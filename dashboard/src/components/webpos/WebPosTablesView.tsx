@@ -39,12 +39,18 @@ type Props = {
   selectedTableId?: string | null;
   /** Table ids that have an in-session open draft cart */
   draftTableIds?: string[];
+  /** Hide this table from the plan (e.g. source table when picking a move target). */
+  excludeTableId?: string | null;
+  /** Move whole open order from an occupied table. */
+  onMoveTable?: (table: { id: string; label: string }) => void;
 };
 
 export default function WebPosTablesView({
   onSelectTable,
   selectedTableId,
   draftTableIds = [],
+  excludeTableId = null,
+  onMoveTable,
 }: Props) {
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -122,34 +128,55 @@ export default function WebPosTablesView({
             maxWidth: '100%',
           }}
         >
-          {activePlan.tables.map((table) => {
+          {activePlan.tables
+            .filter((table) => table.id !== excludeTableId)
+            .map((table) => {
             const selected = selectedTableId === table.id;
             const hasDraft = draftTableIds.includes(table.id);
             const statusColor = hasDraft ? STATUS_COLOR.occupied : STATUS_COLOR[table.status];
             return (
-              <button
+              <div
                 key={table.id}
-                type="button"
-                onClick={() => onSelectTable?.({ id: table.id, label: table.label })}
-                className={`absolute flex flex-col items-center justify-center border-2 text-xs font-bold transition hover:brightness-95 ${
-                  table.shape === 'round' ? 'rounded-full' : 'rounded-lg'
-                } ${selected ? 'ring-4 ring-[var(--webpos-accent-ring)] ring-offset-2' : ''}`}
+                className="absolute"
                 style={{
                   left: table.posX,
                   top: table.posY,
                   width: table.width,
                   height: table.height,
                   transform: `rotate(${table.rotation || 0}deg)`,
-                  backgroundColor: `${statusColor}22`,
-                  borderColor: statusColor,
-                  color: '#1c1917',
                 }}
               >
-                <span>{table.label}</span>
-                <span className="text-[10px] font-normal opacity-70">
-                  {hasDraft ? t('webPosOpenCart') : `${table.capacity}p`}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectTable?.({ id: table.id, label: table.label })}
+                  className={`flex h-full w-full flex-col items-center justify-center border-2 text-xs font-bold transition hover:brightness-95 ${
+                    table.shape === 'round' ? 'rounded-full' : 'rounded-lg'
+                  } ${selected ? 'ring-4 ring-[var(--webpos-accent-ring)] ring-offset-2' : ''}`}
+                  style={{
+                    backgroundColor: `${statusColor}22`,
+                    borderColor: statusColor,
+                    color: '#1c1917',
+                  }}
+                >
+                  <span>{table.label}</span>
+                  <span className="text-[10px] font-normal opacity-70">
+                    {hasDraft ? t('webPosOpenCart') : `${table.capacity}p`}
+                  </span>
+                </button>
+                {hasDraft && onMoveTable ? (
+                  <button
+                    type="button"
+                    title={t('webPosMoveTable')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMoveTable({ id: table.id, label: table.label });
+                    }}
+                    className="absolute -right-1 -top-1 z-10 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-stone-700 shadow ring-1 ring-stone-300 hover:bg-stone-50"
+                  >
+                    ⇄
+                  </button>
+                ) : null}
+              </div>
             );
           })}
         </div>

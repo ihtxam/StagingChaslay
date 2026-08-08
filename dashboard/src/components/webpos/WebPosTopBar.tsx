@@ -1,13 +1,19 @@
 import {
   Bell,
+  BookOpen,
+  ClipboardList,
+  LayoutGrid,
   Menu,
   MoreHorizontal,
   PanelLeft,
+  Pencil,
   RefreshCw,
   Search,
   UserCircle2,
   Vault,
+  X,
 } from 'lucide-react';
+import { useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
 import type { PosTab, PosView } from './types';
@@ -80,69 +86,96 @@ export default function WebPosTopBar({
 }: Props) {
   const { t } = useI18n();
   const inCheckout = posView === 'checkout' || posView === 'success';
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
-  const tabs: Array<{ id: PosTab; label: string }> = [
-    ...(!hideTablesTab ? [{ id: 'tables' as const, label: t('webPosTabTables') }] : []),
-    { id: 'register', label: t('webPosTabRegister') },
-    { id: 'orders', label: t('webPosTabOrders') },
-    ...(!hideBookingsTab ? [{ id: 'bookings' as const, label: t('webPosTabBookings') }] : []),
+  const tabs: Array<{ id: PosTab; label: string; Icon: typeof Pencil }> = [
+    ...(!hideTablesTab
+      ? [{ id: 'tables' as const, label: t('webPosTabTables'), Icon: LayoutGrid }]
+      : []),
+    { id: 'register', label: t('webPosTabRegister'), Icon: Pencil },
+    { id: 'orders', label: t('webPosTabOrders'), Icon: ClipboardList },
+    ...(!hideBookingsTab
+      ? [{ id: 'bookings' as const, label: t('webPosTabBookings'), Icon: BookOpen }]
+      : []),
   ];
 
   return (
     <header className="relative z-20 shrink-0 border-b border-stone-200 bg-white">
-      <div className="flex items-center gap-2 px-3 py-2 sm:px-4">
-        <nav className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 sm:gap-2 sm:px-4 sm:py-2">
+        {/* Mobile: icon nav (Odoo-style). Desktop: text tabs. */}
+        <nav
+          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto md:items-end md:gap-1"
+          aria-label="POS views"
+        >
           {tabs.map((tab) => {
             const active = !inCheckout && activeTab === tab.id;
+            const Icon = tab.Icon;
             return (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => onTabChange(tab.id)}
                 disabled={inCheckout}
-                className={`shrink-0 px-3 pb-2 pt-1 text-sm font-semibold transition ${
+                title={tab.label}
+                aria-label={tab.label}
+                aria-current={active ? 'page' : undefined}
+                className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition disabled:opacity-50 md:h-auto md:w-auto md:items-end md:rounded-none md:px-3 md:pb-2 md:pt-1 md:text-sm md:font-semibold md:ring-0 ${
                   active
-                    ? 'border-b-2 border-[var(--webpos-accent)] text-[var(--webpos-accent-text)]'
-                    : 'border-b-2 border-transparent text-stone-500 hover:text-stone-800 disabled:opacity-50'
+                    ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)] md:border-b-2 md:border-[var(--webpos-accent)] md:bg-transparent md:ring-0'
+                    : 'text-stone-500 hover:bg-stone-50 hover:text-stone-800 md:border-b-2 md:border-transparent md:hover:bg-transparent'
                 }`}
               >
-                {tab.label}
+                <Icon size={20} className="md:hidden" aria-hidden />
+                <span className="hidden md:inline">{tab.label}</span>
               </button>
             );
           })}
+
           {!inCheckout && activeTab === 'register' ? (
-            <span className="webpos-accent-chip mb-1 ml-1 shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide">
+            <span className="webpos-accent-chip mb-0 ml-1 shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide md:mb-1">
               {t('webPosDirectSale')}
             </span>
           ) : null}
           {tableBadge ? (
-            <span className="mb-1 ml-1 shrink-0 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+            <span className="mb-0 ml-1 shrink-0 rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200 md:mb-1">
               {tableBadge}
             </span>
           ) : null}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
           {showSearch ? (
-            <label className="relative hidden sm:block">
-              <Search
-                size={15}
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
-              />
-              <input
-                className="h-9 w-44 rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2 text-sm lg:w-52"
-                placeholder={t('webPosSearchProducts')}
-                value={search}
-                onChange={(e) => onSearchChange(e.target.value)}
-                autoComplete="off"
-              />
-            </label>
+            <>
+              <label className="relative hidden sm:block">
+                <Search
+                  size={15}
+                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+                />
+                <input
+                  className="h-9 w-44 rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2 text-sm lg:w-52"
+                  placeholder={t('webPosSearchProducts')}
+                  value={search}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  autoComplete="off"
+                />
+              </label>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 sm:hidden"
+                aria-label={t('webPosSearchProducts')}
+                aria-expanded={mobileSearchOpen}
+                onClick={() => setMobileSearchOpen((v) => !v)}
+              >
+                {mobileSearchOpen ? <X size={18} /> : <Search size={18} />}
+              </button>
+            </>
           ) : null}
 
+          {/* Desktop / tablet: shift + tools visible. Mobile: overflow into hamburger. */}
           {shiftsEnabled ? (
             <button
               type="button"
-              className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold ${
+              className={`hidden h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold md:inline-flex ${
                 shiftOpen
                   ? 'bg-[var(--webpos-accent)] text-white hover:opacity-90'
                   : 'border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
@@ -158,12 +191,14 @@ export default function WebPosTopBar({
               <span className="hidden sm:inline">
                 {shiftOpen ? t('webPosShiftClose') : t('webPosShiftStart')}
               </span>
-              <span className="sm:hidden">{shiftOpen ? t('webPosShiftOpenBadge') : t('webPosShiftMenu')}</span>
+              <span className="sm:hidden">
+                {shiftOpen ? t('webPosShiftOpenBadge') : t('webPosShiftMenu')}
+              </span>
             </button>
           ) : showEodButton ? (
             <button
               type="button"
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2.5 text-xs font-bold text-stone-800 hover:bg-stone-50"
+              className="hidden h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2.5 text-xs font-bold text-stone-800 hover:bg-stone-50 md:inline-flex"
               onClick={() => onEodReport?.()}
               title={t('webPosEodReport')}
             >
@@ -174,7 +209,7 @@ export default function WebPosTopBar({
 
           <button
             type="button"
-            className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50"
+            className="relative hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 md:inline-flex"
             onClick={onOnlineOrders}
             title={t('webPosOnlineOrders')}
           >
@@ -188,7 +223,7 @@ export default function WebPosTopBar({
 
           <button
             type="button"
-            className="hidden h-9 max-w-[7rem] items-center gap-1 truncate rounded-lg border border-stone-200 px-2 text-xs font-medium sm:inline-flex"
+            className="hidden h-9 max-w-[7rem] items-center gap-1 truncate rounded-lg border border-stone-200 px-2 text-xs font-medium md:inline-flex"
             onClick={onSwitchUser}
             title={staffName || t('webPosSwitchUser')}
           >
@@ -199,7 +234,7 @@ export default function WebPosTopBar({
           {canDrawer ? (
             <button
               type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50"
+              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 md:inline-flex"
               onClick={onOpenDrawer}
               title={t('webPosOpenDrawer')}
             >
@@ -210,11 +245,12 @@ export default function WebPosTopBar({
           <div className="relative" ref={settingsRef}>
             <button
               type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 md:h-9 md:w-9"
               aria-expanded={settingsOpen}
+              aria-label={t('webPosMoreShort')}
               onClick={onToggleSettings}
             >
-              <Menu size={17} />
+              <Menu size={18} />
             </button>
             {settingsOpen ? settingsPanel : null}
           </div>
@@ -231,11 +267,31 @@ export default function WebPosTopBar({
           ) : null}
         </div>
       </div>
+
+      {showSearch && mobileSearchOpen ? (
+        <div className="border-t border-stone-100 px-2 py-2 sm:hidden">
+          <label className="relative block">
+            <Search
+              size={15}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+            />
+            <input
+              className="h-10 w-full rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2 text-sm"
+              placeholder={t('webPosSearchProducts')}
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              autoComplete="off"
+              autoFocus
+            />
+          </label>
+        </div>
+      ) : null}
+
       {merchantName ? (
         <p className="hidden px-4 pb-1 text-[10px] text-stone-400 sm:block">
           {merchantName}
-          {!agentOk ? ` ù ${t('webPosStartPrintAgent')}` : ''}
-          {shiftsEnabled && shiftOpen ? ` ù ${t('webPosShiftOpenBadge')}` : ''}
+          {!agentOk ? ` - ${t('webPosStartPrintAgent')}` : ''}
+          {shiftsEnabled && shiftOpen ? ` - ${t('webPosShiftOpenBadge')}` : ''}
         </p>
       ) : null}
     </header>
@@ -259,6 +315,12 @@ export function WebPosSettingsDropdown({
   onStartShift,
   showEodButton,
   onEodReport,
+  onlinePendingCount = 0,
+  onOnlineOrders,
+  onSwitchUser,
+  staffName,
+  canDrawer,
+  onOpenDrawer,
 }: {
   printerName: string;
   printers: Array<{ name: string; isDefault?: boolean }>;
@@ -276,10 +338,57 @@ export function WebPosSettingsDropdown({
   onStartShift?: () => void;
   showEodButton?: boolean;
   onEodReport?: () => void;
+  /** Mobile overflow actions (hidden on desktop top bar). */
+  onlinePendingCount?: number;
+  onOnlineOrders?: () => void;
+  onSwitchUser?: () => void;
+  staffName?: string | null;
+  canDrawer?: boolean;
+  onOpenDrawer?: () => void;
 }) {
   const { t } = useI18n();
   return (
     <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-[min(20rem,calc(100vw-1.5rem))] space-y-3 rounded-xl border border-stone-200 bg-white p-3 shadow-xl">
+      <div className="space-y-1.5 border-b border-stone-100 pb-3 md:hidden">
+        {onOnlineOrders ? (
+          <button
+            type="button"
+            className="flex w-full items-center justify-between rounded-lg px-2 py-2.5 text-left text-sm font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={onOnlineOrders}
+          >
+            <span className="inline-flex items-center gap-2">
+              <Bell size={16} />
+              {t('webPosOnlineOrders')}
+            </span>
+            {onlinePendingCount > 0 ? (
+              <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                {onlinePendingCount}
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+        {onSwitchUser ? (
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={onSwitchUser}
+          >
+            <UserCircle2 size={16} />
+            <span className="truncate">{staffName || t('webPosSwitchUser')}</span>
+          </button>
+        ) : null}
+        {canDrawer && onOpenDrawer ? (
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={onOpenDrawer}
+          >
+            <Vault size={16} />
+            {t('webPosOpenDrawer')}
+          </button>
+        ) : null}
+      </div>
+
       {shiftsEnabled ? (
         <div className="space-y-2 border-b border-stone-100 pb-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">

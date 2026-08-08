@@ -15,6 +15,8 @@ export type CheckoutPayMethod = 'cash' | 'card' | 'terminal' | 'pay_later';
 export type CheckoutResult = {
   method: CheckoutPayMethod;
   discountPercent: number;
+  /** Fixed CHF bill discount; used when > 0 and discountPercent is 0. */
+  discountAmount?: number;
   tipAmount: number;
   roundingAmount: number;
   total: number;

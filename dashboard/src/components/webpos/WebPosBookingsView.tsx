@@ -79,7 +79,7 @@ export default function WebPosBookingsView() {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}{' '}
-                      · {r.partySize} {t('reservationsGuests')}
+                      Â· {r.partySize} {t('reservationsGuests')}
                     </p>
                     <p className="text-xs text-stone-500">{r.guestPhone}</p>
                   </div>

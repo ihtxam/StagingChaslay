@@ -121,7 +121,7 @@ export default function WebPosNumericKeypad({
                 className={`${keyClass} bg-amber-50 text-amber-900 ring-amber-200`}
                 aria-label="-"
               >
-                −
+                -
               </button>
               <button
                 type="button"

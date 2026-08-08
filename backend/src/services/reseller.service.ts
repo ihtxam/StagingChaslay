@@ -1,10 +1,24 @@
-import { and, count, desc, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { AuthService } from "@/services/auth.service";
 import { EditionService } from "@/services/edition.service";
 import { MerchantService } from "@/services/merchant.service";
+import { LicenseAdminService } from "@/services/license-admin.service";
+import { ResellerBillingService } from "@/services/reseller-billing.service";
 
-function serializeReseller(row: typeof schema.resellers.$inferSelect, merchantCount = 0) {
+function serializeReseller(
+  row: typeof schema.resellers.$inferSelect,
+  extras?: {
+    merchantCount?: number;
+    seatsUsed?: number;
+    activeOrTrialCount?: number;
+    suspendedCount?: number;
+    billableMerchantCount?: number;
+    deviceCount?: number;
+  }
+) {
+  const licenseSeats = row.licenseSeats ?? 0;
+  const seatsUsed = extras?.seatsUsed ?? 0;
   return {
     id: row.id,
     name: row.name,
@@ -13,13 +27,96 @@ function serializeReseller(row: typeof schema.resellers.$inferSelect, merchantCo
     status: row.status,
     branding: row.branding,
     createdBySuperadminId: row.createdBySuperadminId,
-    merchantCount,
+    licenseSeats,
+    seatsUsed,
+    seatsRemaining: Math.max(0, licenseSeats - seatsUsed),
+    merchantCount: extras?.merchantCount ?? 0,
+    activeOrTrialCount: extras?.activeOrTrialCount ?? 0,
+    suspendedCount: extras?.suspendedCount ?? 0,
+    billableMerchantCount: extras?.billableMerchantCount ?? 0,
+    deviceCount: extras?.deviceCount ?? 0,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
 export class ResellerService {
+  static async countSeatsUsed(resellerId: string): Promise<number> {
+    const db = getDb();
+    // Active seats only — revoked/suspended licenses free pool capacity
+    const [{ c }] = await db
+      .select({ c: count() })
+      .from(schema.licenses)
+      .where(
+        and(
+          eq(schema.licenses.issuedByResellerId, resellerId),
+          eq(schema.licenses.status, "active")
+        )
+      );
+    return Number(c || 0);
+  }
+
+  static async getSeatPool(resellerId: string) {
+    const db = getDb();
+    const row = await db.query.resellers.findFirst({
+      where: eq(schema.resellers.id, resellerId),
+    });
+    if (!row) throw new Error("Reseller not found");
+    const seatsUsed = await this.countSeatsUsed(resellerId);
+    return {
+      licenseSeats: row.licenseSeats ?? 0,
+      seatsUsed,
+      seatsRemaining: Math.max(0, (row.licenseSeats ?? 0) - seatsUsed),
+    };
+  }
+
+  static async assertSeatCapacity(resellerId: string, seatsNeeded: number) {
+    const need = Math.max(0, Math.floor(seatsNeeded));
+    if (need <= 0) return this.getSeatPool(resellerId);
+    const pool = await this.getSeatPool(resellerId);
+    if (pool.seatsRemaining < need) {
+      throw new Error(
+        `Insufficient license seats: need ${need}, remaining ${pool.seatsRemaining} (allocated ${pool.licenseSeats})`
+      );
+    }
+    return pool;
+  }
+
+  /** Superadmin sets absolute allocated seat pool (or delta via mode). */
+  static async allocateLicenseSeats(
+    resellerId: string,
+    input: { seats?: number; delta?: number }
+  ) {
+    const db = getDb();
+    const existing = await db.query.resellers.findFirst({
+      where: eq(schema.resellers.id, resellerId),
+    });
+    if (!existing) throw new Error("Reseller not found");
+
+    let next = existing.licenseSeats ?? 0;
+    if (input.seats != null) {
+      next = Math.max(0, Math.floor(Number(input.seats)));
+    } else if (input.delta != null) {
+      next = Math.max(0, next + Math.floor(Number(input.delta)));
+    } else {
+      throw new Error("Provide seats (absolute) or delta");
+    }
+
+    const seatsUsed = await this.countSeatsUsed(resellerId);
+    if (next < seatsUsed) {
+      throw new Error(
+        `Cannot set allocated seats to ${next}: ${seatsUsed} already issued to merchants`
+      );
+    }
+
+    const [row] = await db
+      .update(schema.resellers)
+      .set({ licenseSeats: next, updatedAt: new Date() })
+      .where(eq(schema.resellers.id, resellerId))
+      .returning();
+    return this.getById(row!.id);
+  }
+
   static async ensureChaslayAgency(createdBySuperadminId?: string | null) {
     const db = getDb();
     const email = (process.env.SEED_RESELLER_EMAIL || "agency@chaslay.com").toLowerCase();
@@ -75,15 +172,18 @@ export class ResellerService {
       .where(clauses.length ? and(...clauses) : undefined)
       .orderBy(desc(schema.resellers.createdAt));
 
-    const counts = await db
-      .select({
-        resellerId: schema.merchants.resellerId,
-        c: count(),
-      })
-      .from(schema.merchants)
-      .groupBy(schema.merchants.resellerId);
-    const map = new Map(counts.map((r) => [r.resellerId, Number(r.c)]));
-    return rows.map((r) => serializeReseller(r, map.get(r.id) || 0));
+    const statsMap = await ResellerBillingService.getResellerStatsMap(rows.map((r) => r.id));
+    return rows.map((r) => {
+      const st = statsMap.get(r.id);
+      return serializeReseller(r, {
+        merchantCount: st?.merchantCount || 0,
+        seatsUsed: st?.seatsUsed || 0,
+        activeOrTrialCount: st?.activeOrTrialCount || 0,
+        suspendedCount: st?.suspendedCount || 0,
+        billableMerchantCount: st?.billableMerchantCount || 0,
+        deviceCount: st?.deviceCount || 0,
+      });
+    });
   }
 
   static async getById(id: string) {
@@ -92,11 +192,16 @@ export class ResellerService {
       where: eq(schema.resellers.id, id),
     });
     if (!row) return null;
-    const [{ c }] = await db
-      .select({ c: count() })
-      .from(schema.merchants)
-      .where(eq(schema.merchants.resellerId, id));
-    return serializeReseller(row, Number(c || 0));
+    const statsMap = await ResellerBillingService.getResellerStatsMap([id]);
+    const st = statsMap.get(id);
+    return serializeReseller(row, {
+      merchantCount: st?.merchantCount || 0,
+      seatsUsed: st?.seatsUsed || 0,
+      activeOrTrialCount: st?.activeOrTrialCount || 0,
+      suspendedCount: st?.suspendedCount || 0,
+      billableMerchantCount: st?.billableMerchantCount || 0,
+      deviceCount: st?.deviceCount || 0,
+    });
   }
 
   static async create(input: {
@@ -105,6 +210,7 @@ export class ResellerService {
     password: string;
     phone?: string;
     createdBySuperadminId?: string;
+    licenseSeats?: number;
   }) {
     const db = getDb();
     const email = String(input.email || "").trim().toLowerCase();
@@ -126,6 +232,7 @@ export class ResellerService {
         passwordHash,
         phone: input.phone?.trim() || null,
         status: "active",
+        licenseSeats: Math.max(0, Math.floor(Number(input.licenseSeats) || 0)),
         createdBySuperadminId: input.createdBySuperadminId || null,
       })
       .returning();
@@ -134,7 +241,7 @@ export class ResellerService {
 
   static async update(
     id: string,
-    input: { name?: string; phone?: string; status?: string; password?: string }
+    input: { name?: string; phone?: string; status?: string; password?: string; licenseSeats?: number }
   ) {
     const db = getDb();
     const existing = await db.query.resellers.findFirst({
@@ -151,6 +258,16 @@ export class ResellerService {
     if (input.password) {
       if (input.password.length < 8) throw new Error("Password must be at least 8 characters");
       patch.passwordHash = await AuthService.hashPassword(input.password);
+    }
+    if (input.licenseSeats !== undefined) {
+      const next = Math.max(0, Math.floor(Number(input.licenseSeats)));
+      const seatsUsed = await this.countSeatsUsed(id);
+      if (next < seatsUsed) {
+        throw new Error(
+          `Cannot set allocated seats to ${next}: ${seatsUsed} already issued to merchants`
+        );
+      }
+      patch.licenseSeats = next;
     }
     const [row] = await db
       .update(schema.resellers)
@@ -261,6 +378,11 @@ export class ResellerService {
       (edition.ownerType === "reseller" && edition.ownerId === resellerId);
     if (!allowedOwner) throw new Error("Edition not available for this reseller");
 
+    const seats = Math.max(0, Math.min(20, Number(input.deviceSeats) || 0));
+    if (seats > 0) {
+      await this.assertSeatCapacity(resellerId, seats);
+    }
+
     const created = await MerchantService.createMerchant(
       input.email,
       input.password,
@@ -272,9 +394,10 @@ export class ResellerService {
       input.country,
       {
         shopEnabled: input.shopEnabled,
-        deviceSeats: input.deviceSeats,
+        deviceSeats: seats,
         licenseType: input.licenseType,
         customDays: input.customDays,
+        issuedByResellerId: seats > 0 ? resellerId : undefined,
         sendInvite: input.sendInvite,
         editionId: input.editionId,
         resellerId,
@@ -288,9 +411,158 @@ export class ResellerService {
     const db = getDb();
     const m = await db.query.merchants.findFirst({
       where: and(eq(schema.merchants.id, merchantId), eq(schema.merchants.resellerId, resellerId)),
-      columns: { id: true, status: true },
+      columns: { id: true, status: true, name: true },
     });
     if (!m) throw new Error("Merchant not found");
     return m;
+  }
+
+  /**
+   * List licenses for merchants owned by this reseller only.
+   */
+  static async listLicenses(
+    resellerId: string,
+    opts?: { status?: string; merchantId?: string; page?: number; limit?: number }
+  ) {
+    const db = getDb();
+    const page = Math.max(1, opts?.page || 1);
+    const limit = Math.min(100, Math.max(1, opts?.limit || 20));
+    const offset = (page - 1) * limit;
+
+    const owned = await db
+      .select({ id: schema.merchants.id })
+      .from(schema.merchants)
+      .where(eq(schema.merchants.resellerId, resellerId));
+    const merchantIds = owned.map((m) => m.id);
+    if (!merchantIds.length) return [];
+
+    if (opts?.merchantId && !merchantIds.includes(opts.merchantId)) {
+      throw new Error("Merchant not found");
+    }
+
+    const clauses = [
+      opts?.merchantId
+        ? eq(schema.licenses.merchantId, opts.merchantId)
+        : inArray(schema.licenses.merchantId, merchantIds),
+    ];
+    if (opts?.status) clauses.push(eq(schema.licenses.status, opts.status));
+
+    return db.query.licenses.findMany({
+      where: and(...clauses),
+      with: { merchant: true, device: true },
+      limit,
+      offset,
+      orderBy: desc(schema.licenses.createdAt),
+    });
+  }
+
+  /** Issue device seats from reseller pool to an owned merchant. */
+  static async issueDeviceSeats(
+    resellerId: string,
+    input: {
+      merchantId: string;
+      seats?: number;
+      licenseType?: "trial" | "yearly" | "custom";
+      customDays?: number;
+      deviceType?: string;
+      posDeviceId?: string;
+      mode?: "seats" | "device";
+    }
+  ) {
+    await this.assertOwnsMerchant(resellerId, input.merchantId);
+
+    if (input.mode === "device" || input.posDeviceId?.trim()) {
+      // New seats need pool capacity; reuse of an existing active license is free.
+      const poolBefore = await this.getSeatPool(resellerId);
+      if (poolBefore.seatsRemaining < 1) {
+        // Still allow returning an existing active code (no new seat)
+        const peek = await LicenseAdminService.issueForPosDeviceId(
+          input.merchantId,
+          String(input.posDeviceId || "").trim(),
+          input.licenseType || "yearly",
+          input.customDays,
+          input.deviceType || "tablet",
+          null
+        );
+        if (!peek.reused) {
+          await LicenseAdminService.revokeLicense(peek.licenseId);
+          throw new Error(
+            `Insufficient license seats: need 1, remaining 0 (allocated ${poolBefore.licenseSeats})`
+          );
+        }
+        return {
+          licenses: [
+            {
+              deviceId: peek.deviceId,
+              deviceName: peek.deviceName,
+              licenseKey: peek.licenseKey,
+              expiresAt: peek.expiresAt,
+              licenseId: peek.licenseId,
+              externalDeviceId: peek.externalDeviceId,
+              reused: true,
+            },
+          ],
+          pool: poolBefore,
+        };
+      }
+      const result = await LicenseAdminService.issueForPosDeviceId(
+        input.merchantId,
+        String(input.posDeviceId || "").trim(),
+        input.licenseType || "yearly",
+        input.customDays,
+        input.deviceType || "tablet",
+        resellerId
+      );
+      return {
+        licenses: [
+          {
+            deviceId: result.deviceId,
+            deviceName: result.deviceName,
+            licenseKey: result.licenseKey,
+            expiresAt: result.expiresAt,
+            licenseId: result.licenseId,
+            externalDeviceId: result.externalDeviceId,
+            reused: result.reused,
+          },
+        ],
+        pool: await this.getSeatPool(resellerId),
+      };
+    }
+
+    const seats = Math.max(1, Math.min(20, Number(input.seats) || 1));
+    await this.assertSeatCapacity(resellerId, seats);
+    const issued = await LicenseAdminService.issueDeviceSeats(
+      input.merchantId,
+      seats,
+      input.licenseType || "yearly",
+      input.customDays,
+      input.deviceType || "tablet",
+      resellerId
+    );
+    return { licenses: issued, pool: await this.getSeatPool(resellerId) };
+  }
+
+  static async revokeOwnedLicense(resellerId: string, licenseId: string) {
+    const db = getDb();
+    const license = await db.query.licenses.findFirst({
+      where: eq(schema.licenses.id, licenseId),
+      with: { merchant: true },
+    });
+    if (!license || license.merchant?.resellerId !== resellerId) {
+      throw new Error("License not found");
+    }
+    return LicenseAdminService.revokeLicense(licenseId);
+  }
+
+  static async extendOwnedLicense(resellerId: string, licenseId: string, additionalDays: number) {
+    const db = getDb();
+    const license = await db.query.licenses.findFirst({
+      where: eq(schema.licenses.id, licenseId),
+      with: { merchant: true },
+    });
+    if (!license || license.merchant?.resellerId !== resellerId) {
+      throw new Error("License not found");
+    }
+    return LicenseAdminService.extendLicense(licenseId, additionalDays);
   }
 }

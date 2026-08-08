@@ -32,18 +32,113 @@ router.get("/me", async (req: Request, res: Response) => {
  */
 router.get("/overview", async (req: Request, res: Response) => {
   try {
-    const merchants = await ResellerService.listMerchants(resellerId(req));
+    const rid = resellerId(req);
+    const me = await ResellerService.getById(rid);
+    const merchants = await ResellerService.listMerchants(rid);
     const active = merchants.filter((m) => m.status === "active" || m.status === "trial").length;
+    const pool = await ResellerService.getSeatPool(rid);
     res.json({
       success: true,
       overview: {
         merchantCount: merchants.length,
         activeCount: active,
         suspendedCount: merchants.filter((m) => m.status === "suspended").length,
+        licenseSeats: pool.licenseSeats,
+        seatsUsed: pool.seatsUsed,
+        seatsRemaining: pool.seatsRemaining,
+        billableMerchantCount: me?.billableMerchantCount ?? 0,
       },
     });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * GET /api/reseller/licenses/pool
+ */
+router.get("/licenses/pool", async (req: Request, res: Response) => {
+  try {
+    const pool = await ResellerService.getSeatPool(resellerId(req));
+    res.json({ success: true, pool });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * GET /api/reseller/licenses
+ * Licenses for this reseller's merchants only
+ */
+router.get("/licenses", async (req: Request, res: Response) => {
+  try {
+    const licenses = await ResellerService.listLicenses(resellerId(req), {
+      status: typeof req.query.status === "string" ? req.query.status : undefined,
+      merchantId: typeof req.query.merchantId === "string" ? req.query.merchantId : undefined,
+      page: req.query.page ? Number(req.query.page) : 1,
+      limit: req.query.limit ? Number(req.query.limit) : 20,
+    });
+    res.json({ success: true, licenses });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * POST /api/reseller/licenses/issue-seats
+ */
+router.post("/licenses/issue-seats", async (req: Request, res: Response) => {
+  try {
+    const { merchantId, seats, licenseType, customDays, deviceType, posDeviceId, mode } =
+      req.body || {};
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const result = await ResellerService.issueDeviceSeats(resellerId(req), {
+      merchantId,
+      seats: seats != null ? Number(seats) : 1,
+      licenseType,
+      customDays: customDays != null ? Number(customDays) : undefined,
+      deviceType,
+      posDeviceId,
+      mode: mode === "device" || posDeviceId ? "device" : "seats",
+    });
+    res.status(201).json({
+      success: true,
+      message: `Issued ${result.licenses.length} device license(s)`,
+      licenses: result.licenses,
+      pool: result.pool,
+    });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to issue licenses" });
+  }
+});
+
+/**
+ * POST /api/reseller/licenses/:licenseId/revoke
+ */
+router.post("/licenses/:licenseId/revoke", async (req: Request, res: Response) => {
+  try {
+    const license = await ResellerService.revokeOwnedLicense(resellerId(req), req.params.licenseId);
+    res.json({ success: true, license });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * POST /api/reseller/licenses/:licenseId/extend
+ */
+router.post("/licenses/:licenseId/extend", async (req: Request, res: Response) => {
+  try {
+    const days = Number(req.body?.additionalDays);
+    if (!days || days <= 0) return res.status(400).json({ error: "additionalDays required" });
+    const license = await ResellerService.extendOwnedLicense(
+      resellerId(req),
+      req.params.licenseId,
+      days
+    );
+    res.json({ success: true, license });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
   }
 });
 

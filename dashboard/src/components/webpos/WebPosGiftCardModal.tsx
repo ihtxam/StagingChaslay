@@ -360,7 +360,7 @@ export default function WebPosGiftCardModal({
                   <div className="mt-1 text-lg font-bold">CHF {card.balance.toFixed(2)}</div>
                   {card.membershipEnabled && (
                     <div className="mt-1 text-xs">
-                      {t('membership')}: {card.holderName || card.customer?.firstName || '—'}
+                      {t('membership')}: {card.holderName || card.customer?.firstName || '-'}
                     </div>
                   )}
                 </div>
@@ -411,7 +411,7 @@ export default function WebPosGiftCardModal({
                           step="0.01"
                           value={amount}
                           onChange={(e) => setAmount(e.target.value)}
-                          placeholder={`CHF ${minA} – ${maxA}`}
+                          placeholder={`CHF ${minA} - ${maxA}`}
                         />
                       )}
                     </>

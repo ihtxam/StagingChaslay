@@ -31,7 +31,7 @@ export type CartLine = {
   courseNumber?: number;
   lineDiscountPercent?: number;
   sentToKitchen?: boolean;
-  /** Gift card sell/reload — credited after successful payment */
+  /** Gift card sell/reload  - credited after successful payment */
   giftCard?: GiftCardLineMeta;
 };
 
@@ -56,6 +56,12 @@ export type Product = {
 
 export type PostSuccessTarget = 'register' | 'tables';
 
+/** Whole-bill discount: percent XOR fixed CHF amount (percent wins if both set). */
+export type BillDiscount = {
+  percent: number;
+  amount: number;
+};
+
 /** In-memory open cart draft for a table / tab / channel (session only). */
 export type OpenCartDraft = {
   cart: CartLine[];
@@ -69,6 +75,8 @@ export type OpenCartDraft = {
   coursesBulkSent: boolean;
   selectedLineId: string | null;
   keypadBuffer: string;
+  /** Order-level discount (not per-line). */
+  billDiscount?: BillDiscount;
 };
 
 export function openCartDraftKey(opts: {

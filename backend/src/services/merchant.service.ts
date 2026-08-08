@@ -122,6 +122,8 @@ export class MerchantService {
       deviceSeats?: number;
       licenseType?: "trial" | "yearly" | "custom";
       customDays?: number;
+      /** When set, issued device seats count against this reseller's pool */
+      issuedByResellerId?: string;
       /** Send password-setup invite email after create (default true when no password) */
       sendInvite?: boolean;
       editionId?: string;
@@ -214,7 +216,9 @@ export class MerchantService {
           created.id,
           seats,
           options?.licenseType || "yearly",
-          options?.customDays
+          options?.customDays,
+          "tablet",
+          options?.issuedByResellerId || null
         );
         issuedLicenses = issued;
       }

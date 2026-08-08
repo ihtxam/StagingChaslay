@@ -46,7 +46,7 @@ export default function WebPosProductArea({
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-stone-100">
-      {/* Category chips — fixed sizes, wrap to a second row when needed */}
+      {/* Category chips  - fixed sizes, wrap to a second row when needed */}
       <div className="shrink-0 border-b border-stone-200/80 bg-stone-100/90 px-3 py-2">
         <div className="webpos-cat-scroll flex flex-wrap gap-1.5">
           {giftCardsEnabled && onGiftCards ? (
@@ -137,7 +137,7 @@ export default function WebPosProductArea({
       </div>
 
       {expressCheckout && onExpressPay ? (
-        <div className="shrink-0 grid grid-cols-3 gap-2 border-t border-stone-200 bg-white p-3">
+        <div className="hidden shrink-0 grid-cols-3 gap-2 border-t border-stone-200 bg-white p-3 lg:grid">
           {expressMethods?.cash !== false ? (
             <button
               type="button"

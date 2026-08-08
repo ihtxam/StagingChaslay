@@ -303,6 +303,10 @@ button {
     @apply rounded-md py-1.5 text-sm;
   }
 
+  .webpos-mobile-pay-cart {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  }
+
   .webpos-mini-btn {
     @apply inline-flex flex-col items-center justify-center gap-0.5 rounded-lg border border-stone-200 bg-white px-1 py-1.5 text-[10px] font-semibold leading-tight text-stone-600 hover:bg-stone-50 disabled:opacity-40;
   }

@@ -22,7 +22,8 @@ export class LicenseAdminService {
     posDeviceId: string,
     licenseType: "trial" | "yearly" | "custom" = "yearly",
     customDays?: number,
-    deviceType: string = "tablet"
+    deviceType: string = "tablet",
+    issuedByResellerId?: string | null
   ) {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
@@ -118,6 +119,7 @@ export class LicenseAdminService {
         startsAt: now,
         expiresAt,
         status: "active",
+        issuedByResellerId: issuedByResellerId || null,
       })
       .returning();
 
@@ -146,7 +148,8 @@ export class LicenseAdminService {
     seats: number = 1,
     licenseType: "trial" | "yearly" | "custom" = "yearly",
     customDays?: number,
-    deviceType: string = "tablet"
+    deviceType: string = "tablet",
+    issuedByResellerId?: string | null
   ) {
     const db = getDb();
     const count = Math.max(1, Math.min(20, seats));
@@ -184,7 +187,8 @@ export class LicenseAdminService {
         merchantId,
         device[0].id,
         licenseType,
-        customDays
+        customDays,
+        issuedByResellerId
       );
 
       issued.push({
@@ -218,7 +222,8 @@ export class LicenseAdminService {
     merchantId: string,
     deviceId: string,
     licenseType: "trial" | "yearly" | "custom" = "yearly",
-    customDays?: number
+    customDays?: number,
+    issuedByResellerId?: string | null
   ) {
     const db = getDb();
 
@@ -266,6 +271,7 @@ export class LicenseAdminService {
           startsAt: now,
           expiresAt,
           status: "active",
+          issuedByResellerId: issuedByResellerId || null,
         })
         .returning();
 

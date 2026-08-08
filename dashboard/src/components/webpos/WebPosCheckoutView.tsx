@@ -1,4 +1,12 @@
-import { Banknote, CreditCard, Gift, MonitorSmartphone, UserCircle2, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Banknote,
+  CreditCard,
+  Gift,
+  MonitorSmartphone,
+  UserCircle2,
+  X,
+} from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
@@ -34,6 +42,11 @@ type Props = {
   onGiftCardRequest?: (remaining: number) => void;
   injectPayment?: AppliedPayment | null;
   onInjectPaymentConsumed?: () => void;
+  onBack?: () => void;
+  onBillDiscount?: () => void;
+  canApplyBillDiscount?: boolean;
+  billDiscountLabel?: string | null;
+  billDiscountAmount?: number;
 };
 
 function newPayId() {
@@ -53,6 +66,11 @@ export default function WebPosCheckoutView({
   onGiftCardRequest,
   injectPayment,
   onInjectPaymentConsumed,
+  onBack,
+  onBillDiscount,
+  canApplyBillDiscount = true,
+  billDiscountLabel,
+  billDiscountAmount = 0,
 }: Props) {
   const { t } = useI18n();
   const [buffer, setBuffer] = useState('');
@@ -99,7 +117,9 @@ export default function WebPosCheckoutView({
               ? 'pay_later'
               : null;
     if (defaultMethod && baseTotal > 0 && defaultMethod !== 'gift_card') {
-      setPayments([{ id: newPayId(), method: defaultMethod, amount: roundMoney2(baseTotal) }]);
+      const id = newPayId();
+      setPayments([{ id, method: defaultMethod, amount: roundMoney2(baseTotal) }]);
+      // Leave unselected so first keypad digit is intentional after row tap (mobile: methods first)
     }
     setSeeded(true);
   }, [seeded, methods.cash, methods.card, methods.terminal, methods.giftCard, methods.payLater, baseTotal]);
@@ -123,6 +143,8 @@ export default function WebPosCheckoutView({
       }
       return [...withoutGc, { ...injectPayment, id: injectPayment.id || newPayId() }];
     });
+    setSelectedPaymentId(null);
+    setBuffer('');
     onInjectPaymentConsumed?.();
   }, [injectPayment, onInjectPaymentConsumed, total]);
 
@@ -140,7 +162,7 @@ export default function WebPosCheckoutView({
     });
   }, [tipAmount, total, baseTotal, seeded]);
 
-  // Live-update selected payment row from keypad
+  // Live-update selected payment row from keypad (overwrite-selected-line)
   useEffect(() => {
     if (!selectedPaymentId || bufferAmount == null) return;
     setPayments((prev) =>
@@ -179,53 +201,87 @@ export default function WebPosCheckoutView({
   const methodLabel = (m: PosPaymentMethod) =>
     payButtons.find((b) => b.id === m)?.label || m;
 
+  const selectPayment = (id: string) => {
+    if (selectedPaymentId === id) {
+      setSelectedPaymentId(null);
+      setBuffer('');
+      return;
+    }
+    // Fresh overwrite entry: clear buffer so typing replaces the amount
+    setSelectedPaymentId(id);
+    setBuffer('');
+  };
+
   const applyMethod = (method: PosPaymentMethod) => {
     if (busy) return;
 
     if (method === 'gift_card') {
+      const editingSelected = !!selectedPaymentId;
       const due =
-        bufferAmount != null && bufferAmount > 0
+        !editingSelected && bufferAmount != null && bufferAmount > 0
           ? bufferAmount
           : remaining > 0
             ? remaining
             : total;
+      setSelectedPaymentId(null);
+      setBuffer('');
       onGiftCardRequest?.(roundMoney2(due));
       return;
     }
 
-    // Change method (and optionally amount) on selected row
-    if (selectedPaymentId) {
-      const amount = bufferAmount ?? payments.find((p) => p.id === selectedPaymentId)?.amount ?? remaining;
-      if (amount < 0) return;
-      setPayments((prev) =>
-        prev.map((p) =>
-          p.id === selectedPaymentId ? { ...p, method, amount: roundMoney2(amount) } : p
-        )
-      );
+    // Buffer while a row is selected edits that row ù not the next tender amount
+    const editingSelected = !!selectedPaymentId;
+    if (editingSelected) {
+      setSelectedPaymentId(null);
+      setBuffer('');
+    }
+
+    // Switch sole covering tender (Cash ? Card) when nothing left to split
+    const sole = payments.length === 1 ? payments[0]! : null;
+    const soleCovers =
+      !!sole &&
+      !editingSelected &&
+      (bufferAmount == null || bufferAmount <= 0) &&
+      remaining <= 0.001 &&
+      Math.abs(sole.amount - total) < 0.011;
+    if (soleCovers) {
+      if (sole.method === method) return;
+      setPayments([{ ...sole, method }]);
       return;
     }
 
-    // With a typed amount before method: use it; else full remaining (or full total if empty)
+    // Typed amount before method (no row selected); else remaining; else no-op
     const amount =
-      bufferAmount != null && bufferAmount > 0
+      !editingSelected && bufferAmount != null && bufferAmount > 0
         ? bufferAmount
         : remaining > 0
           ? remaining
-          : total;
+          : 0;
     if (amount <= 0) return;
 
-    // If no payments yet, set as sole tender
     if (payments.length === 0) {
-      setPayments([{ id: newPayId(), method, amount: roundMoney2(amount) }]);
+      const id = newPayId();
+      setPayments([{ id, method, amount: roundMoney2(amount) }]);
       setBuffer('');
       return;
     }
 
-    // Multi-tender: add another method for remaining / typed amount
-    setPayments((prev) => [
-      ...prev,
-      { id: newPayId(), method, amount: roundMoney2(amount) },
-    ]);
+    // Multi-tender: add / top-up same method for remaining
+    setPayments((prev) => {
+      const sameIdx = prev.findIndex((p) => p.method === method);
+      // Top-up existing line of same method when filling remaining (no typed override)
+      if (
+        sameIdx >= 0 &&
+        (editingSelected || bufferAmount == null || bufferAmount <= 0) &&
+        remaining > 0
+      ) {
+        const next = [...prev];
+        const row = next[sameIdx]!;
+        next[sameIdx] = { ...row, amount: roundMoney2(row.amount + amount) };
+        return next;
+      }
+      return [...prev, { id: newPayId(), method, amount: roundMoney2(amount) }];
+    });
     setBuffer('');
   };
 
@@ -251,24 +307,45 @@ export default function WebPosCheckoutView({
         ? `CHF ${buffer}`
         : null;
 
+  const showKeypad = !!selectedPaymentId || payments.length > 0;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-white lg:flex-row">
+      {/* Mobile: total first (Odoo-style). Desktop: methods column first. */}
+      <div className="order-1 flex shrink-0 flex-col items-center border-b border-stone-100 px-4 py-4 text-center lg:hidden">
+        <p className="text-4xl font-light tabular-nums tracking-tight text-stone-800">
+          CHF {total.toFixed(2)}
+        </p>
+        {tipAmount > 0 ? (
+          <p className="mt-1 text-sm text-[var(--webpos-accent-text)]">
+            {t('webPosTip')}: CHF {tipAmount.toFixed(2)}
+          </p>
+        ) : null}
+        {remaining > 0.001 ? (
+          <p className="mt-2 text-sm font-semibold tabular-nums text-[var(--webpos-accent-text)]">
+            {t('webPosRemaining')}: CHF {remaining.toFixed(2)}
+          </p>
+        ) : null}
+      </div>
+
       {/* Left: payment methods + tip + keypad */}
-      <div className="flex shrink-0 flex-col gap-2 border-b border-stone-100 p-3 lg:w-[min(20rem,36vw)] lg:border-b-0 lg:border-r lg:overflow-y-auto">
-        {payButtons
-          .filter((b) => b.show)
-          .map((b) => (
-            <button
-              key={b.id}
-              type="button"
-              disabled={busy}
-              onClick={() => applyMethod(b.id)}
-              className="flex items-center gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3.5 text-left text-sm font-semibold hover:bg-stone-100 disabled:opacity-40"
-            >
-              {b.icon}
-              {b.label}
-            </button>
-          ))}
+      <div className="order-2 flex shrink-0 flex-col gap-2 border-b border-stone-100 p-3 lg:order-1 lg:w-[min(20rem,36vw)] lg:border-b-0 lg:border-r lg:overflow-y-auto">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+          {payButtons
+            .filter((b) => b.show)
+            .map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                disabled={busy}
+                onClick={() => applyMethod(b.id)}
+                className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-4 text-center text-sm font-semibold hover:bg-stone-100 disabled:opacity-40 lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-3.5 lg:text-left"
+              >
+                {b.icon}
+                {b.label}
+              </button>
+            ))}
+        </div>
 
         <div className="mt-1 flex gap-2">
           <button
@@ -293,7 +370,7 @@ export default function WebPosCheckoutView({
                   : 'border-stone-400'
               }`}
             >
-              {invoice ? '?' : ''}
+              {invoice ? '\u2713' : ''}
             </span>
             {t('webPosInvoice')}
           </button>
@@ -302,6 +379,22 @@ export default function WebPosCheckoutView({
         {settings.splitBillsEnabled && onSplit ? (
           <button type="button" className="btn-secondary text-sm" onClick={onSplit}>
             {t('webPosSplitBill')}
+          </button>
+        ) : null}
+
+        {settings.discountsEnabled && onBillDiscount ? (
+          <button
+            type="button"
+            disabled={busy || !canApplyBillDiscount}
+            onClick={onBillDiscount}
+            className="w-full rounded-lg border border-stone-200 bg-white py-2.5 text-sm font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+          >
+            {t('webPosBillDiscount')}
+            {billDiscountAmount > 0
+              ? ` - CHF ${billDiscountAmount.toFixed(2)}${
+                  billDiscountLabel ? ` (${billDiscountLabel})` : ''
+                }`
+              : ''}
           </button>
         ) : null}
 
@@ -317,36 +410,53 @@ export default function WebPosCheckoutView({
               {tipAmount > 0 ? ` - CHF ${tipAmount.toFixed(2)}` : ''}
             </button>
           ) : null}
-          <WebPosNumericKeypad
-            mode="qty"
-            onModeChange={() => undefined}
-            buffer={buffer}
-            onBufferChange={setBuffer}
-            onApply={complete}
-            showModeButtons={false}
-            showQuickAdd
-            compact
-            disabled={busy}
-            applyLabel={canComplete ? t('webPosConfirmPay') : t('webPosExact')}
-            applyDisabled={busy || !canComplete}
-          />
+          {/* Amount keypad: desktop always; mobile only after a method/row exists */}
+          <div className={showKeypad ? '' : 'hidden lg:block'}>
+            <WebPosNumericKeypad
+              mode="qty"
+              onModeChange={() => undefined}
+              buffer={buffer}
+              onBufferChange={(buf) => {
+                // First keystroke without a selection edits the last / sole tender row
+                if (!selectedPaymentId && payments.length > 0 && buf) {
+                  const target = payments[payments.length - 1]!;
+                  setSelectedPaymentId(target.id);
+                }
+                setBuffer(buf);
+              }}
+              onApply={complete}
+              showModeButtons={false}
+              showQuickAdd
+              compact
+              disabled={busy}
+              applyLabel={canComplete ? t('webPosConfirmPay') : t('webPosExact')}
+              applyDisabled={busy || !canComplete}
+            />
+          </div>
+          {!showKeypad ? (
+            <p className="py-6 text-center text-sm text-stone-400 lg:hidden">
+              {t('webPosTapPaymentMethod')}
+            </p>
+          ) : null}
         </div>
       </div>
 
-      {/* Right: amount due + payment rows */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex flex-1 flex-col items-center px-4 py-8 text-center">
-          <p className="text-sm font-semibold uppercase tracking-wide text-stone-400">
-            {t('webPosAmountDue')}
-          </p>
-          <p className="text-5xl font-light tabular-nums tracking-tight text-stone-700 sm:text-6xl">
-            CHF {total.toFixed(2)}
-          </p>
-          {tipAmount > 0 ? (
-            <p className="mt-1 text-sm text-[var(--webpos-accent-text)]">
-              {t('webPosTip')}: CHF {tipAmount.toFixed(2)}
+      {/* Right: amount due (desktop) + payment rows */}
+      <div className="order-3 flex min-h-0 flex-1 flex-col lg:order-2">
+        <div className="flex flex-1 flex-col items-center px-4 py-4 text-center lg:py-8">
+          <div className="hidden w-full flex-col items-center lg:flex">
+            <p className="text-sm font-semibold uppercase tracking-wide text-stone-400">
+              {t('webPosAmountDue')}
             </p>
-          ) : null}
+            <p className="text-5xl font-light tabular-nums tracking-tight text-stone-700 sm:text-6xl">
+              CHF {total.toFixed(2)}
+            </p>
+            {tipAmount > 0 ? (
+              <p className="mt-1 text-sm text-[var(--webpos-accent-text)]">
+                {t('webPosTip')}: CHF {tipAmount.toFixed(2)}
+              </p>
+            ) : null}
+          </div>
           {liveEntryLabel && !selectedPaymentId ? (
             <p className="mt-2 text-base font-semibold tabular-nums text-[var(--webpos-accent-text)]">
               {t('webPosEntering')}: {liveEntryLabel}
@@ -364,9 +474,11 @@ export default function WebPosCheckoutView({
             <p className="mt-1 text-sm font-medium text-[var(--webpos-accent-text)]">{splitLabel}</p>
           ) : null}
 
-          <div className="mt-8 w-full max-w-md space-y-2 text-left">
+          <div className="mt-4 w-full max-w-md space-y-2 text-left lg:mt-8">
             {payments.length === 0 ? (
-              <p className="text-center text-sm text-stone-400">{t('webPosTapPaymentMethod')}</p>
+              <p className="hidden text-center text-sm text-stone-400 lg:block">
+                {t('webPosTapPaymentMethod')}
+              </p>
             ) : (
               payments.map((p) => {
                 const selected = selectedPaymentId === p.id;
@@ -375,24 +487,11 @@ export default function WebPosCheckoutView({
                     key={p.id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => {
-                      if (selected) {
-                        setSelectedPaymentId(null);
-                        setBuffer('');
-                      } else {
-                        setSelectedPaymentId(p.id);
-                        setBuffer(String(p.amount));
-                      }
-                    }}
+                    onClick={() => selectPayment(p.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
-                        if (selected) {
-                          setSelectedPaymentId(null);
-                          setBuffer('');
-                        } else {
-                          setSelectedPaymentId(p.id);
-                          setBuffer(String(p.amount));
-                        }
+                        e.preventDefault();
+                        selectPayment(p.id);
                       }
                     }}
                     className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 ${
@@ -407,6 +506,8 @@ export default function WebPosCheckoutView({
                         <p className="mt-0.5 text-xs font-medium text-[var(--webpos-accent-text)]">
                           {t('webPosEntering')}: {liveEntryLabel}
                         </p>
+                      ) : selected ? (
+                        <p className="mt-0.5 text-xs text-stone-500">{t('webPosEditAmount')}</p>
                       ) : null}
                     </div>
                     <div className="flex items-center gap-2">
@@ -432,11 +533,13 @@ export default function WebPosCheckoutView({
           </div>
 
           <div className="mt-6 w-full max-w-md space-y-1 text-sm">
-            <div className="flex justify-between font-semibold">
+            <div
+              className={`flex justify-between font-semibold ${
+                remaining > 0.001 ? 'text-[var(--webpos-accent-text)]' : ''
+              }`}
+            >
               <span>{t('webPosRemaining')}</span>
-              <span className="tabular-nums text-[var(--webpos-accent-text)]">
-                CHF {remaining.toFixed(2)}
-              </span>
+              <span className="tabular-nums">CHF {remaining.toFixed(2)}</span>
             </div>
             {changeDue > 0 ? (
               <div className="flex justify-between font-semibold text-emerald-700">
@@ -447,19 +550,40 @@ export default function WebPosCheckoutView({
           </div>
         </div>
 
-        {canComplete ? (
-          <div className="mt-auto border-t border-stone-100 p-4">
+        <div className="mt-auto flex items-stretch gap-2 border-t border-stone-100 p-3 sm:p-4">
+          {onBack ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onBack}
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-40 lg:hidden"
+              aria-label={t('back')}
+              title={t('back')}
+            >
+              <ArrowLeft size={18} />
+            </button>
+          ) : null}
+          {canComplete ? (
             <button
               type="button"
               disabled={busy}
               onClick={complete}
-              className="webpos-accent-btn w-full rounded-xl px-4 py-3.5 text-sm font-bold disabled:opacity-40"
+              className="webpos-accent-btn min-h-12 flex-1 rounded-xl px-4 py-3.5 text-sm font-bold disabled:opacity-40"
             >
               {t('webPosConfirmPay')}
-              {changeDue > 0 ? ` ù ${t('webPosChangeDue')} CHF ${changeDue.toFixed(2)}` : ''}
+              {changeDue > 0 ? ` - ${t('webPosChangeDue')} CHF ${changeDue.toFixed(2)}` : ''}
             </button>
-          </div>
-        ) : null}
+          ) : onBack ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onBack}
+              className="hidden min-h-12 flex-1 rounded-xl border border-stone-200 bg-white px-4 py-3.5 text-sm font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-40 lg:inline-flex lg:items-center lg:justify-center"
+            >
+              {t('back')}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <WebPosTipKeypad

@@ -1,9 +1,14 @@
 /** Catalog text normalization and mojibake repair (UTF-8 read as Latin-1). */
 
-/** All dash / hyphen lookalikes that must become ASCII hyphen-minus (U+002D). */
+/**
+ * Dash / hyphen lookalikes → ASCII hyphen-minus (U+002D).
+ * Includes en/em/minus, fullwidth, soft hyphen, and C1 bytes (U+0096/97/9D)
+ * that appear when Windows-1252 dashes were mis-decoded.
+ */
 const DASH_LIKE =
-  /[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D\u00AD\u2043]/g;
+  /[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D\u00AD\u2043\u0096\u0097\u009D\uFFFD]/g;
 
+/** Fix UTF-8 bytes mis-read as ISO-8859-1 (e.g. SnackÃ© → Snacké). */
 export function repairUtf8Mojibake(text: string): string {
   if (!text.includes("\u00C3") && !text.includes("\u00C2") && !text.includes("\uFFFD")) {
     return text;

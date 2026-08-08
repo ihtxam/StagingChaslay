@@ -810,11 +810,22 @@ router.post("/resellers", async (req: Request, res: Response) => {
       email: req.body?.email,
       password: req.body?.password,
       phone: req.body?.phone,
+      licenseSeats: req.body?.licenseSeats != null ? Number(req.body.licenseSeats) : 0,
       createdBySuperadminId: req.user?.id,
     });
     res.status(201).json({ success: true, reseller });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+router.get("/resellers/:resellerId", async (req: Request, res: Response) => {
+  try {
+    const reseller = await ResellerService.getById(req.params.resellerId);
+    if (!reseller) return res.status(404).json({ error: "Reseller not found" });
+    res.json({ success: true, reseller });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
   }
 });
 
@@ -825,8 +836,71 @@ router.put("/resellers/:resellerId", async (req: Request, res: Response) => {
       phone: req.body?.phone,
       status: req.body?.status,
       password: req.body?.password,
+      licenseSeats:
+        req.body?.licenseSeats != null ? Number(req.body.licenseSeats) : undefined,
     });
     res.json({ success: true, reseller });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * POST /api/superadmin/resellers/:resellerId/allocate-seats
+ * Body: { seats } absolute OR { delta } relative
+ */
+router.post("/resellers/:resellerId/allocate-seats", async (req: Request, res: Response) => {
+  try {
+    const reseller = await ResellerService.allocateLicenseSeats(req.params.resellerId, {
+      seats: req.body?.seats != null ? Number(req.body.seats) : undefined,
+      delta: req.body?.delta != null ? Number(req.body.delta) : undefined,
+    });
+    res.json({ success: true, reseller });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * GET /api/superadmin/resellers/:resellerId/billing
+ * Invoice-style platform billing summary (what reseller owes Chaslay)
+ */
+router.get("/resellers/:resellerId/billing", async (req: Request, res: Response) => {
+  try {
+    const { ResellerBillingService } = await import("@/services/reseller-billing.service");
+    const year = req.query.year ? Number(req.query.year) : undefined;
+    const month = req.query.month ? Number(req.query.month) : undefined;
+    const invoice = await ResellerBillingService.getResellerInvoice(req.params.resellerId, {
+      year,
+      month,
+    });
+    res.json({ success: true, invoice });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * GET /api/superadmin/reseller-billing/prices
+ */
+router.get("/reseller-billing/prices", async (_req: Request, res: Response) => {
+  try {
+    const { ResellerBillingService } = await import("@/services/reseller-billing.service");
+    const prices = await ResellerBillingService.getPriceList();
+    res.json({ success: true, prices });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * PUT /api/superadmin/reseller-billing/prices
+ */
+router.put("/reseller-billing/prices", async (req: Request, res: Response) => {
+  try {
+    const { ResellerBillingService } = await import("@/services/reseller-billing.service");
+    const prices = await ResellerBillingService.setPriceList(req.body || {});
+    res.json({ success: true, prices });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
   }

@@ -79,6 +79,8 @@ import WebPosCartPanel from '@/components/webpos/WebPosCartPanel';
 import WebPosProductArea from '@/components/webpos/WebPosProductArea';
 import WebPosCheckoutView from '@/components/webpos/WebPosCheckoutView';
 import WebPosSuccessView from '@/components/webpos/WebPosSuccessView';
+import WebPosSendReceiptModal from '@/components/webpos/WebPosSendReceiptModal';
+import WebPosPrintChooserModal from '@/components/webpos/WebPosPrintChooserModal';
 import WebPosTablesView from '@/components/webpos/WebPosTablesView';
 import WebPosBookingsView from '@/components/webpos/WebPosBookingsView';
 import WebPosKitchenMessageModal from '@/components/webpos/WebPosKitchenMessageModal';
@@ -94,7 +96,17 @@ import WebPosGiftCardModal, {
   type GiftCardSettingsClient,
 } from '@/components/webpos/WebPosGiftCardModal';
 import type { AppliedPayment } from '@/components/webpos/WebPosCheckoutView';
+
+type SplitReceiptPart = {
+  id: string;
+  label: string;
+  text: string;
+  url?: string;
+  amount: number;
+  orderNumber?: string;
+};
 import type {
+  BillDiscount,
   GiftCardLineMeta,
   KeypadMode,
   OpenCartDraft,
@@ -103,6 +115,11 @@ import type {
   PosView,
 } from '@/components/webpos/types';
 import { openCartDraftKey } from '@/components/webpos/types';
+import {
+  applyBillDiscountToTotals,
+  merchandiseBase,
+  resolveBillDiscountAmount,
+} from '@/lib/webpos-bill-discount';
 import {
   playOrderAlertOnce,
   startOrderAlertLoop,
@@ -160,19 +177,19 @@ function lineExtrasLabel(l: CartLine) {
   const parts: string[] = [];
   if (l.comboSelections.length) {
     parts.push(
-      ...l.comboSelections.map((c) =>
-        c.selectedExtras?.length
-          ? `${c.productName} (${c.selectedExtras.map((e) => e.name).join(', ')})`
-          : c.productName
-      )
+      ...l.comboSelections.map((c) => {
+        const productName = repairCatalogText(c.productName || '');
+        const extras = (c.selectedExtras || []).map((e) => repairCatalogText(e.name || ''));
+        return extras.length ? `${productName} (${extras.join(', ')})` : productName;
+      })
     );
   }
   if (!l.comboSelections.length && l.selectedExtras.length) {
-    parts.push(...l.selectedExtras.map((e) => e.name));
+    parts.push(...l.selectedExtras.map((e) => repairCatalogText(e.name || '')));
   } else if (l.comboSelections.length && l.selectedExtras.length) {
-    parts.push(...l.selectedExtras.map((e) => e.name));
+    parts.push(...l.selectedExtras.map((e) => repairCatalogText(e.name || '')));
   }
-  return parts.join(' · ');
+  return parts.join(', ');
 }
 
 type SaleRecord = {
@@ -221,8 +238,27 @@ type WebPosPaymentConfig = {
 
 type CheckoutExtras = CheckoutResult;
 
+type TablePickerPurpose = 'set' | 'move_table' | 'move_dish';
+
 function money(n: number) {
   return `CHF ${n.toFixed(2)}`;
+}
+
+function mergeBillDiscounts(
+  source?: BillDiscount | null,
+  target?: BillDiscount | null
+): BillDiscount {
+  const empty: BillDiscount = { percent: 0, amount: 0 };
+  const src = source || empty;
+  const tgt = target || empty;
+  const srcHas = src.percent > 0 || src.amount > 0;
+  const tgtHas = tgt.percent > 0 || tgt.amount > 0;
+  if (!srcHas) return { percent: tgt.percent, amount: tgt.amount };
+  if (!tgtHas) return { percent: src.percent, amount: src.amount };
+  if (src.percent > 0 || tgt.percent > 0) {
+    return { percent: Math.max(src.percent, tgt.percent), amount: 0 };
+  }
+  return { percent: 0, amount: roundMoney2(src.amount + tgt.amount) };
 }
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
@@ -285,6 +321,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [kitchenMsgOpen, setKitchenMsgOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [setTableOpen, setSetTableOpen] = useState(false);
+  const [tablePickerPurpose, setTablePickerPurpose] = useState<TablePickerPurpose>('set');
+  const [moveSourceTable, setMoveSourceTable] = useState<{ id: string; label: string } | null>(
+    null
+  );
+  const [moveLineId, setMoveLineId] = useState<string | null>(null);
+  const [mergeTarget, setMergeTarget] = useState<{ id: string; label: string } | null>(null);
+  const [billDiscount, setBillDiscount] = useState<BillDiscount>({ percent: 0, amount: 0 });
+  const [billDiscountOpen, setBillDiscountOpen] = useState(false);
   const [setTabOpen, setSetTabOpen] = useState(false);
   const [postSuccessTarget, setPostSuccessTarget] = useState<'register' | 'tables'>(() => {
     const stored = localStorage.getItem('manupos_webpos_post_success');
@@ -308,6 +352,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('manupos_webpos_autoprint') !== '0');
   const [lastReceipt, setLastReceipt] = useState<string>('');
   const [lastReceiptUrl, setLastReceiptUrl] = useState<string>('');
+  const [lastReceiptOrderNumber, setLastReceiptOrderNumber] = useState<string>('');
+  const [lastSplitReceipts, setLastSplitReceipts] = useState<SplitReceiptPart[]>([]);
+  const splitReceiptsRef = useRef<SplitReceiptPart[]>([]);
+  const [sendReceiptOpen, setSendReceiptOpen] = useState(false);
+  const [sendReceiptBusy, setSendReceiptBusy] = useState(false);
+  const [sendReceiptPrefillEmail, setSendReceiptPrefillEmail] = useState('');
+  const [printChooserOpen, setPrintChooserOpen] = useState(false);
+  const [printChooserBusy, setPrintChooserBusy] = useState(false);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [ordersRefreshToken, setOrdersRefreshToken] = useState(0);
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
@@ -381,6 +433,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     localStorage.setItem('manupos_webpos_post_success', postSuccessTarget);
   }, [postSuccessTarget]);
+
+  /** Mobile cart page is phone-only; restore side-cart layout from lg up. */
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const sync = () => {
+      if (mq.matches) setMobileCartOpen(false);
+    };
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -540,17 +604,30 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [cart, taxRate, vatIncludedInPrice, roundingStep]
   );
 
+  const payableFullTotals = useMemo(
+    () => applyBillDiscountToTotals(fullTotals, billDiscount, vatIncludedInPrice, roundingStep),
+    [fullTotals, billDiscount, vatIncludedInPrice, roundingStep]
+  );
+
   const activeSale = useMemo(() => {
     const part = splitQueue[splitIndex];
     if (!part) {
-      return { lines: cart, totals: fullTotals, label: null as string | null };
+      return { lines: cart, totals: payableFullTotals, label: null as string | null };
     }
     if (part.lineIds.length > 0) {
       const lines = cart.filter((l) => part.lineIds.includes(l.lineId));
       const t = computeMerchandiseTotals(lines, taxRate, vatIncludedInPrice, roundingStep);
-      return { lines, totals: { ...t, total: part.amount }, label: part.label };
+      const payableShare =
+        payableFullTotals.total > 0 && fullTotals.total > 0
+          ? roundMoney2((t.total / fullTotals.total) * payableFullTotals.total)
+          : t.total;
+      return {
+        lines,
+        totals: { ...t, total: part.amount || payableShare, discount: 0 },
+        label: part.label,
+      };
     }
-    const factor = fullTotals.total > 0 ? part.amount / fullTotals.total : 1;
+    const factor = payableFullTotals.total > 0 ? part.amount / payableFullTotals.total : 1;
     const lines = scaleLinesByFactor(cart, factor);
     const t = computeMerchandiseTotals(lines, taxRate, vatIncludedInPrice, roundingStep);
     return {
@@ -559,13 +636,30 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ...t,
         total: part.amount,
         rounding: roundMoney2(part.amount - t.gross),
+        discount: 0,
       },
       label: part.label,
     };
-  }, [cart, fullTotals, splitQueue, splitIndex, taxRate, vatIncludedInPrice, roundingStep]);
+  }, [
+    cart,
+    fullTotals,
+    payableFullTotals,
+    splitQueue,
+    splitIndex,
+    taxRate,
+    vatIncludedInPrice,
+    roundingStep,
+  ]);
 
-  /** @deprecated alias - full cart totals for sidebar display */
-  const totals = splitQueue.length > 0 ? activeSale.totals : fullTotals;
+  /** Payable cart totals for sidebar / pay buttons (includes bill discount). */
+  const totals = splitQueue.length > 0 ? activeSale.totals : payableFullTotals;
+
+  const billDiscountLabel =
+    billDiscount.percent > 0
+      ? `${billDiscount.percent}%`
+      : billDiscount.amount > 0
+        ? money(billDiscount.amount)
+        : null;
 
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -724,6 +818,54 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           price: Number(p.price),
           sku: p.sku ?? null,
           barcode: p.barcode ?? null,
+          extras: Array.isArray(p.extras)
+            ? p.extras.map((e: any) => ({
+                ...e,
+                name: repairCatalogText(e?.name || ''),
+              }))
+            : p.extras,
+          modifierGroups: Array.isArray(p.modifierGroups)
+            ? p.modifierGroups.map((g: any) => ({
+                ...g,
+                name: repairCatalogText(g?.name || ''),
+                options: Array.isArray(g?.options)
+                  ? g.options.map((o: any) => ({
+                      ...o,
+                      name: repairCatalogText(o?.name || ''),
+                    }))
+                  : g?.options,
+              }))
+            : p.modifierGroups,
+          comboSlots: Array.isArray(p.comboSlots)
+            ? p.comboSlots.map((slot: any) => ({
+                ...slot,
+                name: repairCatalogText(slot?.name || ''),
+                products: Array.isArray(slot?.products)
+                  ? slot.products.map((sp: any) => ({
+                      ...sp,
+                      name: repairCatalogText(sp?.name || ''),
+                      extras: Array.isArray(sp?.extras)
+                        ? sp.extras.map((e: any) => ({
+                            ...e,
+                            name: repairCatalogText(e?.name || ''),
+                          }))
+                        : sp?.extras,
+                      modifierGroups: Array.isArray(sp?.modifierGroups)
+                        ? sp.modifierGroups.map((g: any) => ({
+                            ...g,
+                            name: repairCatalogText(g?.name || ''),
+                            options: Array.isArray(g?.options)
+                              ? g.options.map((o: any) => ({
+                                  ...o,
+                                  name: repairCatalogText(o?.name || ''),
+                                }))
+                              : g?.options,
+                          }))
+                        : sp?.modifierGroups,
+                    }))
+                  : slot?.products,
+              }))
+            : p.comboSlots,
         }))
       );
       await refreshAgent();
@@ -1295,6 +1437,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const applyKeypadToLine = () => {
     applyKeypadValue(keypadBuffer, { clearBuffer: true, allowQtyDelete: true });
+    setSelectedLineId(null);
+    setKeypadBuffer('');
   };
 
   const handleKeypadBufferChange = (buf: string) => {
@@ -1469,6 +1613,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         coursesBulkSent: true,
         selectedLineId: null,
         keypadBuffer: '',
+        billDiscount,
       });
       setDraftVersion((n) => n + 1);
     }
@@ -1476,6 +1621,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setSelectedLineId(null);
     setKeypadBuffer('');
     setOrderNote('');
+    setBillDiscount({ percent: 0, amount: 0 });
     setTableId(null);
     setTableLabel(null);
     setTabNumber(null);
@@ -1567,6 +1713,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     coursesBulkSent,
     selectedLineId,
     keypadBuffer,
+    billDiscount,
   });
 
   const saveOpenCartDraft = (override?: Partial<OpenCartDraft>) => {
@@ -1597,6 +1744,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setCoursesBulkSent(draft.coursesBulkSent);
     setSelectedLineId(draft.selectedLineId);
     setKeypadBuffer(draft.keypadBuffer);
+    setBillDiscount(draft.billDiscount || { percent: 0, amount: 0 });
   };
 
   /** Attach current cart lines to a table (Set table) — never wipe the cart. */
@@ -1611,6 +1759,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     let nextCourse = activeCourse;
     let nextOrderSent = orderSent;
     let nextCoursesBulkSent = coursesBulkSent;
+    let nextBillDiscount = billDiscount;
 
     if (existing && (existing.cart.length > 0 || existing.orderSent)) {
       const existingIds = new Set(existing.cart.map((l) => l.lineId));
@@ -1624,6 +1773,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       } else {
         nextNote = orderNote || existing.orderNote || '';
       }
+      nextBillDiscount = mergeBillDiscounts(billDiscount, existing.billDiscount);
     }
 
     if (fromKey !== toKey) {
@@ -1639,6 +1789,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setActiveCourse(nextCourse);
     setOrderSent(nextOrderSent);
     setCoursesBulkSent(nextCoursesBulkSent);
+    setBillDiscount(nextBillDiscount);
     setFulfillmentWhen(null);
 
     openCartDraftsRef.current.set(toKey, {
@@ -1653,6 +1804,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       coursesBulkSent: nextCoursesBulkSent,
       selectedLineId,
       keypadBuffer,
+      billDiscount: nextBillDiscount,
     });
     setDraftVersion((n) => n + 1);
     setPosTab('register');
@@ -1671,6 +1823,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setSelectedLineId(null);
       setKeypadBuffer('');
       setOrderNote('');
+      setBillDiscount({ percent: 0, amount: 0 });
       setTabNumber(null);
       setActiveCourse(1);
       setOrderSent(false);
@@ -1692,7 +1845,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setCart([]);
     setSelectedLineId(null);
     setKeypadBuffer('');
+    setMobileCartOpen(false);
     setOrderNote('');
+    setBillDiscount({ percent: 0, amount: 0 });
     setTableId(null);
     setTableLabel(null);
     setTabNumber(null);
@@ -1705,11 +1860,335 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setProvisionalPrinted(false);
   };
 
+  const getDraftForTable = (tid: string): OpenCartDraft | undefined => {
+    if (tableId === tid) return snapshotOpenCartDraft();
+    return openCartDraftsRef.current.get(openCartDraftKey({ tableId: tid, channel: 'dine_in' }));
+  };
+
+  const syncHeldOrdersForTableMove = async (
+    sourceId: string,
+    target: { id: string; label: string },
+    mutateCart?: (cart: CartLine[]) => CartLine[]
+  ) => {
+    try {
+      const res = await api.get('/merchant/pos/held');
+      const list = (res.data?.held || []) as Array<{
+        id: string;
+        label?: string;
+        channel?: string | null;
+        cartJson?: Record<string, unknown>;
+        status?: string;
+      }>;
+      for (const h of list) {
+        const cj = h.cartJson;
+        if (!cj || typeof cj !== 'object') continue;
+        if (cj.tableId !== sourceId) continue;
+        const prevCart = Array.isArray(cj.cart) ? (cj.cart as CartLine[]) : [];
+        const nextCart = mutateCart ? mutateCart(prevCart) : prevCart;
+        await api.delete(`/merchant/pos/held/${h.id}`);
+        if (!nextCart.length && mutateCart) continue;
+        await api.post('/merchant/pos/held', {
+          label: h.label || `${target.label} · ${money(payableFullTotals.total)}`,
+          channel: 'dine_in',
+          cartJson: {
+            ...cj,
+            cart: nextCart,
+            channel: 'dine_in',
+            tableId: target.id,
+            tableLabel: target.label,
+          },
+          staffId: webposStaff?.id,
+          staffName: webposStaff?.name,
+          sendToKitchen: h.status === 'sent_to_kitchen',
+        });
+      }
+    } catch {
+      /* best-effort */
+    }
+  };
+
+  const openMoveTablePicker = (source?: { id: string; label: string }) => {
+    const src =
+      source || (tableId && tableLabel ? { id: tableId, label: tableLabel } : null);
+    if (!src) {
+      toast.error(t('webPosSetTable'));
+      return;
+    }
+    saveOpenCartDraft();
+    const draft = getDraftForTable(src.id);
+    if (!draft || (!draft.cart.length && !draft.orderSent)) {
+      toast.error(t('webPosSetTable'));
+      return;
+    }
+    setMoveSourceTable(src);
+    setMoveLineId(null);
+    setMergeTarget(null);
+    setTablePickerPurpose('move_table');
+    setSetTableOpen(true);
+  };
+
+  const openMoveDishPicker = () => {
+    if (!tableId || !tableLabel || !selectedLineId) return;
+    saveOpenCartDraft();
+    setMoveSourceTable({ id: tableId, label: tableLabel });
+    setMoveLineId(selectedLineId);
+    setMergeTarget(null);
+    setTablePickerPurpose('move_dish');
+    setSetTableOpen(true);
+  };
+
+  const executeMoveEntireTable = async (
+    source: { id: string; label: string },
+    target: { id: string; label: string },
+    merge: boolean
+  ) => {
+    if (tableId === source.id || tableId === target.id) {
+      saveOpenCartDraft();
+    }
+    const srcDraft = getDraftForTable(source.id);
+    if (!srcDraft || (!srcDraft.cart.length && !srcDraft.orderSent)) return;
+    const tgtDraft = getDraftForTable(target.id);
+    const targetOccupied = !!(tgtDraft && (tgtDraft.cart.length > 0 || tgtDraft.orderSent));
+    if (targetOccupied && !merge) return;
+
+    const sourceKey = openCartDraftKey({ tableId: source.id, channel: 'dine_in' });
+    const targetKey = openCartDraftKey({ tableId: target.id, channel: 'dine_in' });
+
+    let result: OpenCartDraft;
+    if (merge && tgtDraft) {
+      const existingIds = new Set(tgtDraft.cart.map((l) => l.lineId));
+      const incoming = srcDraft.cart.filter((l) => !existingIds.has(l.lineId));
+      let nextNote = tgtDraft.orderNote || srcDraft.orderNote || '';
+      if (tgtDraft.orderNote && srcDraft.orderNote && tgtDraft.orderNote !== srcDraft.orderNote) {
+        nextNote = `${tgtDraft.orderNote} · ${srcDraft.orderNote}`;
+      }
+      result = {
+        cart: [...tgtDraft.cart, ...incoming],
+        channel: 'dine_in',
+        tableId: target.id,
+        tableLabel: target.label,
+        tabNumber: null,
+        orderNote: nextNote,
+        activeCourse: Math.max(tgtDraft.activeCourse || 1, srcDraft.activeCourse || 1),
+        orderSent: tgtDraft.orderSent || srcDraft.orderSent,
+        coursesBulkSent: tgtDraft.coursesBulkSent || srcDraft.coursesBulkSent,
+        selectedLineId: null,
+        keypadBuffer: '',
+        billDiscount: mergeBillDiscounts(srcDraft.billDiscount, tgtDraft.billDiscount),
+      };
+    } else {
+      result = {
+        ...srcDraft,
+        channel: 'dine_in',
+        tableId: target.id,
+        tableLabel: target.label,
+        tabNumber: null,
+      };
+    }
+
+    openCartDraftsRef.current.delete(sourceKey);
+    openCartDraftsRef.current.set(targetKey, result);
+
+    if (tableId === source.id || tableId === target.id) {
+      applyOpenCartDraft(result);
+    } else {
+      setDraftVersion((n) => n + 1);
+    }
+
+    await syncHeldOrdersForTableMove(source.id, target);
+
+    toast.success(
+      (merge ? t('webPosTableMerged') : t('webPosTableMoved')).replace('{table}', target.label)
+    );
+    setMoveSourceTable(null);
+    setMoveLineId(null);
+    setMergeTarget(null);
+    setTablePickerPurpose('set');
+  };
+
+  const executeMoveDish = async (
+    source: { id: string; label: string },
+    target: { id: string; label: string },
+    lineId: string
+  ) => {
+    if (tableId === source.id || tableId === target.id) {
+      saveOpenCartDraft();
+    }
+    const srcDraft = getDraftForTable(source.id);
+    if (!srcDraft) return;
+    const line = srcDraft.cart.find((l) => l.lineId === lineId);
+    if (!line) return;
+
+    const sourceKey = openCartDraftKey({ tableId: source.id, channel: 'dine_in' });
+    const targetKey = openCartDraftKey({ tableId: target.id, channel: 'dine_in' });
+    const newSourceCart = srcDraft.cart.filter((l) => l.lineId !== lineId);
+
+    let tgtDraft = getDraftForTable(target.id);
+    if (!tgtDraft) {
+      tgtDraft = {
+        cart: [],
+        channel: 'dine_in',
+        tableId: target.id,
+        tableLabel: target.label,
+        tabNumber: null,
+        orderNote: '',
+        activeCourse: 1,
+        orderSent: false,
+        coursesBulkSent: false,
+        selectedLineId: null,
+        keypadBuffer: '',
+        billDiscount: { percent: 0, amount: 0 },
+      };
+    }
+
+    const updatedTarget: OpenCartDraft = {
+      ...tgtDraft,
+      cart: tgtDraft.cart.some((l) => l.lineId === lineId)
+        ? tgtDraft.cart
+        : [...tgtDraft.cart, line],
+      channel: 'dine_in',
+      tableId: target.id,
+      tableLabel: target.label,
+      tabNumber: null,
+    };
+    openCartDraftsRef.current.set(targetKey, updatedTarget);
+
+    if (newSourceCart.length === 0) {
+      openCartDraftsRef.current.delete(sourceKey);
+    } else {
+      openCartDraftsRef.current.set(sourceKey, {
+        ...srcDraft,
+        cart: newSourceCart,
+        selectedLineId: srcDraft.selectedLineId === lineId ? null : srcDraft.selectedLineId,
+      });
+    }
+
+    if (tableId === source.id) {
+      if (newSourceCart.length === 0) {
+        setCart([]);
+        setSelectedLineId(null);
+        setKeypadBuffer('');
+        setOrderNote('');
+        setBillDiscount({ percent: 0, amount: 0 });
+        setTableId(null);
+        setTableLabel(null);
+        setOrderSent(false);
+        setCoursesBulkSent(false);
+        setChannel(null);
+        setDraftVersion((n) => n + 1);
+      } else {
+        applyOpenCartDraft({
+          ...srcDraft,
+          cart: newSourceCart,
+          selectedLineId: srcDraft.selectedLineId === lineId ? null : srcDraft.selectedLineId,
+        });
+      }
+    } else if (tableId === target.id) {
+      applyOpenCartDraft(updatedTarget);
+    } else {
+      setDraftVersion((n) => n + 1);
+    }
+
+    try {
+      const res = await api.get('/merchant/pos/held');
+      const list = (res.data?.held || []) as Array<{
+        id: string;
+        label?: string;
+        channel?: string | null;
+        cartJson?: Record<string, unknown>;
+        status?: string;
+      }>;
+      for (const h of list) {
+        const cj = h.cartJson;
+        if (!cj || typeof cj !== 'object' || cj.tableId !== source.id) continue;
+        const prevCart = Array.isArray(cj.cart) ? (cj.cart as CartLine[]) : [];
+        if (!prevCart.some((l) => l.lineId === lineId)) continue;
+        const moved = prevCart.find((l) => l.lineId === lineId)!;
+        const remaining = prevCart.filter((l) => l.lineId !== lineId);
+        await api.delete(`/merchant/pos/held/${h.id}`);
+        if (remaining.length) {
+          await api.post('/merchant/pos/held', {
+            label: h.label,
+            channel: (cj.channel as string) || 'dine_in',
+            cartJson: { ...cj, cart: remaining },
+            staffId: webposStaff?.id,
+            staffName: webposStaff?.name,
+            sendToKitchen: h.status === 'sent_to_kitchen',
+          });
+        }
+        await api.post('/merchant/pos/held', {
+          label: `${target.label} · ${moved.name}`,
+          channel: 'dine_in',
+          cartJson: {
+            cart: [moved],
+            channel: 'dine_in',
+            tableId: target.id,
+            tableLabel: target.label,
+          },
+          staffId: webposStaff?.id,
+          staffName: webposStaff?.name,
+          sendToKitchen: !!moved.sentToKitchen,
+        });
+      }
+    } catch {
+      /* best-effort */
+    }
+
+    toast.success(t('webPosDishMoved').replace('{table}', target.label));
+    setMoveSourceTable(null);
+    setMoveLineId(null);
+    setTablePickerPurpose('set');
+  };
+
+  const handleTablePickerSelect = (table: { id: string; label: string }) => {
+    setSetTableOpen(false);
+    if (tablePickerPurpose === 'set') {
+      assignCartToTable(table);
+      return;
+    }
+    if (tablePickerPurpose === 'move_table') {
+      const source = moveSourceTable;
+      if (!source) return;
+      if (source.id === table.id) {
+        toast.error(t('webPosSameTable'));
+        return;
+      }
+      const targetDraft = getDraftForTable(table.id);
+      if (targetDraft && (targetDraft.cart.length > 0 || targetDraft.orderSent)) {
+        setMergeTarget(table);
+        return;
+      }
+      void executeMoveEntireTable(source, table, false);
+      return;
+    }
+    if (tablePickerPurpose === 'move_dish') {
+      const source =
+        moveSourceTable ||
+        (tableId && tableLabel ? { id: tableId, label: tableLabel } : null);
+      if (!source || !moveLineId) return;
+      if (source.id === table.id) {
+        toast.error(t('webPosSameTable'));
+        return;
+      }
+      void executeMoveDish(source, table, moveLineId);
+    }
+  };
+
+  const checkoutBillDiscountExtras = () => {
+    const amount = resolveBillDiscountAmount(fullTotals, billDiscount, vatIncludedInPrice);
+    return {
+      discountPercent: billDiscount.percent,
+      discountAmount:
+        billDiscount.percent > 0 ? amount : billDiscount.amount > 0 ? billDiscount.amount : amount,
+    };
+  };
+
   const printProvisionalReceipt = async () => {
     if (!cart.length) return;
     try {
       const ticket = nextWebPosTicketNumber(merchant?.id);
       const lang = resolveReceiptLanguage(printSettings, paymentConfig?.panelLanguage || locale);
+      const disc = payableFullTotals.discount || 0;
       const receiptPayload: WebPosReceipt = {
         businessName: merchant?.name || APP_NAME,
         address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
@@ -1730,12 +2209,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           productId: l.productId,
           categoryId: l.categoryId,
         })),
-        subtotal: totals.subtotal,
-        discount: 0,
-        taxAmount: totals.tax,
+        subtotal: fullTotals.subtotal,
+        discount: disc,
+        taxAmount: payableFullTotals.tax,
         taxRate,
-        rounding: totals.rounding,
-        total: totals.total,
+        rounding: payableFullTotals.rounding,
+        total: payableFullTotals.total,
         vatIncludedInPrice,
         language: lang,
         paperWidthMm: printSettings?.paperWidthMm || 80,
@@ -1805,6 +2284,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setCustomerOpen(true);
       return;
     }
+    setMobileCartOpen(false);
+    setSelectedLineId(null);
     setPosView('checkout');
   };
 
@@ -1974,9 +2455,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       || payments[0];
     if (!primary) return;
     const amountTendered = roundMoney2(payments.reduce((s, p) => s + p.amount, 0));
+    const discExtras = checkoutBillDiscountExtras();
     const extras: CheckoutResult = {
       method: (primary.method === 'gift_card' ? 'card' : primary.method) as CheckoutResult['method'],
-      discountPercent: 0,
+      discountPercent: splitQueue.length > 0 ? 0 : discExtras.discountPercent,
+      discountAmount: splitQueue.length > 0 ? 0 : discExtras.discountAmount,
       tipAmount: tip,
       roundingAmount: totals.rounding,
       total: partTotal,
@@ -2025,9 +2508,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setCustomerOpen(true);
       return;
     }
+    const discExtras = checkoutBillDiscountExtras();
     const extras: CheckoutResult = {
       method,
-      discountPercent: 0,
+      discountPercent: discExtras.discountPercent,
+      discountAmount: discExtras.discountAmount,
       tipAmount: 0,
       roundingAmount: totals.rounding,
       total: totals.total,
@@ -2105,6 +2590,52 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const printReceipt = async (receiptText: string, receiptUrl?: string) => {
     await printEscPosToTargets(receiptText, { qrUrl: receiptUrl, role: 'receipt' });
+  };
+
+  const openSuccessPrint = () => {
+    if (lastSplitReceipts.length > 1) {
+      setPrintChooserOpen(true);
+      return;
+    }
+    if (lastReceipt) {
+      void printReceipt(lastReceipt, lastReceiptUrl || undefined).catch((e: any) =>
+        toast.error(e.message || t('webPosPrintFailed'))
+      );
+      return;
+    }
+    toast.error(t('webPosPrintFailed'));
+  };
+
+  const sendReceiptEmail = async (email: string) => {
+    setSendReceiptBusy(true);
+    try {
+      const parts = lastSplitReceipts.length > 0 ? lastSplitReceipts : null;
+      const receiptUrl =
+        parts && parts.length > 1
+          ? parts.map((p) => p.url).filter(Boolean).join('\n') || lastReceiptUrl
+          : lastReceiptUrl;
+      const receiptText =
+        parts && parts.length > 1
+          ? parts.map((p) => `${p.label}\n${p.text}`).join('\n\n----------\n\n')
+          : lastReceipt;
+      const amount =
+        parts && parts.length > 0
+          ? roundMoney2(parts.reduce((s, p) => s + p.amount, 0))
+          : successInfo?.amount;
+      await api.post('/merchant/pos/send-receipt-email', {
+        email,
+        receiptUrl: receiptUrl || undefined,
+        receiptText: receiptText || undefined,
+        orderNumber: lastReceiptOrderNumber || undefined,
+        amount: amount ?? undefined,
+      });
+      toast.success(t('webPosReceiptEmailSent'));
+      setSendReceiptOpen(false);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || e.message || t('webPosReceiptEmailFailed'));
+    } finally {
+      setSendReceiptBusy(false);
+    }
   };
 
   const printPosOrderReceipt = async (order: PosOrderForReceipt, splitLabel?: string | null) => {
@@ -2263,7 +2794,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const merchandiseGross = vatIncludedInPrice
       ? roundMoney2(saleTotals.subtotal + saleTotals.tax)
       : saleTotals.subtotal;
-    const discountAmount = roundMoney2((merchandiseGross * discPct) / 100);
+    const discountAmount =
+      extras?.discountAmount != null && extras.discountAmount > 0
+        ? roundMoney2(Math.min(extras.discountAmount, merchandiseGross))
+        : roundMoney2((merchandiseGross * discPct) / 100);
     const tipAmount = roundMoney2(extras?.tipAmount || 0);
     const roundingAmount = roundMoney2(
       extras?.roundingAmount != null ? extras.roundingAmount : saleTotals.rounding
@@ -2373,17 +2907,45 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       whenOverride !== undefined ? whenOverride : fulfillmentWhen;
     const extras = extrasOverride !== undefined ? extrasOverride : checkoutExtras;
     const saleLines = activeSale.lines;
-    const saleTotals = activeSale.totals;
+    /** Pre-discount merchandise for payload/receipt; payable amount comes from extras.total. */
+    const saleTotals =
+      splitQueue.length > 0
+        ? activeSale.totals
+        : computeMerchandiseTotals(saleLines, taxRate, vatIncludedInPrice, roundingStep);
     const splitMeta =
       splitQueue.length > 0 && splitMasterIdRef.current
         ? { masterOrderId: splitMasterIdRef.current, splitCheckNumber: splitIndex + 1 }
         : undefined;
+    const discExtras = checkoutBillDiscountExtras();
+    const extrasWithDisc: CheckoutExtras | null = extras
+      ? {
+          ...extras,
+          discountPercent:
+            extras.discountPercent ||
+            (splitQueue.length > 0 ? 0 : discExtras.discountPercent),
+          discountAmount:
+            extras.discountAmount != null && extras.discountAmount > 0
+              ? extras.discountAmount
+              : splitQueue.length > 0
+                ? 0
+                : discExtras.discountAmount,
+        }
+      : splitQueue.length > 0
+        ? extras
+        : {
+            method: method as CheckoutResult['method'],
+            discountPercent: discExtras.discountPercent,
+            discountAmount: discExtras.discountAmount,
+            tipAmount: 0,
+            roundingAmount: saleTotals.rounding,
+            total: payableFullTotals.total,
+          };
     const sale = buildSalePayload(
       clientId,
       method,
       whenSnapshot,
       ticket.orderNumber,
-      extras,
+      extrasWithDisc,
       saleLines,
       saleTotals,
       splitMeta
@@ -2441,7 +3003,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         };
       }),
       subtotal: saleTotals.subtotal,
-      discount: 0,
+      discount: sale.discountAmount || 0,
       taxAmount: saleTotals.tax,
       taxRate,
       rounding: saleTotals.rounding,
@@ -2462,6 +3024,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const receiptText = generateWebPosReceiptText(receiptPayload, locale);
     setLastReceipt(receiptText);
     setLastReceiptUrl(receiptUrl);
+    setLastReceiptOrderNumber(ticket.orderNumber || ticket.display || '');
+
+    const splitPart: SplitReceiptPart = {
+      id: clientId,
+      label:
+        activeSale.label ||
+        (splitQueue.length > 0
+          ? t('webPosSplitBillN').replace('{n}', String(splitIndex + 1))
+          : t('webPosPrintReceipt')),
+      text: receiptText,
+      url: receiptUrl,
+      amount: sale.total,
+      orderNumber: ticket.orderNumber || ticket.display,
+    };
+    if (splitQueue.length > 0) {
+      if (splitIndex === 0) splitReceiptsRef.current = [splitPart];
+      else splitReceiptsRef.current = [...splitReceiptsRef.current, splitPart];
+    } else {
+      splitReceiptsRef.current = [splitPart];
+    }
+
     setSales((prev) =>
       [
         {
@@ -2484,6 +3067,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const paidKey = openCartDraftKey({ tableId, tabNumber, channel });
       openCartDraftsRef.current.delete(paidKey);
       setDraftVersion((n) => n + 1);
+      setSendReceiptPrefillEmail(selectedCustomer?.email || '');
       setCart([]);
       setFulfillmentWhen(null);
       setSelectedCustomer(null);
@@ -2493,6 +3077,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setSelectedLineId(null);
       setKeypadBuffer('');
       setOrderNote('');
+      setBillDiscount({ percent: 0, amount: 0 });
       setTableId(null);
       setTableLabel(null);
       setTabNumber(null);
@@ -2500,14 +3085,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setOrderSent(false);
       setCoursesBulkSent(false);
       setChannel(null);
+      setLastSplitReceipts([...splitReceiptsRef.current]);
     }
     setCheckoutExtras(null);
     setCheckoutOpen(false);
     const payLater = method === 'pay_later';
     const paidTotal = sale.total;
+    const splitPaidTotal = roundMoney2(
+      splitReceiptsRef.current.reduce((s, p) => s + p.amount, 0)
+    );
     if (showSuccessScreen && !payLater && !moreSplits) {
       setSuccessInfo({
-        amount: paidTotal,
+        amount: splitReceiptsRef.current.length > 1 ? splitPaidTotal : paidTotal,
         changeDue: extras?.changeDue ?? null,
       });
       setPosView('success');
@@ -2580,7 +3169,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       try {
         await finalizeSale('cash', undefined, whenOverride, {
           method: 'cash',
-          discountPercent: 0,
+          ...checkoutBillDiscountExtras(),
           tipAmount: 0,
           roundingAmount: totals.rounding,
           total: totals.total,
@@ -2644,7 +3233,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await api.post('/merchant/pos/held', {
         label: `${channel} · ${money(totals.total)}`,
         channel,
-        cartJson: { cart, channel },
+        cartJson: { cart, channel, tableId, tableLabel, billDiscount, orderNote },
         staffId: webposStaff?.id,
         staffName: webposStaff?.name,
         sendToKitchen,
@@ -2743,6 +3332,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'CANCEL_ORDERS'));
   const canRefundOrders =
     !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'REFUND_ORDERS'));
+  const canApplyDiscounts =
+    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'APPLY_DISCOUNTS'));
   const canViewReports =
     !staffConfigured ||
     (!!webposStaff &&
@@ -2971,9 +3562,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (tab === 'tables' || tab === 'orders' || tab === 'bookings') {
       saveOpenCartDraft();
     }
+    setMobileCartOpen(false);
+    setSelectedLineId(null);
     setPosTab(tab);
     setPosView(tab);
   };
+
+  const cartItemsLabel =
+    cartCount === 1
+      ? t('webPosCartItemOne')
+      : t('webPosCartItems').replace('{n}', String(cartCount));
 
   return (
     <div
@@ -3050,6 +3648,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setSettingsOpen(false);
               void printTodayEod();
             }}
+            onlinePendingCount={onlinePendingCount}
+            onOnlineOrders={() => {
+              setSettingsOpen(false);
+              setOnlineOrdersOpen(true);
+              stopOrderAlertLoop();
+            }}
+            onSwitchUser={() => {
+              setSettingsOpen(false);
+              openSwitchUserPin();
+            }}
+            staffName={webposStaff?.name}
+            canDrawer={canDrawer}
+            onOpenDrawer={() => {
+              setSettingsOpen(false);
+              void openCashDrawer();
+            }}
           />
         }
       />
@@ -3101,6 +3715,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onComplete={(payments, changeDue, tipAmount) =>
               void completeMultiTenderCheckout(payments, changeDue, tipAmount)
             }
+            onBack={() => {
+              setPosView('register');
+              setPosTab('register');
+            }}
+            onBillDiscount={
+              checkoutSettings.discountsEnabled ? () => setBillDiscountOpen(true) : undefined
+            }
+            canApplyBillDiscount={canApplyDiscounts}
+            billDiscountLabel={billDiscountLabel}
+            billDiscountAmount={payableFullTotals.discount || 0}
           />
         ) : posView === 'success' && successInfo ? (
           <WebPosSuccessView
@@ -3108,24 +3732,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             changeDue={successInfo.changeDue}
             onBack={() => {
               setSuccessInfo(null);
+              setLastSplitReceipts([]);
+              splitReceiptsRef.current = [];
               setPosView('register');
               setPosTab('register');
             }}
-            onPrint={() => {
-              if (lastReceipt) void printReceipt(lastReceipt, lastReceiptUrl || undefined);
-              else toast.error(t('webPosPrintFailed'));
-            }}
+            onPrint={openSuccessPrint}
             onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
-            onSendReceipt={() => {
-              if (lastReceiptUrl && navigator.clipboard?.writeText) {
-                void navigator.clipboard.writeText(lastReceiptUrl);
-                toast.success(t('webPosReceiptLinkCopied'));
-              } else {
-                toast.success(t('webPosSendReceiptHint'));
-              }
-            }}
+            onSendReceipt={() => setSendReceiptOpen(true)}
             onContinue={() => {
               setSuccessInfo(null);
+              setLastSplitReceipts([]);
+              splitReceiptsRef.current = [];
               const next = isRetail ? 'register' : postSuccessTarget;
               setPosTab(next);
               setPosView(next);
@@ -3136,6 +3754,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             selectedTableId={tableId}
             draftTableIds={draftTableIds}
             onSelectTable={(table) => switchToTableOrder(table)}
+            onMoveTable={(table) => openMoveTablePicker(table)}
           />
         ) : posView === 'bookings' ? (
           <WebPosBookingsView />
@@ -3153,12 +3772,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             canRefund={canRefundOrders}
             highlightOrderId={highlightOrderId}
             onResumeHeld={(held) => {
-              const data = held.cartJson as { cart?: CartLine[]; channel?: Channel } | CartLine[];
+              const data = held.cartJson as
+                | {
+                    cart?: CartLine[];
+                    channel?: Channel;
+                    tableId?: string | null;
+                    tableLabel?: string | null;
+                    billDiscount?: BillDiscount;
+                    orderNote?: string;
+                  }
+                | CartLine[];
               if (Array.isArray(data)) {
                 setCart(data);
               } else if (data?.cart) {
                 setCart(data.cart);
                 if (data.channel) setChannel(data.channel);
+                if (data.tableId) setTableId(data.tableId);
+                if (data.tableLabel) setTableLabel(data.tableLabel);
+                if (data.orderNote != null) setOrderNote(data.orderNote);
+                if (data.billDiscount) setBillDiscount(data.billDiscount);
               }
               const sent = held.status === 'sent_to_kitchen';
               setOrderSent(sent);
@@ -3181,103 +3813,180 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               cartSide === 'right' ? 'lg:flex-row-reverse' : ''
             }`}
           >
-            <WebPosCartPanel
-              cart={cart}
-              totals={totals}
-              taxRate={taxRate}
-              money={money}
-              selectedLineId={selectedLineId}
-              onSelectLine={handleSelectLine}
-              keypadMode={keypadMode}
-              onKeypadModeChange={handleKeypadModeChange}
-              keypadBuffer={keypadBuffer}
-              onKeypadBufferChange={handleKeypadBufferChange}
-              onKeypadApply={applyKeypadToLine}
-              onKeypadAdjust={handleKeypadAdjust}
-              onKeypadBackspace={handleKeypadBackspace}
-              channel={channel}
-              onChannelChange={selectFulfillmentChannel}
-              activeCourse={activeCourse}
-              coursesEnabled={coursesEnabled}
-              courseNumbers={courseNumbers}
-              onSelectCourse={setActiveCourse}
-              orderNote={orderNote}
-              tableLabel={tableLabel}
-              tabNumber={tabNumber}
-              customerLabel={customerLabel}
-              fulfillmentLabel={fulfillmentWhen?.label || null}
-              fulfillmentIsLater={fulfillmentWhen?.mode === 'later'}
-              busy={busy || paymentModalOpen}
-              orderSent={orderSent}
-              showNewOrder={showNewOrderButton}
-              sendLabel={sendLabel}
-              onCustomer={() => setCustomerOpen(true)}
-              onProvisionalReceipt={() => void printProvisionalReceipt()}
-              onToggleChannel={convertChannel}
-              onCourse={advanceCourse}
-              onKitchenMessage={() => setKitchenMsgOpen(true)}
-              onSetTable={() => setSetTableOpen(true)}
-              onSetTab={() => setSetTabOpen(true)}
-              onSend={() => void sendCoursesToKitchen()}
-              onNewOrder={startNewOrder}
-              onPayment={openRegisterCheckout}
-              onCancelOrder={() => {
-                const can =
-                  cart.length > 0 &&
-                  (provisionalPrinted || orderSent || cart.some((l) => l.sentToKitchen));
-                if (!can) {
-                  toast.error(t('webPosCancelNeedSend'));
-                  return;
-                }
-                setCancelModal({ scope: 'order' });
-              }}
-              onCancelItem={() => {
-                const line = cart.find((l) => l.lineId === selectedLineId);
-                if (!line?.sentToKitchen) {
-                  toast.error(t('webPosCancelItemNeedSent'));
-                  return;
-                }
-                setCancelModal({ scope: 'item', lineId: line.lineId });
-              }}
-              onPayLater={() => beginCheckout('pay_later')}
-              onEditFulfillment={() => {
-                if (channel === 'takeaway' || channel === 'delivery') {
-                  setScheduleOpen(true);
-                }
-              }}
-              showSend={showSend}
-              hideTab={hideTab}
-              canCancelOrder={
-                cart.length > 0 &&
-                (provisionalPrinted || orderSent || cart.some((l) => l.sentToKitchen))
+            {/* Desktop: side cart. Mobile: full-screen cart page when open. */}
+            <div
+              className={
+                mobileCartOpen
+                  ? 'flex min-h-0 flex-1 flex-col'
+                  : 'hidden min-h-0 lg:flex lg:flex-col'
               }
-              canCancelItem={!!cart.find((l) => l.lineId === selectedLineId)?.sentToKitchen}
-              dockSide={cartSide}
-              showChannelTabs={showChannelTabs}
-              channelTabOptions={channelTabOptions}
-              kitchenEnabled={kitchenEnabled}
-              onHoldOrder={() => void holdCurrentOrder(false)}
-            />
-            <WebPosProductArea
-              categories={categories}
-              products={visibleProducts}
-              categoryId={categoryId}
-              onCategoryChange={setCategoryId}
-              onProductClick={onProductClick}
-              cartQtyByProduct={cartQtyByProduct}
-              productHasCombo={(p) => productHasComboSlots(p)}
-              productHasMods={(p) => productHasModifiers(p as ShopProductForModifiers)}
-              expressCheckout={enabledMethods.express}
-              expressMethods={{
-                cash: enabledMethods.cash,
-                card: enabledMethods.card,
-                terminal: enabledMethods.terminal,
-              }}
-              onExpressPay={(m) => void runExpressPay(m)}
-              expressDisabled={!cart.length || busy || paymentModalOpen}
-              giftCardsEnabled={giftCardsFeatureOn}
-              onGiftCards={() => setGiftCardOpsOpen(true)}
-            />
+            >
+              <WebPosCartPanel
+                cart={cart}
+                totals={totals}
+                taxRate={taxRate}
+                money={money}
+                selectedLineId={selectedLineId}
+                onSelectLine={handleSelectLine}
+                keypadMode={keypadMode}
+                onKeypadModeChange={handleKeypadModeChange}
+                keypadBuffer={keypadBuffer}
+                onKeypadBufferChange={handleKeypadBufferChange}
+                onKeypadApply={applyKeypadToLine}
+                onKeypadAdjust={handleKeypadAdjust}
+                onKeypadBackspace={handleKeypadBackspace}
+                channel={channel}
+                onChannelChange={selectFulfillmentChannel}
+                activeCourse={activeCourse}
+                coursesEnabled={coursesEnabled}
+                courseNumbers={courseNumbers}
+                onSelectCourse={setActiveCourse}
+                orderNote={orderNote}
+                tableLabel={tableLabel}
+                tabNumber={tabNumber}
+                customerLabel={customerLabel}
+                fulfillmentLabel={fulfillmentWhen?.label || null}
+                fulfillmentIsLater={fulfillmentWhen?.mode === 'later'}
+                busy={busy || paymentModalOpen}
+                orderSent={orderSent}
+                showNewOrder={showNewOrderButton}
+                sendLabel={sendLabel}
+                onCustomer={() => setCustomerOpen(true)}
+                onProvisionalReceipt={() => void printProvisionalReceipt()}
+                onToggleChannel={convertChannel}
+                onCourse={advanceCourse}
+                onKitchenMessage={() => setKitchenMsgOpen(true)}
+                onSetTable={() => {
+                  setTablePickerPurpose('set');
+                  setMoveSourceTable(null);
+                  setMoveLineId(null);
+                  setSetTableOpen(true);
+                }}
+                onSetTab={() => setSetTabOpen(true)}
+                onSend={() => void sendCoursesToKitchen()}
+                onNewOrder={startNewOrder}
+                onPayment={openRegisterCheckout}
+                onCancelOrder={() => {
+                  const can =
+                    cart.length > 0 &&
+                    (provisionalPrinted || orderSent || cart.some((l) => l.sentToKitchen));
+                  if (!can) {
+                    toast.error(t('webPosCancelNeedSend'));
+                    return;
+                  }
+                  setCancelModal({ scope: 'order' });
+                }}
+                onCancelItem={() => {
+                  const line = cart.find((l) => l.lineId === selectedLineId);
+                  if (!line?.sentToKitchen) {
+                    toast.error(t('webPosCancelItemNeedSent'));
+                    return;
+                  }
+                  setCancelModal({ scope: 'item', lineId: line.lineId });
+                }}
+                onPayLater={() => beginCheckout('pay_later')}
+                onEditFulfillment={() => {
+                  if (channel === 'takeaway' || channel === 'delivery') {
+                    setScheduleOpen(true);
+                  }
+                }}
+                showSend={showSend}
+                hideTab={hideTab}
+                canCancelOrder={
+                  cart.length > 0 &&
+                  (provisionalPrinted || orderSent || cart.some((l) => l.sentToKitchen))
+                }
+                canCancelItem={!!cart.find((l) => l.lineId === selectedLineId)?.sentToKitchen}
+                dockSide={cartSide}
+                showChannelTabs={showChannelTabs}
+                channelTabOptions={channelTabOptions}
+                kitchenEnabled={kitchenEnabled}
+                onHoldOrder={() => void holdCurrentOrder(false)}
+                onMoveTable={
+                  !isRetail && kitchenEnabled && tablesEditionOk
+                    ? () => openMoveTablePicker()
+                    : undefined
+                }
+                onMoveDish={
+                  !isRetail && kitchenEnabled && tablesEditionOk
+                    ? () => openMoveDishPicker()
+                    : undefined
+                }
+                onBillDiscount={
+                  checkoutSettings.discountsEnabled ? () => setBillDiscountOpen(true) : undefined
+                }
+                canApplyBillDiscount={canApplyDiscounts}
+                billDiscountLabel={billDiscountLabel}
+                layout={mobileCartOpen ? 'page' : 'side'}
+                onBack={
+                  mobileCartOpen
+                    ? () => {
+                        setMobileCartOpen(false);
+                        setSelectedLineId(null);
+                        setKeypadBuffer('');
+                      }
+                    : undefined
+                }
+              />
+            </div>
+
+            {/* Products (mobile default). Hidden on mobile while cart page is open. */}
+            <div
+              className={
+                mobileCartOpen
+                  ? 'hidden min-h-0 min-w-0 flex-1 flex-col lg:flex'
+                  : 'flex min-h-0 min-w-0 flex-1 flex-col'
+              }
+            >
+              <WebPosProductArea
+                categories={categories}
+                products={visibleProducts}
+                categoryId={categoryId}
+                onCategoryChange={setCategoryId}
+                onProductClick={onProductClick}
+                cartQtyByProduct={cartQtyByProduct}
+                productHasCombo={(p) => productHasComboSlots(p)}
+                productHasMods={(p) => productHasModifiers(p as ShopProductForModifiers)}
+                expressCheckout={enabledMethods.express}
+                expressMethods={{
+                  cash: enabledMethods.cash,
+                  card: enabledMethods.card,
+                  terminal: enabledMethods.terminal,
+                }}
+                onExpressPay={(m) => void runExpressPay(m)}
+                expressDisabled={!cart.length || busy || paymentModalOpen}
+                giftCardsEnabled={giftCardsFeatureOn}
+                onGiftCards={() => setGiftCardOpsOpen(true)}
+              />
+              {/* Odoo-style mobile sticky Pay + Cart */}
+              <div className="webpos-mobile-pay-cart shrink-0 border-t border-stone-200 bg-white p-2 lg:hidden">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={!cart.length || busy || paymentModalOpen}
+                    onClick={openRegisterCheckout}
+                    className="flex flex-col items-center justify-center rounded-xl border border-stone-300 bg-white px-3 py-3 text-stone-800 hover:bg-stone-50 disabled:opacity-40"
+                  >
+                    <span className="text-sm font-bold leading-none">{t('webPosPay')}</span>
+                    <span className="mt-1 text-xs font-semibold tabular-nums text-stone-600">
+                      {money(totals.total)}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileCartOpen(true);
+                      setSelectedLineId(null);
+                      setKeypadBuffer('');
+                    }}
+                    className="webpos-accent-btn flex flex-col items-center justify-center rounded-xl px-3 py-3 disabled:opacity-40"
+                  >
+                    <span className="text-sm font-bold leading-none">{t('webPosCart')}</span>
+                    <span className="mt-1 text-xs font-semibold opacity-95">{cartItemsLabel}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -3288,20 +3997,72 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 compact
                 amount={successInfo.amount}
                 changeDue={successInfo.changeDue}
-                onPrint={() => {
-                  if (lastReceipt) void printReceipt(lastReceipt, lastReceiptUrl || undefined);
-                  else toast.error(t('webPosPrintFailed'));
-                }}
+                onPrint={openSuccessPrint}
                 onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
+                onSendReceipt={() => setSendReceiptOpen(true)}
                 onContinue={() => {
                   setExpressSuccessOpen(false);
                   setSuccessInfo(null);
+                  setLastSplitReceipts([]);
+                  splitReceiptsRef.current = [];
                 }}
               />
             </div>
           </div>
         ) : null}
       </div>
+
+      <WebPosSendReceiptModal
+        open={sendReceiptOpen}
+        busy={sendReceiptBusy}
+        initialEmail={sendReceiptPrefillEmail}
+        onClose={() => {
+          if (!sendReceiptBusy) setSendReceiptOpen(false);
+        }}
+        onSend={(email) => void sendReceiptEmail(email)}
+      />
+
+      <WebPosPrintChooserModal
+        open={printChooserOpen}
+        busy={printChooserBusy}
+        parts={lastSplitReceipts.map((p) => ({
+          id: p.id,
+          label: p.label,
+          amount: p.amount,
+        }))}
+        onClose={() => {
+          if (!printChooserBusy) setPrintChooserOpen(false);
+        }}
+        onPrintPart={async (partId) => {
+          const part = lastSplitReceipts.find((p) => p.id === partId);
+          if (!part) return;
+          setPrintChooserBusy(true);
+          try {
+            await printReceipt(part.text, part.url);
+            setPrintChooserOpen(false);
+          } catch (e: any) {
+            toast.error(e.message || t('webPosPrintFailed'));
+          } finally {
+            setPrintChooserBusy(false);
+          }
+        }}
+        onPrintComplete={async () => {
+          if (!lastSplitReceipts.length) return;
+          setPrintChooserBusy(true);
+          try {
+            const combined = lastSplitReceipts
+              .map((p) => p.text)
+              .join('\n\n====================\n\n');
+            const firstUrl = lastSplitReceipts[0]?.url;
+            await printReceipt(combined, firstUrl);
+            setPrintChooserOpen(false);
+          } catch (e: any) {
+            toast.error(e.message || t('webPosPrintFailed'));
+          } finally {
+            setPrintChooserBusy(false);
+          }
+        }}
+      />
 
       <WebPosKitchenMessageModal
         open={kitchenMsgOpen}
@@ -3316,13 +4077,60 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       />
       <WebPosSetTableModal
         open={setTableOpen}
-        onClose={() => setSetTableOpen(false)}
-        selectedTableId={tableId}
-        onSelect={(table) => {
+        onClose={() => {
           setSetTableOpen(false);
-          assignCartToTable(table);
+          setTablePickerPurpose('set');
         }}
+        selectedTableId={tableId}
+        excludeTableId={
+          tablePickerPurpose === 'set'
+            ? null
+            : moveSourceTable?.id || tableId
+        }
+        title={
+          tablePickerPurpose === 'move_table'
+            ? t('webPosMoveTableTo')
+            : tablePickerPurpose === 'move_dish'
+              ? t('webPosMoveDishTo')
+              : undefined
+        }
+        draftTableIds={draftTableIds}
+        onSelect={handleTablePickerSelect}
       />
+
+      {mergeTarget && moveSourceTable ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-stone-900">
+              {t('webPosMergeTableTitle')}
+            </h3>
+            <p className="mt-2 text-sm text-stone-600">
+              {t('webPosMergeTableBody').replace('{table}', mergeTarget.label)}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary text-sm"
+                onClick={() => setMergeTarget(null)}
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                onClick={() => {
+                  const source = moveSourceTable;
+                  const target = mergeTarget;
+                  setMergeTarget(null);
+                  if (source && target) void executeMoveEntireTable(source, target, true);
+                }}
+              >
+                {t('webPosMerge')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <WebPosSetTabModal
         open={setTabOpen}
         onClose={() => setSetTabOpen(false)}
@@ -3388,6 +4196,40 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           }
           addConfiguredProduct(pendingOpenPrice, amount, [], []);
           setPendingOpenPrice(null);
+        }}
+      />
+
+      <WebPosTipKeypad
+        open={billDiscountOpen}
+        title={t('webPosBillDiscount')}
+        baseAmount={merchandiseBase(fullTotals, vatIncludedInPrice)}
+        presetsPercent={(checkoutSettings.discountPresets || [])
+          .map((p) => p.percent)
+          .filter((p) => p > 0)}
+        allowPercent
+        allowCustom
+        initial={
+          billDiscount.percent > 0
+            ? billDiscount.percent
+            : billDiscount.amount > 0
+              ? billDiscount.amount
+              : 0
+        }
+        onClose={() => setBillDiscountOpen(false)}
+        onConfirm={(amount, meta) => {
+          if (!canApplyDiscounts) {
+            setBillDiscountOpen(false);
+            return;
+          }
+          if (meta?.mode === 'percent') {
+            setBillDiscount({ percent: Math.max(0, meta.value), amount: 0 });
+          } else {
+            setBillDiscount({ percent: 0, amount: Math.max(0, amount) });
+          }
+          setBillDiscountOpen(false);
+          if (amount > 0 || (meta?.value || 0) > 0) {
+            toast.success(t('webPosBillDiscountApplied'));
+          }
         }}
       />
 
@@ -3537,6 +4379,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onConfirm={(parts) => {
           setSplitOpen(false);
           splitMasterIdRef.current = crypto.randomUUID();
+          splitReceiptsRef.current = [];
+          setLastSplitReceipts([]);
           setSplitQueue(parts);
           setSplitIndex(0);
           setCheckoutSeedMethod('cash');

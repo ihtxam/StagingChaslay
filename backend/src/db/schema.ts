@@ -49,6 +49,11 @@ export const resellers = pgTable(
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
     phone: varchar("phone", { length: 40 }),
     status: varchar("status", { length: 50 }).default("active").notNull(), // active | suspended
+    /**
+     * Device-license seat pool granted by Superadmin.
+     * Reseller issues seats to their own merchants from this quota.
+     */
+    licenseSeats: integer("license_seats").default(0).notNull(),
     /** Optional branding JSON for future white-label */
     branding: json("branding").$type<Record<string, unknown> | null>(),
     createdBySuperadminId: uuid("created_by_superadmin_id").references(() => superadmins.id, {
@@ -468,6 +473,10 @@ export const licenses = pgTable(
     expiresAt: timestamp("expires_at").notNull(),
     renewalNotifiedAt: timestamp("renewal_notified_at"),
     status: varchar("status", { length: 50 }).default("active").notNull(), // active, expired, suspended
+    /** When set, this seat was issued from a reseller's license pool */
+    issuedByResellerId: uuid("issued_by_reseller_id").references(() => resellers.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -477,6 +486,7 @@ export const licenses = pgTable(
     licenseKeyIdx: uniqueIndex("licenses_license_key_idx").on(table.licenseKey),
     statusIdx: index("licenses_status_idx").on(table.status),
     expiresAtIdx: index("licenses_expires_at_idx").on(table.expiresAt),
+    issuedByResellerIdx: index("licenses_issued_by_reseller_idx").on(table.issuedByResellerId),
   })
 );
 

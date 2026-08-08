@@ -1483,6 +1483,92 @@ router.post(
   }
 );
 
+/**
+ * POST /api/merchant/pos/send-receipt-email
+ * Email a digital receipt link (and optional plain-text receipt) via merchant SMTP / Brevo.
+ */
+router.post("/pos/send-receipt-email", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+
+    const to = String(req.body?.email || req.body?.to || "").trim();
+    if (!to.includes("@")) {
+      return res.status(400).json({ error: "Valid email required" });
+    }
+
+    const receiptUrl = String(req.body?.receiptUrl || "").trim();
+    const receiptText = String(req.body?.receiptText || "").trim();
+    const orderNumber = String(req.body?.orderNumber || "").trim();
+    const amount =
+      req.body?.amount != null && Number.isFinite(Number(req.body.amount))
+        ? Number(req.body.amount)
+        : null;
+
+    if (!receiptUrl && !receiptText) {
+      return res.status(400).json({ error: "receiptUrl or receiptText is required" });
+    }
+
+    const merchant = await getDb().query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { name: true },
+    });
+    const shopName = merchant?.name || "Shop";
+    const subjectBits = [
+      shopName,
+      orderNumber ? `#${orderNumber}` : null,
+      "Receipt",
+    ].filter(Boolean);
+    const subject = subjectBits.join(" · ");
+
+    const amountLine =
+      amount != null
+        ? `<p style="font-size:18px;font-weight:700;margin:12px 0;">CHF ${amount.toFixed(2)}</p>`
+        : "";
+    const linkBlock = receiptUrl
+      ? `<p><a href="${receiptUrl}" style="display:inline-block;padding:10px 16px;background:#0f766e;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">View receipt</a></p>
+         <p style="color:#666;font-size:12px;word-break:break-all;">${receiptUrl}</p>`
+      : "";
+    const textBlock = receiptText
+      ? `<pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:12px;background:#f5f5f4;padding:12px;border-radius:8px;">${receiptText
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")}</pre>`
+      : "";
+
+    const html = `
+      <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;color:#1c1917;">
+        <h2 style="margin:0 0 8px;">${shopName}</h2>
+        <p style="margin:0;color:#57534e;">Your receipt${orderNumber ? ` for order ${orderNumber}` : ""}</p>
+        ${amountLine}
+        ${linkBlock}
+        ${textBlock}
+      </div>
+    `;
+    const text =
+      `${shopName}\nYour receipt${orderNumber ? ` for order ${orderNumber}` : ""}\n` +
+      (amount != null ? `CHF ${amount.toFixed(2)}\n` : "") +
+      (receiptUrl ? `${receiptUrl}\n` : "") +
+      (receiptText ? `\n${receiptText}\n` : "");
+
+    const { EmailService } = await import("@/services/email.service");
+    await EmailService.send({
+      merchantId,
+      to,
+      subject,
+      html,
+      text,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Send receipt email failed:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to send receipt email",
+    });
+  }
+});
+
 /** GET /api/merchant/pos/orders — POS order history */
 router.get("/pos/orders", async (req: Request, res: Response) => {
   try {

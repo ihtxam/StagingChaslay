@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowLeftRight,
   Ban,
   MessageSquare,
@@ -8,12 +9,13 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
+import { normalizeDashes, repairCatalogText } from '@/lib/text-encoding';
 import WebPosNumericKeypad from './WebPosNumericKeypad';
 import type { CartLine, KeypadMode, PosChannel } from './types';
 
 type Props = {
   cart: CartLine[];
-  totals: { subtotal: number; tax: number; rounding: number; total: number };
+  totals: { subtotal: number; tax: number; rounding: number; total: number; discount?: number };
   taxRate: number;
   money: (n: number) => string;
   selectedLineId: string | null;
@@ -65,29 +67,44 @@ type Props = {
   showChannelTabs?: boolean;
   /** Which fulfillment channels appear when tabs are shown. */
   channelTabOptions?: Array<'takeaway' | 'delivery'>;
-  /** Kitchen message, SEND, set table — restaurant only. */
+  /** Kitchen message, SEND, set table - restaurant only. */
   kitchenEnabled?: boolean;
   /** Hold current cart without kitchen send (retail / direct sale). */
   onHoldOrder?: () => void;
+  /** Move whole open table order to another table. */
+  onMoveTable?: () => void;
+  /** Move selected cart line to another table. */
+  onMoveDish?: () => void;
+  /** Apply whole-bill discount. */
+  onBillDiscount?: () => void;
+  canApplyBillDiscount?: boolean;
+  billDiscountLabel?: string | null;
+  /**
+   * `page` = full-screen mobile cart (Odoo-style).
+   * `side` = desktop docked cart.
+   */
+  layout?: 'side' | 'page';
+  /** Mobile cart: back to products. */
+  onBack?: () => void;
 };
 
 function lineExtrasLabel(l: CartLine) {
   const parts: string[] = [];
   if (l.comboSelections.length) {
     parts.push(
-      ...l.comboSelections.map((c) =>
-        c.selectedExtras?.length
-          ? `${c.productName} (${c.selectedExtras.map((e) => e.name).join(', ')})`
-          : c.productName
-      )
+      ...l.comboSelections.map((c) => {
+        const productName = repairCatalogText(c.productName || '');
+        const extras = (c.selectedExtras || []).map((e) => repairCatalogText(e.name || ''));
+        return extras.length ? `${productName} (${extras.join(', ')})` : productName;
+      })
     );
   }
   if (!l.comboSelections.length && l.selectedExtras.length) {
-    parts.push(...l.selectedExtras.map((e) => e.name));
+    parts.push(...l.selectedExtras.map((e) => repairCatalogText(e.name || '')));
   } else if (l.comboSelections.length && l.selectedExtras.length) {
-    parts.push(...l.selectedExtras.map((e) => e.name));
+    parts.push(...l.selectedExtras.map((e) => repairCatalogText(e.name || '')));
   }
-  return parts.join(', ');
+  return normalizeDashes(parts.join(', '));
 }
 
 type CartRow =
@@ -166,10 +183,19 @@ export default function WebPosCartPanel({
   channelTabOptions = ['takeaway', 'delivery'],
   kitchenEnabled = true,
   onHoldOrder,
+  onMoveTable,
+  onMoveDish,
+  onBillDiscount,
+  canApplyBillDiscount = true,
+  billDiscountLabel,
+  layout = 'side',
+  onBack,
 }: Props) {
   const { t } = useI18n();
   const hasItems = cart.length > 0;
-  const keypadExpanded = hasItems;
+  const isPage = layout === 'page';
+  /** Keypad only while a cart line is selected (mobile + desktop). */
+  const keypadExpanded = !!selectedLineId;
   const effectiveShowSend = kitchenEnabled && showSend;
   const channelOptions =
     channelTabOptions.length > 0 ? channelTabOptions : (['takeaway', 'delivery'] as const);
@@ -190,9 +216,17 @@ export default function WebPosCartPanel({
     return out;
   }, [cart, courseNumbers, coursesEnabled]);
 
+  const selectedLine = selectedLineId
+    ? cart.find((l) => l.lineId === selectedLineId) || null
+    : null;
+
   return (
     <aside
-      className={`webpos-cart-panel flex w-full shrink-0 flex-col ${sideBorder} border-stone-200 bg-white lg:w-[min(22rem,34vw)]`}
+      className={`webpos-cart-panel flex w-full shrink-0 flex-col bg-white ${
+        isPage
+          ? 'min-h-0 flex-1 border-0'
+          : `${sideBorder} border-stone-200 lg:w-[min(22rem,34vw)]`
+      }`}
     >
       {/* Channel: Takeaway / Delivery above cart */}
       {showChannelTabs ? (
@@ -337,6 +371,50 @@ export default function WebPosCartPanel({
                   {t('webPosHoldOrder')}
                 </button>
               ) : null}
+              {onMoveTable ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                  disabled={!hasItems || busy || !tableLabel}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onMoveTable();
+                  }}
+                >
+                  {t('webPosMoveTable')}
+                </button>
+              ) : null}
+              {onMoveDish ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                  disabled={!selectedLineId || busy || !tableLabel}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onMoveDish();
+                  }}
+                >
+                  {t('webPosMoveDishTo')}
+                </button>
+              ) : null}
+              {onBillDiscount ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                  disabled={!hasItems || busy || !canApplyBillDiscount}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onBillDiscount();
+                  }}
+                >
+                  {billDiscountLabel
+                    ? `${t('webPosBillDiscount')} (${billDiscountLabel})`
+                    : t('webPosBillDiscount')}
+                </button>
+              ) : null}
               <button
                 type="button"
                 role="menuitem"
@@ -460,6 +538,7 @@ export default function WebPosCartPanel({
               const l = row.line;
               const selected = selectedLineId === l.lineId;
               const extras = lineExtrasLabel(l);
+              const lineName = repairCatalogText(l.name || '');
               return (
                 <li key={l.lineId}>
                   <button
@@ -474,7 +553,7 @@ export default function WebPosCartPanel({
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-medium leading-snug">
-                          <span className="tabular-nums">{l.quantity}</span> {l.name}
+                          <span className="tabular-nums">{l.quantity}</span> {lineName}
                           {l.sentToKitchen ? (
                             <span className="ml-1 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
                               {t('webPosSentBadge')}
@@ -482,7 +561,10 @@ export default function WebPosCartPanel({
                           ) : null}
                         </p>
                         {extras ? (
-                          <p className="mt-0.5 text-[11px] text-stone-500">- {extras}</p>
+                          <p className="mt-0.5 text-[11px] text-stone-500">
+                            {'- '}
+                            {extras}
+                          </p>
                         ) : null}
                         {l.lineDiscountPercent ? (
                           <p className="text-[11px] font-medium text-[var(--webpos-accent-text)]">
@@ -504,6 +586,15 @@ export default function WebPosCartPanel({
 
       <div className="shrink-0 border-t border-stone-100 px-3 py-2">
         <div className="space-y-0.5 text-sm">
+          {(totals.discount || 0) > 0 ? (
+            <div className="flex justify-between text-[var(--webpos-accent-text)]">
+              <span>
+                {t('discount')}
+                {billDiscountLabel ? ` (${billDiscountLabel})` : ''}
+              </span>
+              <span className="tabular-nums">-{money(totals.discount || 0)}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between text-stone-500">
             <span>{t('webPosTax').replace('{rate}', String(taxRate))}</span>
             <span className="tabular-nums">{money(totals.tax)}</span>
@@ -515,13 +606,13 @@ export default function WebPosCartPanel({
         </div>
       </div>
 
-      {/* Keypad: compact, docked at bottom for more cart space */}
+      {/* Course + keypad: keypad only when a line is selected */}
       <div
         className={`shrink-0 border-t border-stone-100 bg-stone-50 transition-all ${
           keypadExpanded ? 'px-1.5 py-1' : 'px-1.5 py-0.5'
         }`}
       >
-        {coursesEnabled ? (
+        {coursesEnabled && (keypadExpanded || !isPage) ? (
           <div className="mb-1">
             <p className="mb-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-violet-700">
               {t('webPosCourse')} {activeCourse} - {t('webPosCourseActive')}
@@ -536,28 +627,69 @@ export default function WebPosCartPanel({
               + {t('webPosAddNextCourse')}
             </button>
           </div>
+        ) : coursesEnabled && isPage && !keypadExpanded ? (
+          <button
+            type="button"
+            className="mb-1 w-full rounded-md bg-violet-50 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100 disabled:opacity-40"
+            onClick={onCourse}
+            disabled={!hasItems}
+          >
+            + {t('webPosAddNextCourse')}
+          </button>
         ) : null}
+
         {keypadExpanded ? (
-          <WebPosNumericKeypad
-            mode={keypadMode}
-            onModeChange={onKeypadModeChange}
-            buffer={keypadBuffer}
-            onBufferChange={onKeypadBufferChange}
-            onApply={onKeypadApply}
-            onAdjust={onKeypadAdjust}
-            onBackspace={onKeypadBackspace}
-            disabled={!selectedLineId}
-            compact
-            hideApply
-          />
-        ) : (
-          <p className="py-0.5 text-center text-[10px] font-medium uppercase tracking-wide text-stone-400">
-            {t('webPosKeypadMinimized')}
-          </p>
-        )}
+          <>
+            {selectedLine ? (
+              <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
+                <p className="min-w-0 truncate text-xs font-semibold text-stone-700">
+                  <span className="tabular-nums">{selectedLine.quantity}</span>{' '}
+                  {repairCatalogText(selectedLine.name || '')}
+                </p>
+                <button
+                  type="button"
+                  className="webpos-accent-btn shrink-0 rounded-md px-3 py-1 text-xs font-bold"
+                  onClick={onKeypadApply}
+                  disabled={busy}
+                >
+                  {t('webPosKeypadApply')}
+                </button>
+              </div>
+            ) : null}
+            <WebPosNumericKeypad
+              mode={keypadMode}
+              onModeChange={onKeypadModeChange}
+              buffer={keypadBuffer}
+              onBufferChange={onKeypadBufferChange}
+              onApply={onKeypadApply}
+              onAdjust={onKeypadAdjust}
+              onBackspace={onKeypadBackspace}
+              disabled={!selectedLineId}
+              compact
+              hideApply
+            />
+          </>
+        ) : null}
       </div>
 
-      <div className="shrink-0 grid grid-cols-[1fr_1fr_1.4fr] gap-1.5 border-t border-stone-200 bg-white p-2">
+      <div
+        className={`shrink-0 grid gap-1.5 border-t border-stone-200 bg-white p-2 ${
+          isPage && onBack
+            ? 'grid-cols-[auto_1fr_1fr_1.4fr]'
+            : 'grid-cols-[1fr_1fr_1.4fr]'
+        }`}
+      >
+        {isPage && onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex h-full min-h-[2.75rem] w-11 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+            aria-label={t('back')}
+            title={t('back')}
+          >
+            <ArrowLeft size={18} />
+          </button>
+        ) : null}
         {showNewOrder ? (
           <button
             type="button"

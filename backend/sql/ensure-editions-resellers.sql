@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS resellers (
   password_hash VARCHAR(255) NOT NULL,
   phone VARCHAR(40),
   status VARCHAR(50) NOT NULL DEFAULT 'active',
+  license_seats INTEGER NOT NULL DEFAULT 0,
   branding JSONB,
   created_by_superadmin_id UUID REFERENCES superadmins(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

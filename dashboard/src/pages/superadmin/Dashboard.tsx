@@ -39,7 +39,7 @@ function SuperadminShell() {
         { label: t('merchants'), path: '/superadmin/merchants', icon: '🏪' },
         { label: t('licenses'), path: '/superadmin/licenses', icon: '🔑' },
         { label: t('posVersions'), path: '/superadmin/editions', icon: '📦' },
-        { label: 'Resellers', path: '/superadmin/resellers', icon: '🤝' },
+        { label: t('resellerManage'), path: '/superadmin/resellers', icon: '🤝' },
       ],
     },
     { label: t('analytics'), path: '/superadmin/analytics', icon: '📈' },

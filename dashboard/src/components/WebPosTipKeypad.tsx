@@ -15,7 +15,8 @@ type Props = {
   allowPercent?: boolean;
   allowCustom?: boolean;
   onClose: () => void;
-  onConfirm: (amount: number) => void;
+  /** Second arg: raw keypad mode/value (for bill discount % vs fixed). */
+  onConfirm: (amount: number, meta?: { mode: TipMode; value: number }) => void;
 };
 
 export default function WebPosTipKeypad({
@@ -153,7 +154,7 @@ export default function WebPosTipKeypad({
               className="btn-secondary flex-1"
               onClick={() => {
                 setBuf('');
-                onConfirm(0);
+                onConfirm(0, { mode, value: 0 });
               }}
             >
               {t('clear')}
@@ -162,7 +163,8 @@ export default function WebPosTipKeypad({
               type="button"
               className="btn-primary flex-1"
               onClick={() => {
-                onConfirm(resolvedAmount);
+                const value = Number(buf) || 0;
+                onConfirm(resolvedAmount, { mode, value });
                 onClose();
               }}
             >
