@@ -1,7 +1,53 @@
 import { getDb, schema } from "@/db";
 import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
-import { POS_CANCEL_REASONS } from "@/lib/pos-print-settings";
+import { POS_CANCEL_REASONS, resolvePosCancelReason } from "@/lib/pos-print-settings";
 import { roundMoney2 } from "@/lib/money";
+
+const COMPLETED_STATUSES = new Set(["completed", "partially_refunded"]);
+const BLOCKED_CANCEL_STATUSES = new Set([
+  "completed",
+  "partially_refunded",
+  "refunded",
+  "cancelled",
+]);
+const ALLOWED_PAYMENT_METHODS = new Set([
+  "cash",
+  "card",
+  "terminal",
+  "express",
+  "online",
+  "loyalty",
+  "pay_later",
+]);
+
+type HeldCartLine = {
+  productId?: string;
+  name?: string;
+  quantity?: number;
+  unitPrice?: number;
+  lineTotal?: number;
+  taxable?: boolean;
+  selectedExtras?: unknown;
+  comboSelections?: unknown;
+  isOpenPrice?: boolean;
+};
+
+function parseHeldCart(cartJson: unknown): {
+  lines: HeldCartLine[];
+  channel: string;
+  tableLabel: string | null;
+  notes: string | null;
+} {
+  const data = cartJson as
+    | { cart?: HeldCartLine[]; channel?: string; tableLabel?: string; orderNote?: string }
+    | HeldCartLine[]
+    | null;
+  const lines = Array.isArray(data) ? data : data?.cart || [];
+  const channel = (!Array.isArray(data) && data?.channel) || "takeaway";
+  const tableLabel = (!Array.isArray(data) && data?.tableLabel) || null;
+  const notes = (!Array.isArray(data) && data?.orderNote) || null;
+  return { lines, channel: String(channel), tableLabel, notes };
+}
 
 export class PosOrdersService {
   static cancelReasons() {
@@ -91,8 +137,16 @@ export class PosOrdersService {
     if (!order) throw new Error("Order not found");
     if (order.status === "cancelled") throw new Error("Order already cancelled");
     if (order.status === "refunded") throw new Error("Order already refunded");
+    if (
+      BLOCKED_CANCEL_STATUSES.has(String(order.status)) ||
+      COMPLETED_STATUSES.has(String(order.paymentStatus || ""))
+    ) {
+      throw new Error(
+        "Completed orders cannot be cancelled. Change the payment method or issue a refund."
+      );
+    }
 
-    const reasonText = String(reason || "").trim().slice(0, 500);
+    const reasonText = resolvePosCancelReason(reason);
     if (!reasonText) throw new Error("Cancel reason is required");
 
     const [updated] = await db
@@ -103,6 +157,45 @@ export class PosOrdersService {
         cancelReason: reasonText,
         cancelledAt: new Date(),
       })
+      .where(eq(schema.orders.id, orderId))
+      .returning();
+
+    return updated;
+  }
+
+  static async updatePaymentMethod(
+    merchantId: string,
+    orderId: string,
+    paymentMethod: string
+  ) {
+    const db = getDb();
+    const method = String(paymentMethod || "")
+      .trim()
+      .toLowerCase();
+    if (!ALLOWED_PAYMENT_METHODS.has(method)) {
+      throw new Error("Invalid payment method");
+    }
+
+    const order = await db.query.orders.findFirst({
+      where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
+    });
+    if (!order) throw new Error("Order not found");
+    if (order.status === "cancelled" || order.paymentStatus === "cancelled") {
+      throw new Error("Cannot change payment method on a cancelled order");
+    }
+    if (order.status === "refunded" || order.paymentStatus === "refunded") {
+      throw new Error("Cannot change payment method on a refunded order");
+    }
+    if (
+      !COMPLETED_STATUSES.has(String(order.status)) &&
+      !COMPLETED_STATUSES.has(String(order.paymentStatus || ""))
+    ) {
+      throw new Error("Only completed orders can change payment method");
+    }
+
+    const [updated] = await db
+      .update(schema.orders)
+      .set({ paymentMethod: method })
       .where(eq(schema.orders.id, orderId))
       .returning();
 
@@ -196,6 +289,89 @@ export class PosOrdersService {
     if (!existing) throw new Error("Held order not found");
     await db.delete(schema.heldOrders).where(eq(schema.heldOrders.id, id));
     return { ok: true };
+  }
+
+  /**
+   * Cancel a held / kitchen-sent order with a required reason.
+   * Records a cancelled POS sale for EOD and sales reports, then removes the hold.
+   */
+  static async cancelHeld(merchantId: string, id: string, reason: string) {
+    const db = getDb();
+    const existing = await db.query.heldOrders.findFirst({
+      where: and(eq(schema.heldOrders.id, id), eq(schema.heldOrders.merchantId, merchantId)),
+    });
+    if (!existing) throw new Error("Held order not found");
+
+    const reasonText = resolvePosCancelReason(reason);
+    if (!reasonText) throw new Error("Cancel reason is required");
+
+    const { lines, channel, tableLabel, notes } = parseHeldCart(existing.cartJson);
+    if (!lines.length) {
+      await db.delete(schema.heldOrders).where(eq(schema.heldOrders.id, id));
+      return { ok: true, order: null, heldStatus: existing.status };
+    }
+
+    let subtotal = 0;
+    for (const line of lines) {
+      subtotal += Number(line.lineTotal || 0);
+    }
+    subtotal = roundMoney2(subtotal);
+    const orderNumber = `CXL-${Date.now().toString(36).toUpperCase()}-${Math.random()
+      .toString(36)
+      .slice(2, 6)
+      .toUpperCase()}`.slice(0, 50);
+    const clientId = `cancel-held-${existing.id}`.slice(0, 64);
+    const now = new Date();
+
+    const [order] = await db
+      .insert(schema.orders)
+      .values({
+        merchantId,
+        orderNumber,
+        orderType: "pos",
+        fulfillmentChannel: existing.channel || channel || "takeaway",
+        status: "cancelled",
+        subtotal: subtotal.toFixed(2),
+        taxAmount: "0.00",
+        discountAmount: "0.00",
+        tipAmount: "0.00",
+        roundingAmount: "0.00",
+        total: subtotal.toFixed(2),
+        paymentMethod: null,
+        paymentStatus: "cancelled",
+        notes: notes || existing.notes || null,
+        tableLabel: tableLabel || null,
+        staffName: existing.staffName || null,
+        clientId,
+        cancelReason: reasonText,
+        cancelledAt: now,
+        completedAt: null,
+        syncedAt: now,
+      })
+      .returning();
+
+    for (const line of lines) {
+      const qty = Number(line.quantity) || 1;
+      const totalPrice = roundMoney2(Number(line.lineTotal || 0));
+      const unitPrice = roundMoney2(
+        Number(line.unitPrice != null ? line.unitPrice : qty ? totalPrice / qty : 0)
+      );
+      await db.insert(schema.orderItems).values({
+        orderId: order.id,
+        productId: null,
+        productName: String(line.name || "Item").slice(0, 255),
+        quantity: String(qty),
+        unitPrice: unitPrice.toFixed(2),
+        totalPrice: totalPrice.toFixed(2),
+        taxAmount: "0.00",
+        selectedExtras: Array.isArray(line.selectedExtras) ? line.selectedExtras : [],
+        comboSelections: Array.isArray(line.comboSelections) ? line.comboSelections : [],
+        isOpenPrice: !!line.isOpenPrice,
+      });
+    }
+
+    await db.delete(schema.heldOrders).where(eq(schema.heldOrders.id, id));
+    return { ok: true, order, heldStatus: existing.status, cancelReason: reasonText };
   }
 
   static async resumeHeld(merchantId: string, id: string) {

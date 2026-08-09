@@ -3,6 +3,7 @@ import { getDb, schema } from "@/db";
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { FloorPlanService } from "@/services/floor-plan.service";
 import { roundMoney2, roundTo005 } from "@/lib/money";
+import { resolvePosCancelReason } from "@/lib/pos-print-settings";
 
 export interface SyncSaleItem {
   productClientId?: string;
@@ -34,6 +35,9 @@ export interface SyncSalePayload {
   paymentStatus?: string;
   /** Order lifecycle status; defaults completed for paid sales, accepted for pay-later */
   status?: string;
+  /** Required when status is cancelled — stored on the order for EOD/sales reports */
+  cancelReason?: string | null;
+  cancelledAt?: string | number | null;
   subtotal: number;
   taxAmount: number;
   discountAmount?: number;
@@ -345,11 +349,32 @@ export class SyncService {
           ? Number(sale.total)
           : subtotal + taxAmount - discountAmount + tipAmount + roundingAmount
       );
-      const payStatus = sale.paymentStatus || "completed";
+      const isCancelled = String(sale.status || "").toLowerCase() === "cancelled";
+      const cancelReason = isCancelled
+        ? resolvePosCancelReason(String(sale.cancelReason || ""))
+        : null;
+      if (isCancelled && !cancelReason) {
+        throw new Error("Cancel reason is required for cancelled sales");
+      }
+      let cancelledAt: Date | null = null;
+      if (isCancelled) {
+        cancelledAt =
+          sale.cancelledAt != null && sale.cancelledAt !== ""
+            ? new Date(sale.cancelledAt)
+            : new Date();
+        if (Number.isNaN(cancelledAt.getTime())) {
+          throw new Error("Invalid cancelledAt on sale");
+        }
+      }
+
+      const payStatus = isCancelled
+        ? "cancelled"
+        : sale.paymentStatus || "completed";
       const payLater =
-        payStatus === "awaiting_payment" ||
-        sale.paymentMethod === "pay_later" ||
-        sale.paymentMethod === "pay-later";
+        !isCancelled &&
+        (payStatus === "awaiting_payment" ||
+          sale.paymentMethod === "pay_later" ||
+          sale.paymentMethod === "pay-later");
       let scheduledFor: Date | null = null;
       if (sale.scheduledFor != null && sale.scheduledFor !== "") {
         const d = new Date(sale.scheduledFor);
@@ -358,7 +383,7 @@ export class SyncService {
       const status =
         sale.status ||
         (payLater ? (scheduledFor ? "accepted" : "preparing") : "completed");
-      const completedAt = payLater
+      const completedAt = isCancelled || payLater
         ? null
         : sale.completedAt
           ? new Date(sale.completedAt)
@@ -387,7 +412,7 @@ export class SyncService {
             : null,
         staffName: sale.staffName ? String(sale.staffName).trim().slice(0, 255) : null,
         total: total.toFixed(2),
-        paymentMethod: sale.paymentMethod,
+        paymentMethod: isCancelled ? sale.paymentMethod || null : sale.paymentMethod,
         paymentStatus: payStatus,
         notes: sale.notes || null,
         scheduledFor,
@@ -412,6 +437,8 @@ export class SyncService {
         deviceId: sale.deviceId || null,
         syncedAt: new Date(),
         completedAt,
+        cancelReason,
+        cancelledAt,
       };
 
       let order: { id: string } | undefined;

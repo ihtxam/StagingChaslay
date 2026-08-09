@@ -2489,21 +2489,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setFulfillmentWhen(asapFulfillment());
   };
 
-  const confirmCancelCart = async (reason: string) => {
+  const confirmCancelCart = async (reason: string, reasonId?: string) => {
     if (!cancelModal) return;
     const scope = cancelModal.scope;
     const lineId = cancelModal.lineId;
-    const linesToCancel =
+    const kitchenLines =
       scope === 'item'
         ? cart.filter((l) => l.lineId === lineId && l.sentToKitchen)
         : cart.filter((l) => l.sentToKitchen);
+    const recordLines =
+      scope === 'item' && lineId
+        ? cart.filter((l) => l.lineId === lineId)
+        : [...cart];
 
     setCancelModal(null);
     setBusy(true);
     try {
-      if (linesToCancel.length) {
+      if (kitchenLines.length) {
         const ticket = nextWebPosTicketNumber(merchant?.id);
-        await printKitchenForCart(linesToCancel, effectiveChannel, {
+        await printKitchenForCart(kitchenLines, effectiveChannel, {
           orderNumber: ticket.display,
           when: fulfillmentWhen,
           cancelled: true,
@@ -2511,6 +2515,38 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           forcePrint: true,
         });
       }
+
+      // Persist cancellation for EOD / sales reports (reason required).
+      if (recordLines.length) {
+        const ticket = nextWebPosTicketNumber(merchant?.id);
+        const cancelBase = computeMerchandiseTotals(
+          recordLines,
+          taxRate,
+          vatIncludedInPrice,
+          roundingStep
+        );
+        const cancelTotals = { ...cancelBase, discount: 0 };
+        const clientId = `webpos-cancel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const sale = {
+          ...buildSalePayload(
+            clientId,
+            'cash',
+            fulfillmentWhen,
+            ticket.orderNumber,
+            null,
+            recordLines,
+            cancelTotals
+          ),
+          status: 'cancelled',
+          paymentStatus: 'cancelled',
+          cancelReason: reasonId || reason,
+          cancelledAt: Date.now(),
+          completedAt: undefined,
+        };
+        await api.post('/sync/push-sales', { sales: [sale] });
+        setOrdersRefreshToken((n) => n + 1);
+      }
+
       if (scope === 'item' && lineId) {
         setCart((prev) => prev.filter((l) => l.lineId !== lineId));
         if (selectedLineId === lineId) setSelectedLineId(null);
@@ -2520,7 +2556,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         toast.success(t('webPosOrderCancelled'));
       }
     } catch (e: any) {
-      toast.error(e.message || t('webPosCancelFailed'));
+      toast.error(e.response?.data?.error || e.message || t('webPosCancelFailed'));
     } finally {
       setBusy(false);
     }
@@ -4078,6 +4114,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 toast.error(e.message || t('webPosPrintFailed'));
               }
             }}
+            onVoidHeldKitchen={async (held, reason) => {
+              const data = held.cartJson as { cart?: CartLine[] } | CartLine[];
+              const lines = Array.isArray(data) ? data : data?.cart || [];
+              if (!lines.length) return;
+              const ch = (held.channel || 'takeaway') as Channel;
+              const ticket = nextWebPosTicketNumber(merchant?.id);
+              await printKitchenForCart(lines, ch, {
+                orderNumber: ticket.display,
+                cancelled: true,
+                cancelReason: reason,
+                forcePrint: true,
+              });
+            }}
           />
         ) : (
           <div
@@ -4579,7 +4628,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             : null
         }
         onClose={() => setCancelModal(null)}
-        onConfirm={(reason) => void confirmCancelCart(reason)}
+        onConfirm={(reason, reasonId) => void confirmCancelCart(reason, reasonId)}
       />
 
       <WebPosCustomerPicker

@@ -718,6 +718,17 @@ export function generateEodReportText(report: EodReportPrint): string {
   if (report.coversServed) {
     r += padLine(L.guestsServed, String(report.coversServed), width) + '\n';
   }
+  if (report.cancelledCount > 0 || report.cancelledTotal > 0) {
+    r +=
+      padLine(
+        `${L.cancelled} (${report.cancelledCount})`,
+        money(report.cancelledTotal),
+        width
+      ) + '\n';
+  }
+  if (report.refundTotal > 0) {
+    r += padLine(L.refunds, money(report.refundTotal), width) + '\n';
+  }
   r += '\n';
   r += thin + '\n';
   r += centerLine(L.paymentMethods, width) + '\n';

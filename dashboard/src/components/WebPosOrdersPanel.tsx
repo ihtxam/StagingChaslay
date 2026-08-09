@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import {
   ChevronLeft,
   ChevronRight,
+  CreditCard,
   Info,
   Printer,
   RefreshCw,
@@ -13,6 +14,8 @@ import {
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import type { PosOrderForReceipt } from '@/lib/webpos-receipt';
+import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
+
 type CancelReason = { id: string; en: string; fr: string; de: string };
 export type PosOrder = PosOrderForReceipt & {
   status: string;
@@ -40,19 +43,43 @@ type Props = {
   onClose: () => void;
   onResumeHeld: (held: HeldRow) => void;
   onPrintOrder?: (order: PosOrderForReceipt, splitLabel?: string | null) => Promise<void>;
+  /** Print kitchen void ticket when cancelling a sent-to-kitchen held order */
+  onVoidHeldKitchen?: (held: HeldRow, reason: string) => Promise<void>;
   refreshToken?: number;
   canCancel?: boolean;
   canRefund?: boolean;
   highlightOrderId?: string | null;
 };
+
+const PAYMENT_OPTIONS = ['cash', 'card', 'terminal'] as const;
+
 function todayIso(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
 }
+
+/** Ongoing / kitchen / unpaid — not completed sales */
 function canCancelOrder(o: PosOrder): boolean {
-  if (o.status === 'cancelled' || o.paymentStatus === 'cancelled') return false;
-  if (o.status === 'refunded' || o.paymentStatus === 'refunded') return false;
-  return o.status === 'completed' || o.paymentStatus === 'completed';
+  const status = (o.status || '').toLowerCase();
+  const pay = (o.paymentStatus || '').toLowerCase();
+  if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) return false;
+  if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(pay)) return false;
+  return true;
 }
+
+function canEditPayment(o: PosOrder): boolean {
+  const status = (o.status || '').toLowerCase();
+  const pay = (o.paymentStatus || '').toLowerCase();
+  if (['cancelled', 'refunded'].includes(status) || ['cancelled', 'refunded'].includes(pay)) {
+    return false;
+  }
+  return (
+    status === 'completed' ||
+    status === 'partially_refunded' ||
+    pay === 'completed' ||
+    pay === 'partially_refunded'
+  );
+}
+
 function canRefundOrder(o: PosOrder): boolean {
   if (o.status === 'cancelled' || o.paymentStatus === 'cancelled') return false;
   const remaining = Number(o.total || 0) - Number(o.refundAmount || 0);
@@ -64,6 +91,7 @@ function canRefundOrder(o: PosOrder): boolean {
     o.paymentStatus === 'partially_refunded'
   );
 }
+
 function channelBadgeClass(ch?: string | null) {
   switch (ch) {
     case 'dine_in':
@@ -76,6 +104,7 @@ function channelBadgeClass(ch?: string | null) {
       return 'bg-violet-100 text-violet-800';
   }
 }
+
 function isPlatformChannel(ch?: string | null) {
   if (!ch) return false;
   const c = ch.toLowerCase();
@@ -88,22 +117,26 @@ function isPlatformChannel(ch?: string | null) {
     c === 'online'
   );
 }
+
 type ListItem =
   | { kind: 'held'; held: HeldRow }
   | { kind: 'order'; order: PosOrder };
+
 const PAGE_SIZE = 10;
+
 export default function WebPosOrdersPanel({
   open,
   embedded = false,
   onClose,
   onResumeHeld,
   onPrintOrder,
+  onVoidHeldKitchen,
   refreshToken = 0,
   canCancel = true,
   canRefund = true,
   highlightOrderId = null,
 }: Props) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
   const [search, setSearch] = useState('');
@@ -115,13 +148,23 @@ export default function WebPosOrdersPanel({
   const [selectedHeld, setSelectedHeld] = useState<HeldRow | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
   const [cancelFor, setCancelFor] = useState<PosOrder | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
+  const [cancelHeldFor, setCancelHeldFor] = useState<HeldRow | null>(null);
   const [refundFor, setRefundFor] = useState<PosOrder | null>(null);
   const [refundPartial, setRefundPartial] = useState(false);
   const [refundAmountText, setRefundAmountText] = useState('');
+  const [paymentEditFor, setPaymentEditFor] = useState<PosOrder | null>(null);
+  const [paymentMethodDraft, setPaymentMethodDraft] = useState('cash');
   const [page, setPage] = useState(0);
-  const reasonLabel = (r: CancelReason) =>
-    locale === 'fr' ? r.fr : locale === 'de' ? r.de : r.en;
+
+  const paymentLabel = (method?: string | null) => {
+    const m = (method || '').toLowerCase();
+    if (m === 'cash') return t('webPosCash');
+    if (m === 'card') return t('webPosCard');
+    if (m === 'terminal') return t('webPosTerminal');
+    if (m === 'express') return t('webPosExpress');
+    return method || '—';
+  };
+
   const statusLabel = (status: string) => {
     const key = status?.toLowerCase().replace(/-/g, '_');
     const map: Record<string, string> = {
@@ -136,6 +179,7 @@ export default function WebPosOrdersPanel({
     };
     return map[key] || status;
   };
+
   const channelLabel = (ch?: string | null) => {
     if (!ch) return '·';
     if (ch === 'dine_in') return t('dineIn');
@@ -144,6 +188,7 @@ export default function WebPosOrdersPanel({
     if (isPlatformChannel(ch)) return t('webPosFoodPlatform');
     return ch;
   };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -161,9 +206,11 @@ export default function WebPosOrdersPanel({
       setLoading(false);
     }
   }, [t]);
+
   useEffect(() => {
     if (open) void load();
   }, [open, load, refreshToken]);
+
   useEffect(() => {
     if (!open || !highlightOrderId || orders.length === 0) return;
     const match = orders.find((o) => o.id === highlightOrderId || o.clientId === highlightOrderId);
@@ -173,9 +220,11 @@ export default function WebPosOrdersPanel({
       setSelectedHeld(null);
     }
   }, [open, highlightOrderId, orders]);
+
   useEffect(() => {
     setPage(0);
   }, [statusFilter, channelFilter, search]);
+
   const splitCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const o of orders) {
@@ -185,6 +234,7 @@ export default function WebPosOrdersPanel({
     }
     return map;
   }, [orders]);
+
   const listItems = useMemo(() => {
     const items: ListItem[] = [];
     const q = search.trim().toLowerCase();
@@ -203,9 +253,26 @@ export default function WebPosOrdersPanel({
         }
         items.push({ kind: 'held', held: h });
       }
+      for (const o of orders) {
+        if (!canCancelOrder(o)) continue;
+        if (channelFilter !== 'all') {
+          if (channelFilter === 'platform') {
+            if (!isPlatformChannel(o.channel)) continue;
+          } else if ((o.channel || 'takeaway') !== channelFilter) {
+            continue;
+          }
+        }
+        if (q) {
+          const hay = `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''}`.toLowerCase();
+          if (!hay.includes(q)) continue;
+        }
+        items.push({ kind: 'order', order: o });
+      }
     }
     if (statusFilter === 'completed' || statusFilter === 'all') {
       for (const o of orders) {
+        // Ongoing orders already listed under Active; skip them here (including "All").
+        if (canCancelOrder(o)) continue;
         if (channelFilter !== 'all') {
           if (channelFilter === 'platform') {
             if (!isPlatformChannel(o.channel)) continue;
@@ -222,31 +289,58 @@ export default function WebPosOrdersPanel({
     }
     return items;
   }, [held, orders, statusFilter, channelFilter, search]);
+
   const pageCount = Math.max(1, Math.ceil(listItems.length / PAGE_SIZE));
   const pageItems = listItems.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   const rangeStart = listItems.length === 0 ? 0 : page * PAGE_SIZE + 1;
   const rangeEnd = Math.min(listItems.length, (page + 1) * PAGE_SIZE);
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
+
   const heldCartLines = (h: HeldRow) => {
-    const data = h.cartJson as { cart?: Array<{ name: string; quantity: number; lineTotal: number }> } | Array<{ name: string; quantity: number; lineTotal: number }>;
+    const data = h.cartJson as
+      | { cart?: Array<{ name: string; quantity: number; lineTotal: number }> }
+      | Array<{ name: string; quantity: number; lineTotal: number }>;
     if (Array.isArray(data)) return data;
     return data?.cart || [];
   };
+
   const heldTotal = (h: HeldRow) =>
     heldCartLines(h).reduce((s, l) => s + Number(l.lineTotal || 0), 0);
-  const doCancel = async () => {
-    if (!cancelFor || !cancelReason) return;
+
+  const doCancelOrder = async (reason: string) => {
+    if (!cancelFor) return;
     try {
-      await api.post(`/merchant/pos/orders/${cancelFor.id}/cancel`, { reason: cancelReason });
+      await api.post(`/merchant/pos/orders/${cancelFor.id}/cancel`, { reason });
       toast.success(t('webPosOrderCancelled'));
       setCancelFor(null);
       setSelectedOrder(null);
-      setCancelReason('');
       void load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosCancelFailed'));
     }
   };
+
+  const doCancelHeld = async (reason: string) => {
+    if (!cancelHeldFor) return;
+    const heldRow = cancelHeldFor;
+    try {
+      if (heldRow.status === 'sent_to_kitchen' && onVoidHeldKitchen) {
+        try {
+          await onVoidHeldKitchen(heldRow, reason);
+        } catch {
+          /* kitchen print is best-effort */
+        }
+      }
+      await api.post(`/merchant/pos/held/${heldRow.id}/cancel`, { reason });
+      toast.success(t('webPosOrderCancelled'));
+      setCancelHeldFor(null);
+      if (selectedHeld?.id === heldRow.id) setSelectedHeld(null);
+      void load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('webPosCancelFailed'));
+    }
+  };
+
   const doRefund = async () => {
     if (!refundFor) return;
     const remaining = round2(refundFor.total - refundFor.refundAmount);
@@ -270,6 +364,26 @@ export default function WebPosOrdersPanel({
       toast.error(e.response?.data?.error || t('webPosRefundFailed'));
     }
   };
+
+  const doUpdatePayment = async () => {
+    if (!paymentEditFor) return;
+    try {
+      await api.patch(`/merchant/pos/orders/${paymentEditFor.id}/payment-method`, {
+        paymentMethod: paymentMethodDraft,
+      });
+      toast.success(t('webPosPaymentUpdated'));
+      setPaymentEditFor(null);
+      void load();
+      setSelectedOrder((prev) =>
+        prev && prev.id === paymentEditFor.id
+          ? { ...prev, paymentMethod: paymentMethodDraft }
+          : prev
+      );
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('webPosPaymentUpdateFailed'));
+    }
+  };
+
   const printOne = async (order: PosOrder, splitLabel?: string | null) => {
     if (!onPrintOrder) return;
     setPrinting(true);
@@ -279,21 +393,28 @@ export default function WebPosOrdersPanel({
       setPrinting(false);
     }
   };
+
   const selectHeld = (h: HeldRow) => {
     setSelectedHeld(h);
     setSelectedOrder(null);
   };
+
   const selectOrder = (o: PosOrder) => {
     setSelectedOrder(o);
     setSelectedHeld(null);
   };
+
   if (!open) return null;
+
   const channelFilters: Array<{ id: ChannelFilter; label: string }> = [
     { id: 'dine_in', label: t('dineIn') },
     { id: 'takeaway', label: t('takeaway') },
     { id: 'delivery', label: t('delivery') },
     { id: 'platform', label: t('webPosFoodPlatform') },
   ];
+
+  const cancelModalOpen = !!(cancelFor || cancelHeldFor);
+
   return (
     <div
       className={
@@ -309,7 +430,6 @@ export default function WebPosOrdersPanel({
             : 'flex h-full w-full max-w-5xl flex-col bg-white shadow-xl'
         }
       >
-        {/* Filter bar */}
         <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-2 py-2 sm:px-3 sm:py-2.5">
           <div className="relative min-w-0 flex-1 basis-full sm:min-w-[12rem] sm:basis-auto">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
@@ -383,7 +503,6 @@ export default function WebPosOrdersPanel({
           </div>
         </div>
         <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
-          {/* List — full width on phone; left column from lg up */}
           <div
             className={
               selectedHeld || selectedOrder
@@ -437,23 +556,26 @@ export default function WebPosOrdersPanel({
                             </div>
                           </div>
                           <Info size={16} className="mt-1 shrink-0 text-stone-400 sm:mt-0" />
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            className="mt-0.5 shrink-0 rounded p-1 text-stone-400 hover:bg-red-50 hover:text-red-600 sm:mt-0"
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              try {
-                                await api.delete(`/merchant/pos/held/${h.id}`);
-                                if (selectedHeld?.id === h.id) setSelectedHeld(null);
-                                void load();
-                              } catch (err: any) {
-                                toast.error(err.response?.data?.error || t('deleteFailed'));
-                              }
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </span>
+                          {canCancel ? (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className="mt-0.5 shrink-0 rounded p-1 text-stone-400 hover:bg-red-50 hover:text-red-600 sm:mt-0"
+                              aria-label={t('webPosCancelOrder')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCancelHeldFor(h);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.stopPropagation();
+                                  setCancelHeldFor(h);
+                                }
+                              }}
+                            >
+                              <Trash2 size={16} />
+                            </span>
+                          ) : null}
                         </button>
                       </li>
                     );
@@ -505,7 +627,9 @@ export default function WebPosOrdersPanel({
                               className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
                                 o.status === 'completed'
                                   ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-stone-100 text-stone-600'
+                                  : o.status === 'cancelled'
+                                    ? 'bg-rose-100 text-rose-800'
+                                    : 'bg-stone-100 text-stone-600'
                               }`}
                             >
                               {statusLabel(o.status)}
@@ -559,7 +683,7 @@ export default function WebPosOrdersPanel({
                     <span className="tabular-nums">{money(heldTotal(selectedHeld))}</span>
                   </div>
                 </div>
-                <div className="border-t border-stone-200 p-3">
+                <div className="space-y-2 border-t border-stone-200 p-3">
                   <button
                     type="button"
                     className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900"
@@ -570,6 +694,15 @@ export default function WebPosOrdersPanel({
                   >
                     {t('webPosLoadOrder')}
                   </button>
+                  {canCancel ? (
+                    <button
+                      type="button"
+                      className="w-full rounded-xl border border-rose-200 bg-rose-50 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100"
+                      onClick={() => setCancelHeldFor(selectedHeld)}
+                    >
+                      {t('webPosCancelOrder')}
+                    </button>
+                  ) : null}
                 </div>
               </>
             ) : selectedOrder ? (
@@ -613,17 +746,44 @@ export default function WebPosOrdersPanel({
                     <span>{t('webPosTotal')}</span>
                     <span className="tabular-nums">{money(selectedOrder.total)}</span>
                   </div>
+                  {selectedOrder.paymentMethod ? (
+                    <p className="mt-2 text-sm text-stone-600">
+                      {t('webPosPaymentMethod')}:{' '}
+                      <span className="font-semibold">{paymentLabel(selectedOrder.paymentMethod)}</span>
+                    </p>
+                  ) : null}
+                  {selectedOrder.cancelReason ? (
+                    <p className="mt-2 text-sm text-rose-700">
+                      {t('webPosCancelReason')}: {selectedOrder.cancelReason}
+                    </p>
+                  ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {canCancel && canCancelOrder(selectedOrder) ? (
                       <button
                         type="button"
                         className="btn-secondary text-xs"
-                        onClick={() => {
-                          setCancelFor(selectedOrder);
-                          setCancelReason(reasons[0] ? reasonLabel(reasons[0]) : '');
-                        }}
+                        onClick={() => setCancelFor(selectedOrder)}
                       >
                         {t('webPosCancelOrder')}
+                      </button>
+                    ) : null}
+                    {canEditPayment(selectedOrder) ? (
+                      <button
+                        type="button"
+                        className="btn-secondary inline-flex items-center gap-1 text-xs"
+                        onClick={() => {
+                          setPaymentEditFor(selectedOrder);
+                          setPaymentMethodDraft(
+                            (selectedOrder.paymentMethod || 'cash').toLowerCase() === 'card'
+                              ? 'card'
+                              : (selectedOrder.paymentMethod || 'cash').toLowerCase() === 'terminal'
+                                ? 'terminal'
+                                : 'cash'
+                          );
+                        }}
+                      >
+                        <CreditCard size={14} />
+                        {t('webPosEditPayment')}
                       </button>
                     ) : null}
                     {canRefund && canRefundOrder(selectedOrder) ? (
@@ -650,32 +810,6 @@ export default function WebPosOrdersPanel({
             )}
           </aside>
         </div>
-        {cancelFor ? (
-          <div className="border-t border-stone-200 bg-white p-4 space-y-3">
-            <p className="text-sm font-medium">
-              {t('webPosCancelReason')} · {cancelFor.orderNumber}
-            </p>
-            <select
-              className="input"
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-            >
-              {reasons.map((r) => (
-                <option key={r.id} value={reasonLabel(r)}>
-                  {reasonLabel(r)}
-                </option>
-              ))}
-            </select>
-            <div className="flex gap-2">
-              <button type="button" className="btn-secondary flex-1" onClick={() => setCancelFor(null)}>
-                {t('cancel')}
-              </button>
-              <button type="button" className="btn-primary flex-1" onClick={() => void doCancel()}>
-                {t('confirm')}
-              </button>
-            </div>
-          </div>
-        ) : null}
         {refundFor ? (
           <div className="border-t border-stone-200 bg-white p-4 space-y-3">
             <p className="text-sm font-medium">
@@ -720,10 +854,61 @@ export default function WebPosOrdersPanel({
             </div>
           </div>
         ) : null}
+        {paymentEditFor ? (
+          <div className="border-t border-stone-200 bg-white p-4 space-y-3">
+            <p className="text-sm font-medium">
+              {t('webPosEditPayment')} · {paymentEditFor.orderNumber}
+            </p>
+            <p className="text-xs text-stone-500">{t('webPosEditPaymentHint')}</p>
+            <div className="flex flex-wrap gap-2">
+              {PAYMENT_OPTIONS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPaymentMethodDraft(m)}
+                  className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
+                    paymentMethodDraft === m
+                      ? 'bg-stone-800 text-white'
+                      : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                  }`}
+                >
+                  {paymentLabel(m)}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn-secondary flex-1"
+                onClick={() => setPaymentEditFor(null)}
+              >
+                {t('cancel')}
+              </button>
+              <button type="button" className="btn-primary flex-1" onClick={() => void doUpdatePayment()}>
+                {t('confirm')}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
+
+      <WebPosCancelModal
+        open={cancelModalOpen}
+        scope="order"
+        reasons={reasons}
+        onClose={() => {
+          setCancelFor(null);
+          setCancelHeldFor(null);
+        }}
+        onConfirm={(reason) => {
+          if (cancelHeldFor) void doCancelHeld(reason);
+          else void doCancelOrder(reason);
+        }}
+      />
     </div>
   );
 }
+
 function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
