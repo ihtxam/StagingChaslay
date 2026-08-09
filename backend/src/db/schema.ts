@@ -1807,6 +1807,22 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   paymentTransactions: many(paymentTransactions),
 }));
 
+/** Required so `orders.with.paymentTransactions` can be inferred by Drizzle. */
+export const paymentTransactionsRelations = relations(paymentTransactions, ({ one }) => ({
+  merchant: one(merchants, {
+    fields: [paymentTransactions.merchantId],
+    references: [merchants.id],
+  }),
+  order: one(orders, {
+    fields: [paymentTransactions.orderId],
+    references: [orders.id],
+  }),
+  terminal: one(paymentTerminals, {
+    fields: [paymentTransactions.terminalId],
+    references: [paymentTerminals.id],
+  }),
+}));
+
 export const heldOrdersRelations = relations(heldOrders, ({ one }) => ({
   merchant: one(merchants, { fields: [heldOrders.merchantId], references: [merchants.id] }),
 }));

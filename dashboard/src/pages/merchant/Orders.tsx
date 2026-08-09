@@ -173,13 +173,26 @@ export default function Orders() {
     try {
       await api.post(`/merchant/orders/${orderId}/action`, { action });
       toast.success('Updated');
-      await load();
+
+      // Reload board, then sync the open popup from that list so actions
+      // (Start kitchen → Mark ready) update even if the detail endpoint fails.
+      const listRes = await api.get('/merchant/orders?limit=100');
+      const next = (listRes.data.orders || []) as Order[];
+      setOrders(next);
+
       if (selected?.id === orderId) {
-        const refreshed = await api.get(`/merchant/orders/${orderId}`);
-        setSelected(refreshed.data.order);
+        const fromList = next.find((o) => o.id === orderId) || null;
+        if (fromList) setSelected(fromList);
+        try {
+          const refreshed = await api.get(`/merchant/orders/${orderId}`);
+          if (refreshed.data?.order) setSelected(refreshed.data.order);
+        } catch {
+          /* keep list snapshot — modal still shows new status/actions */
+        }
       }
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Action failed');
+      await load();
     } finally {
       setBusyId(null);
     }
