@@ -1120,6 +1120,9 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
     const posCheckoutSettings = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
     const giftCardSettings = normalizeGiftCardSettings(merchant.giftCardSettings);
 
+    const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
+    const entitlement = await WebPosEntitlementService.getEntitlement(merchantId);
+
     res.json({
       success: true,
       config: {
@@ -1165,6 +1168,7 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
             return null;
           }
         })(),
+        entitlement,
       },
     });
   } catch (error) {
@@ -1186,6 +1190,26 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
       });
     }
     res.status(500).json({ error: raw });
+  }
+});
+
+/**
+ * GET /api/merchant/webpos-entitlement
+ * Merchant-level 7-day trial / subscription status for WebPOS gating.
+ */
+router.get("/webpos-entitlement", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+    const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
+    const entitlement = await WebPosEntitlementService.getEntitlement(merchantId);
+    res.json({ success: true, entitlement });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to check WebPOS entitlement",
+    });
   }
 });
 
@@ -1220,6 +1244,8 @@ router.post("/pos/shifts/start", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
+    if (!(await WebPosEntitlementService.guard(merchantId, res))) return;
     const { PosShiftService } = await import("@/services/pos-shift.service");
     const rawOpen = req.body?.openingCash;
     const openingCash =
@@ -1632,6 +1658,8 @@ router.post("/pos/held", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
+    if (!(await WebPosEntitlementService.guard(merchantId, res))) return;
     const { PosOrdersService } = await import("@/services/pos-orders.service");
     const row = await PosOrdersService.holdOrder(merchantId, req.body || {});
     res.json({ success: true, held: row });

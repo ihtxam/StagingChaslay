@@ -49,6 +49,11 @@ export class SubscriptionBillingService {
       platformAdyenConfigured = false;
     }
 
+    const { WebPosEntitlementService } = await import(
+      "@/services/webpos-entitlement.service"
+    );
+    const webposEntitlement = await WebPosEntitlementService.getEntitlement(merchantId);
+
     return {
       merchant: {
         id: merchant.id,
@@ -63,6 +68,7 @@ export class SubscriptionBillingService {
       plans,
       payments,
       platformAdyenConfigured,
+      webposEntitlement,
     };
   }
 

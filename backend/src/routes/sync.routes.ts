@@ -46,6 +46,8 @@ router.post("/push-catalog", async (req: Request, res: Response) => {
 router.post("/push-sales", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
+    const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
+    if (!(await WebPosEntitlementService.guard(merchantId, res))) return;
     const sales = Array.isArray(req.body?.sales) ? req.body.sales : [];
     const result = await SyncService.pushSales(merchantId, sales);
     res.json({ success: true, ...result });

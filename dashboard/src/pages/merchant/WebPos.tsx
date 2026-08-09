@@ -101,6 +101,9 @@ import WebPosSetTabModal from '@/components/webpos/WebPosSetTabModal';
 import WebPosCancelModal, {
   type CancelScope,
 } from '@/components/webpos/WebPosCancelModal';
+import WebPosLicenseGate, {
+  type WebPosEntitlement,
+} from '@/components/webpos/WebPosLicenseGate';
 import WebPosGiftCardModal, {
   type GiftCardCartMeta,
   type GiftCardPayResult,
@@ -283,6 +286,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const bootActive = bootCart?.active || null;
 
   const [loading, setLoading] = useState(true);
+  const [entitlement, setEntitlement] = useState<WebPosEntitlement | null>(null);
   const [merchant, setMerchant] = useState<any>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -865,7 +869,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       );
       const cfg = webposRes.data.config as (WebPosPaymentConfig & {
         shiftsSchemaMissing?: boolean;
+        entitlement?: WebPosEntitlement;
       }) | null;
+      if (cfg?.entitlement) {
+        setEntitlement(cfg.entitlement);
+      } else {
+        try {
+          const entRes = await api.get('/merchant/webpos-entitlement');
+          setEntitlement(entRes.data.entitlement || null);
+        } catch {
+          setEntitlement(null);
+        }
+      }
       // Either source can enable; avoids hiding shifts when one payload omits the flag.
       const editionFeats = Array.isArray(cfg?.editionFeatures)
         ? cfg!.editionFeatures
@@ -3126,7 +3141,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       splitMeta
     );
 
-    const pushRes = await api.post('/sync/push-sales', { sales: [sale] });
+    let pushRes;
+    try {
+      pushRes = await api.post('/sync/push-sales', { sales: [sale] });
+    } catch (err: any) {
+      if (
+        err.response?.data?.code === 'WEBPOS_LICENSE_REQUIRED' &&
+        err.response?.data?.entitlement
+      ) {
+        setEntitlement(err.response.data.entitlement as WebPosEntitlement);
+      }
+      throw err;
+    }
     const backendOrderId =
       pushRes.data?.results?.find((r: { clientId?: string }) => r.clientId === clientId)?.orderId ||
       pushRes.data?.results?.[0]?.orderId ||
@@ -3696,6 +3722,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
         {t('webPosLoading')}
+      </div>
+    );
+  }
+
+  if (entitlement && !entitlement.allowed) {
+    return (
+      <div
+        className={`webpos-shell ${
+          appMode ? 'h-dvh' : '-m-3 sm:-m-4 h-[calc(100dvh-4rem)]'
+        } flex flex-col`}
+        data-theme={posColorTheme || 'teal'}
+      >
+        <WebPosLicenseGate
+          entitlement={entitlement}
+          businessName={merchant?.name || APP_NAME}
+        />
       </div>
     );
   }
