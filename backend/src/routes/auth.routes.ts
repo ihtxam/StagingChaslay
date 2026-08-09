@@ -124,6 +124,28 @@ router.post("/reseller/login", async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/auth/reset-login-password
+ * Temporary login-page password reset (merchant / staff / reseller / superadmin).
+ * Disable with ALLOW_LOGIN_PASSWORD_RESET=0.
+ */
+router.post("/reset-login-password", async (req: Request, res: Response) => {
+  try {
+    const { email, newPassword, role } = req.body || {};
+    const allowed = ["merchant", "staff", "reseller", "superadmin"] as const;
+    if (!allowed.includes(role)) {
+      return res.status(400).json({ error: "role must be merchant, staff, reseller, or superadmin" });
+    }
+    const result = await AuthService.resetLoginPasswordByEmail(role, String(email || ""), String(newPassword || ""));
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Error resetting login password:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to reset password",
+    });
+  }
+});
+
+/**
  * GET /api/auth/me
  * Get current user info
  */

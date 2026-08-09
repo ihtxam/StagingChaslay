@@ -224,9 +224,17 @@ export default function WebPosCheckoutView({
   const methodLabel = (m: PosPaymentMethod) =>
     payButtons.find((b) => b.id === m)?.label || m;
 
+  const clearPaymentSelection = () => {
+    setSelectedPaymentId(null);
+    setBuffer('');
+  };
+
   const selectPayment = (id: string) => {
-    // Keep a row selected so Cash/Card method buttons always retarget it.
-    if (selectedPaymentId === id) return;
+    // Re-tap selected row to deselect — frees Cash/Card to add a new tender amount.
+    if (selectedPaymentId === id) {
+      clearPaymentSelection();
+      return;
+    }
     setSelectedPaymentId(id);
     setBuffer('');
   };
@@ -669,10 +677,8 @@ export default function WebPosCheckoutView({
                   onModeChange={() => undefined}
                   buffer={buffer}
                   onBufferChange={(buf) => {
-                    if (!selectedPaymentId && payments.length > 0 && buf) {
-                      const target = payments[payments.length - 1]!;
-                      setSelectedPaymentId(target.id);
-                    }
+                    // Do not auto-select an existing tender while typing a new amount.
+                    // User must tap a payment line to edit it, or tap a method to add one.
                     setBuffer(buf);
                   }}
                   onQuickAdd={showQuickAdd ? applyQuickAdd : undefined}
@@ -696,7 +702,12 @@ export default function WebPosCheckoutView({
 
           {/* Payment lines + remaining */}
           <div className="order-3 flex min-h-0 flex-1 flex-col lg:order-2 lg:h-full lg:overflow-hidden">
-            <div className="flex flex-col items-center px-4 py-3 pb-8 text-center lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:py-8">
+            <div
+              className="flex flex-col items-center px-4 py-3 pb-8 text-center lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:py-8"
+              onClick={() => {
+                if (selectedPaymentId) clearPaymentSelection();
+              }}
+            >
               <div className="hidden w-full flex-col items-center lg:flex">
                 <p className="text-sm font-semibold uppercase tracking-wide text-stone-400">
                   {t('webPosAmountDue')}
@@ -740,7 +751,10 @@ export default function WebPosCheckoutView({
                         key={p.id}
                         role="button"
                         tabIndex={0}
-                        onClick={() => selectPayment(p.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectPayment(p.id);
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();

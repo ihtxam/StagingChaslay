@@ -369,4 +369,74 @@ export class AuthService {
       throw error;
     }
   }
+
+  /**
+   * Temporary login-page password reset (merchants / staff / superadmin by email).
+   * Disable with ALLOW_LOGIN_PASSWORD_RESET=0.
+   */
+  static async resetLoginPasswordByEmail(
+    role: "merchant" | "staff" | "superadmin" | "reseller",
+    email: string,
+    newPassword: string
+  ) {
+    if (process.env.ALLOW_LOGIN_PASSWORD_RESET === "0") {
+      throw new Error("Password reset from login is disabled");
+    }
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) throw new Error("Email is required");
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error("Password must be at least 8 characters");
+    }
+
+    const db = getDb();
+    const passwordHash = await this.hashPassword(newPassword);
+
+    if (role === "merchant") {
+      const merchant = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.email, normalized),
+      });
+      if (!merchant) throw new Error("Merchant not found");
+      await db
+        .update(schema.merchants)
+        .set({ passwordHash, updatedAt: new Date() })
+        .where(eq(schema.merchants.id, merchant.id));
+      return { success: true, role: "merchant" as const, email: merchant.email };
+    }
+
+    if (role === "staff") {
+      const staff = await db.query.merchantStaff.findFirst({
+        where: eq(schema.merchantStaff.email, normalized),
+      });
+      if (!staff) throw new Error("Staff user not found");
+      if (!staff.canAccessPanel) {
+        throw new Error("This staff account cannot sign in to the panel");
+      }
+      await db
+        .update(schema.merchantStaff)
+        .set({ passwordHash, updatedAt: new Date() })
+        .where(eq(schema.merchantStaff.id, staff.id));
+      return { success: true, role: "staff" as const, email: staff.email || normalized };
+    }
+
+    if (role === "superadmin") {
+      const admin = await db.query.superadmins.findFirst({
+        where: eq(schema.superadmins.email, normalized),
+      });
+      if (!admin) throw new Error("Superadmin not found");
+      await db
+        .update(schema.superadmins)
+        .set({ passwordHash, updatedAt: new Date() })
+        .where(eq(schema.superadmins.id, admin.id));
+      return { success: true, role: "superadmin" as const, email: admin.email };
+    }
+
+    // reseller
+    const { ResellerService } = await import("@/services/reseller.service");
+    const reseller = await db.query.resellers.findFirst({
+      where: eq(schema.resellers.email, normalized),
+    });
+    if (!reseller) throw new Error("Reseller not found");
+    await ResellerService.update(reseller.id, { password: newPassword });
+    return { success: true, role: "reseller" as const, email: reseller.email };
+  }
 }
