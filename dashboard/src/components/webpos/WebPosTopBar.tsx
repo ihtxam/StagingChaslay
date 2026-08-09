@@ -6,11 +6,13 @@ import {
   Maximize2,
   Menu,
   Minimize2,
+  Moon,
   MoreHorizontal,
   PanelLeft,
   Pencil,
   RefreshCw,
   Search,
+  Sun,
   UserCircle2,
   Vault,
   X,
@@ -23,6 +25,7 @@ import type { PosTab, PosView } from './types';
 
 export type WebPosColorTheme = 'teal' | 'green' | 'blue' | 'violet' | 'mono';
 export type WebPosTextSize = 'sm' | 'md' | 'lg' | 'xl';
+export type WebPosAppearance = 'light' | 'night';
 
 export const WEBPOS_COLOR_THEMES: WebPosColorTheme[] = [
   'teal',
@@ -87,6 +90,8 @@ type Props = {
   onlinePendingCount: number;
   staffName?: string | null;
   canDrawer: boolean;
+  /** Show Menus / Esc exit to backend panel (requires ACCESS_PANEL). */
+  canShowPanel?: boolean;
   appMode: boolean;
   settingsOpen: boolean;
   onToggleSettings: () => void;
@@ -110,6 +115,8 @@ type Props = {
   hideBookingsTab?: boolean;
   colorTheme?: WebPosColorTheme;
   onColorThemeChange?: (theme: WebPosColorTheme) => void;
+  appearance?: WebPosAppearance;
+  onAppearanceChange?: (appearance: WebPosAppearance) => void;
   textSize?: WebPosTextSize;
   onTextSizeChange?: (size: WebPosTextSize) => void;
   /** Offline sale sync (IndexedDB outbox). */
@@ -132,6 +139,7 @@ export default function WebPosTopBar({
   onlinePendingCount,
   staffName,
   canDrawer,
+  canShowPanel = true,
   appMode,
   settingsOpen,
   onToggleSettings,
@@ -152,6 +160,8 @@ export default function WebPosTopBar({
   hideBookingsTab = false,
   colorTheme = 'teal',
   onColorThemeChange,
+  appearance = 'light',
+  onAppearanceChange,
   textSize = 'md',
   onTextSizeChange,
   syncOnline = true,
@@ -165,21 +175,6 @@ export default function WebPosTopBar({
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const fullscreenActive = useFullscreenActive();
   const syncNeedsAttention = !syncOnline || syncPendingCount > 0 || syncFailedCount > 0;
-
-  const themeLabel = (id: WebPosColorTheme) => {
-    switch (id) {
-      case 'green':
-        return t('posThemeGreen');
-      case 'blue':
-        return t('posThemeBlue');
-      case 'violet':
-        return t('posThemeViolet');
-      case 'mono':
-        return t('posThemeMono');
-      default:
-        return t('posThemeTeal');
-    }
-  };
 
   const bumpTextSize = (dir: -1 | 1) => {
     if (!onTextSizeChange) return;
@@ -410,30 +405,26 @@ export default function WebPosTopBar({
             </div>
           ) : null}
 
-          {onColorThemeChange ? (
-            <div
-              className="hidden items-center gap-1 rounded-lg border border-stone-200 px-1.5 py-1 lg:inline-flex"
-              title={t('webPosTheme')}
-              role="group"
-              aria-label={t('webPosTheme')}
+          {onAppearanceChange ? (
+            <button
+              type="button"
+              className="hidden h-9 items-center gap-1.5 rounded-lg border border-stone-200 px-2.5 text-xs font-bold text-stone-700 hover:bg-stone-50 lg:inline-flex"
+              onClick={() =>
+                onAppearanceChange(appearance === 'night' ? 'light' : 'night')
+              }
+              title={
+                appearance === 'night' ? t('webPosAppearanceLight') : t('webPosAppearanceNight')
+              }
+              aria-label={
+                appearance === 'night' ? t('webPosAppearanceLight') : t('webPosAppearanceNight')
+              }
+              aria-pressed={appearance === 'night'}
             >
-              {WEBPOS_COLOR_THEMES.map((id) => {
-                const active = colorTheme === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    title={themeLabel(id)}
-                    aria-label={themeLabel(id)}
-                    aria-pressed={active}
-                    onClick={() => onColorThemeChange(id)}
-                    className={`h-5 w-5 rounded-full ${themeSwatchClass(id)} ${
-                      active ? 'ring-2 ring-offset-1 ring-stone-800' : 'opacity-80 hover:opacity-100'
-                    }`}
-                  />
-                );
-              })}
-            </div>
+              {appearance === 'night' ? <Sun size={15} /> : <Moon size={15} />}
+              <span className="hidden xl:inline">
+                {appearance === 'night' ? t('webPosAppearanceLightShort') : t('webPosAppearanceNightShort')}
+              </span>
+            </button>
           ) : null}
 
           <button
@@ -459,7 +450,7 @@ export default function WebPosTopBar({
             {settingsOpen ? settingsPanel : null}
           </div>
 
-          {appMode ? (
+          {appMode && canShowPanel ? (
             <button
               type="button"
               className="hidden h-9 items-center gap-1 rounded-lg border border-stone-200 px-2 text-xs font-medium hover:bg-stone-50 lg:inline-flex"
@@ -531,6 +522,8 @@ export function WebPosSettingsDropdown({
   onOpenDrawer,
   colorTheme = 'teal',
   onColorThemeChange,
+  appearance = 'light',
+  onAppearanceChange,
   textSize = 'md',
   onTextSizeChange,
 }: {
@@ -559,6 +552,8 @@ export function WebPosSettingsDropdown({
   onOpenDrawer?: () => void;
   colorTheme?: WebPosColorTheme;
   onColorThemeChange?: (theme: WebPosColorTheme) => void;
+  appearance?: WebPosAppearance;
+  onAppearanceChange?: (appearance: WebPosAppearance) => void;
   textSize?: WebPosTextSize;
   onTextSizeChange?: (size: WebPosTextSize) => void;
 }) {
@@ -598,12 +593,45 @@ export function WebPosSettingsDropdown({
         <p className="px-2 text-[11px] leading-snug text-stone-500">{t('webPosFullscreenHint')}</p>
       </div>
 
-      {(onColorThemeChange || onTextSizeChange) && (
+      {(onAppearanceChange || onColorThemeChange || onTextSizeChange) && (
         <div className="space-y-2 border-b border-stone-100 pb-3">
+          {onAppearanceChange ? (
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                {t('webPosAppearance')}
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onAppearanceChange('light')}
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-bold ${
+                    appearance === 'light'
+                      ? 'border-stone-900 bg-stone-50'
+                      : 'border-stone-200 hover:bg-stone-50'
+                  }`}
+                >
+                  <Sun size={14} />
+                  {t('webPosAppearanceLightShort')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onAppearanceChange('night')}
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-bold ${
+                    appearance === 'night'
+                      ? 'border-stone-900 bg-stone-50'
+                      : 'border-stone-200 hover:bg-stone-50'
+                  }`}
+                >
+                  <Moon size={14} />
+                  {t('webPosAppearanceNightShort')}
+                </button>
+              </div>
+            </div>
+          ) : null}
           {onColorThemeChange ? (
             <div>
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500">
-                {t('webPosTheme')}
+                {t('webPosAccentColor')}
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {WEBPOS_COLOR_THEMES.map((id) => {

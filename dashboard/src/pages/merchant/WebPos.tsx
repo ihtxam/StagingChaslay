@@ -80,6 +80,9 @@ import WebPosTopBar, {
 } from '@/components/webpos/WebPosTopBar';
 
 const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
+const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
+
+export type WebPosAppearance = 'light' | 'night';
 
 function readStoredTextSize(): WebPosTextSize {
   try {
@@ -89,6 +92,16 @@ function readStoredTextSize(): WebPosTextSize {
     /* ignore */
   }
   return 'md';
+}
+
+function readStoredAppearance(): WebPosAppearance {
+  try {
+    const v = localStorage.getItem(WEBPOS_APPEARANCE_KEY);
+    if (v === 'night' || v === 'light') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'light';
 }
 import {
   clearPersistedWebPosCarts,
@@ -174,6 +187,7 @@ import {
   stopOrderAlertLoop,
 } from '@/lib/order-alert';
 import {
+  getEffectivePanelAccess,
   hasPermission,
   loadWebPosStaffSession,
   saveWebPosStaffSession,
@@ -347,6 +361,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [shiftsEnabled, setShiftsEnabled] = useState(false);
   const [posColorTheme, setPosColorTheme] = useState<WebPosColorTheme>('teal');
   const [posTextSize, setPosTextSize] = useState<WebPosTextSize>(() => readStoredTextSize());
+  const [posAppearance, setPosAppearance] = useState<WebPosAppearance>(() => readStoredAppearance());
   const [openShift, setOpenShift] = useState<{
     id: string;
     openingCash: number;
@@ -609,8 +624,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [settingsOpen]);
 
   const showPanelMenus = useCallback(() => {
+    const access = getEffectivePanelAccess({
+      jwtPermissions: undefined,
+      isOwner: false,
+      staffConfigured,
+      pinSession: webposStaff,
+    });
+    // When PINs are configured, only staff with ACCESS_PANEL may leave WebPOS chrome.
+    if (staffConfigured && !access.canOpenPanel) {
+      toast.error(t('webPosPanelDenied'));
+      return;
+    }
     window.dispatchEvent(new CustomEvent('webpos:show-panel'));
-  }, []);
+  }, [staffConfigured, webposStaff, t]);
 
   const enterPosApp = useCallback(() => {
     window.dispatchEvent(new CustomEvent('webpos:enter-app'));
@@ -3770,20 +3796,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const staffPerms = webposStaff?.permissions;
+  /** Never treat merchant-owner JWT as a bypass while a PIN session is required. */
   const canPay =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'PROCESS_PAYMENTS'));
+    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'PROCESS_PAYMENTS', false));
   const canDrawer =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'OPEN_CASH_DRAWER'));
+    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'OPEN_CASH_DRAWER', false));
   const canCancelOrders =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'CANCEL_ORDERS'));
+    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'CANCEL_ORDERS', false));
   const canRefundOrders =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'REFUND_ORDERS'));
+    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'REFUND_ORDERS', false));
   const canApplyDiscounts =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'APPLY_DISCOUNTS'));
+    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'APPLY_DISCOUNTS', false));
   const canViewReports =
     !staffConfigured ||
     (!!webposStaff &&
-      (hasPermission(staffPerms, 'VIEW_REPORTS') || hasPermission(staffPerms, 'END_OF_DAY')));
+      (hasPermission(staffPerms, 'VIEW_REPORTS', false) ||
+        hasPermission(staffPerms, 'END_OF_DAY', false)));
+  const canOpenPanel =
+    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'ACCESS_PANEL', false));
   const showEodButton = !shiftsEnabled && canViewReports;
 
   const openCashDrawer = async () => {
@@ -3819,6 +3849,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
+  const changePosAppearance = (appearance: WebPosAppearance) => {
+    setPosAppearance(appearance);
+    try {
+      localStorage.setItem(WEBPOS_APPEARANCE_KEY, appearance);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const onStaffPinSuccess = (staff: {
     id: string;
     name: string;
@@ -3835,6 +3874,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     setWebposStaff(session);
     saveWebPosStaffSession(session);
+    window.dispatchEvent(new CustomEvent('webpos:staff-session'));
     setPinModalOpen(false);
     toast.success(t('webPosSignedInAs').replace('{name}', staff.name));
     void refreshCurrentShift();
@@ -4077,10 +4117,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   return (
     <div
-      className={`webpos-shell min-h-0 overflow-hidden ${
-        appMode ? 'h-dvh' : '-m-3 sm:-m-4 h-[calc(100dvh-4rem)]'
-      } flex flex-col bg-stone-100`}
+      className={`webpos-shell min-h-0 overflow-hidden flex flex-col ${
+        appMode ? 'webpos-shell--fill' : 'webpos-shell--embedded -m-3 sm:-m-4'
+      }`}
       data-theme={posColorTheme || 'teal'}
+      data-appearance={posAppearance}
       data-text-size={posTextSize}
       data-narrow={isNarrowViewport ? '1' : '0'}
     >
@@ -4096,6 +4137,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onlinePendingCount={onlinePendingCount}
         staffName={webposStaff?.name}
         canDrawer={canDrawer}
+        canShowPanel={canOpenPanel}
         appMode={appMode}
         settingsOpen={settingsOpen}
         onToggleSettings={() => setSettingsOpen((v) => !v)}
@@ -4124,6 +4166,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         hideBookingsTab={isRetail || !tablesEditionOk}
         colorTheme={posColorTheme}
         onColorThemeChange={(theme) => void changePosColorTheme(theme)}
+        appearance={posAppearance}
+        onAppearanceChange={changePosAppearance}
         textSize={posTextSize}
         onTextSizeChange={changePosTextSize}
         syncOnline={offlineSync.online}
@@ -4190,6 +4234,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             staffName={webposStaff?.name}
             colorTheme={posColorTheme}
             onColorThemeChange={(theme) => void changePosColorTheme(theme)}
+            appearance={posAppearance}
+            onAppearanceChange={changePosAppearance}
             textSize={posTextSize}
             onTextSizeChange={changePosTextSize}
             canDrawer={canDrawer}

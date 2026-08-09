@@ -176,6 +176,13 @@ button {
 
   .webpos-shell {
     overscroll-behavior: none;
+    --webpos-zoom: 1;
+    --webpos-bg: #f5f5f4; /* stone-100 */
+    --webpos-surface: #ffffff;
+    --webpos-surface-2: #fafaf9; /* stone-50 */
+    --webpos-text: #292524; /* stone-800 */
+    --webpos-text-muted: #78716c; /* stone-500 */
+    --webpos-border: #e7e5e4; /* stone-200 */
     --webpos-accent: #0d9488;
     --webpos-accent-hover: #0f766e;
     --webpos-accent-soft: #ccfbf1;
@@ -183,6 +190,23 @@ button {
     --webpos-accent-text: #115e59;
     --webpos-accent-ring: #2dd4bf;
     --webpos-accent-border: #99f6e4;
+    zoom: var(--webpos-zoom);
+    background-color: var(--webpos-bg);
+    color: var(--webpos-text);
+  }
+
+  /*
+   * Zoom scales rem/Tailwind UI, but would clip the fixed viewport.
+   * Compensate layout box so Pay / cart dock stay inside 100dvh.
+   */
+  .webpos-shell.webpos-shell--fill {
+    height: calc(100dvh / var(--webpos-zoom));
+    width: calc(100vw / var(--webpos-zoom));
+    max-height: calc(100dvh / var(--webpos-zoom));
+  }
+  .webpos-shell.webpos-shell--embedded {
+    height: calc((100dvh - 4rem) / var(--webpos-zoom));
+    max-height: calc((100dvh - 4rem) / var(--webpos-zoom));
   }
   .webpos-shell[data-theme='teal'] {
     --webpos-accent: #0d9488;
@@ -231,18 +255,133 @@ button {
     --webpos-accent-border: #a3a3a3;
   }
 
-  /* Station text size (zoom scales Tailwind rem utilities too) */
+  /* Station text size — zoom + viewport compensation (see .webpos-shell--fill) */
   .webpos-shell[data-text-size='sm'] {
-    zoom: 0.9;
+    --webpos-zoom: 0.9;
   }
   .webpos-shell[data-text-size='md'] {
-    zoom: 1;
+    --webpos-zoom: 1;
   }
   .webpos-shell[data-text-size='lg'] {
-    zoom: 1.12;
+    --webpos-zoom: 1.12;
   }
   .webpos-shell[data-text-size='xl'] {
-    zoom: 1.24;
+    --webpos-zoom: 1.2;
+  }
+
+  /* Night / black POS — surface theme (independent of accent color swatches) */
+  .webpos-shell[data-appearance='night'] {
+    --webpos-bg: #0a0a0a;
+    --webpos-surface: #171717;
+    --webpos-surface-2: #262626;
+    --webpos-text: #f5f5f5;
+    --webpos-text-muted: #a3a3a3;
+    --webpos-border: #404040;
+    color-scheme: dark;
+  }
+  .webpos-shell[data-appearance='night'][data-theme='teal'] {
+    --webpos-accent: #2dd4bf;
+    --webpos-accent-hover: #5eead4;
+    --webpos-accent-soft: #134e4a;
+    --webpos-accent-softer: #042f2e;
+    --webpos-accent-text: #99f6e4;
+    --webpos-accent-ring: #2dd4bf;
+    --webpos-accent-border: #115e59;
+  }
+  .webpos-shell[data-appearance='night'][data-theme='green'] {
+    --webpos-accent: #4ade80;
+    --webpos-accent-hover: #86efac;
+    --webpos-accent-soft: #14532d;
+    --webpos-accent-softer: #052e16;
+    --webpos-accent-text: #bbf7d0;
+    --webpos-accent-ring: #4ade80;
+    --webpos-accent-border: #166534;
+  }
+  .webpos-shell[data-appearance='night'][data-theme='blue'] {
+    --webpos-accent: #60a5fa;
+    --webpos-accent-hover: #93c5fd;
+    --webpos-accent-soft: #1e3a8a;
+    --webpos-accent-softer: #172554;
+    --webpos-accent-text: #bfdbfe;
+    --webpos-accent-ring: #60a5fa;
+    --webpos-accent-border: #1d4ed8;
+  }
+  .webpos-shell[data-appearance='night'][data-theme='violet'] {
+    --webpos-accent: #a78bfa;
+    --webpos-accent-hover: #c4b5fd;
+    --webpos-accent-soft: #4c1d95;
+    --webpos-accent-softer: #2e1065;
+    --webpos-accent-text: #ddd6fe;
+    --webpos-accent-ring: #a78bfa;
+    --webpos-accent-border: #6d28d9;
+  }
+  .webpos-shell[data-appearance='night'][data-theme='mono'] {
+    --webpos-accent: #f5f5f5;
+    --webpos-accent-hover: #ffffff;
+    --webpos-accent-soft: #404040;
+    --webpos-accent-softer: #262626;
+    --webpos-accent-text: #fafafa;
+    --webpos-accent-ring: #a3a3a3;
+    --webpos-accent-border: #525252;
+  }
+
+  /* Remap common Tailwind stone/white utilities inside night POS */
+  .webpos-shell[data-appearance='night'] .bg-white {
+    background-color: var(--webpos-surface) !important;
+  }
+  .webpos-shell[data-appearance='night'] .bg-stone-50,
+  .webpos-shell[data-appearance='night'] .bg-stone-100 {
+    background-color: var(--webpos-surface-2) !important;
+  }
+  .webpos-shell[data-appearance='night'] .bg-stone-200 {
+    background-color: #404040 !important;
+  }
+  .webpos-shell[data-appearance='night'] .bg-stone-950 {
+    background-color: #000000 !important;
+  }
+  .webpos-shell[data-appearance='night'] .text-stone-400,
+  .webpos-shell[data-appearance='night'] .text-stone-500 {
+    color: var(--webpos-text-muted) !important;
+  }
+  .webpos-shell[data-appearance='night'] .text-stone-600,
+  .webpos-shell[data-appearance='night'] .text-stone-700,
+  .webpos-shell[data-appearance='night'] .text-stone-800,
+  .webpos-shell[data-appearance='night'] .text-stone-900 {
+    color: var(--webpos-text) !important;
+  }
+  .webpos-shell[data-appearance='night'] .border-stone-100,
+  .webpos-shell[data-appearance='night'] .border-stone-200,
+  .webpos-shell[data-appearance='night'] .border-stone-300 {
+    border-color: var(--webpos-border) !important;
+  }
+  .webpos-shell[data-appearance='night'] .hover\:bg-stone-50:hover,
+  .webpos-shell[data-appearance='night'] .hover\:bg-stone-100:hover {
+    background-color: #303030 !important;
+  }
+  .webpos-shell[data-appearance='night'] .webpos-category-chip {
+    color: var(--webpos-text);
+  }
+  .webpos-shell[data-appearance='night'] .webpos-product-card {
+    border-color: var(--webpos-border);
+    background-color: var(--webpos-surface);
+  }
+  .webpos-shell[data-appearance='night'] .webpos-keypad-key {
+    background-color: var(--webpos-surface);
+    color: var(--webpos-text);
+    --tw-ring-color: var(--webpos-border);
+  }
+  .webpos-shell[data-appearance='night'] .webpos-mini-btn,
+  .webpos-shell[data-appearance='night'] .webpos-action-chip {
+    background-color: var(--webpos-surface);
+    border-color: var(--webpos-border);
+    color: var(--webpos-text);
+  }
+  .webpos-shell[data-appearance='night'] .webpos-accent-btn {
+    color: #0a0a0a;
+  }
+  .webpos-shell[data-appearance='night'][data-theme='mono'] .webpos-accent-btn {
+    color: #0a0a0a;
+    background: #f5f5f5;
   }
   .webpos-accent-chip {
     background: var(--webpos-accent-softer);
