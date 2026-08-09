@@ -3877,6 +3877,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }}
             busy={busy || paymentModalOpen}
             customerLabel={customerLabel}
+            onCustomer={() => setCustomerOpen(true)}
+            onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
             onSplit={
               checkoutSettings.splitBillsEnabled && !splitQueue.length
                 ? () => {

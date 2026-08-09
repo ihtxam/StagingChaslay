@@ -307,6 +307,22 @@ button {
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
   }
 
+  /* Checkout: scroll body; pin footer above iOS Safari chrome */
+  .webpos-checkout-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    padding-bottom: 1.5rem;
+  }
+  .webpos-checkout-footer {
+    padding-bottom: max(0.85rem, env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -4px 16px rgb(0 0 0 / 0.06);
+  }
+  @media (min-width: 1024px) {
+    .webpos-checkout-footer {
+      box-shadow: none;
+    }
+  }
+
   /* Register cart: lines grow; keypad/actions stay docked at bottom */
   .webpos-cart-panel {
     min-height: 0;

@@ -27,6 +27,11 @@ type Props = {
   onAdjust?: (delta: number) => void;
   /** Custom backspace (cart: buffer edit → price 0 → delete) */
   onBackspace?: () => void;
+  /**
+   * Show +/- sign toggle (rarely useful for money entry).
+   * Off by default for checkout; cart uses onAdjust instead.
+   */
+  showSignToggle?: boolean;
 };
 
 export default function WebPosNumericKeypad({
@@ -46,6 +51,7 @@ export default function WebPosNumericKeypad({
   hideApply = false,
   onAdjust,
   onBackspace,
+  showSignToggle = false,
 }: Props) {
   const { t } = useI18n();
   const quickAmounts =
@@ -157,7 +163,7 @@ export default function WebPosNumericKeypad({
                 +
               </button>
             </div>
-          ) : (
+          ) : showSignToggle ? (
             <button
               type="button"
               disabled={disabled}
@@ -166,32 +172,67 @@ export default function WebPosNumericKeypad({
             >
               +/-
             </button>
+          ) : (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => push('0')}
+              className={keyClass}
+            >
+              0
+            </button>
           )}
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => push('0')}
-            className={keyClass}
-          >
-            0
-          </button>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => push('.')}
-            className={`${keyClass} bg-orange-50 text-orange-900 ring-orange-200`}
-          >
-            .
-          </button>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={backspace}
-            className={`${keyClass} bg-red-50 text-red-700 ring-red-200`}
-            aria-label={t('webPosBackspace')}
-          >
-            <Delete size={compact ? 15 : 18} className="mx-auto" />
-          </button>
+          {onAdjust || showSignToggle ? (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => push('0')}
+              className={keyClass}
+            >
+              0
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => push('.')}
+              className={`${keyClass} bg-orange-50 text-orange-900 ring-orange-200`}
+            >
+              .
+            </button>
+          )}
+          {onAdjust || showSignToggle ? (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => push('.')}
+              className={`${keyClass} bg-orange-50 text-orange-900 ring-orange-200`}
+            >
+              .
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={backspace}
+              className={`${keyClass} bg-red-50 text-red-700 ring-red-200`}
+              aria-label={t('webPosBackspace')}
+            >
+              <Delete size={compact ? 15 : 18} className="mx-auto" />
+            </button>
+          )}
+          {/* Cart/adjust mode: delete sits on its own following row cell; checkout: already on 0 . ⌫ row */}
+          {onAdjust || showSignToggle ? (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={backspace}
+              className={`${keyClass} bg-red-50 text-red-700 ring-red-200`}
+              aria-label={t('webPosBackspace')}
+            >
+              <Delete size={compact ? 15 : 18} className="mx-auto" />
+            </button>
+          ) : null}
         </div>
 
         {showQuickAdd ? (

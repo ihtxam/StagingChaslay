@@ -1,10 +1,14 @@
 import {
   ArrowLeft,
+  ArrowLeftRight,
   Banknote,
+  Coins,
   CreditCard,
   Gift,
   MonitorSmartphone,
+  Percent,
   UserCircle2,
+  Vault,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -37,6 +41,7 @@ type Props = {
   };
   busy: boolean;
   customerLabel?: string | null;
+  onCustomer?: () => void;
   onSplit?: () => void;
   onComplete: (payments: AppliedPayment[], changeDue: number, tipAmount: number) => void;
   onGiftCardRequest?: (remaining: number) => void;
@@ -47,6 +52,7 @@ type Props = {
   canApplyBillDiscount?: boolean;
   billDiscountLabel?: string | null;
   billDiscountAmount?: number;
+  onOpenDrawer?: () => void;
 };
 
 function newPayId() {
@@ -61,6 +67,7 @@ export default function WebPosCheckoutView({
   methods,
   busy,
   customerLabel,
+  onCustomer,
   onSplit,
   onComplete,
   onGiftCardRequest,
@@ -71,6 +78,7 @@ export default function WebPosCheckoutView({
   canApplyBillDiscount = true,
   billDiscountLabel,
   billDiscountAmount = 0,
+  onOpenDrawer,
 }: Props) {
   const { t } = useI18n();
   const [buffer, setBuffer] = useState('');
@@ -107,6 +115,14 @@ export default function WebPosCheckoutView({
     const dens = (settings.quickCashDenominations || []).filter((n) => Number.isFinite(n) && n > 0);
     return dens.length ? dens : [10, 20, 50, 100];
   }, [settings.quickCashEnabled, settings.quickCashDenominations]);
+
+  const activeMethod = useMemo<PosPaymentMethod | null>(() => {
+    if (selectedPaymentId) {
+      return payments.find((p) => p.id === selectedPaymentId)?.method ?? null;
+    }
+    if (payments.length === 1) return payments[0]!.method;
+    return null;
+  }, [payments, selectedPaymentId]);
 
   // Default: cash covers full amount and is selected (so Card switches method)
   useEffect(() => {
@@ -207,11 +223,8 @@ export default function WebPosCheckoutView({
     payButtons.find((b) => b.id === m)?.label || m;
 
   const selectPayment = (id: string) => {
-    if (selectedPaymentId === id) {
-      setSelectedPaymentId(null);
-      setBuffer('');
-      return;
-    }
+    // Keep a row selected so Cash/Card method buttons always retarget it.
+    if (selectedPaymentId === id) return;
     setSelectedPaymentId(id);
     setBuffer('');
   };
@@ -224,6 +237,13 @@ export default function WebPosCheckoutView({
       return id;
     }
     return null;
+  };
+
+  /** Switch method on an existing tender row (keep amount). */
+  const switchPaymentMethod = (targetId: string, method: PosPaymentMethod) => {
+    setPayments((prev) => prev.map((p) => (p.id === targetId ? { ...p, method } : p)));
+    setSelectedPaymentId(targetId);
+    setBuffer('');
   };
 
   /** +10 / +20: add to selected tender and update paid/remaining immediately. */
@@ -269,35 +289,32 @@ export default function WebPosCheckoutView({
       return;
     }
 
-    // Selected row + method button = change method of that row (keep amount)
+    // Selected payment line under the total: Cash/Card always retargets that line.
     if (selectedPaymentId) {
       const sel = payments.find((p) => p.id === selectedPaymentId);
       if (sel) {
-        if (sel.method !== method) {
-          setPayments((prev) =>
-            prev.map((p) => (p.id === selectedPaymentId ? { ...p, method } : p))
-          );
-        }
-        setBuffer('');
+        if (sel.method !== method) switchPaymentMethod(selectedPaymentId, method);
+        else setBuffer('');
         return;
       }
     }
 
-    // No row selected: switch sole covering tender (Cash ? Card) when nothing left to split
-    const sole = payments.length === 1 ? payments[0]! : null;
-    const soleCovers =
-      !!sole &&
-      (bufferAmount == null || bufferAmount <= 0) &&
-      remaining <= 0.001 &&
-      Math.abs(sole.amount - total) < 0.011;
-    if (soleCovers) {
-      if (sole.method === method) {
-        setSelectedPaymentId(sole.id);
+    // Sole tender covering the bill: switch Cash ↔ Card without needing a second tap.
+    if (payments.length === 1 && (bufferAmount == null || bufferAmount <= 0)) {
+      const sole = payments[0]!;
+      const coversBill =
+        remaining <= 0.001 || Math.abs(sole.amount - total) < 0.05;
+      if (coversBill) {
+        if (sole.method !== method) switchPaymentMethod(sole.id, method);
+        else setSelectedPaymentId(sole.id);
         return;
       }
-      setPayments([{ ...sole, method }]);
-      setSelectedPaymentId(sole.id);
-      setBuffer('');
+    }
+
+    // Fully paid multi-tender: change the last line's method.
+    if (remaining <= 0.001 && payments.length > 0 && (bufferAmount == null || bufferAmount <= 0)) {
+      const targetId = payments[payments.length - 1]!.id;
+      switchPaymentMethod(targetId, method);
       return;
     }
 
@@ -334,11 +351,14 @@ export default function WebPosCheckoutView({
   };
 
   const removePayment = (id: string) => {
-    setPayments((prev) => prev.filter((p) => p.id !== id));
-    if (selectedPaymentId === id) {
-      setSelectedPaymentId(null);
-      setBuffer('');
-    }
+    setPayments((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      if (selectedPaymentId === id) {
+        setSelectedPaymentId(next[0]?.id ?? null);
+        setBuffer('');
+      }
+      return next;
+    });
   };
 
   const canComplete = payments.length > 0 && paid + 0.001 >= total;
@@ -358,293 +378,352 @@ export default function WebPosCheckoutView({
   const showKeypad = !!selectedPaymentId || payments.length > 0;
   const showQuickAdd = quickAddAmounts.length > 0;
 
+  const actionBtnClass = (active?: boolean) =>
+    `inline-flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1.5 text-[10px] font-semibold leading-tight disabled:opacity-40 ${
+      active
+        ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)]'
+        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+    }`;
+
+  const footerBar = (opts: { mobileOnly?: boolean; desktopOnly?: boolean }) => (
+    <div
+      className={`webpos-checkout-footer flex shrink-0 items-stretch gap-2 border-t border-stone-100 bg-white p-3 sm:p-4 ${
+        opts.mobileOnly ? 'lg:hidden' : ''
+      } ${opts.desktopOnly ? 'mt-auto hidden lg:flex' : ''}`}
+    >
+      {onBack ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onBack}
+          className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-40 ${
+            opts.desktopOnly ? 'lg:hidden' : ''
+          }`}
+          aria-label={t('back')}
+          title={t('back')}
+        >
+          <ArrowLeft size={18} />
+        </button>
+      ) : null}
+      {canComplete ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={complete}
+          className="webpos-accent-btn min-h-12 flex-1 rounded-xl px-4 py-3.5 text-sm font-bold disabled:opacity-40"
+        >
+          {t('webPosConfirmPay')}
+          {changeDue > 0 ? ` - ${t('webPosChangeDue')} CHF ${changeDue.toFixed(2)}` : ''}
+        </button>
+      ) : onBack ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onBack}
+          className="hidden min-h-12 flex-1 rounded-xl border border-stone-200 bg-white px-4 py-3.5 text-sm font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-40 lg:inline-flex lg:items-center lg:justify-center"
+        >
+          {t('back')}
+        </button>
+      ) : null}
+    </div>
+  );
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white lg:flex-row">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
       {/*
-        Mobile: one vertical scroll so payment rows + keypad + methods stay reachable.
-        Desktop: two columns; each column scrolls independently.
+        Mobile: scrollable body + fixed footer (Safari bottom bar safe).
+        Desktop: two columns via lg:contents on the scroll wrapper.
       */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain lg:contents">
-        {/* Mobile: total first (Odoo-style). Desktop: methods column first. */}
-        <div className="order-1 flex shrink-0 flex-col items-center border-b border-stone-100 px-4 py-4 text-center lg:hidden">
-          <p className="text-4xl font-light tabular-nums tracking-tight text-stone-800">
-            CHF {total.toFixed(2)}
-          </p>
-          {tipAmount > 0 ? (
-            <p className="mt-1 text-sm text-[var(--webpos-accent-text)]">
-              {t('webPosTip')}: CHF {tipAmount.toFixed(2)}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+        <div className="webpos-checkout-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] lg:contents">
+          {/* Mobile: total first */}
+          <div className="order-1 flex shrink-0 flex-col items-center border-b border-stone-100 px-4 py-3 text-center lg:hidden">
+            <p className="text-3xl font-light tabular-nums tracking-tight text-stone-800 sm:text-4xl">
+              CHF {total.toFixed(2)}
             </p>
-          ) : null}
-          {remaining > 0.001 ? (
-            <p className="mt-2 text-sm font-semibold tabular-nums text-[var(--webpos-accent-text)]">
-              {t('webPosRemaining')}: CHF {remaining.toFixed(2)}
-            </p>
-          ) : null}
-          {changeDue > 0.001 ? (
-            <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-700">
-              {t('webPosChangeDue')}: CHF {changeDue.toFixed(2)}
-            </p>
-          ) : null}
-        </div>
-
-        {/* Left: payment methods + tip + keypad */}
-        <div className="order-2 flex shrink-0 flex-col gap-2 border-b border-stone-100 p-3 lg:order-1 lg:h-full lg:w-[min(20rem,36vw)] lg:overflow-y-auto lg:border-b-0 lg:border-r">
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
-            {payButtons
-              .filter((b) => b.show)
-              .map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => applyMethod(b.id)}
-                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-4 text-center text-sm font-semibold hover:bg-stone-100 disabled:opacity-40 lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-3.5 lg:text-left"
-                >
-                  {b.icon}
-                  {b.label}
-                </button>
-              ))}
-          </div>
-
-          <div className="mt-1 flex gap-2">
-            <button
-              type="button"
-              className="flex-1 rounded-lg border border-stone-200 bg-white px-2 py-2 text-xs font-semibold text-stone-700"
-            >
-              {customerLabel || t('webPosCustomer')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setInvoice((v) => !v)}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${
-                invoice
-                  ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)]'
-                  : 'border-stone-200 bg-white text-stone-600'
-              }`}
-            >
-              <span
-                className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded border text-[9px] ${
-                  invoice
-                    ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
-                    : 'border-stone-400'
-                }`}
-              >
-                {invoice ? '\u2713' : ''}
-              </span>
-              {t('webPosInvoice')}
-            </button>
-          </div>
-
-          {settings.splitBillsEnabled && onSplit ? (
-            <button type="button" className="btn-secondary text-sm" onClick={onSplit}>
-              {t('webPosSplitBill')}
-            </button>
-          ) : null}
-
-          {settings.discountsEnabled && onBillDiscount ? (
-            <button
-              type="button"
-              disabled={busy || !canApplyBillDiscount}
-              onClick={onBillDiscount}
-              className="w-full rounded-lg border border-stone-200 bg-white py-2.5 text-sm font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
-            >
-              {t('webPosBillDiscount')}
-              {billDiscountAmount > 0
-                ? ` - CHF ${billDiscountAmount.toFixed(2)}${
-                    billDiscountLabel ? ` (${billDiscountLabel})` : ''
-                  }`
-                : ''}
-            </button>
-          ) : null}
-
-          <div className="space-y-2 border-t border-stone-100 pt-3 lg:mt-auto">
-            {settings.tipsEnabled ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setTipOpen(true)}
-                className="w-full rounded-lg bg-[var(--webpos-accent-soft)] py-2.5 text-sm font-bold uppercase tracking-wide text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)] hover:brightness-95 disabled:opacity-40"
-              >
-                {t('webPosTip')}
-                {tipAmount > 0 ? ` - CHF ${tipAmount.toFixed(2)}` : ''}
-              </button>
+            {tipAmount > 0 ? (
+              <p className="mt-1 text-sm text-[var(--webpos-accent-text)]">
+                {t('webPosTip')}: CHF {tipAmount.toFixed(2)}
+              </p>
             ) : null}
-            <div className={showKeypad ? '' : 'hidden lg:block'}>
-              <WebPosNumericKeypad
-                mode="qty"
-                onModeChange={() => undefined}
-                buffer={buffer}
-                onBufferChange={(buf) => {
-                  if (!selectedPaymentId && payments.length > 0 && buf) {
-                    const target = payments[payments.length - 1]!;
-                    setSelectedPaymentId(target.id);
-                  }
-                  setBuffer(buf);
-                }}
-                onQuickAdd={showQuickAdd ? applyQuickAdd : undefined}
-                onApply={complete}
-                showModeButtons={false}
-                showQuickAdd={showQuickAdd}
-                quickAddAmounts={quickAddAmounts}
-                compact
-                disabled={busy}
-                hideApply
-              />
-            </div>
-            {!showKeypad ? (
-              <p className="py-6 text-center text-sm text-stone-400 lg:hidden">
-                {t('webPosTapPaymentMethod')}
+            {remaining > 0.001 ? (
+              <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--webpos-accent-text)]">
+                {t('webPosRemaining')}: CHF {remaining.toFixed(2)}
+              </p>
+            ) : null}
+            {changeDue > 0.001 ? (
+              <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-700">
+                {t('webPosChangeDue')}: CHF {changeDue.toFixed(2)}
               </p>
             ) : null}
           </div>
-        </div>
 
-        {/* Right: amount due (desktop) + payment rows */}
-        <div className="order-3 flex min-h-0 flex-1 flex-col lg:order-2 lg:h-full lg:overflow-hidden">
-          <div className="flex min-h-0 flex-1 flex-col items-center px-4 py-4 text-center lg:overflow-y-auto lg:py-8">
-            <div className="hidden w-full flex-col items-center lg:flex">
-              <p className="text-sm font-semibold uppercase tracking-wide text-stone-400">
-                {t('webPosAmountDue')}
-              </p>
-              <p className="text-5xl font-light tabular-nums tracking-tight text-stone-700 sm:text-6xl">
-                CHF {total.toFixed(2)}
-              </p>
-              {tipAmount > 0 ? (
-                <p className="mt-1 text-sm text-[var(--webpos-accent-text)]">
-                  {t('webPosTip')}: CHF {tipAmount.toFixed(2)}
-                </p>
-              ) : null}
-            </div>
-            {liveEntryLabel && !selectedPaymentId ? (
-              <p className="mt-2 text-base font-semibold tabular-nums text-[var(--webpos-accent-text)]">
-                {t('webPosEntering')}: {liveEntryLabel}
-              </p>
-            ) : null}
-            {perGuest ? (
-              <p className="mt-3 text-lg text-stone-500">
-                CHF {perGuest.toFixed(2)} / {t('webPosGuest')}{' '}
-                <span className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded bg-stone-200 text-sm font-bold">
-                  {splitGuestCount}
-                </span>
-              </p>
-            ) : null}
-            {splitLabel ? (
-              <p className="mt-1 text-sm font-medium text-[var(--webpos-accent-text)]">{splitLabel}</p>
-            ) : null}
-
-            <div className="mt-4 w-full max-w-md space-y-2 text-left lg:mt-8">
-              {payments.length === 0 ? (
-                <p className="hidden text-center text-sm text-stone-400 lg:block">
-                  {t('webPosTapPaymentMethod')}
-                </p>
-              ) : (
-                payments.map((p) => {
-                  const selected = selectedPaymentId === p.id;
-                  const displayAmount =
-                    selected && bufferAmount != null ? bufferAmount : p.amount;
+          {/* Methods + compact icon actions + keypad */}
+          <div className="order-2 flex shrink-0 flex-col gap-2 border-b border-stone-100 p-3 lg:order-1 lg:h-full lg:w-[min(20rem,36vw)] lg:overflow-y-auto lg:border-b-0 lg:border-r">
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+              {payButtons
+                .filter((b) => b.show)
+                .map((b) => {
+                  const selected = activeMethod === b.id;
                   return (
-                    <div
-                      key={p.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => selectPayment(p.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          selectPayment(p.id);
-                        }
-                      }}
-                      className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 ${
+                    <button
+                      key={b.id}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => applyMethod(b.id)}
+                      className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border px-3 py-3 text-center text-sm font-semibold disabled:opacity-40 lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-3.5 lg:text-left ${
                         selected
-                          ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] ring-1 ring-[var(--webpos-accent-ring)]'
-                          : 'border-stone-200 bg-white hover:bg-stone-50'
+                          ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
+                          : 'border-stone-200 bg-stone-50 hover:bg-stone-100'
                       }`}
                     >
-                      <div className="min-w-0">
-                        <span className="text-sm font-semibold">{methodLabel(p.method)}</span>
-                        {selected && liveEntryLabel ? (
-                          <p className="mt-0.5 text-xs font-medium text-[var(--webpos-accent-text)]">
-                            {t('webPosEntering')}: {liveEntryLabel}
-                          </p>
-                        ) : selected ? (
-                          <p className="mt-0.5 text-xs text-stone-500">{t('webPosEditAmount')}</p>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold tabular-nums">
-                          CHF {displayAmount.toFixed(2)}
-                        </span>
-                        <button
-                          type="button"
-                          className="rounded p-1 text-red-500 hover:bg-red-50"
-                          aria-label={t('delete')}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removePayment(p.id);
-                          }}
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    </div>
+                      {b.icon}
+                      {b.label}
+                    </button>
                   );
-                })
-              )}
+                })}
             </div>
 
-            <div className="mt-6 w-full max-w-md space-y-1 text-sm">
-              <div
-                className={`flex justify-between font-semibold ${
-                  remaining > 0.001 ? 'text-[var(--webpos-accent-text)]' : ''
-                }`}
+            {/* One row: customer / split / discount / tip / drawer */}
+            <div className="flex items-stretch gap-1.5">
+              <button
+                type="button"
+                disabled={busy || !onCustomer}
+                onClick={() => onCustomer?.()}
+                className={actionBtnClass(!!customerLabel)}
+                title={customerLabel || t('webPosCustomer')}
               >
-                <span>{t('webPosRemaining')}</span>
-                <span className="tabular-nums">CHF {remaining.toFixed(2)}</span>
+                <UserCircle2 size={18} />
+                <span className="max-w-full truncate">
+                  {customerLabel || t('webPosCustomerShort')}
+                </span>
+              </button>
+
+              {settings.splitBillsEnabled && onSplit ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={onSplit}
+                  className={actionBtnClass(!!splitLabel)}
+                  title={t('webPosSplitBill')}
+                >
+                  <ArrowLeftRight size={18} />
+                  <span className="max-w-full truncate">{t('webPosSplitBill')}</span>
+                </button>
+              ) : null}
+
+              {settings.discountsEnabled && onBillDiscount ? (
+                <button
+                  type="button"
+                  disabled={busy || !canApplyBillDiscount}
+                  onClick={onBillDiscount}
+                  className={actionBtnClass(billDiscountAmount > 0)}
+                  title={
+                    billDiscountAmount > 0
+                      ? `${t('webPosBillDiscount')} - CHF ${billDiscountAmount.toFixed(2)}${
+                          billDiscountLabel ? ` (${billDiscountLabel})` : ''
+                        }`
+                      : t('webPosBillDiscount')
+                  }
+                >
+                  <Percent size={18} />
+                  <span className="truncate">
+                    {billDiscountAmount > 0 ? `-${billDiscountAmount.toFixed(2)}` : '%'}
+                  </span>
+                </button>
+              ) : null}
+
+              {settings.tipsEnabled ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setTipOpen(true)}
+                  className={actionBtnClass(tipAmount > 0)}
+                  title={t('webPosTip')}
+                >
+                  <Coins size={18} />
+                  <span className="truncate">
+                    {tipAmount > 0 ? `CHF ${tipAmount.toFixed(2)}` : t('webPosTip')}
+                  </span>
+                </button>
+              ) : null}
+
+              {onOpenDrawer ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={onOpenDrawer}
+                  className={`${actionBtnClass(false)} max-w-[3rem] flex-none px-1`}
+                  title={t('webPosOpenDrawer')}
+                  aria-label={t('webPosOpenDrawer')}
+                >
+                  <Vault size={18} />
+                  <span className="sr-only">{t('webPosOpenDrawer')}</span>
+                </button>
+              ) : null}
+            </div>
+
+            <label className="inline-flex w-fit cursor-pointer items-center gap-1.5 px-0.5 text-xs font-semibold text-stone-600">
+              <input
+                type="checkbox"
+                checked={invoice}
+                onChange={() => setInvoice((v) => !v)}
+                className="h-3.5 w-3.5 rounded border-stone-400 text-[var(--webpos-accent)] focus:ring-[var(--webpos-accent-ring)]"
+              />
+              {t('webPosInvoice')}
+            </label>
+
+            <div className="space-y-2 border-t border-stone-100 pt-2 lg:mt-auto">
+              <div className={showKeypad ? '' : 'hidden lg:block'}>
+                <WebPosNumericKeypad
+                  mode="qty"
+                  onModeChange={() => undefined}
+                  buffer={buffer}
+                  onBufferChange={(buf) => {
+                    if (!selectedPaymentId && payments.length > 0 && buf) {
+                      const target = payments[payments.length - 1]!;
+                      setSelectedPaymentId(target.id);
+                    }
+                    setBuffer(buf);
+                  }}
+                  onQuickAdd={showQuickAdd ? applyQuickAdd : undefined}
+                  onApply={complete}
+                  showModeButtons={false}
+                  showQuickAdd={showQuickAdd}
+                  quickAddAmounts={quickAddAmounts}
+                  compact
+                  disabled={busy}
+                  hideApply
+                  showSignToggle={false}
+                />
               </div>
-              {changeDue > 0 ? (
-                <div className="flex justify-between font-semibold text-emerald-700">
-                  <span>{t('webPosChangeDue')}</span>
-                  <span className="tabular-nums">CHF {changeDue.toFixed(2)}</span>
-                </div>
+              {!showKeypad ? (
+                <p className="py-6 text-center text-sm text-stone-400 lg:hidden">
+                  {t('webPosTapPaymentMethod')}
+                </p>
               ) : null}
             </div>
           </div>
 
-          <div className="mt-auto flex shrink-0 items-stretch gap-2 border-t border-stone-100 bg-white p-3 sm:p-4">
-            {onBack ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onBack}
-                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-40 lg:hidden"
-                aria-label={t('back')}
-                title={t('back')}
-              >
-                <ArrowLeft size={18} />
-              </button>
-            ) : null}
-            {canComplete ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={complete}
-                className="webpos-accent-btn min-h-12 flex-1 rounded-xl px-4 py-3.5 text-sm font-bold disabled:opacity-40"
-              >
-                {t('webPosConfirmPay')}
-                {changeDue > 0 ? ` - ${t('webPosChangeDue')} CHF ${changeDue.toFixed(2)}` : ''}
-              </button>
-            ) : onBack ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onBack}
-                className="hidden min-h-12 flex-1 rounded-xl border border-stone-200 bg-white px-4 py-3.5 text-sm font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-40 lg:inline-flex lg:items-center lg:justify-center"
-              >
-                {t('back')}
-              </button>
-            ) : null}
+          {/* Payment lines + remaining */}
+          <div className="order-3 flex min-h-0 flex-1 flex-col lg:order-2 lg:h-full lg:overflow-hidden">
+            <div className="flex flex-col items-center px-4 py-3 pb-8 text-center lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:py-8">
+              <div className="hidden w-full flex-col items-center lg:flex">
+                <p className="text-sm font-semibold uppercase tracking-wide text-stone-400">
+                  {t('webPosAmountDue')}
+                </p>
+                <p className="text-5xl font-light tabular-nums tracking-tight text-stone-700 sm:text-6xl">
+                  CHF {total.toFixed(2)}
+                </p>
+                {tipAmount > 0 ? (
+                  <p className="mt-1 text-sm text-[var(--webpos-accent-text)]">
+                    {t('webPosTip')}: CHF {tipAmount.toFixed(2)}
+                  </p>
+                ) : null}
+              </div>
+              {liveEntryLabel && !selectedPaymentId ? (
+                <p className="mt-2 text-base font-semibold tabular-nums text-[var(--webpos-accent-text)]">
+                  {t('webPosEntering')}: {liveEntryLabel}
+                </p>
+              ) : null}
+              {perGuest ? (
+                <p className="mt-3 text-lg text-stone-500">
+                  CHF {perGuest.toFixed(2)} / {t('webPosGuest')}{' '}
+                  <span className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded bg-stone-200 text-sm font-bold">
+                    {splitGuestCount}
+                  </span>
+                </p>
+              ) : null}
+              {splitLabel ? (
+                <p className="mt-1 text-sm font-medium text-[var(--webpos-accent-text)]">
+                  {splitLabel}
+                </p>
+              ) : null}
+
+              <div className="mt-3 w-full max-w-md space-y-2 text-left lg:mt-8">
+                {payments.length === 0 ? (
+                  <p className="hidden text-center text-sm text-stone-400 lg:block">
+                    {t('webPosTapPaymentMethod')}
+                  </p>
+                ) : (
+                  payments.map((p) => {
+                    const selected = selectedPaymentId === p.id;
+                    const displayAmount =
+                      selected && bufferAmount != null ? bufferAmount : p.amount;
+                    return (
+                      <div
+                        key={p.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => selectPayment(p.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            selectPayment(p.id);
+                          }
+                        }}
+                        className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 ${
+                          selected
+                            ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] ring-1 ring-[var(--webpos-accent-ring)]'
+                            : 'border-stone-200 bg-white hover:bg-stone-50'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <span className="text-sm font-semibold">{methodLabel(p.method)}</span>
+                          {selected && liveEntryLabel ? (
+                            <p className="mt-0.5 text-xs font-medium text-[var(--webpos-accent-text)]">
+                              {t('webPosEntering')}: {liveEntryLabel}
+                            </p>
+                          ) : selected ? (
+                            <p className="mt-0.5 text-xs text-stone-500">{t('webPosEditAmount')}</p>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold tabular-nums">
+                            CHF {displayAmount.toFixed(2)}
+                          </span>
+                          <button
+                            type="button"
+                            className="rounded p-1 text-red-500 hover:bg-red-50"
+                            aria-label={t('delete')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removePayment(p.id);
+                            }}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="mt-4 w-full max-w-md space-y-1 text-sm">
+                <div
+                  className={`flex justify-between font-semibold ${
+                    remaining > 0.001 ? 'text-[var(--webpos-accent-text)]' : ''
+                  }`}
+                >
+                  <span>{t('webPosRemaining')}</span>
+                  <span className="tabular-nums">CHF {remaining.toFixed(2)}</span>
+                </div>
+                {changeDue > 0 ? (
+                  <div className="flex justify-between font-semibold text-emerald-700">
+                    <span>{t('webPosChangeDue')}</span>
+                    <span className="tabular-nums">CHF {changeDue.toFixed(2)}</span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {footerBar({ desktopOnly: true })}
           </div>
         </div>
+
+        {/* Mobile: Confirm stays pinned above Safari chrome; body scrolls above it */}
+        {footerBar({ mobileOnly: true })}
       </div>
 
       <WebPosTipKeypad
