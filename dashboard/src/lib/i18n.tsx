@@ -863,6 +863,23 @@ const en: Dict = {
   webPosSaleComplete: 'Sale completed',
   webPosSaleFailed: 'Sale failed',
   webPosLoadFailed: 'Failed to load WebPOS catalog',
+  webPosLicenseTrialExpiredTitle: 'Your 7-day WebPOS trial has ended',
+  webPosLicenseSubExpiredTitle: 'Your WebPOS subscription has expired',
+  webPosLicenseSuspendedTitle: 'Account suspended',
+  webPosLicenseTrialExpiredBody:
+    'The register is locked until you buy a license or renew with your reseller. Your products and history stay safe.',
+  webPosLicenseSubExpiredBody:
+    'Renew your plan to keep selling on WebPOS. Your products and history stay safe.',
+  webPosLicenseSuspendedBody:
+    'This merchant account is suspended. Contact your reseller or support to restore access.',
+  webPosLicenseEndedOn: 'Ended on {date}',
+  webPosLicenseBuy: 'Buy license',
+  webPosLicenseContactReseller: 'Contact reseller',
+  webPosLicenseContactSupport: 'Open settings',
+  webPosLicenseYourReseller: 'Your reseller',
+  webPosLicenseNoResellerHint:
+    'No reseller is linked. Use Buy license for self-serve plans, or contact support.',
+  webPosLicenseMailSubject: 'WebPOS license renewal',
   webPosDrawerDenied: 'You do not have permission to open the cash drawer',
   webPosDrawerOpened: 'Cash drawer opened',
   webPosDrawerFailed: 'Could not open cash drawer',
@@ -1998,6 +2015,23 @@ const fr: Dict = {
   webPosSaleComplete: 'Vente terminée',
   webPosSaleFailed: 'Échec de la vente',
   webPosLoadFailed: 'Échec du chargement du catalogue WebPOS',
+  webPosLicenseTrialExpiredTitle: 'Votre essai WebPOS de 7 jours est terminé',
+  webPosLicenseSubExpiredTitle: 'Votre abonnement WebPOS a expiré',
+  webPosLicenseSuspendedTitle: 'Compte suspendu',
+  webPosLicenseTrialExpiredBody:
+    'La caisse est verrouillée jusqu’à l’achat d’une licence ou le renouvellement via votre revendeur. Produits et historique restent disponibles.',
+  webPosLicenseSubExpiredBody:
+    'Renouvelez votre offre pour continuer à vendre sur WebPOS. Produits et historique restent disponibles.',
+  webPosLicenseSuspendedBody:
+    'Ce compte marchand est suspendu. Contactez votre revendeur ou le support pour rétablir l’accès.',
+  webPosLicenseEndedOn: 'Terminé le {date}',
+  webPosLicenseBuy: 'Acheter une licence',
+  webPosLicenseContactReseller: 'Contacter le revendeur',
+  webPosLicenseContactSupport: 'Ouvrir les paramètres',
+  webPosLicenseYourReseller: 'Votre revendeur',
+  webPosLicenseNoResellerHint:
+    'Aucun revendeur lié. Utilisez Acheter une licence pour les offres en libre-service, ou contactez le support.',
+  webPosLicenseMailSubject: 'Renouvellement licence WebPOS',
   webPosDrawerDenied: 'Vous n’avez pas la permission d’ouvrir le tiroir-caisse',
   webPosDrawerOpened: 'Tiroir-caisse ouvert',
   webPosDrawerFailed: 'Impossible d’ouvrir le tiroir-caisse',
@@ -3139,6 +3173,23 @@ const de: Dict = {
   webPosSaleComplete: 'Verkauf abgeschlossen',
   webPosSaleFailed: 'Verkauf fehlgeschlagen',
   webPosLoadFailed: 'WebPOS-Katalog konnte nicht geladen werden',
+  webPosLicenseTrialExpiredTitle: 'Ihre 7-Tage-WebPOS-Testphase ist beendet',
+  webPosLicenseSubExpiredTitle: 'Ihr WebPOS-Abo ist abgelaufen',
+  webPosLicenseSuspendedTitle: 'Konto gesperrt',
+  webPosLicenseTrialExpiredBody:
+    'Die Kasse ist gesperrt, bis Sie eine Lizenz kaufen oder bei Ihrem Reseller verlängern. Produkte und Verlauf bleiben erhalten.',
+  webPosLicenseSubExpiredBody:
+    'Verlängern Sie Ihren Plan, um weiter auf WebPOS zu verkaufen. Produkte und Verlauf bleiben erhalten.',
+  webPosLicenseSuspendedBody:
+    'Dieses Händlerkonto ist gesperrt. Kontaktieren Sie Ihren Reseller oder den Support.',
+  webPosLicenseEndedOn: 'Beendet am {date}',
+  webPosLicenseBuy: 'Lizenz kaufen',
+  webPosLicenseContactReseller: 'Reseller kontaktieren',
+  webPosLicenseContactSupport: 'Einstellungen öffnen',
+  webPosLicenseYourReseller: 'Ihr Reseller',
+  webPosLicenseNoResellerHint:
+    'Kein Reseller verknüpft. Nutzen Sie Lizenz kaufen für Self-Serve-Pläne oder kontaktieren Sie den Support.',
+  webPosLicenseMailSubject: 'WebPOS-Lizenz verlängern',
   webPosDrawerDenied: 'Keine Berechtigung zum Öffnen der Kassenschublade',
   webPosDrawerOpened: 'Kassenschublade geöffnet',
   webPosDrawerFailed: 'Kassenschublade konnte nicht geöffnet werden',
