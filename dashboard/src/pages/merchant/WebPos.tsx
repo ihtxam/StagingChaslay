@@ -73,6 +73,14 @@ import WebPosOnlineOrdersPanel, {
 } from '@/components/WebPosOnlineOrdersPanel';
 import WebPosTopBar, { WebPosSettingsDropdown } from '@/components/webpos/WebPosTopBar';
 import {
+  clearPersistedWebPosCarts,
+  draftsMapToRecord,
+  loadPersistedWebPosCarts,
+  recordToDraftsMap,
+  savePersistedWebPosCarts,
+  type PersistedWebPosCarts,
+} from '@/lib/webpos-cart-persist';
+import {
   WebPosStartShiftModal,
   WebPosCloseShiftModal,
   WebPosShiftClosedModal,
@@ -266,27 +274,37 @@ function mergeBillDiscounts(
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const { t, locale } = useI18n();
+  /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
+  const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
+  if (bootCartRef.current === undefined) {
+    bootCartRef.current = loadPersistedWebPosCarts();
+  }
+  const bootCart = bootCartRef.current;
+  const bootActive = bootCart?.active || null;
+
   const [loading, setLoading] = useState(true);
   const [merchant, setMerchant] = useState<any>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categoryId, setCategoryId] = useState<string | 'all'>('all');
   const [search, setSearch] = useState('');
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [channel, setChannel] = useState<Channel | null>(null);
+  const [cart, setCart] = useState<CartLine[]>(() => bootActive?.cart || []);
+  const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? null);
   const effectiveChannel: Channel = channel ?? 'takeaway';
   const [posTab, setPosTab] = useState<PosTab>('register');
   const [posView, setPosView] = useState<PosView>('register');
-  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(
+    () => bootActive?.selectedLineId ?? null
+  );
   const [keypadMode, setKeypadMode] = useState<KeypadMode>('qty');
-  const [keypadBuffer, setKeypadBuffer] = useState('');
-  const [activeCourse, setActiveCourse] = useState(1);
-  const [orderSent, setOrderSent] = useState(false);
-  const [coursesBulkSent, setCoursesBulkSent] = useState(false);
-  const [orderNote, setOrderNote] = useState('');
-  const [tableId, setTableId] = useState<string | null>(null);
-  const [tableLabel, setTableLabel] = useState<string | null>(null);
-  const [tabNumber, setTabNumber] = useState<string | null>(null);
+  const [keypadBuffer, setKeypadBuffer] = useState(() => bootActive?.keypadBuffer || '');
+  const [activeCourse, setActiveCourse] = useState(() => bootActive?.activeCourse || 1);
+  const [orderSent, setOrderSent] = useState(() => !!bootActive?.orderSent);
+  const [coursesBulkSent, setCoursesBulkSent] = useState(() => !!bootActive?.coursesBulkSent);
+  const [orderNote, setOrderNote] = useState(() => bootActive?.orderNote || '');
+  const [tableId, setTableId] = useState<string | null>(() => bootActive?.tableId ?? null);
+  const [tableLabel, setTableLabel] = useState<string | null>(() => bootActive?.tableLabel ?? null);
+  const [tabNumber, setTabNumber] = useState<string | null>(() => bootActive?.tabNumber ?? null);
   const [expressSuccessOpen, setExpressSuccessOpen] = useState(false);
   const [shiftsEnabled, setShiftsEnabled] = useState(false);
   const [posColorTheme, setPosColorTheme] = useState('teal');
@@ -330,7 +348,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
   const [moveLineId, setMoveLineId] = useState<string | null>(null);
   const [mergeTarget, setMergeTarget] = useState<{ id: string; label: string } | null>(null);
-  const [billDiscount, setBillDiscount] = useState<BillDiscount>({ percent: 0, amount: 0 });
+  const [billDiscount, setBillDiscount] = useState<BillDiscount>(
+    () => bootActive?.billDiscount || { percent: 0, amount: 0 }
+  );
   const [billDiscountOpen, setBillDiscountOpen] = useState(false);
   const [setTabOpen, setSetTabOpen] = useState(false);
   const [postSuccessTarget, setPostSuccessTarget] = useState<'register' | 'tables'>(() => {
@@ -372,7 +392,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const onlinePanelOpenRef = useRef(false);
   const splitMasterIdRef = useRef<string | null>(null);
   const [fulfillmentWhen, setFulfillmentWhen] = useState<FulfillmentWhen | null>(null);
-  const [selectedCustomer, setSelectedCustomer] = useState<WebPosCustomer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<WebPosCustomer | null>(() => {
+    const c = bootCart?.customer;
+    if (!c?.id) return null;
+    return c as WebPosCustomer;
+  });
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [provisionalPrinted, setProvisionalPrinted] = useState(false);
@@ -399,7 +423,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [pendingCombo, setPendingCombo] = useState<ShopComboProduct | null>(null);
   const [pendingOpenPrice, setPendingOpenPrice] = useState<Product | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [mobileCartOpen, setMobileCartOpen] = useState(() => {
+    const hasItems = (bootActive?.cart?.length || 0) > 0 || !!bootActive?.orderSent;
+    return !!(bootCart?.mobileCartOpen && hasItems);
+  });
   /** true below Tailwind lg (1024px) — drives Odoo mobile register (not CSS-only). */
   const [isNarrowViewport, setIsNarrowViewport] = useState(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return true;
@@ -413,9 +440,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const scanBufferRef = useRef('');
   const scanTimerRef = useRef<number | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
-  /** Session-only open carts keyed by table / tab / channel */
-  const openCartDraftsRef = useRef<Map<string, OpenCartDraft>>(new Map());
+  /** Open carts keyed by table / tab / channel (also mirrored to sessionStorage). */
+  const openCartDraftsRef = useRef<Map<string, OpenCartDraft>>(
+    recordToDraftsMap(bootCart?.drafts)
+  );
   const [draftVersion, setDraftVersion] = useState(0);
+  const cartPersistReadyRef = useRef(false);
   const draftTableIds = useMemo(
     () =>
       [...openCartDraftsRef.current.keys()]
@@ -443,6 +473,66 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     localStorage.setItem('manupos_webpos_post_success', postSuccessTarget);
   }, [postSuccessTarget]);
+
+  /** Persist open cart so refresh keeps items and returns to the cart page. */
+  useEffect(() => {
+    // Skip the very first paint so we don't race boot hydration with an empty write.
+    if (!cartPersistReadyRef.current) {
+      cartPersistReadyRef.current = true;
+      return;
+    }
+    const active: OpenCartDraft = {
+      cart,
+      channel,
+      tableId,
+      tableLabel,
+      tabNumber,
+      orderNote,
+      activeCourse,
+      orderSent,
+      coursesBulkSent,
+      selectedLineId,
+      keypadBuffer,
+      billDiscount,
+    };
+    const key = openCartDraftKey({ tableId, tabNumber, channel });
+    if (cart.length > 0 || orderSent) {
+      openCartDraftsRef.current.set(key, active);
+    }
+    savePersistedWebPosCarts({
+      drafts: draftsMapToRecord(openCartDraftsRef.current),
+      active: cart.length > 0 || orderSent ? active : null,
+      mobileCartOpen,
+      customer: selectedCustomer
+        ? {
+            id: selectedCustomer.id,
+            firstName: selectedCustomer.firstName,
+            lastName: selectedCustomer.lastName,
+            phone: selectedCustomer.phone,
+            email: selectedCustomer.email,
+            defaultAddress: selectedCustomer.defaultAddress,
+            defaultZip: selectedCustomer.defaultZip,
+            defaultCity: selectedCustomer.defaultCity,
+          }
+        : null,
+    });
+  }, [
+    cart,
+    channel,
+    tableId,
+    tableLabel,
+    tabNumber,
+    orderNote,
+    activeCourse,
+    orderSent,
+    coursesBulkSent,
+    selectedLineId,
+    keypadBuffer,
+    billDiscount,
+    mobileCartOpen,
+    selectedCustomer,
+    draftVersion,
+  ]);
 
   /** Mobile cart page is phone-only; restore side-cart layout from lg (1024px) up. */
   useEffect(() => {
@@ -1739,6 +1829,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     } else {
       openCartDraftsRef.current.delete(key);
     }
+    savePersistedWebPosCarts({
+      drafts: draftsMapToRecord(openCartDraftsRef.current),
+      active: snap.cart.length > 0 || snap.orderSent ? snap : null,
+      mobileCartOpen,
+      customer: selectedCustomer
+        ? {
+            id: selectedCustomer.id,
+            firstName: selectedCustomer.firstName,
+            lastName: selectedCustomer.lastName,
+            phone: selectedCustomer.phone,
+            email: selectedCustomer.email,
+            defaultAddress: selectedCustomer.defaultAddress,
+            defaultZip: selectedCustomer.defaultZip,
+            defaultCity: selectedCustomer.defaultCity,
+          }
+        : null,
+    });
     setDraftVersion((n) => n + 1);
     return key;
   };
@@ -3153,6 +3260,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setOrderSent(false);
       setCoursesBulkSent(false);
       setChannel(null);
+      setMobileCartOpen(false);
+      clearPersistedWebPosCarts();
       setLastSplitReceipts([...splitReceiptsRef.current]);
     }
     setCheckoutExtras(null);

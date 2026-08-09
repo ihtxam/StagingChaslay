@@ -62,7 +62,7 @@ export type BillDiscount = {
   amount: number;
 };
 
-/** In-memory open cart draft for a table / tab / channel (session only). */
+/** Open cart draft for a table / tab / channel (kept in sessionStorage across refresh). */
 export type OpenCartDraft = {
   cart: CartLine[];
   channel: PosChannel | null;
