@@ -224,6 +224,40 @@ router.post("/merchants/:merchantId/impersonate", async (req: Request, res: Resp
 });
 
 /**
+ * POST /api/reseller/merchants/:merchantId/purge-sales-data
+ * Fresh start after demos / training — reseller-owned merchants only.
+ * Deletes orders, held carts, payments, shifts, reports, loyalty/gift history.
+ * Keeps menu, staff, settings, licenses, devices, and floor plan layout.
+ */
+router.post("/merchants/:merchantId/purge-sales-data", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.params.merchantId;
+    const confirm = String(req.body?.confirm || "").trim();
+    if (confirm !== "DELETE ALL SALES") {
+      return res.status(400).json({
+        error: 'Confirmation required: send { "confirm": "DELETE ALL SALES" } in the request body',
+      });
+    }
+    const m = await ResellerService.assertOwnsMerchant(resellerId(req), merchantId);
+    const { MerchantDataResetService } = await import("@/services/merchant-data-reset.service");
+    const result = await MerchantDataResetService.purgeSalesData(merchantId, {
+      deleteCustomers: req.body?.deleteCustomers === true,
+      deleteReservations: req.body?.deleteReservations !== false,
+    });
+    res.json({
+      success: true,
+      message: `Purged sales data for ${result.merchantName || m.name}`,
+      result,
+    });
+  } catch (error) {
+    console.error("Reseller purge sales data failed:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to purge sales data",
+    });
+  }
+});
+
+/**
  * GET /api/reseller/editions/catalog
  */
 router.get("/editions/catalog", (_req: Request, res: Response) => {

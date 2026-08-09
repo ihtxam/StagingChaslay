@@ -396,6 +396,24 @@ const en: Dict = {
   resellerStoreName: 'Store name',
   resellerMerchantCreated: 'Merchant created',
   resellerOpenMerchant: 'Open panel',
+  resellerPurgeSales: 'Reset sales history',
+  resellerPurgeHint:
+    'After demos or training, reset a store’s sales history so they start from zero (menu & settings kept).',
+  resellerPurgeBody:
+    'Permanently delete all orders and sales for a fresh start. This cannot be undone.',
+  resellerPurgeDeletes:
+    'Deletes: orders, held carts, payments, shifts, daily reports, floor sync, loyalty/gift history, reservations.',
+  resellerPurgeKeeps: 'Keeps: menu, staff, settings, licenses, devices, floor plan layout.',
+  resellerPurgeDeleteCustomers:
+    'Also delete customer profiles (otherwise only reset spend / points stats)',
+  resellerPurgeConfirmPlaceholder: 'Type DELETE ALL SALES',
+  resellerPurgeConfirmType: 'Type DELETE ALL SALES to confirm',
+  resellerPurgeConfirmAsk:
+    'Permanently delete all orders and sales for "{name}"? Menu and settings are kept. This cannot be undone.',
+  resellerPurgeDone: 'Purged {orders} orders, {held} held carts, {reports} reports',
+  resellerPurgeDoneSimple: 'Sales data purged',
+  resellerPurgeFailed: 'Failed to purge sales data',
+  resellerPurging: 'Purging…',
   resellerInsufficientSeats: 'Not enough license seats in your pool',
   analytics: 'Analytics',
   navSales: 'Sales',
@@ -1552,6 +1570,25 @@ const fr: Dict = {
   resellerStoreName: 'Nom du magasin',
   resellerMerchantCreated: 'Commerçant créé',
   resellerOpenMerchant: 'Ouvrir le panneau',
+  resellerPurgeSales: 'Réinitialiser l’historique',
+  resellerPurgeHint:
+    'Après démos ou formation, réinitialisez l’historique des ventes d’un magasin pour repartir de zéro (menu et paramètres conservés).',
+  resellerPurgeBody:
+    'Supprime définitivement toutes les commandes et ventes pour un nouveau départ. Irréversible.',
+  resellerPurgeDeletes:
+    'Supprime : commandes, paniers en attente, paiements, shifts, rapports journaliers, sync plan de salle, fidélité/cartes cadeaux, réservations.',
+  resellerPurgeKeeps:
+    'Conserve : menu, personnel, paramètres, licences, appareils, plan de salle.',
+  resellerPurgeDeleteCustomers:
+    'Supprimer aussi les fiches clients (sinon seuls les stats dépenses / points sont remis à zéro)',
+  resellerPurgeConfirmPlaceholder: 'Tapez DELETE ALL SALES',
+  resellerPurgeConfirmType: 'Tapez DELETE ALL SALES pour confirmer',
+  resellerPurgeConfirmAsk:
+    'Supprimer définitivement toutes les commandes et ventes de « {name} » ? Menu et paramètres conservés. Irréversible.',
+  resellerPurgeDone: 'Purge : {orders} commandes, {held} paniers, {reports} rapports',
+  resellerPurgeDoneSimple: 'Données de vente purgées',
+  resellerPurgeFailed: 'Échec de la purge des ventes',
+  resellerPurging: 'Purge…',
   resellerInsufficientSeats: 'Pas assez de sièges licence dans votre pool',
   analytics: 'Analytique',
   navSales: 'Ventes',
@@ -2714,6 +2751,25 @@ const de: Dict = {
   resellerStoreName: 'Filialname',
   resellerMerchantCreated: 'Händler erstellt',
   resellerOpenMerchant: 'Panel öffnen',
+  resellerPurgeSales: 'Verkaufshistorie zurücksetzen',
+  resellerPurgeHint:
+    'Nach Demos oder Schulungen die Verkaufshistorie einer Filiale zurücksetzen — Neustart bei Null (Menü & Einstellungen bleiben).',
+  resellerPurgeBody:
+    'Löscht dauerhaft alle Bestellungen und Verkäufe für einen Neustart. Nicht rückgängig machbar.',
+  resellerPurgeDeletes:
+    'Löscht: Bestellungen, gehaltene Warenkörbe, Zahlungen, Schichten, Tagesberichte, Floor-Sync, Treue-/Geschenkkarten-Historie, Reservationen.',
+  resellerPurgeKeeps:
+    'Behält: Menü, Personal, Einstellungen, Lizenzen, Geräte, Raumplan.',
+  resellerPurgeDeleteCustomers:
+    'Kundenprofile ebenfalls löschen (sonst nur Umsatz-/Punkte-Statistik zurücksetzen)',
+  resellerPurgeConfirmPlaceholder: 'DELETE ALL SALES eingeben',
+  resellerPurgeConfirmType: 'Zur Bestätigung DELETE ALL SALES eingeben',
+  resellerPurgeConfirmAsk:
+    'Alle Bestellungen und Verkäufe für „{name}“ dauerhaft löschen? Menü und Einstellungen bleiben. Nicht rückgängig machbar.',
+  resellerPurgeDone: '{orders} Bestellungen, {held} gehaltene, {reports} Berichte gelöscht',
+  resellerPurgeDoneSimple: 'Verkaufsdaten gelöscht',
+  resellerPurgeFailed: 'Verkaufsdaten konnten nicht gelöscht werden',
+  resellerPurging: 'Löschen…',
   resellerInsufficientSeats: 'Nicht genug Lizenzplätze in Ihrem Pool',
   analytics: 'Analysen',
   navSales: 'Verkauf',

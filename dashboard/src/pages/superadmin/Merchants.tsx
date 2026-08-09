@@ -786,9 +786,9 @@ export default function Merchants() {
                     <Eraser className="w-4 h-4" /> Purge test sales data
                   </p>
                   <p className="text-xs text-red-800">
-                    Deletes all POS / WebPOS / online orders, held carts, payment records, daily
-                    reports, floor sync orders, and loyalty history. Keeps menu, staff, settings,
-                    licenses, and devices. Use after merchant testing to start from zero.
+                    Deletes all POS / WebPOS / online orders, held carts, payment records, shifts,
+                    daily reports, floor sync orders, and loyalty/gift history. Keeps menu, staff,
+                    settings, licenses, and devices. Use after merchant testing to start from zero.
                   </p>
                   <label className="flex items-center gap-2 text-xs text-red-900">
                     <input
