@@ -11,6 +11,13 @@ type Props = {
   disabled?: boolean;
   showModeButtons?: boolean;
   showQuickAdd?: boolean;
+  /** Denominations for +N quick-cash (defaults 10/20/50). */
+  quickAddAmounts?: number[];
+  /**
+   * Prefer this for checkout tender updates so +N applies immediately
+   * (avoids buffer-only updates that may not re-render paid/remaining).
+   */
+  onQuickAdd?: (amount: number) => void;
   applyLabel?: string;
   applyDisabled?: boolean;
   /** Tighter keys for cart panel */
@@ -31,6 +38,8 @@ export default function WebPosNumericKeypad({
   disabled,
   showModeButtons = true,
   showQuickAdd = false,
+  quickAddAmounts,
+  onQuickAdd,
   applyLabel,
   applyDisabled,
   compact = false,
@@ -39,6 +48,8 @@ export default function WebPosNumericKeypad({
   onBackspace,
 }: Props) {
   const { t } = useI18n();
+  const quickAmounts =
+    quickAddAmounts && quickAddAmounts.length > 0 ? quickAddAmounts : [10, 20, 50];
 
   const push = (ch: string) => {
     onBufferChange(
@@ -62,6 +73,15 @@ export default function WebPosNumericKeypad({
   const toggleSign = () => {
     if (!buffer || buffer === '0') return;
     onBufferChange(buffer.startsWith('-') ? buffer.slice(1) : `-${buffer}`);
+  };
+
+  const addQuick = (n: number) => {
+    if (onQuickAdd) {
+      onQuickAdd(n);
+      return;
+    }
+    const base = Number(buffer) || 0;
+    onBufferChange(String(Math.round((base + n) * 100) / 100));
   };
 
   const numKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
@@ -99,7 +119,11 @@ export default function WebPosNumericKeypad({
         </div>
       ) : null}
 
-      <div className={`grid ${compact ? 'gap-1' : 'gap-1.5'} ${showQuickAdd ? 'grid-cols-[1fr_auto]' : 'grid-cols-1'}`}>
+      <div
+        className={`grid ${compact ? 'gap-1' : 'gap-1.5'} ${
+          showQuickAdd ? 'grid-cols-[1fr_auto]' : 'grid-cols-1'
+        }`}
+      >
         <div className={`grid grid-cols-3 ${compact ? 'gap-1' : 'gap-1.5'}`}>
           {numKeys.map((k) => (
             <button
@@ -172,15 +196,12 @@ export default function WebPosNumericKeypad({
 
         {showQuickAdd ? (
           <div className={`flex flex-col ${compact ? 'gap-1' : 'gap-1.5'}`}>
-            {[10, 20, 50].map((n) => (
+            {quickAmounts.map((n) => (
               <button
                 key={n}
                 type="button"
                 disabled={disabled}
-                onClick={() => {
-                  const base = Number(buffer) || 0;
-                  onBufferChange(String(Math.round((base + n) * 100) / 100));
-                }}
+                onClick={() => addQuick(n)}
                 className={`${keyClass} min-w-[3rem] bg-emerald-50 text-emerald-800 ring-emerald-200`}
               >
                 +{n}

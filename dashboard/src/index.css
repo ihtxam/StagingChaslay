@@ -307,6 +307,30 @@ button {
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
   }
 
+  /* Register cart: lines grow; keypad/actions stay docked at bottom */
+  .webpos-cart-panel {
+    min-height: 0;
+  }
+  .webpos-cart-lines {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+  }
+  .webpos-cart-dock {
+    flex-shrink: 0;
+    margin-top: auto;
+  }
+
+  /*
+   * Odoo-style mobile register backup (max-width 1023 = below Tailwind lg).
+   * JS also gates cart/products via data-narrow on .webpos-shell.
+   */
+  @media (max-width: 1023px) {
+    .webpos-shell[data-narrow='1'] .webpos-mobile-pay-cart {
+      display: block;
+    }
+  }
+
   .webpos-mini-btn {
     @apply inline-flex flex-col items-center justify-center gap-0.5 rounded-lg border border-stone-200 bg-white px-1 py-1.5 text-[10px] font-semibold leading-tight text-stone-600 hover:bg-stone-50 disabled:opacity-40;
   }

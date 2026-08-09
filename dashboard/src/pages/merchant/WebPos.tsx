@@ -40,9 +40,12 @@ import WebPosSplitBillModal, {
 } from '@/components/WebPosSplitBillModal';
 import { localDateTimeToIso, type StoreHours } from '@/lib/shop-hours';
 import {
+  browserPrintText,
   isPrintAgentAvailable,
+  isUnsuitableRawPrinter,
   listAgentPrinters,
   printViaAgent,
+  unsuitableRawPrinterMessage,
   type AgentPrinter,
 } from '@/lib/print-agent';
 import { buildReceiptUrl } from '@/lib/qr';
@@ -397,6 +400,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [pendingOpenPrice, setPendingOpenPrice] = useState<Product | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  /** true below Tailwind lg (1024px) — drives Odoo mobile register (not CSS-only). */
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return true;
+    return !window.matchMedia('(min-width: 1024px)').matches;
+  });
   const [recentOpen, setRecentOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
@@ -428,18 +436,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [cart]);
 
   const hideTab = !!tableLabel;
+  // Waiter / staff phone: USE_WEBPOS PIN gate works on mobile Safari; kitchen + receipt
+  // print still goes through the print agent / main till printers (not the phone).
   const pinGateRequired = staffConfigured && !webposStaff;
 
   useEffect(() => {
     localStorage.setItem('manupos_webpos_post_success', postSuccessTarget);
   }, [postSuccessTarget]);
 
-  /** Mobile cart page is phone-only; restore side-cart layout from lg up. */
+  /** Mobile cart page is phone-only; restore side-cart layout from lg (1024px) up. */
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
     const mq = window.matchMedia('(min-width: 1024px)');
     const sync = () => {
-      if (mq.matches) setMobileCartOpen(false);
+      const lgUp = mq.matches;
+      setIsNarrowViewport(!lgUp);
+      if (lgUp) setMobileCartOpen(false);
     };
     sync();
     mq.addEventListener('change', sync);
@@ -1349,7 +1361,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         shiftCash: report?.shiftCash,
       });
       await printEscPosToTargets(text, { role: 'eod' });
-      toast.success(t('webPosEodPrinted'));
     } catch (e: any) {
       toast.error(e.response?.data?.error || e.message || t('webPosPrintFailed'));
     }
@@ -2563,6 +2574,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       targets.length > 0
         ? targets.map((x) => x.name)
         : [printerName || ''];
+    const named = names.map((n) => (n || '').trim()).filter(Boolean);
+    const unsuitableNamed = named.filter((n) => isUnsuitableRawPrinter(n));
+
+    // EOD to OneNote/PDF: browser text/PDF window instead of claiming RAW success.
+    if (opts.role === 'eod' && named.length > 0 && unsuitableNamed.length === named.length) {
+      browserPrintText(text);
+      toast(t('webPosEodBrowserFallback'));
+      return;
+    }
+
     const paper = opts.paperWidthMm || targets[0]?.paperWidthMm || printSettings?.paperWidthMm || 80;
     const logoUrl =
       opts.role === 'receipt'
@@ -2575,17 +2596,64 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       opts.role === 'receipt' && printSettings?.receiptShowQrCode !== false ? opts.qrUrl : undefined;
     const escpos = textToEscPos(text, qr, logo);
     const dataBase64 = uint8ToBase64(escpos);
-    if (!(agentOk || (await isPrintAgentAvailable()))) {
+
+    const agentReady = agentOk || (await isPrintAgentAvailable());
+    if (!agentReady) {
+      if (opts.role === 'eod') {
+        browserPrintText(text);
+        toast(t('webPosEodBrowserFallback'));
+        return;
+      }
       throw new Error(t('webPosAgentOffline'));
     }
+
+    let printedOk = 0;
+    let lastOkName = '';
     for (const name of names) {
-      await printViaAgent({ printerName: name || undefined, dataBase64, text });
+      const label = (name || '').trim();
+      if (label && isUnsuitableRawPrinter(label)) {
+        if (opts.role === 'eod') {
+          browserPrintText(text);
+          toast(t('webPosEodBrowserFallback'));
+          return;
+        }
+        throw new Error(unsuitableRawPrinterMessage(label) || t('webPosUnsuitablePrinter'));
+      }
+      try {
+        const res = await printViaAgent({
+          printerName: label || undefined,
+          dataBase64,
+          text,
+        });
+        printedOk += 1;
+        lastOkName = res.printer || label;
+      } catch (e: any) {
+        const msg = String(e?.message || '');
+        if (
+          opts.role === 'eod' &&
+          /OneNote|PDF|XPS|ESC-POS|virtual|receipt\/ESC-POS|corrupted/i.test(msg)
+        ) {
+          browserPrintText(text);
+          toast(t('webPosEodBrowserFallback'));
+          return;
+        }
+        throw e;
+      }
     }
-    toast.success(
-      names[0]
-        ? t('webPosPrintedOn').replace('{name}', names[0])
-        : t('webPosSentDefaultPrinter')
-    );
+
+    if (!printedOk) {
+      throw new Error(t('webPosPrintFailed'));
+    }
+
+    if (opts.role === 'eod') {
+      toast.success(t('webPosEodPrinted'));
+    } else {
+      toast.success(
+        lastOkName
+          ? t('webPosPrintedOn').replace('{name}', lastOkName)
+          : t('webPosSentDefaultPrinter')
+      );
+    }
   };
 
   const printReceipt = async (receiptText: string, receiptUrl?: string) => {
@@ -3530,6 +3598,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           appMode ? 'h-dvh' : '-m-3 sm:-m-4 h-[calc(100dvh-4rem)]'
         } flex flex-col bg-stone-950`}
         data-theme={posColorTheme || 'teal'}
+      data-narrow={isNarrowViewport ? '1' : '0'}
       >
         <WebPosPinModal
           open
@@ -3813,12 +3882,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               cartSide === 'right' ? 'lg:flex-row-reverse' : ''
             }`}
           >
-            {/* Desktop: side cart. Mobile: full-screen cart page when open. */}
+            {/* Desktop: side cart. Mobile (<1024): full-screen cart only when open — JS-gated. */}
+            {(mobileCartOpen || !isNarrowViewport) ? (
             <div
               className={
-                mobileCartOpen
+                mobileCartOpen && isNarrowViewport
                   ? 'flex min-h-0 flex-1 flex-col'
-                  : 'hidden min-h-0 lg:flex lg:flex-col'
+                  : 'hidden min-h-0 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:self-stretch'
               }
             >
               <WebPosCartPanel
@@ -3917,9 +3987,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 }
                 canApplyBillDiscount={canApplyDiscounts}
                 billDiscountLabel={billDiscountLabel}
-                layout={mobileCartOpen ? 'page' : 'side'}
+                layout={isNarrowViewport && mobileCartOpen ? 'page' : 'side'}
                 onBack={
-                  mobileCartOpen
+                  isNarrowViewport && mobileCartOpen
                     ? () => {
                         setMobileCartOpen(false);
                         setSelectedLineId(null);
@@ -3929,15 +3999,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 }
               />
             </div>
+            ) : null}
 
-            {/* Products (mobile default). Hidden on mobile while cart page is open. */}
-            <div
-              className={
-                mobileCartOpen
-                  ? 'hidden min-h-0 min-w-0 flex-1 flex-col lg:flex'
-                  : 'flex min-h-0 min-w-0 flex-1 flex-col'
-              }
-            >
+            {/* Products (mobile default). Hidden on narrow viewports while cart page is open. */}
+            {(!isNarrowViewport || !mobileCartOpen) ? (
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <WebPosProductArea
                 categories={categories}
                 products={visibleProducts}
@@ -3958,8 +4024,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 giftCardsEnabled={giftCardsFeatureOn}
                 onGiftCards={() => setGiftCardOpsOpen(true)}
               />
-              {/* Odoo-style mobile sticky Pay + Cart */}
-              <div className="webpos-mobile-pay-cart shrink-0 border-t border-stone-200 bg-white p-2 lg:hidden">
+              {/* Odoo-style sticky Pay | Cart — only on narrow viewports (JS + CSS). */}
+              {isNarrowViewport ? (
+              <div className="webpos-mobile-pay-cart shrink-0 border-t border-stone-200 bg-white p-2">
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -3986,7 +4053,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   </button>
                 </div>
               </div>
+              ) : null}
             </div>
+            ) : null}
           </div>
         )}
 

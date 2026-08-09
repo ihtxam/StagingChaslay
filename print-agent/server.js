@@ -19,6 +19,30 @@ const { promisify } = require("util");
 
 const execFileAsync = promisify(execFile);
 
+const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
+const VERSION = "1.3.0";
+const APP_NAME = "ChaslayPrintAgent";
+const EXE_NAME = "chaslay-print-agent.exe";
+const RUN_VALUE_NAME = "ChaslayPrintAgent";
+
+const isPkg = typeof process.pkg !== "undefined";
+
+/** Virtual / GDI PDF drivers that cannot usefully accept ESC/POS RAW bytes. */
+function isUnsuitableRawPrinter(name) {
+  const n = String(name || "").toLowerCase();
+  if (!n.trim()) return false;
+  return /onenote|microsoft print to pdf|microsoft xps|send to onenote|\bfax\b|adobe pdf|foxit|nitro pdf|cutepdf|pdfcreator|dopdf|bullzip|print to pdf|microsoft shared fax/.test(
+    n
+  );
+}
+
+function unsuitablePrinterError(name) {
+  return (
+    `Select a receipt/ESC-POS thermal printer, not OneNote/PDF/XPS ('${name}'). ` +
+    `Raw ESC/POS bytes cannot render on virtual PDF drivers.`
+  );
+}
+
 function checkHealth() {
   return new Promise((resolve) => {
     const req = http.get(`http://127.0.0.1:${PORT}/health`, (res) => {
@@ -39,13 +63,15 @@ function checkHealth() {
     });
   });
 }
-const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.2.0";
-const APP_NAME = "ChaslayPrintAgent";
-const EXE_NAME = "chaslay-print-agent.exe";
-const RUN_VALUE_NAME = "ChaslayPrintAgent";
 
-const isPkg = typeof process.pkg !== "undefined";
+async function waitForHealth(attempts = 15, delayMs = 400) {
+  for (let i = 0; i < attempts; i++) {
+    const health = await checkHealth();
+    if (health?.ok) return health;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return null;
+}
 
 function runtimeDir() {
   if (isPkg) return path.dirname(process.execPath);
@@ -55,6 +81,20 @@ function runtimeDir() {
 function installDir() {
   const base = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
   return path.join(base, APP_NAME);
+}
+
+function installLogPath() {
+  return path.join(installDir(), "install.log");
+}
+
+function appendInstallLog(line) {
+  try {
+    const dir = installDir();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.appendFileSync(installLogPath(), `[${new Date().toISOString()}] ${line}\n`, "utf8");
+  } catch (e) {
+    console.warn("[print-agent] install.log write failed:", e.message || e);
+  }
 }
 
 function assetPath(filename) {
@@ -81,22 +121,45 @@ function ensurePs1OnDisk() {
   return dest;
 }
 
-function showMessage(title, body) {
+/**
+ * Show a blocking Windows MessageBox (awaited so process.exit does not kill it).
+ * Title/body are passed via UTF-8 temp files to avoid quoting/encoding issues.
+ */
+async function showMessage(title, body) {
+  appendInstallLog(`MessageBox: ${title} — ${String(body).replace(/\s+/g, " ").slice(0, 200)}`);
   if (!isWindows()) {
     console.log(`${title}: ${body}`);
     return;
   }
-  const safeTitle = String(title).replace(/'/g, "''");
-  const safeBody = String(body).replace(/'/g, "''");
-  const ps = `Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('${safeBody}','${safeTitle}')`;
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "chaslay-msg-"));
+  const titleFile = path.join(tmpDir, "title.txt");
+  const bodyFile = path.join(tmpDir, "body.txt");
   try {
-    execFile(
+    fs.writeFileSync(titleFile, String(title), { encoding: "utf8" });
+    fs.writeFileSync(bodyFile, String(body), { encoding: "utf8" });
+    const ps = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName PresentationFramework
+$t = [System.IO.File]::ReadAllText('${titleFile.replace(/'/g, "''")}', [System.Text.UTF8Encoding]::new($false))
+$b = [System.IO.File]::ReadAllText('${bodyFile.replace(/'/g, "''")}', [System.Text.UTF8Encoding]::new($false))
+[void][System.Windows.MessageBox]::Show($b, $t)
+`;
+    await execFileAsync(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps],
-      { windowsHide: true }
+      ["-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-Command", ps],
+      { windowsHide: true, timeout: 300000, maxBuffer: 1024 * 1024 }
     );
-  } catch {
+  } catch (e) {
     console.log(`${title}: ${body}`);
+    appendInstallLog(`MessageBox failed: ${e.message || e}`);
+  } finally {
+    try {
+      fs.unlinkSync(titleFile);
+      fs.unlinkSync(bodyFile);
+      fs.rmdirSync(tmpDir);
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -123,6 +186,7 @@ async function doInstall() {
   if (!isWindows()) {
     throw new Error("Install is only supported on Windows.");
   }
+  appendInstallLog(`Install start (v${VERSION}, pkg=${isPkg})`);
   const dir = installDir();
   fs.mkdirSync(dir, { recursive: true });
 
@@ -131,27 +195,40 @@ async function doInstall() {
   if (isPkg) {
     if (path.resolve(process.execPath) !== path.resolve(targetExe)) {
       fs.copyFileSync(process.execPath, targetExe);
+      appendInstallLog(`Copied EXE to ${targetExe}`);
+    } else {
+      appendInstallLog(`Already running from install dir ${targetExe}`);
     }
   } else if (fs.existsSync(sourceExe)) {
     fs.copyFileSync(sourceExe, targetExe);
+    appendInstallLog(`Copied built EXE to ${targetExe}`);
   } else {
     // Dev fallback: write a start.cmd that launches node server.js
-    const cmd = `@echo off\r\ncd /d "${__dirname}"\r\nnode server.js\r\n`;
+    const cmd = `@echo off\r\ncd /d "${__dirname}"\r\nnode server.js --run\r\n`;
     fs.writeFileSync(path.join(dir, "start-agent.cmd"), cmd);
+    appendInstallLog(`Wrote start-agent.cmd (dev fallback)`);
   }
 
   const ps1Src = path.join(__dirname, "win-raw-print.ps1");
   const ps1Dest = path.join(dir, "win-raw-print.ps1");
   if (fs.existsSync(ps1Src)) {
     fs.copyFileSync(ps1Src, ps1Dest);
+    appendInstallLog(`Copied win-raw-print.ps1`);
+  } else {
+    appendInstallLog(`WARNING: win-raw-print.ps1 missing at ${ps1Src}`);
   }
 
   const launchPath = fs.existsSync(targetExe) ? targetExe : path.join(dir, "start-agent.cmd");
   await setStartup(true, launchPath);
+  appendInstallLog(`Registered Startup: ${launchPath}`);
 
   // Start agent in background if not already listening
-  const health = await checkHealth();
-  if (!health?.ok) {
+  let running = false;
+  const existing = await checkHealth();
+  if (existing?.ok) {
+    running = true;
+    appendInstallLog(`Agent already healthy on port ${PORT}`);
+  } else {
     const spawnArgs = launchPath.toLowerCase().endsWith(".exe") ? ["--run"] : [];
     const child = spawn(launchPath, spawnArgs, {
       detached: true,
@@ -160,23 +237,46 @@ async function doInstall() {
       cwd: dir,
     });
     child.unref();
+    appendInstallLog(`Spawned agent pid=${child.pid || "?"}`);
+    const health = await waitForHealth();
+    running = !!health?.ok;
+    appendInstallLog(running ? `Agent healthy on port ${PORT}` : `Agent did not become healthy on port ${PORT}`);
   }
 
-  const msg =
-    `Installed to:\n${dir}\n\n` +
-    `The print agent will start automatically when you log in to Windows.\n` +
-    `Listening on http://127.0.0.1:${PORT}`;
-  console.log(msg);
-  showMessage("Chaslay Print Agent", msg);
+  if (running) {
+    const msg =
+      `Chaslay Print Agent installed and running on port ${PORT}.\n\n` +
+      `Installed to:\n${dir}\n\n` +
+      `It will also start automatically when you log in to Windows.\n\n` +
+      `Log: ${installLogPath()}`;
+    console.log(msg);
+    appendInstallLog("Install success (running)");
+    await showMessage("Chaslay Print Agent", msg);
+    return;
+  }
+
+  const warn =
+    `Chaslay Print Agent files were installed to:\n${dir}\n\n` +
+    `Startup registration succeeded, but the agent is not responding on port ${PORT} yet.\n` +
+    `Try running:\n${launchPath}\n\n` +
+    `Log: ${installLogPath()}`;
+  console.warn(warn);
+  appendInstallLog("Install finished (not healthy yet)");
+  await showMessage("Chaslay Print Agent — Warning", warn);
+  // Files + Startup are in place; do not throw a second dialog. Exit non-zero from CLI.
+  const err = new Error(`Installed but agent is not running on port ${PORT}. See ${installLogPath()}`);
+  err.alreadyShown = true;
+  throw err;
 }
 
 async function doUninstall() {
   await setStartup(false);
+  appendInstallLog("Uninstall: removed Startup entry");
   const msg =
     "Removed Windows Startup entry.\n" +
     `Files remain in ${installDir()} — delete that folder manually if desired.`;
   console.log(msg);
-  showMessage("Chaslay Print Agent", msg);
+  await showMessage("Chaslay Print Agent", msg);
 }
 
 function printHelp() {
@@ -201,7 +301,22 @@ async function runCli() {
       process.exit(0);
     } catch (e) {
       console.error(e);
-      showMessage("Chaslay Print Agent", e.message || String(e));
+      appendInstallLog(`Install error: ${e.message || e}`);
+      if (!e.alreadyShown) {
+        await showMessage("Chaslay Print Agent — Error", e.message || String(e));
+        // Keep a console visible on hard failure so users see the message if MessageBox fails.
+        if (isWindows() && isPkg) {
+          try {
+            await execFileAsync(
+              "cmd.exe",
+              ["/c", `echo Install failed. See %LOCALAPPDATA%\\${APP_NAME}\\install.log & pause`],
+              { windowsHide: false, timeout: 300000 }
+            );
+          } catch {
+            /* ignore */
+          }
+        }
+      }
       process.exit(1);
     }
   }
@@ -211,6 +326,8 @@ async function runCli() {
       process.exit(0);
     } catch (e) {
       console.error(e);
+      appendInstallLog(`Uninstall error: ${e.message || e}`);
+      await showMessage("Chaslay Print Agent — Error", e.message || String(e));
       process.exit(1);
     }
   }
@@ -223,7 +340,21 @@ async function runCli() {
       process.exit(0);
     } catch (e) {
       console.error(e);
-      showMessage("Chaslay Print Agent", e.message || String(e));
+      appendInstallLog(`Setup error: ${e.message || e}`);
+      if (!e.alreadyShown) {
+        await showMessage("Chaslay Print Agent — Error", e.message || String(e));
+        if (isWindows()) {
+          try {
+            await execFileAsync(
+              "cmd.exe",
+              ["/c", `echo Install failed. See %LOCALAPPDATA%\\${APP_NAME}\\install.log & pause`],
+              { windowsHide: false, timeout: 300000 }
+            );
+          } catch {
+            /* ignore */
+          }
+        }
+      }
       process.exit(1);
     }
   }
@@ -242,6 +373,7 @@ async function runPowerShell(scriptPath, args) {
   const { stdout, stderr } = await execFileAsync("powershell.exe", psArgs, {
     windowsHide: true,
     maxBuffer: 10 * 1024 * 1024,
+    encoding: "utf8",
   });
   if (stderr && stderr.trim()) {
     console.warn("[print-agent]", stderr.trim());
@@ -253,25 +385,37 @@ async function listPrinters() {
   if (!isWindows()) {
     return [];
   }
+  // Force UTF-8 JSON on stdout so French printer names (é, è, …) survive into Node.
   const ps = `
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
 $items = Get-CimInstance -ClassName Win32_Printer | ForEach-Object {
   [PSCustomObject]@{
     name = $_.Name
     isDefault = [bool]$_.Default
     status = [string]$_.PrinterStatus
+    unsuitableForRaw = $false
   }
 }
-$items | ConvertTo-Json -Compress
+# Mark virtual printers for the UI (computed in Node too; keep field for older clients)
+$json = ($items | ConvertTo-Json -Compress -Depth 4)
+[Console]::Out.Write($json)
 `;
   const { stdout } = await execFileAsync(
     "powershell.exe",
     ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps],
-    { windowsHide: true, maxBuffer: 4 * 1024 * 1024 }
+    { windowsHide: true, maxBuffer: 4 * 1024 * 1024, encoding: "utf8" }
   );
   const raw = stdout.trim();
   if (!raw) return [];
-  const parsed = JSON.parse(raw);
-  return Array.isArray(parsed) ? parsed : [parsed];
+  // Strip BOM if present
+  const cleaned = raw.replace(/^\uFEFF/, "");
+  const parsed = JSON.parse(cleaned);
+  const list = Array.isArray(parsed) ? parsed : [parsed];
+  return list.map((p) => ({
+    ...p,
+    unsuitableForRaw: isUnsuitableRawPrinter(p.name),
+  }));
 }
 
 async function printRaw({ printerName, dataBase64 }) {
@@ -282,9 +426,20 @@ async function printRaw({ printerName, dataBase64 }) {
     throw new Error("dataBase64 is required.");
   }
 
+  const name = printerName && String(printerName).trim() ? String(printerName).trim() : "";
+  if (name && isUnsuitableRawPrinter(name)) {
+    throw new Error(unsuitablePrinterError(name));
+  }
+  if (name.includes("?")) {
+    throw new Error(
+      `Printer name looks corrupted ('${name}'). Re-select the printer in WebPOS (accents must not become '?').`
+    );
+  }
+
   const bytes = Buffer.from(dataBase64, "base64");
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "manupos-print-"));
   const tmpFile = path.join(tmpDir, "receipt.bin");
+  const nameFile = path.join(tmpDir, "printer-name.txt");
   fs.writeFileSync(tmpFile, bytes);
 
   try {
@@ -292,15 +447,24 @@ async function printRaw({ printerName, dataBase64 }) {
     if (!fs.existsSync(scriptPath)) {
       throw new Error(`win-raw-print.ps1 not found at ${scriptPath}`);
     }
+    // Pass printer name via UTF-8 file (not argv) so OpenPrinterW gets real Unicode.
     const args = ["-FilePath", tmpFile];
-    if (printerName && String(printerName).trim()) {
-      args.push("-PrinterName", String(printerName).trim());
+    if (name) {
+      // UTF-8 BOM so PowerShell/.NET always detect UTF-8 (accents/dashes intact).
+      const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+      fs.writeFileSync(nameFile, Buffer.concat([bom, Buffer.from(name, "utf8")]));
+      args.push("-PrinterNameFile", nameFile);
     }
     const usedPrinter = await runPowerShell(scriptPath, args);
-    return usedPrinter || printerName || "default";
+    const resolved = usedPrinter || name || "default";
+    if (isUnsuitableRawPrinter(resolved)) {
+      throw new Error(unsuitablePrinterError(resolved));
+    }
+    return resolved;
   } finally {
     try {
       fs.unlinkSync(tmpFile);
+      if (fs.existsSync(nameFile)) fs.unlinkSync(nameFile);
       fs.rmdirSync(tmpDir);
     } catch {
       /* ignore cleanup errors */
@@ -328,7 +492,7 @@ function startServer() {
       platform: process.platform,
       windows: isWindows(),
       installDir: installDir(),
-      features: ["print", "printers", "drawer", "install"],
+      features: ["print", "printers", "drawer", "install", "unicode-printer-names", "virtual-printer-guard"],
     });
   });
 
@@ -345,7 +509,11 @@ function startServer() {
   app.post("/print", async (req, res) => {
     try {
       const usedPrinter = await printRaw(req.body || {});
-      res.json({ ok: true, printer: usedPrinter });
+      res.json({
+        ok: true,
+        printer: usedPrinter,
+        unsuitableForRaw: isUnsuitableRawPrinter(usedPrinter),
+      });
     } catch (error) {
       console.error("[print-agent] print failed:", error);
       res.status(500).json({ error: error.message || "Print failed" });
@@ -355,9 +523,13 @@ function startServer() {
   /** ESC/POS cash drawer kick (pin 2, on-time 25 × 2ms, off-time 250 × 2ms) */
   app.post("/drawer", async (req, res) => {
     try {
+      const name = req.body?.printerName;
+      if (name && isUnsuitableRawPrinter(name)) {
+        throw new Error(unsuitablePrinterError(name));
+      }
       const drawerBytes = Buffer.from([0x1b, 0x40, 0x1b, 0x70, 0x00, 0x19, 0xfa]);
       const usedPrinter = await printRaw({
-        printerName: req.body?.printerName,
+        printerName: name,
         dataBase64: drawerBytes.toString("base64"),
       });
       res.json({ ok: true, printer: usedPrinter });
@@ -379,7 +551,13 @@ function startServer() {
   await runCli();
   // If CLI installed/uninstalled it already exited. Otherwise start the server.
   startServer();
-})().catch((err) => {
+})().catch(async (err) => {
   console.error(err);
+  appendInstallLog(`Fatal: ${err.message || err}`);
+  try {
+    await showMessage("Chaslay Print Agent — Error", err.message || String(err));
+  } catch {
+    /* ignore */
+  }
   process.exit(1);
 });

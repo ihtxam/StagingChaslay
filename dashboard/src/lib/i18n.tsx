@@ -557,10 +557,10 @@ const en: Dict = {
   autoPrintKitchen: 'Auto-print kitchen ticket',
   printAgentDownload: 'Windows print agent',
   printAgentDownloadHint:
-    'Install once on the WebPOS PC. The agent starts with Windows - no need to re-run start.bat.',
+    'Install once on the WebPOS PC. The agent starts with Windows - no need to re-run start.bat. Use a thermal ESC/POS printer (not OneNote/PDF).',
   downloadPrintAgent: 'Download Print Agent (Windows)',
   printAgentInstallSteps:
-    'Run the setup EXE once. It installs to your user folder, registers Startup, and listens on http://127.0.0.1:9101.',
+    'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Printer profiles',
   printerProfilesHint: 'Map Windows printer names (print-agent) to receipt, kitchen, or end-of-day roles.',
   printerName: 'Windows printer name',
@@ -1004,6 +1004,15 @@ const en: Dict = {
   webPosEodShort: 'EOD',
   webPosEodPrint: 'Print / download EOD',
   webPosEodPrinted: 'End-of-day report sent to printer',
+  webPosEodBrowserFallback:
+    'Opened a printable window instead — OneNote/PDF cannot print raw ESC/POS. Use a receipt printer, or print from this window.',
+  webPosUnsuitablePrinter:
+    'Select a receipt/ESC-POS thermal printer, not OneNote or Microsoft Print to PDF.',
+  webPosPrinterNotThermal: ' (not for receipts)',
+  webPosFullscreen: 'Fullscreen',
+  webPosExitFullscreen: 'Exit fullscreen',
+  webPosFullscreenHint:
+    'Use Fullscreen here, browser F11, or install WebPOS as an app (PWA) for a kiosk-like screen. After leaving fullscreen, open the menu and tap Fullscreen again.',
   webPosEodWhenShiftsOff:
     'Cash shifts are off. Use this for the daily report (late-night venues).',
   webPosShiftCloseTitle: 'Close shift',
@@ -1683,10 +1692,10 @@ const fr: Dict = {
   autoPrintKitchen: 'Impression auto cuisine',
   printAgentDownload: 'Agent d’impression Windows',
   printAgentDownloadHint:
-    'Installez une seule fois sur le PC WebPOS. L’agent démarre avec Windows - plus besoin de relancer start.bat.',
+    'Installez une seule fois sur le PC WebPOS. L’agent démarre avec Windows - plus besoin de relancer start.bat. Utilisez une imprimante tickets ESC/POS (pas OneNote/PDF).',
   downloadPrintAgent: 'Télécharger l’agent d’impression (Windows)',
   printAgentInstallSteps:
-    'Exécutez le setup une fois. Installation dans le dossier utilisateur, démarrage automatique, port http://127.0.0.1:9101.',
+    'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Journal : %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Profils imprimantes',
   printerProfilesHint: 'Associez les noms Windows (print-agent) aux rôles reçu, cuisine ou fin de journée.',
   printerName: 'Nom imprimante Windows',
@@ -2131,6 +2140,15 @@ const fr: Dict = {
   webPosEodShort: 'FDJ',
   webPosEodPrint: 'Imprimer / télécharger FDJ',
   webPosEodPrinted: 'Rapport de fin de journée envoyé à l’imprimante',
+  webPosEodBrowserFallback:
+    'Fenêtre d’impression ouverte — OneNote/PDF ne peut pas imprimer l’ESC/POS brut. Choisissez une imprimante tickets, ou imprimez depuis cette fenêtre.',
+  webPosUnsuitablePrinter:
+    'Choisissez une imprimante tickets ESC/POS, pas OneNote ni Microsoft Print to PDF.',
+  webPosPrinterNotThermal: ' (pas pour tickets)',
+  webPosFullscreen: 'Plein écran',
+  webPosExitFullscreen: 'Quitter le plein écran',
+  webPosFullscreenHint:
+    'Utilisez Plein écran ici, F11 du navigateur, ou installez WebPOS en application (PWA). Après avoir quitté le plein écran, rouvrez le menu et tapez Plein écran.',
   webPosEodWhenShiftsOff:
     'Shifts désactivés. Utilisez ceci pour le rapport du jour (service tardif).',
   webPosShiftCloseTitle: 'Clôturer le shift',
@@ -2815,10 +2833,10 @@ const de: Dict = {
   autoPrintKitchen: 'Küchenticket automatisch drucken',
   printAgentDownload: 'Windows-Druckagent',
   printAgentDownloadHint:
-    'Einmal auf dem WebPOS-PC installieren. Der Agent startet mit Windows - start.bat nicht mehr nötig.',
+    'Einmal auf dem WebPOS-PC installieren. Der Agent startet mit Windows - start.bat nicht mehr nötig. ESC/POS-Bondrucker verwenden (nicht OneNote/PDF).',
   downloadPrintAgent: 'Druckagent herunterladen (Windows)',
   printAgentInstallSteps:
-    'Setup-EXE einmal ausführen. Installation im Benutzerordner, Autostart, Port http://127.0.0.1:9101.',
+    'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Druckerprofile',
   printerProfilesHint: 'Windows-Druckernamen (Print-Agent) Rollen zuweisen: Beleg, Küche, Tagesabschluss.',
   printerName: 'Windows-Druckername',
@@ -3263,6 +3281,15 @@ const de: Dict = {
   webPosEodShort: 'EOD',
   webPosEodPrint: 'Tagesabschluss drucken',
   webPosEodPrinted: 'Tagesabschluss an Drucker gesendet',
+  webPosEodBrowserFallback:
+    'Druckfenster geöffnet — OneNote/PDF kann kein RAW-ESC/POS drucken. Belegdrucker wählen oder aus diesem Fenster drucken.',
+  webPosUnsuitablePrinter:
+    'Bitte einen ESC/POS-Bondrucker wählen, nicht OneNote oder Microsoft Print to PDF.',
+  webPosPrinterNotThermal: ' (nicht für Belege)',
+  webPosFullscreen: 'Vollbild',
+  webPosExitFullscreen: 'Vollbild beenden',
+  webPosFullscreenHint:
+    'Vollbild hier, Browser-F11 oder WebPOS als App (PWA) installieren. Nach Verlassen des Vollbilds: Menü öffnen und erneut Vollbild tippen.',
   webPosEodWhenShiftsOff:
     'Schichten aus. Für den Tagesbericht nutzen (Spätbetrieb).',
   webPosShiftCloseTitle: 'Schicht schliessen',

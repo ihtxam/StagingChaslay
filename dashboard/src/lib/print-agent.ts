@@ -11,16 +11,40 @@ export type AgentPrinter = {
   name: string;
   isDefault?: boolean;
   status?: string;
+  unsuitableForRaw?: boolean;
 };
 
 declare global {
   interface Window {
     manuposDesktop?: {
       listPrinters: () => Promise<AgentPrinter[]>;
-      printEscPos: (payload: { printerName?: string; dataBase64: string; text?: string }) => Promise<{ ok: boolean; error?: string }>;
+      printEscPos: (payload: {
+        printerName?: string;
+        dataBase64: string;
+        text?: string;
+      }) => Promise<{ ok: boolean; error?: string; printer?: string }>;
       getAgentStatus: () => Promise<{ running: boolean; port: number }>;
     };
   }
+}
+
+/** Virtual / GDI drivers that cannot usefully accept ESC/POS RAW bytes. */
+export function isUnsuitableRawPrinter(name?: string | null): boolean {
+  const n = String(name || '').toLowerCase();
+  if (!n.trim()) return false;
+  return /onenote|microsoft print to pdf|microsoft xps|send to onenote|\bfax\b|adobe pdf|foxit|nitro pdf|cutepdf|pdfcreator|dopdf|bullzip|print to pdf|microsoft shared fax/.test(
+    n
+  );
+}
+
+export function unsuitableRawPrinterMessage(name?: string | null): string {
+  const label = (name || '').trim() || 'this printer';
+  return `Select a receipt/ESC-POS printer, not OneNote/PDF (${label}). Raw bytes will not print usefully.`;
+}
+
+/** True if the name already looks mangled (accents → '?'). */
+export function looksCorruptedPrinterName(name?: string | null): boolean {
+  return !!name && name.includes('?');
 }
 
 async function agentFetch(path: string, init?: RequestInit) {
@@ -57,23 +81,48 @@ export async function isPrintAgentAvailable(): Promise<boolean> {
 
 export async function listAgentPrinters(): Promise<AgentPrinter[]> {
   if (window.manuposDesktop?.listPrinters) {
-    return window.manuposDesktop.listPrinters();
+    const list = await window.manuposDesktop.listPrinters();
+    return (list || []).map((p) => ({
+      ...p,
+      unsuitableForRaw: p.unsuitableForRaw ?? isUnsuitableRawPrinter(p.name),
+    }));
   }
   const data = await agentFetch('/printers');
-  return data.printers || [];
+  return (data.printers || []).map((p: AgentPrinter) => ({
+    ...p,
+    unsuitableForRaw: p.unsuitableForRaw ?? isUnsuitableRawPrinter(p.name),
+  }));
 }
+
+export type PrintViaAgentResult = {
+  ok: true;
+  printer?: string;
+};
 
 export async function printViaAgent(opts: {
   printerName?: string;
   dataBase64: string;
   text?: string;
-}): Promise<void> {
+}): Promise<PrintViaAgentResult> {
+  const name = opts.printerName?.trim() || '';
+  if (name && isUnsuitableRawPrinter(name)) {
+    throw new Error(unsuitableRawPrinterMessage(name));
+  }
+  if (looksCorruptedPrinterName(name)) {
+    throw new Error(
+      `Printer name looks corrupted ('${name}'). Re-select the printer in WebPOS after updating the Print Agent.`
+    );
+  }
+
   if (window.manuposDesktop?.printEscPos) {
     const res = await window.manuposDesktop.printEscPos(opts);
     if (!res.ok) throw new Error(res.error || 'Desktop print failed');
-    return;
+    if (res.printer && isUnsuitableRawPrinter(res.printer)) {
+      throw new Error(unsuitableRawPrinterMessage(res.printer));
+    }
+    return { ok: true, printer: res.printer };
   }
-  await agentFetch('/print', {
+  const data = await agentFetch('/print', {
     method: 'POST',
     body: JSON.stringify({
       printerName: opts.printerName || undefined,
@@ -81,6 +130,10 @@ export async function printViaAgent(opts: {
       text: opts.text,
     }),
   });
+  if (data?.printer && isUnsuitableRawPrinter(data.printer)) {
+    throw new Error(unsuitableRawPrinterMessage(data.printer));
+  }
+  return { ok: true, printer: data?.printer };
 }
 
 /** ESC/POS initialize + cash drawer kick (pin 2): 1B 40 1B 70 00 19 FA */
@@ -92,6 +145,9 @@ const DRAWER_KICK_BASE64 = 'G0AbcAAZ+g==';
  */
 export async function openCashDrawerViaAgent(opts?: { printerName?: string }): Promise<void> {
   const printerName = opts?.printerName || undefined;
+  if (printerName && isUnsuitableRawPrinter(printerName)) {
+    throw new Error(unsuitableRawPrinterMessage(printerName));
+  }
   try {
     await agentFetch('/drawer', {
       method: 'POST',
@@ -119,7 +175,9 @@ export function browserPrintText(text: string, qrImageSrc?: string) {
     ? `<div style="text-align:center;margin-top:8px"><img src="${qrImageSrc}" width="160" height="160" alt="QR receipt"/><div style="font:11px monospace;margin-top:4px">Scan for digital receipt</div></div>`
     : '';
   w.document.write(
-    `<pre style="font:12px/1.3 monospace;white-space:pre-wrap;padding:12px;margin:0">${safe}</pre>${qrHtml}`
+    `<!DOCTYPE html><html><head><title>Print</title><meta charset="utf-8"/></head><body>` +
+      `<pre style="font:12px/1.3 monospace;white-space:pre-wrap;padding:12px;margin:0">${safe}</pre>${qrHtml}` +
+      `</body></html>`
   );
   w.document.close();
   w.focus();

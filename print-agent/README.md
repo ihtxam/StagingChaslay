@@ -60,8 +60,15 @@ Outputs:
 
 - **Windows only** (RAW Win32 print API).
 - EXE is **unsigned** unless you codesign it (SmartScreen may warn).
-- Binds to `127.0.0.1` only ù not exposed on the LAN.
+- Binds to `127.0.0.1` only ? not exposed on the LAN.
 - Not a Windows Service by default (per-user Startup is enough for WebPOS on the cashier PC). To run as a service, wrap the installed EXE with NSSM or Task Scheduler (SYSTEM).
+- **OneNote / Microsoft Print to PDF / XPS** are rejected for RAW ESC/POS (they cannot render receipt bytes). Use a thermal receipt printer.
+- Printer names with accents (e.g. French *ProtÈgÈ*) are passed via a UTF-8 file to `OpenPrinterW` so they are not mangled to `?`.
+
+### Install UX
+
+- Setup EXE shows a **MessageBox** on success or failure (no silent CMD flash-and-exit).
+- Log file: `%LOCALAPPDATA%\ChaslayPrintAgent\install.log`
 
 ## API
 

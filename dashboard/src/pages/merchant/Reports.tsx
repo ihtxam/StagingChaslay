@@ -12,7 +12,13 @@ import {
   uint8ToBase64,
   type PosPrintSettingsClient,
 } from '@/lib/webpos-receipt';
-import { isPrintAgentAvailable, printViaAgent } from '@/lib/print-agent';
+import {
+  browserPrintText,
+  isPrintAgentAvailable,
+  isUnsuitableRawPrinter,
+  printViaAgent,
+  unsuitableRawPrinterMessage,
+} from '@/lib/print-agent';
 
 type EodShiftCash = {
   openingFloat: number;
@@ -131,21 +137,45 @@ export default function ReportsPage() {
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
       });
-      const ok = await isPrintAgentAvailable();
-      if (!ok) throw new Error(t('webPosAgentOffline'));
-      const logoUrl = printSettings?.receiptLogoUrl || shopLogoUrl;
-      const logo = logoUrl
-        ? await logoUrlToEscPos(logoUrl, paperWidthMm === 58 ? 240 : 384)
-        : null;
-      // Plain ESC/POS body (no bold) ù kitchen tickets use bold separately.
-      const escpos = textToEscPos(text, undefined, logo);
-      const dataBase64 = uint8ToBase64(escpos);
       const names =
         targets.length > 0
           ? targets.map((x) => x.name)
           : [localStorage.getItem('manupos_webpos_printer') || ''];
+      const named = names.map((n) => (n || '').trim()).filter(Boolean);
+      if (named.length > 0 && named.every((n) => isUnsuitableRawPrinter(n))) {
+        browserPrintText(text);
+        toast(t('webPosEodBrowserFallback'));
+        return;
+      }
+      const ok = await isPrintAgentAvailable();
+      if (!ok) {
+        browserPrintText(text);
+        toast(t('webPosEodBrowserFallback'));
+        return;
+      }
+      const logoUrl = printSettings?.receiptLogoUrl || shopLogoUrl;
+      const logo = logoUrl
+        ? await logoUrlToEscPos(logoUrl, paperWidthMm === 58 ? 240 : 384)
+        : null;
+      // Plain ESC/POS body (no bold) ÔøΩ kitchen tickets use bold separately.
+      const escpos = textToEscPos(text, undefined, logo);
+      const dataBase64 = uint8ToBase64(escpos);
       for (const name of names) {
-        await printViaAgent({ printerName: name || undefined, dataBase64, text });
+        const label = (name || '').trim();
+        if (label && isUnsuitableRawPrinter(label)) {
+          throw new Error(unsuitableRawPrinterMessage(label));
+        }
+        try {
+          await printViaAgent({ printerName: label || undefined, dataBase64, text });
+        } catch (err: any) {
+          const msg = String(err?.message || '');
+          if (/OneNote|PDF|XPS|ESC-POS|virtual|receipt\/ESC-POS|corrupted/i.test(msg)) {
+            browserPrintText(text);
+            toast(t('webPosEodBrowserFallback'));
+            return;
+          }
+          throw err;
+        }
       }
       toast.success(t('reportsPrinted'));
     } catch (e: any) {
@@ -376,7 +406,7 @@ export default function ReportsPage() {
                       report.channelRows.map((r) => (
                         <li key={r.channel} className="flex justify-between px-3 py-2">
                           <span>
-                            {r.channel} ù {r.count}
+                            {r.channel} ÔøΩ {r.count}
                           </span>
                           <span className="tabular-nums">{money(r.total)}</span>
                         </li>
@@ -395,7 +425,7 @@ export default function ReportsPage() {
                       report.paymentRows.map((r) => (
                         <li key={r.method} className="flex justify-between px-3 py-2">
                           <span>
-                            {r.method} ù {r.count}
+                            {r.method} ÔøΩ {r.count}
                           </span>
                           <span className="tabular-nums">{money(r.total)}</span>
                         </li>

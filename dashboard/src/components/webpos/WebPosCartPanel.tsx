@@ -222,10 +222,11 @@ export default function WebPosCartPanel({
 
   return (
     <aside
-      className={`webpos-cart-panel flex w-full shrink-0 flex-col bg-white ${
+      data-layout={isPage ? 'page' : 'side'}
+      className={`webpos-cart-panel flex min-h-0 w-full flex-1 flex-col bg-white ${
         isPage
-          ? 'min-h-0 flex-1 border-0'
-          : `${sideBorder} border-stone-200 lg:w-[min(22rem,34vw)]`
+          ? 'border-0'
+          : `${sideBorder} border-stone-200 lg:w-[min(22rem,34vw)] lg:shrink-0`
       }`}
     >
       {/* Channel: Takeaway / Delivery above cart */}
@@ -505,7 +506,8 @@ export default function WebPosCartPanel({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-2">
+      {/* Cart lines take remaining height; keypad + actions stay docked below */}
+      <div className="webpos-cart-lines min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
         {!hasItems ? (
           <p className="py-8 text-center text-sm text-stone-400">{t('webPosTapProducts')}</p>
         ) : (
@@ -584,167 +586,170 @@ export default function WebPosCartPanel({
         )}
       </div>
 
-      <div className="shrink-0 border-t border-stone-100 px-3 py-2">
-        <div className="space-y-0.5 text-sm">
-          {(totals.discount || 0) > 0 ? (
-            <div className="flex justify-between text-[var(--webpos-accent-text)]">
-              <span>
-                {t('discount')}
-                {billDiscountLabel ? ` (${billDiscountLabel})` : ''}
-              </span>
-              <span className="tabular-nums">-{money(totals.discount || 0)}</span>
+      {/* Docked footer: totals + keypad + primary actions */}
+      <div className="webpos-cart-dock mt-auto shrink-0">
+        <div className="border-t border-stone-100 px-3 py-2">
+          <div className="space-y-0.5 text-sm">
+            {(totals.discount || 0) > 0 ? (
+              <div className="flex justify-between text-[var(--webpos-accent-text)]">
+                <span>
+                  {t('discount')}
+                  {billDiscountLabel ? ` (${billDiscountLabel})` : ''}
+                </span>
+                <span className="tabular-nums">-{money(totals.discount || 0)}</span>
+              </div>
+            ) : null}
+            <div className="flex justify-between text-stone-500">
+              <span>{t('webPosTax').replace('{rate}', String(taxRate))}</span>
+              <span className="tabular-nums">{money(totals.tax)}</span>
             </div>
-          ) : null}
-          <div className="flex justify-between text-stone-500">
-            <span>{t('webPosTax').replace('{rate}', String(taxRate))}</span>
-            <span className="tabular-nums">{money(totals.tax)}</span>
-          </div>
-          <div className="flex justify-between text-base font-bold">
-            <span>{t('webPosTotal')}</span>
-            <span className="tabular-nums">{money(totals.total)}</span>
+            <div className="flex justify-between text-base font-bold">
+              <span>{t('webPosTotal')}</span>
+              <span className="tabular-nums">{money(totals.total)}</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Course + keypad: keypad only when a line is selected */}
-      <div
-        className={`shrink-0 border-t border-stone-100 bg-stone-50 transition-all ${
-          keypadExpanded ? 'px-1.5 py-1' : 'px-1.5 py-0.5'
-        }`}
-      >
-        {coursesEnabled && (keypadExpanded || !isPage) ? (
-          <div className="mb-1">
-            <p className="mb-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-violet-700">
-              {t('webPosCourse')} {activeCourse} - {t('webPosCourseActive')}
-            </p>
+        {/* Course + keypad: keypad only when a line is selected */}
+        <div
+          className={`border-t border-stone-100 bg-stone-50 transition-all ${
+            keypadExpanded ? 'px-1.5 py-1' : 'px-1.5 py-0.5'
+          }`}
+        >
+          {coursesEnabled && (keypadExpanded || !isPage) ? (
+            <div className="mb-1">
+              <p className="mb-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                {t('webPosCourse')} {activeCourse} - {t('webPosCourseActive')}
+              </p>
+              <button
+                type="button"
+                className="w-full rounded-md bg-violet-600 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white hover:bg-violet-700 disabled:opacity-40"
+                onClick={onCourse}
+                disabled={!hasItems}
+                title={t('webPosAddNextCourse')}
+              >
+                + {t('webPosAddNextCourse')}
+              </button>
+            </div>
+          ) : coursesEnabled && isPage && !keypadExpanded ? (
             <button
               type="button"
-              className="w-full rounded-md bg-violet-600 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white hover:bg-violet-700 disabled:opacity-40"
+              className="mb-1 w-full rounded-md bg-violet-50 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100 disabled:opacity-40"
               onClick={onCourse}
               disabled={!hasItems}
-              title={t('webPosAddNextCourse')}
             >
               + {t('webPosAddNextCourse')}
             </button>
-          </div>
-        ) : coursesEnabled && isPage && !keypadExpanded ? (
-          <button
-            type="button"
-            className="mb-1 w-full rounded-md bg-violet-50 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100 disabled:opacity-40"
-            onClick={onCourse}
-            disabled={!hasItems}
-          >
-            + {t('webPosAddNextCourse')}
-          </button>
-        ) : null}
+          ) : null}
 
-        {keypadExpanded ? (
-          <>
-            {selectedLine ? (
-              <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
-                <p className="min-w-0 truncate text-xs font-semibold text-stone-700">
-                  <span className="tabular-nums">{selectedLine.quantity}</span>{' '}
-                  {repairCatalogText(selectedLine.name || '')}
-                </p>
-                <button
-                  type="button"
-                  className="webpos-accent-btn shrink-0 rounded-md px-3 py-1 text-xs font-bold"
-                  onClick={onKeypadApply}
-                  disabled={busy}
-                >
-                  {t('webPosKeypadApply')}
-                </button>
-              </div>
-            ) : null}
-            <WebPosNumericKeypad
-              mode={keypadMode}
-              onModeChange={onKeypadModeChange}
-              buffer={keypadBuffer}
-              onBufferChange={onKeypadBufferChange}
-              onApply={onKeypadApply}
-              onAdjust={onKeypadAdjust}
-              onBackspace={onKeypadBackspace}
-              disabled={!selectedLineId}
-              compact
-              hideApply
-            />
-          </>
-        ) : null}
-      </div>
+          {keypadExpanded ? (
+            <>
+              {selectedLine ? (
+                <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
+                  <p className="min-w-0 truncate text-xs font-semibold text-stone-700">
+                    <span className="tabular-nums">{selectedLine.quantity}</span>{' '}
+                    {repairCatalogText(selectedLine.name || '')}
+                  </p>
+                  <button
+                    type="button"
+                    className="webpos-accent-btn shrink-0 rounded-md px-3 py-1 text-xs font-bold"
+                    onClick={onKeypadApply}
+                    disabled={busy}
+                  >
+                    {t('webPosKeypadApply')}
+                  </button>
+                </div>
+              ) : null}
+              <WebPosNumericKeypad
+                mode={keypadMode}
+                onModeChange={onKeypadModeChange}
+                buffer={keypadBuffer}
+                onBufferChange={onKeypadBufferChange}
+                onApply={onKeypadApply}
+                onAdjust={onKeypadAdjust}
+                onBackspace={onKeypadBackspace}
+                disabled={!selectedLineId}
+                compact
+                hideApply
+              />
+            </>
+          ) : null}
+        </div>
 
-      <div
-        className={`shrink-0 grid gap-1.5 border-t border-stone-200 bg-white p-2 ${
-          isPage && onBack
-            ? 'grid-cols-[auto_1fr_1fr_1.4fr]'
-            : 'grid-cols-[1fr_1fr_1.4fr]'
-        }`}
-      >
-        {isPage && onBack ? (
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex h-full min-h-[2.75rem] w-11 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
-            aria-label={t('back')}
-            title={t('back')}
-          >
-            <ArrowLeft size={18} />
-          </button>
-        ) : null}
-        {showNewOrder ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onNewOrder}
-            className="col-span-2 rounded-lg bg-violet-700 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
-          >
-            {t('webPosNew')}
-          </button>
-        ) : !kitchenEnabled ? (
-          <button
-            type="button"
-            disabled={!hasItems || busy}
-            onClick={() => (onHoldOrder ? onHoldOrder() : onNewOrder())}
-            className="col-span-2 rounded-lg bg-violet-700 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
-          >
-            {onHoldOrder ? t('webPosHoldOrder') : t('webPosNew')}
-          </button>
-        ) : effectiveShowSend || hideTab || orderSent ? (
-          <button
-            type="button"
-            disabled={!hasItems || busy}
-            onClick={onSend}
-            className="col-span-2 rounded-lg bg-violet-700 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
-          >
-            {sendLabel}
-          </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onSetTable}
-              className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
-            >
-              {tableLabel || t('webPosSetTable')}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onSetTab}
-              className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
-            >
-              {tabNumber ? `#${tabNumber}` : t('webPosSetTab')}
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          disabled={!hasItems || busy}
-          onClick={onPayment}
-          className="rounded-lg bg-stone-200 py-3 text-sm font-bold text-stone-800 hover:bg-stone-300 disabled:opacity-40"
+        <div
+          className={`grid gap-1.5 border-t border-stone-200 bg-white p-2 ${
+            isPage && onBack
+              ? 'grid-cols-[auto_1fr_1fr_1.4fr]'
+              : 'grid-cols-[1fr_1fr_1.4fr]'
+          }`}
         >
-          {t('webPosPayment')}
-        </button>
+          {isPage && onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex h-full min-h-[2.75rem] w-11 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+              aria-label={t('back')}
+              title={t('back')}
+            >
+              <ArrowLeft size={18} />
+            </button>
+          ) : null}
+          {showNewOrder ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onNewOrder}
+              className="col-span-2 rounded-lg bg-violet-700 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+            >
+              {t('webPosNew')}
+            </button>
+          ) : !kitchenEnabled ? (
+            <button
+              type="button"
+              disabled={!hasItems || busy}
+              onClick={() => (onHoldOrder ? onHoldOrder() : onNewOrder())}
+              className="col-span-2 rounded-lg bg-violet-700 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+            >
+              {onHoldOrder ? t('webPosHoldOrder') : t('webPosNew')}
+            </button>
+          ) : effectiveShowSend || hideTab || orderSent ? (
+            <button
+              type="button"
+              disabled={!hasItems || busy}
+              onClick={onSend}
+              className="col-span-2 rounded-lg bg-violet-700 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+            >
+              {sendLabel}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onSetTable}
+                className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+              >
+                {tableLabel || t('webPosSetTable')}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onSetTab}
+                className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+              >
+                {tabNumber ? `#${tabNumber}` : t('webPosSetTab')}
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            disabled={!hasItems || busy}
+            onClick={onPayment}
+            className="rounded-lg bg-stone-200 py-3 text-sm font-bold text-stone-800 hover:bg-stone-300 disabled:opacity-40"
+          >
+            {t('webPosPayment')}
+          </button>
+        </div>
       </div>
     </aside>
   );

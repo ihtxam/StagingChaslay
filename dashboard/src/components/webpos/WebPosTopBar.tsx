@@ -3,7 +3,9 @@ import {
   BookOpen,
   ClipboardList,
   LayoutGrid,
+  Maximize2,
   Menu,
+  Minimize2,
   MoreHorizontal,
   PanelLeft,
   Pencil,
@@ -13,10 +15,38 @@ import {
   Vault,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
+import { isUnsuitableRawPrinter } from '@/lib/print-agent';
 import type { PosTab, PosView } from './types';
+
+function useFullscreenActive() {
+  const [active, setActive] = useState(
+    () => typeof document !== 'undefined' && !!document.fullscreenElement
+  );
+  useEffect(() => {
+    const onChange = () => setActive(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  return active;
+}
+
+async function toggleWebPosFullscreen() {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+    const el = document.documentElement;
+    if (el.requestFullscreen) {
+      await el.requestFullscreen();
+    }
+  } catch {
+    // Browser may block without a user gesture or if not allowed in iframe.
+  }
+}
 
 type Props = {
   activeTab: PosTab;
@@ -87,6 +117,7 @@ export default function WebPosTopBar({
   const { t } = useI18n();
   const inCheckout = posView === 'checkout' || posView === 'success';
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const fullscreenActive = useFullscreenActive();
 
   const tabs: Array<{ id: PosTab; label: string; Icon: typeof Pencil }> = [
     ...(!hideTablesTab
@@ -104,7 +135,7 @@ export default function WebPosTopBar({
       <div className="flex items-center gap-1.5 px-2 py-1.5 sm:gap-2 sm:px-4 sm:py-2">
         {/* Mobile: icon nav (Odoo-style). Desktop: text tabs. */}
         <nav
-          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto md:items-end md:gap-1"
+          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto lg:items-end lg:gap-1"
           aria-label="POS views"
         >
           {tabs.map((tab) => {
@@ -119,25 +150,25 @@ export default function WebPosTopBar({
                 title={tab.label}
                 aria-label={tab.label}
                 aria-current={active ? 'page' : undefined}
-                className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition disabled:opacity-50 md:h-auto md:w-auto md:items-end md:rounded-none md:px-3 md:pb-2 md:pt-1 md:text-sm md:font-semibold md:ring-0 ${
+                className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition disabled:opacity-50 lg:h-auto lg:w-auto lg:items-end lg:rounded-none lg:px-3 lg:pb-2 lg:pt-1 lg:text-sm lg:font-semibold lg:ring-0 ${
                   active
-                    ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)] md:border-b-2 md:border-[var(--webpos-accent)] md:bg-transparent md:ring-0'
-                    : 'text-stone-500 hover:bg-stone-50 hover:text-stone-800 md:border-b-2 md:border-transparent md:hover:bg-transparent'
+                    ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)] lg:border-b-2 lg:border-[var(--webpos-accent)] lg:bg-transparent lg:ring-0'
+                    : 'text-stone-500 hover:bg-stone-50 hover:text-stone-800 lg:border-b-2 lg:border-transparent lg:hover:bg-transparent'
                 }`}
               >
-                <Icon size={20} className="md:hidden" aria-hidden />
-                <span className="hidden md:inline">{tab.label}</span>
+                <Icon size={20} className="lg:hidden" aria-hidden />
+                <span className="hidden lg:inline">{tab.label}</span>
               </button>
             );
           })}
 
           {!inCheckout && activeTab === 'register' ? (
-            <span className="webpos-accent-chip mb-0 ml-1 shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide md:mb-1">
+            <span className="webpos-accent-chip mb-0 ml-1 shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide lg:mb-1">
               {t('webPosDirectSale')}
             </span>
           ) : null}
           {tableBadge ? (
-            <span className="mb-0 ml-1 shrink-0 rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200 md:mb-1">
+            <span className="mb-0 ml-1 shrink-0 rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200 lg:mb-1">
               {tableBadge}
             </span>
           ) : null}
@@ -175,7 +206,7 @@ export default function WebPosTopBar({
           {shiftsEnabled ? (
             <button
               type="button"
-              className={`hidden h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold md:inline-flex ${
+              className={`hidden h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold lg:inline-flex ${
                 shiftOpen
                   ? 'bg-[var(--webpos-accent)] text-white hover:opacity-90'
                   : 'border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
@@ -198,7 +229,7 @@ export default function WebPosTopBar({
           ) : showEodButton ? (
             <button
               type="button"
-              className="hidden h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2.5 text-xs font-bold text-stone-800 hover:bg-stone-50 md:inline-flex"
+              className="hidden h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2.5 text-xs font-bold text-stone-800 hover:bg-stone-50 lg:inline-flex"
               onClick={() => onEodReport?.()}
               title={t('webPosEodReport')}
             >
@@ -209,7 +240,7 @@ export default function WebPosTopBar({
 
           <button
             type="button"
-            className="relative hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 md:inline-flex"
+            className="relative hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:inline-flex"
             onClick={onOnlineOrders}
             title={t('webPosOnlineOrders')}
           >
@@ -223,7 +254,7 @@ export default function WebPosTopBar({
 
           <button
             type="button"
-            className="hidden h-9 max-w-[7rem] items-center gap-1 truncate rounded-lg border border-stone-200 px-2 text-xs font-medium md:inline-flex"
+            className="hidden h-9 max-w-[7rem] items-center gap-1 truncate rounded-lg border border-stone-200 px-2 text-xs font-medium lg:inline-flex"
             onClick={onSwitchUser}
             title={staffName || t('webPosSwitchUser')}
           >
@@ -234,7 +265,7 @@ export default function WebPosTopBar({
           {canDrawer ? (
             <button
               type="button"
-              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 md:inline-flex"
+              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:inline-flex"
               onClick={onOpenDrawer}
               title={t('webPosOpenDrawer')}
             >
@@ -242,10 +273,20 @@ export default function WebPosTopBar({
             </button>
           ) : null}
 
+          <button
+            type="button"
+            className="hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:inline-flex"
+            onClick={() => void toggleWebPosFullscreen()}
+            title={fullscreenActive ? t('webPosExitFullscreen') : t('webPosFullscreen')}
+            aria-label={fullscreenActive ? t('webPosExitFullscreen') : t('webPosFullscreen')}
+          >
+            {fullscreenActive ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+          </button>
+
           <div className="relative" ref={settingsRef}>
             <button
               type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 md:h-9 md:w-9"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
               aria-expanded={settingsOpen}
               aria-label={t('webPosMoreShort')}
               onClick={onToggleSettings}
@@ -347,9 +388,21 @@ export function WebPosSettingsDropdown({
   onOpenDrawer?: () => void;
 }) {
   const { t } = useI18n();
+  const fullscreenActive = useFullscreenActive();
   return (
     <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-[min(20rem,calc(100vw-1.5rem))] space-y-3 rounded-xl border border-stone-200 bg-white p-3 shadow-xl">
-      <div className="space-y-1.5 border-b border-stone-100 pb-3 md:hidden">
+      <div className="space-y-1.5 border-b border-stone-100 pb-3">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm font-semibold text-stone-700 hover:bg-stone-50"
+          onClick={() => void toggleWebPosFullscreen()}
+        >
+          {fullscreenActive ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          {fullscreenActive ? t('webPosExitFullscreen') : t('webPosFullscreen')}
+        </button>
+        <p className="px-2 text-[11px] leading-snug text-stone-500">{t('webPosFullscreenHint')}</p>
+      </div>
+      <div className="space-y-1.5 border-b border-stone-100 pb-3 lg:hidden">
         {onOnlineOrders ? (
           <button
             type="button"
@@ -443,14 +496,21 @@ export function WebPosSettingsDropdown({
           disabled={!agentOk}
         >
           <option value="">{t('webPosDefaultPrinter')}</option>
-          {printers.map((p) => (
-            <option key={p.name} value={p.name}>
-              {p.name}
-              {p.isDefault ? t('webPosDefaultSuffix') : ''}
-            </option>
-          ))}
+          {printers.map((p) => {
+            const bad = isUnsuitableRawPrinter(p.name);
+            return (
+              <option key={p.name} value={p.name}>
+                {p.name}
+                {p.isDefault ? t('webPosDefaultSuffix') : ''}
+                {bad ? t('webPosPrinterNotThermal') : ''}
+              </option>
+            );
+          })}
         </select>
       </label>
+      {printerName && isUnsuitableRawPrinter(printerName) ? (
+        <p className="text-[11px] leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
+      ) : null}
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"

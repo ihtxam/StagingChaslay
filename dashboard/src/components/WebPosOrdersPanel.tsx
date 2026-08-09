@@ -310,8 +310,8 @@ export default function WebPosOrdersPanel({
         }
       >
         {/* Filter bar */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-3 py-2.5">
-          <div className="relative min-w-[12rem] flex-1">
+        <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-2 py-2 sm:px-3 sm:py-2.5">
+          <div className="relative min-w-0 flex-1 basis-full sm:min-w-[12rem] sm:basis-auto">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
             <input
               type="search"
@@ -382,9 +382,13 @@ export default function WebPosOrdersPanel({
             ) : null}
           </div>
         </div>
-        <div className="flex min-h-0 flex-1">
-          {/* List */}
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+          {/* List — full width on phone; left column from lg up */}
+          <div
+            className={`min-h-0 min-w-0 flex-1 overflow-y-auto ${
+              selectedHeld || selectedOrder ? 'hidden lg:block' : ''
+            }`}
+          >
             {loading ? (
               <p className="p-4 text-sm text-stone-400">{t('loading')}</p>
             ) : pageItems.length === 0 ? (
@@ -401,7 +405,7 @@ export default function WebPosOrdersPanel({
                         <button
                           type="button"
                           onClick={() => selectHeld(h)}
-                          className={`flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-stone-50 ${
+                          className={`flex w-full items-center gap-3 px-3 py-3.5 text-left hover:bg-stone-50 sm:px-4 ${
                             selected ? 'bg-teal-50' : ''
                           }`}
                         >
@@ -456,7 +460,7 @@ export default function WebPosOrdersPanel({
                       <button
                         type="button"
                         onClick={() => selectOrder(o)}
-                        className={`flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-stone-50 ${
+                        className={`flex w-full items-center gap-3 px-3 py-3.5 text-left hover:bg-stone-50 sm:px-4 ${
                           selected ? 'bg-teal-50' : ''
                         }`}
                       >
@@ -507,11 +511,25 @@ export default function WebPosOrdersPanel({
               </ul>
             )}
           </div>
-          {/* Detail panel */}
-          <aside className="flex w-full max-w-sm shrink-0 flex-col border-l border-stone-200 bg-stone-50">
+          {/* Detail panel — stacked full-screen on phone when a row is selected */}
+          <aside
+            className={`flex min-h-0 w-full flex-col bg-stone-50 lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200 ${
+              selectedHeld || selectedOrder
+                ? 'absolute inset-0 z-10 flex lg:static'
+                : 'hidden lg:flex'
+            }`}
+          >
             {selectedHeld ? (
               <>
                 <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                  <button
+                    type="button"
+                    className="mb-3 inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 lg:hidden"
+                    onClick={() => setSelectedHeld(null)}
+                  >
+                    <ChevronLeft size={16} />
+                    {t('back')}
+                  </button>
                   <p className="text-sm font-semibold">{selectedHeld.label || t('webPosHeldOrder')}</p>
                   <p className="mt-1 text-xs text-stone-500">
                     {channelLabel(selectedHeld.channel)} · {statusLabel(selectedHeld.status)}
@@ -547,6 +565,14 @@ export default function WebPosOrdersPanel({
             ) : selectedOrder ? (
               <>
                 <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                  <button
+                    type="button"
+                    className="mb-3 inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 lg:hidden"
+                    onClick={() => setSelectedOrder(null)}
+                  >
+                    <ChevronLeft size={16} />
+                    {t('back')}
+                  </button>
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-sm font-semibold">{selectedOrder.orderNumber}</p>
