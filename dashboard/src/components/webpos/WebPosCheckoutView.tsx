@@ -49,6 +49,7 @@ type Props = {
   onInjectPaymentConsumed?: () => void;
   onBack?: () => void;
   onBillDiscount?: () => void;
+  onClearBillDiscount?: () => void;
   canApplyBillDiscount?: boolean;
   billDiscountLabel?: string | null;
   billDiscountAmount?: number;
@@ -75,6 +76,7 @@ export default function WebPosCheckoutView({
   onInjectPaymentConsumed,
   onBack,
   onBillDiscount,
+  onClearBillDiscount,
   canApplyBillDiscount = true,
   billDiscountLabel,
   billDiscountAmount = 0,
@@ -385,6 +387,94 @@ export default function WebPosCheckoutView({
         : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
     }`;
 
+  const clearTip = () => setTipAmount(0);
+
+  const adjustmentCards = (
+    <div className="w-full max-w-md space-y-2 text-left">
+      {billDiscountAmount > 0.001 ? (
+        <div
+          role={onBillDiscount ? 'button' : undefined}
+          tabIndex={onBillDiscount ? 0 : undefined}
+          onClick={() => onBillDiscount?.()}
+          onKeyDown={(e) => {
+            if (!onBillDiscount) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onBillDiscount();
+            }
+          }}
+          className={`flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 ${
+            onBillDiscount ? 'cursor-pointer hover:bg-amber-100/80' : ''
+          }`}
+        >
+          <div className="min-w-0">
+            <span className="text-sm font-semibold text-amber-950">{t('webPosBillDiscount')}</span>
+            {billDiscountLabel ? (
+              <p className="mt-0.5 truncate text-xs text-amber-800/80">{billDiscountLabel}</p>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold tabular-nums text-amber-950">
+              −CHF {billDiscountAmount.toFixed(2)}
+            </span>
+            {onClearBillDiscount ? (
+              <button
+                type="button"
+                className="rounded p-1 text-red-500 hover:bg-red-50"
+                aria-label={t('webPosRemoveDiscount')}
+                title={t('webPosRemoveDiscount')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClearBillDiscount();
+                }}
+              >
+                <X size={16} />
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {tipAmount > 0.001 ? (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setTipOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setTipOpen(true);
+            }
+          }}
+          className="flex cursor-pointer items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 hover:bg-emerald-100/80"
+        >
+          <div className="min-w-0">
+            <span className="text-sm font-semibold text-emerald-950">{t('webPosTip')}</span>
+            <p className="mt-0.5 text-xs text-emerald-800/80">{t('webPosTapToEdit')}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold tabular-nums text-emerald-950">
+              +CHF {tipAmount.toFixed(2)}
+            </span>
+            <button
+              type="button"
+              className="rounded p-1 text-red-500 hover:bg-red-50"
+              aria-label={t('webPosRemoveTip')}
+              title={t('webPosRemoveTip')}
+              onClick={(e) => {
+                e.stopPropagation();
+                clearTip();
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const hasAdjustments = billDiscountAmount > 0.001 || tipAmount > 0.001;
+
   const footerBar = (opts: { mobileOnly?: boolean; desktopOnly?: boolean }) => (
     <div
       className={`webpos-checkout-footer flex shrink-0 items-stretch gap-2 border-t border-stone-100 bg-white p-3 sm:p-4 ${
@@ -438,14 +528,13 @@ export default function WebPosCheckoutView({
         <div className="webpos-checkout-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] lg:contents">
           {/* Mobile: total first */}
           <div className="order-1 flex shrink-0 flex-col items-center border-b border-stone-100 px-4 py-3 text-center lg:hidden">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+              {t('webPosAmountDue')}
+            </p>
             <p className="text-3xl font-light tabular-nums tracking-tight text-stone-800 sm:text-4xl">
               CHF {total.toFixed(2)}
             </p>
-            {tipAmount > 0 ? (
-              <p className="mt-1 text-sm text-[var(--webpos-accent-text)]">
-                {t('webPosTip')}: CHF {tipAmount.toFixed(2)}
-              </p>
-            ) : null}
+            {hasAdjustments ? <div className="mt-2 w-full">{adjustmentCards}</div> : null}
             {remaining > 0.001 ? (
               <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--webpos-accent-text)]">
                 {t('webPosRemaining')}: CHF {remaining.toFixed(2)}
@@ -615,11 +704,7 @@ export default function WebPosCheckoutView({
                 <p className="text-5xl font-light tabular-nums tracking-tight text-stone-700 sm:text-6xl">
                   CHF {total.toFixed(2)}
                 </p>
-                {tipAmount > 0 ? (
-                  <p className="mt-1 text-sm text-[var(--webpos-accent-text)]">
-                    {t('webPosTip')}: CHF {tipAmount.toFixed(2)}
-                  </p>
-                ) : null}
+                {hasAdjustments ? <div className="mt-3 w-full">{adjustmentCards}</div> : null}
               </div>
               {liveEntryLabel && !selectedPaymentId ? (
                 <p className="mt-2 text-base font-semibold tabular-nums text-[var(--webpos-accent-text)]">

@@ -4297,6 +4297,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onBillDiscount={
               checkoutSettings.discountsEnabled ? () => setBillDiscountOpen(true) : undefined
             }
+            onClearBillDiscount={
+              checkoutSettings.discountsEnabled
+                ? () => setBillDiscount({ percent: 0, amount: 0 })
+                : undefined
+            }
             canApplyBillDiscount={canApplyDiscounts}
             billDiscountLabel={billDiscountLabel}
             billDiscountAmount={payableFullTotals.discount || 0}
