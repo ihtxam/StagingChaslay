@@ -16,17 +16,20 @@ export type PurgeSalesDataResult = {
     heldOrders: number;
     paymentTransactions: number;
     dailyReports: number;
+    posShifts: number;
     floorTableOrders: number;
     floorPrintJobs: number;
     loyaltyTransactions: number;
     loyaltyPointLots: number;
     loyaltyPointEvents: number;
+    giftCardTransactions: number;
     reservations: number;
     customers?: number;
   };
   reset: {
     diningTables: number;
     loyaltyCards: number;
+    giftCards: number;
     customers: number;
   };
 };
@@ -85,6 +88,16 @@ export class MerchantDataResetService {
         .where(eq(schema.dailyReports.merchantId, merchantId))
         .returning({ id: schema.dailyReports.id });
 
+      const posShifts = await tx
+        .delete(schema.posShifts)
+        .where(eq(schema.posShifts.merchantId, merchantId))
+        .returning({ id: schema.posShifts.id });
+
+      const giftCardTransactions = await tx
+        .delete(schema.giftCardTransactions)
+        .where(eq(schema.giftCardTransactions.merchantId, merchantId))
+        .returning({ id: schema.giftCardTransactions.id });
+
       const floorTableOrders = await tx
         .delete(schema.chaslayFloorTableOrders)
         .where(eq(schema.chaslayFloorTableOrders.merchantId, merchantId))
@@ -114,6 +127,16 @@ export class MerchantDataResetService {
         .set({ pointsBalance: 0, balance: "0" })
         .where(eq(schema.loyaltyCards.merchantId, merchantId))
         .returning({ id: schema.loyaltyCards.id });
+
+      const giftCardsReset = await tx
+        .update(schema.giftCards)
+        .set({
+          balance: "0",
+          pointsBalance: 0,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.giftCards.merchantId, merchantId))
+        .returning({ id: schema.giftCards.id });
 
       let customersDeleted: { id: string }[] = [];
       let customersReset: { id: string }[] = [];
@@ -148,17 +171,20 @@ export class MerchantDataResetService {
           heldOrders: heldOrders.length,
           paymentTransactions: paymentTransactions.length,
           dailyReports: dailyReports.length,
+          posShifts: posShifts.length,
           floorTableOrders: floorTableOrders.length,
           floorPrintJobs: floorPrintJobs.length,
           loyaltyTransactions: loyaltyTransactions.length,
           loyaltyPointLots: loyaltyPointLots.length,
           loyaltyPointEvents: loyaltyPointEvents.length,
+          giftCardTransactions: giftCardTransactions.length,
           reservations: reservations.length,
           ...(deleteCustomers ? { customers: customersDeleted.length } : {}),
         },
         reset: {
           diningTables: diningTablesReset.length,
           loyaltyCards: loyaltyCardsReset.length,
+          giftCards: giftCardsReset.length,
           customers: deleteCustomers ? 0 : customersReset.length,
         },
       };

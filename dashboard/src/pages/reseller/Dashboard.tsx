@@ -68,6 +68,10 @@ function MerchantsPage() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [purgeFor, setPurgeFor] = useState<{ id: string; name: string } | null>(null);
+  const [purgeConfirm, setPurgeConfirm] = useState('');
+  const [deleteCustomersToo, setDeleteCustomersToo] = useState(false);
+  const [purgingSales, setPurgingSales] = useState(false);
   const [form, setForm] = useState({
     businessName: '',
     email: '',
@@ -154,6 +158,54 @@ function MerchantsPage() {
     }
   };
 
+  const openPurge = (m: { id: string; name: string }) => {
+    setPurgeFor({ id: m.id, name: m.name });
+    setPurgeConfirm('');
+    setDeleteCustomersToo(false);
+  };
+
+  const closePurge = () => {
+    setPurgeFor(null);
+    setPurgeConfirm('');
+    setDeleteCustomersToo(false);
+  };
+
+  const handlePurgeSalesData = async () => {
+    if (!purgeFor) return;
+    if (purgeConfirm !== 'DELETE ALL SALES') {
+      toast.error(t('resellerPurgeConfirmType'));
+      return;
+    }
+    if (
+      !window.confirm(
+        t('resellerPurgeConfirmAsk').replace('{name}', purgeFor.name)
+      )
+    ) {
+      return;
+    }
+    setPurgingSales(true);
+    try {
+      const res = await api.post(`/reseller/merchants/${purgeFor.id}/purge-sales-data`, {
+        confirm: 'DELETE ALL SALES',
+        deleteCustomers: deleteCustomersToo,
+      });
+      const d = res.data?.result?.deleted;
+      toast.success(
+        d
+          ? t('resellerPurgeDone')
+              .replace('{orders}', String(d.orders ?? 0))
+              .replace('{held}', String(d.heldOrders ?? 0))
+              .replace('{reports}', String(d.dailyReports ?? 0))
+          : res.data?.message || t('resellerPurgeDoneSimple')
+      );
+      closePurge();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('resellerPurgeFailed'));
+    } finally {
+      setPurgingSales(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -163,6 +215,7 @@ function MerchantsPage() {
             {t('resellerLicenseSeats')}: {pool.seatsUsed}/{pool.licenseSeats} (
             {pool.seatsRemaining} {t('resellerRemaining')})
           </p>
+          <p className="text-xs text-stone-500 mt-1">{t('resellerPurgeHint')}</p>
         </div>
         <button type="button" className="btn-primary text-sm" onClick={() => setShowCreate(true)}>
           {t('resellerAddStore')}
@@ -319,7 +372,7 @@ function MerchantsPage() {
                   </span>
                 </td>
                 <td className="px-3 py-2">{m.status}</td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-2 text-right space-x-3 whitespace-nowrap">
                   <button
                     type="button"
                     className="text-teal-700 hover:underline"
@@ -327,12 +380,67 @@ function MerchantsPage() {
                   >
                     {t('resellerOpenMerchant')}
                   </button>
+                  <button
+                    type="button"
+                    className="text-rose-700 hover:underline"
+                    onClick={() => openPurge(m)}
+                  >
+                    {t('resellerPurgeSales')}
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {purgeFor ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-rose-200 bg-white p-5 shadow-xl space-y-3">
+            <h2 className="text-lg font-bold text-rose-900">{t('resellerPurgeSales')}</h2>
+            <p className="text-sm text-stone-700">
+              <span className="font-semibold">{purgeFor.name}</span>
+              {' — '}
+              {t('resellerPurgeBody')}
+            </p>
+            <ul className="text-xs text-stone-600 list-disc pl-5 space-y-1">
+              <li>{t('resellerPurgeDeletes')}</li>
+              <li>{t('resellerPurgeKeeps')}</li>
+            </ul>
+            <label className="flex items-center gap-2 text-xs text-rose-900">
+              <input
+                type="checkbox"
+                checked={deleteCustomersToo}
+                onChange={(e) => setDeleteCustomersToo(e.target.checked)}
+              />
+              {t('resellerPurgeDeleteCustomers')}
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                className="input flex-1 border-rose-200"
+                placeholder={t('resellerPurgeConfirmPlaceholder')}
+                value={purgeConfirm}
+                onChange={(e) => setPurgeConfirm(e.target.value)}
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                className="btn-secondary whitespace-nowrap border-rose-300 text-rose-800 hover:bg-rose-100"
+                disabled={purgingSales || purgeConfirm !== 'DELETE ALL SALES'}
+                onClick={() => void handlePurgeSalesData()}
+              >
+                {purgingSales ? t('resellerPurging') : t('resellerPurgeSales')}
+              </button>
+            </div>
+            <div className="flex justify-end">
+              <button type="button" className="btn-secondary text-sm" onClick={closePurge}>
+                {t('cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
