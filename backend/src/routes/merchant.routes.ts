@@ -1600,6 +1600,24 @@ router.post("/pos/orders/:id/cancel", async (req: Request, res: Response) => {
   }
 });
 
+router.patch("/pos/orders/:id/payment-method", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { PosOrdersService } = await import("@/services/pos-orders.service");
+    const order = await PosOrdersService.updatePaymentMethod(
+      merchantId,
+      req.params.id,
+      String(req.body?.paymentMethod || "")
+    );
+    res.json({ success: true, order });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to update payment method",
+    });
+  }
+});
+
 router.post("/pos/orders/:id/refund", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
@@ -1661,6 +1679,23 @@ router.delete("/pos/held/:id", async (req: Request, res: Response) => {
     res.json({ success: true });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Delete failed" });
+  }
+});
+
+/** Cancel held / kitchen-sent order with reason — records cancellation for reports */
+router.post("/pos/held/:id/cancel", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { PosOrdersService } = await import("@/services/pos-orders.service");
+    const result = await PosOrdersService.cancelHeld(
+      merchantId,
+      req.params.id,
+      String(req.body?.reason || "")
+    );
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Cancel failed" });
   }
 });
 

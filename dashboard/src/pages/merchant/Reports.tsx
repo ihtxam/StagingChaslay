@@ -41,6 +41,12 @@ type EodReport = {
   tipsTotal: number;
   refundTotal: number;
   cancelledTotal: number;
+  cancelledOrders?: Array<{
+    orderNumber: string;
+    total: number;
+    cancelReason?: string | null;
+    cancelledAt?: string | null;
+  }>;
   grandTotal: number;
   coversServed: number | null;
   cashTotal: number;
@@ -293,6 +299,8 @@ export default function ReportsPage() {
                   [t('reportsCard'), money(report.cardTotal)],
                   [t('reportsTerminal'), money(report.terminalTotal)],
                   [t('reportsRefunds'), money(report.refundTotal)],
+                  [t('reportsCancelled'), String(report.cancelledCount)],
+                  [t('reportsCancelledTotal'), money(report.cancelledTotal)],
                 ].map(([label, value]) => (
                   <div
                     key={String(label)}
@@ -305,6 +313,33 @@ export default function ReportsPage() {
               </div>
               {report.tipsTotal > 0 && (
                 <p className="text-xs text-[var(--text-muted)]">{t('tipsNotTaxable')}</p>
+              )}
+
+              {!!report.cancelledOrders?.length && (
+                <section className="rounded-xl border border-[var(--border)] overflow-hidden">
+                  <h2 className="px-3 py-2 text-sm font-semibold bg-[var(--bg-muted)]">
+                    {t('reportsCancelled')}
+                  </h2>
+                  <ul className="divide-y divide-[var(--border)]">
+                    {report.cancelledOrders.map((c, idx) => (
+                      <li
+                        key={`${c.orderNumber}-${idx}`}
+                        className="px-3 py-2.5 flex flex-wrap items-start justify-between gap-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold">{c.orderNumber}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                            {c.cancelReason || '—'}
+                            {c.cancelledAt
+                              ? ` · ${new Date(c.cancelledAt).toLocaleString()}`
+                              : ''}
+                          </p>
+                        </div>
+                        <p className="font-semibold tabular-nums shrink-0">{money(c.total)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               )}
 
               {!!report.shiftCash?.length && (

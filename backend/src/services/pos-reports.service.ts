@@ -219,6 +219,15 @@ export class PosReportsService {
       }
     }
 
+    const cancelledOrders = cancelled.map((o) => ({
+      id: o.id,
+      orderNumber: o.orderNumber,
+      total: round2(money(o.total)),
+      cancelReason: o.cancelReason || null,
+      channel: o.fulfillmentChannel || "takeaway",
+      staffName: o.staffName || null,
+      cancelledAt: o.cancelledAt?.toISOString?.() ?? o.createdAt?.toISOString?.() ?? null,
+    }));
     for (const o of cancelled) {
       cancelledTotal += money(o.total);
     }
@@ -312,6 +321,7 @@ export class PosReportsService {
       },
       salesCount: completed.length,
       cancelledCount: cancelled.length,
+      cancelledOrders,
       refundCount: refunded.length,
       /** Taxable revenue (tips excluded) */
       revenue: round2(revenue),

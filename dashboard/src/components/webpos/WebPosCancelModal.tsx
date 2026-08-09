@@ -4,45 +4,65 @@ import { useI18n } from '@/lib/i18n';
 
 export type CancelScope = 'order' | 'item';
 
+export type CancelReasonOption = {
+  id: string;
+  en: string;
+  fr: string;
+  de: string;
+};
+
+export const WEBPOS_CANCEL_REASON_KEYS = [
+  { id: 'kitchen_busy', key: 'webPosCancelReasonBusy' },
+  { id: 'client_cancel', key: 'webPosCancelReasonClient' },
+  { id: 'out_of_stock', key: 'webPosCancelReasonStock' },
+  { id: 'wrong_order', key: 'webPosCancelReasonWrong' },
+  { id: 'could_not_process', key: 'webPosCancelReasonProcess' },
+  { id: 'other', key: 'webPosCancelReasonOther' },
+] as const;
+
 type Props = {
   open: boolean;
   scope: CancelScope;
   itemLabel?: string | null;
+  /** Optional API reasons (en/fr/de). Falls back to i18n keys. */
+  reasons?: CancelReasonOption[];
   onClose: () => void;
-  onConfirm: (reason: string) => void;
+  /** reasonId + localized label for display; backend normalizes to English. */
+  onConfirm: (reason: string, reasonId: string) => void;
 };
-
-const REASON_KEYS = [
-  'webPosCancelReasonBusy',
-  'webPosCancelReasonClient',
-  'webPosCancelReasonStock',
-  'webPosCancelReasonWrong',
-  'webPosCancelReasonProcess',
-  'webPosCancelReasonOther',
-] as const;
 
 export default function WebPosCancelModal({
   open,
   scope,
   itemLabel,
+  reasons: apiReasons,
   onClose,
   onConfirm,
 }: Props) {
-  const { t } = useI18n();
-  const reasons = useMemo(() => REASON_KEYS.map((k) => t(k)), [t]);
-  const [reason, setReason] = useState('');
+  const { t, locale } = useI18n();
+  const options = useMemo(() => {
+    if (apiReasons?.length) {
+      return apiReasons.map((r) => ({
+        id: r.id,
+        label: locale === 'fr' ? r.fr : locale === 'de' ? r.de : r.en,
+      }));
+    }
+    return WEBPOS_CANCEL_REASON_KEYS.map((r) => ({
+      id: r.id,
+      label: t(r.key),
+    }));
+  }, [apiReasons, locale, t]);
+  const [reasonId, setReasonId] = useState('');
 
   useEffect(() => {
     if (!open) return;
-    setReason(reasons[0] || '');
-  }, [open, reasons]);
+    setReasonId(options[0]?.id || '');
+  }, [open, options]);
 
   if (!open) return null;
 
-  const title =
-    scope === 'item'
-      ? t('webPosCancelItem')
-      : t('webPosCancelOrder');
+  const title = scope === 'item' ? t('webPosCancelItem') : t('webPosCancelOrder');
+  const selected = options.find((o) => o.id === reasonId) || options[0];
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/45 p-3">
@@ -60,11 +80,11 @@ export default function WebPosCancelModal({
             <p className="text-sm text-[var(--text-muted)]">{t('webPosCancelReasonPrompt')}</p>
           )}
           <div className="space-y-1.5">
-            {reasons.map((r) => (
+            {options.map((r) => (
               <label
-                key={r}
+                key={r.id}
                 className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm ${
-                  reason === r
+                  reasonId === r.id
                     ? 'border-rose-500 bg-rose-50 font-semibold text-rose-900'
                     : 'border-[var(--border)]'
                 }`}
@@ -72,11 +92,11 @@ export default function WebPosCancelModal({
                 <input
                   type="radio"
                   name="webpos-cancel-reason"
-                  checked={reason === r}
-                  onChange={() => setReason(r)}
+                  checked={reasonId === r.id}
+                  onChange={() => setReasonId(r.id)}
                   className="accent-rose-600"
                 />
-                {r}
+                {r.label}
               </label>
             ))}
           </div>
@@ -88,8 +108,8 @@ export default function WebPosCancelModal({
           <button
             type="button"
             className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-40"
-            disabled={!reason}
-            onClick={() => onConfirm(reason)}
+            disabled={!selected}
+            onClick={() => selected && onConfirm(selected.label, selected.id)}
           >
             {t('confirm')}
           </button>

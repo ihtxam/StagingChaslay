@@ -126,10 +126,24 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
 }
 
 export const POS_CANCEL_REASONS = [
-  { id: "could_not_process", en: "Could not process order", fr: "Commande impossible  traiter", de: "Bestellung konnte nicht verarbeitet werden" },
-  { id: "kitchen_busy", en: "Kitchen too busy", fr: "Cuisine trop occupe", de: "Kche berlastet" },
+  { id: "kitchen_busy", en: "Kitchen too busy", fr: "Cuisine trop occupÃ©e", de: "KÃ¼che Ã¼berlastet" },
   { id: "client_cancel", en: "Client cancellation", fr: "Annulation client", de: "Stornierung durch Gast" },
-  { id: "out_of_stock", en: "Out of stock", fr: "Rupture de stock", de: "Nicht vorrtig" },
+  { id: "out_of_stock", en: "Out of stock", fr: "Rupture de stock", de: "Nicht vorrÃ¤tig" },
   { id: "wrong_order", en: "Wrong order entered", fr: "Mauvaise commande saisie", de: "Falsche Bestellung erfasst" },
+  { id: "could_not_process", en: "Could not process order", fr: "Impossible de traiter la commande", de: "Bestellung konnte nicht verarbeitet werden" },
   { id: "other", en: "Other", fr: "Autre", de: "Sonstiges" },
 ] as const;
+
+export function resolvePosCancelReason(reason: string): string {
+  const raw = String(reason || "").trim();
+  if (!raw) return "";
+  const lower = raw.toLowerCase();
+  const matched = POS_CANCEL_REASONS.find(
+    (r) =>
+      r.id === lower ||
+      r.en.toLowerCase() === lower ||
+      r.fr.toLowerCase() === lower ||
+      r.de.toLowerCase() === lower
+  );
+  return (matched ? matched.en : raw).slice(0, 500);
+}
