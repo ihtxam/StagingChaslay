@@ -424,12 +424,12 @@ function kitchenItemCount(items: WebPosReceiptItem[]): number {
   return items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
 }
 
-/** CRLF — more reliable line advance on Windows RAW / cheap ESC/POS printers than LF alone. */
-const KITCHEN_NL = '\r\n';
-
 type KitchenLine = {
   kind: 'center' | 'header' | 'item' | 'normal' | 'strike';
+  /** Line body without trailing newlines (ESC/POS adds LF bytes explicitly). */
   text: string;
+  /** Extra blank lines after this row (kitchen readability). */
+  blankAfter?: number;
 };
 
 /** Columns available when GS ! enlarges text (scale 3 = double width). */
@@ -485,35 +485,38 @@ function formatKitchenItemLines(
   const wrappedPrimary = wrapKitchenWords(primary, width);
   const lines: KitchenLine[] = [];
 
-  const pushStrikeOrItem = (text: string) => {
+  const pushStrikeOrItem = (text: string, blankAfter = 0) => {
     if (!cancelled) {
-      lines.push({ kind: 'item', text: `${text}${KITCHEN_NL}` });
+      lines.push({ kind: 'item', text, blankAfter });
       return;
     }
     if (forEscPos) {
       lines.push({
         kind: 'strike',
-        text: `${strikethroughEscPosLabel(text).slice(0, width)}${KITCHEN_NL}`,
+        text: strikethroughEscPosLabel(text).slice(0, width),
+        blankAfter,
       });
     } else {
-      lines.push({ kind: 'strike', text: `${strikethroughText(text)}${KITCHEN_NL}` });
+      lines.push({ kind: 'strike', text: strikethroughText(text), blankAfter });
     }
   };
 
   if (wrappedPrimary.length) {
-    wrappedPrimary.forEach((w) => pushStrikeOrItem(w));
+    wrappedPrimary.forEach((w, i) => {
+      const last = i === wrappedPrimary.length - 1 && !extras;
+      pushStrikeOrItem(w, last ? 1 : 0);
+    });
   } else {
-    pushStrikeOrItem(qty);
+    pushStrikeOrItem(qty, extras ? 0 : 1);
   }
 
   if (extras) {
-    for (const w of wrapKitchenWords(`(${extras})`, Math.max(8, width - 2))) {
-      pushStrikeOrItem(`  ${w}`);
-    }
+    const extraLines = wrapKitchenWords(`(${extras})`, Math.max(8, width - 2));
+    extraLines.forEach((w, i) => {
+      pushStrikeOrItem(`  ${w}`, i === extraLines.length - 1 ? 1 : 0);
+    });
   }
 
-  // Blank line between items so kitchen can scan quickly.
-  lines.push({ kind: 'normal', text: KITCHEN_NL });
   return lines;
 }
 
@@ -552,28 +555,28 @@ function buildKitchenTicketLines(
 
   // Center via ESC a — do not space-pad (padding + large font caused smashed headers).
   const lines: KitchenLine[] = [
-    { kind: 'center', text: `${title}${KITCHEN_NL}` },
-    { kind: 'center', text: `${ticketNo}${KITCHEN_NL}` },
+    { kind: 'center', text: title },
+    { kind: 'center', text: ticketNo },
   ];
   for (const w of wrapKitchenWords(
     formatChannelWhen(L, opts.channel, opts.scheduledFor),
     headerWidth
   )) {
-    lines.push({ kind: 'header', text: `${w}${KITCHEN_NL}` });
+    lines.push({ kind: 'header', text: w });
   }
-  lines.push({ kind: 'normal', text: `${thin}${KITCHEN_NL}` });
+  lines.push({ kind: 'normal', text: thin });
 
   if (opts.tableLabel) {
     for (const w of wrapKitchenWords(`TABLE ${opts.tableLabel}`, headerWidth)) {
-      lines.push({ kind: 'header', text: `${w}${KITCHEN_NL}` });
+      lines.push({ kind: 'header', text: w });
     }
   }
 
   if (cancelled && opts.cancelReason) {
     for (const w of wrapKitchenWords(String(opts.cancelReason), footWidth)) {
-      lines.push({ kind: 'normal', text: `${w}${KITCHEN_NL}` });
+      lines.push({ kind: 'normal', text: w });
     }
-    lines.push({ kind: 'normal', text: `${thin}${KITCHEN_NL}` });
+    lines.push({ kind: 'normal', text: thin });
   }
 
   const items = opts.items;
@@ -587,7 +590,7 @@ function buildKitchenTicketLines(
       new Set(items.map((i) => i.courseNumber || 1).filter((n) => n > 0))
     ).sort((a, b) => a - b);
     for (const course of courses) {
-      lines.push({ kind: 'header', text: `COURSE ${course}${KITCHEN_NL}` });
+      lines.push({ kind: 'header', text: `COURSE ${course}` });
       for (const item of items.filter((i) => (i.courseNumber || 1) === course)) {
         lines.push(...formatKitchenItemLines(item, itemWidth, cancelled, forEscPos));
       }
@@ -598,17 +601,10 @@ function buildKitchenTicketLines(
     }
   }
 
-  lines.push({ kind: 'normal', text: `${thin}${KITCHEN_NL}` });
-  lines.push({
-    kind: 'normal',
-    text: `${L.totalItems}: ${totalQty}${KITCHEN_NL}`,
-  });
-  lines.push({ kind: 'normal', text: `${thin}${KITCHEN_NL}` });
-  lines.push({
-    kind: 'normal',
-    text: `${user}, ${timeStr} | ${source}${KITCHEN_NL}`,
-  });
-  lines.push({ kind: 'normal', text: `${KITCHEN_NL}${KITCHEN_NL}${KITCHEN_NL}` });
+  lines.push({ kind: 'normal', text: thin });
+  lines.push({ kind: 'normal', text: `${L.totalItems}: ${totalQty}` });
+  lines.push({ kind: 'normal', text: thin });
+  lines.push({ kind: 'normal', text: `${user}, ${timeStr} | ${source}`, blankAfter: 3 });
 
   return { width: footWidth, L, lines };
 }
@@ -616,7 +612,7 @@ function buildKitchenTicketLines(
 /** Plain-text kitchen ticket (fallback / preview). */
 export function generateKitchenTicketText(opts: KitchenTicketOpts): string {
   return buildKitchenTicketLines(opts, false)
-    .lines.map((l) => l.text)
+    .lines.map((l) => `${l.text}\n${'\n'.repeat(l.blankAfter || 0)}`)
     .join('');
 }
 
@@ -650,9 +646,16 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
     : 2) as 1 | 2 | 3;
   const bold = opts.boldText !== false;
   const parts: Uint8Array[] = [new Uint8Array([0x1b, 0x40]), ESC_CODEPAGE_CP850];
+  const lf = new Uint8Array([0x0a]);
+  const feedLine = (blankAfter = 0) => {
+    parts.push(lf);
+    for (let i = 0; i < blankAfter; i++) parts.push(lf);
+  };
   const resetSize = () => {
     parts.push(escKitchenSize(1), escBold(false), escUnderline(false), escAlign(0));
   };
+  const body = (text: string) =>
+    escposCp850Encode(String(text || '').replace(/[\r\n]+/g, ' ').trimEnd());
 
   for (const line of lines) {
     if (line.kind === 'center') {
@@ -661,8 +664,9 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escKitchenSize(headerScale),
         escBold(bold || headerScale > 1),
         escUnderline(false),
-        escposCp850Encode(line.text)
+        body(line.text)
       );
+      feedLine(line.blankAfter);
       resetSize();
     } else if (line.kind === 'header') {
       parts.push(
@@ -670,8 +674,9 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escKitchenSize(headerScale),
         escBold(bold || headerScale > 1),
         escUnderline(false),
-        escposCp850Encode(line.text)
+        body(line.text)
       );
+      feedLine(line.blankAfter);
       resetSize();
     } else if (line.kind === 'strike') {
       parts.push(
@@ -679,9 +684,10 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escKitchenSize(itemScale),
         escBold(true),
         escUnderline(true),
-        escposCp850Encode(line.text),
+        body(line.text),
         escUnderline(false)
       );
+      feedLine(line.blankAfter);
       resetSize();
     } else if (line.kind === 'item') {
       parts.push(
@@ -689,8 +695,9 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escKitchenSize(itemScale),
         escBold(bold || itemScale > 1),
         escUnderline(false),
-        escposCp850Encode(line.text)
+        body(line.text)
       );
+      feedLine(line.blankAfter);
       resetSize();
     } else {
       parts.push(
@@ -698,8 +705,9 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escKitchenSize(1),
         escBold(false),
         escUnderline(false),
-        escposCp850Encode(line.text)
+        body(line.text)
       );
+      feedLine(line.blankAfter);
     }
   }
 

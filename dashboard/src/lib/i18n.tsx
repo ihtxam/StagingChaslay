@@ -1201,6 +1201,9 @@ const en: Dict = {
   staffPinInvalid: 'PIN must be 4–8 digits',
   staffUserUpdated: 'User updated',
   staffUserUpdateFailed: 'Failed to update user',
+  staffOwnerTitle: 'Shop owner (panel login)',
+  staffOwnerHint:
+    'This is the merchant owner account for the shop (email + password). It is not a staff PIN user, so it is not listed in the table below. Staff PINs and panel users are managed in that list.',
   perm_USE_POS: 'Use Android POS',
   perm_USE_WEBPOS: 'Use WebPOS',
   perm_PROCESS_PAYMENTS: 'Process payments',
@@ -2448,6 +2451,9 @@ const fr: Dict = {
   staffPinInvalid: 'Le PIN doit contenir 4 à 8 chiffres',
   staffUserUpdated: 'Utilisateur mis à jour',
   staffUserUpdateFailed: 'Échec de la mise à jour',
+  staffOwnerTitle: 'Propriétaire (connexion panneau)',
+  staffOwnerHint:
+    'Compte propriétaire de la boutique (email + mot de passe). Ce n’est pas un utilisateur PIN, donc il n’apparaît pas dans le tableau. Les PIN et accès panneau du personnel sont gérés dans la liste.',
   perm_USE_POS: 'Utiliser le POS Android',
   perm_USE_WEBPOS: 'Utiliser le WebPOS',
   perm_PROCESS_PAYMENTS: 'Encaisser les paiements',
@@ -3700,6 +3706,9 @@ const de: Dict = {
   staffPinInvalid: 'PIN muss 4–8 Ziffern haben',
   staffUserUpdated: 'Benutzer aktualisiert',
   staffUserUpdateFailed: 'Benutzer konnte nicht aktualisiert werden',
+  staffOwnerTitle: 'Shop-Inhaber (Panel-Login)',
+  staffOwnerHint:
+    'Das Händler-Inhaberkonto des Shops (E-Mail + Passwort). Kein PIN-Mitarbeiter, daher nicht in der Tabelle. PIN- und Panel-Benutzer werden in der Liste unten verwaltet.',
   perm_USE_POS: 'Android-POS nutzen',
   perm_USE_WEBPOS: 'WebPOS nutzen',
   perm_PROCESS_PAYMENTS: 'Zahlungen verarbeiten',

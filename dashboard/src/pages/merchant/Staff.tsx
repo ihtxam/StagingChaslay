@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { ALL_PERMISSIONS, type Permission } from '@/lib/permissions';
+import { useAuthStore } from '@/store/auth';
 
 type RoleRow = {
   id: string;
@@ -44,6 +45,11 @@ const emptyCreateForm = {
 
 export default function StaffPage() {
   const { t } = useI18n();
+  const authUser = useAuthStore((s) => s.user);
+  const ownerEmail =
+    authUser?.role === 'merchant' || authUser?.isOwner ? authUser.email : null;
+  const ownerName =
+    authUser?.role === 'merchant' || authUser?.isOwner ? authUser.name : null;
   const [tab, setTab] = useState<'staff' | 'roles'>('staff');
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [staff, setStaff] = useState<StaffRow[]>([]);
@@ -284,6 +290,17 @@ export default function StaffPage() {
               {t('staffAddUser')}
             </button>
           </form>
+
+          {ownerEmail ? (
+            <div className="card p-4 space-y-1 border border-stone-200 bg-stone-50">
+              <p className="text-sm font-medium">{t('staffOwnerTitle')}</p>
+              <p className="text-sm text-stone-800">
+                {ownerName ? `${ownerName} · ` : ''}
+                <span className="font-mono text-xs sm:text-sm">{ownerEmail}</span>
+              </p>
+              <p className="text-xs text-[var(--text-muted)]">{t('staffOwnerHint')}</p>
+            </div>
+          ) : null}
 
           <div className="card !p-0 table-scroll">
             <table className="w-full text-sm min-w-[560px]">
