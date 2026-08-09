@@ -11,7 +11,7 @@ import {
   Vault,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
 import type { PosCheckoutSettings } from '@/lib/pos-checkout';
@@ -90,6 +90,8 @@ export default function WebPosCheckoutView({
   const [tipAmount, setTipAmount] = useState(0);
   const [tipOpen, setTipOpen] = useState(false);
   const [seeded, setSeeded] = useState(false);
+  /** Previous amount due — used to resize tenders when tip is added/removed. */
+  const prevTotalRef = useRef<number | null>(null);
 
   const total = useMemo(() => roundMoney2(baseTotal + tipAmount), [baseTotal, tipAmount]);
 
@@ -171,19 +173,53 @@ export default function WebPosCheckoutView({
     onInjectPaymentConsumed?.();
   }, [injectPayment, onInjectPaymentConsumed, total]);
 
-  // Keep sole full-cover tender in sync when tip changes total
+  // When tip (or base) changes amount due, keep covering tenders sized correctly.
+  // Fixes: tip +5 then remove → leftover CHF 5 wrongly shown as change.
   useEffect(() => {
     if (!seeded) return;
+    const prevTotal = prevTotalRef.current;
+    prevTotalRef.current = total;
+    if (prevTotal == null || Math.abs(prevTotal - total) < 0.001) return;
+
+    const delta = roundMoney2(total - prevTotal);
+
     setPayments((prev) => {
-      if (prev.length !== 1) return prev;
-      const only = prev[0]!;
-      const withoutTip = roundMoney2(baseTotal);
-      const coversBaseOrTotal =
-        Math.abs(only.amount - withoutTip) < 0.011 || Math.abs(only.amount - total) < 0.011;
-      if (!coversBaseOrTotal || Math.abs(only.amount - total) < 0.005) return prev;
-      return [{ ...only, amount: total }];
+      if (!prev.length) return prev;
+      const paidSum = roundMoney2(prev.reduce((s, p) => s + p.amount, 0));
+
+      // Payments exactly covered the previous amount due → resize with tip.
+      if (Math.abs(paidSum - prevTotal) < 0.051) {
+        if (prev.length === 1) {
+          return [{ ...prev[0]!, amount: total }];
+        }
+        const next = prev.map((p) => ({ ...p }));
+        let left = delta;
+        for (let i = next.length - 1; i >= 0 && Math.abs(left) > 0.001; i--) {
+          const row = next[i]!;
+          const newAmt = roundMoney2(row.amount + left);
+          if (newAmt > 0.001) {
+            next[i] = { ...row, amount: newAmt };
+            left = 0;
+          } else {
+            left = newAmt; // still negative; drop this row and continue
+            next.splice(i, 1);
+          }
+        }
+        return next.length ? next : prev;
+      }
+
+      // Single tender that still tracked base / previous due.
+      if (prev.length === 1) {
+        const only = prev[0]!;
+        const coversBaseOrPrev =
+          Math.abs(only.amount - roundMoney2(baseTotal)) < 0.011 ||
+          Math.abs(only.amount - prevTotal) < 0.011;
+        if (coversBaseOrPrev) return [{ ...only, amount: total }];
+      }
+
+      return prev;
     });
-  }, [tipAmount, total, baseTotal, seeded]);
+  }, [total, baseTotal, seeded]);
 
   // Live-update selected payment row from keypad digits
   useEffect(() => {
@@ -534,7 +570,6 @@ export default function WebPosCheckoutView({
             <p className="text-3xl font-light tabular-nums tracking-tight text-stone-800 sm:text-4xl">
               CHF {total.toFixed(2)}
             </p>
-            {hasAdjustments ? <div className="mt-2 w-full">{adjustmentCards}</div> : null}
             {remaining > 0.001 ? (
               <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--webpos-accent-text)]">
                 {t('webPosRemaining')}: CHF {remaining.toFixed(2)}
@@ -707,7 +742,6 @@ export default function WebPosCheckoutView({
                 <p className="text-5xl font-light tabular-nums tracking-tight text-stone-700 sm:text-6xl">
                   CHF {total.toFixed(2)}
                 </p>
-                {hasAdjustments ? <div className="mt-3 w-full">{adjustmentCards}</div> : null}
               </div>
               {liveEntryLabel && !selectedPaymentId ? (
                 <p className="mt-2 text-base font-semibold tabular-nums text-[var(--webpos-accent-text)]">
@@ -789,6 +823,15 @@ export default function WebPosCheckoutView({
                     );
                   })
                 )}
+                {hasAdjustments ? (
+                  <div
+                    className="space-y-2 pt-1"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    {adjustmentCards}
+                  </div>
+                ) : null}
               </div>
 
               <div className="mt-4 w-full max-w-md space-y-1 text-sm">
