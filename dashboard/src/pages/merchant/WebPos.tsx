@@ -1873,15 +1873,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const fireCourseLines = async (lines: CartLine[], courseOnly?: number) => {
     const ticket = nextWebPosTicketNumber(merchant?.id);
-    await printKitchenForCart(lines, effectiveChannel, {
-      orderNumber: ticket.display,
-      when: fulfillmentWhen,
-      courseOnly,
-    });
     const ids = new Set(lines.map((l) => l.lineId));
+    // Mark sent first so Send can release the register immediately.
     setCart((prev) =>
       prev.map((l) => (ids.has(l.lineId) ? { ...l, sentToKitchen: true } : l))
     );
+    // Print agent can take several seconds; never block the Send button on it.
+    // printKitchenForCart captures ticket fields synchronously before its first await.
+    void printKitchenForCart(lines, effectiveChannel, {
+      orderNumber: ticket.display,
+      when: fulfillmentWhen,
+      courseOnly,
+    }).catch((e: any) => {
+      toast.error(e?.message || t('webPosKitchenPrintFailed'));
+    });
   };
 
   /** Clear operator editing UI without deleting table/tab kitchen drafts. */
@@ -3571,14 +3576,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
     if (!moreSplits || splitIndex === 0) {
-      try {
-        await printKitchenForCart(cartSnapshot, channelSnapshot, {
-          orderNumber: ticket.display,
-          when: whenSnapshot,
-        });
-      } catch (e: any) {
-        toast.error(e.message || t('webPosKitchenPrintFailed'));
-      }
+      // Don't hold checkout/busy on kitchen print — agent latency is often several seconds.
+      void printKitchenForCart(cartSnapshot, channelSnapshot, {
+        orderNumber: ticket.display,
+        when: whenSnapshot,
+      }).catch((e: any) => {
+        toast.error(e?.message || t('webPosKitchenPrintFailed'));
+      });
     }
   };
 
@@ -3702,6 +3706,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const holdCurrentOrder = async (sendToKitchen = false) => {
     if (!cart.length) return;
     try {
+      const cartSnapshot = cart;
+      const channelSnapshot = channel;
+      const whenSnapshot = fulfillmentWhen;
       await api.post('/merchant/pos/held', {
         label: `${channel} · ${money(totals.total)}`,
         channel,
@@ -3710,19 +3717,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         staffName: webposStaff?.name,
         sendToKitchen,
       });
-      if (sendToKitchen) {
-        try {
-          const ticket = nextWebPosTicketNumber(merchant?.id);
-          await printKitchenForCart(cart, channel, {
-            orderNumber: ticket.display,
-            when: fulfillmentWhen,
-          });
-        } catch {
-          /* kitchen optional on hold */
-        }
-      }
       setCart([]);
       toast.success(sendToKitchen ? t('webPosHeldSentKitchen') : t('webPosOrderHeld'));
+      if (sendToKitchen) {
+        const ticket = nextWebPosTicketNumber(merchant?.id);
+        void printKitchenForCart(cartSnapshot, channelSnapshot, {
+          orderNumber: ticket.display,
+          when: whenSnapshot,
+        }).catch((e: any) => {
+          toast.error(e?.message || t('webPosKitchenPrintFailed'));
+        });
+      }
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosHoldFailed'));
     }
