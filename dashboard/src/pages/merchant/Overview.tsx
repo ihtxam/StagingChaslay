@@ -101,7 +101,8 @@ function money(n: number) {
   return `CHF ${Number(n || 0).toFixed(2)}`;
 }
 
-function ChangeLine({ value, label }: { value: number; label: string }) {
+function ChangeLine({ value, label }: { value: number | null; label: string }) {
+  if (value == null) return null;
   const up = value >= 0;
   const Icon = up ? TrendingUp : TrendingDown;
   return (
@@ -445,10 +446,11 @@ export default function Overview() {
       )}
 
       {kpis && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5 sm:gap-3">
           {[
             { key: 'totalSales', label: t('ovTotalSales'), value: money(kpis.totalSales), change: kpis.changes.totalSales },
             { key: 'netSales', label: t('ovNetSales'), value: money(kpis.netSales), change: kpis.changes.netSales },
+            { key: 'tips', label: t('ovTips'), value: money(kpis.tipsTotal), change: null as number | null },
             { key: 'funding', label: t('ovFunding'), value: money(kpis.fundingAmount), change: kpis.changes.fundingAmount },
             { key: 'orders', label: t('ovOrders'), value: String(kpis.orders), change: kpis.changes.orders },
             { key: 'customers', label: t('ovCustomers'), value: String(kpis.customers), change: kpis.changes.customers },
@@ -496,6 +498,10 @@ export default function Overview() {
             <div className="flex justify-between gap-2 pt-2 border-t border-[var(--border)] font-semibold">
               <span>{t('ovTotalSales')}</span>
               <span className="tabular-nums">{money(data?.salesBreakdown.totalSales || 0)}</span>
+            </div>
+            <div className="flex justify-between gap-2 text-xs text-[var(--text-muted)]">
+              <span>{t('ovTips')}</span>
+              <span className="tabular-nums">{money(data?.kpis.tipsTotal || 0)}</span>
             </div>
           </div>
         </div>

@@ -37,6 +37,8 @@ export type ReceiptLabels = {
   refunds: string;
   covers: string;
   tipsNotTaxable: string;
+  /** Taxable sales total (order totals minus tips) */
+  netSalesExclTips: string;
   grandTotal: string;
   orders: string;
   guestsServed: string;
@@ -102,6 +104,7 @@ const EN: ReceiptLabels = {
   refunds: 'Refunds',
   covers: 'Covers',
   tipsNotTaxable: 'Tips (not taxable)',
+  netSalesExclTips: 'Net sales (excl. tips)',
   grandTotal: 'GRAND TOTAL',
   orders: 'Orders',
   guestsServed: 'Guests served',
@@ -168,6 +171,7 @@ const FR: ReceiptLabels = {
   refunds: 'Remboursements',
   covers: 'Couverts',
   tipsNotTaxable: 'Pourboires (non taxables)',
+  netSalesExclTips: 'Ventes nettes (hors pourboires)',
   grandTotal: 'TOTAL GENERAL',
   orders: 'Commandes',
   guestsServed: 'Couverts servis',
@@ -234,6 +238,7 @@ const DE: ReceiptLabels = {
   refunds: 'Rueckerstattungen',
   covers: 'Gedecke',
   tipsNotTaxable: 'Trinkgeld (nicht steuerpflichtig)',
+  netSalesExclTips: 'Nettoumsatz (ohne Trinkgeld)',
   grandTotal: 'GESAMTSUMME',
   orders: 'Bestellungen',
   guestsServed: 'Gaeste bedient',

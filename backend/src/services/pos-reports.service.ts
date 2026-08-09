@@ -313,17 +313,20 @@ export class PosReportsService {
       salesCount: completed.length,
       cancelledCount: cancelled.length,
       refundCount: refunded.length,
-      /** Taxable revenue (tips excluded) */
+      /** Taxable revenue / net sales (tips excluded — tips are not taxable) */
       revenue: round2(revenue),
+      /** Alias of revenue for clients that want an explicit “excl. tips” field */
+      netSalesExclTips: round2(revenue),
       subtotal: round2(subtotal),
       taxTotal: round2(taxTotal),
+      /** Net of VAT (also excl. tips) */
       netTotal,
       brutTotal: round2(revenue),
       discountTotal: round2(discountTotal),
       tipsTotal: round2(tipsTotal),
       refundTotal: round2(refundTotal),
       cancelledTotal: round2(cancelledTotal),
-      /** Taxable revenue + tips */
+      /** Net sales + tips (money collected) */
       grandTotal,
       coversServed: covers || null,
       vatRows,
