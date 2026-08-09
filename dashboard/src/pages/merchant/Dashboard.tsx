@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
@@ -25,16 +25,38 @@ import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
 import { APP_PANEL_TITLE } from '@/lib/brand';
 import { useAuthStore } from '@/store/auth';
-import { canAccessRoute } from '@/lib/permissions';
+import {
+  canAccessRoute,
+  getEffectivePanelAccess,
+  loadWebPosStaffSession,
+  type Permission,
+  type WebPosStaffSession,
+} from '@/lib/permissions';
 import type { EditionFeatureKey } from '@/lib/edition-features';
 
 const WebsiteCms = lazy(() => import('./WebsiteCms'));
 
+function PanelRouteGuard({
+  path,
+  allow,
+  children,
+}: {
+  path: string;
+  allow: (path: string) => boolean;
+  children: React.ReactNode;
+}) {
+  if (!allow(path)) {
+    return <Navigate to="/merchant/pos" replace />;
+  }
+  return <>{children}</>;
+}
+
 function MerchantShell() {
   const { t, locale, setLocale } = useI18n();
   const user = useAuthStore((s) => s.user);
-  const isOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
   const location = useLocation();
+  const navigate = useNavigate();
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
   const isPosEmbed =
     typeof window !== 'undefined' &&
@@ -46,7 +68,34 @@ function MerchantShell() {
   /** When true on /merchant/pos, hide sidebar + header so WebPOS feels like its own app. */
   const [posAppMode, setPosAppMode] = useState(true);
   const [editionFeatures, setEditionFeatures] = useState<EditionFeatureKey[] | null>(null);
+  const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
+    loadWebPosStaffSession()
+  );
   const hideChrome = (isPosRoute && posAppMode) || isPosEmbed;
+
+  // Keep PIN session in sync when WebPOS switches users
+  useEffect(() => {
+    const syncPin = () => setPinSession(loadWebPosStaffSession());
+    syncPin();
+    window.addEventListener('storage', syncPin);
+    window.addEventListener('webpos:staff-session', syncPin);
+    return () => {
+      window.removeEventListener('storage', syncPin);
+      window.removeEventListener('webpos:staff-session', syncPin);
+    };
+  }, [location.pathname, posAppMode]);
+
+  const effective = useMemo(
+    () =>
+      getEffectivePanelAccess({
+        jwtPermissions: user?.permissions as Permission[] | undefined,
+        isOwner: jwtIsOwner,
+        // Active PIN session means floor staff perms override owner JWT for panel access.
+        staffConfigured: !!pinSession || user?.role === 'staff',
+        pinSession,
+      }),
+    [user?.permissions, user?.role, jwtIsOwner, pinSession]
+  );
 
   useEffect(() => {
     api
@@ -67,7 +116,20 @@ function MerchantShell() {
   }, []);
 
   useEffect(() => {
-    const showPanel = () => setPosAppMode(false);
+    const showPanel = () => {
+      const access = getEffectivePanelAccess({
+        jwtPermissions: user?.permissions as Permission[] | undefined,
+        isOwner: jwtIsOwner,
+        staffConfigured: !!loadWebPosStaffSession() || user?.role === 'staff',
+        pinSession: loadWebPosStaffSession(),
+      });
+      if (!access.canOpenPanel) {
+        toast.error(t('webPosPanelDenied'));
+        setPosAppMode(true);
+        return;
+      }
+      setPosAppMode(false);
+    };
     const enterApp = () => setPosAppMode(true);
     window.addEventListener('webpos:show-panel', showPanel);
     window.addEventListener('webpos:enter-app', enterApp);
@@ -75,7 +137,16 @@ function MerchantShell() {
       window.removeEventListener('webpos:show-panel', showPanel);
       window.removeEventListener('webpos:enter-app', enterApp);
     };
-  }, []);
+  }, [user?.permissions, user?.role, jwtIsOwner, t]);
+
+  // If a restricted PIN session is active, never leave POS chrome / panel routes.
+  useEffect(() => {
+    if (!effective.pinActive || effective.canOpenPanel) return;
+    if (!posAppMode) setPosAppMode(true);
+    if (!isPosRoute) {
+      navigate('/merchant/pos', { replace: true });
+    }
+  }, [effective.pinActive, effective.canOpenPanel, posAppMode, isPosRoute, navigate]);
 
   const changeLanguage = useCallback(
     async (lang: Locale) => {
@@ -89,8 +160,11 @@ function MerchantShell() {
     [setLocale]
   );
 
-  const perms = user?.permissions;
-  const allow = (path: string) => canAccessRoute(path, perms, isOwner, editionFeatures);
+  const allow = useCallback(
+    (path: string) =>
+      canAccessRoute(path, effective.permissions, effective.isOwner, editionFeatures),
+    [effective.permissions, effective.isOwner, editionFeatures]
+  );
 
   const menuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
@@ -189,32 +263,146 @@ function MerchantShell() {
           }
         >
           <Routes>
-            <Route index element={<Overview />} />
-            <Route path="orders" element={<Orders />} />
+            <Route
+              index
+              element={
+                <PanelRouteGuard path="/merchant" allow={allow}>
+                  <Overview />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="orders"
+              element={
+                <PanelRouteGuard path="/merchant/orders" allow={allow}>
+                  <Orders />
+                </PanelRouteGuard>
+              }
+            />
             <Route path="pos" element={<WebPos appMode={hideChrome} />} />
-            <Route path="reports" element={<Reports />} />
-            <Route path="products" element={<Products />} />
-            <Route path="modifiers" element={<Modifiers />} />
-            <Route path="categories" element={<Categories />} />
-            <Route path="customers" element={<Customers />} />
-            <Route path="loyalty" element={<Loyalty />} />
-            <Route path="offers" element={<Offers />} />
-            <Route path="newsletter" element={<Newsletter />} />
-            <Route path="online-shop" element={<OnlineShop />} />
+            <Route
+              path="reports"
+              element={
+                <PanelRouteGuard path="/merchant/reports" allow={allow}>
+                  <Reports />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="products"
+              element={
+                <PanelRouteGuard path="/merchant/products" allow={allow}>
+                  <Products />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="modifiers"
+              element={
+                <PanelRouteGuard path="/merchant/modifiers" allow={allow}>
+                  <Modifiers />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="categories"
+              element={
+                <PanelRouteGuard path="/merchant/categories" allow={allow}>
+                  <Categories />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="customers"
+              element={
+                <PanelRouteGuard path="/merchant/customers" allow={allow}>
+                  <Customers />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="loyalty"
+              element={
+                <PanelRouteGuard path="/merchant/loyalty" allow={allow}>
+                  <Loyalty />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="offers"
+              element={
+                <PanelRouteGuard path="/merchant/offers" allow={allow}>
+                  <Offers />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="newsletter"
+              element={
+                <PanelRouteGuard path="/merchant/newsletter" allow={allow}>
+                  <Newsletter />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="online-shop"
+              element={
+                <PanelRouteGuard path="/merchant/online-shop" allow={allow}>
+                  <OnlineShop />
+                </PanelRouteGuard>
+              }
+            />
             <Route
               path="website"
               element={
-                <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
-                  <WebsiteCms />
-                </Suspense>
+                <PanelRouteGuard path="/merchant/website" allow={allow}>
+                  <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
+                    <WebsiteCms />
+                  </Suspense>
+                </PanelRouteGuard>
               }
             />
             <Route path="terminals" element={<Terminals />} />
-            <Route path="floor-plan" element={<FloorPlan />} />
-            <Route path="reservations" element={<Reservations />} />
-            <Route path="billing" element={<Billing />} />
-            <Route path="users" element={<Staff />} />
-            <Route path="settings" element={<Settings />} />
+            <Route
+              path="floor-plan"
+              element={
+                <PanelRouteGuard path="/merchant/floor-plan" allow={allow}>
+                  <FloorPlan />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="reservations"
+              element={
+                <PanelRouteGuard path="/merchant/reservations" allow={allow}>
+                  <Reservations />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="billing"
+              element={
+                <PanelRouteGuard path="/merchant/billing" allow={allow}>
+                  <Billing />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="users"
+              element={
+                <PanelRouteGuard path="/merchant/users" allow={allow}>
+                  <Staff />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <PanelRouteGuard path="/merchant/settings" allow={allow}>
+                  <Settings />
+                </PanelRouteGuard>
+              }
+            />
           </Routes>
         </main>
       </div>

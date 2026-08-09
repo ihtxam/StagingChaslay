@@ -129,3 +129,37 @@ export function saveWebPosStaffSession(session: WebPosStaffSession | null) {
 export function clearWebPosStaffSession() {
   sessionStorage.removeItem(WEBPOS_STAFF_KEY);
 }
+
+/**
+ * Effective panel permissions while a WebPOS PIN session is active.
+ * Owner JWT must not bypass a restricted floor staff PIN (waiter/cashier).
+ */
+export function getEffectivePanelAccess(opts: {
+  jwtPermissions: Permission[] | undefined;
+  isOwner: boolean;
+  staffConfigured: boolean;
+  pinSession: WebPosStaffSession | null;
+}): {
+  permissions: Permission[] | undefined;
+  /** Treat as owner for route checks (false when a PIN session is active). */
+  isOwner: boolean;
+  canOpenPanel: boolean;
+  pinActive: boolean;
+} {
+  const pinActive = opts.staffConfigured && !!opts.pinSession;
+  if (pinActive && opts.pinSession) {
+    const permissions = opts.pinSession.permissions || [];
+    return {
+      permissions,
+      isOwner: false,
+      canOpenPanel: hasPermission(permissions, 'ACCESS_PANEL', false),
+      pinActive: true,
+    };
+  }
+  return {
+    permissions: opts.jwtPermissions,
+    isOwner: opts.isOwner,
+    canOpenPanel: opts.isOwner || hasPermission(opts.jwtPermissions, 'ACCESS_PANEL', false),
+    pinActive: false,
+  };
+}

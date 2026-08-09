@@ -26,23 +26,43 @@ export class StaffService {
         }))
       );
     }
-    // Waiters must never see company-wide sales / EOD aggregates.
-    await this.enforceWaiterReportRestrictions(merchantId);
+    // Waiters: floor POS only — never panel / drawer / company sales aggregates.
+    await this.enforceWaiterFloorRestrictions(merchantId);
     return db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
     });
   }
 
-  /** Strip VIEW_REPORTS / END_OF_DAY from system Waiter role (keep other custom perms). */
+  /** @deprecated use enforceWaiterFloorRestrictions */
   static async enforceWaiterReportRestrictions(merchantId: string) {
+    return this.enforceWaiterFloorRestrictions(merchantId);
+  }
+
+  /**
+   * Strip privileged permissions from system Waiter role (keep other custom floor perms).
+   * ACCESS_PANEL / OPEN_CASH_DRAWER / reports are never allowed on Waiter.
+   */
+  static async enforceWaiterFloorRestrictions(merchantId: string) {
     const db = getDb();
+    const blocked: Permission[] = [
+      "VIEW_REPORTS",
+      "END_OF_DAY",
+      "ACCESS_PANEL",
+      "OPEN_CASH_DRAWER",
+      "MANAGE_SETTINGS",
+      "MANAGE_STAFF",
+      "MANAGE_ROLES",
+      "MANAGE_BILLING",
+      "MANAGE_PRODUCTS",
+      "REFUND_ORDERS",
+    ];
     const roles = await db.query.merchantRoles.findMany({
       where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.isSystem, true)),
     });
     for (const role of roles) {
       if (!role.name.trim().toLowerCase().startsWith("waiter")) continue;
       const perms = parsePermissions(role.permissions);
-      const next = perms.filter((p) => p !== "VIEW_REPORTS" && p !== "END_OF_DAY");
+      const next = perms.filter((p) => !blocked.includes(p));
       if (next.length === perms.length) continue;
       await db
         .update(schema.merchantRoles)
@@ -86,7 +106,12 @@ export class StaffService {
       .set(patch)
       .where(eq(schema.merchantRoles.id, roleId))
       .returning();
-    return row;
+    await this.enforceWaiterFloorRestrictions(merchantId);
+    return (
+      (await db.query.merchantRoles.findFirst({
+        where: eq(schema.merchantRoles.id, roleId),
+      })) || row
+    );
   }
 
   static async createRole(merchantId: string, name: string, permissions: Permission[]) {
@@ -294,6 +319,9 @@ export class StaffService {
     const db = getDb();
     const normalized = pin.trim();
     if (!normalized) throw new Error("PIN is required");
+
+    // Ensure system Waiter privileges stay floor-only before returning PIN session.
+    await this.enforceWaiterFloorRestrictions(merchantId);
 
     const staffList = await db.query.merchantStaff.findMany({
       where: and(eq(schema.merchantStaff.merchantId, merchantId), eq(schema.merchantStaff.isActive, true)),

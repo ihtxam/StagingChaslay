@@ -90,7 +90,7 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
     ],
   },
   {
-    // No VIEW_REPORTS / END_OF_DAY — waiters must not see company or other staff sales.
+    // Floor-only: no panel, no drawer, no company sales / EOD.
     name: "Waiter",
     isSystem: true,
     sortOrder: 20,
@@ -99,7 +99,6 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "USE_POS",
       "PROCESS_PAYMENTS",
       "APPLY_DISCOUNTS",
-      "OPEN_CASH_DRAWER",
       "SEND_KITCHEN",
       "MANAGE_TABLES",
       "TAKEAWAY_ORDERS",
