@@ -29,7 +29,9 @@ export function normalizeForEscPosPrint(text: string): string {
     .replace(/\u2019|\u2018|\u02BC/g, "'")
     .replace(/\u201C|\u201D/g, '"')
     .replace(/\u2026/g, '...')
-    .replace(/\u00A0/g, ' ');
+    .replace(/\u00A0/g, ' ')
+    // Middle dot / bullets are not in CP850 — become "?" on many thermals.
+    .replace(/[\u00B7\u2022\u2219\u22C5\u30FB]/g, '|');
 }
 
 /** Encode text to CP850 bytes for ESC/POS printers. */

@@ -389,23 +389,97 @@ function kitchenItemCount(items: WebPosReceiptItem[]): number {
   return items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
 }
 
+/** CRLF — more reliable line advance on Windows RAW / cheap ESC/POS printers than LF alone. */
+const KITCHEN_NL = '\r\n';
+
 type KitchenLine = {
   kind: 'center' | 'header' | 'item' | 'normal' | 'strike';
   text: string;
 };
 
-function formatKitchenItemLine(
+/** Columns available when GS ! enlarges text (scale 3 = double width). */
+function kitchenColsForScale(paperWidthMm: number | undefined, scale: 1 | 2 | 3): number {
+  const base = lineWidthForPaper(paperWidthMm);
+  return scale === 3 ? Math.max(16, Math.floor(base / 2)) : base;
+}
+
+function wrapKitchenWords(text: string, width: number): string[] {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return [];
+  if (clean.length <= width) return [clean];
+  const words = clean.split(' ');
+  const out: string[] = [];
+  let cur = '';
+  for (const word of words) {
+    if (!word) continue;
+    if (word.length > width) {
+      if (cur) {
+        out.push(cur);
+        cur = '';
+      }
+      for (let i = 0; i < word.length; i += width) {
+        out.push(word.slice(i, i + width));
+      }
+      continue;
+    }
+    const next = cur ? `${cur} ${word}` : word;
+    if (next.length <= width) {
+      cur = next;
+    } else {
+      if (cur) out.push(cur);
+      cur = word;
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+function formatKitchenItemLines(
   item: KitchenTicketItem,
   width: number,
   cancelled: boolean,
   forEscPos: boolean
-): KitchenLine {
-  const raw = `${item.quantity}x ${item.name}`.slice(0, Math.max(8, width - (cancelled ? 4 : 0)));
-  if (!cancelled) return { kind: 'item', text: `${raw}\n` };
-  if (forEscPos) {
-    return { kind: 'strike', text: `${strikethroughEscPosLabel(raw).slice(0, width)}\n` };
+): KitchenLine[] {
+  const qty = `${Number(item.quantity) || 0}x`;
+  const fullName = String(item.name || '').replace(/\s+/g, ' ').trim();
+  const paren = fullName.match(/^(.*?)\s*\((.*)\)\s*$/);
+  const product = paren ? paren[1].trim() : fullName;
+  const extras = paren ? paren[2].trim() : '';
+
+  const primary = `${qty} ${product}`.trim();
+  const wrappedPrimary = wrapKitchenWords(primary, width);
+  const lines: KitchenLine[] = [];
+
+  const pushStrikeOrItem = (text: string) => {
+    if (!cancelled) {
+      lines.push({ kind: 'item', text: `${text}${KITCHEN_NL}` });
+      return;
+    }
+    if (forEscPos) {
+      lines.push({
+        kind: 'strike',
+        text: `${strikethroughEscPosLabel(text).slice(0, width)}${KITCHEN_NL}`,
+      });
+    } else {
+      lines.push({ kind: 'strike', text: `${strikethroughText(text)}${KITCHEN_NL}` });
+    }
+  };
+
+  if (wrappedPrimary.length) {
+    wrappedPrimary.forEach((w) => pushStrikeOrItem(w));
+  } else {
+    pushStrikeOrItem(qty);
   }
-  return { kind: 'strike', text: `${strikethroughText(raw)}\n` };
+
+  if (extras) {
+    for (const w of wrapKitchenWords(`(${extras})`, Math.max(8, width - 2))) {
+      pushStrikeOrItem(`  ${w}`);
+    }
+  }
+
+  // Blank line between items so kitchen can scan quickly.
+  lines.push({ kind: 'normal', text: KITCHEN_NL });
+  return lines;
 }
 
 function buildKitchenTicketLines(
@@ -416,9 +490,18 @@ function buildKitchenTicketLines(
   L: ReturnType<typeof receiptLabels>;
   lines: KitchenLine[];
 } {
-  const width = lineWidthForPaper(opts.paperWidthMm);
+  const headerScale = (opts.headerTextScale === 1 || opts.headerTextScale === 3
+    ? opts.headerTextScale
+    : 2) as 1 | 2 | 3;
+  const itemScale = (opts.itemTextScale === 1 || opts.itemTextScale === 3
+    ? opts.itemTextScale
+    : 2) as 1 | 2 | 3;
+  const headerWidth = kitchenColsForScale(opts.paperWidthMm, headerScale);
+  const itemWidth = kitchenColsForScale(opts.paperWidthMm, itemScale);
+  const footWidth = lineWidthForPaper(opts.paperWidthMm);
   const L = receiptLabels(opts.language);
-  const thin = '-'.repeat(width);
+  // Short separator avoids wrap when a prior large-font mode was left on by a flaky printer.
+  const thin = '-'.repeat(Math.min(footWidth, 32));
   const orderedAt = new Date(opts.orderedAt || Date.now());
   const timeStr = orderedAt.toLocaleTimeString('de-CH', {
     hour: '2-digit',
@@ -432,26 +515,30 @@ function buildKitchenTicketLines(
   const cancelled = !!opts.cancelled;
   const title = cancelled ? L.cancelledTicket : L.kitchen;
 
+  // Center via ESC a — do not space-pad (padding + large font caused smashed headers).
   const lines: KitchenLine[] = [
-    { kind: 'center', text: `${centerLine(title, width)}\n` },
-    { kind: 'center', text: `${centerLine(ticketNo, width)}\n` },
-    { kind: 'header', text: `${formatChannelWhen(L, opts.channel, opts.scheduledFor)}\n` },
-    { kind: 'normal', text: `${thin}\n` },
+    { kind: 'center', text: `${title}${KITCHEN_NL}` },
+    { kind: 'center', text: `${ticketNo}${KITCHEN_NL}` },
   ];
+  for (const w of wrapKitchenWords(
+    formatChannelWhen(L, opts.channel, opts.scheduledFor),
+    headerWidth
+  )) {
+    lines.push({ kind: 'header', text: `${w}${KITCHEN_NL}` });
+  }
+  lines.push({ kind: 'normal', text: `${thin}${KITCHEN_NL}` });
 
   if (opts.tableLabel) {
-    lines.push({
-      kind: 'header',
-      text: `TABLE ${opts.tableLabel}\n`,
-    });
+    for (const w of wrapKitchenWords(`TABLE ${opts.tableLabel}`, headerWidth)) {
+      lines.push({ kind: 'header', text: `${w}${KITCHEN_NL}` });
+    }
   }
 
   if (cancelled && opts.cancelReason) {
-    lines.push({
-      kind: 'normal',
-      text: `${String(opts.cancelReason).slice(0, width)}\n`,
-    });
-    lines.push({ kind: 'normal', text: `${thin}\n` });
+    for (const w of wrapKitchenWords(String(opts.cancelReason), footWidth)) {
+      lines.push({ kind: 'normal', text: `${w}${KITCHEN_NL}` });
+    }
+    lines.push({ kind: 'normal', text: `${thin}${KITCHEN_NL}` });
   }
 
   const items = opts.items;
@@ -465,27 +552,30 @@ function buildKitchenTicketLines(
       new Set(items.map((i) => i.courseNumber || 1).filter((n) => n > 0))
     ).sort((a, b) => a - b);
     for (const course of courses) {
-      lines.push({ kind: 'header', text: `COURSE ${course}\n` });
+      lines.push({ kind: 'header', text: `COURSE ${course}${KITCHEN_NL}` });
       for (const item of items.filter((i) => (i.courseNumber || 1) === course)) {
-        lines.push(formatKitchenItemLine(item, width, cancelled, forEscPos));
+        lines.push(...formatKitchenItemLines(item, itemWidth, cancelled, forEscPos));
       }
     }
   } else {
     for (const item of items) {
-      lines.push(formatKitchenItemLine(item, width, cancelled, forEscPos));
+      lines.push(...formatKitchenItemLines(item, itemWidth, cancelled, forEscPos));
     }
   }
 
-  lines.push({ kind: 'normal', text: `${thin}\n` });
+  lines.push({ kind: 'normal', text: `${thin}${KITCHEN_NL}` });
   lines.push({
     kind: 'normal',
-    text: padLine(L.totalItems, String(totalQty), width) + '\n',
+    text: `${L.totalItems}: ${totalQty}${KITCHEN_NL}`,
   });
-  lines.push({ kind: 'normal', text: `${thin}\n` });
-  lines.push({ kind: 'normal', text: `${user}, ${timeStr} · ${source}\n` });
-  lines.push({ kind: 'normal', text: '\n\n\n' });
+  lines.push({ kind: 'normal', text: `${thin}${KITCHEN_NL}` });
+  lines.push({
+    kind: 'normal',
+    text: `${user}, ${timeStr} | ${source}${KITCHEN_NL}`,
+  });
+  lines.push({ kind: 'normal', text: `${KITCHEN_NL}${KITCHEN_NL}${KITCHEN_NL}` });
 
-  return { width, L, lines };
+  return { width: footWidth, L, lines };
 }
 
 /** Plain-text kitchen ticket (fallback / preview). */
@@ -525,6 +615,9 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
     : 2) as 1 | 2 | 3;
   const bold = opts.boldText !== false;
   const parts: Uint8Array[] = [new Uint8Array([0x1b, 0x40]), ESC_CODEPAGE_CP850];
+  const resetSize = () => {
+    parts.push(escKitchenSize(1), escBold(false), escUnderline(false), escAlign(0));
+  };
 
   for (const line of lines) {
     if (line.kind === 'center') {
@@ -533,8 +626,9 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escKitchenSize(headerScale),
         escBold(bold || headerScale > 1),
         escUnderline(false),
-        escposCp850Encode(line.text.trimStart())
+        escposCp850Encode(line.text)
       );
+      resetSize();
     } else if (line.kind === 'header') {
       parts.push(
         escAlign(0),
@@ -543,6 +637,7 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escUnderline(false),
         escposCp850Encode(line.text)
       );
+      resetSize();
     } else if (line.kind === 'strike') {
       parts.push(
         escAlign(0),
@@ -552,6 +647,7 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escposCp850Encode(line.text),
         escUnderline(false)
       );
+      resetSize();
     } else if (line.kind === 'item') {
       parts.push(
         escAlign(0),
@@ -560,6 +656,7 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escUnderline(false),
         escposCp850Encode(line.text)
       );
+      resetSize();
     } else {
       parts.push(
         escAlign(0),
