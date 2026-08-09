@@ -1621,24 +1621,17 @@ export default function Settings() {
                 </div>
                 <div id="pos-theme">
                   <Field label={t('posColorTheme')} hint={t('posColorThemeHint')}>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                       {(
                         [
-                          ['teal', t('posThemeTeal')],
-                          ['green', t('posThemeGreen')],
-                          ['blue', t('posThemeBlue')],
-                          ['violet', t('posThemeViolet')],
+                          ['teal', t('posThemeTeal'), 'bg-teal-600'],
+                          ['green', t('posThemeGreen'), 'bg-green-600'],
+                          ['blue', t('posThemeBlue'), 'bg-blue-600'],
+                          ['violet', t('posThemeViolet'), 'bg-violet-600'],
+                          ['mono', t('posThemeMono'), 'bg-neutral-900'],
                         ] as const
-                      ).map(([id, label]) => {
+                      ).map(([id, label, swatch]) => {
                         const active = (settings.posColorTheme || 'teal') === id;
-                        const swatch =
-                          id === 'teal'
-                            ? 'bg-teal-600'
-                            : id === 'green'
-                              ? 'bg-green-600'
-                              : id === 'blue'
-                                ? 'bg-blue-600'
-                                : 'bg-violet-600';
                         return (
                           <button
                             key={id}

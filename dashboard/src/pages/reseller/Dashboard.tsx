@@ -8,7 +8,11 @@ import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
 import { APP_PANEL_TITLE } from '@/lib/brand';
 import { useAuthStore } from '@/store/auth';
-import { ALL_EDITION_FEATURES, type EditionFeatureKey } from '@/lib/edition-features';
+import {
+  ALL_EDITION_FEATURES,
+  EDITION_FEATURE_GROUPS,
+  type EditionFeatureKey,
+} from '@/lib/edition-features';
 import EditionFeatureChecklist from '@/components/EditionFeatureChecklist';
 
 function Overview() {
@@ -837,6 +841,7 @@ function EditionsPage() {
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     const res = await api.get('/reseller/editions', { params: { all: '1' } });
@@ -847,82 +852,169 @@ function EditionsPage() {
     load().catch(() => toast.error(t('posVersionLoadFailed')));
   }, [t]);
 
-  const save = async () => {
+  const openCreate = () => {
+    setEditingId(null);
+    setForm({
+      name: '',
+      note: '',
+      businessCategory: 'both',
+      features: [...ALL_EDITION_FEATURES],
+    });
+    setShowForm(true);
+  };
+
+  const openEdit = (ed: any) => {
+    setEditingId(ed.id);
+    setForm({
+      name: ed.name,
+      note: ed.note || '',
+      businessCategory: ed.businessCategory || 'both',
+      features: Array.isArray(ed.features) && ed.features.length
+        ? ed.features
+        : [...ALL_EDITION_FEATURES],
+    });
+    setShowForm(true);
+  };
+
+  /** Platform templates are read-only — clone into an editable agency copy, then open editor. */
+  const customizePlatform = async (ed: any) => {
     try {
+      setSaving(true);
+      const res = await api.post(`/reseller/editions/${ed.id}/clone`);
+      const cloned = res.data?.edition;
+      toast.success(t('posVersionClonedEditable'));
+      await load();
+      if (cloned?.id) {
+        openEdit(cloned);
+      } else {
+        const refreshed = await api.get('/reseller/editions', { params: { all: '1' } });
+        const list = refreshed.data.editions || [];
+        const match = list.find(
+          (e: any) => e.ownerType === 'reseller' && String(e.name || '').startsWith(ed.name)
+        );
+        if (match) openEdit(match);
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const save = async () => {
+    if (!form.name.trim()) {
+      toast.error(t('posVersionNameRequired'));
+      return;
+    }
+    try {
+      setSaving(true);
       if (editingId) {
         const ed = editions.find((e) => e.id === editingId);
         if (ed?.ownerType === 'platform') {
           toast.error(t('posVersionCloneRequired'));
           return;
         }
-        await api.put(`/reseller/editions/${editingId}`, form);
+        await api.put(`/reseller/editions/${editingId}`, {
+          ...form,
+          features: form.features,
+        });
+        toast.success(t('posVersionUpdated'));
       } else {
         await api.post('/reseller/editions', form);
+        toast.success(t('posVersionCreated'));
       }
-      toast.success(t('saved'));
       setShowForm(false);
       setEditingId(null);
-      load();
+      await load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deactivate = async (ed: any) => {
+    if (!window.confirm(t('posVersionDeactivateConfirm').replace('{name}', ed.name))) return;
+    try {
+      await api.delete(`/reseller/editions/${ed.id}`);
+      toast.success(t('posVersionDeactivated'));
+      if (editingId === ed.id) {
+        setShowForm(false);
+        setEditingId(null);
+      }
+      await load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('resellerSaveFailed'));
     }
   };
 
-  const clone = async (id: string) => {
-    try {
-      await api.post(`/reseller/editions/${id}/clone`);
-      toast.success(t('cloned'));
-      load();
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('resellerSaveFailed'));
+  const featureLabel = (key: string) => {
+    for (const g of EDITION_FEATURE_GROUPS) {
+      const f = g.features.find((x) => x.key === key);
+      if (f) return f.label;
     }
+    return key;
   };
 
   return (
     <div className="max-w-6xl space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-xl font-bold">{t('posVersionManagement')}</h1>
-        <button
-          type="button"
-          className="btn-primary text-sm"
-          onClick={() => {
-            setEditingId(null);
-            setForm({
-              name: '',
-              note: '',
-              businessCategory: 'both',
-              features: [...ALL_EDITION_FEATURES],
-            });
-            setShowForm(true);
-          }}
-        >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold">{t('posVersionManagement')}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-stone-500">{t('posVersionResellerHint')}</p>
+        </div>
+        <button type="button" className="btn-primary text-sm" onClick={openCreate} disabled={saving}>
           {t('posVersionNew')}
         </button>
       </div>
       {showForm && (
-        <div className="card p-4 space-y-3">
-          <input
-            className="input"
-            placeholder={t('posVersionName')}
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          />
-          <EditionFeatureChecklist
-            value={form.features}
-            onChange={(features) => setForm((f) => ({ ...f, features }))}
-          />
+        <div className="card space-y-3 p-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1 text-sm sm:col-span-2">
+              <span className="font-medium text-stone-700">{t('posVersionName')}</span>
+              <input
+                className="input"
+                placeholder={t('posVersionName')}
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </label>
+            <label className="block space-y-1 text-sm sm:col-span-2">
+              <span className="font-medium text-stone-700">{t('note')}</span>
+              <input
+                className="input"
+                placeholder={t('posVersionNotePlaceholder')}
+                value={form.note}
+                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+              />
+            </label>
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold text-stone-800">{t('features')}</p>
+            <EditionFeatureChecklist
+              value={form.features}
+              onChange={(features) => setForm((f) => ({ ...f, features }))}
+            />
+          </div>
           <div className="flex justify-end gap-2">
-            <button type="button" className="btn-secondary text-sm" onClick={() => setShowForm(false)}>
+            <button
+              type="button"
+              className="btn-secondary text-sm"
+              onClick={() => {
+                setShowForm(false);
+                setEditingId(null);
+              }}
+            >
               {t('cancel')}
             </button>
-            <button type="button" className="btn-primary text-sm" onClick={save}>
-              {t('save')}
+            <button type="button" className="btn-primary text-sm" onClick={() => void save()} disabled={saving}>
+              {saving ? t('saving') : t('save')}
             </button>
           </div>
         </div>
       )}
-      <div className="card !p-0 table-scroll">
-        <table className="w-full text-sm min-w-[480px]">
+      <div className="card table-scroll !p-0">
+        <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-stone-50 text-left">
             <tr>
               <th className="px-3 py-2">{t('name')}</th>
@@ -932,41 +1024,75 @@ function EditionsPage() {
             </tr>
           </thead>
           <tbody>
-            {editions.map((ed) => (
-              <tr key={ed.id} className="border-t">
-                <td className="px-3 py-2 font-medium">{ed.name}</td>
-                <td className="px-3 py-2">{ed.ownerType}</td>
-                <td className="px-3 py-2">{ed.features?.length}</td>
-                <td className="px-3 py-2 text-right space-x-2">
-                  {ed.ownerType === 'platform' ? (
-                    <button
-                      type="button"
-                      className="text-teal-700 hover:underline"
-                      onClick={() => clone(ed.id)}
+            {editions.map((ed) => {
+              const feats: string[] = Array.isArray(ed.features) ? ed.features : [];
+              const isPlatform = ed.ownerType === 'platform';
+              return (
+                <tr key={ed.id} className="border-t align-top">
+                  <td className="px-3 py-2">
+                    <p className="font-medium">{ed.name}</p>
+                    {ed.note ? <p className="mt-0.5 text-xs text-stone-500">{ed.note}</p> : null}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase ${
+                        isPlatform ? 'bg-stone-100 text-stone-600' : 'bg-teal-50 text-teal-800'
+                      }`}
                     >
-                      {t('clone')}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="text-teal-700 hover:underline"
-                      onClick={() => {
-                        setEditingId(ed.id);
-                        setForm({
-                          name: ed.name,
-                          note: ed.note || '',
-                          businessCategory: ed.businessCategory || 'both',
-                          features: ed.features || [...ALL_EDITION_FEATURES],
-                        });
-                        setShowForm(true);
-                      }}
-                    >
-                      {t('edit')}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+                      {isPlatform ? t('posVersionPlatform') : t('posVersionYours')}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <p className="mb-1 text-xs font-semibold text-stone-500">
+                      {feats.length}/{ALL_EDITION_FEATURES.length}
+                    </p>
+                    <div className="flex max-w-md flex-wrap gap-1">
+                      {feats.slice(0, 8).map((k) => (
+                        <span
+                          key={k}
+                          className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-700"
+                          title={k}
+                        >
+                          {featureLabel(k)}
+                        </span>
+                      ))}
+                      {feats.length > 8 ? (
+                        <span className="text-[10px] text-stone-400">+{feats.length - 8}</span>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="space-x-2 px-3 py-2 text-right whitespace-nowrap">
+                    {isPlatform ? (
+                      <button
+                        type="button"
+                        className="text-teal-700 hover:underline disabled:opacity-40"
+                        disabled={saving}
+                        onClick={() => void customizePlatform(ed)}
+                      >
+                        {t('posVersionCustomize')}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="text-teal-700 hover:underline"
+                          onClick={() => openEdit(ed)}
+                        >
+                          {t('edit')}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-red-600 hover:underline"
+                          onClick={() => void deactivate(ed)}
+                        >
+                          {t('deactivate')}
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

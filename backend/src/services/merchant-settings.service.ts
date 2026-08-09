@@ -263,7 +263,9 @@ export class MerchantSettingsService {
     if (updates.shiftsEnabled !== undefined) patch.shiftsEnabled = !!updates.shiftsEnabled;
     if (updates.posColorTheme !== undefined) {
       const theme = String(updates.posColorTheme || "teal").toLowerCase();
-      patch.posColorTheme = ["teal", "green", "blue", "violet"].includes(theme) ? theme : "teal";
+      patch.posColorTheme = ["teal", "green", "blue", "violet", "mono"].includes(theme)
+        ? theme
+        : "teal";
     }
     if (updates.storeHours !== undefined) patch.storeHours = updates.storeHours;
     if (updates.shopLogoUrl !== undefined) patch.shopLogoUrl = updates.shopLogoUrl;

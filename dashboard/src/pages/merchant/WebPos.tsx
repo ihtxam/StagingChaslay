@@ -71,7 +71,25 @@ import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosOnlineOrdersPanel, {
   type OnlineOrder,
 } from '@/components/WebPosOnlineOrdersPanel';
-import WebPosTopBar, { WebPosSettingsDropdown } from '@/components/webpos/WebPosTopBar';
+import WebPosTopBar, {
+  WebPosSettingsDropdown,
+  WEBPOS_COLOR_THEMES,
+  WEBPOS_TEXT_SIZES,
+  type WebPosColorTheme,
+  type WebPosTextSize,
+} from '@/components/webpos/WebPosTopBar';
+
+const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
+
+function readStoredTextSize(): WebPosTextSize {
+  try {
+    const v = localStorage.getItem(WEBPOS_TEXT_SIZE_KEY);
+    if (v && (WEBPOS_TEXT_SIZES as string[]).includes(v)) return v as WebPosTextSize;
+  } catch {
+    /* ignore */
+  }
+  return 'md';
+}
 import {
   clearPersistedWebPosCarts,
   draftsMapToRecord,
@@ -311,7 +329,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [tabNumber, setTabNumber] = useState<string | null>(() => bootActive?.tabNumber ?? null);
   const [expressSuccessOpen, setExpressSuccessOpen] = useState(false);
   const [shiftsEnabled, setShiftsEnabled] = useState(false);
-  const [posColorTheme, setPosColorTheme] = useState('teal');
+  const [posColorTheme, setPosColorTheme] = useState<WebPosColorTheme>('teal');
+  const [posTextSize, setPosTextSize] = useState<WebPosTextSize>(() => readStoredTextSize());
   const [openShift, setOpenShift] = useState<{
     id: string;
     openingCash: number;
@@ -902,7 +921,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         );
       }
       setPosColorTheme(
-        ['teal', 'green', 'blue', 'violet'].includes(theme) ? theme : 'teal'
+        (WEBPOS_COLOR_THEMES as string[]).includes(theme) ? (theme as WebPosColorTheme) : 'teal'
       );
       if (cfg) {
         setPaymentConfig({
@@ -3556,6 +3575,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
+  const changePosColorTheme = async (theme: WebPosColorTheme) => {
+    const prev = posColorTheme;
+    setPosColorTheme(theme);
+    try {
+      await api.put('/merchant/settings', { posColorTheme: theme });
+    } catch (e: any) {
+      setPosColorTheme(prev);
+      toast.error(e.response?.data?.error || t('resellerSaveFailed'));
+    }
+  };
+
+  const changePosTextSize = (size: WebPosTextSize) => {
+    setPosTextSize(size);
+    try {
+      localStorage.setItem(WEBPOS_TEXT_SIZE_KEY, size);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const onStaffPinSuccess = (staff: {
     id: string;
     name: string;
@@ -3749,7 +3788,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           appMode ? 'h-dvh' : '-m-3 sm:-m-4 h-[calc(100dvh-4rem)]'
         } flex flex-col bg-stone-950`}
         data-theme={posColorTheme || 'teal'}
-      data-narrow={isNarrowViewport ? '1' : '0'}
+        data-text-size={posTextSize}
+        data-narrow={isNarrowViewport ? '1' : '0'}
       >
         <WebPosPinModal
           open
@@ -3795,10 +3835,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   return (
     <div
-      className={`webpos-shell ${
+      className={`webpos-shell min-h-0 overflow-hidden ${
         appMode ? 'h-dvh' : '-m-3 sm:-m-4 h-[calc(100dvh-4rem)]'
       } flex flex-col bg-stone-100`}
       data-theme={posColorTheme || 'teal'}
+      data-text-size={posTextSize}
+      data-narrow={isNarrowViewport ? '1' : '0'}
     >
       <WebPosTopBar
         activeTab={posTab}
@@ -3838,6 +3880,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }}
         hideTablesTab={isRetail || !tablesEditionOk}
         hideBookingsTab={isRetail || !tablesEditionOk}
+        colorTheme={posColorTheme}
+        onColorThemeChange={(theme) => void changePosColorTheme(theme)}
+        textSize={posTextSize}
+        onTextSizeChange={changePosTextSize}
         settingsPanel={
           <WebPosSettingsDropdown
             printerName={printerName}
@@ -3879,6 +3925,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               openSwitchUserPin();
             }}
             staffName={webposStaff?.name}
+            colorTheme={posColorTheme}
+            onColorThemeChange={(theme) => void changePosColorTheme(theme)}
+            textSize={posTextSize}
+            onTextSizeChange={changePosTextSize}
             canDrawer={canDrawer}
             onOpenDrawer={() => {
               setSettingsOpen(false);
