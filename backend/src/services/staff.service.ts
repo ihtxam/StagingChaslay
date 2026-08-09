@@ -296,6 +296,27 @@ export class StaffService {
     if (input.canAccessPanel !== undefined) patch.canAccessPanel = !!input.canAccessPanel;
     if (input.isActive !== undefined) patch.isActive = !!input.isActive;
 
+    const nextCanAccess =
+      input.canAccessPanel !== undefined ? !!input.canAccessPanel : !!staff.canAccessPanel;
+    const nextEmail =
+      input.email !== undefined
+        ? input.email?.trim().toLowerCase() || null
+        : staff.email;
+    const nextPasswordHash =
+      input.password !== undefined
+        ? input.password === null || input.password === ""
+          ? null
+          : "set"
+        : staff.passwordHash
+          ? "set"
+          : null;
+    if (nextCanAccess) {
+      if (!nextEmail) throw new Error("Email is required for panel access");
+      if (!nextPasswordHash) {
+        throw new Error("Password is required for panel access (set a new password)");
+      }
+    }
+
     const [row] = await db
       .update(schema.merchantStaff)
       .set(patch)

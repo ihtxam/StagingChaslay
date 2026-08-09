@@ -20,6 +20,26 @@ type StaffRow = {
   canAccessPanel: boolean;
   isActive: boolean;
   pinSet: boolean;
+  passwordSet?: boolean;
+};
+
+type StaffEditForm = {
+  name: string;
+  roleId: string;
+  pin: string;
+  clearPin: boolean;
+  email: string;
+  password: string;
+  canAccessPanel: boolean;
+};
+
+const emptyCreateForm = {
+  name: '',
+  roleId: '',
+  pin: '',
+  email: '',
+  password: '',
+  canAccessPanel: false,
 };
 
 export default function StaffPage() {
@@ -30,15 +50,11 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(true);
   const [editingRole, setEditingRole] = useState<RoleRow | null>(null);
   const [rolePerms, setRolePerms] = useState<Permission[]>([]);
+  const [editingStaff, setEditingStaff] = useState<StaffRow | null>(null);
+  const [editForm, setEditForm] = useState<StaffEditForm | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
-  const [staffForm, setStaffForm] = useState({
-    name: '',
-    roleId: '',
-    pin: '',
-    email: '',
-    password: '',
-    canAccessPanel: false,
-  });
+  const [staffForm, setStaffForm] = useState(emptyCreateForm);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,10 +101,72 @@ export default function StaffPage() {
     try {
       await api.post('/merchant/staff', staffForm);
       toast.success(t('staffUserCreated'));
-      setStaffForm({ name: '', roleId: roles[0]?.id || '', pin: '', email: '', password: '', canAccessPanel: false });
+      setStaffForm({ ...emptyCreateForm, roleId: roles[0]?.id || '' });
       void load();
     } catch (err: any) {
       toast.error(err.response?.data?.error || t('staffUserCreateFailed'));
+    }
+  };
+
+  const openStaffEdit = (row: StaffRow) => {
+    setEditingStaff(row);
+    setEditForm({
+      name: row.name,
+      roleId: row.roleId,
+      pin: '',
+      clearPin: false,
+      email: row.email || '',
+      password: '',
+      canAccessPanel: row.canAccessPanel,
+    });
+  };
+
+  const closeStaffEdit = () => {
+    setEditingStaff(null);
+    setEditForm(null);
+  };
+
+  const saveStaffEdit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingStaff || !editForm) return;
+    if (editForm.canAccessPanel) {
+      if (!editForm.email.trim()) {
+        toast.error(t('staffEmailRequired'));
+        return;
+      }
+      if (!editingStaff.passwordSet && !editForm.password.trim()) {
+        toast.error(t('staffPasswordRequired'));
+        return;
+      }
+    }
+    if (editForm.pin && (editForm.pin.length < 4 || editForm.pin.length > 8)) {
+      toast.error(t('staffPinInvalid'));
+      return;
+    }
+    setEditSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        name: editForm.name.trim(),
+        roleId: editForm.roleId,
+        canAccessPanel: editForm.canAccessPanel,
+        email: editForm.canAccessPanel ? editForm.email.trim() : editForm.email.trim() || null,
+      };
+      if (editForm.clearPin) {
+        body.pin = null;
+      } else if (editForm.pin.trim()) {
+        body.pin = editForm.pin.trim();
+      }
+      if (editForm.password.trim()) {
+        body.password = editForm.password.trim();
+      }
+      await api.put(`/merchant/staff/${editingStaff.id}`, body);
+      toast.success(t('staffUserUpdated'));
+      closeStaffEdit();
+      void load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('staffUserUpdateFailed'));
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -237,8 +315,19 @@ export default function StaffPage() {
                         t('no')
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      <button type="button" className="text-red-600 text-xs" onClick={() => void removeStaff(s.id)}>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <button
+                        type="button"
+                        className="text-stone-800 text-xs font-medium mr-3 underline-offset-2 hover:underline"
+                        onClick={() => openStaffEdit(s)}
+                      >
+                        {t('edit')}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-red-600 text-xs"
+                        onClick={() => void removeStaff(s.id)}
+                      >
                         {t('remove')}
                       </button>
                     </td>
@@ -266,6 +355,121 @@ export default function StaffPage() {
           ))}
         </div>
       )}
+
+      {editingStaff && editForm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <form
+            onSubmit={(e) => void saveStaffEdit(e)}
+            className="w-full max-w-lg max-h-[85vh] overflow-auto rounded-xl bg-white dark:bg-stone-900 p-4 shadow-xl space-y-3"
+          >
+            <h3 className="font-semibold">
+              {t('staffEditUser').replace('{name}', editingStaff.name)}
+            </h3>
+            <p className="text-xs text-[var(--text-muted)]">{t('staffEditUserHint')}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm sm:col-span-2">
+                {t('name')}
+                <input
+                  className="input mt-1"
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                />
+              </label>
+              <label className="block text-sm">
+                {t('staffRole')}
+                <select
+                  className="input mt-1"
+                  value={editForm.roleId}
+                  onChange={(e) => setEditForm({ ...editForm, roleId: e.target.value })}
+                >
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm">
+                {t('staffNewPin')}
+                <input
+                  className="input mt-1"
+                  inputMode="numeric"
+                  pattern="[0-9]{4,8}"
+                  placeholder={
+                    editingStaff.pinSet ? t('staffPinKeepPlaceholder') : t('staffPinPlaceholder')
+                  }
+                  disabled={editForm.clearPin}
+                  value={editForm.pin}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, pin: e.target.value.replace(/\D/g, ''), clearPin: false })
+                  }
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={editForm.clearPin}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      clearPin: e.target.checked,
+                      pin: e.target.checked ? '' : editForm.pin,
+                    })
+                  }
+                />
+                {t('staffClearPin')}
+              </label>
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={editForm.canAccessPanel}
+                  onChange={(e) => setEditForm({ ...editForm, canAccessPanel: e.target.checked })}
+                />
+                {t('staffCanAccessPanel')}
+              </label>
+              {editForm.canAccessPanel ? (
+                <>
+                  <label className="block text-sm">
+                    {t('staffEmailPanel')}
+                    <input
+                      className="input mt-1"
+                      type="email"
+                      required
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    {t('staffNewPassword')}
+                    <input
+                      className="input mt-1"
+                      type="password"
+                      minLength={8}
+                      required={!editingStaff.passwordSet}
+                      placeholder={
+                        editingStaff.passwordSet
+                          ? t('staffPasswordKeepPlaceholder')
+                          : t('staffPasswordRequiredPlaceholder')
+                      }
+                      value={editForm.password}
+                      onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                    />
+                  </label>
+                </>
+              ) : null}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" className="btn-secondary" onClick={closeStaffEdit} disabled={editSaving}>
+                {t('cancel')}
+              </button>
+              <button type="submit" className="btn-primary" disabled={editSaving}>
+                {t('save')}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
 
       {editingRole ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
