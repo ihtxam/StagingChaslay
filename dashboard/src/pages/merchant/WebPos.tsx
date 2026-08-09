@@ -48,6 +48,10 @@ import {
   unsuitableRawPrinterMessage,
   type AgentPrinter,
 } from '@/lib/print-agent';
+import {
+  printViaAgentOrQueue,
+  processPendingEscPosPrintJobs,
+} from '@/lib/webpos-print-relay';
 import { buildReceiptUrl } from '@/lib/qr';
 import {
   lineSignature,
@@ -1168,6 +1172,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  /** Main till hub: Print Agent online → pull waiter/mobile ESC/POS jobs and print locally. */
+  useEffect(() => {
+    if (!agentOk) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        await processPendingEscPosPrintJobs();
+      } catch {
+        /* best-effort */
+      }
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [agentOk]);
 
   useEffect(() => {
     if (!isWebPosOfflineEnabled()) return;
@@ -2972,17 +2996,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const escpos = textToEscPos(text, qr, logo);
     const dataBase64 = uint8ToBase64(escpos);
 
-    const agentReady = agentOk || (await isPrintAgentAvailable());
-    if (!agentReady) {
-      if (opts.role === 'eod') {
-        browserPrintText(text);
-        toast(t('webPosEodBrowserFallback'));
-        return;
-      }
-      throw new Error(t('webPosAgentOffline'));
-    }
-
     let printedOk = 0;
+    let queuedOk = 0;
     let lastOkName = '';
     for (const name of names) {
       const label = (name || '').trim();
@@ -2995,18 +3010,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         throw new Error(unsuitableRawPrinterMessage(label) || t('webPosUnsuitablePrinter'));
       }
       try {
-        const res = await printViaAgent({
+        const mode = await printViaAgentOrQueue({
           printerName: label || undefined,
           dataBase64,
           text,
         });
-        printedOk += 1;
-        lastOkName = res.printer || label;
+        if (mode === 'queued') {
+          queuedOk += 1;
+        } else {
+          printedOk += 1;
+          lastOkName = label;
+        }
       } catch (e: any) {
         const msg = String(e?.message || '');
         if (
           opts.role === 'eod' &&
-          /OneNote|PDF|XPS|ESC-POS|virtual|receipt\/ESC-POS|corrupted/i.test(msg)
+          /OneNote|PDF|XPS|ESC-POS|virtual|receipt\/ESC-POS|corrupted|agent|offline/i.test(msg)
         ) {
           browserPrintText(text);
           toast(t('webPosEodBrowserFallback'));
@@ -3016,11 +3035,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
 
-    if (!printedOk) {
+    if (!printedOk && !queuedOk) {
       throw new Error(t('webPosPrintFailed'));
     }
 
     if (opts.quiet) return;
+    if (queuedOk && !printedOk) {
+      toast.success(t('webPosPrintQueuedMainTill'));
+      return;
+    }
     if (opts.role === 'eod') {
       toast.success(t('webPosEodPrinted'));
     } else {
@@ -3169,6 +3192,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cancelReason: opts?.cancelReason || null,
     };
 
+    let queuedAny = false;
     if (kitchenPrinters.length) {
       for (const kp of kitchenPrinters) {
         const items = filterKitchenItems(receiptItems, kp);
@@ -3183,12 +3207,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           items,
           paperWidthMm: kp.paperWidthMm || printSettings?.paperWidthMm || 80,
         });
-        await printViaAgent({
+        const mode = await printViaAgentOrQueue({
           printerName: kp.name,
           dataBase64: uint8ToBase64(escpos),
           text,
+          orderId: opts?.orderNumber || null,
         });
+        if (mode === 'queued') queuedAny = true;
       }
+      if (queuedAny) toast.success(t('webPosPrintQueuedMainTill'));
       return;
     }
 
@@ -3203,14 +3230,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       items: receiptItems,
       paperWidthMm,
     });
-    if (!(agentOk || (await isPrintAgentAvailable()))) {
-      throw new Error(t('webPosAgentOffline'));
-    }
-    await printViaAgent({
+    const mode = await printViaAgentOrQueue({
       printerName: printerName || undefined,
       dataBase64: uint8ToBase64(escpos),
       text,
+      orderId: opts?.orderNumber || null,
     });
+    if (mode === 'queued') toast.success(t('webPosPrintQueuedMainTill'));
   };
 
   const buildSalePayload = (

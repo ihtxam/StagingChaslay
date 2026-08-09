@@ -2,6 +2,7 @@ import { getDb, schema } from "@/db";
 import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
 import { POS_CANCEL_REASONS, resolvePosCancelReason } from "@/lib/pos-print-settings";
 import { roundMoney2 } from "@/lib/money";
+import { zurichDayBounds } from "@/lib/vacation";
 
 const COMPLETED_STATUSES = new Set(["completed", "partially_refunded"]);
 const BLOCKED_CANCEL_STATUSES = new Set([
@@ -74,10 +75,10 @@ export class PosOrdersService {
       conditions.push(eq(schema.orders.status, opts.status));
     }
     if (opts.from) {
-      conditions.push(gte(schema.orders.createdAt, new Date(`${opts.from}T00:00:00`)));
+      conditions.push(gte(schema.orders.createdAt, zurichDayBounds(opts.from).start));
     }
     if (opts.to) {
-      conditions.push(lte(schema.orders.createdAt, new Date(`${opts.to}T23:59:59.999`)));
+      conditions.push(lte(schema.orders.createdAt, zurichDayBounds(opts.to).end));
     }
 
     const rows = await db.query.orders.findMany({

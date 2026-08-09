@@ -13,6 +13,43 @@ export function ymdZurich(at: Date = new Date()): string {
   }).format(at);
 }
 
+/**
+ * Inclusive start / end instants for a Zurich calendar day (YYYY-MM-DD).
+ * Avoids `new Date("YYYY-MM-DDT00:00:00")` which is server-local/UTC and drops
+ * early-morning Zurich sales from "today" lists.
+ */
+export function zurichDayBounds(ymd: string): { start: Date; end: Date } {
+  const fallbackStart = new Date(`${ymd}T00:00:00+02:00`);
+  const fallbackEnd = new Date(`${ymd}T23:59:59.999+02:00`);
+  try {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Zurich",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    let guess = new Date(`${ymd}T00:00:00Z`);
+    for (let i = 0; i < 48; i++) {
+      const parts = Object.fromEntries(fmt.formatToParts(guess).map((p) => [p.type, p.value]));
+      const got = `${parts.year}-${parts.month}-${parts.day}`;
+      const hour = Number(parts.hour === "24" ? "0" : parts.hour);
+      if (got === ymd && hour === 0) break;
+      if (got < ymd) guess = new Date(guess.getTime() + 3600_000);
+      else if (got > ymd) guess = new Date(guess.getTime() - 3600_000);
+      else guess = new Date(guess.getTime() - hour * 3600_000);
+    }
+    const startZ = guess;
+    const endZ = new Date(startZ.getTime() + 24 * 3600_000 - 1);
+    return { start: startZ, end: endZ };
+  } catch {
+    return { start: fallbackStart, end: fallbackEnd };
+  }
+}
+
 /** HH:mm in Europe/Zurich. */
 export function hmZurich(at: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-GB", {

@@ -654,6 +654,8 @@ const en: Dict = {
   webPosHold: 'Hold',
   webPosNoHeld: 'No held orders',
   webPosNoOrders: 'No POS orders yet',
+  webPosNoOrdersHint:
+    'Shows today’s POS sales (Zurich). Send/hold tickets appear under Active. Paid checkouts under Completed.',
   webPosHeldOrder: 'Held order',
   webPosResume: 'Resume',
   webPosCancelOrder: 'Cancel',
@@ -891,6 +893,10 @@ const en: Dict = {
   webPosReloadCatalog: 'Reload catalog',
   webPosPrintersRefreshed: 'Printers refreshed',
   webPosAgentOnline: 'Print agent online - receipts print silently to your Windows printer (no popup).',
+  webPosPrintRelayHint:
+    'Keep WebPOS open on the PC with the Print Agent — that till prints kitchen/receipt jobs from waiter phones automatically.',
+  webPosPrintQueuedMainTill:
+    'Sent to main till printer. Keep WebPOS open on the PC with the Print Agent.',
   webPosAgentOffline:
     'Print agent offline. Download & install once from Settings → Receipts & printers (or run print-agent setup EXE), then Refresh printers. Set your thermal printer as Windows default, or pick it above.',
   webPosSearchProducts: 'Search products…',
@@ -1903,6 +1909,8 @@ const fr: Dict = {
   webPosHold: 'Mettre en attente',
   webPosNoHeld: 'Aucune commande en attente',
   webPosNoOrders: 'Aucune commande POS',
+  webPosNoOrdersHint:
+    'Affiche les ventes POS du jour (Zurich). Envoi/attente sous Actives, encaissements sous Terminées.',
   webPosHeldOrder: 'Commande en attente',
   webPosResume: 'Reprendre',
   webPosCancelOrder: 'Annuler',
@@ -2141,6 +2149,10 @@ const fr: Dict = {
   webPosReloadCatalog: 'Recharger le catalogue',
   webPosPrintersRefreshed: 'Imprimantes actualisées',
   webPosAgentOnline: 'Agent d’impression en ligne - tickets imprimés silencieusement (sans popup).',
+  webPosPrintRelayHint:
+    'Laissez le WebPOS ouvert sur le PC avec l\'agent d\'impression — cette caisse imprime automatiquement les tickets des téléphones serveurs.',
+  webPosPrintQueuedMainTill:
+    'Envoyé à l\'imprimante de la caisse principale. Gardez le WebPOS ouvert sur le PC avec l\'agent d\'impression.',
   webPosAgentOffline:
     'Agent hors ligne. Téléchargez et installez une fois depuis Paramètres → Reçus & imprimantes (setup EXE), puis Actualiser. Imprimante thermique par défaut Windows, ou choisissez-la ci-dessus.',
   webPosSearchProducts: 'Rechercher des produits…',
@@ -3161,6 +3173,8 @@ const de: Dict = {
   webPosHold: 'Halten',
   webPosNoHeld: 'Keine gehaltenen Bestellungen',
   webPosNoOrders: 'Noch keine POS-Bestellungen',
+  webPosNoOrdersHint:
+    'Zeigt heutige POS-Verkäufe (Zürich). Send/Hold unter Aktiv, bezahlte unter Abgeschlossen.',
   webPosHeldOrder: 'Gehaltene Bestellung',
   webPosResume: 'Fortsetzen',
   webPosCancelOrder: 'Stornieren',
@@ -3399,6 +3413,10 @@ const de: Dict = {
   webPosReloadCatalog: 'Katalog neu laden',
   webPosPrintersRefreshed: 'Drucker aktualisiert',
   webPosAgentOnline: 'Druckagent online - Belege werden still auf den Windows-Drucker gedruckt.',
+  webPosPrintRelayHint:
+    'Lassen Sie WebPOS auf dem PC mit Druckagent geöffnet — diese Kasse druckt Küchen-/Belegjobs von Kellner-Handys automatisch.',
+  webPosPrintQueuedMainTill:
+    'An die Hauptkasse gesendet. WebPOS auf dem PC mit Druckagent geöffnet lassen.',
   webPosAgentOffline:
     'Druckagent offline. Einmal unter Einstellungen → Belege & Drucker herunterladen/installieren, dann aktualisieren. Thermodrucker als Windows-Standard setzen oder oben wählen.',
   webPosSearchProducts: 'Produkte suchen…',

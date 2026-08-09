@@ -36,21 +36,6 @@ export const WEBPOS_COLOR_THEMES: WebPosColorTheme[] = [
 ];
 export const WEBPOS_TEXT_SIZES: WebPosTextSize[] = ['sm', 'md', 'lg', 'xl'];
 
-function themeSwatchClass(id: WebPosColorTheme) {
-  switch (id) {
-    case 'green':
-      return 'bg-green-600';
-    case 'blue':
-      return 'bg-blue-600';
-    case 'violet':
-      return 'bg-violet-600';
-    case 'mono':
-      return 'bg-neutral-900 ring-1 ring-neutral-400';
-    default:
-      return 'bg-teal-600';
-  }
-}
-
 function useFullscreenActive() {
   const [active, setActive] = useState(
     () => typeof document !== 'undefined' && !!document.fullscreenElement
@@ -505,20 +490,6 @@ export function WebPosSettingsDropdown({
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
-  const themeLabel = (id: WebPosColorTheme) => {
-    switch (id) {
-      case 'green':
-        return t('posThemeGreen');
-      case 'blue':
-        return t('posThemeBlue');
-      case 'violet':
-        return t('posThemeViolet');
-      case 'mono':
-        return t('posThemeMono');
-      default:
-        return t('posThemeTeal');
-    }
-  };
   const bumpTextSize = (dir: -1 | 1) => {
     if (!onTextSizeChange) return;
     const idx = WEBPOS_TEXT_SIZES.indexOf(textSize);
@@ -526,7 +497,8 @@ export function WebPosSettingsDropdown({
     if (next) onTextSizeChange(next);
   };
   return (
-    <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-[min(20rem,calc(100vw-1.5rem))] space-y-3 rounded-xl border border-stone-200 bg-white p-3 shadow-xl">
+    <div className="absolute right-0 top-[calc(100%+6px)] z-50 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl">
+      <div className="space-y-3 overflow-y-auto overscroll-contain p-3">
       <div className="space-y-1.5 border-b border-stone-100 pb-3">
         <button
           type="button"
@@ -539,7 +511,7 @@ export function WebPosSettingsDropdown({
         <p className="px-2 text-[11px] leading-snug text-stone-500">{t('webPosFullscreenHint')}</p>
       </div>
 
-      {(onAppearanceChange || onColorThemeChange || onTextSizeChange) && (
+      {(onAppearanceChange || onTextSizeChange) && (
         <div className="space-y-2 border-b border-stone-100 pb-3">
           {onAppearanceChange ? (
             <div>
@@ -571,34 +543,6 @@ export function WebPosSettingsDropdown({
                   <Moon size={14} />
                   {t('webPosAppearanceNightShort')}
                 </button>
-              </div>
-            </div>
-          ) : null}
-          {onColorThemeChange ? (
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500">
-                {t('webPosAccentColor')}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {WEBPOS_COLOR_THEMES.map((id) => {
-                  const active = colorTheme === id;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      title={themeLabel(id)}
-                      onClick={() => onColorThemeChange(id)}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${
-                        active
-                          ? 'border-stone-900 bg-stone-50'
-                          : 'border-stone-200 hover:bg-stone-50'
-                      }`}
-                    >
-                      <span className={`h-3.5 w-3.5 rounded-full ${themeSwatchClass(id)}`} />
-                      {themeLabel(id)}
-                    </button>
-                  );
-                })}
               </div>
             </div>
           ) : null}
@@ -774,9 +718,11 @@ export function WebPosSettingsDropdown({
       <p className="text-[11px] leading-snug text-stone-500">
         {agentOk ? t('webPosAgentOnline') : t('webPosAgentOffline')}
       </p>
+      <p className="text-[11px] leading-snug text-stone-500">{t('webPosPrintRelayHint')}</p>
       <p className="border-t border-stone-100 pt-2 text-center text-[11px] text-stone-400">
         {webPosVersionLabel}
       </p>
+      </div>
     </div>
   );
 }

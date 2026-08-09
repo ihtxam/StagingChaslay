@@ -222,6 +222,8 @@ class FloorSyncRepository @Inject constructor(
         val pending = runCatching { floorApi.pendingPrintJobs() }.getOrNull()?.jobs.orEmpty()
         var processed = 0
         for (job in pending) {
+            // WebPOS waiter phones enqueue ESCPOS for the Windows Print Agent hub — leave pending.
+            if (job.job_type.equals("ESCPOS", ignoreCase = true)) continue
             val success = runCatching {
                 when (job.job_type.uppercase()) {
                     "KITCHEN" -> executeKitchenJob(settings, job.payload)

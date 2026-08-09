@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, notInArray } from "drizzle-orm";
 
 type FloorRole = "MAIN_POS" | "WAITER" | "STANDARD";
 
@@ -171,7 +171,9 @@ export class ChaslayFloorService {
     }
   ) {
     const db = getDb();
-    const safeType = input.jobType === "RECEIPT" ? "RECEIPT" : "KITCHEN";
+    const raw = String(input.jobType || "").toUpperCase();
+    const safeType =
+      raw === "RECEIPT" || raw === "ESCPOS" || raw === "KITCHEN" ? raw : "KITCHEN";
     const inserted = await db
       .insert(schema.chaslayFloorPrintJobs)
       .values({
@@ -192,13 +194,33 @@ export class ChaslayFloorService {
     };
   }
 
-  static async listPendingPrintJobs(merchantId: string, limit: number) {
+  static async listPendingPrintJobs(
+    merchantId: string,
+    limit: number,
+    opts?: { jobTypes?: string[]; excludeJobTypes?: string[] }
+  ) {
     const db = getDb();
+    const conditions = [
+      eq(schema.chaslayFloorPrintJobs.merchantId, merchantId),
+      eq(schema.chaslayFloorPrintJobs.status, "PENDING"),
+    ];
+    if (opts?.jobTypes?.length) {
+      conditions.push(
+        inArray(
+          schema.chaslayFloorPrintJobs.jobType,
+          opts.jobTypes.map((t) => t.toUpperCase())
+        )
+      );
+    } else if (opts?.excludeJobTypes?.length) {
+      conditions.push(
+        notInArray(
+          schema.chaslayFloorPrintJobs.jobType,
+          opts.excludeJobTypes.map((t) => t.toUpperCase())
+        )
+      );
+    }
     const rows = await db.query.chaslayFloorPrintJobs.findMany({
-      where: and(
-        eq(schema.chaslayFloorPrintJobs.merchantId, merchantId),
-        eq(schema.chaslayFloorPrintJobs.status, "PENDING")
-      ),
+      where: and(...conditions),
       orderBy: [asc(schema.chaslayFloorPrintJobs.createdAt)],
       limit,
     });
@@ -208,10 +230,14 @@ export class ChaslayFloorService {
       jobs: rows.map((r) => ({
         id: r.id,
         job_type: r.jobType,
+        jobType: r.jobType,
         payload: r.payload,
         source_device_id: r.sourceDeviceId,
+        sourceDeviceId: r.sourceDeviceId,
         order_id: r.orderId,
+        orderId: r.orderId,
         created_at: r.createdAt?.toISOString() ?? null,
+        createdAt: r.createdAt?.toISOString() ?? null,
       })),
     };
   }

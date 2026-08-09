@@ -82,7 +82,10 @@ router.post("/print-jobs", async (req: Request, res: Response) => {
 router.get("/print-jobs/pending", async (req: Request, res: Response) => {
   try {
     const limit = Math.min(Number(req.query.limit || 20), 50);
-    const data = await ChaslayFloorService.listPendingPrintJobs(req.chaslayMerchantId!, limit);
+    // Android MAIN_POS handles KITCHEN/RECEIPT; WebPOS hubs consume ESCPOS separately.
+    const data = await ChaslayFloorService.listPendingPrintJobs(req.chaslayMerchantId!, limit, {
+      excludeJobTypes: ["ESCPOS"],
+    });
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Print jobs fetch failed" });

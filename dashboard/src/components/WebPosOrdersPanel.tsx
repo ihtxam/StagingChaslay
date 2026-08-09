@@ -137,7 +137,7 @@ export default function WebPosOrdersPanel({
   highlightOrderId = null,
 }: Props) {
   const { t } = useI18n();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
   const [search, setSearch] = useState('');
   const [held, setHeld] = useState<HeldRow[]>([]);
@@ -513,7 +513,10 @@ export default function WebPosOrdersPanel({
             {loading ? (
               <p className="p-4 text-sm text-stone-400">{t('loading')}</p>
             ) : pageItems.length === 0 ? (
-              <p className="p-4 text-sm text-stone-400">{t('webPosNoOrders')}</p>
+              <div className="space-y-1 p-4 text-sm text-stone-400">
+                <p>{t('webPosNoOrders')}</p>
+                <p className="text-xs text-stone-400">{t('webPosNoOrdersHint')}</p>
+              </div>
             ) : (
               <ul className="divide-y divide-stone-100">
                 {pageItems.map((item) => {

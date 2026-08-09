@@ -1595,6 +1595,62 @@ router.post("/pos/send-receipt-email", async (req: Request, res: Response) => {
   }
 });
 
+/** POST /api/merchant/pos/print-jobs — queue ESC/POS for the main till (Print Agent hub) */
+router.post("/pos/print-jobs", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { jobType, payload, sourceDeviceId, orderId } = req.body ?? {};
+    if (!payload || typeof payload !== "object") {
+      return res.status(400).json({ error: "payload required" });
+    }
+    const { ChaslayFloorService } = await import("@/services/chaslay-floor.service");
+    const data = await ChaslayFloorService.createPrintJob(merchantId, {
+      jobType: jobType || "ESCPOS",
+      payload,
+      sourceDeviceId,
+      orderId,
+    });
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Print job create failed",
+    });
+  }
+});
+
+/** GET /api/merchant/pos/print-jobs/pending — main till polls ESC/POS jobs */
+router.get("/pos/print-jobs/pending", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const limit = Math.min(Number(req.query.limit || 20), 50);
+    const jobType = req.query.jobType ? String(req.query.jobType) : "ESCPOS";
+    const { ChaslayFloorService } = await import("@/services/chaslay-floor.service");
+    const data = await ChaslayFloorService.listPendingPrintJobs(merchantId, limit, {
+      jobTypes: [jobType],
+    });
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Print jobs fetch failed",
+    });
+  }
+});
+
+router.post("/pos/print-jobs/:id/ack", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const status = req.body?.status === "FAILED" ? "FAILED" : "DONE";
+    const { ChaslayFloorService } = await import("@/services/chaslay-floor.service");
+    const data = await ChaslayFloorService.ackPrintJob(merchantId, req.params.id, status);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Ack failed" });
+  }
+});
+
 /** GET /api/merchant/pos/orders — POS order history */
 router.get("/pos/orders", async (req: Request, res: Response) => {
   try {
