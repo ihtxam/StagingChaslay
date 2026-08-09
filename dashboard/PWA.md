@@ -30,10 +30,20 @@ After install, double-clicking the app opens a frameless window at WebPOS. If th
 | File | Role |
 |------|------|
 | `public/manifest.webmanifest` | Name, icons, `display: standalone`, `start_url: /merchant/pos` |
-| `public/sw.js` | Thin offline shell (app shell cache; API still needs network) |
+| `public/sw.js` | App shell cache for install/open offline (`chaslay-shell-v2`) |
+| `src/lib/webpos-offline/*` | IndexedDB catalog snapshot + sale outbox; sync via `/sync/push-sales` |
 | `public/icons/*`, `favicon.png` | Install / Start Menu icons |
 | `index.html` | Manifest + theme / apple meta tags |
 | `src/main.tsx` | Registers `/sw.js` in production builds |
+
+### WebPOS offline selling (browser / PWA)
+
+After at least one **successful online** catalog load:
+
+- Opening WebPOS without network hydrates products/settings from IndexedDB.
+- **Cash / card / express** sales can complete offline; they queue in the outbox and sync with `POST /sync/push-sales` (idempotent `clientId`) when online.
+- **Blocked offline** (need cloud): terminal, gift cards, pay later, staff PIN unlock (if no prior session).
+- Toggle off with `localStorage.setItem('manupos_webpos_offline','0')` if you want online-only.
 
 ## Configure start URL
 
