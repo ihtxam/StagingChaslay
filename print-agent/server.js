@@ -20,12 +20,90 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.3.0";
+const VERSION = "1.3.1";
 const APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "chaslay-print-agent.exe";
 const RUN_VALUE_NAME = "ChaslayPrintAgent";
 
 const isPkg = typeof process.pkg !== "undefined";
+
+function isWindows() {
+  return process.platform === "win32";
+}
+
+/**
+ * Detach from the console so setup/install doesn't leave a black CMD window open.
+ * MessageBox is the user-facing UI; console is only a fallback.
+ */
+async function hideConsoleForUi() {
+  if (!isWindows() || !isPkg) return;
+  try {
+    const ps = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class ChaslayConsole {
+  [DllImport("kernel32.dll")] public static extern bool FreeConsole();
+}
+"@
+[void][ChaslayConsole]::FreeConsole()
+`;
+    await execFileAsync(
+      "powershell.exe",
+      ["-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", ps],
+      { windowsHide: true, timeout: 5000 }
+    );
+  } catch {
+    /* ignore — older Windows / policy may block; MessageBox still works */
+  }
+}
+
+/** Stop a previously installed agent so we can overwrite its EXE (avoids EBUSY). */
+async function stopInstalledAgent() {
+  if (!isWindows()) return;
+  appendInstallLog("Stopping running agent (if any) before install copy…");
+  try {
+    await execFileAsync("taskkill", ["/F", "/IM", EXE_NAME, "/T"], {
+      windowsHide: true,
+      timeout: 15000,
+    });
+    appendInstallLog("taskkill: stopped running chaslay-print-agent.exe");
+  } catch (e) {
+    // Exit code 128 = process not found — fine.
+    appendInstallLog(`taskkill: ${e.message || e}`);
+  }
+  await new Promise((r) => setTimeout(r, 600));
+}
+
+function copyFileRetry(src, dest, attempts = 6) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      fs.copyFileSync(src, dest);
+      return;
+    } catch (e) {
+      lastErr = e;
+      const code = e && e.code;
+      if (code === "EBUSY" || code === "EPERM" || code === "EACCES") {
+        // Caller should have stopped the agent; brief wait then retry.
+        const start = Date.now();
+        while (Date.now() - start < 400) {
+          /* spin briefly without async */
+        }
+        continue;
+      }
+      throw e;
+    }
+  }
+  const hint =
+    `Could not update ${dest}.\n\n` +
+    `The Print Agent is still running or locked.\n` +
+    `Open Task Manager → end "chaslay-print-agent.exe", then run setup again.\n\n` +
+    `(${lastErr && lastErr.message ? lastErr.message : lastErr})`;
+  const err = new Error(hint);
+  err.code = lastErr && lastErr.code;
+  throw err;
+}
 
 /** Virtual / GDI PDF drivers that cannot usefully accept ESC/POS RAW bytes. */
 function isUnsuitableRawPrinter(name) {
@@ -163,10 +241,6 @@ $b = [System.IO.File]::ReadAllText('${bodyFile.replace(/'/g, "''")}', [System.Te
   }
 }
 
-function isWindows() {
-  return process.platform === "win32";
-}
-
 async function setStartup(enabled, exePath) {
   if (!isWindows()) return;
   const runKey = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
@@ -186,21 +260,38 @@ async function doInstall() {
   if (!isWindows()) {
     throw new Error("Install is only supported on Windows.");
   }
+  await hideConsoleForUi();
   appendInstallLog(`Install start (v${VERSION}, pkg=${isPkg})`);
   const dir = installDir();
   fs.mkdirSync(dir, { recursive: true });
 
   const targetExe = path.join(dir, EXE_NAME);
   const sourceExe = isPkg ? process.execPath : path.join(__dirname, "dist", EXE_NAME);
+
+  // Always stop a previous install before overwriting — running EXE causes EBUSY.
+  if (fs.existsSync(targetExe)) {
+    await stopInstalledAgent();
+  }
+
   if (isPkg) {
     if (path.resolve(process.execPath) !== path.resolve(targetExe)) {
-      fs.copyFileSync(process.execPath, targetExe);
-      appendInstallLog(`Copied EXE to ${targetExe}`);
+      try {
+        copyFileRetry(process.execPath, targetExe);
+        appendInstallLog(`Copied EXE to ${targetExe}`);
+      } catch (e) {
+        if (e.code === "EBUSY" || e.code === "EPERM" || e.code === "EACCES") {
+          await stopInstalledAgent();
+          copyFileRetry(process.execPath, targetExe);
+          appendInstallLog(`Copied EXE to ${targetExe} after stop retry`);
+        } else {
+          throw e;
+        }
+      }
     } else {
       appendInstallLog(`Already running from install dir ${targetExe}`);
     }
   } else if (fs.existsSync(sourceExe)) {
-    fs.copyFileSync(sourceExe, targetExe);
+    copyFileRetry(sourceExe, targetExe);
     appendInstallLog(`Copied built EXE to ${targetExe}`);
   } else {
     // Dev fallback: write a start.cmd that launches node server.js
@@ -212,7 +303,11 @@ async function doInstall() {
   const ps1Src = path.join(__dirname, "win-raw-print.ps1");
   const ps1Dest = path.join(dir, "win-raw-print.ps1");
   if (fs.existsSync(ps1Src)) {
-    fs.copyFileSync(ps1Src, ps1Dest);
+    try {
+      fs.copyFileSync(ps1Src, ps1Dest);
+    } catch {
+      copyFileRetry(ps1Src, ps1Dest);
+    }
     appendInstallLog(`Copied win-raw-print.ps1`);
   } else {
     appendInstallLog(`WARNING: win-raw-print.ps1 missing at ${ps1Src}`);
@@ -296,6 +391,7 @@ async function runCli() {
     process.exit(0);
   }
   if (args.includes("--install")) {
+    await hideConsoleForUi();
     try {
       await doInstall();
       process.exit(0);
@@ -304,23 +400,12 @@ async function runCli() {
       appendInstallLog(`Install error: ${e.message || e}`);
       if (!e.alreadyShown) {
         await showMessage("Chaslay Print Agent — Error", e.message || String(e));
-        // Keep a console visible on hard failure so users see the message if MessageBox fails.
-        if (isWindows() && isPkg) {
-          try {
-            await execFileAsync(
-              "cmd.exe",
-              ["/c", `echo Install failed. See %LOCALAPPDATA%\\${APP_NAME}\\install.log & pause`],
-              { windowsHide: false, timeout: 300000 }
-            );
-          } catch {
-            /* ignore */
-          }
-        }
       }
       process.exit(1);
     }
   }
   if (args.includes("--uninstall")) {
+    await hideConsoleForUi();
     try {
       await doUninstall();
       process.exit(0);
@@ -335,6 +420,7 @@ async function runCli() {
   // When the downloaded setup EXE is double-clicked (pkg build named *-setup*), install then exit.
   const base = path.basename(isPkg ? process.execPath : process.argv[1] || "", ".exe").toLowerCase();
   if (isPkg && base.includes("setup") && !args.includes("--run")) {
+    await hideConsoleForUi();
     try {
       await doInstall();
       process.exit(0);
@@ -343,17 +429,6 @@ async function runCli() {
       appendInstallLog(`Setup error: ${e.message || e}`);
       if (!e.alreadyShown) {
         await showMessage("Chaslay Print Agent — Error", e.message || String(e));
-        if (isWindows()) {
-          try {
-            await execFileAsync(
-              "cmd.exe",
-              ["/c", `echo Install failed. See %LOCALAPPDATA%\\${APP_NAME}\\install.log & pause`],
-              { windowsHide: false, timeout: 300000 }
-            );
-          } catch {
-            /* ignore */
-          }
-        }
       }
       process.exit(1);
     }

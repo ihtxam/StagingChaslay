@@ -67,8 +67,11 @@ Outputs:
 
 ### Install UX
 
-- Setup EXE shows a **MessageBox** on success or failure (no silent CMD flash-and-exit).
+- Setup EXE shows a **MessageBox** on success or failure, then exits (no CMD window left open).
+- If a previous agent is running, setup stops it first so the EXE can be updated (avoids `EBUSY`).
 - Log file: `%LOCALAPPDATA%\ChaslayPrintAgent\install.log`
+
+**If you still see `EBUSY`:** Task Manager ? end `chaslay-print-agent.exe` ? run setup once more.
 
 ## API
 

@@ -42,7 +42,7 @@ try {
   @"
 {
   "name": "chaslay-print-agent",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "setupFile": "chaslay-print-agent-setup.exe",
   "builtAt": "$(Get-Date -Format o)",
   "platform": "win32-x64",
