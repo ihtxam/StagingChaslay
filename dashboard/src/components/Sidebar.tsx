@@ -80,32 +80,30 @@ export default function Sidebar({
     return ids;
   }, [menuItems, location.pathname]);
 
+  // Accordion: at most one group open (keeps the sidebar short).
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     const stored = loadOpenGroups(panelKey);
-    for (const id of activeGroupIds) stored.add(id);
-    return stored;
+    const activeId = [...activeGroupIds][0];
+    if (activeId) return new Set([activeId]);
+    const firstStored = [...stored][0];
+    return firstStored ? new Set([firstStored]) : new Set();
   });
 
   useEffect(() => {
+    const activeId = [...activeGroupIds][0];
+    if (!activeId) return;
     setOpenGroups((prev) => {
-      let changed = false;
-      const next = new Set(prev);
-      for (const id of activeGroupIds) {
-        if (!next.has(id)) {
-          next.add(id);
-          changed = true;
-        }
-      }
-      if (changed) saveOpenGroups(panelKey, next);
-      return changed ? next : prev;
+      if (prev.size === 1 && prev.has(activeId)) return prev;
+      const next = new Set([activeId]);
+      saveOpenGroups(panelKey, next);
+      return next;
     });
   }, [activeGroupIds, panelKey]);
 
   const toggleGroup = (id: string) => {
     setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      // Opening a group closes every other; clicking the open one collapses all.
+      const next = prev.has(id) ? new Set<string>() : new Set([id]);
       saveOpenGroups(panelKey, next);
       return next;
     });
