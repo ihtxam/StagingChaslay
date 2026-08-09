@@ -3644,10 +3644,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   return (
     <div
-      className={`webpos-shell ${
+      className={`webpos-shell min-h-0 overflow-hidden ${
         appMode ? 'h-dvh' : '-m-3 sm:-m-4 h-[calc(100dvh-4rem)]'
       } flex flex-col bg-stone-100`}
       data-theme={posColorTheme || 'teal'}
+      data-narrow={isNarrowViewport ? '1' : '0'}
     >
       <WebPosTopBar
         activeTab={posTab}
@@ -3768,6 +3769,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }}
             busy={busy || paymentModalOpen}
             customerLabel={customerLabel}
+            onCustomer={() => setCustomerOpen(true)}
+            onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
             onSplit={
               checkoutSettings.splitBillsEnabled && !splitQueue.length
                 ? () => {

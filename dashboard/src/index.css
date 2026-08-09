@@ -307,6 +307,14 @@ button {
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
   }
 
+  /* Checkout: keep Confirm + Remaining clear of iOS Safari chrome */
+  .webpos-checkout-scroll {
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+  }
+  .webpos-checkout-footer {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+
   /* Register cart: lines grow; keypad/actions stay docked at bottom */
   .webpos-cart-panel {
     min-height: 0;

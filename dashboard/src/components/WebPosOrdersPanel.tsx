@@ -385,9 +385,11 @@ export default function WebPosOrdersPanel({
         <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
           {/* List — full width on phone; left column from lg up */}
           <div
-            className={`min-h-0 min-w-0 flex-1 overflow-y-auto ${
-              selectedHeld || selectedOrder ? 'hidden lg:block' : ''
-            }`}
+            className={
+              selectedHeld || selectedOrder
+                ? 'hidden min-h-0 min-w-0 flex-1 overflow-y-auto lg:block'
+                : 'min-h-0 min-w-0 w-full flex-1 overflow-y-auto'
+            }
           >
             {loading ? (
               <p className="p-4 text-sm text-stone-400">{t('loading')}</p>
@@ -405,18 +407,25 @@ export default function WebPosOrdersPanel({
                         <button
                           type="button"
                           onClick={() => selectHeld(h)}
-                          className={`flex w-full items-center gap-3 px-3 py-3.5 text-left hover:bg-stone-50 sm:px-4 ${
+                          className={`flex w-full items-start gap-2 px-3 py-3.5 text-left hover:bg-stone-50 sm:items-center sm:gap-3 sm:px-4 ${
                             selected ? 'bg-teal-50' : ''
                           }`}
                         >
                           <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs text-stone-500">
-                                {new Date(h.updatedAt).toLocaleString()}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold">
+                                  {h.label || t('webPosHeldOrder')}
+                                </p>
+                                <p className="mt-0.5 text-xs text-stone-500">
+                                  {new Date(h.updatedAt).toLocaleString()}
+                                </p>
+                              </div>
+                              <span className="shrink-0 text-sm font-bold tabular-nums text-teal-700">
+                                {money(total)}
                               </span>
-                              <span className="truncate text-sm font-semibold">
-                                {h.label || t('webPosHeldOrder')}
-                              </span>
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                               <span
                                 className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${channelBadgeClass(h.channel)}`}
                               >
@@ -427,14 +436,11 @@ export default function WebPosOrdersPanel({
                               </span>
                             </div>
                           </div>
-                          <span className="shrink-0 text-sm font-bold tabular-nums text-teal-700">
-                            {money(total)}
-                          </span>
-                          <Info size={16} className="shrink-0 text-stone-400" />
+                          <Info size={16} className="mt-1 shrink-0 text-stone-400 sm:mt-0" />
                           <span
                             role="button"
                             tabIndex={0}
-                            className="shrink-0 rounded p-1 text-stone-400 hover:bg-red-50 hover:text-red-600"
+                            className="mt-0.5 shrink-0 rounded p-1 text-stone-400 hover:bg-red-50 hover:text-red-600 sm:mt-0"
                             onClick={async (e) => {
                               e.stopPropagation();
                               try {
@@ -460,19 +466,26 @@ export default function WebPosOrdersPanel({
                       <button
                         type="button"
                         onClick={() => selectOrder(o)}
-                        className={`flex w-full items-center gap-3 px-3 py-3.5 text-left hover:bg-stone-50 sm:px-4 ${
+                        className={`flex w-full items-start gap-2 px-3 py-3.5 text-left hover:bg-stone-50 sm:items-center sm:gap-3 sm:px-4 ${
                           selected ? 'bg-teal-50' : ''
                         }`}
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs text-stone-500">
-                              {new Date(o.completedAt || o.createdAt).toLocaleString()}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">
+                                {o.tableLabel ? `T ${o.tableLabel}` : o.orderNumber}
+                                {o.customerName ? ` · ${o.customerName}` : ''}
+                              </p>
+                              <p className="mt-0.5 text-xs text-stone-500">
+                                {new Date(o.completedAt || o.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                            <span className="shrink-0 text-sm font-bold tabular-nums text-teal-700">
+                              {money(o.total)}
                             </span>
-                            <span className="truncate text-sm font-semibold">
-                              {o.tableLabel ? `T ${o.tableLabel}` : o.orderNumber}
-                              {o.customerName ? ` · ${o.customerName}` : ''}
-                            </span>
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             <span
                               className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${channelBadgeClass(o.channel)}`}
                             >
@@ -500,10 +513,7 @@ export default function WebPosOrdersPanel({
                           </div>
                           <p className="mt-0.5 text-[11px] text-stone-400">{o.orderNumber}</p>
                         </div>
-                        <span className="shrink-0 text-sm font-bold tabular-nums text-teal-700">
-                          {money(o.total)}
-                        </span>
-                        <Info size={16} className="shrink-0 text-stone-400" />
+                        <Info size={16} className="mt-1 shrink-0 text-stone-400 sm:mt-0" />
                       </button>
                     </li>
                   );
@@ -511,13 +521,13 @@ export default function WebPosOrdersPanel({
               </ul>
             )}
           </div>
-          {/* Detail panel — stacked full-screen on phone when a row is selected */}
+          {/* Detail panel — full-screen overlay on phone; side column from lg up */}
           <aside
-            className={`flex min-h-0 w-full flex-col bg-stone-50 lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200 ${
+            className={
               selectedHeld || selectedOrder
-                ? 'absolute inset-0 z-10 flex lg:static'
-                : 'hidden lg:flex'
-            }`}
+                ? 'absolute inset-0 z-10 flex min-h-0 w-full flex-col bg-stone-50 lg:static lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200'
+                : 'hidden min-h-0 w-full flex-col bg-stone-50 lg:flex lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200'
+            }
           >
             {selectedHeld ? (
               <>
