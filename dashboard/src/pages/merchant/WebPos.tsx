@@ -1301,6 +1301,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [shiftsEnabled, openShift, offlineSync.online]
   );
 
+  /** Same product + options + course stacks qty; never merge into already-sent kitchen lines. */
+  const findStackableCartLine = (
+    prev: CartLine[],
+    opts: {
+      productId: string;
+      unitPrice: number;
+      selectedExtras: ShopSelectedExtra[];
+      comboSelections: ShopComboSelection[];
+      courseNumber?: number;
+    }
+  ) => {
+    const sig = lineSignature(opts.selectedExtras, opts.comboSelections);
+    return prev.find((l) => {
+      if (l.productId !== opts.productId) return false;
+      if (l.isOpenPrice || l.giftCard) return false;
+      if (l.sentToKitchen) return false;
+      if (roundMoney2(l.unitPrice) !== roundMoney2(opts.unitPrice)) return false;
+      if (lineSignature(l.selectedExtras, l.comboSelections) !== sig) return false;
+      if (coursesEnabled) {
+        if ((l.courseNumber || 1) !== (opts.courseNumber || 1)) return false;
+      }
+      return true;
+    });
+  };
+
   const addConfiguredProduct = (
     p: Product,
     unitPrice: number,
@@ -1310,21 +1335,28 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const doAdd = () => {
       const price = roundMoney2(unitPrice);
       const sig = lineSignature(selectedExtras, comboSelections);
+      const courseNumber = coursesEnabled ? activeCourse : undefined;
       setCart((prev) => {
         const isOpen = p.isOpenPrice || p.productType === 'open_price';
         const existing = !isOpen
-          ? prev.find(
-              (l) =>
-                l.productId === p.id &&
-                !l.isOpenPrice &&
-                lineSignature(l.selectedExtras, l.comboSelections) === sig
-            )
+          ? findStackableCartLine(prev, {
+              productId: p.id,
+              unitPrice: price,
+              selectedExtras,
+              comboSelections,
+              courseNumber,
+            })
           : undefined;
         if (existing) {
           const quantity = existing.quantity + 1;
+          const disc = existing.lineDiscountPercent || 0;
           return prev.map((l) =>
             l.lineId === existing.lineId
-              ? { ...l, quantity, lineTotal: roundMoney2(price * quantity) }
+              ? {
+                  ...l,
+                  quantity,
+                  lineTotal: roundMoney2(l.unitPrice * quantity * (1 - disc / 100)),
+                }
               : l
           );
         }
@@ -1342,7 +1374,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             selectedExtras,
             comboSelections,
             isOpenPrice: isOpen,
-            courseNumber: coursesEnabled ? activeCourse : undefined,
+            courseNumber,
           },
         ];
       });
@@ -1385,18 +1417,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       // Bypass ensureShift re-entry - shift already confirmed
       const price = roundMoney2(Number(p.price) || 0);
+      const courseNumber = coursesEnabled ? activeCourse : undefined;
       setCart((prev) => {
-        const existing = prev.find(
-          (l) =>
-            l.productId === p.id &&
-            !l.isOpenPrice &&
-            lineSignature(l.selectedExtras, l.comboSelections) === ''
-        );
+        // lineSignature([], []) is "plain" — never compare to "" (that never matched).
+        const existing = findStackableCartLine(prev, {
+          productId: p.id,
+          unitPrice: price,
+          selectedExtras: [],
+          comboSelections: [],
+          courseNumber,
+        });
         if (existing) {
           const quantity = existing.quantity + 1;
+          const disc = existing.lineDiscountPercent || 0;
           return prev.map((l) =>
             l.lineId === existing.lineId
-              ? { ...l, quantity, lineTotal: roundMoney2(price * quantity) }
+              ? {
+                  ...l,
+                  quantity,
+                  lineTotal: roundMoney2(l.unitPrice * quantity * (1 - disc / 100)),
+                }
               : l
           );
         }
@@ -1414,7 +1454,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             selectedExtras: [],
             comboSelections: [],
             isOpenPrice: false,
-            courseNumber: coursesEnabled ? activeCourse : undefined,
+            courseNumber,
           },
         ];
       });
