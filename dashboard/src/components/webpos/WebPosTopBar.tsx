@@ -176,13 +176,6 @@ export default function WebPosTopBar({
   const fullscreenActive = useFullscreenActive();
   const syncNeedsAttention = !syncOnline || syncPendingCount > 0 || syncFailedCount > 0;
 
-  const bumpTextSize = (dir: -1 | 1) => {
-    if (!onTextSizeChange) return;
-    const idx = WEBPOS_TEXT_SIZES.indexOf(textSize);
-    const next = WEBPOS_TEXT_SIZES[Math.max(0, Math.min(WEBPOS_TEXT_SIZES.length - 1, idx + dir))];
-    if (next) onTextSizeChange(next);
-  };
-
   const tabs: Array<{ id: PosTab; label: string; Icon: typeof Pencil }> = [
     ...(!hideTablesTab
       ? [{ id: 'tables' as const, label: t('webPosTabTables'), Icon: LayoutGrid }]
@@ -377,53 +370,6 @@ export default function WebPosTopBar({
               title={t('webPosOpenDrawer')}
             >
               <Vault size={17} />
-            </button>
-          ) : null}
-
-          {onTextSizeChange ? (
-            <div className="hidden items-center rounded-lg border border-stone-200 lg:inline-flex">
-              <button
-                type="button"
-                className="inline-flex h-9 w-8 items-center justify-center text-xs font-bold text-stone-600 hover:bg-stone-50 disabled:opacity-30"
-                disabled={textSize === 'sm'}
-                onClick={() => bumpTextSize(-1)}
-                title={t('webPosTextSizeDecrease')}
-                aria-label={t('webPosTextSizeDecrease')}
-              >
-                A−
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-9 w-8 items-center justify-center text-sm font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-30"
-                disabled={textSize === 'xl'}
-                onClick={() => bumpTextSize(1)}
-                title={t('webPosTextSizeIncrease')}
-                aria-label={t('webPosTextSizeIncrease')}
-              >
-                A+
-              </button>
-            </div>
-          ) : null}
-
-          {onAppearanceChange ? (
-            <button
-              type="button"
-              className="hidden h-9 items-center gap-1.5 rounded-lg border border-stone-200 px-2.5 text-xs font-bold text-stone-700 hover:bg-stone-50 lg:inline-flex"
-              onClick={() =>
-                onAppearanceChange(appearance === 'night' ? 'light' : 'night')
-              }
-              title={
-                appearance === 'night' ? t('webPosAppearanceLight') : t('webPosAppearanceNight')
-              }
-              aria-label={
-                appearance === 'night' ? t('webPosAppearanceLight') : t('webPosAppearanceNight')
-              }
-              aria-pressed={appearance === 'night'}
-            >
-              {appearance === 'night' ? <Sun size={15} /> : <Moon size={15} />}
-              <span className="hidden xl:inline">
-                {appearance === 'night' ? t('webPosAppearanceLightShort') : t('webPosAppearanceNightShort')}
-              </span>
             </button>
           ) : null}
 

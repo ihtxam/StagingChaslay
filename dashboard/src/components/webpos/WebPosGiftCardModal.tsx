@@ -1,10 +1,17 @@
 import { Gift, QrCode, CreditCard, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import RfidScanInput from '@/components/RfidScanInput';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
+
+function normalizeRfidUid(raw: string): string {
+  return String(raw || '')
+    .trim()
+    .replace(/[\s:_\-]+/g, '')
+    .toUpperCase();
+}
 
 export type GiftCardSettingsClient = {
   enabled: boolean;
@@ -87,16 +94,24 @@ export default function WebPosGiftCardModal({
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [custom, setCustom] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+  const lastTriedRef = useRef('');
+  const attachRef = useRef(onAttachCustomer);
+  attachRef.current = onAttachCustomer;
 
   const lookup = useCallback(
-    async (raw: string, mediaType: 'physical' | 'e_card') => {
+    async (raw: string, mediaType: 'physical' | 'e_card', opts?: { silent?: boolean }) => {
       const trimmed = raw.trim();
       if (!trimmed) return;
+      const normalized = mediaType === 'physical' ? normalizeRfidUid(trimmed) : trimmed;
+      const lookupKey = `${mediaType}:${normalized || trimmed}`;
       setBusy(true);
+      setLookupError('');
       try {
-        const res = await api.get(`/gift-cards/lookup/${encodeURIComponent(trimmed)}`, {
-          params: { mediaType },
-        });
+        const res = await api.get(
+          `/gift-cards/lookup/${encodeURIComponent(normalized || trimmed)}`,
+          { params: { mediaType } }
+        );
         const c = res.data.card;
         const looked: LookedUpCard = {
           id: c.id,
@@ -117,9 +132,10 @@ export default function WebPosGiftCardModal({
             : null,
         };
         setCard(looked);
-        setCode(trimmed);
-        if (looked.customer && onAttachCustomer) {
-          onAttachCustomer(looked.customer);
+        setCode(looked.cardNumber || trimmed);
+        lastTriedRef.current = lookupKey;
+        if (looked.customer && attachRef.current) {
+          attachRef.current(looked.customer);
         }
         if (mode === 'pay' || step === 'pay') {
           const due = roundMoney2(amountDue);
@@ -128,14 +144,18 @@ export default function WebPosGiftCardModal({
         }
       } catch (error: any) {
         setCard(null);
-        if (step !== 'sell') {
-          toast.error(error.response?.data?.error || t('giftCardNotFound'));
+        lastTriedRef.current = lookupKey;
+        const msg = error.response?.data?.error || t('giftCardNotFound');
+        setLookupError(msg);
+        // Never toast on auto-scan — that was stacking every few seconds and freezing Chrome.
+        if (step !== 'sell' && !opts?.silent) {
+          toast.error(msg, { id: 'gift-card-lookup' });
         }
       } finally {
         setBusy(false);
       }
     },
-    [amountDue, mode, onAttachCustomer, step, t]
+    [amountDue, mode, step, t]
   );
 
   useEffect(() => {
@@ -147,18 +167,25 @@ export default function WebPosGiftCardModal({
     setAmount('');
     setCustom(false);
     setBusy(false);
+    setLookupError('');
+    lastTriedRef.current = '';
   }, [open, mode]);
 
   useEffect(() => {
     if (!open || media === 'choose' || media === 'e_card') return;
     const trimmed = code.trim();
     if (trimmed.length < 4) return;
-    if (card && card.cardNumber === trimmed) return;
+    const normalized = normalizeRfidUid(trimmed);
+    const lookupKey = `physical:${normalized}`;
+    if (card && normalizeRfidUid(card.cardNumber) === normalized) return;
+    if (lastTriedRef.current === lookupKey) return;
     const tmr = window.setTimeout(() => {
-      void lookup(trimmed, 'physical');
-    }, 280);
+      void lookup(trimmed, 'physical', { silent: true });
+    }, 350);
     return () => window.clearTimeout(tmr);
-  }, [code, open, media, card, lookup]);
+    // Intentionally omit `lookup` — use latest via closure; avoid parent re-render loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, open, media, card]);
 
   if (!open) return null;
 
@@ -336,22 +363,31 @@ export default function WebPosGiftCardModal({
                 ) : (
                   <RfidScanInput
                     value={code}
-                    onChange={setCode}
+                    onChange={(v) => {
+                      lastTriedRef.current = '';
+                      setLookupError('');
+                      setCode(v);
+                    }}
                     placeholder={t('tapCard')}
                     autoFocus
                     className="input w-full"
                   />
                 )}
-                {media === 'e_card' && (
-                  <button
-                    type="button"
-                    className="mt-2 text-sm font-semibold text-teal-700"
-                    disabled={busy}
-                    onClick={() => void lookup(code, 'e_card')}
-                  >
-                    {t('giftCardLookup')}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="mt-2 text-sm font-semibold text-teal-700 disabled:opacity-40"
+                  disabled={busy || code.trim().length < 4}
+                  onClick={() =>
+                    void lookup(code, media === 'e_card' ? 'e_card' : 'physical', {
+                      silent: false,
+                    })
+                  }
+                >
+                  {t('giftCardLookup')}
+                </button>
+                {lookupError ? (
+                  <p className="mt-2 text-sm font-medium text-red-600">{lookupError}</p>
+                ) : null}
               </div>
 
               {card && (

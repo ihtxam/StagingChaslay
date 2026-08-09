@@ -13,6 +13,14 @@ function money(n: number | string | null | undefined): number {
   return Math.round((v + Number.EPSILON) * 100) / 100;
 }
 
+/** Normalize RFID UIDs so tap / manual / issue all match (strip separators, uppercase). */
+export function normalizeRfidUid(raw: string): string {
+  return String(raw || "")
+    .trim()
+    .replace(/[\s:_\-]+/g, "")
+    .toUpperCase();
+}
+
 function assertActive(card: { status: string; expiresAt?: Date | null }) {
   if (card.status === "suspended") throw new Error("Card is suspended");
   if (card.status === "expired") throw new Error("Card is expired");
@@ -113,14 +121,41 @@ export class GiftCardService {
     const db = getDb();
     const trimmed = String(code || "").trim();
     if (!trimmed) throw new Error("Card number is required");
+    const normalized = normalizeRfidUid(trimmed);
+    const candidates = [...new Set([trimmed, normalized, trimmed.toUpperCase(), trimmed.toLowerCase()])].filter(
+      Boolean
+    );
 
-    let card = await db.query.giftCards.findFirst({
-      where: and(
-        eq(schema.giftCards.merchantId, merchantId),
-        eq(schema.giftCards.cardNumber, trimmed)
-      ),
-      with: { customer: true },
-    });
+    let card = null as Awaited<ReturnType<typeof db.query.giftCards.findFirst>>;
+    for (const candidate of candidates) {
+      card = await db.query.giftCards.findFirst({
+        where: and(
+          eq(schema.giftCards.merchantId, merchantId),
+          eq(schema.giftCards.cardNumber, candidate)
+        ),
+        with: { customer: true },
+      });
+      if (card) break;
+    }
+
+    // Case-insensitive / separator-insensitive match for older rows
+    if (!card && normalized) {
+      const rows = await db
+        .select()
+        .from(schema.giftCards)
+        .where(eq(schema.giftCards.merchantId, merchantId))
+        .limit(500);
+      const match = rows.find((r) => normalizeRfidUid(r.cardNumber) === normalized);
+      if (match) {
+        card = await db.query.giftCards.findFirst({
+          where: and(
+            eq(schema.giftCards.merchantId, merchantId),
+            eq(schema.giftCards.id, match.id)
+          ),
+          with: { customer: true },
+        });
+      }
+    }
 
     if (!card && (!mediaType || mediaType === "e_card")) {
       card = await db.query.giftCards.findFirst({
@@ -158,6 +193,8 @@ export class GiftCardService {
     let ecardCode: string | null = null;
 
     if (mediaType === "physical") {
+      if (!cardNumber) throw new Error("RFID card number is required");
+      cardNumber = normalizeRfidUid(cardNumber);
       if (!cardNumber) throw new Error("RFID card number is required");
     } else {
       // Phase-2 stub: generate e-card code; email delivery not implemented
