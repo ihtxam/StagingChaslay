@@ -531,7 +531,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return map;
   }, [cart]);
 
-  const hideTab = !!tableLabel;
+  /** Table or tab assigned → footer shows Send (not Set table / Set tab). */
+  const hideTab = !!tableLabel || !!tabNumber;
   // Waiter / staff phone: USE_WEBPOS PIN gate works on mobile Safari; kitchen + receipt
   // print still goes through the print agent / main till printers (not the phone).
   const pinGateRequired = staffConfigured && !webposStaff;
@@ -723,9 +724,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const tablesEditionOk = editionAllows('pos_tables');
   const giftCardsEditionOk =
     editionAllows('pos_gift_cards') || editionAllows('gift_cards');
+  // Takeaway/delivery, open table, or numbered tab (walk-in takeaway) → Send.
   const showSend =
     kitchenEnabled &&
-    (channel === 'takeaway' || channel === 'delivery' || !!tableLabel);
+    (channel === 'takeaway' ||
+      channel === 'delivery' ||
+      !!tableLabel ||
+      !!tabNumber);
   const cartSide = checkoutSettings.cartSide === 'left' ? 'left' : 'right';
   const courseSendMode = checkoutSettings.courseSendMode || 'fire_per_course';
 
@@ -4816,7 +4821,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         current={tabNumber}
         onConfirm={(tab) => {
           saveOpenCartDraft();
-          const key = openCartDraftKey({ tabNumber: tab, channel: channel || 'takeaway' });
+          // Tabs are walk-in takeaway (not dine-in tables).
+          const tabChannel: Channel = 'takeaway';
+          const key = openCartDraftKey({ tabNumber: tab, channel: tabChannel });
           const existing = openCartDraftsRef.current.get(key);
           if (existing) {
             applyOpenCartDraft(existing);
@@ -4824,6 +4831,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             setTabNumber(tab);
             setTableId(null);
             setTableLabel(null);
+            setChannel(tabChannel);
+            setFulfillmentWhen(asapFulfillment());
           }
         }}
       />
