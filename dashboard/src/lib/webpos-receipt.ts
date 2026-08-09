@@ -710,11 +710,10 @@ export function generateEodReportText(report: EodReportPrint): string {
       ) + '\n';
   }
   r += thin + '\n';
-  r += padLine(L.total, money(brut), width) + '\n';
-  if (tips > 0) {
-    r += padLine(L.tipsNotTaxable, money(tips), width) + '\n';
-    r += padLine(L.grandTotal, money(grand), width) + '\n';
-  }
+  // Taxable net sales never include tips (tips are not taxable).
+  r += padLine(L.netSalesExclTips, money(brut), width) + '\n';
+  r += padLine(L.tipsNotTaxable, money(tips), width) + '\n';
+  r += padLine(L.grandTotal, money(grand), width) + '\n';
   r += padLine(L.orders, String(report.salesCount), width) + '\n';
   if (report.coversServed) {
     r += padLine(L.guestsServed, String(report.coversServed), width) + '\n';

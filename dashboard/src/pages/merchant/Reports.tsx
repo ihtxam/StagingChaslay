@@ -285,8 +285,9 @@ export default function ReportsPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   [t('reportsSalesCount'), String(report.salesCount)],
-                  [t('reportsRevenue'), money(report.revenue)],
+                  [t('reportsNetSalesExclTips'), money(report.revenue)],
                   [t('reportsTax'), money(report.taxTotal)],
+                  [t('reportsNet'), money(report.netTotal ?? report.revenue - report.taxTotal)],
                   [t('reportsTips'), money(report.tipsTotal)],
                   [t('reportsGrandTotal'), money(report.grandTotal)],
                   [t('reportsCash'), money(report.cashTotal)],
@@ -303,9 +304,7 @@ export default function ReportsPage() {
                   </div>
                 ))}
               </div>
-              {report.tipsTotal > 0 && (
-                <p className="text-xs text-[var(--text-muted)]">{t('tipsNotTaxable')}</p>
-              )}
+              <p className="text-xs text-[var(--text-muted)]">{t('reportsNetSalesHint')}</p>
 
               {!!report.shiftCash?.length && (
                 <section className="rounded-xl border border-[var(--border)] overflow-hidden">
