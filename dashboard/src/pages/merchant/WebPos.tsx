@@ -59,7 +59,9 @@ import {
   type ShopSelectedExtra,
 } from '@/lib/shop-cart';
 import ShopProductModifiersModal, {
+  defaultConfiguredAdd,
   productHasModifiers,
+  productRequiresModifierModal,
   type ShopModifierGroup,
   type ShopProductForModifiers,
 } from '@/components/shop/ShopProductModifiersModal';
@@ -1301,69 +1303,65 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [shiftsEnabled, openShift, offlineSync.online]
   );
 
-  /** Same product + options + course stacks qty; never merge into already-sent kitchen lines. */
-  const findStackableCartLine = (
-    prev: CartLine[],
-    opts: {
-      productId: string;
-      unitPrice: number;
-      selectedExtras: ShopSelectedExtra[];
-      comboSelections: ShopComboSelection[];
-      courseNumber?: number;
-    }
-  ) => {
-    const sig = lineSignature(opts.selectedExtras, opts.comboSelections);
-    return prev.find((l) => {
-      if (l.productId !== opts.productId) return false;
-      if (l.isOpenPrice || l.giftCard) return false;
-      if (l.sentToKitchen) return false;
-      if (roundMoney2(l.unitPrice) !== roundMoney2(opts.unitPrice)) return false;
-      if (lineSignature(l.selectedExtras, l.comboSelections) !== sig) return false;
-      if (coursesEnabled) {
-        if ((l.courseNumber || 1) !== (opts.courseNumber || 1)) return false;
-      }
-      return true;
-    });
+  /** Same product + options + course → one line with qty. Skip open-price / gift / already-sent. */
+  const cartLineStackKey = (l: {
+    productId: string;
+    isOpenPrice?: boolean;
+    giftCard?: unknown;
+    sentToKitchen?: boolean;
+    selectedExtras: ShopSelectedExtra[];
+    comboSelections: ShopComboSelection[];
+    courseNumber?: number;
+  }) => {
+    if (l.isOpenPrice || l.giftCard || l.sentToKitchen) return null;
+    const course = coursesEnabled ? l.courseNumber || 1 : 0;
+    return `${l.productId}|${lineSignature(l.selectedExtras, l.comboSelections)}|c${course}`;
   };
 
-  const addConfiguredProduct = (
+  /** Collapse duplicate stackable lines (qty sum). Keeps first line’s price/discount. */
+  const collapseStackableCart = (lines: CartLine[]): CartLine[] => {
+    const out: CartLine[] = [];
+    const indexByKey = new Map<string, number>();
+    for (const l of lines) {
+      const key = cartLineStackKey(l);
+      if (!key) {
+        out.push(l);
+        continue;
+      }
+      const idx = indexByKey.get(key);
+      if (idx == null) {
+        indexByKey.set(key, out.length);
+        out.push(l);
+        continue;
+      }
+      const prev = out[idx]!;
+      const quantity = prev.quantity + l.quantity;
+      const disc = prev.lineDiscountPercent || 0;
+      out[idx] = {
+        ...prev,
+        quantity,
+        lineTotal: roundMoney2(prev.unitPrice * quantity * (1 - disc / 100)),
+      };
+    }
+    return out;
+  };
+
+  const pushConfiguredProduct = (
     p: Product,
     unitPrice: number,
     selectedExtras: ShopSelectedExtra[] = [],
     comboSelections: ShopComboSelection[] = []
   ) => {
-    const doAdd = () => {
-      const price = roundMoney2(unitPrice);
-      const sig = lineSignature(selectedExtras, comboSelections);
-      const courseNumber = coursesEnabled ? activeCourse : undefined;
-      setCart((prev) => {
-        const isOpen = p.isOpenPrice || p.productType === 'open_price';
-        const existing = !isOpen
-          ? findStackableCartLine(prev, {
-              productId: p.id,
-              unitPrice: price,
-              selectedExtras,
-              comboSelections,
-              courseNumber,
-            })
-          : undefined;
-        if (existing) {
-          const quantity = existing.quantity + 1;
-          const disc = existing.lineDiscountPercent || 0;
-          return prev.map((l) =>
-            l.lineId === existing.lineId
-              ? {
-                  ...l,
-                  quantity,
-                  lineTotal: roundMoney2(l.unitPrice * quantity * (1 - disc / 100)),
-                }
-              : l
-          );
-        }
+    const price = roundMoney2(unitPrice);
+    const sig = lineSignature(selectedExtras, comboSelections);
+    const courseNumber = coursesEnabled ? activeCourse : undefined;
+    setCart((prev) => {
+      const isOpen = p.isOpenPrice || p.productType === 'open_price';
+      if (isOpen) {
         return [
           ...prev,
           {
-            lineId: `${p.id}-${Date.now()}-${sig || 'plain'}`,
+            lineId: `${p.id}-${Date.now()}-open`,
             productId: p.id,
             name: p.name,
             quantity: 1,
@@ -1373,13 +1371,38 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             categoryId: p.categoryId,
             selectedExtras,
             comboSelections,
-            isOpenPrice: isOpen,
+            isOpenPrice: true,
             courseNumber,
           },
         ];
-      });
-    };
-    ensureShift(doAdd);
+      }
+      return collapseStackableCart([
+        ...prev,
+        {
+          lineId: `${p.id}-${Date.now()}-${sig || 'plain'}`,
+          productId: p.id,
+          name: p.name,
+          quantity: 1,
+          unitPrice: price,
+          lineTotal: price,
+          taxable: p.isTaxable !== false,
+          categoryId: p.categoryId,
+          selectedExtras,
+          comboSelections,
+          isOpenPrice: false,
+          courseNumber,
+        },
+      ]);
+    });
+  };
+
+  const addConfiguredProduct = (
+    p: Product,
+    unitPrice: number,
+    selectedExtras: ShopSelectedExtra[] = [],
+    comboSelections: ShopComboSelection[] = []
+  ) => {
+    ensureShift(() => pushConfiguredProduct(p, unitPrice, selectedExtras, comboSelections));
   };
 
   const onProductClick = (p: Product) => {
@@ -1404,7 +1427,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         });
         return;
       }
-      if (productHasModifiers(p as ShopProductForModifiers)) {
+      // Only open options when something is required. Optional extras → one-tap stack.
+      if (productRequiresModifierModal(p as ShopProductForModifiers)) {
         setPendingProduct({
           id: p.id,
           name: p.name,
@@ -1415,49 +1439,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         });
         return;
       }
-      // Bypass ensureShift re-entry - shift already confirmed
-      const price = roundMoney2(Number(p.price) || 0);
-      const courseNumber = coursesEnabled ? activeCourse : undefined;
-      setCart((prev) => {
-        // lineSignature([], []) is "plain" — never compare to "" (that never matched).
-        const existing = findStackableCartLine(prev, {
-          productId: p.id,
-          unitPrice: price,
-          selectedExtras: [],
-          comboSelections: [],
-          courseNumber,
+      if (productHasModifiers(p as ShopProductForModifiers)) {
+        const configured = defaultConfiguredAdd({
+          id: p.id,
+          name: p.name,
+          price: Number(p.price) || 0,
+          allowExtras: p.allowExtras,
+          extras: p.extras,
+          modifierGroups: p.modifierGroups,
         });
-        if (existing) {
-          const quantity = existing.quantity + 1;
-          const disc = existing.lineDiscountPercent || 0;
-          return prev.map((l) =>
-            l.lineId === existing.lineId
-              ? {
-                  ...l,
-                  quantity,
-                  lineTotal: roundMoney2(l.unitPrice * quantity * (1 - disc / 100)),
-                }
-              : l
-          );
-        }
-        return [
-          ...prev,
-          {
-            lineId: `${p.id}-${Date.now()}-plain`,
-            productId: p.id,
-            name: p.name,
-            quantity: 1,
-            unitPrice: price,
-            lineTotal: price,
-            taxable: p.isTaxable !== false,
-            categoryId: p.categoryId,
-            selectedExtras: [],
-            comboSelections: [],
-            isOpenPrice: false,
-            courseNumber,
-          },
-        ];
-      });
+        pushConfiguredProduct(p, configured.unitPrice, configured.selectedExtras, []);
+        return;
+      }
+      pushConfiguredProduct(p, roundMoney2(Number(p.price) || 0), [], []);
     });
   };
 

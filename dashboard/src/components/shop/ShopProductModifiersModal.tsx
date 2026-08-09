@@ -225,3 +225,38 @@ export function productHasModifiers(product: ShopProductForModifiers) {
     (!!(product.allowExtras && product.extras?.length))
   );
 }
+
+/** True only when the cashier must open the options modal (required / min > 0). */
+export function productRequiresModifierModal(product: ShopProductForModifiers) {
+  const groups = effectiveGroups(product);
+  if (!groups.length) return false;
+  return groups.some((g) => groupMin(g) > 0);
+}
+
+/** Default extras + unit price for one-tap add (optional groups / defaults only). */
+export function defaultConfiguredAdd(product: ShopProductForModifiers): {
+  selectedExtras: ShopSelectedExtra[];
+  unitPrice: number;
+} {
+  const groups = effectiveGroups(product);
+  const selection = initialSelection(groups);
+  const selectedExtras: ShopSelectedExtra[] = [];
+  for (const g of groups) {
+    for (const id of selection[g.id] || []) {
+      const opt = g.options.find((o) => o.id === id);
+      if (!opt) continue;
+      selectedExtras.push({
+        id: opt.id,
+        name: opt.name,
+        price: Number(opt.price) || 0,
+        groupId: g.id,
+        groupTitle: g.title,
+      });
+    }
+  }
+  const extrasTotal = roundMoney2(selectedExtras.reduce((s, e) => s + e.price, 0));
+  return {
+    selectedExtras,
+    unitPrice: roundMoney2(Number(product.price) + extrasTotal),
+  };
+}
