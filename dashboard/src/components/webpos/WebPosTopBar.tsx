@@ -21,6 +21,33 @@ import { webPosVersionLabel } from '@/lib/app-version';
 import { isUnsuitableRawPrinter } from '@/lib/print-agent';
 import type { PosTab, PosView } from './types';
 
+export type WebPosColorTheme = 'teal' | 'green' | 'blue' | 'violet' | 'mono';
+export type WebPosTextSize = 'sm' | 'md' | 'lg' | 'xl';
+
+export const WEBPOS_COLOR_THEMES: WebPosColorTheme[] = [
+  'teal',
+  'green',
+  'blue',
+  'violet',
+  'mono',
+];
+export const WEBPOS_TEXT_SIZES: WebPosTextSize[] = ['sm', 'md', 'lg', 'xl'];
+
+function themeSwatchClass(id: WebPosColorTheme) {
+  switch (id) {
+    case 'green':
+      return 'bg-green-600';
+    case 'blue':
+      return 'bg-blue-600';
+    case 'violet':
+      return 'bg-violet-600';
+    case 'mono':
+      return 'bg-neutral-900 ring-1 ring-neutral-400';
+    default:
+      return 'bg-teal-600';
+  }
+}
+
 function useFullscreenActive() {
   const [active, setActive] = useState(
     () => typeof document !== 'undefined' && !!document.fullscreenElement
@@ -81,6 +108,10 @@ type Props = {
   hideTablesTab?: boolean;
   /** Hide Bookings tab (optional for retail). */
   hideBookingsTab?: boolean;
+  colorTheme?: WebPosColorTheme;
+  onColorThemeChange?: (theme: WebPosColorTheme) => void;
+  textSize?: WebPosTextSize;
+  onTextSizeChange?: (size: WebPosTextSize) => void;
 };
 
 export default function WebPosTopBar({
@@ -113,11 +144,37 @@ export default function WebPosTopBar({
   onEodReport,
   hideTablesTab = false,
   hideBookingsTab = false,
+  colorTheme = 'teal',
+  onColorThemeChange,
+  textSize = 'md',
+  onTextSizeChange,
 }: Props) {
   const { t } = useI18n();
   const inCheckout = posView === 'checkout' || posView === 'success';
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const fullscreenActive = useFullscreenActive();
+
+  const themeLabel = (id: WebPosColorTheme) => {
+    switch (id) {
+      case 'green':
+        return t('posThemeGreen');
+      case 'blue':
+        return t('posThemeBlue');
+      case 'violet':
+        return t('posThemeViolet');
+      case 'mono':
+        return t('posThemeMono');
+      default:
+        return t('posThemeTeal');
+    }
+  };
+
+  const bumpTextSize = (dir: -1 | 1) => {
+    if (!onTextSizeChange) return;
+    const idx = WEBPOS_TEXT_SIZES.indexOf(textSize);
+    const next = WEBPOS_TEXT_SIZES[Math.max(0, Math.min(WEBPOS_TEXT_SIZES.length - 1, idx + dir))];
+    if (next) onTextSizeChange(next);
+  };
 
   const tabs: Array<{ id: PosTab; label: string; Icon: typeof Pencil }> = [
     ...(!hideTablesTab
@@ -273,6 +330,57 @@ export default function WebPosTopBar({
             </button>
           ) : null}
 
+          {onTextSizeChange ? (
+            <div className="hidden items-center rounded-lg border border-stone-200 lg:inline-flex">
+              <button
+                type="button"
+                className="inline-flex h-9 w-8 items-center justify-center text-xs font-bold text-stone-600 hover:bg-stone-50 disabled:opacity-30"
+                disabled={textSize === 'sm'}
+                onClick={() => bumpTextSize(-1)}
+                title={t('webPosTextSizeDecrease')}
+                aria-label={t('webPosTextSizeDecrease')}
+              >
+                A−
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-9 w-8 items-center justify-center text-sm font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-30"
+                disabled={textSize === 'xl'}
+                onClick={() => bumpTextSize(1)}
+                title={t('webPosTextSizeIncrease')}
+                aria-label={t('webPosTextSizeIncrease')}
+              >
+                A+
+              </button>
+            </div>
+          ) : null}
+
+          {onColorThemeChange ? (
+            <div
+              className="hidden items-center gap-1 rounded-lg border border-stone-200 px-1.5 py-1 lg:inline-flex"
+              title={t('webPosTheme')}
+              role="group"
+              aria-label={t('webPosTheme')}
+            >
+              {WEBPOS_COLOR_THEMES.map((id) => {
+                const active = colorTheme === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    title={themeLabel(id)}
+                    aria-label={themeLabel(id)}
+                    aria-pressed={active}
+                    onClick={() => onColorThemeChange(id)}
+                    className={`h-5 w-5 rounded-full ${themeSwatchClass(id)} ${
+                      active ? 'ring-2 ring-offset-1 ring-stone-800' : 'opacity-80 hover:opacity-100'
+                    }`}
+                  />
+                );
+              })}
+            </div>
+          ) : null}
+
           <button
             type="button"
             className="hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:inline-flex"
@@ -362,6 +470,10 @@ export function WebPosSettingsDropdown({
   staffName,
   canDrawer,
   onOpenDrawer,
+  colorTheme = 'teal',
+  onColorThemeChange,
+  textSize = 'md',
+  onTextSizeChange,
 }: {
   printerName: string;
   printers: Array<{ name: string; isDefault?: boolean }>;
@@ -386,9 +498,33 @@ export function WebPosSettingsDropdown({
   staffName?: string | null;
   canDrawer?: boolean;
   onOpenDrawer?: () => void;
+  colorTheme?: WebPosColorTheme;
+  onColorThemeChange?: (theme: WebPosColorTheme) => void;
+  textSize?: WebPosTextSize;
+  onTextSizeChange?: (size: WebPosTextSize) => void;
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
+  const themeLabel = (id: WebPosColorTheme) => {
+    switch (id) {
+      case 'green':
+        return t('posThemeGreen');
+      case 'blue':
+        return t('posThemeBlue');
+      case 'violet':
+        return t('posThemeViolet');
+      case 'mono':
+        return t('posThemeMono');
+      default:
+        return t('posThemeTeal');
+    }
+  };
+  const bumpTextSize = (dir: -1 | 1) => {
+    if (!onTextSizeChange) return;
+    const idx = WEBPOS_TEXT_SIZES.indexOf(textSize);
+    const next = WEBPOS_TEXT_SIZES[Math.max(0, Math.min(WEBPOS_TEXT_SIZES.length - 1, idx + dir))];
+    if (next) onTextSizeChange(next);
+  };
   return (
     <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-[min(20rem,calc(100vw-1.5rem))] space-y-3 rounded-xl border border-stone-200 bg-white p-3 shadow-xl">
       <div className="space-y-1.5 border-b border-stone-100 pb-3">
@@ -402,6 +538,67 @@ export function WebPosSettingsDropdown({
         </button>
         <p className="px-2 text-[11px] leading-snug text-stone-500">{t('webPosFullscreenHint')}</p>
       </div>
+
+      {(onColorThemeChange || onTextSizeChange) && (
+        <div className="space-y-2 border-b border-stone-100 pb-3">
+          {onColorThemeChange ? (
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                {t('webPosTheme')}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {WEBPOS_COLOR_THEMES.map((id) => {
+                  const active = colorTheme === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      title={themeLabel(id)}
+                      onClick={() => onColorThemeChange(id)}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${
+                        active
+                          ? 'border-stone-900 bg-stone-50'
+                          : 'border-stone-200 hover:bg-stone-50'
+                      }`}
+                    >
+                      <span className={`h-3.5 w-3.5 rounded-full ${themeSwatchClass(id)}`} />
+                      {themeLabel(id)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+          {onTextSizeChange ? (
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                {t('webPosTextSize')}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary flex-1 text-sm font-bold"
+                  disabled={textSize === 'sm'}
+                  onClick={() => bumpTextSize(-1)}
+                >
+                  A−
+                </button>
+                <span className="min-w-[2.5rem] text-center text-xs font-bold uppercase text-stone-500">
+                  {textSize}
+                </span>
+                <button
+                  type="button"
+                  className="btn-secondary flex-1 text-sm font-bold"
+                  disabled={textSize === 'xl'}
+                  onClick={() => bumpTextSize(1)}
+                >
+                  A+
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
       <div className="space-y-1.5 border-b border-stone-100 pb-3 lg:hidden">
         {onOnlineOrders ? (
           <button

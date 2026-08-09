@@ -220,6 +220,30 @@ button {
     --webpos-accent-ring: #a78bfa;
     --webpos-accent-border: #c4b5fd;
   }
+  /* Black & white / mono — high-contrast station look */
+  .webpos-shell[data-theme='mono'] {
+    --webpos-accent: #171717;
+    --webpos-accent-hover: #0a0a0a;
+    --webpos-accent-soft: #e5e5e5;
+    --webpos-accent-softer: #f5f5f5;
+    --webpos-accent-text: #171717;
+    --webpos-accent-ring: #737373;
+    --webpos-accent-border: #a3a3a3;
+  }
+
+  /* Station text size (zoom scales Tailwind rem utilities too) */
+  .webpos-shell[data-text-size='sm'] {
+    zoom: 0.9;
+  }
+  .webpos-shell[data-text-size='md'] {
+    zoom: 1;
+  }
+  .webpos-shell[data-text-size='lg'] {
+    zoom: 1.12;
+  }
+  .webpos-shell[data-text-size='xl'] {
+    zoom: 1.24;
+  }
   .webpos-accent-chip {
     background: var(--webpos-accent-softer);
     color: var(--webpos-accent-text);
