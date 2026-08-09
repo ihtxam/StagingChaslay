@@ -32,6 +32,8 @@ type Props = {
    * Off by default for checkout; cart uses onAdjust instead.
    */
   showSignToggle?: boolean;
+  /** Digits + backspace only (no decimal) — e.g. Set Tab number entry. */
+  integerOnly?: boolean;
 };
 
 export default function WebPosNumericKeypad({
@@ -52,6 +54,7 @@ export default function WebPosNumericKeypad({
   onAdjust,
   onBackspace,
   showSignToggle = false,
+  integerOnly = false,
 }: Props) {
   const { t } = useI18n();
   const quickAmounts =
@@ -61,6 +64,11 @@ export default function WebPosNumericKeypad({
     onBufferChange(
       (() => {
         const prev = buffer;
+        if (integerOnly) {
+          if (ch === '.') return prev;
+          const next = (prev + ch).replace(/[^\d]/g, '');
+          return next.slice(0, 10);
+        }
         if (ch === '.' && prev.includes('.')) return prev;
         if (prev === '0' && ch !== '.') return ch;
         if (prev.includes('.') && prev.split('.')[1]!.length >= 2) return prev;
@@ -142,97 +150,129 @@ export default function WebPosNumericKeypad({
               {k}
             </button>
           ))}
-          {onAdjust ? (
-            <div className={`grid grid-cols-2 ${compact ? 'gap-0.5' : 'gap-1'}`}>
+          {integerOnly ? (
+            <>
               <button
                 type="button"
                 disabled={disabled}
-                onClick={() => onAdjust(-1)}
-                className={`${keyClass} bg-amber-50 text-amber-900 ring-amber-200`}
-                aria-label="-"
+                onClick={() => push('0')}
+                className={keyClass}
               >
-                -
+                0
               </button>
               <button
                 type="button"
                 disabled={disabled}
-                onClick={() => onAdjust(1)}
-                className={`${keyClass} bg-amber-50 text-amber-900 ring-amber-200`}
-                aria-label="+"
+                onClick={() => onBufferChange('')}
+                className={`${keyClass} bg-stone-100 text-stone-700`}
               >
-                +
+                C
               </button>
-            </div>
-          ) : showSignToggle ? (
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={toggleSign}
-              className={`${keyClass} bg-amber-50 text-amber-900 ring-amber-200`}
-            >
-              +/-
-            </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={backspace}
+                className={`${keyClass} bg-red-50 text-red-700 ring-red-200`}
+                aria-label={t('webPosBackspace')}
+              >
+                <Delete size={compact ? 15 : 18} className="mx-auto" />
+              </button>
+            </>
           ) : (
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => push('0')}
-              className={keyClass}
-            >
-              0
-            </button>
+            <>
+              {onAdjust ? (
+                <div className={`grid grid-cols-2 ${compact ? 'gap-0.5' : 'gap-1'}`}>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onAdjust(-1)}
+                    className={`${keyClass} bg-amber-50 text-amber-900 ring-amber-200`}
+                    aria-label="-"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onAdjust(1)}
+                    className={`${keyClass} bg-amber-50 text-amber-900 ring-amber-200`}
+                    aria-label="+"
+                  >
+                    +
+                  </button>
+                </div>
+              ) : showSignToggle ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={toggleSign}
+                  className={`${keyClass} bg-amber-50 text-amber-900 ring-amber-200`}
+                >
+                  +/-
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => push('0')}
+                  className={keyClass}
+                >
+                  0
+                </button>
+              )}
+              {onAdjust || showSignToggle ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => push('0')}
+                  className={keyClass}
+                >
+                  0
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => push('.')}
+                  className={`${keyClass} bg-orange-50 text-orange-900 ring-orange-200`}
+                >
+                  .
+                </button>
+              )}
+              {onAdjust || showSignToggle ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => push('.')}
+                  className={`${keyClass} bg-orange-50 text-orange-900 ring-orange-200`}
+                >
+                  .
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={backspace}
+                  className={`${keyClass} bg-red-50 text-red-700 ring-red-200`}
+                  aria-label={t('webPosBackspace')}
+                >
+                  <Delete size={compact ? 15 : 18} className="mx-auto" />
+                </button>
+              )}
+              {/* Cart/adjust mode: delete sits on its own following row cell; checkout: already on 0 . ⌫ row */}
+              {onAdjust || showSignToggle ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={backspace}
+                  className={`${keyClass} bg-red-50 text-red-700 ring-red-200`}
+                  aria-label={t('webPosBackspace')}
+                >
+                  <Delete size={compact ? 15 : 18} className="mx-auto" />
+                </button>
+              ) : null}
+            </>
           )}
-          {onAdjust || showSignToggle ? (
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => push('0')}
-              className={keyClass}
-            >
-              0
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => push('.')}
-              className={`${keyClass} bg-orange-50 text-orange-900 ring-orange-200`}
-            >
-              .
-            </button>
-          )}
-          {onAdjust || showSignToggle ? (
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => push('.')}
-              className={`${keyClass} bg-orange-50 text-orange-900 ring-orange-200`}
-            >
-              .
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={backspace}
-              className={`${keyClass} bg-red-50 text-red-700 ring-red-200`}
-              aria-label={t('webPosBackspace')}
-            >
-              <Delete size={compact ? 15 : 18} className="mx-auto" />
-            </button>
-          )}
-          {/* Cart/adjust mode: delete sits on its own following row cell; checkout: already on 0 . ⌫ row */}
-          {onAdjust || showSignToggle ? (
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={backspace}
-              className={`${keyClass} bg-red-50 text-red-700 ring-red-200`}
-              aria-label={t('webPosBackspace')}
-            >
-              <Delete size={compact ? 15 : 18} className="mx-auto" />
-            </button>
-          ) : null}
         </div>
 
         {showQuickAdd ? (
