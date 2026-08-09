@@ -112,6 +112,12 @@ type Props = {
   onColorThemeChange?: (theme: WebPosColorTheme) => void;
   textSize?: WebPosTextSize;
   onTextSizeChange?: (size: WebPosTextSize) => void;
+  /** Offline sale sync (IndexedDB outbox). */
+  syncOnline?: boolean;
+  syncPendingCount?: number;
+  syncFailedCount?: number;
+  syncing?: boolean;
+  onSyncNow?: () => void;
 };
 
 export default function WebPosTopBar({
@@ -148,11 +154,17 @@ export default function WebPosTopBar({
   onColorThemeChange,
   textSize = 'md',
   onTextSizeChange,
+  syncOnline = true,
+  syncPendingCount = 0,
+  syncFailedCount = 0,
+  syncing = false,
+  onSyncNow,
 }: Props) {
   const { t } = useI18n();
   const inCheckout = posView === 'checkout' || posView === 'success';
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const fullscreenActive = useFullscreenActive();
+  const syncNeedsAttention = !syncOnline || syncPendingCount > 0 || syncFailedCount > 0;
 
   const themeLabel = (id: WebPosColorTheme) => {
     switch (id) {
@@ -292,6 +304,49 @@ export default function WebPosTopBar({
             >
               <span className="hidden sm:inline">{t('webPosEodReport')}</span>
               <span className="sm:hidden">{t('webPosEodShort')}</span>
+            </button>
+          ) : null}
+
+          {onSyncNow ? (
+            <button
+              type="button"
+              className={`relative hidden h-9 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-bold lg:inline-flex ${
+                !syncOnline
+                  ? 'border-amber-300 bg-amber-50 text-amber-900'
+                  : syncFailedCount > 0
+                    ? 'border-red-300 bg-red-50 text-red-800'
+                    : syncPendingCount > 0
+                      ? 'border-sky-300 bg-sky-50 text-sky-900'
+                      : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+              }`}
+              onClick={onSyncNow}
+              title={
+                !syncOnline
+                  ? t('webPosSyncOffline')
+                  : syncFailedCount > 0
+                    ? t('webPosSyncFailed').replace('{n}', String(syncFailedCount))
+                    : syncPendingCount > 0
+                      ? t('webPosSyncPending').replace('{n}', String(syncPendingCount))
+                      : t('webPosSyncOk')
+              }
+              disabled={syncing}
+            >
+              <RefreshCw size={14} className={syncing ? 'animate-spin' : undefined} />
+              <span className="hidden xl:inline">
+                {!syncOnline
+                  ? t('webPosSyncOfflineShort')
+                  : syncPendingCount > 0 || syncFailedCount > 0
+                    ? t('webPosSyncPendingShort').replace(
+                        '{n}',
+                        String(syncPendingCount + syncFailedCount)
+                      )
+                    : t('webPosSyncOkShort')}
+              </span>
+              {syncNeedsAttention && syncOnline ? (
+                <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-sky-600 px-1 text-[9px] font-bold text-white">
+                  {syncPendingCount + syncFailedCount}
+                </span>
+              ) : null}
             </button>
           ) : null}
 
@@ -440,6 +495,10 @@ export default function WebPosTopBar({
         <p className="hidden px-4 pb-1 text-[10px] text-stone-400 sm:block">
           {merchantName}
           {!agentOk ? ` - ${t('webPosStartPrintAgent')}` : ''}
+          {!syncOnline ? ` - ${t('webPosSyncOfflineShort')}` : ''}
+          {syncOnline && syncPendingCount > 0
+            ? ` - ${t('webPosSyncPendingShort').replace('{n}', String(syncPendingCount))}`
+            : ''}
           {shiftsEnabled && shiftOpen ? ` - ${t('webPosShiftOpenBadge')}` : ''}
         </p>
       ) : null}

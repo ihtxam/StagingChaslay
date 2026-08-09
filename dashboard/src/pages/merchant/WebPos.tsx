@@ -99,6 +99,22 @@ import {
   type PersistedWebPosCarts,
 } from '@/lib/webpos-cart-persist';
 import {
+  canCompleteSaleOffline,
+  cartHasOfflineUnsafeLines,
+  enqueueOutboxSale,
+  flushOfflineOutbox,
+  isBrowserOnline,
+  isNetworkError,
+  isWebPosCurrentlyOffline,
+  isWebPosOfflineEnabled,
+  loadWebPosOfflineSnapshot,
+  onOfflineSaleSynced,
+  saveWebPosOfflineSnapshot,
+  startOfflineSyncEngine,
+  subscribeOfflineSync,
+  type OfflineSyncState,
+} from '@/lib/webpos-offline';
+import {
   WebPosStartShiftModal,
   WebPosCloseShiftModal,
   WebPosShiftClosedModal,
@@ -393,6 +409,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [agentOk, setAgentOk] = useState(false);
+  const [offlineSync, setOfflineSync] = useState<OfflineSyncState>({
+    online: typeof navigator === 'undefined' ? true : navigator.onLine !== false,
+    syncing: false,
+    pendingCount: 0,
+    failedCount: 0,
+    lastSyncAt: null,
+    lastError: null,
+    catalogCachedAt: null,
+  });
+  const [loadedFromOfflineCache, setLoadedFromOfflineCache] = useState(false);
   const [printers, setPrinters] = useState<AgentPrinter[]>([]);
   const [printerName, setPrinterName] = useState(() => localStorage.getItem('manupos_webpos_printer') || '');
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('manupos_webpos_autoprint') !== '0');
@@ -867,6 +893,66 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   }, [t]);
 
+  const applyCachedOfflineSnapshot = useCallback(
+    async (reason?: string) => {
+      if (!isWebPosOfflineEnabled()) return false;
+      const snap = await loadWebPosOfflineSnapshot();
+      if (!snap) return false;
+      const merch = snap.config.merchant as any;
+      const cfg = snap.config.paymentConfig as (WebPosPaymentConfig & {
+        shiftsSchemaMissing?: boolean;
+        entitlement?: WebPosEntitlement;
+      }) | null;
+      const entitlementCached =
+        (snap.config.entitlement as WebPosEntitlement | null) || cfg?.entitlement || null;
+      setMerchant(merch);
+      setPrintSettings(
+        (snap.config.printSettings as PosPrintSettingsClient | null) ||
+          merch?.posPrintSettings ||
+          null
+      );
+      setCategories((snap.catalog.categories || []) as Category[]);
+      setProducts((snap.catalog.products || []) as Product[]);
+      setEntitlement(entitlementCached);
+      const editionFeats = Array.isArray(cfg?.editionFeatures)
+        ? cfg!.editionFeatures
+        : Array.isArray(merch?.editionFeatures)
+          ? (merch.editionFeatures as string[])
+          : null;
+      const shiftsAllowed = editionFeats == null || editionFeats.includes('pos_shifts');
+      const shiftsOn = shiftsAllowed && !!(cfg?.shiftsEnabled || merch?.shiftsEnabled);
+      const theme = (cfg?.posColorTheme || merch?.posColorTheme || 'teal').toLowerCase();
+      setShiftsEnabled(shiftsOn);
+      shiftsEnabledRef.current = shiftsOn;
+      setPosColorTheme(
+        (WEBPOS_COLOR_THEMES as string[]).includes(theme) ? (theme as WebPosColorTheme) : 'teal'
+      );
+      if (cfg) {
+        setPaymentConfig({
+          ...cfg,
+          editionFeatures: cfg.editionFeatures ?? merch?.editionFeatures ?? null,
+        });
+        if (cfg.defaultTerminalId) setSelectedTerminalId(cfg.defaultTerminalId);
+        const first = ['cash', 'card', 'terminal'] as const;
+        const pick = first.find((m) => cfg.methods[m]);
+        if (pick) setPaymentMethod(pick);
+      }
+      const staffList = Array.isArray(snap.config.staff) ? snap.config.staff : [];
+      const hasPins = staffList.some(
+        (s: any) => s?.pinSet && s?.isActive !== false
+      );
+      setStaffConfigured(hasPins);
+      if (hasPins && !loadWebPosStaffSession()) {
+        setPinModalMode('gate');
+        setPinModalOpen(true);
+      }
+      setLoadedFromOfflineCache(true);
+      toast(reason || t('webPosOfflineCacheLoaded'), { icon: '📴', duration: 4500 });
+      return true;
+    },
+    [t]
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -880,23 +966,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const merch = settingsRes.data.settings || settingsRes.data.merchant;
       setMerchant(merch);
       setPrintSettings(merch?.posPrintSettings || null);
-      setCategories(
-        (catRes.data.categories || catRes.data || []).map((c: any) => ({
-          ...c,
-          name: repairCatalogText(c.name),
-        }))
-      );
+      const mappedCategories = (catRes.data.categories || catRes.data || []).map((c: any) => ({
+        ...c,
+        name: repairCatalogText(c.name),
+      }));
+      setCategories(mappedCategories);
       const cfg = webposRes.data.config as (WebPosPaymentConfig & {
         shiftsSchemaMissing?: boolean;
         entitlement?: WebPosEntitlement;
       }) | null;
+      let nextEntitlement: WebPosEntitlement | null = cfg?.entitlement || null;
       if (cfg?.entitlement) {
         setEntitlement(cfg.entitlement);
       } else {
         try {
           const entRes = await api.get('/merchant/webpos-entitlement');
-          setEntitlement(entRes.data.entitlement || null);
+          nextEntitlement = entRes.data.entitlement || null;
+          setEntitlement(nextEntitlement);
         } catch {
+          nextEntitlement = null;
           setEntitlement(null);
         }
       }
@@ -923,14 +1011,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setPosColorTheme(
         (WEBPOS_COLOR_THEMES as string[]).includes(theme) ? (theme as WebPosColorTheme) : 'teal'
       );
+      let nextPaymentConfig: WebPosPaymentConfig | null = null;
+      let nextPrintSettings: PosPrintSettingsClient | null = merch?.posPrintSettings || null;
       if (cfg) {
-        setPaymentConfig({
+        nextPaymentConfig = {
           ...cfg,
           editionFeatures: cfg.editionFeatures ?? merch?.editionFeatures ?? null,
-        });
-        if (cfg.posPrintSettings) setPrintSettings(cfg.posPrintSettings);
+        };
+        setPaymentConfig(nextPaymentConfig);
+        if (cfg.posPrintSettings) {
+          nextPrintSettings = cfg.posPrintSettings;
+          setPrintSettings(cfg.posPrintSettings);
+        }
         if (cfg.defaultTerminalId) setSelectedTerminalId(cfg.defaultTerminalId);
-        const first: PosPaymentMethod[] = ['cash', 'card', 'terminal'];
+        const first = ['cash', 'card', 'terminal'] as const;
         const pick = first.find((m) => cfg.methods[m]);
         if (pick) setPaymentMethod(pick);
         if (cfg.posPrintSettings?.autoPrintReceipt != null) {
@@ -947,75 +1041,116 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setPinModalOpen(true);
       }
       const prods = prodRes.data.products || prodRes.data || [];
-      setProducts(
-        prods.map((p: any) => ({
-          ...p,
-          name: repairCatalogText(p.name),
-          price: Number(p.price),
-          sku: p.sku ?? null,
-          barcode: p.barcode ?? null,
-          extras: Array.isArray(p.extras)
-            ? p.extras.map((e: any) => ({
-                ...e,
-                name: repairCatalogText(e?.name || ''),
-              }))
-            : p.extras,
-          modifierGroups: Array.isArray(p.modifierGroups)
-            ? p.modifierGroups.map((g: any) => ({
-                ...g,
-                name: repairCatalogText(g?.name || ''),
-                options: Array.isArray(g?.options)
-                  ? g.options.map((o: any) => ({
-                      ...o,
-                      name: repairCatalogText(o?.name || ''),
-                    }))
-                  : g?.options,
-              }))
-            : p.modifierGroups,
-          comboSlots: Array.isArray(p.comboSlots)
-            ? p.comboSlots.map((slot: any) => ({
-                ...slot,
-                name: repairCatalogText(slot?.name || ''),
-                products: Array.isArray(slot?.products)
-                  ? slot.products.map((sp: any) => ({
-                      ...sp,
-                      name: repairCatalogText(sp?.name || ''),
-                      extras: Array.isArray(sp?.extras)
-                        ? sp.extras.map((e: any) => ({
-                            ...e,
-                            name: repairCatalogText(e?.name || ''),
-                          }))
-                        : sp?.extras,
-                      modifierGroups: Array.isArray(sp?.modifierGroups)
-                        ? sp.modifierGroups.map((g: any) => ({
-                            ...g,
-                            name: repairCatalogText(g?.name || ''),
-                            options: Array.isArray(g?.options)
-                              ? g.options.map((o: any) => ({
-                                  ...o,
-                                  name: repairCatalogText(o?.name || ''),
-                                }))
-                              : g?.options,
-                          }))
-                        : sp?.modifierGroups,
-                    }))
-                  : slot?.products,
-              }))
-            : p.comboSlots,
-        }))
-      );
+      const mappedProducts = prods.map((p: any) => ({
+        ...p,
+        name: repairCatalogText(p.name),
+        price: Number(p.price),
+        sku: p.sku ?? null,
+        barcode: p.barcode ?? null,
+        extras: Array.isArray(p.extras)
+          ? p.extras.map((e: any) => ({
+              ...e,
+              name: repairCatalogText(e?.name || ''),
+            }))
+          : p.extras,
+        modifierGroups: Array.isArray(p.modifierGroups)
+          ? p.modifierGroups.map((g: any) => ({
+              ...g,
+              name: repairCatalogText(g?.name || ''),
+              options: Array.isArray(g?.options)
+                ? g.options.map((o: any) => ({
+                    ...o,
+                    name: repairCatalogText(o?.name || ''),
+                  }))
+                : g?.options,
+            }))
+          : p.modifierGroups,
+        comboSlots: Array.isArray(p.comboSlots)
+          ? p.comboSlots.map((slot: any) => ({
+              ...slot,
+              name: repairCatalogText(slot?.name || ''),
+              products: Array.isArray(slot?.products)
+                ? slot.products.map((sp: any) => ({
+                    ...sp,
+                    name: repairCatalogText(sp?.name || ''),
+                    extras: Array.isArray(sp?.extras)
+                      ? sp.extras.map((e: any) => ({
+                          ...e,
+                          name: repairCatalogText(e?.name || ''),
+                        }))
+                      : sp?.extras,
+                    modifierGroups: Array.isArray(sp?.modifierGroups)
+                      ? sp.modifierGroups.map((g: any) => ({
+                          ...g,
+                          name: repairCatalogText(g?.name || ''),
+                          options: Array.isArray(g?.options)
+                            ? g.options.map((o: any) => ({
+                                ...o,
+                                name: repairCatalogText(o?.name || ''),
+                              }))
+                            : g?.options,
+                        }))
+                      : sp?.modifierGroups,
+                  }))
+                : slot?.products,
+            }))
+          : p.comboSlots,
+      }));
+      setProducts(mappedProducts);
+      setLoadedFromOfflineCache(false);
+      if (isWebPosOfflineEnabled() && merch?.id) {
+        void saveWebPosOfflineSnapshot({
+          merchantId: String(merch.id),
+          categories: mappedCategories,
+          products: mappedProducts,
+          merchant: merch,
+          paymentConfig: nextPaymentConfig,
+          entitlement: nextEntitlement,
+          printSettings: nextPrintSettings,
+          staff: staffList,
+        }).catch(() => undefined);
+      }
       await refreshAgent();
       await refreshCurrentShift(shiftsOn);
+      void flushOfflineOutbox();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('webPosLoadFailed'));
+      const hydrated = await applyCachedOfflineSnapshot(
+        isNetworkError(e) || !isBrowserOnline()
+          ? t('webPosOfflineCacheLoaded')
+          : undefined
+      );
+      if (!hydrated) {
+        toast.error(e.response?.data?.error || t('webPosLoadFailed'));
+      }
     } finally {
       setLoading(false);
     }
-  }, [refreshAgent, refreshCurrentShift, t]);
+  }, [applyCachedOfflineSnapshot, refreshAgent, refreshCurrentShift, t]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!isWebPosOfflineEnabled()) return;
+    const stop = startOfflineSyncEngine();
+    const unsub = subscribeOfflineSync(setOfflineSync);
+    const unsubSale = onOfflineSaleSynced(({ clientId, orderId }) => {
+      setSales((prev) =>
+        prev.map((s) =>
+          s.id === clientId
+            ? { ...s, synced: true, backendOrderId: orderId || s.backendOrderId }
+            : s
+        )
+      );
+      setOrdersRefreshToken((n) => n + 1);
+    });
+    return () => {
+      stop();
+      unsub();
+      unsubSale();
+    };
+  }, []);
 
   const pollOnlineOrders = useCallback(async () => {
     try {
@@ -1093,14 +1228,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const ensureShift = useCallback(
     (action: () => void) => {
-      if (!shiftsEnabled || openShift) {
+      // Offline: shift open/close needs the API — do not block cash/card sales.
+      if (!shiftsEnabled || openShift || !offlineSync.online) {
         action();
         return;
       }
       pendingAfterShift.current = action;
       setStartShiftOpen(true);
     },
-    [shiftsEnabled, openShift]
+    [shiftsEnabled, openShift, offlineSync.online]
   );
 
   const addConfiguredProduct = (
@@ -2661,15 +2797,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     setBusy(true);
     try {
-      // Deduct gift balance before persisting sale (fail closed on empty/suspended cards)
-      await redeemGiftCardPayments(payments);
-      const remainingSplits = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
       const saleMethod: PosPaymentMethod =
         primary.method === 'pay_later'
           ? 'pay_later'
           : primary.method === 'gift_card'
             ? 'gift_card'
             : primary.method;
+      if (!guardOfflineCheckout(saleMethod, { payments })) {
+        return;
+      }
+      // Deduct gift balance before persisting sale (fail closed on empty/suspended cards)
+      await redeemGiftCardPayments(payments);
+      const remainingSplits = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
       await finalizeSale(saleMethod, undefined, undefined, extras, true);
       if (remainingSplits) {
         setSplitIndex((i) => i + 1);
@@ -2683,6 +2822,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const runExpressPay = async (method: PosPaymentMethod) => {
     if (!cart.length || busy) return;
+    if (!guardOfflineCheckout(method)) return;
     let whenForPay: FulfillmentWhen | undefined;
     if (
       (channel === 'delivery' || channel === 'takeaway') &&
@@ -3196,25 +3336,49 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       splitMeta
     );
 
-    let pushRes;
-    try {
-      pushRes = await api.post('/sync/push-sales', { sales: [sale] });
-    } catch (err: any) {
-      if (
-        err.response?.data?.code === 'WEBPOS_LICENSE_REQUIRED' &&
-        err.response?.data?.entitlement
-      ) {
-        setEntitlement(err.response.data.entitlement as WebPosEntitlement);
-      }
-      throw err;
-    }
-    const backendOrderId =
-      pushRes.data?.results?.find((r: { clientId?: string }) => r.clientId === clientId)?.orderId ||
-      pushRes.data?.results?.[0]?.orderId ||
+    const offlineEligible =
+      isWebPosOfflineEnabled() && canCompleteSaleOffline(method, saleLines);
+    let pushRes: { data?: { results?: Array<{ clientId?: string; orderId?: string }> } } | null =
       null;
+    let queuedOffline = false;
 
-    // Credit gift-card sell/reload lines after successful payment persistence
-    await creditGiftCardLines(saleLines, backendOrderId);
+    if (!isBrowserOnline() && offlineEligible) {
+      await enqueueOutboxSale(sale);
+      queuedOffline = true;
+    } else {
+      try {
+        pushRes = await api.post('/sync/push-sales', { sales: [sale] });
+      } catch (err: any) {
+        if (
+          err.response?.data?.code === 'WEBPOS_LICENSE_REQUIRED' &&
+          err.response?.data?.entitlement
+        ) {
+          setEntitlement(err.response.data.entitlement as WebPosEntitlement);
+        }
+        // Online-first: only queue on transport failures for safe tenders (never on 4xx).
+        if (offlineEligible && isNetworkError(err)) {
+          await enqueueOutboxSale(sale);
+          queuedOffline = true;
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    const backendOrderId = queuedOffline
+      ? null
+      : pushRes?.data?.results?.find((r: { clientId?: string }) => r.clientId === clientId)
+          ?.orderId ||
+        pushRes?.data?.results?.[0]?.orderId ||
+        null;
+
+    // Credit gift-card sell/reload lines after successful online persistence only
+    if (!queuedOffline) {
+      await creditGiftCardLines(saleLines, backendOrderId);
+    } else {
+      toast(t('webPosSaleQueuedOffline'), { icon: '📴', duration: 4000 });
+      void flushOfflineOutbox();
+    }
 
     const receiptUrl = buildReceiptUrl(clientId);
     const lang = resolveReceiptLanguage(
@@ -3311,7 +3475,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           paymentMethod: method,
           channel: effectiveChannel,
           completedAt: Date.now(),
-          synced: true,
+          synced: !queuedOffline,
         },
         ...prev,
       ].slice(0, 30)
@@ -3392,8 +3556,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
+  const guardOfflineCheckout = (
+    method: PosPaymentMethod | 'express',
+    opts?: { payments?: AppliedPayment[] }
+  ): boolean => {
+    if (!isWebPosCurrentlyOffline() && isBrowserOnline()) return true;
+    if (!isWebPosOfflineEnabled()) {
+      toast.error(t('webPosOfflineNeedNetwork'));
+      return false;
+    }
+    const hasGiftTender = !!opts?.payments?.some((p) => p.method === 'gift_card');
+    if (hasGiftTender || cartHasOfflineUnsafeLines(cart)) {
+      toast.error(t('webPosOfflineGiftCardBlocked'));
+      return false;
+    }
+    const payMethod = method === 'express' ? 'cash' : method;
+    if (!canCompleteSaleOffline(payMethod, cart)) {
+      toast.error(t('webPosOfflinePaymentBlocked'));
+      return false;
+    }
+    return true;
+  };
+
   const beginCheckout = (method: PosPaymentMethod | 'express') => {
     if (!cart.length || busy || paymentModalOpen || checkoutOpen) return;
+    if (!guardOfflineCheckout(method)) return;
     if (method === 'pay_later' && (channel === 'dine_in' || !channel)) {
       setChannel('takeaway');
     }
@@ -3461,6 +3648,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               : result.changeDue,
         }
       : result;
+    if (!guardOfflineCheckout(adjusted.method)) return;
     setCheckoutExtras(adjusted);
     setCheckoutOpen(false);
     if (adjusted.method === 'terminal') {
@@ -3777,12 +3965,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
   }, [handleBarcodeScan, pinGateRequired, pinModalOpen, posView]);
 
+  const offlineNow = isWebPosCurrentlyOffline();
   const enabledMethods = {
     express: (paymentConfig?.methods.express ?? true) && canPay,
     cash: (paymentConfig?.methods.cash ?? true) && canPay,
     card: (paymentConfig?.methods.card ?? true) && canPay,
-    terminal: (paymentConfig?.methods.terminal ?? false) && canPay,
-    giftCard: (paymentConfig?.methods.giftCard === true) && canPay && giftCardsEditionOk,
+    // Terminal / gift card require live cloud APIs — hide while offline.
+    terminal: (paymentConfig?.methods.terminal ?? false) && canPay && !offlineNow,
+    giftCard:
+      (paymentConfig?.methods.giftCard === true) && canPay && giftCardsEditionOk && !offlineNow,
   };
   const giftCardsFeatureOn =
     giftCardsEditionOk &&
@@ -3818,6 +4009,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }
 
   if (pinGateRequired) {
+    const pinNeedsNetwork = isWebPosCurrentlyOffline();
     return (
       <div
         className={`webpos-shell ${
@@ -3827,14 +4019,28 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         data-text-size={posTextSize}
         data-narrow={isNarrowViewport ? '1' : '0'}
       >
-        <WebPosPinModal
-          open
-          mode="gate"
-          onClose={() => {
-            /* gate cannot be dismissed without PIN */
-          }}
-          onSuccess={onStaffPinSuccess}
-        />
+        {pinNeedsNetwork ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-stone-100">
+            <p className="text-lg font-semibold">{t('webPosOfflinePinTitle')}</p>
+            <p className="max-w-md text-sm text-stone-300">{t('webPosOfflinePinBody')}</p>
+            <button
+              type="button"
+              className="mt-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500"
+              onClick={() => void load()}
+            >
+              {t('webPosOfflineRetry')}
+            </button>
+          </div>
+        ) : (
+          <WebPosPinModal
+            open
+            mode="gate"
+            onClose={() => {
+              /* gate cannot be dismissed without PIN */
+            }}
+            onSuccess={onStaffPinSuccess}
+          />
+        )}
       </div>
     );
   }
@@ -3920,6 +4126,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onColorThemeChange={(theme) => void changePosColorTheme(theme)}
         textSize={posTextSize}
         onTextSizeChange={changePosTextSize}
+        syncOnline={offlineSync.online}
+        syncPendingCount={offlineSync.pendingCount}
+        syncFailedCount={offlineSync.failedCount}
+        syncing={offlineSync.syncing}
+        onSyncNow={() => {
+          if (!isBrowserOnline()) {
+            toast.error(t('webPosOfflineNeedNetwork'));
+            return;
+          }
+          void flushOfflineOutbox().then((r) => {
+            if (r.synced > 0) {
+              toast.success(
+                t('webPosSyncFlushed').replace('{n}', String(r.synced))
+              );
+            } else if (r.failed > 0) {
+              toast.error(t('webPosSyncFailed').replace('{n}', String(r.failed)));
+            } else {
+              toast.success(t('webPosSyncOk'));
+            }
+          });
+        }}
         settingsPanel={
           <WebPosSettingsDropdown
             printerName={printerName}
@@ -3974,7 +4201,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
       />
 
-      {shiftsEnabled && !openShift && !startShiftOpen ? (
+      {shiftsEnabled && !openShift && !startShiftOpen && !offlineNow ? (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-3 py-2 sm:px-4">
           <p className="min-w-0 text-xs font-medium text-amber-950 sm:text-sm">
             {t('webPosShiftClosedHint')}
@@ -3986,6 +4213,45 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           >
             {t('webPosShiftStart')}
           </button>
+        </div>
+      ) : null}
+
+      {offlineNow || offlineSync.pendingCount > 0 || offlineSync.failedCount > 0 ? (
+        <div
+          className={`flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-4 ${
+            offlineNow
+              ? 'border-amber-200 bg-amber-50'
+              : offlineSync.failedCount > 0
+                ? 'border-red-200 bg-red-50'
+                : 'border-sky-200 bg-sky-50'
+          }`}
+        >
+          <p
+            className={`min-w-0 text-xs font-medium sm:text-sm ${
+              offlineNow
+                ? 'text-amber-950'
+                : offlineSync.failedCount > 0
+                  ? 'text-red-900'
+                  : 'text-sky-950'
+            }`}
+          >
+            {offlineNow
+              ? t('webPosOfflineBanner')
+              : offlineSync.failedCount > 0
+                ? t('webPosSyncFailed').replace('{n}', String(offlineSync.failedCount))
+                : t('webPosSyncPending').replace('{n}', String(offlineSync.pendingCount))}
+            {loadedFromOfflineCache && offlineNow ? ` ${t('webPosOfflineCachedHint')}` : ''}
+          </p>
+          {!offlineNow ? (
+            <button
+              type="button"
+              className="shrink-0 rounded-lg bg-sky-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-800 disabled:opacity-60"
+              disabled={offlineSync.syncing}
+              onClick={() => void flushOfflineOutbox()}
+            >
+              {t('webPosSyncNow')}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -4001,7 +4267,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               card: enabledMethods.card,
               terminal: enabledMethods.terminal,
               giftCard: enabledMethods.giftCard,
-              payLater: (channel === 'takeaway' || channel === 'delivery') && canPay,
+              payLater:
+                (channel === 'takeaway' || channel === 'delivery') && canPay && !offlineNow,
             }}
             busy={busy || paymentModalOpen}
             customerLabel={customerLabel}
@@ -4273,8 +4540,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 }}
                 onExpressPay={(m) => void runExpressPay(m)}
                 expressDisabled={!cart.length || busy || paymentModalOpen}
-                giftCardsEnabled={giftCardsFeatureOn}
-                onGiftCards={() => setGiftCardOpsOpen(true)}
+                giftCardsEnabled={giftCardsFeatureOn && !offlineNow}
+                onGiftCards={() => {
+                  if (offlineNow) {
+                    toast.error(t('webPosOfflineGiftCardBlocked'));
+                    return;
+                  }
+                  setGiftCardOpsOpen(true);
+                }}
               />
               {/* Odoo-style sticky Pay | Cart — only on narrow viewports (JS + CSS). */}
               {isNarrowViewport ? (
