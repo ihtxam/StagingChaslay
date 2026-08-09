@@ -22,6 +22,8 @@ export type CheckoutResult = {
   total: number;
   amountTendered: number | null;
   changeDue: number | null;
+  /** Multi-tender lines (e.g. half cash + half card) for the receipt. */
+  tenders?: Array<{ method: string; amount: number }>;
 };
 
 type MethodFlags = {

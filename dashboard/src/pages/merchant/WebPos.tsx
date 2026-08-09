@@ -442,6 +442,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [lastReceiptOrderNumber, setLastReceiptOrderNumber] = useState<string>('');
   const [lastSplitReceipts, setLastSplitReceipts] = useState<SplitReceiptPart[]>([]);
   const splitReceiptsRef = useRef<SplitReceiptPart[]>([]);
+  /** Cache receipt logo ESC/POS so checkout print is not waiting on image decode. */
+  const logoEscPosCacheRef = useRef<{ key: string; bytes: Uint8Array | null } | null>(null);
   const [sendReceiptOpen, setSendReceiptOpen] = useState(false);
   const [sendReceiptBusy, setSendReceiptBusy] = useState(false);
   const [sendReceiptPrefillEmail, setSendReceiptPrefillEmail] = useState('');
@@ -2542,11 +2544,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         showVat: printSettings?.receiptShowVatTable !== false,
         showStaff: printSettings?.receiptShowStaffLine !== false,
         staffName: webposStaff?.name,
+        includeQr: false,
       };
       const text = generateWebPosReceiptText(receiptPayload, locale);
-      await printEscPosToTargets(text, { role: 'receipt' });
       setProvisionalPrinted(true);
       toast.success(t('webPosProvisionalPrinted'));
+      void printEscPosToTargets(text, { role: 'receipt', quiet: true }).catch((e: any) => {
+        toast.error(e?.message || t('webPosPrintFailed'));
+      });
     } catch (e: any) {
       toast.error(e.message || t('webPosPrintFailed'));
     }
@@ -2555,18 +2560,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const onKitchenMessage = async (message: string) => {
     try {
       const ticket = nextWebPosTicketNumber(merchant?.id);
-      const msgLine = {
-        name: `★ ${message}`,
-        quantity: 1,
-        unitPrice: 0,
-        lineTotal: 0,
-      };
-      await printKitchenForCart(
+      const whenSnapshot = fulfillmentWhen;
+      const channelSnapshot = effectiveChannel;
+      toast.success(t('webPosKitchenMessageSent'));
+      void printKitchenForCart(
         [
           {
             lineId: 'msg',
             productId: 'kitchen-msg',
-            name: msgLine.name,
+            name: `★ ${message}`,
             quantity: 1,
             unitPrice: 0,
             lineTotal: 0,
@@ -2575,10 +2577,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             comboSelections: [],
           },
         ],
-        effectiveChannel,
-        { orderNumber: ticket.display, when: fulfillmentWhen }
-      );
-      toast.success(t('webPosKitchenMessageSent'));
+        channelSnapshot,
+        { orderNumber: ticket.display, when: whenSnapshot }
+      ).catch((e: any) => {
+        toast.error(e?.message || t('webPosKitchenPrintFailed'));
+      });
     } catch (e: any) {
       toast.error(e.message || t('webPosKitchenPrintFailed'));
     }
@@ -2820,6 +2823,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       total: partTotal,
       amountTendered,
       changeDue: changeDue > 0 ? changeDue : null,
+      tenders: payments.map((p) => ({ method: p.method, amount: roundMoney2(p.amount) })),
     };
     if (primary.method === 'terminal' && payments.length === 1) {
       setCheckoutExtras(extras);
@@ -2915,7 +2919,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const printEscPosToTargets = async (
     text: string,
-    opts: { qrUrl?: string; role: 'receipt' | 'kitchen' | 'eod'; paperWidthMm?: 58 | 80 }
+    opts: {
+      qrUrl?: string;
+      role: 'receipt' | 'kitchen' | 'eod';
+      paperWidthMm?: 58 | 80;
+      /** Skip success toast (caller already confirmed to the cashier). */
+      quiet?: boolean;
+    }
   ) => {
     const targets = printersForRole(printSettings, opts.role);
     const names =
@@ -2937,9 +2947,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       opts.role === 'receipt'
         ? printSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl
         : null;
-    const logo = logoUrl
-      ? await logoUrlToEscPos(String(logoUrl), paper === 58 ? 240 : 384)
-      : null;
+    let logo: Uint8Array | null = null;
+    if (logoUrl) {
+      const cacheKey = `${String(logoUrl)}|${paper}`;
+      if (logoEscPosCacheRef.current?.key === cacheKey) {
+        logo = logoEscPosCacheRef.current.bytes;
+      } else {
+        logo = await logoUrlToEscPos(String(logoUrl), paper === 58 ? 240 : 384);
+        logoEscPosCacheRef.current = { key: cacheKey, bytes: logo };
+      }
+    }
     const qr =
       opts.role === 'receipt' && printSettings?.receiptShowQrCode !== false ? opts.qrUrl : undefined;
     const escpos = textToEscPos(text, qr, logo);
@@ -2993,6 +3010,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       throw new Error(t('webPosPrintFailed'));
     }
 
+    if (opts.quiet) return;
     if (opts.role === 'eod') {
       toast.success(t('webPosEodPrinted'));
     } else {
@@ -3005,7 +3023,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const printReceipt = async (receiptText: string, receiptUrl?: string) => {
-    await printEscPosToTargets(receiptText, { qrUrl: receiptUrl, role: 'receipt' });
+    await printEscPosToTargets(receiptText, {
+      qrUrl: receiptUrl,
+      role: 'receipt',
+      quiet: true,
+    });
   };
 
   const openSuccessPrint = () => {
@@ -3438,6 +3460,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       completedAt: Date.now(),
       channel: effectiveChannel,
       paymentMethod: method,
+      paymentLines: extrasWithDisc?.tenders?.length
+        ? extrasWithDisc.tenders.map((p) => ({
+            method: p.method,
+            amount: roundMoney2(p.amount),
+          }))
+        : undefined,
+      amountTendered: extrasWithDisc?.amountTendered ?? null,
+      changeDue: extrasWithDisc?.changeDue ?? null,
       customerName: sale.customerName || undefined,
       customerPhone: sale.customerPhone || undefined,
       shippingAddress: effectiveChannel === 'delivery' ? shipAddr : undefined,
@@ -3569,11 +3599,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       autoPrint &&
       printSettings?.autoPrintReceipt !== false;
     if (shouldPrintReceipt) {
-      try {
-        await printReceipt(receiptText, receiptUrl);
-      } catch (e: any) {
-        toast.error(e.message || t('webPosPrintFailed'));
-      }
+      // Never hold checkout/busy on the print agent.
+      void printReceipt(receiptText, receiptUrl).catch((e: any) => {
+        toast.error(e?.message || t('webPosPrintFailed'));
+      });
     }
     if (!moreSplits || splitIndex === 0) {
       // Don't hold checkout/busy on kitchen print — agent latency is often several seconds.

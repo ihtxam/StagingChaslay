@@ -100,6 +100,10 @@ export type WebPosReceipt = {
   completedAt: number;
   channel?: string;
   paymentMethod: string;
+  /** Split tenders printed as separate lines (cash + card, etc.). */
+  paymentLines?: Array<{ method: string; amount: number }>;
+  amountTendered?: number | null;
+  changeDue?: number | null;
   /** Delivery customer (printed on delivery receipts) */
   customerName?: string | null;
   customerPhone?: string | null;
@@ -311,8 +315,40 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   r += sep + '\n';
   r += padLine(`${L.total}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
   r += sep + '\n';
-  r += `${L.payment}: ${paymentLabel(L, tx.paymentMethod)}\n`;
+  const tenders =
+    tx.paymentLines && tx.paymentLines.length > 0
+      ? tx.paymentLines
+      : [{ method: tx.paymentMethod, amount: tx.total }];
+  if (tenders.length === 1) {
+    r += `${L.payment}: ${paymentLabel(L, tenders[0]!.method)}\n`;
+  } else {
+    r += `${L.payment}:\n`;
+    for (const p of tenders) {
+      r +=
+        padLine(
+          `  ${paymentLabel(L, p.method)}`,
+          `CHF ${roundMoney2(p.amount).toFixed(2)}`,
+          width
+        ) + '\n';
+    }
+  }
   r += padLine(`${L.paid}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
+  if (
+    tx.amountTendered != null &&
+    tx.amountTendered > 0 &&
+    roundMoney2(tx.amountTendered) !== roundMoney2(tx.total)
+  ) {
+    r +=
+      padLine(
+        `${L.tendered}:`,
+        `CHF ${roundMoney2(tx.amountTendered).toFixed(2)}`,
+        width
+      ) + '\n';
+  }
+  if (tx.changeDue != null && tx.changeDue > 0) {
+    r +=
+      padLine(`${L.change}:`, `CHF ${roundMoney2(tx.changeDue).toFixed(2)}`, width) + '\n';
+  }
   // VAT calculations below payment section
   const vatSection = formatVatSection(tx, L, width);
   if (vatSection) {
@@ -320,11 +356,10 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
   if (tx.notes) r += `${L.note} ${tx.notes}\n`;
 
-  const qrUrl = tx.receiptUrl || (tx.includeQr !== false ? buildReceiptUrl(tx.id) : undefined);
-  if (qrUrl && tx.includeQr !== false) {
+  // QR is embedded as ESC/POS graphics by the printer layer — do not print the URL text.
+  if (tx.includeQr !== false && (tx.receiptUrl || tx.id)) {
     r += thin + '\n';
     r += L.scanDigitalReceipt + '\n';
-    r += qrUrl + '\n';
   }
 
   r += formatReceiptMetaFooter(tx, L, locale, width) + '\n';

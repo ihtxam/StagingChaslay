@@ -12,6 +12,8 @@ export type ReceiptLabels = {
   total: string;
   payment: string;
   paid: string;
+  tendered: string;
+  change: string;
   note: string;
   staff: string;
   scanDigitalReceipt: string;
@@ -80,6 +82,8 @@ const EN: ReceiptLabels = {
   total: 'TOTAL',
   payment: 'Payment',
   paid: 'Paid',
+  tendered: 'Tendered',
+  change: 'Change',
   note: 'Note',
   staff: 'Staff',
   scanDigitalReceipt: 'Scan for digital receipt',
@@ -147,6 +151,8 @@ const FR: ReceiptLabels = {
   total: 'TOTAL',
   payment: 'Paiement',
   paid: 'Payé',
+  tendered: 'Remis',
+  change: 'Monnaie',
   note: 'Note',
   staff: 'Personnel',
   scanDigitalReceipt: 'Scannez pour le recu digital',
@@ -214,6 +220,8 @@ const DE: ReceiptLabels = {
   total: 'TOTAL',
   payment: 'Zahlung',
   paid: 'Bezahlt',
+  tendered: 'Gegeben',
+  change: 'Rueckgeld',
   note: 'Notiz',
   staff: 'Personal',
   scanDigitalReceipt: 'Scannen fuer digitalen Beleg',
@@ -287,6 +295,8 @@ export function paymentLabel(labels: ReceiptLabels, method?: string | null): str
   if (m === 'cash' || m === 'express') return m === 'express' ? labels.express : labels.cash;
   if (m === 'card') return labels.card;
   if (m === 'terminal') return labels.terminal;
+  if (m === 'pay_later') return labels.payLater;
+  if (m === 'gift_card') return 'Gift card';
   return String(method || '').toUpperCase();
 }
 
