@@ -59,6 +59,7 @@ interface SettingsData {
     cartSide?: 'left' | 'right';
     postSuccessTarget?: 'register' | 'tables';
     posMode?: 'restaurant' | 'retail';
+    tablesEnabled?: boolean;
     retailTakeawayEnabled?: boolean;
     retailDeliveryEnabled?: boolean;
   } | null;
@@ -1550,7 +1551,32 @@ export default function Settings() {
                       </label>
                     ))}
                   </div>
-                ) : null}
+                ) : (
+                  <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.posCheckoutSettings?.tablesEnabled !== false}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setSettings({
+                          ...settings,
+                          posCheckoutSettings: {
+                            ...(settings.posCheckoutSettings || {}),
+                            tablesEnabled: on,
+                            postSuccessTarget: on
+                              ? settings.posCheckoutSettings?.postSuccessTarget || 'register'
+                              : 'register',
+                          },
+                        });
+                      }}
+                    />
+                    <span>
+                      <span className="font-medium block">{t('posTablesEnabled')}</span>
+                      <span className="text-xs muted">{t('posTablesEnabledHint')}</span>
+                    </span>
+                  </label>
+                )}
               </Section>
 
               <Section
@@ -1603,7 +1629,15 @@ export default function Settings() {
                   <Field label={t('webPosPostSuccessNav')} hint={t('posPostSuccessHint')}>
                     <select
                       className="input max-w-md"
-                      value={settings.posCheckoutSettings?.postSuccessTarget || 'register'}
+                      value={
+                        settings.posCheckoutSettings?.tablesEnabled === false
+                          ? 'register'
+                          : settings.posCheckoutSettings?.postSuccessTarget || 'register'
+                      }
+                      disabled={
+                        (settings.posCheckoutSettings?.posMode || 'restaurant') === 'retail' ||
+                        settings.posCheckoutSettings?.tablesEnabled === false
+                      }
                       onChange={(e) =>
                         setSettings({
                           ...settings,
@@ -1615,7 +1649,10 @@ export default function Settings() {
                       }
                     >
                       <option value="register">{t('webPosTabRegister')}</option>
-                      <option value="tables">{t('webPosTabTables')}</option>
+                      {settings.posCheckoutSettings?.tablesEnabled !== false &&
+                      (settings.posCheckoutSettings?.posMode || 'restaurant') !== 'retail' ? (
+                        <option value="tables">{t('webPosTabTables')}</option>
+                      ) : null}
                     </select>
                   </Field>
                 </div>

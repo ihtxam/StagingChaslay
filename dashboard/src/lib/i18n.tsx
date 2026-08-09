@@ -144,6 +144,9 @@ const en: Dict = {
   posModeRestaurantHint: 'Tables, kitchen tickets, takeaway & delivery as usual.',
   posModeRetail: 'Retail',
   posModeRetailHint: 'No tables or kitchen by default. Direct sales and barcode scanner.',
+  posTablesEnabled: 'Enable tables',
+  posTablesEnabledHint:
+    'Turn off for fast-food / counter service. Hides the Tables tab and Set table; kitchen and takeaway stay available.',
   posRetailTakeaway: 'Enable takeaway in retail',
   posRetailDelivery: 'Enable delivery in retail',
   posLayoutSettings: 'POS layout',
@@ -1466,6 +1469,9 @@ const fr: Dict = {
   posModeRestaurantHint: 'Tables, tickets cuisine, à emporter et livraison comme d’habitude.',
   posModeRetail: 'Retail',
   posModeRetailHint: 'Pas de tables ni cuisine par défaut. Ventes directes et scan code-barres.',
+  posTablesEnabled: 'Activer les tables',
+  posTablesEnabledHint:
+    'Désactivez pour le fast-food / comptoir. Masque l’onglet Tables et « Choisir une table » ; cuisine et à emporter restent disponibles.',
   posRetailTakeaway: 'Activer à emporter en retail',
   posRetailDelivery: 'Activer livraison en retail',
   posLayoutSettings: 'Disposition POS',
@@ -2721,6 +2727,9 @@ const de: Dict = {
   posModeRestaurantHint: 'Tische, Küchenbons, Takeaway & Lieferung wie gewohnt.',
   posModeRetail: 'Retail',
   posModeRetailHint: 'Keine Tische/Küche standardmäßig. Direktverkauf und Barcode-Scan.',
+  posTablesEnabled: 'Tische aktivieren',
+  posTablesEnabledHint:
+    'Für Fast-Food / Theke ausschalten. Versteckt den Tab Tische und «Tisch wählen»; Küche und Takeaway bleiben verfügbar.',
   posRetailTakeaway: 'Takeaway im Retail aktivieren',
   posRetailDelivery: 'Lieferung im Retail aktivieren',
   posLayoutSettings: 'POS-Layout',

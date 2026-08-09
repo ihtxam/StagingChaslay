@@ -69,6 +69,8 @@ type Props = {
   channelTabOptions?: Array<'takeaway' | 'delivery'>;
   /** Kitchen message, SEND, set table - restaurant only. */
   kitchenEnabled?: boolean;
+  /** When false (fast-food), hide Set table; Send is always available with kitchen. */
+  tablesEnabled?: boolean;
   /** Hold current cart without kitchen send (retail / direct sale). */
   onHoldOrder?: () => void;
   /** Move whole open table order to another table. */
@@ -182,6 +184,7 @@ export default function WebPosCartPanel({
   showChannelTabs = true,
   channelTabOptions = ['takeaway', 'delivery'],
   kitchenEnabled = true,
+  tablesEnabled = true,
   onHoldOrder,
   onMoveTable,
   onMoveDish,
@@ -356,6 +359,20 @@ export default function WebPosCartPanel({
                 >
                   <MessageSquare size={14} className="shrink-0 text-stone-500" />
                   {t('webPosKitchenMessage')}
+                </button>
+              ) : null}
+              {kitchenEnabled && !tablesEnabled ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                  disabled={busy}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onSetTab();
+                  }}
+                >
+                  {tabNumber ? `${t('webPosTab')} #${tabNumber}` : t('webPosSetTab')}
                 </button>
               ) : null}
               {onHoldOrder ? (
@@ -712,7 +729,7 @@ export default function WebPosCartPanel({
             >
               {onHoldOrder ? t('webPosHoldOrder') : t('webPosNew')}
             </button>
-          ) : effectiveShowSend || hideTab || orderSent ? (
+          ) : effectiveShowSend || hideTab || orderSent || !tablesEnabled ? (
             <button
               type="button"
               disabled={!hasItems || busy}

@@ -722,12 +722,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const coursesEnabled =
     !!merchant?.coursesEnabled && kitchenEnabled && editionAllows('pos_courses');
   const tablesEditionOk = editionAllows('pos_tables');
+  /** Fast-food can keep kitchen but hide Tables / Set table. */
+  const tablesUiEnabled =
+    !isRetail && tablesEditionOk && checkoutSettings.tablesEnabled !== false;
   const giftCardsEditionOk =
     editionAllows('pos_gift_cards') || editionAllows('gift_cards');
-  // Takeaway/delivery, open table, or numbered tab (walk-in takeaway) → Send.
+  // Counter / takeaway / delivery / open table or tab → Send.
+  // When tables are off, always offer Send (fast-food walk-in).
   const showSend =
     kitchenEnabled &&
-    (channel === 'takeaway' ||
+    (!tablesUiEnabled ||
+      channel === 'takeaway' ||
       channel === 'delivery' ||
       !!tableLabel ||
       !!tabNumber);
@@ -746,23 +751,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     const fromSettings = checkoutSettings.postSuccessTarget;
     if (fromSettings === 'tables' || fromSettings === 'register') {
-      setPostSuccessTarget(isRetail ? 'register' : fromSettings);
+      setPostSuccessTarget(tablesUiEnabled ? fromSettings : 'register');
     }
-  }, [checkoutSettings.postSuccessTarget, isRetail]);
+  }, [checkoutSettings.postSuccessTarget, tablesUiEnabled]);
 
-  // Retail has no tables tab — keep post-success on register.
+  // No tables UI — keep post-success on register.
   useEffect(() => {
-    if (isRetail && postSuccessTarget === 'tables') {
+    if (!tablesUiEnabled && postSuccessTarget === 'tables') {
       setPostSuccessTarget('register');
     }
-  }, [isRetail, postSuccessTarget]);
+  }, [tablesUiEnabled, postSuccessTarget]);
 
   useEffect(() => {
-    if (isRetail && (posTab === 'tables' || posTab === 'bookings')) {
+    if (!tablesUiEnabled && (posTab === 'tables' || posTab === 'bookings')) {
       setPosTab('register');
       setPosView('register');
     }
-  }, [isRetail, posTab]);
+  }, [tablesUiEnabled, posTab]);
 
   const showFireCourseButton =
     coursesEnabled &&
@@ -4201,8 +4206,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           setSettingsOpen(false);
           void printTodayEod();
         }}
-        hideTablesTab={isRetail || !tablesEditionOk}
-        hideBookingsTab={isRetail || !tablesEditionOk}
+        hideTablesTab={!tablesUiEnabled}
+        hideBookingsTab={!tablesUiEnabled}
         colorTheme={posColorTheme}
         onColorThemeChange={(theme) => void changePosColorTheme(theme)}
         appearance={posAppearance}
@@ -4580,14 +4585,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 showChannelTabs={showChannelTabs}
                 channelTabOptions={channelTabOptions}
                 kitchenEnabled={kitchenEnabled}
+                tablesEnabled={tablesUiEnabled}
                 onHoldOrder={() => void holdCurrentOrder(false)}
                 onMoveTable={
-                  !isRetail && kitchenEnabled && tablesEditionOk
+                  tablesUiEnabled && kitchenEnabled
                     ? () => openMoveTablePicker()
                     : undefined
                 }
                 onMoveDish={
-                  !isRetail && kitchenEnabled && tablesEditionOk
+                  tablesUiEnabled && kitchenEnabled
                     ? () => openMoveDishPicker()
                     : undefined
                 }

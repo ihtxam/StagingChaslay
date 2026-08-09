@@ -29,6 +29,11 @@ export type PosCheckoutSettings = {
   postSuccessTarget: PostSuccessTarget;
   /** Restaurant (tables/kitchen) vs retail (register / barcode). */
   posMode: PosMode;
+  /**
+   * Restaurant only: show Tables tab + Set table.
+   * Fast-food / counter service can turn this off and keep kitchen + takeaway.
+   */
+  tablesEnabled: boolean;
   /** Retail only: show Takeaway channel (off by default). */
   retailTakeawayEnabled: boolean;
   /** Retail only: show Delivery channel (off by default). */
@@ -55,6 +60,7 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   cartSide: 'right',
   postSuccessTarget: 'register',
   posMode: 'restaurant',
+  tablesEnabled: true,
   retailTakeawayEnabled: false,
   retailDeliveryEnabled: false,
 };
@@ -95,6 +101,7 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
     cartSide: src.cartSide === 'left' ? 'left' : 'right',
     postSuccessTarget: src.postSuccessTarget === 'tables' ? 'tables' : 'register',
     posMode: src.posMode === 'retail' ? 'retail' : 'restaurant',
+    tablesEnabled: src.tablesEnabled !== false,
     retailTakeawayEnabled: src.retailTakeawayEnabled === true,
     retailDeliveryEnabled: src.retailDeliveryEnabled === true,
   };
