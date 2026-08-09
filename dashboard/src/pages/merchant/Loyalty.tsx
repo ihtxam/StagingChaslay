@@ -211,7 +211,7 @@ export default function Loyalty() {
     setSavingCard(true);
     try {
       const res = await api.post('/gift-cards', {
-        cardNumber: issueRfid.trim(),
+        cardNumber: issueRfid.trim().replace(/[\s:_\-]+/g, '').toUpperCase(),
         cardMediaType: 'physical',
         initialBalance: Number(issueBalance) || 0,
         membershipEnabled: issueMembership,

@@ -494,13 +494,12 @@ export default function WebPosCheckoutView({
           type="button"
           disabled={busy}
           onClick={onBack}
-          className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-40 ${
-            opts.desktopOnly ? 'lg:hidden' : ''
-          }`}
+          className="inline-flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-40 sm:px-4"
           aria-label={t('back')}
           title={t('back')}
         >
           <ArrowLeft size={18} />
+          <span className="hidden sm:inline">{t('back')}</span>
         </button>
       ) : null}
       {canComplete ? (
@@ -513,16 +512,9 @@ export default function WebPosCheckoutView({
           {t('webPosConfirmPay')}
           {changeDue > 0 ? ` - ${t('webPosChangeDue')} CHF ${changeDue.toFixed(2)}` : ''}
         </button>
-      ) : onBack ? (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onBack}
-          className="hidden min-h-12 flex-1 rounded-xl border border-stone-200 bg-white px-4 py-3.5 text-sm font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-40 lg:inline-flex lg:items-center lg:justify-center"
-        >
-          {t('back')}
-        </button>
-      ) : null}
+      ) : (
+        <div className="min-h-12 flex-1" aria-hidden />
+      )}
     </div>
   );
 
