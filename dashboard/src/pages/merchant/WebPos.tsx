@@ -1649,16 +1649,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         channelRows?: Array<{ channel: string; count: number; total: number }>;
         range?: { label: string; from: string; to: string };
       } | null = null;
-      // Waiters without VIEW_REPORTS/END_OF_DAY only get their own shift totals (no company EOD).
-      const mayFetchCompanyEod =
+      // END_OF_DAY / VIEW_REPORTS: fetch EOD (server scopes to own sales without VIEW_ALL_SALES).
+      // Waiters without those perms only get drawer totals from the closed shift.
+      const mayFetchEod =
         !staffConfigured ||
         (!!webposStaff &&
           (hasPermission(webposStaff.permissions, 'VIEW_REPORTS') ||
             hasPermission(webposStaff.permissions, 'END_OF_DAY')));
-      if (mayFetchCompanyEod) {
+      if (mayFetchEod) {
         try {
+          const headers: Record<string, string> = {};
+          if (webposStaff?.accessToken) {
+            headers['X-WebPos-Staff-Access'] = webposStaff.accessToken;
+          }
           const repRes = await api.get('/merchant/reports/eod', {
             params: { preset: 'custom', from: fromYmd, to: toYmd },
+            headers,
           });
           report = repRes.data.report;
         } catch {
@@ -1675,6 +1681,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         label: report?.range?.label || t('webPosShiftEodLabel'),
         periodFrom: lastClosedShift.reportPeriod.from,
         periodTo: lastClosedShift.reportPeriod.to,
+        scopeStaffName:
+          staffConfigured &&
+          webposStaff &&
+          !hasPermission(webposStaff.permissions, 'VIEW_ALL_SALES')
+            ? webposStaff.name
+            : null,
         salesCount: report?.salesCount ?? lastClosedShift.orderCount,
         revenue: report?.revenue ?? totalSales,
         subtotal: report?.subtotal ?? totalSales,
@@ -1729,7 +1741,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** EOD print/download when cash shifts are disabled (late-night venues). */
   const printTodayEod = async () => {
     try {
-      const repRes = await api.get('/merchant/reports/eod', { params: { preset: 'today' } });
+      const headers: Record<string, string> = {};
+      if (webposStaff?.accessToken) {
+        headers['X-WebPos-Staff-Access'] = webposStaff.accessToken;
+      }
+      const repRes = await api.get('/merchant/reports/eod', {
+        params: { preset: 'today' },
+        headers,
+      });
       const report = repRes.data.report as {
         salesCount: number;
         revenue: number;
@@ -1765,6 +1784,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         label: report?.range?.label || t('webPosEodReport'),
         periodFrom: report?.range?.from,
         periodTo: report?.range?.to,
+        scopeStaffName:
+          staffConfigured &&
+          webposStaff &&
+          !hasPermission(webposStaff.permissions, 'VIEW_ALL_SALES')
+            ? webposStaff.name
+            : null,
         salesCount: report?.salesCount ?? 0,
         revenue: report?.revenue ?? 0,
         subtotal: report?.subtotal ?? report?.revenue ?? 0,
@@ -3505,6 +3530,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       amountTendered: extras?.amountTendered ?? null,
       changeDue: extras?.changeDue ?? null,
       staffName: webposStaff?.name || null,
+      staffId: webposStaff?.id || null,
       total: saleTotal,
       fulfillmentChannel: effectiveChannel,
       completedAt: payLater ? undefined : Date.now(),
@@ -4148,6 +4174,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     roleId: string;
     roleName: string;
     permissions: string[];
+    accessToken?: string;
   }) => {
     const session: WebPosStaffSession = {
       id: staff.id,
@@ -4155,6 +4182,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       roleId: staff.roleId,
       roleName: staff.roleName,
       permissions: staff.permissions as Permission[],
+      accessToken: staff.accessToken,
     };
     setWebposStaff(session);
     saveWebPosStaffSession(session);

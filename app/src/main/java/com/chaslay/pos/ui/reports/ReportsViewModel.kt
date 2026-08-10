@@ -2,6 +2,7 @@ package com.chaslay.pos.ui.reports
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.SettingsRepository
 import com.chaslay.pos.data.repository.TransactionRepository
 import com.chaslay.pos.domain.model.DailySalesReport
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -77,7 +79,8 @@ data class ReportsUiState(
 class ReportsViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val settingsRepository: SettingsRepository,
-    private val printerService: BluetoothPrinterService
+    private val printerService: BluetoothPrinterService,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReportsUiState())
@@ -96,7 +99,13 @@ class ReportsViewModel @Inject constructor(
             val range = _uiState.value.selectedRange
             val (start, end) = rangeBounds(range)
             val settings = settingsRepository.getSettings()
-            val transactions = transactionRepository.getTransactionsBetween(start, end)
+            val access = sessionManager.currentUserAccess.first()
+            val userId = sessionManager.currentUserId.first()
+            val ownOnly = access != null && !access.canViewAllSales()
+            val scopeUserId = if (ownOnly) userId else null
+            val allTx = transactionRepository.getTransactionsBetween(start, end)
+            val transactions =
+                if (scopeUserId != null) allTx.filter { it.userId == scopeUserId } else allTx
             val completed = transactions.filter { it.paymentStatus == PaymentStatus.COMPLETED }
             val cancelled = transactions.filter { it.paymentStatus == PaymentStatus.CANCELLED }
             // Tips are not taxable and not part of sales: gross excludes tips (matches end-of-day brut).
@@ -131,9 +140,15 @@ class ReportsViewModel @Inject constructor(
                 dailyReport = transactionRepository.getDailyReport(),
                 salesReport = salesReport,
                 selectedRange = range,
-                endOfDayReport = transactionRepository.getEndOfDayReport(start, end),
-                topProducts = transactionRepository.getProductsSold(start, end),
-                userPerformance = transactionRepository.getUserPerformance()
+                endOfDayReport = transactionRepository.buildEndOfDayReport(
+                    allTx,
+                    start,
+                    end,
+                    scopeUserId
+                ),
+                topProducts = transactionRepository.getProductsSold(start, end, scopeUserId),
+                userPerformance = if (ownOnly) emptyList()
+                else transactionRepository.getUserPerformance()
             )
         }
     }

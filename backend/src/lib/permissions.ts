@@ -13,6 +13,8 @@ export const PERMISSIONS = [
   "CANCEL_ORDERS",
   "REFUND_ORDERS",
   "VIEW_REPORTS",
+  /** See company-wide / all-staff sales in reports and EOD (without this = own sales only). */
+  "VIEW_ALL_SALES",
   "MANAGE_PRODUCTS",
   "MANAGE_CUSTOMERS",
   "MANAGE_OFFERS",
@@ -79,6 +81,7 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "CANCEL_ORDERS",
       "REFUND_ORDERS",
       "VIEW_REPORTS",
+      "VIEW_ALL_SALES",
       "MANAGE_PRODUCTS",
       "MANAGE_CUSTOMERS",
       "MANAGE_OFFERS",
@@ -116,7 +119,14 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
     name: "User",
     isSystem: true,
     sortOrder: 40,
-    permissions: ["USE_WEBPOS", "USE_POS", "PROCESS_PAYMENTS", "TAKEAWAY_ORDERS", "VIEW_ORDER_HISTORY"],
+    permissions: [
+      "USE_WEBPOS",
+      "USE_POS",
+      "PROCESS_PAYMENTS",
+      "TAKEAWAY_ORDERS",
+      "VIEW_ORDER_HISTORY",
+      "END_OF_DAY",
+    ],
   },
   {
     name: "Cashier",
@@ -130,6 +140,7 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "VIEW_ORDER_HISTORY",
       "OPEN_CASH_DRAWER",
       "APPLY_DISCOUNTS",
+      "END_OF_DAY",
     ],
   },
 ];

@@ -17,6 +17,7 @@ export type Permission =
   | 'CANCEL_ORDERS'
   | 'REFUND_ORDERS'
   | 'VIEW_REPORTS'
+  | 'VIEW_ALL_SALES'
   | 'MANAGE_PRODUCTS'
   | 'MANAGE_CUSTOMERS'
   | 'MANAGE_OFFERS'
@@ -42,6 +43,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'CANCEL_ORDERS',
   'REFUND_ORDERS',
   'VIEW_REPORTS',
+  'VIEW_ALL_SALES',
   'MANAGE_PRODUCTS',
   'MANAGE_CUSTOMERS',
   'MANAGE_OFFERS',
@@ -104,6 +106,8 @@ export type WebPosStaffSession = {
   roleId: string;
   roleName: string;
   permissions: Permission[];
+  /** Short-lived staff JWT from PIN verify — used to scope EOD/reports server-side. */
+  accessToken?: string;
 };
 
 const WEBPOS_STAFF_KEY = 'webpos_staff_session';

@@ -778,6 +778,8 @@ export type EodReportPrint = {
   label: string;
   periodFrom?: string;
   periodTo?: string;
+  /** When set, print shows this is one employee's sales (not company totals). */
+  scopeStaffName?: string | null;
   salesCount: number;
   revenue: number;
   subtotal?: number;
@@ -850,6 +852,13 @@ export function generateEodReportText(report: EodReportPrint): string {
   r += sep + '\n';
   r += '\n';
   r += centerLine(L.endOfDay, width) + '\n';
+  if (report.scopeStaffName?.trim()) {
+    r +=
+      centerLine(
+        `${L.mySales || 'My sales'}: ${report.scopeStaffName.trim()}`.slice(0, width),
+        width
+      ) + '\n';
+  }
   r += '\n';
   r += centerLine(L.reportPeriod, width) + '\n';
   r += centerLine(period.slice(0, width), width) + '\n';

@@ -765,6 +765,8 @@ const en: Dict = {
   failedSaveReceipt: 'Failed to save receipt settings',
   reports: 'Reports',
   reportsHint: 'End-of-day sales statistics for POS and WebPOS (synced sales).',
+  reportsOwnSalesOnly:
+    'Showing your sales only ({name}). Enable “View all sales” on the role for company totals.',
   reportsToday: 'Today',
   reportsYesterday: 'Yesterday',
   reportsLastWeek: 'Last week',
@@ -1405,7 +1407,9 @@ const en: Dict = {
   perm_VIEW_ORDER_HISTORY: 'View order history',
   perm_CANCEL_ORDERS: 'Cancel orders',
   perm_REFUND_ORDERS: 'Refund orders',
-  perm_VIEW_REPORTS: 'View reports (company / all staff sales)',
+  perm_VIEW_REPORTS: 'View reports (scoped by “View all sales”)',
+  perm_VIEW_ALL_SALES:
+    'View all sales — company totals and every employee’s sales (without this: own sales only)',
   perm_MANAGE_PRODUCTS: 'Manage products',
   perm_MANAGE_CUSTOMERS: 'Manage customers',
   perm_MANAGE_OFFERS: 'Manage offers',
@@ -1415,7 +1419,8 @@ const en: Dict = {
   perm_MANAGE_STAFF: 'Manage staff',
   perm_MANAGE_ROLES: 'Manage roles',
   perm_MANAGE_BILLING: 'Manage billing',
-  perm_END_OF_DAY: 'End of day reports (company totals)',
+  perm_END_OF_DAY:
+    'End of day — print/view EOD (own sales unless “View all sales” is also granted)',
   adyenSettingsHint:
     'One Swisspayout merchant account and API key for the online shop and all payment terminals.',
   swisspayoutNoAccount: "Don't have a Swisspayout account?",
@@ -2201,6 +2206,8 @@ const fr: Dict = {
   failedSaveReceipt: 'Échec de l’enregistrement des reçus',
   reports: 'Rapports',
   reportsHint: 'Statistiques de fin de journée POS et WebPOS (ventes synchronisées).',
+  reportsOwnSalesOnly:
+    'Affichage de vos ventes uniquement ({name}). Activez « Voir toutes les ventes » sur le rôle pour les totaux société.',
   reportsToday: 'Aujourd’hui',
   reportsYesterday: 'Hier',
   reportsLastWeek: 'Semaine dernière',
@@ -2845,7 +2852,9 @@ const fr: Dict = {
   perm_VIEW_ORDER_HISTORY: 'Voir l’historique des commandes',
   perm_CANCEL_ORDERS: 'Annuler des commandes',
   perm_REFUND_ORDERS: 'Rembourser des commandes',
-  perm_VIEW_REPORTS: 'Voir les rapports (ventes société / tout le personnel)',
+  perm_VIEW_REPORTS: 'Voir les rapports (selon « Voir toutes les ventes »)',
+  perm_VIEW_ALL_SALES:
+    'Voir toutes les ventes — totaux société et ventes de chaque employé (sans cela : ses ventes seulement)',
   perm_MANAGE_PRODUCTS: 'Gérer les produits',
   perm_MANAGE_CUSTOMERS: 'Gérer les clients',
   perm_MANAGE_OFFERS: 'Gérer les offres',
@@ -2855,7 +2864,8 @@ const fr: Dict = {
   perm_MANAGE_STAFF: 'Gérer le personnel',
   perm_MANAGE_ROLES: 'Gérer les rôles',
   perm_MANAGE_BILLING: 'Gérer la facturation',
-  perm_END_OF_DAY: 'Rapports de fin de journée (totaux société)',
+  perm_END_OF_DAY:
+    'Fin de journée — imprimer/voir l’EOD (ses ventes sauf si « Voir toutes les ventes »)',
   notes: 'Notes',
   adyenSettingsHint:
     'Un seul compte marchand et clé API Swisspayout pour la boutique en ligne et tous les terminaux.',
@@ -3646,6 +3656,8 @@ const de: Dict = {
   failedSaveReceipt: 'Belegeinstellungen speichern fehlgeschlagen',
   reports: 'Berichte',
   reportsHint: 'Tagesabschluss-Statistiken für POS und WebPOS (synchronisierte Verkäufe).',
+  reportsOwnSalesOnly:
+    'Nur Ihre Verkäufe ({name}). Für Firmentotale „Alle Verkäufe ansehen“ in der Rolle aktivieren.',
   reportsToday: 'Heute',
   reportsYesterday: 'Gestern',
   reportsLastWeek: 'Letzte Woche',
@@ -4290,7 +4302,9 @@ const de: Dict = {
   perm_VIEW_ORDER_HISTORY: 'Bestellhistorie ansehen',
   perm_CANCEL_ORDERS: 'Bestellungen stornieren',
   perm_REFUND_ORDERS: 'Bestellungen erstatten',
-  perm_VIEW_REPORTS: 'Berichte ansehen (Firmen-/Personalumsätze)',
+  perm_VIEW_REPORTS: 'Berichte ansehen (nach „Alle Verkäufe ansehen“)',
+  perm_VIEW_ALL_SALES:
+    'Alle Verkäufe ansehen — Firmentotale und Verkäufe aller Mitarbeitenden (ohne: nur eigene)',
   perm_MANAGE_PRODUCTS: 'Produkte verwalten',
   perm_MANAGE_CUSTOMERS: 'Kunden verwalten',
   perm_MANAGE_OFFERS: 'Angebote verwalten',
@@ -4300,7 +4314,8 @@ const de: Dict = {
   perm_MANAGE_STAFF: 'Personal verwalten',
   perm_MANAGE_ROLES: 'Rollen verwalten',
   perm_MANAGE_BILLING: 'Abrechnung verwalten',
-  perm_END_OF_DAY: 'Tagesabschluss-Berichte (Firmentotale)',
+  perm_END_OF_DAY:
+    'Tagesabschluss — EOD drucken/ansehen (eigene Verkäufe außer mit „Alle Verkäufe ansehen“)',
   notes: 'Notizen',
   adyenSettingsHint:
     'Ein Swisspayout-Händlerkonto und API-Schlüssel für Online-Shop und alle Zahlungsterminals.',

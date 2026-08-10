@@ -27,11 +27,34 @@ export class StaffService {
         }))
       );
     }
+    // Existing Manager roles that already see company reports keep VIEW_ALL_SALES.
+    await this.ensureManagerViewAllSales(merchantId);
     // Waiters: floor POS only — never panel / drawer / company sales aggregates.
     await this.enforceWaiterFloorRestrictions(merchantId);
     return db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
     });
+  }
+
+  /** Grant VIEW_ALL_SALES to system Manager roles that already have company report access. */
+  static async ensureManagerViewAllSales(merchantId: string) {
+    const db = getDb();
+    const roles = await db.query.merchantRoles.findMany({
+      where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.isSystem, true)),
+    });
+    for (const role of roles) {
+      if (!role.name.trim().toLowerCase().startsWith("manager")) continue;
+      const perms = parsePermissions(role.permissions);
+      if (perms.includes("VIEW_ALL_SALES")) continue;
+      if (!perms.includes("VIEW_REPORTS") && !perms.includes("END_OF_DAY")) continue;
+      await db
+        .update(schema.merchantRoles)
+        .set({
+          permissions: encodePermissions([...perms, "VIEW_ALL_SALES"]),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.merchantRoles.id, role.id));
+    }
   }
 
   /** @deprecated use enforceWaiterFloorRestrictions */
@@ -47,6 +70,7 @@ export class StaffService {
     const db = getDb();
     const blocked: Permission[] = [
       "VIEW_REPORTS",
+      "VIEW_ALL_SALES",
       "END_OF_DAY",
       "ACCESS_PANEL",
       "OPEN_CASH_DRAWER",
@@ -391,12 +415,23 @@ export class StaffService {
         where: eq(schema.merchantRoles.id, staff.roleId),
       });
       const permissions = parsePermissions(role?.permissions);
+      const accessToken = AuthService.generateToken({
+        id: staff.id,
+        email: staff.email || `${staff.id}@pin.local`,
+        role: "staff",
+        merchantId,
+        staffId: staff.id,
+        name: staff.name,
+        roleName: role?.name || "Staff",
+        permissions,
+      });
       return {
         id: staff.id,
         name: staff.name,
         roleId: staff.roleId,
         roleName: role?.name || "Staff",
         permissions,
+        accessToken,
         /** Android PosPermission-compatible keys for clients that consume this payload. */
         androidPermissions: toAndroidPermissions(permissions),
       };

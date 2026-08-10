@@ -1376,7 +1376,9 @@ router.put("/settings", async (req: Request, res: Response) => {
  * GET /api/merchant/reports/eod
  * End-of-day / sales report (POS + synced sales in orders table)
  * Query: preset=today|yesterday|last_week|last_month|last_3_months|custom&from=&to=
- * Requires VIEW_REPORTS or END_OF_DAY (waiters must not see company totals).
+ * Requires VIEW_REPORTS or END_OF_DAY.
+ * Without VIEW_ALL_SALES (or with a WebPOS PIN session lacking it), results are
+ * scoped to that staff member's own sales.
  */
 router.get(
   "/reports/eod",
@@ -1385,6 +1387,25 @@ router.get(
     try {
       const merchantId = req.merchantId;
       if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { resolveReportActor, salesScopeForActor } = await import(
+        "@/lib/report-sales-scope"
+      );
+      const actor = resolveReportActor(req);
+      // PIN session on an owner JWT: still require report permission on the PIN role.
+      if (actor.kind === "pin") {
+        const ok =
+          actor.permissions.includes("VIEW_REPORTS") ||
+          actor.permissions.includes("END_OF_DAY");
+        if (!ok) {
+          return res.status(403).json({ error: "Permission denied" });
+        }
+      }
+      const scope = salesScopeForActor(actor);
+      if (!scope.viewAll && !scope.staffId) {
+        return res.status(403).json({
+          error: "Own-sales reports require a staff PIN session",
+        });
+      }
       const { PosReportsService } = await import("@/services/pos-reports.service");
       const preset = String(req.query.preset || "today") as
         | "today"
@@ -1398,6 +1419,8 @@ router.get(
         from: req.query.from ? String(req.query.from) : undefined,
         to: req.query.to ? String(req.query.to) : undefined,
         channel: req.query.channel ? String(req.query.channel) : undefined,
+        staffId: scope.staffId,
+        staffName: scope.staffName,
       });
       res.json({ success: true, report });
     } catch (error) {
@@ -1418,6 +1441,24 @@ router.get(
     try {
       const merchantId = req.merchantId;
       if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { resolveReportActor, salesScopeForActor } = await import(
+        "@/lib/report-sales-scope"
+      );
+      const actor = resolveReportActor(req);
+      if (actor.kind === "pin") {
+        const ok =
+          actor.permissions.includes("VIEW_REPORTS") ||
+          actor.permissions.includes("END_OF_DAY");
+        if (!ok) {
+          return res.status(403).json({ error: "Permission denied" });
+        }
+      }
+      const scope = salesScopeForActor(actor);
+      if (!scope.viewAll && !scope.staffId) {
+        return res.status(403).json({
+          error: "Own-sales reports require a staff PIN session",
+        });
+      }
       const { PosReportsService } = await import("@/services/pos-reports.service");
       const preset = String(req.query.preset || "today") as
         | "today"
@@ -1430,6 +1471,8 @@ router.get(
         preset,
         from: req.query.from ? String(req.query.from) : undefined,
         to: req.query.to ? String(req.query.to) : undefined,
+        staffId: scope.staffId,
+        staffName: scope.staffName,
       });
       res.json({ success: true, overview });
     } catch (error) {
@@ -1452,6 +1495,24 @@ router.get(
     try {
       const merchantId = req.merchantId;
       if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { resolveReportActor, salesScopeForActor } = await import(
+        "@/lib/report-sales-scope"
+      );
+      const actor = resolveReportActor(req);
+      if (actor.kind === "pin") {
+        const ok =
+          actor.permissions.includes("VIEW_REPORTS") ||
+          actor.permissions.includes("END_OF_DAY");
+        if (!ok) {
+          return res.status(403).json({ error: "Permission denied" });
+        }
+      }
+      const scope = salesScopeForActor(actor);
+      if (!scope.viewAll && !scope.staffId) {
+        return res.status(403).json({
+          error: "Own-sales reports require a staff PIN session",
+        });
+      }
       const { ReportExportService } = await import("@/services/report-export.service");
       const preset = String(req.query.preset || "today") as
         | "today"
@@ -1465,6 +1526,8 @@ router.get(
         preset,
         from: req.query.from ? String(req.query.from) : undefined,
         to: req.query.to ? String(req.query.to) : undefined,
+        staffId: scope.staffId,
+        staffName: scope.staffName,
       };
       const file =
         format === "csv"

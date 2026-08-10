@@ -664,14 +664,18 @@ class TransactionRepository @Inject constructor(
         }
     }
 
-    suspend fun getProductsSold(start: Long, end: Long): List<ProductSalesReport> =
-        transactionDao.getProductsSold(start, end).map {
+    suspend fun getProductsSold(
+        start: Long,
+        end: Long,
+        userId: Long? = null
+    ): List<ProductSalesReport> =
+        transactionDao.getProductsSold(start, end, userId ?: -1L).map {
             ProductSalesReport(it.productName, it.qty, roundMoney(it.revenue))
         }
 
-    suspend fun getUserPerformance(): List<UserPerformanceReport> {
+    suspend fun getUserPerformance(userId: Long? = null): List<UserPerformanceReport> {
         val (start, end) = dayBounds()
-        return transactionDao.getUserPerformance(start, end).map {
+        return transactionDao.getUserPerformance(start, end, userId ?: -1L).map {
             UserPerformanceReport(it.userName, it.txCount, roundMoney(it.revenue))
         }
     }
@@ -690,10 +694,14 @@ class TransactionRepository @Inject constructor(
     suspend fun buildEndOfDayReport(
         transactions: List<TransactionEntity>,
         start: Long,
-        end: Long
+        end: Long,
+        scopeUserId: Long? = null
     ): EndOfDayReport {
         val settings = settingsDao.get() ?: BusinessSettingsEntity()
-        val completed = transactions.filter { it.paymentStatus == PaymentStatus.COMPLETED }
+        val scoped =
+            if (scopeUserId != null) transactions.filter { it.userId == scopeUserId }
+            else transactions
+        val completed = scoped.filter { it.paymentStatus == PaymentStatus.COMPLETED }
 
         // Brut (taxable gross incl. VAT) excludes tips because tips are not taxable.
         fun brutOf(tx: TransactionEntity) = (tx.total - tx.tipAmount).coerceAtLeast(0.0)
@@ -749,9 +757,11 @@ class TransactionRepository @Inject constructor(
             )
         }
 
-        val productsSold = transactionDao.getProductsSold(start, end).map {
-            ProductSalesReport(it.productName, it.qty, roundMoney(it.revenue))
-        }
+        val productsSold = transactionDao
+            .getProductsSold(start, end, scopeUserId ?: -1L)
+            .map {
+                ProductSalesReport(it.productName, it.qty, roundMoney(it.revenue))
+            }
 
         val coversServed = if (settings.trackCoversFromSeatingPlan) {
             completed

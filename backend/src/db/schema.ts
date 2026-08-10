@@ -809,6 +809,8 @@ export const orders = pgTable(
     changeDue: decimal("change_due", { precision: 10, scale: 2 }),
     /** Staff who completed the POS / WebPOS sale */
     staffName: varchar("staff_name", { length: 255 }),
+    /** Stable staff id for own-sales EOD / reports (nullable for legacy rows) */
+    staffId: uuid("staff_id").references(() => merchantStaff.id, { onDelete: "set null" }),
     /** Online card surcharge charged to the customer */
     cardFee: decimal("card_fee", { precision: 10, scale: 2 }).default("0"),
     /** CHF discount applied from redeeming loyalty points as money */

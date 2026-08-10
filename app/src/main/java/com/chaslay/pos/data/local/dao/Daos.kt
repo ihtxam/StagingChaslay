@@ -263,11 +263,12 @@ interface TransactionDao {
         INNER JOIN transactions t ON t.id = ti.transactionId
         WHERE t.createdAt >= :startMs AND t.createdAt < :endMs
         AND t.paymentStatus = 'COMPLETED'
+        AND (:userId < 0 OR t.userId = :userId)
         GROUP BY ti.productName
         ORDER BY qty DESC, ti.productName ASC
         """
     )
-    suspend fun getProductsSold(startMs: Long, endMs: Long): List<ProductSalesRow>
+    suspend fun getProductsSold(startMs: Long, endMs: Long, userId: Long = -1L): List<ProductSalesRow>
 
     @Query(
         """
@@ -275,11 +276,12 @@ interface TransactionDao {
         FROM transactions
         WHERE createdAt >= :startOfDay AND createdAt < :endOfDay
         AND paymentStatus = 'COMPLETED'
+        AND (:userId < 0 OR userId = :userId)
         GROUP BY userName
         ORDER BY revenue DESC
         """
     )
-    suspend fun getUserPerformance(startOfDay: Long, endOfDay: Long): List<UserPerformanceRow>
+    suspend fun getUserPerformance(startOfDay: Long, endOfDay: Long, userId: Long = -1L): List<UserPerformanceRow>
 
     @Query(
         """
