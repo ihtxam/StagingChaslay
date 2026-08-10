@@ -172,6 +172,32 @@ export class ChaslayCompatService {
   }
 
   static async posLogin(email: string, password: string, tenantSlug?: string | null) {
+    void tenantSlug; // accepted for API compat; not used to reject login
+    try {
+      return await this.posLoginOwner(email, password);
+    } catch (ownerError) {
+      try {
+        return await this.posLoginStaff(email, password);
+      } catch {
+        throw ownerError;
+      }
+    }
+  }
+
+  private static async ensureMerchantSyncKey(merchantId: string, existingKey?: string | null) {
+    const db = getDb();
+    let syncApiKey = existingKey?.trim() || "";
+    if (!syncApiKey) {
+      syncApiKey = generateSyncApiKey();
+      await db
+        .update(schema.merchants)
+        .set({ syncApiKey })
+        .where(eq(schema.merchants.id, merchantId));
+    }
+    return syncApiKey;
+  }
+
+  private static async posLoginOwner(email: string, password: string) {
     const db = getDb();
     const normalizedEmail = String(email || "").trim().toLowerCase();
     // Match by email only (case-insensitive). A stale device tenantSlug must not
@@ -196,17 +222,7 @@ export class ChaslayCompatService {
       throw new Error(`Account is ${merchant.status}`);
     }
 
-    void tenantSlug; // accepted for API compat; not used to reject login
-
-    // Ensure every merchant has a sync API key so the POS can pull/push catalog.
-    let syncApiKey = merchant.syncApiKey?.trim() || "";
-    if (!syncApiKey) {
-      syncApiKey = generateSyncApiKey();
-      await db
-        .update(schema.merchants)
-        .set({ syncApiKey })
-        .where(eq(schema.merchants.id, merchant.id));
-    }
+    const syncApiKey = await this.ensureMerchantSyncKey(merchant.id, merchant.syncApiKey);
 
     // Same JWT the merchant dashboard uses, so Android can open Settings in a WebView.
     const dashboardToken = AuthService.generateToken({
@@ -223,6 +239,7 @@ export class ChaslayCompatService {
       role: "merchant" as const,
       merchantId: merchant.id,
       isOwner: true,
+      roleName: "Owner",
     };
 
     return {
@@ -231,6 +248,70 @@ export class ChaslayCompatService {
         email: merchant.email,
         name: merchant.name,
         role: "MERCHANT",
+        roleName: "Owner",
+        tenantSlug: merchant.slug,
+      },
+      merchantId: merchant.id,
+      syncApiKey,
+      dashboardToken,
+      dashboardUser,
+      dashboardUrl:
+        process.env.MERCHANT_DASHBOARD_URL ||
+        process.env.PUBLIC_APP_URL ||
+        "https://app.chaslay.com",
+    };
+  }
+
+  private static async posLoginStaff(email: string, password: string) {
+    const { StaffService } = await import("@/services/staff.service");
+    const { toAndroidPermissions } = await import("@/lib/permissions");
+    const { staff, role, permissions } = await StaffService.loginStaff(email, password);
+
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, staff.merchantId),
+    });
+    if (!merchant) {
+      throw new Error("Invalid credentials");
+    }
+    if (merchant.status !== "active" && merchant.status !== "trial") {
+      throw new Error(`Account is ${merchant.status}`);
+    }
+
+    const syncApiKey = await this.ensureMerchantSyncKey(merchant.id, merchant.syncApiKey);
+    const roleName = role?.name || "Staff";
+    const androidPermissions = toAndroidPermissions(permissions);
+
+    const dashboardToken = AuthService.generateToken({
+      id: staff.id,
+      email: staff.email || email,
+      role: "staff",
+      merchantId: staff.merchantId,
+      staffId: staff.id,
+      name: staff.name,
+      roleName,
+      permissions,
+    });
+    const dashboardUser = {
+      id: staff.id,
+      email: staff.email || email,
+      name: staff.name,
+      role: "staff" as const,
+      merchantId: staff.merchantId,
+      staffId: staff.id,
+      isOwner: false,
+      roleName,
+      permissions,
+    };
+
+    return {
+      user: {
+        id: staff.id,
+        email: staff.email || email,
+        name: staff.name,
+        role: roleName.toUpperCase().replace(/\s+/g, "_"),
+        roleName,
+        permissions: androidPermissions,
         tenantSlug: merchant.slug,
       },
       merchantId: merchant.id,

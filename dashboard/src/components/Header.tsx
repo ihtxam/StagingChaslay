@@ -107,8 +107,18 @@ export default function Header({
           <div className="flex items-center gap-2 pl-2 border-l border-[var(--border)]">
             <div className="text-right hidden sm:block max-w-[9rem]">
               <p className="font-medium text-xs truncate">{user?.name}</p>
-              <p className="text-[10px] muted capitalize truncate">
-                {impersonating ? 'Merchant (SA)' : user?.role}
+              <p className="text-[10px] muted truncate" title={
+                impersonating
+                  ? 'Merchant (SA)'
+                  : user?.isOwner
+                    ? t('staffOwnerTitle')
+                    : user?.roleName || user?.role || ''
+              }>
+                {impersonating
+                  ? 'Merchant (SA)'
+                  : user?.isOwner
+                    ? t('staffOwnerTitle')
+                    : user?.roleName || user?.role}
               </p>
             </div>
             <button

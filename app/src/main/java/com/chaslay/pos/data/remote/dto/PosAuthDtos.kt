@@ -23,6 +23,9 @@ data class PosLoginUserDto(
     @SerializedName("email") val email: String,
     @SerializedName("name") val name: String,
     @SerializedName("role") val role: String,
+    /** Display name from merchant Users & roles (e.g. Manager). */
+    @SerializedName("roleName") val roleName: String? = null,
+    @SerializedName("permissions") val permissions: List<String>? = null,
     @SerializedName("tenantSlug") val tenantSlug: String?
 )
 
@@ -32,5 +35,8 @@ data class PosDashboardUserDto(
     @SerializedName("name") val name: String,
     @SerializedName("role") val role: String,
     @SerializedName("merchantId") val merchantId: String? = null,
-    @SerializedName("isOwner") val isOwner: Boolean? = true
+    @SerializedName("staffId") val staffId: String? = null,
+    @SerializedName("isOwner") val isOwner: Boolean? = true,
+    @SerializedName("roleName") val roleName: String? = null,
+    @SerializedName("permissions") val permissions: List<String>? = null
 )

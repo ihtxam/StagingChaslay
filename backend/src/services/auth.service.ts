@@ -158,6 +158,7 @@ export class AuthService {
         email: merchant.email,
         name: merchant.name,
         status: merchant.status,
+        roleName: "Owner",
       },
       isOwner: true,
     };

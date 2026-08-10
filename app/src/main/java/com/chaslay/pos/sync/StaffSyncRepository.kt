@@ -24,10 +24,9 @@ class StaffSyncRepository @Inject constructor(
 
             val roleIdByRemote = mutableMapOf<String, Long>()
             for (remote in remoteRoles) {
+                // Server already maps panel keys → Android names; keep aliases for older backends.
                 val perms = PosPermission.encode(
-                    remote.permissions.mapNotNull { name ->
-                        runCatching { PosPermission.valueOf(name) }.getOrNull()
-                    }.toSet()
+                    com.chaslay.pos.data.repository.AuthRepository.mapServerPermissions(remote.permissions)
                 )
                 val existing = roleDao.getAll().find { it.name.equals(remote.name, ignoreCase = true) }
                 val roleId = if (existing != null) {

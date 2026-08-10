@@ -6,6 +6,7 @@ import {
   DEFAULT_ROLE_TEMPLATES,
   encodePermissions,
   parsePermissions,
+  toAndroidPermissions,
   type Permission,
 } from "@/lib/permissions";
 
@@ -363,6 +364,8 @@ export class StaffService {
         roleId: staff.roleId,
         roleName: role?.name || "Staff",
         permissions,
+        /** Android PosPermission-compatible keys for clients that consume this payload. */
+        androidPermissions: toAndroidPermissions(permissions),
       };
     }
 
@@ -407,7 +410,7 @@ export class StaffService {
       roles: roles.map((r) => ({
         id: r.id,
         name: r.name,
-        permissions: parsePermissions(r.permissions),
+        permissions: toAndroidPermissions(parsePermissions(r.permissions)),
         isSystem: r.isSystem,
       })),
       staff: staff.map((s) => ({

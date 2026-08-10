@@ -120,7 +120,11 @@ export default function LoginPage() {
       merchantId: kind === 'merchant' ? account.id : undefined,
       resellerId: kind === 'reseller' ? account.id : undefined,
       staffId: isStaff ? account.staffId : undefined,
-      roleName: account.roleName,
+      roleName: isStaff
+        ? account.roleName
+        : kind === 'merchant' && isOwner !== false
+          ? account.roleName || 'Owner'
+          : account.roleName,
       permissions: account.permissions,
       isOwner: kind === 'merchant' && isOwner !== false && !isStaff,
     };

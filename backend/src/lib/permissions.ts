@@ -134,7 +134,29 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
   },
 ];
 
-/** Panel sidebar route ? required permission (any match grants access). */
+/**
+ * Map panel/web permission keys → Android PosPermission names used by Chaslay POS.
+ * Unknown keys are dropped so Room sync only stores enums the app understands.
+ */
+export const ANDROID_PERMISSION_ALIASES: Record<string, string> = {
+  ACCESS_PANEL: "ACCESS_SETTINGS",
+  MANAGE_SETTINGS: "ACCESS_SETTINGS",
+  MANAGE_STAFF: "MANAGE_USERS",
+  USE_WEBPOS: "USE_POS",
+};
+
+export function toAndroidPermissions(perms: Permission[] | string[]): string[] {
+  const out = new Set<string>();
+  for (const raw of perms) {
+    const key = String(raw || "").trim();
+    if (!key) continue;
+    const mapped = ANDROID_PERMISSION_ALIASES[key] || key;
+    out.add(mapped);
+  }
+  return [...out];
+}
+
+/** Panel sidebar route → required permission (any match grants access). */
 export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   "/merchant": ["VIEW_REPORTS", "ACCESS_PANEL"],
   "/merchant/orders": ["VIEW_ORDER_HISTORY"],

@@ -91,6 +91,14 @@ class AuthRepository @Inject constructor(
         /** Cloud merchant users are stored locally above seeded staff IDs. */
         private const val CLOUD_USER_ID_BASE = 100_000L
 
+        /** Panel/web permission keys → Android PosPermission names. */
+        private val SERVER_PERMISSION_ALIASES = mapOf(
+            "ACCESS_PANEL" to PosPermission.ACCESS_SETTINGS,
+            "MANAGE_SETTINGS" to PosPermission.ACCESS_SETTINGS,
+            "MANAGE_STAFF" to PosPermission.MANAGE_USERS,
+            "USE_WEBPOS" to PosPermission.USE_POS
+        )
+
         /** Maps server UUID to a stable local Room user id. */
         fun cloudUserLocalId(cloudUserId: String): Long {
             val uuid = runCatching { UUID.fromString(cloudUserId.trim()) }.getOrNull()
@@ -100,6 +108,22 @@ class AuthRepository @Inject constructor(
                 cloudUserId.hashCode().toLong()
             }
             return CLOUD_USER_ID_BASE + (bucket and 0x1FFFFFFFFFFFFFFFL) % 50_000_000L
+        }
+
+        fun mapServerPermissions(raw: List<String>?): Set<PosPermission> {
+            if (raw.isNullOrEmpty()) return emptySet()
+            val out = linkedSetOf<PosPermission>()
+            for (name in raw) {
+                val key = name.trim()
+                if (key.isEmpty()) continue
+                val aliased = SERVER_PERMISSION_ALIASES[key]
+                if (aliased != null) {
+                    out.add(aliased)
+                    continue
+                }
+                runCatching { PosPermission.valueOf(key) }.getOrNull()?.let { out.add(it) }
+            }
+            return out
         }
     }
 
@@ -181,7 +205,9 @@ class AuthRepository @Inject constructor(
                     .put("name", du.name)
                     .put("role", du.role)
                     .put("merchantId", du.merchantId ?: du.id)
+                    .put("staffId", du.staffId)
                     .put("isOwner", du.isOwner != false)
+                    .put("roleName", du.roleName ?: cloudUser.roleName)
                     .toString()
                 syncPreferences.setDashboardUserJson(json)
             }
@@ -189,13 +215,35 @@ class AuthRepository @Inject constructor(
                 syncPreferences.setDashboardUrl(url)
             }
             syncPreferences.resetMenuSyncCursor()
-            val permissions = PosPermission.all()
-            val role = com.chaslay.pos.data.local.entity.RoleEntity(
-                id = 1L,
-                name = "Merchant",
-                permissions = PosPermission.encode(permissions),
-                isSystem = true
-            )
+            val isOwner = body.dashboardUser?.isOwner != false &&
+                cloudUser.role.equals("MERCHANT", ignoreCase = true)
+            val roleName = cloudUser.roleName?.trim()?.takeIf { it.isNotEmpty() }
+                ?: if (isOwner) "Owner" else cloudUser.role.replace('_', ' ').lowercase(Locale.getDefault())
+                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+            val permissionSet = if (isOwner) {
+                PosPermission.all()
+            } else {
+                mapServerPermissions(cloudUser.permissions)
+                    .ifEmpty { PosPermission.decode(roleDao.getAll().find { it.name.equals(roleName, true) }?.permissions) }
+                    .ifEmpty { setOf(PosPermission.USE_POS, PosPermission.PROCESS_PAYMENTS) }
+            }
+            val existingRole = roleDao.getAll().find { it.name.equals(roleName, ignoreCase = true) }
+            val role = if (existingRole != null) {
+                val updated = existingRole.copy(
+                    permissions = PosPermission.encode(permissionSet),
+                    isSystem = existingRole.isSystem || isOwner
+                )
+                roleDao.update(updated)
+                updated
+            } else {
+                val created = com.chaslay.pos.data.local.entity.RoleEntity(
+                    name = roleName,
+                    permissions = PosPermission.encode(permissionSet),
+                    isSystem = isOwner
+                )
+                val newId = roleDao.insert(created)
+                created.copy(id = newId)
+            }
             val localId = cloudUserLocalId(cloudUser.id)
             val existingByEmail = userDao.getByEmail(cloudUser.email.trim())
             val existing = when {
