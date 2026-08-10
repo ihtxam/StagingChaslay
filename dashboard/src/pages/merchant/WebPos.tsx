@@ -2040,12 +2040,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           toast.error(t('webPosNoItemsInCourse'));
           return;
         }
-        await fireCourseLines(lines, activeCourse);
-        toast.success(t('webPosFireCourseDone').replace('{n}', String(activeCourse)));
         const sentIds = new Set(lines.map((l) => l.lineId));
         const sentCart = cart.map((l) =>
           sentIds.has(l.lineId) ? { ...l, sentToKitchen: true } : l
         );
+        const ticket = ensureCartTicket();
+        // Orders panel only lists API held rows — persist before clearing the register.
+        await persistHeldOrder(sentCart, true, { ticket });
+        await fireCourseLines(lines, activeCourse);
+        toast.success(t('webPosFireCourseDone').replace('{n}', String(activeCourse)));
         releaseOperatorAfterKitchen(sentCart);
         return;
       }
@@ -2072,17 +2075,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         toSend = unsent.length > 0 ? unsent : stamped;
       }
 
-      await fireCourseLines(toSend);
-      setOrderSent(true);
-      setCoursesBulkSent(true);
-      toast.success(t('webPosHeldSentKitchen'));
       const sentIds = new Set(toSend.map((l) => l.lineId));
       const sentCart = stamped.map((l) =>
         sentIds.has(l.lineId) ? { ...l, sentToKitchen: true } : l
       );
+      const ticket = ensureCartTicket();
+      // Print alone is not enough — Orders loads /merchant/pos/held + today's paid POS.
+      await persistHeldOrder(sentCart, true, { ticket });
+      await fireCourseLines(toSend);
+      setOrderSent(true);
+      setCoursesBulkSent(true);
+      toast.success(t('webPosHeldSentKitchen'));
       releaseOperatorAfterKitchen(sentCart);
     } catch (e: any) {
-      toast.error(e.message || t('webPosKitchenPrintFailed'));
+      toast.error(e?.response?.data?.error || e.message || t('webPosKitchenPrintFailed'));
     } finally {
       setBusy(false);
     }
@@ -2170,6 +2176,72 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTicketDisplay(null);
     setTicketOrderNumber(null);
   }, []);
+
+  /**
+   * Persist cart to /merchant/pos/held so Orders can list kitchen / held tickets.
+   * Upserts by ticket (or table / tab) so re-sends update the same row.
+   */
+  const persistHeldOrder = async (
+    cartLines: CartLine[],
+    sendToKitchen: boolean,
+    opts?: { ticket?: { display: string; orderNumber: string } }
+  ) => {
+    if (!cartLines.length) return;
+    const ticket = opts?.ticket ?? ensureCartTicket();
+    const cartSum = cartLines.reduce((s, l) => s + Number(l.lineTotal || 0), 0);
+    const heldLabel = [
+      tableLabel || null,
+      tabNumber ? `${t('webPosTab')} ${tabNumber}` : null,
+      ticket.display,
+      channel,
+      money(cartSum),
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const cartJson = {
+      cart: cartLines,
+      channel,
+      tableId,
+      tableLabel,
+      tabNumber,
+      ticketDisplay: ticket.display,
+      ticketOrderNumber: ticket.orderNumber,
+      billDiscount,
+      orderNote,
+    };
+
+    try {
+      const res = await api.get('/merchant/pos/held');
+      const list = (res.data?.held || []) as Array<{
+        id: string;
+        cartJson?: Record<string, unknown> | null;
+      }>;
+      for (const h of list) {
+        const cj = h.cartJson;
+        if (!cj || typeof cj !== 'object') continue;
+        const sameTicket =
+          typeof cj.ticketDisplay === 'string' && cj.ticketDisplay === ticket.display;
+        const sameTable = !!tableId && cj.tableId === tableId;
+        const sameTab =
+          !!tabNumber && !tableId && cj.tabNumber === tabNumber && !cj.tableId;
+        if (sameTicket || sameTable || sameTab) {
+          await api.delete(`/merchant/pos/held/${h.id}`);
+        }
+      }
+    } catch {
+      /* best-effort upsert cleanup */
+    }
+
+    await api.post('/merchant/pos/held', {
+      label: heldLabel,
+      channel,
+      cartJson,
+      staffId: webposStaff?.id,
+      staffName: webposStaff?.name,
+      sendToKitchen,
+    });
+    setOrdersRefreshToken((n) => n + 1);
+  };
 
   /** Attach current cart lines to a table (Set table) — never wipe the cart. */
   const assignCartToTable = (table: { id: string; label: string }) => {
@@ -3859,32 +3931,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const channelSnapshot = channel;
       const whenSnapshot = fulfillmentWhen;
       const ticket = ensureCartTicket();
-      const heldLabel = [
-        tabNumber ? `${t('webPosTab')} ${tabNumber}` : null,
-        ticket.display,
-        channel,
-        money(totals.total),
-      ]
-        .filter(Boolean)
-        .join(' · ');
-      await api.post('/merchant/pos/held', {
-        label: heldLabel,
-        channel,
-        cartJson: {
-          cart,
-          channel,
-          tableId,
-          tableLabel,
-          tabNumber,
-          ticketDisplay: ticket.display,
-          ticketOrderNumber: ticket.orderNumber,
-          billDiscount,
-          orderNote,
-        },
-        staffId: webposStaff?.id,
-        staffName: webposStaff?.name,
-        sendToKitchen,
-      });
+      await persistHeldOrder(cart, sendToKitchen, { ticket });
       setCart([]);
       clearCartTicket();
       toast.success(sendToKitchen ? t('webPosHeldSentKitchen') : t('webPosOrderHeld'));
@@ -4577,6 +4624,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     channel?: Channel;
                     tableId?: string | null;
                     tableLabel?: string | null;
+                    tabNumber?: string | null;
+                    ticketDisplay?: string | null;
+                    ticketOrderNumber?: string | null;
                     billDiscount?: BillDiscount;
                     orderNote?: string;
                   }
@@ -4588,12 +4638,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 if (data.channel) setChannel(data.channel);
                 if (data.tableId) setTableId(data.tableId);
                 if (data.tableLabel) setTableLabel(data.tableLabel);
+                if (data.tabNumber != null) setTabNumber(data.tabNumber);
+                if (data.ticketDisplay) setTicketDisplay(data.ticketDisplay);
+                if (data.ticketOrderNumber) setTicketOrderNumber(data.ticketOrderNumber);
                 if (data.orderNote != null) setOrderNote(data.orderNote);
                 if (data.billDiscount) setBillDiscount(data.billDiscount);
               }
               const sent = held.status === 'sent_to_kitchen';
               setOrderSent(sent);
               setCoursesBulkSent(sent);
+              // Remove from held list while editing/paying on the register.
+              void api.post(`/merchant/pos/held/${held.id}/resume`).catch(() => {});
+              setOrdersRefreshToken((n) => n + 1);
               setPosTab('register');
               setPosView('register');
               toast.success(t('webPosOrderResumed'));
@@ -4606,13 +4662,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               }
             }}
             onVoidHeldKitchen={async (held, reason) => {
-              const data = held.cartJson as { cart?: CartLine[] } | CartLine[];
+              const data = held.cartJson as
+                | { cart?: CartLine[]; ticketDisplay?: string | null }
+                | CartLine[];
               const lines = Array.isArray(data) ? data : data?.cart || [];
               if (!lines.length) return;
               const ch = (held.channel || 'takeaway') as Channel;
-              const ticket = nextWebPosTicketNumber(merchant?.id);
+              const existingTicket =
+                (!Array.isArray(data) && data?.ticketDisplay) ||
+                (held.label || '').match(/#\d{4}/)?.[0] ||
+                null;
+              const ticketDisplay =
+                existingTicket || nextWebPosTicketNumber(merchant?.id).display;
               await printKitchenForCart(lines, ch, {
-                orderNumber: ticket.display,
+                orderNumber: ticketDisplay,
                 cancelled: true,
                 cancelReason: reason,
                 forcePrint: true,

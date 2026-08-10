@@ -271,7 +271,19 @@ export default function WebPosOrdersPanel({
         }
         if (q) {
           const label = (h.label || '').toLowerCase();
-          if (!label.includes(q) && !(h.channel || '').toLowerCase().includes(q)) continue;
+          const cj = h.cartJson as
+            | { ticketDisplay?: string | null; tabNumber?: string | null; tableLabel?: string | null }
+            | null;
+          const hay = [
+            label,
+            h.channel || '',
+            cj && !Array.isArray(cj) ? cj.ticketDisplay || '' : '',
+            cj && !Array.isArray(cj) ? cj.tabNumber || '' : '',
+            cj && !Array.isArray(cj) ? cj.tableLabel || '' : '',
+          ]
+            .join(' ')
+            .toLowerCase();
+          if (!hay.includes(q)) continue;
         }
         items.push({ kind: 'held', held: h });
       }
