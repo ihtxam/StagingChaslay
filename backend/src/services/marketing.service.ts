@@ -202,6 +202,7 @@ export class MarketingService {
       title?: string;
       subject: string;
       bodyHtml: string;
+      designJson?: Record<string, unknown> | null;
       audience?: "all" | "selected";
       selectedEmails?: string[];
     }
@@ -223,6 +224,10 @@ export class MarketingService {
             )
           )
         : null;
+    const designJson =
+      input.designJson && typeof input.designJson === "object"
+        ? (input.designJson as Record<string, unknown>)
+        : null;
 
     if (input.id) {
       const existing = await db.query.newsletterCampaigns.findFirst({
@@ -239,6 +244,7 @@ export class MarketingService {
           title: String(input.title || existing.title || "Newsletter").slice(0, 200),
           subject: subject.slice(0, 300),
           bodyHtml,
+          designJson: designJson ?? existing.designJson ?? null,
           audience,
           selectedEmails,
           status: existing.status === "sent" ? "draft" : existing.status,
@@ -256,6 +262,7 @@ export class MarketingService {
         title: String(input.title || "Newsletter").slice(0, 200),
         subject: subject.slice(0, 300),
         bodyHtml,
+        designJson,
         audience,
         selectedEmails,
         status: "draft",

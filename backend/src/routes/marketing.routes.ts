@@ -45,6 +45,7 @@ router.post("/campaigns", async (req: Request, res: Response) => {
       title: req.body.title,
       subject: req.body.subject,
       bodyHtml: req.body.bodyHtml,
+      designJson: req.body.designJson ?? null,
       audience: req.body.audience,
       selectedEmails: req.body.selectedEmails,
     });

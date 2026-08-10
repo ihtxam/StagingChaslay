@@ -43,6 +43,11 @@ const en: Dict = {
   newsletterBody: 'Email body',
   newsletterBuilderHint:
     'Drag blocks to reorder. Add headings, text, buttons, images, dividers. Switch to HTML anytime.',
+  newsletterUnlayerHint:
+    'Drag-and-drop Unlayer editor. Use Merge Tags for {{name}}, {{businessName}}, {{shopUrl}}. Save exports HTML for sending.',
+  newsletterLegacyRedesign:
+    'This draft was made in the old editor. Redesign it here, then Save draft (previous HTML is replaced).',
+  newsletterNew: 'New campaign',
   newsletterPlaceholders: 'Placeholders: {{name}} {{shopUrl}} {{businessName}}',
   newsletterAudience: 'Audience',
   newsletterAllCustomers: 'All customers with email',
@@ -1559,6 +1564,11 @@ const fr: Dict = {
   newsletterBody: 'Corps de l’email',
   newsletterBuilderHint:
     'Glissez les blocs pour réordonner. Ajoutez titres, texte, boutons, images, séparateurs. Passez en HTML à tout moment.',
+  newsletterUnlayerHint:
+    'Éditeur Unlayer glisser-déposer. Utilisez les Merge Tags pour {{name}}, {{businessName}}, {{shopUrl}}. L’enregistrement exporte le HTML.',
+  newsletterLegacyRedesign:
+    'Brouillon de l’ancien éditeur. Refaites le design ici, puis Enregistrer (l’ancien HTML sera remplacé).',
+  newsletterNew: 'Nouvelle campagne',
   newsletterPlaceholders: 'Variables : {{name}} {{shopUrl}} {{businessName}}',
   newsletterAudience: 'Audience',
   newsletterAllCustomers: 'Tous les clients avec email',
@@ -3009,6 +3019,11 @@ const de: Dict = {
   newsletterBody: 'E-Mail-Inhalt',
   newsletterBuilderHint:
     'Blöcke per Drag & Drop sortieren. Überschriften, Text, Buttons, Bilder, Trennlinien. HTML jederzeit möglich.',
+  newsletterUnlayerHint:
+    'Unlayer Drag-and-Drop-Editor. Merge Tags für {{name}}, {{businessName}}, {{shopUrl}}. Speichern exportiert HTML.',
+  newsletterLegacyRedesign:
+    'Entwurf aus dem alten Editor. Hier neu gestalten, dann Speichern (altes HTML wird ersetzt).',
+  newsletterNew: 'Neue Kampagne',
   newsletterPlaceholders: 'Platzhalter: {{name}} {{shopUrl}} {{businessName}}',
   newsletterAudience: 'Empfänger',
   newsletterAllCustomers: 'Alle Kunden mit E-Mail',

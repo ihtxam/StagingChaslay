@@ -1,7 +1,10 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import EmailBlockBuilder from '@/components/EmailBlockBuilder';
+import UnlayerEmailEditor, {
+  type UnlayerDesign,
+  type UnlayerEmailEditorHandle,
+} from '@/components/UnlayerEmailEditor';
 import { useI18n } from '@/lib/i18n';
 
 type AudienceRow = {
@@ -16,6 +19,7 @@ type Campaign = {
   title: string;
   subject: string;
   bodyHtml: string;
+  designJson?: UnlayerDesign | null;
   status: string;
   audience: string;
   recipientCount?: number;
@@ -28,6 +32,7 @@ type Campaign = {
 
 export default function Newsletter() {
   const { t } = useI18n();
+  const editorRef = useRef<UnlayerEmailEditorHandle>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
@@ -39,9 +44,8 @@ export default function Newsletter() {
   const [campaignId, setCampaignId] = useState<string | null>(null);
   const [title, setTitle] = useState('Newsletter');
   const [subject, setSubject] = useState('');
-  const [bodyHtml, setBodyHtml] = useState(
-    '<p>Hi {{name}},</p>\n<p>Here is our latest news from {{businessName}}.</p>\n<p><a href="{{shopUrl}}">Visit our shop</a></p>'
-  );
+  const [designJson, setDesignJson] = useState<UnlayerDesign | null>(null);
+  const [legacyHtml, setLegacyHtml] = useState<string | null>(null);
   const [audienceMode, setAudienceMode] = useState<'all' | 'selected'>('all');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState('');
@@ -82,23 +86,36 @@ export default function Newsletter() {
     [selected]
   );
 
+  const exportFromEditor = async () => {
+    const exported = await editorRef.current?.exportDesign();
+    if (!exported?.html?.trim()) {
+      throw new Error(t('newsletterNeedSubjectBody'));
+    }
+    setDesignJson(exported.design);
+    setLegacyHtml(null);
+    return exported;
+  };
+
   const saveDraft = async (e?: FormEvent) => {
     e?.preventDefault();
     setSaving(true);
     try {
+      const { html, design } = await exportFromEditor();
       const res = await api.post('/merchant/marketing/campaigns', {
         id: campaignId || undefined,
         title,
         subject,
-        bodyHtml,
+        bodyHtml: html,
+        designJson: design,
         audience: audienceMode,
         selectedEmails: audienceMode === 'selected' ? selectedEmails : undefined,
       });
       setCampaignId(res.data.campaign.id);
+      setDesignJson((res.data.campaign.designJson as UnlayerDesign) || design);
       toast.success(t('newsletterDraftSaved'));
       await load();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || t('newsletterSaveFailed'));
+      toast.error(error.response?.data?.error || error.message || t('newsletterSaveFailed'));
     } finally {
       setSaving(false);
     }
@@ -109,7 +126,7 @@ export default function Newsletter() {
       toast.error(t('newsletterEmailNotConfigured'));
       return;
     }
-    if (!subject.trim() || !bodyHtml.trim()) {
+    if (!subject.trim()) {
       toast.error(t('newsletterNeedSubjectBody'));
       return;
     }
@@ -120,16 +137,19 @@ export default function Newsletter() {
     if (!window.confirm(t('newsletterSendConfirm'))) return;
     setSending(true);
     try {
+      const { html, design } = await exportFromEditor();
       const saved = await api.post('/merchant/marketing/campaigns', {
         id: campaignId || undefined,
         title,
         subject,
-        bodyHtml,
+        bodyHtml: html,
+        designJson: design,
         audience: audienceMode,
         selectedEmails: audienceMode === 'selected' ? selectedEmails : undefined,
       });
       const id = saved.data.campaign.id as string;
       setCampaignId(id);
+      setDesignJson((saved.data.campaign.designJson as UnlayerDesign) || design);
       const res = await api.post(`/merchant/marketing/campaigns/${id}/send`);
       toast.success(
         t('newsletterSent')
@@ -138,7 +158,7 @@ export default function Newsletter() {
       );
       await load();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || t('newsletterSendFailed'));
+      toast.error(error.response?.data?.error || error.message || t('newsletterSendFailed'));
     } finally {
       setSending(false);
     }
@@ -148,7 +168,12 @@ export default function Newsletter() {
     setCampaignId(c.id);
     setTitle(c.title || 'Newsletter');
     setSubject(c.subject || '');
-    setBodyHtml(c.bodyHtml || '');
+    const design =
+      c.designJson && typeof c.designJson === 'object' && Object.keys(c.designJson).length > 0
+        ? c.designJson
+        : null;
+    setDesignJson(design);
+    setLegacyHtml(!design && c.bodyHtml?.trim() ? c.bodyHtml : null);
     setAudienceMode(c.audience === 'selected' ? 'selected' : 'all');
     const next: Record<string, boolean> = {};
     (c.selectedEmails || []).forEach((e) => {
@@ -157,15 +182,30 @@ export default function Newsletter() {
     setSelected(next);
   };
 
+  const newCampaign = () => {
+    setCampaignId(null);
+    setTitle('Newsletter');
+    setSubject('');
+    setDesignJson(null);
+    setLegacyHtml(null);
+    setAudienceMode('all');
+    setSelected({});
+  };
+
   if (loading) {
     return <div className="text-center py-12 muted text-sm">{t('loading')}</div>;
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
-      <div>
-        <h1 className="page-title">{t('newsletter')}</h1>
-        <p className="page-sub">{t('newsletterHint')}</p>
+    <div className="mx-auto max-w-6xl space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="page-title">{t('newsletter')}</h1>
+          <p className="page-sub">{t('newsletterHint')}</p>
+        </div>
+        <button type="button" className="btn-secondary text-sm" onClick={newCampaign}>
+          {t('newsletterNew')}
+        </button>
       </div>
 
       {!emailStatus.configured ? (
@@ -195,13 +235,20 @@ export default function Newsletter() {
             />
           </label>
         </div>
+
         <div className="space-y-1">
           <span className="text-sm font-medium block">{t('newsletterBody')}</span>
-          <p className="text-[11px] muted">{t('newsletterBuilderHint')}</p>
-          <EmailBlockBuilder
-            key={campaignId || 'new'}
-            valueHtml={bodyHtml}
-            onChangeHtml={setBodyHtml}
+          <p className="text-[11px] muted">{t('newsletterUnlayerHint')}</p>
+          {legacyHtml ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+              {t('newsletterLegacyRedesign')}
+            </div>
+          ) : null}
+          <UnlayerEmailEditor
+            ref={editorRef}
+            designJson={designJson}
+            minHeight="680px"
+            className="overflow-hidden rounded-lg border border-[var(--border)]"
           />
         </div>
 
@@ -292,7 +339,11 @@ export default function Newsletter() {
                     {c.sentCount != null ? ` · ${c.sentCount}/${c.recipientCount || 0}` : ''}
                   </p>
                 </div>
-                <button type="button" className="btn-secondary text-xs shrink-0" onClick={() => loadCampaign(c)}>
+                <button
+                  type="button"
+                  className="btn-secondary text-xs shrink-0"
+                  onClick={() => loadCampaign(c)}
+                >
                   {t('edit')}
                 </button>
               </li>

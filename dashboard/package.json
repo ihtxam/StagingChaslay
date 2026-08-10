@@ -25,6 +25,7 @@
     "motion-dom": "12.23.20",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-email-editor": "^2.0.0",
     "react-hook-form": "^7.52.0",
     "react-hot-toast": "^2.4.1",
     "react-leaflet": "^4.2.1",

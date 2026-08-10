@@ -1912,6 +1912,8 @@ export const newsletterCampaigns = pgTable(
     title: varchar("title", { length: 200 }).notNull().default("Newsletter"),
     subject: varchar("subject", { length: 300 }).notNull(),
     bodyHtml: text("body_html").notNull().default(""),
+    /** Unlayer design JSON (reloadable in the email editor). */
+    designJson: json("design_json").$type<Record<string, unknown> | null>(),
     status: varchar("status", { length: 30 }).notNull().default("draft"), // draft | sending | sent | failed
     audience: varchar("audience", { length: 30 }).notNull().default("all"), // all | selected
     recipientCount: integer("recipient_count").default(0),
