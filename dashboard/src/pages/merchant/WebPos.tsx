@@ -245,6 +245,7 @@ type CartLine = {
   courseNumber?: number;
   lineDiscountPercent?: number;
   sentToKitchen?: boolean;
+  sentToKitchenAt?: number;
   giftCard?: GiftCardLineMeta;
 };
 
@@ -813,10 +814,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     coursesBulkSent &&
     activeCourse > 1;
   const hasUnsentItems = cart.some((l) => !l.sentToKitchen);
-  const showNewOrderButton =
-    orderSent &&
-    !showFireCourseButton &&
-    !(courseSendMode === 'fire_per_course' && hasUnsentItems);
+  // Ongoing order with new (unsent) lines must keep Send — not New.
+  const showNewOrderButton = orderSent && !showFireCourseButton && !hasUnsentItems;
   const sendLabel = useMemo(() => {
     if (showFireCourseButton) {
       return t('webPosFireCourse').replace('{n}', String(activeCourse));
@@ -2044,9 +2043,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const fireCourseLines = async (lines: CartLine[], courseOnly?: number) => {
     const ticket = ensureCartTicket();
     const ids = new Set(lines.map((l) => l.lineId));
+    const sentAt = Date.now();
     // Mark sent first so Send can release the register immediately.
     setCart((prev) =>
-      prev.map((l) => (ids.has(l.lineId) ? { ...l, sentToKitchen: true } : l))
+      prev.map((l) =>
+        ids.has(l.lineId) ? { ...l, sentToKitchen: true, sentToKitchenAt: l.sentToKitchenAt || sentAt } : l
+      )
     );
     // Print agent can take several seconds; never block the Send button on it.
     // printKitchenForCart captures ticket fields synchronously before its first await.
@@ -2129,8 +2131,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           return;
         }
         const sentIds = new Set(lines.map((l) => l.lineId));
+        const sentAt = Date.now();
         const sentCart = cart.map((l) =>
-          sentIds.has(l.lineId) ? { ...l, sentToKitchen: true } : l
+          sentIds.has(l.lineId)
+            ? { ...l, sentToKitchen: true, sentToKitchenAt: l.sentToKitchenAt || sentAt }
+            : l
         );
         const ticket = ensureCartTicket();
         // Orders panel only lists API held rows — persist before clearing the register.
@@ -2164,8 +2169,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
 
       const sentIds = new Set(toSend.map((l) => l.lineId));
+      const sentAt = Date.now();
       const sentCart = stamped.map((l) =>
-        sentIds.has(l.lineId) ? { ...l, sentToKitchen: true } : l
+        sentIds.has(l.lineId)
+          ? { ...l, sentToKitchen: true, sentToKitchenAt: l.sentToKitchenAt || sentAt }
+          : l
       );
       const ticket = ensureCartTicket();
       // Print alone is not enough — Orders loads /merchant/pos/held + today's paid POS.
@@ -2896,32 +2904,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const convertChannel = () => {
-    if (isRetail) {
-      const opts = channelTabOptions.length
-        ? channelTabOptions
-        : (['takeaway'] as Array<'takeaway' | 'delivery'>);
-      if (opts.length < 2) return;
-      const idx = Math.max(0, opts.indexOf((channel as 'takeaway' | 'delivery') || opts[0]));
-      const next = opts[(idx + 1) % opts.length];
-      leaveTableForChannel();
-      setChannel(next);
-      setFulfillmentWhen(asapFulfillment());
-      return;
-    }
-    const next: Channel =
-      channel === 'takeaway'
-        ? 'delivery'
-        : channel === 'delivery'
-          ? 'dine_in'
-          : 'takeaway';
-    if (next !== 'dine_in') leaveTableForChannel();
-    setChannel(next);
-    if (next === 'dine_in') {
+  /** Menu: switch to dine-in and prompt for a table (takeaway↔delivery uses cart-top buttons). */
+  const switchToDineIn = () => {
+    if (channel !== 'dine_in') {
+      setChannel('dine_in');
       setFulfillmentWhen(null);
-      return;
     }
-    setFulfillmentWhen(asapFulfillment());
+    if (!tableId) {
+      setTablePickerPurpose('set');
+      setMoveSourceTable(null);
+      setMoveLineId(null);
+      setSetTableOpen(true);
+    }
   };
 
   const confirmCancelCart = async (reason: string, reasonId?: string) => {
@@ -4846,7 +4840,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 sendLabel={sendLabel}
                 onCustomer={() => setCustomerOpen(true)}
                 onProvisionalReceipt={() => void printProvisionalReceipt()}
-                onToggleChannel={convertChannel}
+                onSwitchToDineIn={switchToDineIn}
                 onCourse={advanceCourse}
                 onKitchenMessage={() => setKitchenMsgOpen(true)}
                 onSetTable={() => {

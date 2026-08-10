@@ -34,6 +34,8 @@ export type CartLine = {
   courseNumber?: number;
   lineDiscountPercent?: number;
   sentToKitchen?: boolean;
+  /** Epoch ms when line was sent to kitchen (Ordered tab). */
+  sentToKitchenAt?: number;
   /** Gift card sell/reload  - credited after successful payment */
   giftCard?: GiftCardLineMeta;
 };

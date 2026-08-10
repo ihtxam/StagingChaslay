@@ -1,17 +1,19 @@
 import {
   ArrowLeft,
-  ArrowLeftRight,
   Ban,
   MessageSquare,
   MoreHorizontal,
   Printer,
+  UtensilsCrossed,
   User,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { normalizeDashes, repairCatalogText } from '@/lib/text-encoding';
 import WebPosNumericKeypad from './WebPosNumericKeypad';
 import type { CartLine, KeypadMode, PosChannel } from './types';
+
+type CartListTab = 'ordering' | 'ordered';
 
 type Props = {
   cart: CartLine[];
@@ -45,7 +47,8 @@ type Props = {
   sendLabel: string;
   onCustomer: () => void;
   onProvisionalReceipt: () => void;
-  onToggleChannel: () => void;
+  /** Switch order to dine-in and open table picker when needed. */
+  onSwitchToDineIn: () => void;
   onCourse: () => void;
   onKitchenMessage: () => void;
   onSetTable: () => void;
@@ -113,23 +116,17 @@ type CartRow =
   | { kind: 'course'; course: number }
   | { kind: 'line'; line: CartLine };
 
-function nextChannelLabel(
-  channel: PosChannel | null,
-  t: (k: string) => string
-): string {
-  if (channel === 'takeaway') return t('delivery');
-  if (channel === 'delivery') return t('dineIn');
-  return t('takeaway');
-}
-
-function currentChannelLabel(
-  channel: PosChannel | null,
-  t: (k: string) => string
-): string {
-  if (channel === 'delivery') return t('delivery');
-  if (channel === 'dine_in') return t('dineIn');
-  if (channel === 'takeaway') return t('takeaway');
-  return t('webPosOrderType');
+function formatSentAt(ms?: number): string | null {
+  if (!ms || !Number.isFinite(ms)) return null;
+  try {
+    return new Date(ms).toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  } catch {
+    return null;
+  }
 }
 
 export default function WebPosCartPanel({
@@ -164,7 +161,7 @@ export default function WebPosCartPanel({
   sendLabel,
   onCustomer,
   onProvisionalReceipt,
-  onToggleChannel,
+  onSwitchToDineIn,
   onCourse,
   onKitchenMessage,
   onSetTable,
@@ -197,31 +194,55 @@ export default function WebPosCartPanel({
   const { t } = useI18n();
   const hasItems = cart.length > 0;
   const isPage = layout === 'page';
-  /** Keypad only while a cart line is selected (mobile + desktop). */
-  const keypadExpanded = !!selectedLineId;
   const effectiveShowSend = kitchenEnabled && showSend;
   const channelOptions =
     channelTabOptions.length > 0 ? channelTabOptions : (['takeaway', 'delivery'] as const);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [cartTab, setCartTab] = useState<CartListTab>('ordering');
   const sideBorder = dockSide === 'right' ? 'border-l' : 'border-r';
+
+  const orderedLines = useMemo(() => cart.filter((l) => !!l.sentToKitchen), [cart]);
+  const orderingLines = useMemo(() => cart.filter((l) => !l.sentToKitchen), [cart]);
+  const showOrderTabs = kitchenEnabled && orderedLines.length > 0;
+  const onOrderedTab = showOrderTabs && cartTab === 'ordered';
+  /** Keypad only while a cart line is selected on Ordering (not Ordered history). */
+  const keypadExpanded = !!selectedLineId && !onOrderedTab;
+  const visibleCart = showOrderTabs
+    ? cartTab === 'ordered'
+      ? orderedLines
+      : orderingLines
+    : cart;
+
+  useEffect(() => {
+    if (!showOrderTabs) {
+      setCartTab('ordering');
+      return;
+    }
+    setCartTab(orderingLines.length === 0 ? 'ordered' : 'ordering');
+  }, [showOrderTabs, orderingLines.length]);
 
   const rows = useMemo(() => {
     if (!coursesEnabled || courseNumbers.length === 0) {
-      return cart.map((line) => ({ kind: 'line' as const, line }));
+      return visibleCart.map((line) => ({ kind: 'line' as const, line }));
     }
     const out: CartRow[] = [];
-    for (const course of courseNumbers) {
+    const courses = courseNumbers.filter((course) =>
+      visibleCart.some((l) => (l.courseNumber || 1) === course)
+    );
+    for (const course of courses) {
       out.push({ kind: 'course', course });
-      for (const line of cart.filter((l) => (l.courseNumber || 1) === course)) {
+      for (const line of visibleCart.filter((l) => (l.courseNumber || 1) === course)) {
         out.push({ kind: 'line', line });
       }
     }
     return out;
-  }, [cart, courseNumbers, coursesEnabled]);
+  }, [visibleCart, courseNumbers, coursesEnabled]);
 
   const selectedLine = selectedLineId
     ? cart.find((l) => l.lineId === selectedLineId) || null
     : null;
+  const canSendNow =
+    (showOrderTabs ? orderingLines.length > 0 : hasItems) && !onOrderedTab;
 
   return (
     <aside
@@ -256,40 +277,21 @@ export default function WebPosCartPanel({
         </div>
       ) : null}
 
-      {/* Compact breadcrumb / overflow menu (Android CartOrderMenuButton pattern) */}
+      {/* Cart overflow menu — ⋮ on the right */}
       <div className="relative shrink-0 border-b border-stone-100 px-2 py-1.5">
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1.5 text-left hover:bg-stone-100"
-          onClick={() => setMoreOpen((v) => !v)}
-          title={t('webPosMoreActions')}
-          aria-haspopup="menu"
-          aria-expanded={moreOpen}
-        >
-          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-stone-600 ring-1 ring-stone-200">
-            <MoreHorizontal size={16} aria-hidden />
-          </span>
-          <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] font-semibold text-stone-600">
-            <span className="truncate">{customerLabel || t('webPosAddClient')}</span>
-            <span className="shrink-0 text-stone-300" aria-hidden>
-              /
-            </span>
-            <span className="truncate">{currentChannelLabel(channel, t)}</span>
-            {tableLabel ? (
-              <>
-                <span className="shrink-0 text-stone-300" aria-hidden>
-                  /
-                </span>
-                <span className="truncate">
-                  {t('table')} {tableLabel}
-                </span>
-              </>
-            ) : null}
-          </span>
-          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-stone-400">
-            {t('webPosMoreShort')}
-          </span>
-        </button>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+            onClick={() => setMoreOpen((v) => !v)}
+            title={t('webPosMoreActions')}
+            aria-haspopup="menu"
+            aria-expanded={moreOpen}
+            aria-label={t('webPosMoreActions')}
+          >
+            <MoreHorizontal size={18} aria-hidden />
+          </button>
+        </div>
         {moreOpen ? (
           <>
             <button
@@ -300,7 +302,7 @@ export default function WebPosCartPanel({
             />
             <div
               role="menu"
-              className="absolute left-2 right-2 top-full z-20 mt-1 rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
+              className="absolute right-2 left-2 top-full z-20 mt-1 rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
             >
               <button
                 type="button"
@@ -327,23 +329,21 @@ export default function WebPosCartPanel({
                 <Printer size={14} className="shrink-0 text-stone-500" />
                 {t('webPosProvisionalReceipt')}
               </button>
-              {showChannelTabs || kitchenEnabled ? (
+              {kitchenEnabled && tablesEnabled ? (
                 <button
                   type="button"
                   role="menuitem"
                   className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-                  title={t('webPosConvertChannel')}
                   onClick={() => {
                     setMoreOpen(false);
-                    onToggleChannel();
+                    onSwitchToDineIn();
                   }}
                 >
-                  <ArrowLeftRight size={14} className="shrink-0 text-stone-500" />
+                  <UtensilsCrossed size={14} className="shrink-0 text-stone-500" />
                   <span className="min-w-0 truncate">
-                    {t('webPosConvertChannel')}
-                    <span className="ml-1 font-bold text-stone-500">
-                      ({nextChannelLabel(channel, t)})
-                    </span>
+                    {channel === 'dine_in' && tableLabel
+                      ? `${t('dineIn')} · ${t('table')} ${tableLabel}`
+                      : t('dineIn')}
                   </span>
                 </button>
               ) : null}
@@ -523,10 +523,47 @@ export default function WebPosCartPanel({
         </div>
       )}
 
+      {showOrderTabs ? (
+        <div className="shrink-0 grid grid-cols-2 gap-1 border-b border-stone-100 px-2 py-1.5">
+          <button
+            type="button"
+            onClick={() => setCartTab('ordering')}
+            className={`rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide ${
+              cartTab === 'ordering'
+                ? 'bg-[var(--webpos-accent)] text-white'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+            }`}
+          >
+            {t('webPosCartOrdering')}
+            {orderingLines.length ? (
+              <span className="ml-1 tabular-nums opacity-80">({orderingLines.length})</span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCartTab('ordered')}
+            className={`rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide ${
+              cartTab === 'ordered'
+                ? 'bg-stone-800 text-white'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+            }`}
+          >
+            {t('webPosCartOrdered')}
+            {orderedLines.length ? (
+              <span className="ml-1 tabular-nums opacity-80">({orderedLines.length})</span>
+            ) : null}
+          </button>
+        </div>
+      ) : null}
+
       {/* Cart lines take remaining height; keypad + actions stay docked below */}
       <div className="webpos-cart-lines min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
         {!hasItems ? (
           <p className="py-8 text-center text-sm text-stone-400">{t('webPosTapProducts')}</p>
+        ) : visibleCart.length === 0 ? (
+          <p className="py-8 text-center text-sm text-stone-400">
+            {cartTab === 'ordered' ? t('webPosCartOrderedEmpty') : t('webPosCartOrderingEmpty')}
+          </p>
         ) : (
           <ul className="space-y-1">
             {rows.map((row) => {
@@ -558,6 +595,7 @@ export default function WebPosCartPanel({
               const selected = selectedLineId === l.lineId;
               const extras = lineExtrasLabel(l);
               const lineName = repairCatalogText(l.name || '');
+              const sentAtLabel = formatSentAt(l.sentToKitchenAt);
               return (
                 <li key={l.lineId}>
                   <button
@@ -567,7 +605,7 @@ export default function WebPosCartPanel({
                       selected
                         ? 'bg-[var(--webpos-accent-softer)] ring-2 ring-[var(--webpos-accent-ring)]'
                         : 'hover:bg-stone-50'
-                    } ${l.sentToKitchen ? 'opacity-70' : ''}`}
+                    } ${l.sentToKitchen ? 'opacity-80' : ''}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -593,6 +631,11 @@ export default function WebPosCartPanel({
                           <p className="mt-0.5 text-[11px] text-stone-500">
                             {'- '}
                             {extras}
+                          </p>
+                        ) : null}
+                        {l.sentToKitchen && sentAtLabel ? (
+                          <p className="mt-0.5 text-[11px] font-medium text-stone-500">
+                            {t('webPosSentAt').replace('{time}', sentAtLabel)}
                           </p>
                         ) : null}
                         {l.lineDiscountPercent ? (
@@ -746,7 +789,7 @@ export default function WebPosCartPanel({
           ) : effectiveShowSend || hideTab || orderSent || !tablesEnabled ? (
             <button
               type="button"
-              disabled={!hasItems || busy}
+              disabled={!canSendNow || busy}
               onClick={onSend}
               className="col-span-2 rounded-lg bg-violet-700 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
             >

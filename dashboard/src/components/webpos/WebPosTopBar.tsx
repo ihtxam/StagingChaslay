@@ -485,32 +485,33 @@ export function WebPosSettingsDropdown({
   return (
     <div className="absolute right-0 top-[calc(100%+6px)] z-50 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl">
       <div className="space-y-3 overflow-y-auto overscroll-contain p-3">
-      <div className="space-y-1.5 border-b border-stone-100 pb-3">
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm font-semibold text-stone-700 hover:bg-stone-50"
-          onClick={() => {
-            if (!appMode) {
-              void toggleWebPosFullscreen({ forceEnterApp: true });
-              return;
-            }
-            void toggleWebPosFullscreen();
-          }}
-        >
-          {!appMode || !fullscreenActive ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-          {!appMode || !fullscreenActive ? t('webPosFullscreen') : t('webPosExitFullscreen')}
-        </button>
-        <p className="px-2 text-[11px] leading-snug text-stone-500">{t('webPosFullscreenHint')}</p>
-        {canShowPanel && onShowPanel ? (
+      <div className="border-b border-stone-100 pb-3">
+        <div className={`grid gap-1.5 ${canShowPanel && onShowPanel ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm font-semibold text-stone-700 hover:bg-stone-50"
-            onClick={onShowPanel}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={() => {
+              if (!appMode) {
+                void toggleWebPosFullscreen({ forceEnterApp: true });
+                return;
+              }
+              void toggleWebPosFullscreen();
+            }}
           >
-            <PanelLeft size={16} />
-            {t('webPosMenus')}
+            {!appMode || !fullscreenActive ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+            {!appMode || !fullscreenActive ? t('webPosFullscreen') : t('webPosExitFullscreen')}
           </button>
-        ) : null}
+          {canShowPanel && onShowPanel ? (
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+              onClick={onShowPanel}
+            >
+              <PanelLeft size={16} />
+              {t('webPosDashboard')}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {(onAppearanceChange || onTextSizeChange) && (
