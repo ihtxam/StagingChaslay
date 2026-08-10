@@ -1,5 +1,8 @@
 import { getDb, schema } from "@/db";
-import { and, asc, eq, gt, inArray, notInArray } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lt, notInArray, type SQL } from "drizzle-orm";
+
+/** PROCESSING jobs older than this are returned to PENDING (crashed / unacked printers). */
+const PRINT_JOB_STALE_MS = 5 * 60 * 1000;
 
 type FloorRole = "MAIN_POS" | "WAITER" | "STANDARD";
 
@@ -194,40 +197,78 @@ export class ChaslayFloorService {
     };
   }
 
+  /**
+   * Atomically claim PENDING print jobs (→ PROCESSING) so overlapping pollers
+   * (WebPOS 2.5s interval, multi-tab, Android MAIN_POS) cannot reprint the same job.
+   */
   static async listPendingPrintJobs(
     merchantId: string,
     limit: number,
     opts?: { jobTypes?: string[]; excludeJobTypes?: string[] }
   ) {
     const db = getDb();
-    const conditions = [
-      eq(schema.chaslayFloorPrintJobs.merchantId, merchantId),
-      eq(schema.chaslayFloorPrintJobs.status, "PENDING"),
-    ];
+    const typeConds: SQL[] = [];
     if (opts?.jobTypes?.length) {
-      conditions.push(
+      typeConds.push(
         inArray(
           schema.chaslayFloorPrintJobs.jobType,
           opts.jobTypes.map((t) => t.toUpperCase())
         )
       );
     } else if (opts?.excludeJobTypes?.length) {
-      conditions.push(
+      typeConds.push(
         notInArray(
           schema.chaslayFloorPrintJobs.jobType,
           opts.excludeJobTypes.map((t) => t.toUpperCase())
         )
       );
     }
-    const rows = await db.query.chaslayFloorPrintJobs.findMany({
-      where: and(...conditions),
+
+    // Reclaim leases from crashed / disconnected printers.
+    const staleBefore = new Date(Date.now() - PRINT_JOB_STALE_MS);
+    await db
+      .update(schema.chaslayFloorPrintJobs)
+      .set({ status: "PENDING", processedAt: null })
+      .where(
+        and(
+          eq(schema.chaslayFloorPrintJobs.merchantId, merchantId),
+          eq(schema.chaslayFloorPrintJobs.status, "PROCESSING"),
+          lt(schema.chaslayFloorPrintJobs.processedAt, staleBefore),
+          ...typeConds
+        )
+      );
+
+    const candidates = await db.query.chaslayFloorPrintJobs.findMany({
+      where: and(
+        eq(schema.chaslayFloorPrintJobs.merchantId, merchantId),
+        eq(schema.chaslayFloorPrintJobs.status, "PENDING"),
+        ...typeConds
+      ),
       orderBy: [asc(schema.chaslayFloorPrintJobs.createdAt)],
-      limit,
+      limit: Math.max(1, Math.min(limit, 50)),
     });
+
+    const claimed: typeof candidates = [];
+    const now = new Date();
+    for (const row of candidates) {
+      // Only one poller wins: UPDATE … WHERE status='PENDING' RETURNING.
+      const [won] = await db
+        .update(schema.chaslayFloorPrintJobs)
+        .set({ status: "PROCESSING", processedAt: now })
+        .where(
+          and(
+            eq(schema.chaslayFloorPrintJobs.id, row.id),
+            eq(schema.chaslayFloorPrintJobs.merchantId, merchantId),
+            eq(schema.chaslayFloorPrintJobs.status, "PENDING")
+          )
+        )
+        .returning();
+      if (won) claimed.push(won);
+    }
 
     return {
       serverTime: Date.now(),
-      jobs: rows.map((r) => ({
+      jobs: claimed.map((r) => ({
         id: r.id,
         job_type: r.jobType,
         jobType: r.jobType,
@@ -250,9 +291,27 @@ export class ChaslayFloorService {
       .where(
         and(
           eq(schema.chaslayFloorPrintJobs.merchantId, merchantId),
-          eq(schema.chaslayFloorPrintJobs.id, jobId)
+          eq(schema.chaslayFloorPrintJobs.id, jobId),
+          // Accept PENDING (legacy) or PROCESSING (claimed).
+          inArray(schema.chaslayFloorPrintJobs.status, ["PENDING", "PROCESSING"])
         )
       );
     return { ok: true };
+  }
+
+  /** Emergency: mark all open print jobs FAILED so runaway printers stop. */
+  static async failOpenPrintJobs(merchantId: string) {
+    const db = getDb();
+    const rows = await db
+      .update(schema.chaslayFloorPrintJobs)
+      .set({ status: "FAILED", processedAt: new Date() })
+      .where(
+        and(
+          eq(schema.chaslayFloorPrintJobs.merchantId, merchantId),
+          inArray(schema.chaslayFloorPrintJobs.status, ["PENDING", "PROCESSING"])
+        )
+      )
+      .returning({ id: schema.chaslayFloorPrintJobs.id });
+    return { ok: true, cleared: rows.length };
   }
 }

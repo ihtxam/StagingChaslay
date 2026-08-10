@@ -1191,19 +1191,28 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     if (!agentOk) return;
     let cancelled = false;
+    let timer: number | null = null;
+    const schedule = (ms: number) => {
+      if (cancelled) return;
+      timer = window.setTimeout(() => {
+        void tick();
+      }, ms);
+    };
     const tick = async () => {
       if (cancelled) return;
       try {
+        // processPendingEscPosPrintJobs is mutexed; backend claims jobs as PROCESSING.
         await processPendingEscPosPrintJobs();
       } catch {
         /* best-effort */
+      } finally {
+        schedule(2500);
       }
     };
     void tick();
-    const id = window.setInterval(() => void tick(), 2500);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      if (timer != null) window.clearTimeout(timer);
     };
   }, [agentOk]);
 

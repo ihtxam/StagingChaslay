@@ -77,31 +77,60 @@ type PendingJob = {
   payload?: EscPosPrintJobPayload | Record<string, unknown> | null;
 };
 
-/** Drain ESCPOS jobs on a machine that has the Print Agent (main till). */
-export async function processPendingEscPosPrintJobs(): Promise<number> {
-  if (!(await isPrintAgentAvailable())) return 0;
-  const res = await api.get('/merchant/pos/print-jobs/pending', {
-    params: { jobType: 'ESCPOS', limit: 15 },
-  });
-  const jobs = (res.data?.jobs || []) as PendingJob[];
-  let done = 0;
-  for (const job of jobs) {
-    const p = (job.payload || {}) as Partial<EscPosPrintJobPayload>;
-    if (p.kind !== 'escpos' || !p.dataBase64) {
-      await api.post(`/merchant/pos/print-jobs/${job.id}/ack`, { status: 'FAILED' }).catch(() => {});
-      continue;
-    }
+let drainInFlight: Promise<number> | null = null;
+
+async function ackPrintJob(jobId: string, status: 'DONE' | 'FAILED', attempts = 4) {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
     try {
-      await printViaAgent({
-        printerName: p.printerName,
-        dataBase64: p.dataBase64,
-        text: p.text,
-      });
-      await api.post(`/merchant/pos/print-jobs/${job.id}/ack`, { status: 'DONE' });
-      done += 1;
-    } catch {
-      await api.post(`/merchant/pos/print-jobs/${job.id}/ack`, { status: 'FAILED' }).catch(() => {});
+      await api.post(`/merchant/pos/print-jobs/${jobId}/ack`, { status });
+      return;
+    } catch (e) {
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 400 * (i + 1)));
     }
   }
-  return done;
+  throw lastErr;
+}
+
+/**
+ * Drain ESCPOS jobs on a machine that has the Print Agent (main till).
+ * Serialized: overlapping 2.5s poll ticks must not print the same job twice.
+ * Backend also claims jobs as PROCESSING on fetch.
+ */
+export async function processPendingEscPosPrintJobs(): Promise<number> {
+  if (drainInFlight) return drainInFlight;
+  drainInFlight = (async () => {
+    try {
+      if (!(await isPrintAgentAvailable())) return 0;
+      const res = await api.get('/merchant/pos/print-jobs/pending', {
+        params: { jobType: 'ESCPOS', limit: 15 },
+      });
+      const jobs = (res.data?.jobs || []) as PendingJob[];
+      let done = 0;
+      for (const job of jobs) {
+        const p = (job.payload || {}) as Partial<EscPosPrintJobPayload>;
+        if (p.kind !== 'escpos' || !p.dataBase64) {
+          await ackPrintJob(job.id, 'FAILED').catch(() => {});
+          continue;
+        }
+        try {
+          await printViaAgent({
+            printerName: p.printerName,
+            dataBase64: p.dataBase64,
+            text: p.text,
+          });
+          // Never mark FAILED after a successful physical print — retry DONE ack.
+          await ackPrintJob(job.id, 'DONE');
+          done += 1;
+        } catch {
+          await ackPrintJob(job.id, 'FAILED').catch(() => {});
+        }
+      }
+      return done;
+    } finally {
+      drainInFlight = null;
+    }
+  })();
+  return drainInFlight;
 }

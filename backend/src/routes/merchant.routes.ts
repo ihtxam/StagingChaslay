@@ -1707,6 +1707,21 @@ router.post("/pos/print-jobs/:id/ack", async (req: Request, res: Response) => {
   }
 });
 
+/** POST /api/merchant/pos/print-jobs/clear — stop runaway reprints (marks PENDING/PROCESSING as FAILED) */
+router.post("/pos/print-jobs/clear", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { ChaslayFloorService } = await import("@/services/chaslay-floor.service");
+    const data = await ChaslayFloorService.failOpenPrintJobs(merchantId);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Clear print jobs failed",
+    });
+  }
+});
+
 /** GET /api/merchant/pos/orders — POS order history */
 router.get("/pos/orders", async (req: Request, res: Response) => {
   try {
