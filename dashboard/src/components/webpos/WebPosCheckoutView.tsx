@@ -412,7 +412,9 @@ export default function WebPosCheckoutView({
     });
   };
 
-  const canComplete = payments.length > 0 && paid + 0.001 >= total;
+  // Block Confirm on empty/zero carts (e.g. after pay-later cleared the cart but left checkout open).
+  const canComplete =
+    total > 0.001 && payments.length > 0 && paid + 0.001 >= total;
 
   const complete = () => {
     if (!canComplete || busy) return;

@@ -962,12 +962,17 @@ router.post("/orders/:orderId/action", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     const { orderId } = req.params;
-    const { action } = req.body as { action?: string };
+    const { action, paymentMethod } = req.body as {
+      action?: string;
+      paymentMethod?: string;
+    };
 
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
     if (!action) return res.status(400).json({ error: "Action is required" });
 
-    const order = await OrderService.applyOrderAction(merchantId, orderId, action);
+    const order = await OrderService.applyOrderAction(merchantId, orderId, action, {
+      paymentMethod: paymentMethod || null,
+    });
     res.json({ success: true, order });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Action failed" });

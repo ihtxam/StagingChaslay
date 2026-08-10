@@ -97,6 +97,23 @@ function canEditPayment(o: PosOrder): boolean {
   );
 }
 
+/** Pay-later / awaiting_payment POS orders that still need collection at pickup. */
+function canCollectPayment(o: PosOrder): boolean {
+  const status = (o.status || '').toLowerCase();
+  const pay = (o.paymentStatus || '').toLowerCase();
+  const method = (o.paymentMethod || '').toLowerCase();
+  if (['cancelled', 'refunded'].includes(status)) return false;
+  if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
+  if (Number(o.total || 0) <= 0.001) return false;
+  if (pay === 'awaiting_payment') return true;
+  if (method === 'pay_later' || method === 'pay-later') {
+    return ['preparing', 'accepted', 'ready', 'out_for_delivery', 'pending', 'confirmed'].includes(
+      status
+    );
+  }
+  return false;
+}
+
 function canRefundOrder(o: PosOrder): boolean {
   if (o.status === 'cancelled' || o.paymentStatus === 'cancelled') return false;
   const remaining = Number(o.total || 0) - Number(o.refundAmount || 0);
@@ -170,6 +187,8 @@ export default function WebPosOrdersPanel({
   const [cancelHeldFor, setCancelHeldFor] = useState<HeldRow | null>(null);
   const [refundFor, setRefundFor] = useState<PosOrder | null>(null);
   const [paymentEditFor, setPaymentEditFor] = useState<PosOrder | null>(null);
+  const [collectFor, setCollectFor] = useState<PosOrder | null>(null);
+  const [collectBusy, setCollectBusy] = useState(false);
   const [paymentMethodDraft, setPaymentMethodDraft] = useState('cash');
   const [page, setPage] = useState(0);
   /** Overflow menu for selected order (side detail breadcrumb) */
@@ -183,6 +202,7 @@ export default function WebPosOrdersPanel({
     if (m === 'card') return t('webPosCard');
     if (m === 'terminal') return t('webPosTerminal');
     if (m === 'express') return t('webPosExpress');
+    if (m === 'pay_later' || m === 'pay-later') return t('webPosPayLater');
     return method || '—';
   };
 
@@ -420,6 +440,26 @@ export default function WebPosOrdersPanel({
       );
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosPaymentUpdateFailed'));
+    }
+  };
+
+  const doCollectPayment = async () => {
+    if (!collectFor) return;
+    setCollectBusy(true);
+    try {
+      const res = await api.post(`/merchant/orders/${collectFor.id}/action`, {
+        action: 'complete_and_collect',
+        paymentMethod: paymentMethodDraft,
+      });
+      toast.success(t('webPosPaymentCollected'));
+      setCollectFor(null);
+      const updated = res.data?.order as PosOrder | undefined;
+      setSelectedOrder(updated || null);
+      void load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
+    } finally {
+      setCollectBusy(false);
     }
   };
 
@@ -1045,6 +1085,11 @@ export default function WebPosOrdersPanel({
                     <p className="mt-2 text-sm text-stone-600">
                       {t('webPosPaymentMethod')}:{' '}
                       <span className="font-semibold">{paymentLabel(selectedOrder.paymentMethod)}</span>
+                      {canCollectPayment(selectedOrder) ? (
+                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                          {t('webPosAwaitingPayment')}
+                        </span>
+                      ) : null}
                     </p>
                   ) : null}
                   {selectedOrder.cancelReason ? (
@@ -1059,6 +1104,21 @@ export default function WebPosOrdersPanel({
                     </p>
                   ) : null}
                 </div>
+                {canCollectPayment(selectedOrder) ? (
+                  <div className="space-y-2 border-t border-stone-200 p-3">
+                    <button
+                      type="button"
+                      className="w-full rounded-xl bg-emerald-700 py-3.5 text-sm font-bold text-white hover:bg-emerald-800"
+                      onClick={() => {
+                        setPaymentEditFor(null);
+                        setPaymentMethodDraft('cash');
+                        setCollectFor(selectedOrder);
+                      }}
+                    >
+                      {t('webPosTakePayment')} · {money(selectedOrder.total)}
+                    </button>
+                  </div>
+                ) : null}
               </>
             ) : (
               <div className="flex flex-1 items-center justify-center p-6 text-sm text-stone-400">
@@ -1067,7 +1127,48 @@ export default function WebPosOrdersPanel({
             )}
           </aside>
         </div>
-        {paymentEditFor ? (
+        {collectFor ? (
+          <div className="border-t border-stone-200 bg-white p-4 space-y-3">
+            <p className="text-sm font-medium">
+              {t('webPosTakePayment')} · {money(collectFor.total)}
+            </p>
+            <p className="text-xs text-stone-500">{t('webPosTakePaymentHint')}</p>
+            <div className="flex flex-wrap gap-2">
+              {PAYMENT_OPTIONS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPaymentMethodDraft(m)}
+                  className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
+                    paymentMethodDraft === m
+                      ? 'bg-emerald-700 text-white'
+                      : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                  }`}
+                >
+                  {paymentLabel(m)}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn-secondary flex-1"
+                disabled={collectBusy}
+                onClick={() => setCollectFor(null)}
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn-primary flex-1"
+                disabled={collectBusy}
+                onClick={() => void doCollectPayment()}
+              >
+                {collectBusy ? t('saving') : t('webPosConfirmPayment')}
+              </button>
+            </div>
+          </div>
+        ) : paymentEditFor ? (
           <div className="border-t border-stone-200 bg-white p-4 space-y-3">
             <p className="text-sm font-medium">
               {t('webPosEditPayment')} · {paymentEditFor.orderNumber}

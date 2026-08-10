@@ -271,7 +271,8 @@ export class OrderService {
   static async applyOrderAction(
     merchantId: string,
     orderId: string,
-    action: string
+    action: string,
+    opts?: { paymentMethod?: string | null }
   ) {
     const db = getDb();
     const order = await db.query.orders.findFirst({
@@ -326,10 +327,21 @@ export class OrderService {
       }
       case "collect_payment": {
         if (paymentDone) throw new Error("Payment already completed");
-        return set({
-          paymentStatus: "completed",
-          paymentMethod: order.paymentMethod || "cash",
-        });
+        {
+          const methodRaw = String(opts?.paymentMethod || order.paymentMethod || "cash")
+            .trim()
+            .toLowerCase();
+          const method =
+            methodRaw === "pay_later" || methodRaw === "pay-later"
+              ? "cash"
+              : ["cash", "card", "terminal"].includes(methodRaw)
+                ? methodRaw
+                : "cash";
+          return set({
+            paymentStatus: "completed",
+            paymentMethod: method,
+          });
+        }
       }
       case "complete": {
         if (channel === "delivery") {
@@ -355,15 +367,20 @@ export class OrderService {
         ) {
           throw new Error("Order is not ready to complete");
         }
-        return set({
-          status: "completed",
-          paymentStatus: "completed",
-          paymentMethod:
-            order.paymentMethod === "pay_later" || order.paymentMethod === "pay-later"
-              ? "cash"
-              : order.paymentMethod || "cash",
-          completedAt: new Date(),
-        });
+        {
+          const methodRaw = String(opts?.paymentMethod || order.paymentMethod || "cash")
+            .trim()
+            .toLowerCase();
+          let method = methodRaw;
+          if (method === "pay_later" || method === "pay-later") method = "cash";
+          if (!["cash", "card", "terminal"].includes(method)) method = "cash";
+          return set({
+            status: "completed",
+            paymentStatus: "completed",
+            paymentMethod: method,
+            completedAt: new Date(),
+          });
+        }
       }
       case "reject":
       case "cancel": {

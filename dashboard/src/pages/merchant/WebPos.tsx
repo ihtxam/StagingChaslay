@@ -3071,6 +3071,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     changeDue: number,
     tipAmount = 0
   ) => {
+    if (!activeSale.lines.length || activeSale.totals.total <= 0.001) {
+      toast.error(t('webPosNoItems'));
+      setPosView('register');
+      setPosTab('register');
+      setCheckoutOpen(false);
+      return;
+    }
     const tip = roundMoney2(Math.max(0, tipAmount));
     const part = splitQueue[splitIndex];
     const partTotal = roundMoney2((part?.amount ?? totals.total) + tip);
@@ -3619,12 +3626,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     showSuccessScreen = false,
     opts?: { skipReceiptPrint?: boolean }
   ) => {
+    const saleLines = activeSale.lines;
+    if (!saleLines.length || activeSale.totals.total <= 0.001) {
+      toast.error(t('webPosNoItems'));
+      setPosView('register');
+      setPosTab('register');
+      setCheckoutOpen(false);
+      return;
+    }
     const ticket = ensureCartTicket();
     const clientId = presetClientId || `webpos-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const whenSnapshot =
       whenOverride !== undefined ? whenOverride : fulfillmentWhen;
     const extras = extrasOverride !== undefined ? extrasOverride : checkoutExtras;
-    const saleLines = activeSale.lines;
     /** Pre-discount merchandise for payload/receipt; payable amount comes from extras.total. */
     const saleTotals =
       splitQueue.length > 0
@@ -3874,6 +3888,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             ? t('webPosSplitNext').replace('{n}', String(splitIndex + 2)).replace('{total}', String(splitQueue.length))
             : t('webPosSaleCompleteAmount').replace('{amount}', money(paidTotal))
       );
+    }
+    // Pay later must leave checkout — otherwise Confirm on a CHF 0 cart creates empty duplicates.
+    if (payLater && !moreSplits) {
+      setPosView('register');
+      setPosTab('register');
     }
     const shouldPrintReceipt =
       !opts?.skipReceiptPrint &&

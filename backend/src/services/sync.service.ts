@@ -366,6 +366,15 @@ export class SyncService {
         continue;
       }
 
+      // Reject empty / zero-total pushes (e.g. re-confirm after pay-later cleared the cart).
+      const isCancelledEarly = String(sale.status || "").toLowerCase() === "cancelled";
+      const earlyTotal = roundTo005(Number(sale.total) || 0);
+      const itemCount = Array.isArray(sale.items) ? sale.items.length : 0;
+      if (!isCancelledEarly && (itemCount === 0 || earlyTotal <= 0.001)) {
+        results.push({ clientId: sale.clientId, orderId: sale.clientId, created: false });
+        continue;
+      }
+
       const baseOrderNumber = String(sale.orderNumber || `POS-${sale.clientId}`).slice(0, 40);
       const subtotal = roundMoney2(Number(sale.subtotal) || 0);
       const taxAmount = roundMoney2(Number(sale.taxAmount) || 0);
