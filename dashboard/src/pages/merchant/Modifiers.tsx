@@ -107,7 +107,7 @@ export default function Modifiers() {
       setGroups(g.data.groups || []);
       setProducts(p.data.products || []);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to load modifiers');
+      toast.error(e.response?.data?.error || t('failedLoadModifiers'));
     } finally {
       setLoading(false);
     }
@@ -196,7 +196,7 @@ export default function Modifiers() {
   const onSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) {
-      toast.error('Title is required');
+      toast.error(t('titleRequired'));
       return;
     }
     const options = form.options
@@ -209,7 +209,7 @@ export default function Modifiers() {
       .filter((o) => o.name);
 
     if (!options.length) {
-      toast.error('Add at least one option');
+      toast.error(t('addAtLeastOneOption'));
       return;
     }
 
@@ -228,44 +228,42 @@ export default function Modifiers() {
       };
       if (editingId) {
         await api.put(`/merchant/modifiers/${editingId}`, payload);
-        toast.success('Modifier group updated');
+        toast.success(t('modifierGroupUpdated'));
       } else {
         await api.post('/merchant/modifiers', payload);
-        toast.success('Modifier group created');
+        toast.success(t('modifierGroupCreated'));
       }
       closeEditor();
       await load();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Save failed');
+      toast.error(err.response?.data?.error || t('saveFailed'));
     } finally {
       setSaving(false);
     }
   };
 
   const onDelete = async (id: string) => {
-    if (!confirm('Delete this modifier group?')) return;
+    if (!confirm(t('deleteModifierConfirm'))) return;
     try {
       await api.delete(`/merchant/modifiers/${id}`);
-      toast.success('Deleted');
+      toast.success(t('deletedOk'));
       if (editingId === id) closeEditor();
       await load();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Delete failed');
+      toast.error(err.response?.data?.error || t('deleteFailed'));
     }
   };
 
   if (loading) {
-    return <div className="py-16 text-center text-slate-500">Loading modifiers…</div>;
+    return <div className="py-16 text-center text-slate-500">{t('loadingModifiers')}</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Modifiers / Add-ons</h1>
-          <p className="text-slate-600 mt-1">
-            Create option groups and apply them to products
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{t('modifiersAddons')}</h1>
+          <p className="text-slate-600 mt-1">{t('modifiersPageHint')}</p>
         </div>
         <button
           type="button"
@@ -282,7 +280,7 @@ export default function Modifiers() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search groups, options, products…"
+          placeholder={t('searchModifiersPlaceholder')}
           className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         />
       </div>
@@ -290,10 +288,8 @@ export default function Modifiers() {
       <div className="space-y-3">
         {filtered.length === 0 && (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
-            <p className="font-semibold text-slate-800">No modifier groups yet</p>
-            <p className="text-sm text-slate-500 mt-1">
-              Create a group like “Toppings” or “Drink choice”, then link products.
-            </p>
+            <p className="font-semibold text-slate-800">{t('noModifierGroupsYet')}</p>
+            <p className="text-sm text-slate-500 mt-1">{t('noModifierGroupsHint')}</p>
             <button
               type="button"
               onClick={openCreate}
@@ -315,23 +311,23 @@ export default function Modifiers() {
                 <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
                   <Badge>
                     {group.pricingType === 'free'
-                      ? 'Free'
+                      ? t('free')
                       : group.pricingType === 'fixed'
-                        ? 'Fixed Price'
-                        : 'Toppings (by size)'}
+                        ? t('fixedPrice')
+                        : t('toppingsBySizeShort')}
                   </Badge>
                   <Badge>
-                    {group.selectionType === 'required' ? 'Required' : 'Optional'}
+                    {group.selectionType === 'required' ? t('required') : t('optional')}
                     {group.selectionType === 'required'
-                      ? ` · min ${group.minSelectable}`
+                      ? ` · ${t('minBadge').replace('{n}', String(group.minSelectable))}`
                       : ''}
-                    {` · max ${group.maxSelectable}`}
+                    {` · ${t('maxBadge').replace('{n}', String(group.maxSelectable))}`}
                   </Badge>
-                  <Badge>{group.options.length} options</Badge>
-                  <Badge>{group.products.length} products</Badge>
+                  <Badge>{t('optionsCount').replace('{n}', String(group.options.length))}</Badge>
+                  <Badge>{t('productsCount').replace('{n}', String(group.products.length))}</Badge>
                 </div>
                 <p className="mt-2 text-sm text-slate-500 line-clamp-1">
-                  {group.options.map((o) => o.name).join(' · ') || 'No options'}
+                  {group.options.map((o) => o.name).join(' · ') || t('noOptions')}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -340,14 +336,14 @@ export default function Modifiers() {
                   onClick={() => openEdit(group)}
                   className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  Edit
+                  {t('edit')}
                 </button>
                 <button
                   type="button"
                   onClick={() => void onDelete(group.id)}
                   className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
                 >
-                  Delete
+                  {t('delete')}
                 </button>
               </div>
             </div>
@@ -372,7 +368,7 @@ export default function Modifiers() {
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
               <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-5">
-                <Field label="Title" required>
+                <Field label={t('title')} required>
                   <input
                     className="field"
                     value={form.title}
@@ -383,16 +379,16 @@ export default function Modifiers() {
 
                 <fieldset>
                   <legend className="mb-2 text-sm font-medium text-slate-700">
-                    Pricing Type <span className="text-red-500">*</span>
+                    {t('pricingType')} <span className="text-red-500">*</span>
                   </legend>
                   <div className="flex flex-wrap gap-5 text-sm">
                     {(
                       [
-                        ['free', 'Free'],
-                        ['fixed', 'Fixed Price'],
-                        ['toppings_by_size', 'Toppings (Charge By Size)'],
+                        ['free', 'free'],
+                        ['fixed', 'fixedPrice'],
+                        ['toppings_by_size', 'toppingsBySize'],
                       ] as const
-                    ).map(([value, label]) => (
+                    ).map(([value, labelKey]) => (
                       <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
@@ -401,7 +397,7 @@ export default function Modifiers() {
                           onChange={() => setForm({ ...form, pricingType: value })}
                           className="accent-teal-600"
                         />
-                        {label}
+                        {t(labelKey)}
                       </label>
                     ))}
                   </div>
@@ -409,15 +405,15 @@ export default function Modifiers() {
 
                 <fieldset>
                   <legend className="mb-2 text-sm font-medium text-slate-700">
-                    Selection Type <span className="text-red-500">*</span>
+                    {t('selectionType')} <span className="text-red-500">*</span>
                   </legend>
                   <div className="flex flex-wrap gap-5 text-sm mb-3">
                     {(
                       [
-                        ['optional', 'Optional'],
-                        ['required', 'Required'],
+                        ['optional', 'optional'],
+                        ['required', 'required'],
                       ] as const
-                    ).map(([value, label]) => (
+                    ).map(([value, labelKey]) => (
                       <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
@@ -426,7 +422,7 @@ export default function Modifiers() {
                           onChange={() => setSelectionType(value)}
                           className="accent-teal-600"
                         />
-                        {label}
+                        {t(labelKey)}
                       </label>
                     ))}
                   </div>
@@ -434,7 +430,7 @@ export default function Modifiers() {
                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
                     {form.selectionType === 'required' && (
                       <Stepper
-                        label="Minimum Required"
+                        label={t('minimumRequired')}
                         value={form.minSelectable}
                         min={1}
                         onChange={(v) =>
@@ -447,19 +443,19 @@ export default function Modifiers() {
                       />
                     )}
                     <Stepper
-                      label="Maximum Selectable"
+                      label={t('maxSelectable')}
                       value={form.maxSelectable}
                       min={form.selectionType === 'required' ? Math.max(1, form.minSelectable) : 0}
                       onChange={(v) => setForm({ ...form, maxSelectable: v })}
                     />
                     <Toggle
-                      label="Default To Collapsed View"
+                      label={t('defaultCollapsed')}
                       checked={form.defaultCollapsed}
                       onChange={(v) => setForm({ ...form, defaultCollapsed: v })}
                     />
                     {form.pricingType === 'fixed' && (
                       <Toggle
-                        label="Multiple Selection On Same Item"
+                        label={t('allowMultipleSameItem')}
                         checked={form.allowMultipleSameItem}
                         onChange={(v) => setForm({ ...form, allowMultipleSameItem: v })}
                       />
@@ -515,11 +511,11 @@ export default function Modifiers() {
                                 </div>
                                 <label className="block min-w-0 flex-1 sm:flex-[1.4]">
                                   <span className="mb-1 block text-xs font-medium text-slate-500">
-                                    Items
+                                    {t('items')}
                                   </span>
                                   <input
                                     className="field min-w-0"
-                                    placeholder="Option Name"
+                                    placeholder={t('optionName')}
                                     value={opt.name}
                                     onChange={(e) => {
                                       const options = [...form.options];
@@ -548,7 +544,7 @@ export default function Modifiers() {
                               {form.pricingType !== 'free' && (
                                 <label className="block w-full sm:w-36 sm:shrink-0">
                                   <span className="mb-1 block text-xs font-medium text-slate-500">
-                                    Sale price
+                                    {t('salePrice')}
                                   </span>
                                   <div className="relative">
                                     <input
@@ -576,7 +572,7 @@ export default function Modifiers() {
 
                               <label className="block w-full min-w-0 sm:w-40 sm:shrink-0">
                                 <span className="mb-1 block text-xs font-medium text-slate-500">
-                                  Sale Status
+                                  {t('saleStatus')}
                                 </span>
                                 <select
                                   className="field min-w-0"
@@ -590,8 +586,8 @@ export default function Modifiers() {
                                     setForm({ ...form, options });
                                   }}
                                 >
-                                  <option value="in_stock">In stock</option>
-                                  <option value="out_of_stock">Out of stock</option>
+                                  <option value="in_stock">{t('inStock')}</option>
+                                  <option value="out_of_stock">{t('outOfStock')}</option>
                                 </select>
                               </label>
 
@@ -610,7 +606,7 @@ export default function Modifiers() {
                                       setForm({ ...form, options });
                                     }}
                                   />
-                                  Default
+                                  {t('default')}
                                 </label>
                                 <button
                                   type="button"
@@ -643,13 +639,13 @@ export default function Modifiers() {
                   className="flex w-full items-center justify-between px-5 py-4 text-left font-semibold"
                   onClick={() => setOtherOpen((v) => !v)}
                 >
-                  Other Settings
+                  {t('otherSettings')}
                   {otherOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                 </button>
                 {otherOpen && (
                   <div className="border-t border-slate-100 px-5 py-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-slate-800">Link Products</h4>
+                      <h4 className="font-medium text-slate-800">{t('linkProducts')}</h4>
                       <button
                         type="button"
                         onClick={() => setProductPickerOpen(true)}
@@ -663,7 +659,7 @@ export default function Modifiers() {
                         <thead className="bg-slate-50 text-left text-slate-500">
                           <tr>
                             <th className="px-3 py-2 w-12">#</th>
-                            <th className="px-3 py-2">Items</th>
+                            <th className="px-3 py-2">{t('items')}</th>
                             <th className="px-3 py-2 w-10" />
                           </tr>
                         </thead>
@@ -671,7 +667,7 @@ export default function Modifiers() {
                           {linkedProducts.length === 0 && (
                             <tr>
                               <td colSpan={3} className="px-3 py-8 text-center text-slate-400">
-                                No data yet.
+                                {t('noDataYet')}
                               </td>
                             </tr>
                           )}
@@ -714,14 +710,14 @@ export default function Modifiers() {
                 onClick={closeEditor}
                 className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
-                Cancel
+                {t('cancel')}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
               >
-                {saving ? 'Saving…' : 'Save'}
+                {saving ? t('saving') : t('save')}
               </button>
             </div>
           </form>
@@ -732,7 +728,7 @@ export default function Modifiers() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b px-5 py-4">
-              <h3 className="font-bold text-slate-900">Link Products</h3>
+              <h3 className="font-bold text-slate-900">{t('linkProducts')}</h3>
               <button
                 type="button"
                 onClick={() => setProductPickerOpen(false)}
@@ -744,13 +740,13 @@ export default function Modifiers() {
             <div className="p-5 space-y-3">
               <input
                 className="field"
-                placeholder="Search products…"
+                placeholder={t('searchModifierProductsPlaceholder')}
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
               />
               <div className="max-h-80 overflow-y-auto divide-y rounded-lg border border-slate-200">
                 {pickerProducts.length === 0 && (
-                  <p className="p-6 text-center text-sm text-slate-400">No products to add</p>
+                  <p className="p-6 text-center text-sm text-slate-400">{t('noProductsToAdd')}</p>
                 )}
                 {pickerProducts.map((p) => (
                   <button
@@ -778,7 +774,7 @@ export default function Modifiers() {
                 onClick={() => setProductPickerOpen(false)}
                 className="rounded-lg bg-teal-600 px-5 py-2 text-sm font-semibold text-white"
               >
-                Done
+                {t('done')}
               </button>
             </div>
           </div>
