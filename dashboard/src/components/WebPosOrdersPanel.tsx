@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
+  Ban,
   ChevronLeft,
   ChevronRight,
   CreditCard,
   Info,
+  MoreHorizontal,
   Printer,
   RefreshCw,
   Search,
   Trash2,
+  Undo2,
   X,
 } from 'lucide-react';
 import api from '@/lib/api';
@@ -156,6 +159,10 @@ export default function WebPosOrdersPanel({
   const [paymentEditFor, setPaymentEditFor] = useState<PosOrder | null>(null);
   const [paymentMethodDraft, setPaymentMethodDraft] = useState('cash');
   const [page, setPage] = useState(0);
+  /** Overflow menu for selected order (side detail breadcrumb) */
+  const [detailMenuOpen, setDetailMenuOpen] = useState(false);
+  /** Row-level overflow menu order id */
+  const [rowMenuOrderId, setRowMenuOrderId] = useState<string | null>(null);
 
   const paymentLabel = (method?: string | null) => {
     const m = (method || '').toLowerCase();
@@ -395,14 +402,131 @@ export default function WebPosOrdersPanel({
     }
   };
 
+  const startRefund = (order: PosOrder) => {
+    const remaining = round2(order.total - order.refundAmount);
+    setRefundFor(order);
+    setRefundPartial(false);
+    setRefundAmountText(remaining.toFixed(2));
+    setPaymentEditFor(null);
+  };
+
+  const startEditPayment = (order: PosOrder) => {
+    setPaymentEditFor(order);
+    setPaymentMethodDraft(
+      (order.paymentMethod || 'cash').toLowerCase() === 'card'
+        ? 'card'
+        : (order.paymentMethod || 'cash').toLowerCase() === 'terminal'
+          ? 'terminal'
+          : 'cash'
+    );
+    setRefundFor(null);
+  };
+
+  const closeMenus = () => {
+    setDetailMenuOpen(false);
+    setRowMenuOrderId(null);
+  };
+
   const selectHeld = (h: HeldRow) => {
     setSelectedHeld(h);
     setSelectedOrder(null);
+    closeMenus();
   };
 
   const selectOrder = (o: PosOrder) => {
     setSelectedOrder(o);
     setSelectedHeld(null);
+    closeMenus();
+  };
+
+  const orderActionMenu = (
+    order: PosOrder,
+    opts: { onClose: () => void; align?: 'left' | 'right' }
+  ) => {
+    const showPrint = !!onPrintOrder;
+    const showCancel = !!(canCancel && canCancelOrder(order));
+    const showRefund = !!(canRefund && canRefundOrder(order));
+    const showEditPay = canEditPayment(order);
+    if (!showPrint && !showCancel && !showRefund && !showEditPay) return null;
+    return (
+      <>
+        <button
+          type="button"
+          className="fixed inset-0 z-20 cursor-default"
+          aria-label={t('close')}
+          onClick={opts.onClose}
+        />
+        <div
+          role="menu"
+          className={`absolute top-full z-30 mt-1 min-w-[11rem] rounded-xl border border-stone-200 bg-white py-1 shadow-lg ${
+            opts.align === 'right' ? 'right-0' : 'left-0 right-0'
+          }`}
+        >
+          {showPrint ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+              disabled={printing}
+              onClick={() => {
+                opts.onClose();
+                void printOne(order);
+              }}
+            >
+              <Printer size={14} className="shrink-0 text-stone-500" />
+              {t('webPosPrintReceipt')}
+            </button>
+          ) : null}
+          {showRefund ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+              onClick={() => {
+                opts.onClose();
+                selectOrder(order);
+                startRefund(order);
+              }}
+            >
+              <Undo2 size={14} className="shrink-0 text-stone-500" />
+              {t('webPosRefund')}
+            </button>
+          ) : null}
+          {showEditPay ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+              onClick={() => {
+                opts.onClose();
+                selectOrder(order);
+                startEditPayment(order);
+              }}
+            >
+              <CreditCard size={14} className="shrink-0 text-stone-500" />
+              {t('webPosEditPayment')}
+            </button>
+          ) : null}
+          {showCancel ? (
+            <>
+              <div className="my-1 border-t border-stone-100" />
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                onClick={() => {
+                  opts.onClose();
+                  setCancelFor(order);
+                }}
+              >
+                <Ban size={14} className="shrink-0" />
+                {t('webPosCancelOrder')}
+              </button>
+            </>
+          ) : null}
+        </div>
+      </>
+    );
   };
 
   if (!open) return null;
@@ -587,8 +711,10 @@ export default function WebPosOrdersPanel({
                   const o = item.order;
                   const selected = selectedOrder?.id === o.id;
                   const isSplitRow = o.masterOrderId && (splitCounts.get(o.masterOrderId) || 0) > 1;
+                  const isCompletedSale = !canCancelOrder(o);
+                  const rowMenuOpen = rowMenuOrderId === o.id;
                   return (
-                    <li key={`o-${o.id}`}>
+                    <li key={`o-${o.id}`} className="relative">
                       <button
                         type="button"
                         onClick={() => selectOrder(o)}
@@ -641,8 +767,45 @@ export default function WebPosOrdersPanel({
                           </div>
                           <p className="mt-0.5 text-[11px] text-stone-400">{o.orderNumber}</p>
                         </div>
-                        <Info size={16} className="mt-1 shrink-0 text-stone-400 sm:mt-0" />
+                        {isCompletedSale ? (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="relative mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 sm:mt-0"
+                            title={t('webPosMoreActions')}
+                            aria-label={t('webPosMoreActions')}
+                            aria-haspopup="menu"
+                            aria-expanded={rowMenuOpen}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDetailMenuOpen(false);
+                              setRowMenuOrderId((id) => (id === o.id ? null : o.id));
+                              setSelectedOrder(o);
+                              setSelectedHeld(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setDetailMenuOpen(false);
+                                setRowMenuOrderId((id) => (id === o.id ? null : o.id));
+                                setSelectedOrder(o);
+                                setSelectedHeld(null);
+                              }
+                            }}
+                          >
+                            <MoreHorizontal size={16} />
+                          </span>
+                        ) : (
+                          <Info size={16} className="mt-1 shrink-0 text-stone-400 sm:mt-0" />
+                        )}
                       </button>
+                      {rowMenuOpen
+                        ? orderActionMenu(o, {
+                            align: 'right',
+                            onClose: () => setRowMenuOrderId(null),
+                          })
+                        : null}
                     </li>
                   );
                 })}
@@ -715,26 +878,56 @@ export default function WebPosOrdersPanel({
                   <button
                     type="button"
                     className="mb-3 inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 lg:hidden"
-                    onClick={() => setSelectedOrder(null)}
+                    onClick={() => {
+                      setSelectedOrder(null);
+                      closeMenus();
+                    }}
                   >
                     <ChevronLeft size={16} />
                     {t('back')}
                   </button>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold">{selectedOrder.orderNumber}</p>
-                      <p className="text-xs text-stone-500">{statusLabel(selectedOrder.status)}</p>
-                    </div>
-                    {onPrintOrder ? (
-                      <button
-                        type="button"
-                        className="rounded-lg p-2 hover:bg-white"
-                        disabled={printing}
-                        onClick={() => void printOne(selectedOrder)}
-                      >
-                        <Printer size={18} />
-                      </button>
-                    ) : null}
+
+                  {/* Side breadcrumb / overflow actions (print, refund, cancel) */}
+                  <div className="relative mb-3">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-left hover:bg-stone-50"
+                      onClick={() => {
+                        setRowMenuOrderId(null);
+                        setDetailMenuOpen((v) => !v);
+                      }}
+                      title={t('webPosMoreActions')}
+                      aria-haspopup="menu"
+                      aria-expanded={detailMenuOpen}
+                    >
+                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-stone-50 text-stone-600 ring-1 ring-stone-200">
+                        <MoreHorizontal size={16} aria-hidden />
+                      </span>
+                      <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] font-semibold text-stone-600">
+                        <span className="truncate">{selectedOrder.orderNumber}</span>
+                        <span className="shrink-0 text-stone-300" aria-hidden>
+                          /
+                        </span>
+                        <span className="truncate">{channelLabel(selectedOrder.channel)}</span>
+                        <span className="shrink-0 text-stone-300" aria-hidden>
+                          /
+                        </span>
+                        <span className="truncate">{statusLabel(selectedOrder.status)}</span>
+                      </span>
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-stone-400">
+                        {t('webPosMoreShort')}
+                      </span>
+                    </button>
+                    {detailMenuOpen
+                      ? orderActionMenu(selectedOrder, {
+                          onClose: () => setDetailMenuOpen(false),
+                        })
+                      : null}
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-semibold">{selectedOrder.orderNumber}</p>
+                    <p className="text-xs text-stone-500">{statusLabel(selectedOrder.status)}</p>
                   </div>
                   <ul className="mt-4 space-y-2 text-sm">
                     {selectedOrder.items.map((i, idx) => (
@@ -761,50 +954,6 @@ export default function WebPosOrdersPanel({
                       {t('webPosCancelReason')}: {selectedOrder.cancelReason}
                     </p>
                   ) : null}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {canCancel && canCancelOrder(selectedOrder) ? (
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs"
-                        onClick={() => setCancelFor(selectedOrder)}
-                      >
-                        {t('webPosCancelOrder')}
-                      </button>
-                    ) : null}
-                    {canEditPayment(selectedOrder) ? (
-                      <button
-                        type="button"
-                        className="btn-secondary inline-flex items-center gap-1 text-xs"
-                        onClick={() => {
-                          setPaymentEditFor(selectedOrder);
-                          setPaymentMethodDraft(
-                            (selectedOrder.paymentMethod || 'cash').toLowerCase() === 'card'
-                              ? 'card'
-                              : (selectedOrder.paymentMethod || 'cash').toLowerCase() === 'terminal'
-                                ? 'terminal'
-                                : 'cash'
-                          );
-                        }}
-                      >
-                        <CreditCard size={14} />
-                        {t('webPosEditPayment')}
-                      </button>
-                    ) : null}
-                    {canRefund && canRefundOrder(selectedOrder) ? (
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs"
-                        onClick={() => {
-                          const remaining = round2(selectedOrder.total - selectedOrder.refundAmount);
-                          setRefundFor(selectedOrder);
-                          setRefundPartial(false);
-                          setRefundAmountText(remaining.toFixed(2));
-                        }}
-                      >
-                        {t('webPosRefund')}
-                      </button>
-                    ) : null}
-                  </div>
                 </div>
               </>
             ) : (
