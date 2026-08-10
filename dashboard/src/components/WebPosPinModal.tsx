@@ -28,6 +28,7 @@ export default function WebPosPinModal({
     roleId: string;
     roleName: string;
     permissions: string[];
+    accessToken?: string;
   }) => void;
 }) {
   const { t } = useI18n();

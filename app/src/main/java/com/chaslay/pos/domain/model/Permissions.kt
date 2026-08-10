@@ -13,6 +13,8 @@ enum class PosPermission {
     CANCEL_ORDERS,
     REFUND_ORDERS,
     VIEW_REPORTS,
+    /** Company / all-staff sales in reports and EOD (without this = own sales only). */
+    VIEW_ALL_SALES,
     MANAGE_PRODUCTS,
     ACCESS_SETTINGS,
     MANAGE_USERS,
@@ -44,7 +46,9 @@ data class UserAccess(
     fun has(permission: PosPermission): Boolean = permission in permissions
 
     fun canAccessSettings(): Boolean = has(PosPermission.ACCESS_SETTINGS)
-    fun canAccessReports(): Boolean = has(PosPermission.VIEW_REPORTS)
+    fun canAccessReports(): Boolean =
+        has(PosPermission.VIEW_REPORTS) || has(PosPermission.END_OF_DAY)
+    fun canViewAllSales(): Boolean = has(PosPermission.VIEW_ALL_SALES)
     fun canManageProducts(): Boolean = has(PosPermission.MANAGE_PRODUCTS)
     fun canManageUsers(): Boolean = has(PosPermission.MANAGE_USERS)
     fun canManageRoles(): Boolean = has(PosPermission.MANAGE_ROLES)

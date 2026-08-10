@@ -31,6 +31,11 @@ type EodShiftCash = {
 
 type EodReport = {
   range: { label: string; from: string; to: string; preset: string };
+  salesScope?: {
+    mode: 'all' | 'own';
+    staffId?: string | null;
+    staffName?: string | null;
+  };
   salesCount: number;
   cancelledCount: number;
   revenue: number;
@@ -112,6 +117,12 @@ export default function ReportsPage() {
     void load();
   }, [load]);
 
+  const ownOnly = report?.salesScope?.mode === 'own';
+
+  useEffect(() => {
+    if (ownOnly && tab === 'users') setTab('eod');
+  }, [ownOnly, tab]);
+
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
 
   const printEod = async () => {
@@ -125,6 +136,10 @@ export default function ReportsPage() {
         label: report.range.label,
         periodFrom: report.range.from,
         periodTo: report.range.to,
+        scopeStaffName:
+          report.salesScope?.mode === 'own'
+            ? report.salesScope.staffName || null
+            : null,
         salesCount: report.salesCount,
         revenue: report.revenue,
         subtotal: report.subtotal || report.revenue,
@@ -210,7 +225,7 @@ export default function ReportsPage() {
     { id: 'eod', label: t('reportsTabEod') },
     { id: 'sales', label: t('reportsTabSales') },
     { id: 'products', label: t('reportsTabProducts') },
-    { id: 'users', label: t('reportsTabUsers') },
+    ...(ownOnly ? [] : [{ id: 'users' as const, label: t('reportsTabUsers') }]),
   ];
 
   return (
@@ -219,6 +234,14 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-xl font-semibold">{t('reports')}</h1>
           <p className="text-sm text-[var(--text-muted)] mt-1">{t('reportsHint')}</p>
+          {ownOnly ? (
+            <p className="mt-1 text-sm font-medium text-amber-800 dark:text-amber-200">
+              {t('reportsOwnSalesOnly').replace(
+                '{name}',
+                report?.salesScope?.staffName || ''
+              )}
+            </p>
+          ) : null}
         </div>
         <button
           type="button"

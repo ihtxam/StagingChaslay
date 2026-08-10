@@ -74,6 +74,7 @@ export interface SyncSalePayload {
   amountTendered?: number | null;
   changeDue?: number | null;
   staffName?: string | null;
+  staffId?: string | null;
   total: number;
   notes?: string;
   fulfillmentChannel?: "takeaway" | "dine_in" | "delivery";
@@ -439,6 +440,7 @@ export class SyncService {
             ? roundMoney2(Number(sale.changeDue)).toFixed(2)
             : null,
         staffName: sale.staffName ? String(sale.staffName).trim().slice(0, 255) : null,
+        staffId: asUuidOrNull(sale.staffId),
         total: total.toFixed(2),
         paymentMethod: isCancelled ? sale.paymentMethod || null : sale.paymentMethod,
         paymentStatus: payStatus,

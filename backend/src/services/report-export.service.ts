@@ -1,5 +1,9 @@
 import * as XLSX from "xlsx";
-import { PosReportsService, type ReportPreset } from "./pos-reports.service";
+import {
+  PosReportsService,
+  type ReportPreset,
+  type SalesScopeOpts,
+} from "./pos-reports.service";
 
 function money(n: number | undefined | null): string {
   return (Number(n) || 0).toFixed(2);
@@ -11,7 +15,7 @@ function money(n: number | undefined | null): string {
 export class ReportExportService {
   static async buildOverviewWorkbook(
     merchantId: string,
-    opts: { preset?: ReportPreset; from?: string; to?: string }
+    opts: { preset?: ReportPreset; from?: string; to?: string } & SalesScopeOpts
   ) {
     const overview = await PosReportsService.getOverviewDashboard(merchantId, opts);
     const eod = overview.eod;
@@ -179,7 +183,7 @@ export class ReportExportService {
 
   static async buildOverviewCsv(
     merchantId: string,
-    opts: { preset?: ReportPreset; from?: string; to?: string }
+    opts: { preset?: ReportPreset; from?: string; to?: string } & SalesScopeOpts
   ) {
     const overview = await PosReportsService.getOverviewDashboard(merchantId, opts);
     const eod = overview.eod;

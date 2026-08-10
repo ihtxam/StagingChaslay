@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { and, eq, gte, lte, desc } from "drizzle-orm";
+import { and, eq, gte, lte, desc, or, isNull } from "drizzle-orm";
 
 export type ReportPreset =
   | "today"
@@ -113,10 +113,22 @@ export function resolveReportRange(
   return { start: b.start, end: b.end, label: today, from: today, to: today };
 }
 
+export type SalesScopeOpts = {
+  /** When set, only include this staff member's sales (own-sales EOD). */
+  staffId?: string | null;
+  /** Fallback match for legacy orders without staffId. */
+  staffName?: string | null;
+};
+
 export class PosReportsService {
   static async getEndOfDayReport(
     merchantId: string,
-    opts: { preset?: ReportPreset; from?: string; to?: string; channel?: string }
+    opts: {
+      preset?: ReportPreset;
+      from?: string;
+      to?: string;
+      channel?: string;
+    } & SalesScopeOpts
   ) {
     const db = getDb();
     const range = resolveReportRange(opts.preset || "today", opts.from, opts.to);
@@ -132,13 +144,25 @@ export class PosReportsService {
     const rateDelivery =
       money(merchant?.taxDeliveryRate) || money(merchant?.taxTakeawayRate) || money(merchant?.vatRate) || 2.6;
 
-    const conditions = [
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const conditions: any[] = [
       eq(schema.orders.merchantId, merchantId),
       gte(schema.orders.createdAt, range.start),
       lte(schema.orders.createdAt, range.end),
     ];
     if (opts.channel && ["takeaway", "dine_in", "delivery"].includes(opts.channel)) {
       conditions.push(eq(schema.orders.fulfillmentChannel, opts.channel));
+    }
+    const scopeStaffId = opts.staffId ? String(opts.staffId).trim() : "";
+    const scopeStaffName = opts.staffName ? String(opts.staffName).trim() : "";
+    if (scopeStaffId) {
+      const staffMatch = scopeStaffName
+        ? or(
+            eq(schema.orders.staffId, scopeStaffId),
+            and(isNull(schema.orders.staffId), eq(schema.orders.staffName, scopeStaffName))
+          )
+        : eq(schema.orders.staffId, scopeStaffId);
+      if (staffMatch) conditions.push(staffMatch);
     }
 
     const rows = await db.query.orders.findMany({
@@ -311,13 +335,24 @@ export class PosReportsService {
     }));
 
     // Closed shifts overlapping the report period (for opening float / fond de base on EOD).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const shiftConditions: any[] = [
+      eq(schema.posShifts.merchantId, merchantId),
+      eq(schema.posShifts.status, "closed"),
+      gte(schema.posShifts.closedAt, range.start),
+      lte(schema.posShifts.closedAt, range.end),
+    ];
+    if (scopeStaffId) {
+      const shiftMatch = scopeStaffName
+        ? or(
+            eq(schema.posShifts.staffId, scopeStaffId),
+            and(isNull(schema.posShifts.staffId), eq(schema.posShifts.staffName, scopeStaffName))
+          )
+        : eq(schema.posShifts.staffId, scopeStaffId);
+      if (shiftMatch) shiftConditions.push(shiftMatch);
+    }
     const closedShifts = await db.query.posShifts.findMany({
-      where: and(
-        eq(schema.posShifts.merchantId, merchantId),
-        eq(schema.posShifts.status, "closed"),
-        gte(schema.posShifts.closedAt, range.start),
-        lte(schema.posShifts.closedAt, range.end)
-      ),
+      where: and(...shiftConditions),
       orderBy: [desc(schema.posShifts.closedAt)],
     });
 
@@ -333,6 +368,14 @@ export class PosReportsService {
       closedAt: s.closedAt?.toISOString?.() ?? null,
     }));
 
+    const salesScope = scopeStaffId
+      ? {
+          mode: "own" as const,
+          staffId: scopeStaffId,
+          staffName: scopeStaffName || null,
+        }
+      : { mode: "all" as const, staffId: null as string | null, staffName: null as string | null };
+
     return {
       range: {
         preset: opts.preset || "today",
@@ -342,6 +385,7 @@ export class PosReportsService {
         start: range.start.toISOString(),
         end: range.end.toISOString(),
       },
+      salesScope,
       salesCount: completed.length,
       cancelledCount: cancelled.length,
       cancelledOrders,
@@ -392,7 +436,7 @@ export class PosReportsService {
    */
   static async getOverviewDashboard(
     merchantId: string,
-    opts: { preset?: ReportPreset; from?: string; to?: string }
+    opts: { preset?: ReportPreset; from?: string; to?: string } & SalesScopeOpts
   ) {
     const current = await this.getEndOfDayReport(merchantId, opts);
     const range = resolveReportRange(opts.preset || "today", opts.from, opts.to);
@@ -413,6 +457,8 @@ export class PosReportsService {
       preset: "custom",
       from: prevFrom,
       to: prevTo,
+      staffId: opts.staffId,
+      staffName: opts.staffName,
     });
 
     const pctChange = (cur: number, prev: number) => {

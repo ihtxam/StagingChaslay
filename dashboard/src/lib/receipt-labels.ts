@@ -30,6 +30,7 @@ export type ReceiptLabels = {
   express: string;
   pax: string;
   endOfDay: string;
+  mySales: string;
   reportPeriod: string;
   salesSummary: string;
   salesCount: string;
@@ -99,6 +100,7 @@ const EN: ReceiptLabels = {
   express: 'Express',
   pax: 'PAX',
   endOfDay: 'END OF DAY',
+  mySales: 'My sales',
   reportPeriod: 'Report Period',
   salesSummary: 'SALES SUMMARY',
   salesCount: 'Sales',
@@ -168,6 +170,7 @@ const FR: ReceiptLabels = {
   express: 'Express',
   pax: 'Couverts',
   endOfDay: 'FIN DE JOURNEE',
+  mySales: 'Mes ventes',
   reportPeriod: 'Periode du rapport',
   salesSummary: 'RESUME DES VENTES',
   salesCount: 'Ventes',
@@ -237,6 +240,7 @@ const DE: ReceiptLabels = {
   express: 'Express',
   pax: 'Gaeste',
   endOfDay: 'TAGESABSCHLUSS',
+  mySales: 'Meine Verkaeufe',
   reportPeriod: 'Berichtszeitraum',
   salesSummary: 'VERKAUFSUEBERSICHT',
   salesCount: 'Verkaeufe',
