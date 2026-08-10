@@ -193,11 +193,24 @@ const MAX_POINTS = 2_147_483_647; // PG integer max
 /** Digits only (ignore decimal point/sign) for length checks. */
 const digitCount = (raw: string) => raw.replace(/[^\d]/g, '').length;
 
+/** Free-points field: digits only, hard-capped at 10 (PG integer / product rule). */
+const sanitizeFreePointsInput = (raw: string) => raw.replace(/\D/g, '').slice(0, MAX_MONEY_DIGITS);
+
 const clampNonNegativeInt = (raw: string) => {
   if (raw.trim() === '' || raw === '-') return raw;
   const n = Number(raw);
   if (!Number.isFinite(n)) return '0';
   return String(Math.max(0, Math.floor(n)));
+};
+
+/** Parse free-points for API; null when empty/invalid. */
+const parseFreePoints = (raw: string): number | null | 'too_many_digits' | 'out_of_range' => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (digitCount(trimmed) > MAX_MONEY_DIGITS) return 'too_many_digits';
+  const points = Math.floor(Number(sanitizeFreePointsInput(trimmed)));
+  if (!Number.isFinite(points) || points < 1 || points > MAX_POINTS) return 'out_of_range';
+  return points;
 };
 
 type ProductTypeUi = 'standard' | 'combo' | 'open_price' | 'weighed';
@@ -476,10 +489,8 @@ export default function Products() {
       modifierGroupIds: form.modifierGroupIds,
       allowExtras: form.modifierGroupIds.length > 0,
       loyaltyRewardPoints: (() => {
-        const raw = form.loyaltyRewardPoints.trim();
-        if (!raw) return null;
-        const n = Math.floor(Number(raw));
-        return Number.isFinite(n) && n >= 1 ? n : null;
+        const parsed = parseFreePoints(form.loyaltyRewardPoints);
+        return typeof parsed === 'number' ? parsed : null;
       })(),
     };
   };
@@ -519,17 +530,14 @@ export default function Products() {
       toast.error(`Product code / SKU must be at most ${SKU_MAX_LEN} characters`);
       return;
     }
-    const pointsRaw = form.loyaltyRewardPoints.trim();
-    if (pointsRaw) {
-      if (digitCount(pointsRaw) > MAX_MONEY_DIGITS) {
-        toast.error('Free points must be at most 10 digits');
-        return;
-      }
-      const points = Math.floor(Number(pointsRaw));
-      if (!Number.isFinite(points) || points < 1 || points > MAX_POINTS) {
-        toast.error('Free points must be a whole number between 1 and 2147483647');
-        return;
-      }
+    const parsedPoints = parseFreePoints(form.loyaltyRewardPoints);
+    if (parsedPoints === 'too_many_digits') {
+      toast.error('Free points must be at most 10 digits');
+      return;
+    }
+    if (parsedPoints === 'out_of_range') {
+      toast.error('Free points must be a whole number between 1 and 2147483647');
+      return;
     }
     const stockNum = Number(form.stock);
     if (!Number.isFinite(stockNum) || stockNum < 0) {
@@ -963,7 +971,7 @@ export default function Products() {
               </button>
             </div>
 
-            <form onSubmit={onSubmit} className="space-y-3 px-4 py-3">
+            <form onSubmit={onSubmit} noValidate className="space-y-3 px-4 py-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label={`${t('productName')} *`}>
                   <input
@@ -1081,21 +1089,26 @@ export default function Products() {
               <Field label="Free with points (optional)">
                 <input
                   className="field-input"
-                  type="number"
-                  min="1"
-                  max={MAX_POINTS}
-                  step="1"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
                   placeholder="e.g. 200 - leave empty for none"
                   value={form.loyaltyRewardPoints}
                   onChange={(e) => {
-                    const v = e.target.value;
-                    if (v && digitCount(v) > MAX_MONEY_DIGITS) return;
-                    setForm({ ...form, loyaltyRewardPoints: v });
+                    // text + sanitize: avoids HTML number inputs silently blocking submit when > max
+                    setForm({ ...form, loyaltyRewardPoints: sanitizeFreePointsInput(e.target.value) });
                   }}
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  Customers with at least this many points can add the product free (pays with points). Max 10 digits.
+                  Customers with at least this many points can add the product free (pays with points). Whole
+                  number, max 10 digits (up to {MAX_POINTS.toLocaleString('en-US')}).
                 </p>
+                {form.loyaltyRewardPoints &&
+                parseFreePoints(form.loyaltyRewardPoints) === 'out_of_range' ? (
+                  <p className="mt-1 text-xs font-medium text-rose-600">
+                    Enter a whole number between 1 and {MAX_POINTS.toLocaleString('en-US')}.
+                  </p>
+                ) : null}
               </Field>
 
               <div>

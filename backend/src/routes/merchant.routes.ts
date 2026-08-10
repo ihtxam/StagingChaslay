@@ -295,12 +295,16 @@ router.post("/products", async (req: Request, res: Response) => {
     if (loyaltyRewardPoints === null || loyaltyRewardPoints === "" || loyaltyRewardPoints === undefined) {
       normalizedLoyaltyReward = loyaltyRewardPoints === undefined ? undefined : null;
     } else {
-      const n = Math.floor(Number(loyaltyRewardPoints));
-      if (!Number.isFinite(n) || n < 1 || n > 2147483647) {
-        return res.status(400).json({ error: "loyaltyRewardPoints must be null or an integer from 1 to 2147483647" });
+      const rawPts = String(loyaltyRewardPoints).trim();
+      const ptsDigits = rawPts.replace(/[^\d]/g, "");
+      if (ptsDigits.length > 10) {
+        return res.status(400).json({ error: "Free points must be at most 10 digits" });
       }
-      if (String(Math.abs(n)).length > 10) {
-        return res.status(400).json({ error: "loyaltyRewardPoints must be at most 10 digits" });
+      const n = Math.floor(Number(ptsDigits || rawPts));
+      if (!Number.isFinite(n) || n < 1 || n > 2147483647) {
+        return res
+          .status(400)
+          .json({ error: "Free points must be a whole number between 1 and 2147483647" });
       }
       normalizedLoyaltyReward = n;
     }
@@ -400,9 +404,16 @@ router.put("/products/:productId", async (req: Request, res: Response) => {
       if (updates.loyaltyRewardPoints === null || updates.loyaltyRewardPoints === "") {
         updates.loyaltyRewardPoints = null;
       } else {
-        const n = Math.floor(Number(updates.loyaltyRewardPoints));
+        const rawPts = String(updates.loyaltyRewardPoints).trim();
+        const ptsDigits = rawPts.replace(/[^\d]/g, "");
+        if (ptsDigits.length > 10) {
+          return res.status(400).json({ error: "Free points must be at most 10 digits" });
+        }
+        const n = Math.floor(Number(ptsDigits || rawPts));
         if (!Number.isFinite(n) || n < 1 || n > 2147483647) {
-          return res.status(400).json({ error: "loyaltyRewardPoints must be null or an integer from 1 to 2147483647" });
+          return res
+            .status(400)
+            .json({ error: "Free points must be a whole number between 1 and 2147483647" });
         }
         updates.loyaltyRewardPoints = n;
       }
