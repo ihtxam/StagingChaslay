@@ -20,7 +20,8 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.4.0";
+const VERSION = "1.5.0";
+const { findLatestReading } = require("./aclas-scale");
 const APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "chaslay-print-agent.exe";
 const RUN_VALUE_NAME = "ChaslayPrintAgent";
@@ -498,7 +499,7 @@ async function doInstall() {
     appendInstallLog(`Wrote start-agent.cmd (dev fallback)`);
   }
 
-  for (const ps1Name of ["win-raw-print.ps1", "win-raw-print-worker.ps1"]) {
+  for (const ps1Name of ["win-raw-print.ps1", "win-raw-print-worker.ps1", "win-scale-read.ps1"]) {
     const ps1Src = path.join(__dirname, ps1Name);
     const ps1Dest = path.join(dir, ps1Name);
     if (fs.existsSync(ps1Src)) {
@@ -790,12 +791,70 @@ function startServer() {
         "print",
         "printers",
         "drawer",
+        "scale",
         "install",
         "unicode-printer-names",
         "virtual-printer-guard",
         "warm-print-worker",
       ],
     });
+  });
+
+  /** List Windows COM ports (Aclas USB-serial usually appears as COMx). */
+  app.get("/scale/ports", async (_req, res) => {
+    try {
+      if (!isWindows()) {
+        return res.json({ ok: true, ports: [] });
+      }
+      const scriptPath = ensureAssetOnDisk("win-scale-read.ps1");
+      const stdout = await runPowerShell(scriptPath, ["-ListPorts"]);
+      const parsed = JSON.parse(String(stdout || "{}").replace(/^\uFEFF/, ""));
+      res.json({ ok: true, ports: parsed.ports || [] });
+    } catch (error) {
+      console.error("[print-agent] scale ports failed:", error);
+      res.status(500).json({ error: error.message || "Failed to list scale ports" });
+    }
+  });
+
+  /** Read one Aclas frame from a COM port (manual weight still available in WebPOS). */
+  app.get("/scale/reading", async (req, res) => {
+    try {
+      if (!isWindows()) {
+        return res.status(400).json({ error: "Scale reading is Windows-only" });
+      }
+      const port = String(req.query.port || "").trim();
+      if (!port) {
+        return res.status(400).json({ error: "port query required (e.g. COM3)" });
+      }
+      const timeoutMs = Math.min(Math.max(Number(req.query.timeoutMs || 2500), 500), 8000);
+      const scriptPath = ensureAssetOnDisk("win-scale-read.ps1");
+      const stdout = await runPowerShell(scriptPath, [
+        "-PortName",
+        port,
+        "-TimeoutMs",
+        String(timeoutMs),
+      ]);
+      const parsed = JSON.parse(String(stdout || "{}").replace(/^\uFEFF/, ""));
+      if (!parsed.ok) {
+        return res.status(500).json({ error: parsed.error || "Scale read failed" });
+      }
+      const raw = parsed.dataBase64
+        ? Buffer.from(parsed.dataBase64, "base64")
+        : Buffer.alloc(0);
+      const reading = findLatestReading(raw);
+      if (!reading) {
+        return res.json({
+          ok: true,
+          port,
+          reading: null,
+          message: "No scale frame yet — place item and keep USB scale powered",
+        });
+      }
+      res.json({ ok: true, port, reading });
+    } catch (error) {
+      console.error("[print-agent] scale reading failed:", error);
+      res.status(500).json({ error: error.message || "Scale read failed" });
+    }
   });
 
   app.get("/printers", async (_req, res) => {

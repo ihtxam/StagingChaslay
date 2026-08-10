@@ -28,6 +28,9 @@ export type CartLine = {
   selectedExtras: import('@/lib/shop-cart').ShopSelectedExtra[];
   comboSelections: import('@/lib/shop-cart').ShopComboSelection[];
   isOpenPrice?: boolean;
+  /** Sold by weight: quantity is kg, unitPrice is CHF/kg */
+  isWeighed?: boolean;
+  weightKg?: number;
   courseNumber?: number;
   lineDiscountPercent?: number;
   sentToKitchen?: boolean;
@@ -44,6 +47,8 @@ export type Product = {
   categoryId?: string | null;
   isTaxable?: boolean;
   isOpenPrice?: boolean;
+  soldByWeight?: boolean;
+  weightUnit?: string | null;
   stock?: number;
   productType?: string;
   sku?: string | null;

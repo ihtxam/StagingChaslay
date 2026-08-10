@@ -75,6 +75,7 @@ import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPos
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
+import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
 import WebPosOnlineOrdersPanel, {
   type OnlineOrder,
 } from '@/components/WebPosOnlineOrdersPanel';
@@ -212,6 +213,8 @@ type Product = {
   categoryId?: string | null;
   isTaxable?: boolean;
   isOpenPrice?: boolean;
+  soldByWeight?: boolean;
+  weightUnit?: string | null;
   stock?: number;
   productType?: string;
   sku?: string | null;
@@ -236,6 +239,9 @@ type CartLine = {
   selectedExtras: ShopSelectedExtra[];
   comboSelections: ShopComboSelection[];
   isOpenPrice?: boolean;
+  /** Sold by weight: quantity = kg, unitPrice = CHF/kg */
+  isWeighed?: boolean;
+  weightKg?: number;
   courseNumber?: number;
   lineDiscountPercent?: number;
   sentToKitchen?: boolean;
@@ -502,6 +508,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
   const [pendingCombo, setPendingCombo] = useState<ShopComboProduct | null>(null);
   const [pendingOpenPrice, setPendingOpenPrice] = useState<Product | null>(null);
+  const [pendingWeighed, setPendingWeighed] = useState<Product | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(() => {
     const hasItems = (bootActive?.cart?.length || 0) > 0 || !!bootActive?.orderSent;
@@ -666,6 +673,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (pendingWeighed) {
+        e.preventDefault();
+        setPendingWeighed(null);
+        return;
+      }
       if (pendingProduct) {
         e.preventDefault();
         setPendingProduct(null);
@@ -693,7 +705,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [appMode, pendingProduct, pendingCombo, settingsOpen, mobileCartOpen, showPanelMenus]);
+  }, [
+    appMode,
+    pendingWeighed,
+    pendingProduct,
+    pendingCombo,
+    settingsOpen,
+    mobileCartOpen,
+    showPanelMenus,
+  ]);
 
   const taxRate = useMemo(() => {
     if (!merchant) return 8.1;
@@ -1426,10 +1446,44 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     ensureShift(() => pushConfiguredProduct(p, unitPrice, selectedExtras, comboSelections));
   };
 
+  const isWeighedProduct = (p: Product) =>
+    !!p.soldByWeight || p.productType === 'weighed';
+
+  const pushWeighedProduct = (p: Product, weightKg: number) => {
+    const kg = roundMoney2(Math.max(0, weightKg));
+    if (kg <= 0) return;
+    const pricePerKg = roundMoney2(Number(p.price) || 0);
+    const lineTotal = roundMoney2(pricePerKg * kg);
+    const courseNumber = coursesEnabled ? activeCourse : undefined;
+    setCart((prev) => [
+      ...prev,
+      {
+        lineId: `${p.id}-${Date.now()}-w`,
+        productId: p.id,
+        name: p.name,
+        quantity: kg,
+        unitPrice: pricePerKg,
+        lineTotal,
+        taxable: p.isTaxable !== false,
+        categoryId: p.categoryId,
+        selectedExtras: [],
+        comboSelections: [],
+        isOpenPrice: false,
+        isWeighed: true,
+        weightKg: kg,
+        courseNumber,
+      },
+    ]);
+  };
+
   const onProductClick = (p: Product) => {
     ensureShift(() => {
       if (p.isOpenPrice || p.productType === 'open_price') {
         setPendingOpenPrice(p);
+        return;
+      }
+      if (isWeighedProduct(p)) {
+        setPendingWeighed(p);
         return;
       }
       if (productHasComboSlots(p)) {
@@ -3496,6 +3550,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         quantity: l.quantity,
         unitPrice: l.unitPrice,
         totalPrice: l.lineTotal,
+        weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
         taxAmount: l.taxable
           ? vatIncludedInPrice
             ? extractVatFromGross(l.lineTotal, taxRate)
@@ -5097,6 +5152,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           }
           addConfiguredProduct(pendingOpenPrice, amount, [], []);
           setPendingOpenPrice(null);
+        }}
+      />
+
+      <WebPosWeightModal
+        open={!!pendingWeighed}
+        productName={pendingWeighed?.name || ''}
+        pricePerKg={Number(pendingWeighed?.price) || 0}
+        weightUnit={pendingWeighed?.weightUnit}
+        onClose={() => setPendingWeighed(null)}
+        onConfirm={(weightKg) => {
+          if (!pendingWeighed) return;
+          if (weightKg <= 0) {
+            toast.error(t('webPosEnterWeight'));
+            return;
+          }
+          ensureShift(() => pushWeighedProduct(pendingWeighed, weightKg));
+          setPendingWeighed(null);
         }}
       />
 

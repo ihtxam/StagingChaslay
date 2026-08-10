@@ -69,6 +69,7 @@ interface Product {
   productType?: string;
   isOpenPrice?: boolean;
   soldByWeight?: boolean;
+  weightUnit?: string | null;
   categoryId?: string | null;
   bulkPricing?: BulkTier[];
   specifications?: SpecRow[];
@@ -104,6 +105,8 @@ type FormState = {
   imageUrl: string;
   isOpenPrice: boolean;
   soldByWeight: boolean;
+  /** Catalog price unit for weighed items (default kg). */
+  weightUnit: 'kg' | 'g' | 'lb';
   isCombo: boolean;
   comboSlots: ComboSlotForm[];
   specifications: SpecRow[];
@@ -131,6 +134,7 @@ const emptyForm = (): FormState => ({
   imageUrl: '',
   isOpenPrice: false,
   soldByWeight: false,
+  weightUnit: 'kg',
   isCombo: false,
   comboSlots: [],
   specifications: [{ id: 'default', name: '', price: 0, saleStatus: 'in_stock', isDefault: true }],
@@ -396,9 +400,11 @@ export default function Products() {
         categoryId: full.categoryId || '',
         buttonColor: full.buttonColor || '#0f172a',
         imageUrl: full.imageUrl || '',
-        isOpenPrice: !!full.isOpenPrice,
-        soldByWeight: !!full.soldByWeight,
-        isCombo: full.productType === 'combo' || comboSlots.length > 0,
+      isOpenPrice: !!full.isOpenPrice,
+      soldByWeight: !!full.soldByWeight || full.productType === 'weighed',
+      weightUnit:
+        full.weightUnit === 'g' || full.weightUnit === 'lb' ? full.weightUnit : 'kg',
+      isCombo: full.productType === 'combo' || comboSlots.length > 0,
         comboSlots,
         specifications: specs as SpecRow[],
         modifierGroupIds: (full.modifierGroups || []).map((g) => g.id),
@@ -419,7 +425,11 @@ export default function Products() {
         buttonColor: product.buttonColor || '#0f172a',
         imageUrl: product.imageUrl || '',
         isOpenPrice: !!product.isOpenPrice,
-        soldByWeight: !!product.soldByWeight,
+        soldByWeight: !!product.soldByWeight || product.productType === 'weighed',
+        weightUnit:
+          product.weightUnit === 'g' || product.weightUnit === 'lb'
+            ? product.weightUnit
+            : 'kg',
         isCombo: product.productType === 'combo' || comboSlots.length > 0,
         comboSlots,
         specifications: [
@@ -488,6 +498,7 @@ export default function Products() {
       imageUrl: form.imageUrl.trim() || null,
       isOpenPrice: form.isCombo ? false : form.isOpenPrice,
       soldByWeight: form.isCombo ? false : form.soldByWeight,
+      weightUnit: form.soldByWeight && !form.isCombo ? form.weightUnit : 'kg',
       productType,
       comboItems: comboSlots,
       specifications: form.specifications
@@ -523,6 +534,7 @@ export default function Products() {
       isCombo: next === 'combo',
       isOpenPrice: next === 'open_price',
       soldByWeight: next === 'weighed',
+      weightUnit: next === 'weighed' ? form.weightUnit || 'kg' : form.weightUnit,
       comboSlots:
         next === 'combo' && form.comboSlots.length === 0
           ? [emptySlot(t('comboStepMain')), emptySlot(t('comboStepSide')), emptySlot(t('comboStepDrink'))]
@@ -1028,6 +1040,25 @@ export default function Products() {
                     <option value="weighed">{t('weighingProduct')}</option>
                   </select>
                 </Field>
+                {form.soldByWeight && !form.isCombo ? (
+                  <Field label={t('webPosWeightUnit')}>
+                    <select
+                      className="field-input"
+                      value={form.weightUnit}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          weightUnit: e.target.value as FormState['weightUnit'],
+                        })
+                      }
+                    >
+                      <option value="kg">kg</option>
+                      <option value="g">g</option>
+                      <option value="lb">lb</option>
+                    </select>
+                    <p className="mt-1 text-xs muted">{t('webPosWeighedPriceHint')}</p>
+                  </Field>
+                ) : null}
                 <Field label={t('productCode')}>
                   <input
                     className="field-input"
@@ -1403,7 +1434,7 @@ export default function Products() {
                           }}
                         />
                         <span className="inline-flex shrink-0 items-center border-l border-[var(--border)] bg-[var(--bg-muted)] px-2 text-[10px] font-semibold muted">
-                          CHF
+                          {form.soldByWeight ? 'CHF/kg' : 'CHF'}
                         </span>
                       </div>
                       <select

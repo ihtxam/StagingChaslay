@@ -572,7 +572,17 @@ export default function WebPosCartPanel({
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-medium leading-snug">
-                          <span className="tabular-nums">{l.quantity}</span> {lineName}
+                          <span className="tabular-nums">
+                            {l.isWeighed
+                              ? `${Number(l.weightKg ?? l.quantity).toFixed(3)} kg`
+                              : l.quantity}
+                          </span>{' '}
+                          {lineName}
+                          {l.isWeighed ? (
+                            <span className="ml-1 text-[10px] font-semibold text-stone-500">
+                              @ {money(l.unitPrice)}/kg
+                            </span>
+                          ) : null}
                           {l.sentToKitchen ? (
                             <span className="ml-1 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
                               {t('webPosSentBadge')}
@@ -664,7 +674,11 @@ export default function WebPosCartPanel({
               {selectedLine ? (
                 <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
                   <p className="min-w-0 truncate text-xs font-semibold text-stone-700">
-                    <span className="tabular-nums">{selectedLine.quantity}</span>{' '}
+                    <span className="tabular-nums">
+                      {selectedLine.isWeighed
+                        ? `${Number(selectedLine.weightKg ?? selectedLine.quantity).toFixed(3)} kg`
+                        : selectedLine.quantity}
+                    </span>{' '}
                     {repairCatalogText(selectedLine.name || '')}
                   </p>
                   <button

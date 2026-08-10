@@ -167,6 +167,37 @@ export async function openCashDrawerViaAgent(opts?: { printerName?: string }): P
   });
 }
 
+export type ScaleReading = {
+  weightKg: number;
+  rawWeight?: string;
+  units?: string;
+  status?: string;
+  isZero?: boolean;
+  isTare?: boolean;
+};
+
+/** Windows COM ports from Print Agent (Aclas USB-serial → COMx). */
+export async function listScalePorts(): Promise<string[]> {
+  const data = await agentFetch('/scale/ports');
+  return Array.isArray(data?.ports) ? data.ports.map(String) : [];
+}
+
+/** One Aclas reading from Print Agent (null if no frame yet). */
+export async function readScaleWeight(
+  port: string,
+  timeoutMs = 2500
+): Promise<{ reading: ScaleReading | null; message?: string }> {
+  const q = new URLSearchParams({
+    port,
+    timeoutMs: String(timeoutMs),
+  });
+  const data = await agentFetch(`/scale/reading?${q.toString()}`);
+  return {
+    reading: (data?.reading as ScaleReading | null) || null,
+    message: data?.message ? String(data.message) : undefined,
+  };
+}
+
 export function browserPrintText(text: string, qrImageSrc?: string) {
   const w = window.open('', '_blank', 'width=400,height=700');
   if (!w) throw new Error('Popup blocked - allow popups to print');

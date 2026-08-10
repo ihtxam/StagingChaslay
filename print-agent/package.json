@@ -1,6 +1,6 @@
 {
   "name": "manupos-print-agent",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "Local print service for ChaslayReborn WebPOS - silent ESC/POS to Windows default printer",
   "main": "server.js",
@@ -14,7 +14,9 @@
   "pkg": {
     "assets": [
       "win-raw-print.ps1",
-      "win-raw-print-worker.ps1"
+      "win-raw-print-worker.ps1",
+      "win-scale-read.ps1",
+      "aclas-scale.js"
     ],
     "targets": [
       "node18-win-x64"

@@ -106,6 +106,8 @@ export default function WebPosProductArea({
               const qty = cartQtyByProduct.get(p.id) || 0;
               const isCombo = productHasCombo(p);
               const hasMods = !isCombo && productHasMods(p);
+              const isWeighed =
+                !!p.soldByWeight || p.productType === 'weighed';
               return (
                 <button
                   key={p.id}
@@ -117,9 +119,13 @@ export default function WebPosProductArea({
                     <span className="line-clamp-3 text-center text-sm font-medium leading-snug text-stone-800">
                       {p.name}
                     </span>
-                    {(isCombo || hasMods) && (
+                    {(isCombo || hasMods || isWeighed) && (
                       <span className="mx-auto mt-1 rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-stone-500">
-                        {isCombo ? t('webPosCombo') : t('webPosOpts')}
+                        {isWeighed
+                          ? `${Number(p.price || 0).toFixed(2)}/kg`
+                          : isCombo
+                            ? t('webPosCombo')
+                            : t('webPosOpts')}
                       </span>
                     )}
                   </div>
