@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Ban, Copy, KeyRound, Plus, RefreshCw } from 'lucide-react';
+import {
+  Ban,
+  Building2,
+  Copy,
+  KeyRound,
+  LayoutDashboard,
+  Package,
+  Plus,
+  RefreshCw,
+  Store,
+} from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import api from '@/lib/api';
@@ -113,6 +123,11 @@ function MerchantsPage() {
 
   const create = async (ev: React.FormEvent) => {
     ev.preventDefault();
+    const storeName = form.businessName.trim();
+    if (!storeName) {
+      toast.error(t('resellerStoreNameRequired'));
+      return;
+    }
     if (!form.editionId) {
       toast.error(t('posVersionSelect'));
       return;
@@ -128,6 +143,7 @@ function MerchantsPage() {
     try {
       await api.post('/reseller/merchants', {
         ...form,
+        businessName: storeName,
         password: form.password || undefined,
         deviceSeats: seats,
         customDays: form.licenseType === 'custom' ? Number(form.customDays) : undefined,
@@ -1112,21 +1128,21 @@ function ResellerShell() {
   }, []);
 
   const menuItems = [
-    { label: t('overview'), path: '/reseller', icon: '??' },
+    { label: t('overview'), path: '/reseller', icon: <LayoutDashboard /> },
     {
       id: 'merchants',
       label: t('merchants'),
-      icon: '??',
+      icon: <Store />,
       children: [
-        { label: t('resellerStores'), path: '/reseller/merchants', icon: '??' },
-        { label: t('deviceLicenses'), path: '/reseller/licenses', icon: '??' },
+        { label: t('resellerStores'), path: '/reseller/merchants', icon: <Building2 /> },
+        { label: t('deviceLicenses'), path: '/reseller/licenses', icon: <KeyRound /> },
       ],
     },
     {
       id: 'editions',
       label: t('posVersions'),
-      icon: '??',
-      children: [{ label: t('posVersionManagement'), path: '/reseller/editions', icon: '??' }],
+      icon: <Package />,
+      children: [{ label: t('posVersionManagement'), path: '/reseller/editions', icon: <Package /> }],
     },
   ];
 

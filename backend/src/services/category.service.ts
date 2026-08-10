@@ -20,6 +20,16 @@ export class CategoryService {
     const db = getDb();
 
     try {
+      const trimmedName = String(name || "").trim();
+      if (!String(name || "").length) throw new Error("Category name is required");
+      if (!trimmedName) throw new Error("Category name cannot be only spaces");
+      if (trimmedName.length > 56) throw new Error("Category name must be 56 characters or fewer");
+      const trimmedDescription =
+        description == null ? description : String(description).trim();
+      if (typeof trimmedDescription === "string" && trimmedDescription.length > 256) {
+        throw new Error("Description must be 256 characters or fewer");
+      }
+
       const [{ nextSort }] = await db
         .select({
           nextSort: sql<number>`coalesce(${max(schema.categories.sortOrder)}, -1) + 1`,
@@ -40,8 +50,10 @@ export class CategoryService {
         .insert(schema.categories)
         .values({
           merchantId,
-          name: repairCatalogText(name),
-          description: description ? repairCatalogText(description) : description,
+          name: repairCatalogText(trimmedName),
+          description: trimmedDescription
+            ? repairCatalogText(trimmedDescription)
+            : trimmedDescription,
           color: resolvedColor,
           sortOrder: Number(nextSort) || 0,
         })

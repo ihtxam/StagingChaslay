@@ -717,11 +717,29 @@ router.post("/categories", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Merchant ID is required" });
     }
 
-    if (!name) {
-      return res.status(400).json({ error: "Category name is required" });
+    const trimmedName = typeof name === "string" ? name.trim() : "";
+    const trimmedDescription =
+      typeof description === "string" ? description.trim() : description;
+    if (!name || (typeof name === "string" && !name.trim())) {
+      return res.status(400).json({
+        error: !String(name || "").length
+          ? "Category name is required"
+          : "Category name cannot be only spaces",
+      });
+    }
+    if (trimmedName.length > 56) {
+      return res.status(400).json({ error: "Category name must be 56 characters or fewer" });
+    }
+    if (typeof trimmedDescription === "string" && trimmedDescription.length > 256) {
+      return res.status(400).json({ error: "Description must be 256 characters or fewer" });
     }
 
-    const category = await CategoryService.createCategory(merchantId, name, description, color);
+    const category = await CategoryService.createCategory(
+      merchantId,
+      trimmedName,
+      trimmedDescription,
+      color
+    );
 
     res.status(201).json({
       success: true,
@@ -742,10 +760,31 @@ router.put("/categories/:categoryId", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     const { categoryId } = req.params;
-    const updates = req.body;
+    const updates = { ...req.body };
 
     if (!merchantId) {
       return res.status(400).json({ error: "Merchant ID is required" });
+    }
+
+    if (typeof updates.name === "string") {
+      const trimmedName = updates.name.trim();
+      if (!updates.name.length) {
+        return res.status(400).json({ error: "Category name is required" });
+      }
+      if (!trimmedName) {
+        return res.status(400).json({ error: "Category name cannot be only spaces" });
+      }
+      if (trimmedName.length > 56) {
+        return res.status(400).json({ error: "Category name must be 56 characters or fewer" });
+      }
+      updates.name = trimmedName;
+    }
+    if (typeof updates.description === "string") {
+      const trimmedDescription = updates.description.trim();
+      if (trimmedDescription.length > 256) {
+        return res.status(400).json({ error: "Description must be 256 characters or fewer" });
+      }
+      updates.description = trimmedDescription;
     }
 
     const category = await CategoryService.updateCategory(merchantId, categoryId, updates);
@@ -1018,6 +1057,12 @@ router.post("/customers", async (req: Request, res: Response) => {
     }
     if (!tel && !mail && !first && !last) {
       return res.status(400).json({ error: "Name, email, or phone is required (spaces only are not allowed)" });
+    }
+    if (tel != null && String(tel).length > 0) {
+      const digits = String(tel).replace(/\D/g, "");
+      if (!/^\d{1,15}$/.test(digits) || digits !== String(tel)) {
+        return res.status(400).json({ error: "Phone number must be digits only (max 15)" });
+      }
     }
 
     const customer = await CustomerService.createCustomer(merchantId, mail, tel, first, last, {

@@ -3,6 +3,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, L
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { Users, Lock, TrendingUp, DollarSign } from 'lucide-react';
+import { useI18n } from '@/lib/i18n';
 
 interface Stats {
   totalMerchants: number;
@@ -12,6 +13,7 @@ interface Stats {
 }
 
 export default function Overview() {
+  const { t } = useI18n();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -20,50 +22,72 @@ export default function Overview() {
       try {
         const response = await api.get('/superadmin/analytics/overview');
         setStats(response.data.overview);
-      } catch (error) {
-        toast.error('Failed to load statistics');
+      } catch {
+        toast.error(t('saDashLoadFailed'));
       } finally {
         setLoading(false);
       }
     };
 
     fetchStats();
-  }, []);
+  }, [t]);
 
   if (loading) {
-    return <div className="text-center py-12">Loading...</div>;
+    return <div className="text-center py-12">{t('loading')}</div>;
   }
 
   const statCards = [
     {
-      label: 'Total Merchants',
+      label: t('saDashTotalMerchants'),
       value: stats?.totalMerchants || 0,
       icon: Users,
       color: 'bg-blue-500',
     },
     {
-      label: 'Active Licenses',
+      label: t('saDashActiveLicenses'),
       value: stats?.activeLicenses || 0,
       icon: Lock,
       color: 'bg-green-500',
     },
     {
-      label: 'Total Revenue',
+      label: t('saDashTotalRevenue'),
       value: `$${(stats?.totalRevenue || 0).toFixed(2)}`,
       icon: DollarSign,
       color: 'bg-purple-500',
     },
     {
-      label: 'Growth Rate',
+      label: t('saDashGrowthRate'),
       value: `${stats?.platformGrowth || 0}%`,
       icon: TrendingUp,
       color: 'bg-orange-500',
     },
   ];
 
+  const revenueData = [
+    { month: 'Jan', revenue: 4000 },
+    { month: 'Feb', revenue: 5200 },
+    { month: 'Mar', revenue: 6100 },
+    { month: 'Apr', revenue: 7500 },
+    { month: 'May', revenue: 8200 },
+    { month: 'Jun', revenue: 9100 },
+  ];
+
+  const distributionData = [
+    { status: t('saDashActive'), count: 45 },
+    { status: t('saDashTrial'), count: 12 },
+    { status: t('saDashSuspended'), count: 3 },
+    { status: t('saDashExpired'), count: 5 },
+  ];
+
+  const activity = [
+    { action: t('saDashActNewMerchant'), time: t('saDashHoursAgo').replace('{n}', '2'), merchant: 'Acme Corp' },
+    { action: t('saDashActLicenseExpired'), time: t('saDashHoursAgo').replace('{n}', '5'), merchant: 'Tech Store' },
+    { action: t('saDashActPayment'), time: t('saDashDaysAgo').replace('{n}', '1'), merchant: 'Fashion Plus' },
+    { action: t('saDashActLicenseRenewed'), time: t('saDashDaysAgo').replace('{n}', '2'), merchant: 'Coffee Shop' },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((card, index) => {
           const Icon = card.icon;
@@ -83,59 +107,40 @@ export default function Overview() {
         })}
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Trend */}
         <div className="card">
-          <h3 className="text-lg font-semibold mb-4">Revenue Trend</h3>
+          <h3 className="text-lg font-semibold mb-4">{t('saDashRevenueTrend')}</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={[
-              { month: 'Jan', revenue: 4000 },
-              { month: 'Feb', revenue: 5200 },
-              { month: 'Mar', revenue: 6100 },
-              { month: 'Apr', revenue: 7500 },
-              { month: 'May', revenue: 8200 },
-              { month: 'Jun', revenue: 9100 },
-            ]}>
+            <LineChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />
               <Tooltip />
-              <Line type="monotone" dataKey="revenue" stroke="#3b82f6" />
+              <Legend />
+              <Line type="monotone" dataKey="revenue" name={t('saDashRevenue')} stroke="#3b82f6" />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Merchant Distribution */}
         <div className="card">
-          <h3 className="text-lg font-semibold mb-4">Merchant Distribution</h3>
+          <h3 className="text-lg font-semibold mb-4">{t('saDashMerchantDistribution')}</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={[
-              { status: 'Active', count: 45 },
-              { status: 'Trial', count: 12 },
-              { status: 'Suspended', count: 3 },
-              { status: 'Expired', count: 5 },
-            ]}>
+            <BarChart data={distributionData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="status" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="count" fill="#3b82f6" />
+              <Legend />
+              <Bar dataKey="count" name={t('saDashCount')} fill="#3b82f6" />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Recent Activity */}
       <div className="card">
-        <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
+        <h3 className="text-lg font-semibold mb-4">{t('saDashRecentActivity')}</h3>
         <div className="space-y-3">
-          {[
-            { action: 'New merchant registered', time: '2 hours ago', merchant: 'Acme Corp' },
-            { action: 'License expired', time: '5 hours ago', merchant: 'Tech Store' },
-            { action: 'Payment received', time: '1 day ago', merchant: 'Fashion Plus' },
-            { action: 'License renewed', time: '2 days ago', merchant: 'Coffee Shop' },
-          ].map((item, index) => (
+          {activity.map((item, index) => (
             <div key={index} className="flex items-center justify-between py-3 border-b last:border-b-0">
               <div>
                 <p className="font-medium">{item.action}</p>

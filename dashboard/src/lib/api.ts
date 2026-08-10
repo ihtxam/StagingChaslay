@@ -34,6 +34,11 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       const path = window.location.pathname || '';
+      const reqUrl = String(error.config?.url || '');
+      // Wrong staff PIN is not a session expiry — keep merchant JWT on WebPOS.
+      if (reqUrl.includes('/staff/verify-pin')) {
+        return Promise.reject(error);
+      }
       if (!path.startsWith('/set-password') && !path.startsWith('/login')) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');

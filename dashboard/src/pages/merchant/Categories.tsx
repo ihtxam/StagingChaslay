@@ -13,6 +13,9 @@ interface Category {
   sortOrder?: number;
 }
 
+const MAX_CATEGORY_NAME = 56;
+const MAX_CATEGORY_DESC = 256;
+
 export default function Categories() {
   const { t } = useI18n();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -31,7 +34,7 @@ export default function Categories() {
       const response = await api.get('/merchant/categories');
       setCategories(response.data.categories || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load categories');
+      toast.error(error.response?.data?.error || t('categoryToastLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -70,52 +73,82 @@ export default function Categories() {
       fd.append('file', compressed);
       const res = await api.post('/merchant/media', fd);
       setImageUrl(res.data.url);
-      toast.success('Image uploaded');
+      toast.success(t('imageUploaded'));
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Upload failed');
+      toast.error(error.response?.data?.error || t('uploadFailed'));
     } finally {
       setUploading(false);
     }
   };
 
+  const validateFields = () => {
+    const trimmedName = name.trim();
+    const trimmedDesc = description.trim();
+    if (!name.length) {
+      toast.error(t('categoryNameRequired'));
+      return null;
+    }
+    if (!trimmedName) {
+      toast.error(t('categoryNameWhitespace'));
+      return null;
+    }
+    if (trimmedName.length > MAX_CATEGORY_NAME) {
+      toast.error(t('categoryNameTooLong'));
+      return null;
+    }
+    if (description.length > MAX_CATEGORY_DESC || trimmedDesc.length > MAX_CATEGORY_DESC) {
+      toast.error(t('categoryDescTooLong'));
+      return null;
+    }
+    return {
+      name: trimmedName,
+      description: trimmedDesc || undefined,
+    };
+  };
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const payload = validateFields();
+    if (!payload) return;
     setSaving(true);
     try {
       if (editingId) {
         await api.put(`/merchant/categories/${editingId}`, {
-          name,
-          description,
+          name: payload.name,
+          description: payload.description ?? '',
           imageUrl: imageUrl || null,
         });
-        toast.success('Category updated');
+        toast.success(t('categoryToastUpdated'));
       } else {
-        const created = await api.post('/merchant/categories', { name, description });
+        const created = await api.post('/merchant/categories', {
+          name: payload.name,
+          description: payload.description,
+        });
         if (imageUrl && created.data?.category?.id) {
           await api.put(`/merchant/categories/${created.data.category.id}`, {
             imageUrl,
           });
         }
-        toast.success('Category created');
+        toast.success(t('categoryToastCreated'));
       }
       reset();
       await load();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to save category');
+      toast.error(error.response?.data?.error || t('categoryToastSaveFailed'));
     } finally {
       setSaving(false);
     }
   };
 
   const onDelete = async (id: string) => {
-    if (!confirm('Delete this category?')) return;
+    if (!confirm(t('categoryDeleteConfirm'))) return;
     try {
       await api.delete(`/merchant/categories/${id}`);
-      toast.success('Deleted');
+      toast.success(t('categoryToastDeleted'));
       if (editingId === id) reset();
       await load();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Delete failed');
+      toast.error(error.response?.data?.error || t('categoryToastDeleteFailed'));
     }
   };
 
@@ -130,13 +163,13 @@ export default function Categories() {
       setCategories(res.data.categories || next);
     } catch (error: any) {
       setCategories(prev);
-      toast.error(error.response?.data?.error || 'Failed to save order');
+      toast.error(error.response?.data?.error || t('categoryToastReorderFailed'));
     } finally {
       setReordering(false);
     }
   };
 
-  if (loading) return <div className="text-center py-12">Loading categories...</div>;
+  if (loading) return <div className="text-center py-12">{t('categoryLoading')}</div>;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -146,22 +179,34 @@ export default function Categories() {
           {editingId ? t('editCategory') : t('manageCategories')}
         </p>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-          <input
-            className="input"
-            placeholder={t('name')}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-          <input
-            className="input"
-            placeholder={t('description')}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
+          <div>
+            <input
+              className="input w-full"
+              placeholder={t('name')}
+              value={name}
+              maxLength={MAX_CATEGORY_NAME}
+              onChange={(e) => setName(e.target.value.slice(0, MAX_CATEGORY_NAME))}
+              required
+            />
+            <p className="text-[11px] muted mt-1">
+              {name.trim().length}/{MAX_CATEGORY_NAME}
+            </p>
+          </div>
+          <div className="md:col-span-2">
+            <input
+              className="input w-full"
+              placeholder={t('description')}
+              value={description}
+              maxLength={MAX_CATEGORY_DESC}
+              onChange={(e) => setDescription(e.target.value.slice(0, MAX_CATEGORY_DESC))}
+            />
+            <p className="text-[11px] muted mt-1">
+              {description.trim().length}/{MAX_CATEGORY_DESC}
+            </p>
+          </div>
           <div className="md:col-span-3 flex flex-wrap items-center gap-3">
             <label className="text-sm">
-              <span className="font-medium mr-2">Category photo</span>
+              <span className="font-medium mr-2">{t('categoryPhoto')}</span>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -182,13 +227,13 @@ export default function Categories() {
                   if (fileInputRef.current) fileInputRef.current.value = '';
                 }}
               >
-                Remove photo
+                {t('categoryRemovePhoto')}
               </button>
             ) : null}
           </div>
           <div className="flex gap-2">
             <button type="submit" className="btn-primary" disabled={saving || uploading}>
-              {saving ? 'Saving...' : editingId ? t('save') : t('add')}
+              {saving ? t('saving') : editingId ? t('save') : t('add')}
             </button>
             {editingId && (
               <button type="button" className="btn-secondary" onClick={reset}>

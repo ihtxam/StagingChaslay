@@ -178,13 +178,14 @@ router.post("/merchants", async (req: Request, res: Response) => {
       customDays,
       sendInvite,
     } = req.body || {};
-    if (!email || !businessName || !editionId) {
+    const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
+    if (!email || !trimmedBusinessName || !editionId) {
       return res.status(400).json({ error: "Email, business name, and edition are required" });
     }
     const merchant = await ResellerService.createMerchantForReseller(resellerId(req), {
       email,
       password,
-      businessName,
+      businessName: trimmedBusinessName,
       phone,
       address,
       city,

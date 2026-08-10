@@ -122,7 +122,8 @@ router.post("/staff/verify-pin", async (req: Request, res: Response) => {
     const staff = await StaffService.verifyPin(merchantId, String(pin || ""));
     res.json({ success: true, staff });
   } catch (error) {
-    res.status(401).json({ error: error instanceof Error ? error.message : "Invalid PIN" });
+    // 403 (not 401): invalid PIN must not clear the merchant dashboard JWT.
+    res.status(403).json({ error: error instanceof Error ? error.message : "Invalid PIN" });
   }
 });
 

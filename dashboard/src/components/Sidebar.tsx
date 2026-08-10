@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, LogOut, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -9,7 +9,7 @@ import { useI18n } from '@/lib/i18n';
 export interface SidebarLeaf {
   label: string;
   path: string;
-  icon: string;
+  icon: ReactNode;
 }
 
 export interface SidebarNavEntry {
@@ -17,7 +17,7 @@ export interface SidebarNavEntry {
   id?: string;
   label: string;
   path?: string;
-  icon: string;
+  icon: ReactNode;
   children?: SidebarLeaf[];
 }
 
@@ -196,7 +196,9 @@ export default function Sidebar({
                   onClick={closeMobile}
                   className={linkClass(active)}
                 >
-                  <span className="text-sm w-5 text-center opacity-80">{entry.icon}</span>
+                  <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
+                    {entry.icon}
+                  </span>
                   <span className="font-medium truncate">{entry.label}</span>
                 </Link>
               );
@@ -212,7 +214,9 @@ export default function Sidebar({
                   onClick={closeMobile}
                   className={linkClass(active)}
                 >
-                  <span className="text-sm w-5 text-center opacity-80">{only.icon || entry.icon}</span>
+                  <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
+                    {only.icon || entry.icon}
+                  </span>
                   <span className="font-medium truncate">{only.label}</span>
                 </Link>
               );
@@ -236,7 +240,9 @@ export default function Sidebar({
                       : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
-                  <span className="text-sm w-5 text-center opacity-80">{entry.icon}</span>
+                  <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
+                    {entry.icon}
+                  </span>
                   <span className="font-medium truncate flex-1 text-left">{entry.label}</span>
                   <ChevronDown
                     className={`w-3.5 h-3.5 shrink-0 opacity-70 transition-transform ${
@@ -255,7 +261,9 @@ export default function Sidebar({
                           onClick={closeMobile}
                           className={linkClass(active, true)}
                         >
-                          <span className="text-sm w-4 text-center opacity-80">{child.icon}</span>
+                          <span className="inline-flex w-4 shrink-0 items-center justify-center opacity-80 [&_svg]:h-3.5 [&_svg]:w-3.5">
+                            {child.icon}
+                          </span>
                           <span className="font-medium truncate">{child.label}</span>
                         </Link>
                       );

@@ -29,7 +29,14 @@ export class CustomerService {
       const first = cleanOptional(firstName);
       const last = cleanOptional(lastName);
       const mail = cleanOptional(email);
-      const tel = cleanOptional(phone);
+      let tel = cleanOptional(phone);
+      if (tel) {
+        const digits = tel.replace(/\D/g, "");
+        if (!/^\d{1,15}$/.test(digits) || digits !== tel) {
+          throw new Error("Phone number must be digits only (max 15)");
+        }
+        tel = digits;
+      }
       if (!first && !last && !mail && !tel) {
         throw new Error("Name, email, or phone is required");
       }

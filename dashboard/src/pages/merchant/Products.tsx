@@ -1167,15 +1167,19 @@ export default function Products() {
               {form.isCombo && (
                 <div className="rounded-md border border-[var(--border)] p-3 space-y-3">
                   <Field label={t('salePriceCombo')}>
-                    <div className="relative max-w-xs">
+                    <div className="flex max-w-xs min-w-0 items-stretch overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20">
                       <input
-                        className="field-input money-input pr-14"
-                        type="number"
-                        step="0.05"
-                        min="0"
+                        className="field-input money-input min-w-0 flex-1 border-0 !shadow-none focus:!ring-0"
+                        type="text"
+                        inputMode="decimal"
                         value={form.price}
                         onChange={(e) => {
-                          const price = e.target.value;
+                          const raw = e.target.value.replace(/[^\d.]/g, '');
+                          const parts = raw.split('.');
+                          const price =
+                            parts.length > 1
+                              ? `${parts[0]}.${parts.slice(1).join('').slice(0, 2)}`
+                              : parts[0];
                           if (digitCount(price) > MAX_MONEY_DIGITS) return;
                           setForm({
                             ...form,
@@ -1186,7 +1190,7 @@ export default function Products() {
                           });
                         }}
                       />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold muted">
+                      <span className="inline-flex shrink-0 items-center border-l border-[var(--border)] bg-[var(--bg-muted)] px-2 text-[10px] font-semibold muted">
                         CHF
                       </span>
                     </div>
@@ -1367,7 +1371,7 @@ export default function Products() {
                   {form.specifications.map((spec, idx) => (
                     <div
                       key={spec.id || idx}
-                      className="grid grid-cols-1 sm:grid-cols-[1fr_6.5rem_7rem_auto_auto] gap-1.5 items-center"
+                      className="grid grid-cols-1 sm:grid-cols-[1fr_minmax(8.5rem,9.5rem)_7rem_auto_auto] gap-1.5 items-center"
                     >
                       <input
                         className="field-input"
@@ -1379,22 +1383,26 @@ export default function Products() {
                           setForm({ ...form, specifications: next });
                         }}
                       />
-                      <div className="relative">
+                      <div className="flex min-w-0 items-stretch overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20">
                         <input
-                          className="field-input money-input pr-14"
-                          type="number"
-                          step="0.01"
-                          min="0"
+                          className="field-input money-input min-w-0 flex-1 border-0 !shadow-none focus:!ring-0"
+                          type="text"
+                          inputMode="decimal"
                           value={spec.price}
                           onChange={(e) => {
-                            const raw = e.target.value;
-                            if (digitCount(raw) > MAX_MONEY_DIGITS) return;
+                            const raw = e.target.value.replace(/[^\d.]/g, '');
+                            const parts = raw.split('.');
+                            const normalized =
+                              parts.length > 1
+                                ? `${parts[0]}.${parts.slice(1).join('').slice(0, 2)}`
+                                : parts[0];
+                            if (digitCount(normalized) > MAX_MONEY_DIGITS) return;
                             const next = [...form.specifications];
-                            next[idx] = { ...next[idx], price: Number(raw) || 0 };
-                            setForm({ ...form, specifications: next, price: raw });
+                            next[idx] = { ...next[idx], price: Number(normalized) || 0 };
+                            setForm({ ...form, specifications: next, price: normalized });
                           }}
                         />
-                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold muted">
+                        <span className="inline-flex shrink-0 items-center border-l border-[var(--border)] bg-[var(--bg-muted)] px-2 text-[10px] font-semibold muted">
                           CHF
                         </span>
                       </div>
