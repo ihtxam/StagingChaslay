@@ -69,6 +69,9 @@ export type OpenCartDraft = {
   tableId: string | null;
   tableLabel: string | null;
   tabNumber: string | null;
+  /** Stable kitchen/takeaway shout + opaque receipt id for this open cart. */
+  ticketDisplay?: string | null;
+  ticketOrderNumber?: string | null;
   orderNote: string;
   activeCourse: number;
   orderSent: boolean;

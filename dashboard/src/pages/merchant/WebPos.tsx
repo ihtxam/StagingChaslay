@@ -12,6 +12,7 @@ import {
   generateKitchenTicketText,
   generateWebPosReceiptText,
   logoUrlToEscPos,
+  encodeOrderMetaNotes,
   nextWebPosTicketNumber,
   printersForRole,
   resolveReceiptLanguage,
@@ -363,6 +364,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [tableId, setTableId] = useState<string | null>(() => bootActive?.tableId ?? null);
   const [tableLabel, setTableLabel] = useState<string | null>(() => bootActive?.tableLabel ?? null);
   const [tabNumber, setTabNumber] = useState<string | null>(() => bootActive?.tabNumber ?? null);
+  /** Stable arbitrary kitchen/takeaway # + opaque receipt id for the open cart. */
+  const [ticketDisplay, setTicketDisplay] = useState<string | null>(
+    () => bootActive?.ticketDisplay ?? null
+  );
+  const [ticketOrderNumber, setTicketOrderNumber] = useState<string | null>(
+    () => bootActive?.ticketOrderNumber ?? null
+  );
   const [expressSuccessOpen, setExpressSuccessOpen] = useState(false);
   const [shiftsEnabled, setShiftsEnabled] = useState(false);
   const [posColorTheme, setPosColorTheme] = useState<WebPosColorTheme>('teal');
@@ -560,6 +568,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tableId,
       tableLabel,
       tabNumber,
+      ticketDisplay,
+      ticketOrderNumber,
       orderNote,
       activeCourse,
       orderSent,
@@ -595,6 +605,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     tableId,
     tableLabel,
     tabNumber,
+    ticketDisplay,
+    ticketOrderNumber,
     orderNote,
     activeCourse,
     orderSent,
@@ -1942,7 +1954,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const fireCourseLines = async (lines: CartLine[], courseOnly?: number) => {
-    const ticket = nextWebPosTicketNumber(merchant?.id);
+    const ticket = ensureCartTicket();
     const ids = new Set(lines.map((l) => l.lineId));
     // Mark sent first so Send can release the register immediately.
     setCart((prev) =>
@@ -1979,6 +1991,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         tableId,
         tableLabel,
         tabNumber,
+        ticketDisplay,
+        ticketOrderNumber,
         orderNote,
         activeCourse: draftActiveCourse,
         orderSent: true,
@@ -1997,6 +2011,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTableId(null);
     setTableLabel(null);
     setTabNumber(null);
+    clearCartTicket();
     setActiveCourse(1);
     setOrderSent(false);
     setCoursesBulkSent(false);
@@ -2079,6 +2094,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     tableId,
     tableLabel,
     tabNumber,
+    ticketDisplay,
+    ticketOrderNumber,
     orderNote,
     activeCourse,
     orderSent,
@@ -2127,6 +2144,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTableId(draft.tableId);
     setTableLabel(draft.tableLabel);
     setTabNumber(draft.tabNumber);
+    setTicketDisplay(draft.ticketDisplay ?? null);
+    setTicketOrderNumber(draft.ticketOrderNumber ?? null);
     setOrderNote(draft.orderNote);
     setActiveCourse(draft.activeCourse);
     setOrderSent(draft.orderSent);
@@ -2135,6 +2154,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setKeypadBuffer(draft.keypadBuffer);
     setBillDiscount(draft.billDiscount || { percent: 0, amount: 0 });
   };
+
+  /** One arbitrary ticket per open cart (kitchen + receipt share the same shout #). */
+  const ensureCartTicket = useCallback(() => {
+    if (ticketDisplay && ticketOrderNumber) {
+      return { display: ticketDisplay, orderNumber: ticketOrderNumber };
+    }
+    const ticket = nextWebPosTicketNumber(merchant?.id);
+    setTicketDisplay(ticket.display);
+    setTicketOrderNumber(ticket.orderNumber);
+    return ticket;
+  }, [ticketDisplay, ticketOrderNumber, merchant?.id]);
+
+  const clearCartTicket = useCallback(() => {
+    setTicketDisplay(null);
+    setTicketOrderNumber(null);
+  }, []);
 
   /** Attach current cart lines to a table (Set table) — never wipe the cart. */
   const assignCartToTable = (table: { id: string; label: string }) => {
@@ -2214,6 +2249,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setOrderNote('');
       setBillDiscount({ percent: 0, amount: 0 });
       setTabNumber(null);
+      clearCartTicket();
       setActiveCourse(1);
       setOrderSent(false);
       setCoursesBulkSent(false);
@@ -2240,6 +2276,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTableId(null);
     setTableLabel(null);
     setTabNumber(null);
+    clearCartTicket();
     setActiveCourse(1);
     setOrderSent(false);
     setCoursesBulkSent(false);
@@ -2575,7 +2612,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const printProvisionalReceipt = async () => {
     if (!cart.length) return;
     try {
-      const ticket = nextWebPosTicketNumber(merchant?.id);
+      const ticket = ensureCartTicket();
       const lang = resolveReceiptLanguage(printSettings, paymentConfig?.panelLanguage || locale);
       const disc = payableFullTotals.discount || 0;
       const receiptPayload: WebPosReceipt = {
@@ -2773,7 +2810,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             ticket.orderNumber,
             null,
             recordLines,
-            cancelTotals
+            cancelTotals,
+            undefined,
+            ticket
           ),
           status: 'cancelled',
           paymentStatus: 'cancelled',
@@ -3281,8 +3320,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     extras?: CheckoutExtras | null,
     saleLines: CartLine[] = cart,
     saleTotals = activeSale.totals,
-    splitMeta?: { masterOrderId?: string; splitCheckNumber?: number }
+    splitMeta?: { masterOrderId?: string; splitCheckNumber?: number },
+    ticketMeta?: { display?: string | null; orderNumber?: string | null } | null
   ) => {
+    const saleTicketDisplay = ticketMeta?.display || ticketDisplay;
+    const saleTabNumber = tabNumber;
     const payLater = method === 'pay_later';
     const when = whenOverride !== undefined ? whenOverride : fulfillmentWhen;
     const scheduledRaw = when?.mode === 'later' ? when.scheduledFor : null;
@@ -3347,19 +3389,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       })(),
       masterOrderId: splitMeta?.masterOrderId || null,
       splitCheckNumber: splitMeta?.splitCheckNumber ?? null,
-      notes: [
-        roundingAmount
-          ? `Rounding ${roundingAmount > 0 ? '+' : ''}${roundingAmount.toFixed(2)}`
-          : '',
-        tipAmount > 0 ? `Tip CHF ${tipAmount.toFixed(2)}` : '',
-        extras?.amountTendered != null
-          ? `Tendered CHF ${extras.amountTendered.toFixed(2)}`
-          : '',
-        extras?.changeDue != null ? `Change CHF ${extras.changeDue.toFixed(2)}` : '',
-        when?.mode === 'later' ? `Pickup/delivery: ${when.label}` : '',
-      ]
-        .filter(Boolean)
-        .join(' · ') || undefined,
+      ticketDisplay: saleTicketDisplay || undefined,
+      tabNumber: saleTabNumber || undefined,
+      notes: encodeOrderMetaNotes({
+        existing: [
+          roundingAmount
+            ? `Rounding ${roundingAmount > 0 ? '+' : ''}${roundingAmount.toFixed(2)}`
+            : '',
+          tipAmount > 0 ? `Tip CHF ${tipAmount.toFixed(2)}` : '',
+          extras?.amountTendered != null
+            ? `Tendered CHF ${extras.amountTendered.toFixed(2)}`
+            : '',
+          extras?.changeDue != null ? `Change CHF ${extras.changeDue.toFixed(2)}` : '',
+          when?.mode === 'later' ? `Pickup/delivery: ${when.label}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        ticketDisplay: saleTicketDisplay,
+        tabNumber: saleTabNumber,
+      }),
       items: saleLines.map((l) => ({
         productClientId: l.productId,
         productId: l.productId,
@@ -3409,7 +3457,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     showSuccessScreen = false,
     opts?: { skipReceiptPrint?: boolean }
   ) => {
-    const ticket = nextWebPosTicketNumber(merchant?.id);
+    const ticket = ensureCartTicket();
     const clientId = presetClientId || `webpos-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const whenSnapshot =
       whenOverride !== undefined ? whenOverride : fulfillmentWhen;
@@ -3456,7 +3504,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       extrasWithDisc,
       saleLines,
       saleTotals,
-      splitMeta
+      splitMeta,
+      ticket
     );
 
     const offlineEligible =
@@ -3632,6 +3681,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setTableId(null);
       setTableLabel(null);
       setTabNumber(null);
+      clearCartTicket();
       setActiveCourse(1);
       setOrderSent(false);
       setCoursesBulkSent(false);
@@ -3808,18 +3858,37 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const cartSnapshot = cart;
       const channelSnapshot = channel;
       const whenSnapshot = fulfillmentWhen;
-      await api.post('/merchant/pos/held', {
-        label: `${channel} · ${money(totals.total)}`,
+      const ticket = ensureCartTicket();
+      const heldLabel = [
+        tabNumber ? `${t('webPosTab')} ${tabNumber}` : null,
+        ticket.display,
         channel,
-        cartJson: { cart, channel, tableId, tableLabel, billDiscount, orderNote },
+        money(totals.total),
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      await api.post('/merchant/pos/held', {
+        label: heldLabel,
+        channel,
+        cartJson: {
+          cart,
+          channel,
+          tableId,
+          tableLabel,
+          tabNumber,
+          ticketDisplay: ticket.display,
+          ticketOrderNumber: ticket.orderNumber,
+          billDiscount,
+          orderNote,
+        },
         staffId: webposStaff?.id,
         staffName: webposStaff?.name,
         sendToKitchen,
       });
       setCart([]);
+      clearCartTicket();
       toast.success(sendToKitchen ? t('webPosHeldSentKitchen') : t('webPosOrderHeld'));
       if (sendToKitchen) {
-        const ticket = nextWebPosTicketNumber(merchant?.id);
         void printKitchenForCart(cartSnapshot, channelSnapshot, {
           orderNumber: ticket.display,
           when: whenSnapshot,

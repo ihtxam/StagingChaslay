@@ -16,35 +16,69 @@ import {
 export type KitchenOrderSource = 'WEBPOS' | 'ONLINE' | 'POSAPP' | 'WAITERAPP';
 
 /**
- * Short daily kitchen / shout number, e.g. display `#47`, unique orderNumber `WP-250731-047`.
+ * Arbitrary kitchen / takeaway shout number + receipt record id.
+ * Numbers are random (not sequential) so deleted orders cannot be inferred from gaps.
  */
-export function nextWebPosTicketNumber(merchantId?: string | null): {
+export function nextWebPosTicketNumber(_merchantId?: string | null): {
   display: string;
   orderNumber: string;
 } {
-  const now = new Date();
-  const dayKey = now
-    .toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' })
-    .replace(/-/g, '');
-  const storageKey = `webpos_ticket_seq_${merchantId || 'local'}_${dayKey}`;
-  let n = 0;
-  try {
-    n = Number(localStorage.getItem(storageKey) || '0') || 0;
-  } catch {
-    n = 0;
+  // Customer-facing shout / takeaway number (4 digits, non-sequential).
+  const shout = 1000 + Math.floor(Math.random() * 9000);
+  const display = `#${shout}`;
+  // Opaque receipt / backend record id — no daily counter, no sortable series.
+  const a = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const b = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const orderNumber = `WP-${a}${b}`.slice(0, 20);
+  return { display, orderNumber };
+}
+
+/** Machine markers stored in order.notes so UI/receipts can recover tab + ticket. */
+const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
+const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
+
+export function encodeOrderMetaNotes(opts: {
+  existing?: string | null;
+  ticketDisplay?: string | null;
+  tabNumber?: string | null;
+}): string | undefined {
+  let base = String(opts.existing || '')
+    .replace(TICKET_NOTE_RE, '')
+    .replace(TAB_NOTE_RE, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[·\s]+|[·\s]+$/g, '')
+    .trim();
+  const tags: string[] = [];
+  const ticket = opts.ticketDisplay?.trim();
+  const tab = opts.tabNumber != null ? String(opts.tabNumber).trim() : '';
+  if (ticket) tags.push(`[ticket:${ticket.replace(/[\[\]]/g, '')}]`);
+  if (tab) tags.push(`[tab:${tab.replace(/[\[\]]/g, '')}]`);
+  const joined = [...tags, base].filter(Boolean).join(' ').trim();
+  return joined || undefined;
+}
+
+export function parseOrderMetaNotes(notes?: string | null): {
+  ticketDisplay?: string;
+  tabNumber?: string;
+  cleanNotes: string;
+} {
+  const raw = String(notes || '');
+  const ticketMatch = raw.match(TICKET_NOTE_RE);
+  const tabMatch = raw.match(TAB_NOTE_RE);
+  const cleanNotes = raw
+    .replace(TICKET_NOTE_RE, '')
+    .replace(TAB_NOTE_RE, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[·\s]+|[·\s]+$/g, '')
+    .trim();
+  let ticketDisplay = ticketMatch?.[1]?.trim() || undefined;
+  if (ticketDisplay && !ticketDisplay.startsWith('#')) {
+    ticketDisplay = `#${ticketDisplay.replace(/^#/, '')}`;
   }
-  n += 1;
-  try {
-    localStorage.setItem(storageKey, String(n));
-  } catch {
-    /* ignore quota */
-  }
-  const padded = String(n).padStart(3, '0');
-  // Suffix avoids unique collisions when two tabs race the same counter.
-  const suffix = Math.random().toString(36).slice(2, 5);
   return {
-    display: `#${n}`,
-    orderNumber: `WP-${dayKey.slice(2)}-${padded}-${suffix}`,
+    ticketDisplay,
+    tabNumber: tabMatch?.[1]?.trim() || undefined,
+    cleanNotes,
   };
 }
 
@@ -1128,6 +1162,11 @@ export type PosOrderForReceipt = {
   total: number;
   tableLabel?: string | null;
   guestCount?: number | null;
+  /** Parsed / persisted kitchen–takeaway shout number, e.g. #4821 */
+  ticketDisplay?: string | null;
+  /** Staff-assigned tab / takeaway label */
+  tabNumber?: string | null;
+  notes?: string | null;
   staffName?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
@@ -1166,12 +1205,15 @@ export function posOrderToWebPosReceipt(
     (order.splitCheckNumber != null
       ? `Split ${order.splitCheckNumber}`
       : null);
+  const meta = parseOrderMetaNotes(order.notes);
+  const ticketDisplay = order.ticketDisplay || meta.ticketDisplay || null;
   return {
     businessName: ctx.businessName,
     address: ctx.address,
     phone: ctx.phone,
     vatNumber: ctx.vatNumber,
     id: order.clientId || order.id,
+    orderDisplay: ticketDisplay,
     orderNumber: order.orderNumber,
     completedAt,
     channel: order.channel || undefined,

@@ -93,7 +93,18 @@ export class PosOrdersService {
       limit,
     });
 
-    return rows.map((o) => ({
+    return rows.map((o) => {
+      const notes = String(o.notes || "");
+      const ticketMatch = notes.match(/\[ticket:([^\]]+)\]/i);
+      const tabMatch = notes.match(/\[tab:([^\]]+)\]/i);
+      let ticketDisplay = ticketMatch?.[1]?.trim() || null;
+      if (ticketDisplay && !ticketDisplay.startsWith("#")) {
+        ticketDisplay = `#${ticketDisplay.replace(/^#/, "")}`;
+      }
+      const tabNumber =
+        tabMatch?.[1]?.trim() ||
+        (o.guestCount != null && Number(o.guestCount) > 0 ? String(o.guestCount) : null);
+      return {
       id: o.id,
       orderNumber: o.orderNumber,
       clientId: o.clientId,
@@ -114,6 +125,8 @@ export class PosOrdersService {
       notes: o.notes,
       tableLabel: o.tableLabel,
       guestCount: o.guestCount,
+      ticketDisplay,
+      tabNumber,
       staffName: o.staffName,
       masterOrderId: o.masterOrderId,
       splitCheckNumber: o.splitCheckNumber,
@@ -136,7 +149,8 @@ export class PosOrdersService {
           comboSelections: i.comboSelections || [],
         };
       }),
-    }));
+    };
+    });
   }
 
   static async cancelOrder(merchantId: string, orderId: string, reason: string) {

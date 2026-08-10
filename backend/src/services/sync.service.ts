@@ -6,6 +6,29 @@ import { roundMoney2, roundTo005 } from "@/lib/money";
 import { resolvePosCancelReason } from "@/lib/pos-print-settings";
 import { isUsableProductName, resolveOrderItemName } from "@/lib/order-item-name";
 
+const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
+const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
+
+function encodeOrderMetaNotes(opts: {
+  existing?: string | null;
+  ticketDisplay?: string | null;
+  tabNumber?: string | null;
+}): string | null {
+  let base = String(opts.existing || "")
+    .replace(TICKET_NOTE_RE, "")
+    .replace(TAB_NOTE_RE, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[·\s]+|[·\s]+$/g, "")
+    .trim();
+  const tags: string[] = [];
+  const ticket = opts.ticketDisplay?.trim();
+  const tab = opts.tabNumber != null ? String(opts.tabNumber).trim() : "";
+  if (ticket) tags.push(`[ticket:${ticket.replace(/[\[\]]/g, "")}]`);
+  if (tab) tags.push(`[tab:${tab.replace(/[\[\]]/g, "")}]`);
+  const joined = [...tags, base].filter(Boolean).join(" ").trim();
+  return joined || null;
+}
+
 export interface SyncSaleItem {
   productClientId?: string;
   productId?: string;
@@ -32,6 +55,10 @@ export interface SyncSalePayload {
   clientId: string;
   deviceId?: string;
   orderNumber?: string;
+  /** Kitchen / takeaway shout number shown to staff & customers, e.g. #4821 */
+  ticketDisplay?: string | null;
+  /** Staff-assigned tab / takeaway label (may be non-numeric) */
+  tabNumber?: string | null;
   paymentMethod: string;
   paymentStatus?: string;
   /** Order lifecycle status; defaults completed for paid sales, accepted for pay-later */
@@ -415,7 +442,16 @@ export class SyncService {
         total: total.toFixed(2),
         paymentMethod: isCancelled ? sale.paymentMethod || null : sale.paymentMethod,
         paymentStatus: payStatus,
-        notes: sale.notes || null,
+        notes: encodeOrderMetaNotes({
+          existing: sale.notes,
+          ticketDisplay: sale.ticketDisplay,
+          tabNumber:
+            sale.tabNumber != null && String(sale.tabNumber).trim()
+              ? String(sale.tabNumber).trim()
+              : sale.guestCount != null && Number.isFinite(Number(sale.guestCount))
+                ? String(Math.floor(Number(sale.guestCount)))
+                : null,
+        }),
         scheduledFor,
         customerId: asUuidOrNull(sale.customerId),
         customerName: sale.customerName || null,

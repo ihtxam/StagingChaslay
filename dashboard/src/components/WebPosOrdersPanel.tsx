@@ -17,8 +17,18 @@ import {
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
-import type { PosOrderForReceipt } from '@/lib/webpos-receipt';
+import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
+
+function orderPublicRefs(o: PosOrderForReceipt & { notes?: string | null }) {
+  const meta = parseOrderMetaNotes(o.notes);
+  const ticketDisplay = o.ticketDisplay || meta.ticketDisplay || null;
+  const tabNumber =
+    o.tabNumber ||
+    meta.tabNumber ||
+    (o.guestCount != null && Number(o.guestCount) > 0 ? String(o.guestCount) : null);
+  return { ticketDisplay, tabNumber };
+}
 
 type CancelReason = { id: string; en: string; fr: string; de: string };
 export type PosOrder = PosOrderForReceipt & {
@@ -271,7 +281,9 @@ export default function WebPosOrdersPanel({
           }
         }
         if (q) {
-          const hay = `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''}`.toLowerCase();
+          const refs = orderPublicRefs(o);
+          const hay =
+            `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
           if (!hay.includes(q)) continue;
         }
         items.push({ kind: 'order', order: o });
@@ -289,7 +301,9 @@ export default function WebPosOrdersPanel({
           }
         }
         if (q) {
-          const hay = `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''}`.toLowerCase();
+          const refs = orderPublicRefs(o);
+          const hay =
+            `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
           if (!hay.includes(q)) continue;
         }
         items.push({ kind: 'order', order: o });
@@ -649,6 +663,14 @@ export default function WebPosOrdersPanel({
                     const h = item.held;
                     const selected = selectedHeld?.id === h.id;
                     const total = heldTotal(h);
+                    const heldMeta =
+                      h.cartJson && typeof h.cartJson === 'object' && !Array.isArray(h.cartJson)
+                        ? (h.cartJson as {
+                            tabNumber?: string | null;
+                            ticketDisplay?: string | null;
+                            tableLabel?: string | null;
+                          })
+                        : {};
                     return (
                       <li key={`h-${h.id}`}>
                         <button
@@ -678,6 +700,21 @@ export default function WebPosOrdersPanel({
                               >
                                 {channelLabel(h.channel)}
                               </span>
+                              {heldMeta.ticketDisplay ? (
+                                <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold text-teal-900">
+                                  {t('webPosTicket')} {heldMeta.ticketDisplay}
+                                </span>
+                              ) : null}
+                              {heldMeta.tabNumber ? (
+                                <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-900">
+                                  {t('webPosTab')} {heldMeta.tabNumber}
+                                </span>
+                              ) : null}
+                              {heldMeta.tableLabel ? (
+                                <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800">
+                                  {t('table')} {heldMeta.tableLabel}
+                                </span>
+                              ) : null}
                               <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-teal-800">
                                 {t('webPosOngoing')}
                               </span>
@@ -713,6 +750,13 @@ export default function WebPosOrdersPanel({
                   const isSplitRow = o.masterOrderId && (splitCounts.get(o.masterOrderId) || 0) > 1;
                   const isCompletedSale = !canCancelOrder(o);
                   const rowMenuOpen = rowMenuOrderId === o.id;
+                  const refs = orderPublicRefs(o);
+                  const titleParts = [
+                    refs.ticketDisplay,
+                    refs.tabNumber ? `${t('webPosTab')} ${refs.tabNumber}` : null,
+                    o.tableLabel ? `${t('table')} ${o.tableLabel}` : null,
+                    o.customerName || null,
+                  ].filter(Boolean);
                   return (
                     <li key={`o-${o.id}`} className="relative">
                       <button
@@ -726,8 +770,9 @@ export default function WebPosOrdersPanel({
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold">
-                                {o.tableLabel ? `T ${o.tableLabel}` : o.orderNumber}
-                                {o.customerName ? ` · ${o.customerName}` : ''}
+                                {titleParts.length
+                                  ? titleParts.join(' · ')
+                                  : o.orderNumber}
                               </p>
                               <p className="mt-0.5 text-xs text-stone-500">
                                 {new Date(o.completedAt || o.createdAt).toLocaleString()}
@@ -743,6 +788,16 @@ export default function WebPosOrdersPanel({
                             >
                               {channelLabel(o.channel)}
                             </span>
+                            {refs.ticketDisplay ? (
+                              <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold text-teal-900">
+                                {t('webPosTicket')} {refs.ticketDisplay}
+                              </span>
+                            ) : null}
+                            {refs.tabNumber ? (
+                              <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-900">
+                                {t('webPosTab')} {refs.tabNumber}
+                              </span>
+                            ) : null}
                             {o.tableLabel ? (
                               <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800">
                                 {t('table')} {o.tableLabel}
@@ -888,6 +943,19 @@ export default function WebPosOrdersPanel({
                   </button>
 
                   {/* Side breadcrumb / overflow actions (print, refund, cancel) */}
+                  {(() => {
+                    const refs = orderPublicRefs(selectedOrder);
+                    const crumb = [
+                      refs.ticketDisplay,
+                      refs.tabNumber ? `${t('webPosTab')} ${refs.tabNumber}` : null,
+                      selectedOrder.tableLabel
+                        ? `${t('table')} ${selectedOrder.tableLabel}`
+                        : null,
+                      channelLabel(selectedOrder.channel),
+                      statusLabel(selectedOrder.status),
+                    ].filter(Boolean);
+                    return (
+                      <>
                   <div className="relative mb-3">
                     <button
                       type="button"
@@ -904,15 +972,16 @@ export default function WebPosOrdersPanel({
                         <MoreHorizontal size={16} aria-hidden />
                       </span>
                       <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] font-semibold text-stone-600">
-                        <span className="truncate">{selectedOrder.orderNumber}</span>
-                        <span className="shrink-0 text-stone-300" aria-hidden>
-                          /
-                        </span>
-                        <span className="truncate">{channelLabel(selectedOrder.channel)}</span>
-                        <span className="shrink-0 text-stone-300" aria-hidden>
-                          /
-                        </span>
-                        <span className="truncate">{statusLabel(selectedOrder.status)}</span>
+                        {crumb.map((part, i) => (
+                          <span key={`${part}-${i}`} className="contents">
+                            {i > 0 ? (
+                              <span className="shrink-0 text-stone-300" aria-hidden>
+                                /
+                              </span>
+                            ) : null}
+                            <span className="truncate">{part}</span>
+                          </span>
+                        ))}
                       </span>
                       <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-stone-400">
                         {t('webPosMoreShort')}
@@ -926,9 +995,23 @@ export default function WebPosOrdersPanel({
                   </div>
 
                   <div>
-                    <p className="text-sm font-semibold">{selectedOrder.orderNumber}</p>
-                    <p className="text-xs text-stone-500">{statusLabel(selectedOrder.status)}</p>
+                    <p className="text-sm font-semibold">
+                      {refs.ticketDisplay ||
+                        (refs.tabNumber
+                          ? `${t('webPosTab')} ${refs.tabNumber}`
+                          : selectedOrder.orderNumber)}
+                    </p>
+                    <p className="text-xs text-stone-500">
+                      {statusLabel(selectedOrder.status)}
+                      {refs.tabNumber && refs.ticketDisplay
+                        ? ` · ${t('webPosTab')} ${refs.tabNumber}`
+                        : ''}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-stone-400">{selectedOrder.orderNumber}</p>
                   </div>
+                      </>
+                    );
+                  })()}
                   <ul className="mt-4 space-y-2 text-sm">
                     {selectedOrder.items.map((i, idx) => (
                       <li key={idx} className="flex justify-between gap-2">
