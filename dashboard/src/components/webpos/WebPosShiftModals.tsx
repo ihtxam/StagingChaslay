@@ -2,6 +2,32 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, X, XCircle } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
+/** Integer digits allowed in Start/Close Shift cash amounts (excludes decimals). */
+const MAX_CASH_INT_DIGITS = 10;
+const MAX_CASH_DEC_DIGITS = 2;
+
+/** Keep only a valid cash amount: up to 10 digits before decimal, 2 after. */
+function sanitizeCashAmountInput(raw: string): string {
+  let s = String(raw ?? '').replace(/[^\d.]/g, '');
+  const dot = s.indexOf('.');
+  if (dot !== -1) {
+    s = `${s.slice(0, dot + 1)}${s.slice(dot + 1).replace(/\./g, '')}`;
+  }
+  const [intRaw = '', decRaw] = s.split('.');
+  const intPart = intRaw.replace(/\D/g, '').slice(0, MAX_CASH_INT_DIGITS);
+  if (decRaw === undefined) return intPart;
+  const decPart = decRaw.replace(/\D/g, '').slice(0, MAX_CASH_DEC_DIGITS);
+  if (s.endsWith('.') && decPart === '') return intPart ? `${intPart}.` : '0.';
+  return decPart.length ? `${intPart || '0'}.${decPart}` : intPart;
+}
+
+function parseCashAmount(raw: string): number {
+  const cleaned = sanitizeCashAmountInput(raw);
+  if (!cleaned || cleaned === '.' || cleaned === '0.') return 0;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
 type KeypadProps = {
   value: string;
   onChange: (v: string) => void;
@@ -17,17 +43,13 @@ function CashKeypad({ value, onChange }: KeypadProps) {
       onChange(value.slice(0, -1));
       return;
     }
-    if (ch === '.' && value.includes('.')) return;
-    if (ch === '.' && !value) {
-      onChange('0.');
+    if (ch === '.') {
+      if (value.includes('.')) return;
+      onChange(sanitizeCashAmountInput(value ? `${value}.` : '0.'));
       return;
     }
-    const next = value + ch;
-    const [, dec] = next.split('.');
-    if (dec && dec.length > 2) return;
-    const digits = next.replace(/\D/g, '');
-    if (digits.length > 10) return;
-    onChange(next);
+    if (!/^\d$/.test(ch)) return;
+    onChange(sanitizeCashAmountInput(`${value}${ch}`));
   };
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
   return (
@@ -45,6 +67,45 @@ function CashKeypad({ value, onChange }: KeypadProps) {
       <button type="button" onClick={() => append('C')} className="webpos-keypad-key col-span-3 py-2 text-sm">
         C
       </button>
+    </div>
+  );
+}
+
+function CashAmountField({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  return (
+    <div className="my-4">
+      <label className="mb-1.5 block text-center text-xs font-semibold uppercase tracking-wide text-stone-500">
+        {label}
+      </label>
+      <div className="flex items-center justify-center gap-2 rounded-xl bg-stone-50 px-3 py-3">
+        <input
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          value={value}
+          placeholder="0"
+          onChange={(e) => onChange(sanitizeCashAmountInput(e.target.value))}
+          onPaste={(e) => {
+            e.preventDefault();
+            const text = e.clipboardData.getData('text');
+            onChange(sanitizeCashAmountInput(text));
+          }}
+          className="w-full min-w-0 max-w-[14rem] border-0 bg-transparent text-center text-3xl font-bold tabular-nums text-stone-900 outline-none placeholder:text-stone-400"
+          aria-label={label}
+          aria-valuemax={10 ** MAX_CASH_INT_DIGITS - 1}
+        />
+        <span className="shrink-0 text-base font-semibold text-stone-500">CHF</span>
+      </div>
     </div>
   );
 }
@@ -74,9 +135,10 @@ export function WebPosStartShiftModal({
   if (!open) return null;
 
   const startWithAmount = (raw: string) => {
-    const n = raw.trim() === '' ? 0 : Number(raw);
-    onConfirm(Number.isFinite(n) ? Math.max(0, n) : 0);
+    onConfirm(parseCashAmount(raw));
   };
+
+  const setCashSafe = (v: string) => setCash(sanitizeCashAmountInput(v));
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/45 p-3 sm:items-center sm:p-4">
@@ -113,10 +175,12 @@ export function WebPosStartShiftModal({
               <h2 className="text-lg font-bold text-stone-900">{t('webPosShiftOpeningCash')}</h2>
               <p className="mt-1 text-sm text-stone-600">{t('webPosShiftOpeningCashHint')}</p>
               <p className="mt-1 text-xs font-medium text-teal-700">{t('webPosShiftOpeningCashOptional')}</p>
-              <div className="my-4 rounded-xl bg-stone-50 py-3 text-center text-3xl font-bold tabular-nums text-stone-900">
-                {cash || '0'} <span className="text-base font-semibold text-stone-500">CHF</span>
-              </div>
-              <CashKeypad value={cash} onChange={setCash} />
+              <CashAmountField
+                value={cash}
+                onChange={setCashSafe}
+                label={t('webPosShiftOpeningCash')}
+              />
+              <CashKeypad value={cash} onChange={setCashSafe} />
             </div>
             <div className="shrink-0 space-y-2 border-t border-stone-100 px-5 py-3">
               <div className="grid grid-cols-2 gap-2">
@@ -172,8 +236,9 @@ export function WebPosCloseShiftModal({
 }) {
   const { t } = useI18n();
   const [cash, setCash] = useState('');
+  const setCashSafe = (v: string) => setCash(sanitizeCashAmountInput(v));
   const expected = live?.expectedCash ?? openingCash;
-  const counted = Number(cash || 0);
+  const counted = parseCashAmount(cash);
   const diff = Math.round((counted - expected) * 100) / 100;
   const balanced = cash !== '' && Math.abs(diff) < 0.005;
 
@@ -246,17 +311,20 @@ export function WebPosCloseShiftModal({
             </div>
           </div>
 
-          <p className="mt-4 text-sm font-semibold text-stone-800">{t('webPosShiftCountCash')}</p>
           <div
-            className={`my-2 rounded-xl py-3 text-center text-3xl font-bold tabular-nums ${
+            className={
               cash === ''
-                ? 'bg-stone-50 text-stone-900'
+                ? undefined
                 : balanced
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : 'bg-amber-50 text-amber-800'
-            }`}
+                  ? 'rounded-xl bg-emerald-50/80 px-2'
+                  : 'rounded-xl bg-amber-50/80 px-2'
+            }
           >
-            {cash || '0'} <span className="text-base font-semibold opacity-70">CHF</span>
+            <CashAmountField
+              value={cash}
+              onChange={setCashSafe}
+              label={t('webPosShiftCountCash')}
+            />
           </div>
           {cash !== '' ? (
             <p
@@ -271,7 +339,7 @@ export function WebPosCloseShiftModal({
             </p>
           ) : null}
 
-          <CashKeypad value={cash} onChange={setCash} />
+          <CashKeypad value={cash} onChange={setCashSafe} />
         </div>
 
         <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-stone-100 bg-white px-4 py-3 sm:px-5 sm:py-4">
