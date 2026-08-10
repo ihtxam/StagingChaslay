@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { resolveOrderItemName } from '@/lib/order-item-name';
 import type { PosOrderForReceipt } from '@/lib/webpos-receipt';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 
@@ -675,7 +676,7 @@ export default function WebPosOrdersPanel({
                     {heldCartLines(selectedHeld).map((l, idx) => (
                       <li key={idx} className="flex justify-between gap-2">
                         <span>
-                          {l.quantity}× {l.name || 'Item'}
+                          {l.quantity}× {resolveOrderItemName(l.name)}
                         </span>
                         <span className="tabular-nums">{money(l.lineTotal)}</span>
                       </li>
@@ -739,7 +740,7 @@ export default function WebPosOrdersPanel({
                     {selectedOrder.items.map((i, idx) => (
                       <li key={idx} className="flex justify-between gap-2">
                         <span>
-                          {i.quantity}× {i.name || 'Item'}
+                          {i.quantity}× {resolveOrderItemName(i.name)}
                         </span>
                         <span className="tabular-nums">{money(i.totalPrice)}</span>
                       </li>

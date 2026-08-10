@@ -3,6 +3,7 @@ import { APP_NAME } from '@/lib/brand';
 import { buildReceiptUrl, concatBytes, escposQrCode } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
+import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
   channelLabel,
   lineWidthForPaper,
@@ -1181,7 +1182,7 @@ export function posOrderToWebPosReceipt(
     tableLabel: order.tableLabel,
     guestCount: order.guestCount,
     items: order.items.map((i) => ({
-      name: i.name || 'Item',
+      name: resolveOrderItemName(i.name),
       quantity: i.quantity,
       unitPrice: Number(i.unitPrice ?? (i.quantity ? i.totalPrice / i.quantity : i.totalPrice)),
       lineTotal: Number(i.totalPrice),

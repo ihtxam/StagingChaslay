@@ -4,6 +4,7 @@ import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { FloorPlanService } from "@/services/floor-plan.service";
 import { roundMoney2, roundTo005 } from "@/lib/money";
 import { resolvePosCancelReason } from "@/lib/pos-print-settings";
+import { isUsableProductName, resolveOrderItemName } from "@/lib/order-item-name";
 
 export interface SyncSaleItem {
   productClientId?: string;
@@ -472,6 +473,10 @@ export class SyncService {
       for (const item of sale.items) {
         let productId = asUuidOrNull(item.productId);
         let catalogName: string | null = null;
+        const incomingName = isUsableProductName(item.productName)
+          ? String(item.productName).trim()
+          : null;
+
         if (!productId && item.productClientId) {
           const linked = await db.query.products.findFirst({
             where: and(
@@ -481,18 +486,14 @@ export class SyncService {
           });
           productId = linked?.id ?? null;
           catalogName = linked?.name ?? null;
-        } else if (productId && !(item.productName && String(item.productName).trim())) {
+        } else if (productId && !incomingName) {
           const linked = await db.query.products.findFirst({
             where: eq(schema.products.id, productId),
           });
           catalogName = linked?.name ?? null;
         }
 
-        const resolvedName = (
-          (item.productName && String(item.productName).trim()) ||
-          catalogName ||
-          "Item"
-        ).slice(0, 255);
+        const resolvedName = resolveOrderItemName(incomingName, catalogName);
 
         await db.insert(schema.orderItems).values({
           orderId: order.id,

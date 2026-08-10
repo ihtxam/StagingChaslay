@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { resolveOrderItemName } from '@/lib/order-item-name';
 export type OnlineOrder = {
   id: string;
   orderNumber?: string;
@@ -149,7 +150,7 @@ export default function WebPosOnlineOrdersPanel({ open, onClose, orders, onRefre
                 <ul className="text-xs text-[var(--text-muted)]">
                   {(o.items || []).slice(0, 5).map((i, idx) => (
                     <li key={idx}>
-                      {i.quantity}× {i.productName || 'Item'}
+                      {i.quantity}× {resolveOrderItemName(i.productName)}
                     </li>
                   ))}
                 </ul>

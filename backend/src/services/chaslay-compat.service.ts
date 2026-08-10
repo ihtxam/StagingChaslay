@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { getDb, schema } from "@/db";
 import { repairCatalogText } from "@/lib/text-encoding";
+import { resolveOrderItemName } from "@/lib/order-item-name";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { AuthService } from "./auth.service";
 import { MerchantSettingsService } from "./merchant-settings.service";
@@ -510,7 +511,7 @@ export class ChaslayCompatService {
         notes: o.notes,
         payload: {
           items: (o.items || []).map((i) => ({
-            productName: i.productName,
+            productName: resolveOrderItemName(i.productName),
             quantity: Number(i.quantity),
             unitPrice: parseFloat(String(i.unitPrice)),
             lineTotal: parseFloat(String(i.totalPrice)),

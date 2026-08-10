@@ -3,6 +3,7 @@ import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
 import { POS_CANCEL_REASONS, resolvePosCancelReason } from "@/lib/pos-print-settings";
 import { roundMoney2 } from "@/lib/money";
 import { zurichDayBounds } from "@/lib/vacation";
+import { resolveOrderItemName } from "@/lib/order-item-name";
 
 const COMPLETED_STATUSES = new Set(["completed", "partially_refunded"]);
 const BLOCKED_CANCEL_STATUSES = new Set([
@@ -83,7 +84,11 @@ export class PosOrdersService {
 
     const rows = await db.query.orders.findMany({
       where: and(...conditions),
-      with: { items: true },
+      with: {
+        items: {
+          with: { product: true },
+        },
+      },
       orderBy: [desc(schema.orders.createdAt)],
       limit,
     });
@@ -117,16 +122,20 @@ export class PosOrdersService {
       shippingAddress: o.shippingAddress,
       createdAt: o.createdAt,
       completedAt: o.completedAt,
-      items: (o.items || []).map((i) => ({
-        id: i.id,
-        productId: i.productId,
-        name: i.productName,
-        quantity: Number(i.quantity),
-        unitPrice: Number(i.unitPrice),
-        totalPrice: Number(i.totalPrice),
-        selectedExtras: i.selectedExtras || [],
-        comboSelections: i.comboSelections || [],
-      })),
+      items: (o.items || []).map((i) => {
+        const name = resolveOrderItemName(i.productName, i.product?.name);
+        return {
+          id: i.id,
+          productId: i.productId,
+          name,
+          productName: name,
+          quantity: Number(i.quantity),
+          unitPrice: Number(i.unitPrice),
+          totalPrice: Number(i.totalPrice),
+          selectedExtras: i.selectedExtras || [],
+          comboSelections: i.comboSelections || [],
+        };
+      }),
     }));
   }
 
@@ -360,7 +369,7 @@ export class PosOrdersService {
       await db.insert(schema.orderItems).values({
         orderId: order.id,
         productId: null,
-        productName: String(line.name || "Item").slice(0, 255),
+        productName: resolveOrderItemName(line.name),
         quantity: String(qty),
         unitPrice: unitPrice.toFixed(2),
         totalPrice: totalPrice.toFixed(2),

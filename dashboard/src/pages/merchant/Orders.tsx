@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { playOrderAlertOnce, startOrderAlertLoop, stopOrderAlertLoop } from '@/lib/order-alert';
+import { resolveOrderItemName } from '@/lib/order-item-name';
 
 interface OrderItem {
   productName?: string | null;
@@ -19,11 +20,7 @@ interface OrderItem {
 }
 
 function orderItemName(item: OrderItem) {
-  const raw = item.productName || item.name || item.product?.name;
-  if (raw == null || String(raw).trim() === '' || String(raw).toLowerCase() === 'null') {
-    return 'Item';
-  }
-  return String(raw);
+  return resolveOrderItemName(item.productName, item.name, item.product?.name);
 }
 
 interface Order {
@@ -459,11 +456,12 @@ export default function Orders() {
                     {!!item.comboSelections?.length && (
                       <span className="mt-0.5 block text-xs text-[var(--muted)]">
                         {item.comboSelections
-                          .map((c) =>
-                            c.selectedExtras?.length
-                              ? `${c.productName || 'Item'} (${c.selectedExtras.map((e) => e.name).join(', ')})`
-                              : c.productName || 'Item'
-                          )
+                          .map((c) => {
+                            const name = resolveOrderItemName(c.productName);
+                            return c.selectedExtras?.length
+                              ? `${name} (${c.selectedExtras.map((e) => e.name).join(', ')})`
+                              : name;
+                          })
                           .join(' · ')}
                       </span>
                     )}

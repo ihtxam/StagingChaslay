@@ -2,6 +2,32 @@ import { getDb, schema } from "@/db";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { roundMoney2, roundTo005 } from "@/lib/money";
+import { resolveOrderItemName } from "@/lib/order-item-name";
+
+function withResolvedItemNames<
+  T extends {
+    items?: Array<{
+      productName?: string | null;
+      product?: { name?: string | null } | null;
+      comboSelections?: Array<{ productName?: string | null }> | null;
+    }>;
+  },
+>(order: T): T {
+  if (!order?.items?.length) return order;
+  return {
+    ...order,
+    items: order.items.map((item) => ({
+      ...item,
+      productName: resolveOrderItemName(item.productName, item.product?.name),
+      comboSelections: Array.isArray(item.comboSelections)
+        ? item.comboSelections.map((c) => ({
+            ...c,
+            productName: resolveOrderItemName(c.productName),
+          }))
+        : item.comboSelections,
+    })),
+  };
+}
 
 export class OrderService {
   /**
@@ -83,7 +109,10 @@ export class OrderService {
         await db.insert(schema.orderItems).values({
           orderId: order[0].id,
           productId: item.productId,
-          productName: product?.name || (item as { productName?: string }).productName || "Item",
+          productName: resolveOrderItemName(
+            product?.name,
+            (item as { productName?: string }).productName
+          ),
           quantity: item.quantity.toString(),
           unitPrice: item.unitPrice.toString(),
           totalPrice: itemTotal.toString(),
@@ -147,7 +176,7 @@ export class OrderService {
         orderBy: desc(schema.orders.createdAt),
       });
 
-      return orders;
+      return orders.map((order) => withResolvedItemNames(order));
     } catch (error) {
       console.error("Error getting orders:", error);
       throw error;
@@ -181,7 +210,7 @@ export class OrderService {
         throw new Error("Order not found");
       }
 
-      return order;
+      return withResolvedItemNames(order);
     } catch (error) {
       console.error("Error getting order:", error);
       throw error;

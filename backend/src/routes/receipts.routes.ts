@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { getDb, schema } from "@/db";
 import { eq, or } from "drizzle-orm";
+import { resolveOrderItemName } from "@/lib/order-item-name";
 
 const router = Router();
 
@@ -28,7 +29,9 @@ router.get("/:ref", async (req: Request, res: Response) => {
           )
         : or(eq(schema.orders.orderNumber, ref), eq(schema.orders.clientId, ref)),
       with: {
-        items: true,
+        items: {
+          with: { product: true },
+        },
         merchant: true,
       },
     });
@@ -60,7 +63,7 @@ router.get("/:ref", async (req: Request, res: Response) => {
         notes: order.notes,
         completedAt: order.completedAt || order.createdAt,
         items: (order.items || []).map((i) => ({
-          name: i.productName,
+          name: resolveOrderItemName(i.productName, i.product?.name),
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           lineTotal: i.totalPrice,
