@@ -48,15 +48,22 @@ function useFullscreenActive() {
   return active;
 }
 
-async function toggleWebPosFullscreen() {
+async function toggleWebPosFullscreen(opts?: { forceEnterApp?: boolean }) {
   try {
-    if (document.fullscreenElement) {
+    // Menus opens the backend sidebar (exits POS chrome). Fullscreen / maximize
+    // must bring POS chrome back — browser FS alone leaves the left bar visible.
+    if (opts?.forceEnterApp) {
+      window.dispatchEvent(new CustomEvent('webpos:enter-app'));
+    }
+    if (document.fullscreenElement && !opts?.forceEnterApp) {
       await document.exitFullscreen();
       return;
     }
-    const el = document.documentElement;
-    if (el.requestFullscreen) {
-      await el.requestFullscreen();
+    if (!document.fullscreenElement) {
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        await el.requestFullscreen();
+      }
     }
   } catch {
     // Browser may block without a user gesture or if not allowed in iframe.
@@ -245,41 +252,6 @@ export default function WebPosTopBar({
           ) : null}
 
           {/* Desktop / tablet: shift + tools visible. Mobile: overflow into hamburger. */}
-          {shiftsEnabled ? (
-            <button
-              type="button"
-              className={`hidden h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold lg:inline-flex ${
-                shiftOpen
-                  ? 'bg-[var(--webpos-accent)] text-white hover:opacity-90'
-                  : 'border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
-              }`}
-              onClick={() => (shiftOpen ? onCloseShift?.() : onStartShift?.())}
-              title={shiftOpen ? t('webPosShiftClose') : t('webPosShiftStart')}
-            >
-              <span
-                className={`inline-block h-2 w-2 rounded-full ${
-                  shiftOpen ? 'bg-white' : 'bg-amber-500'
-                }`}
-              />
-              <span className="hidden sm:inline">
-                {shiftOpen ? t('webPosShiftClose') : t('webPosShiftStart')}
-              </span>
-              <span className="sm:hidden">
-                {shiftOpen ? t('webPosShiftOpenBadge') : t('webPosShiftMenu')}
-              </span>
-            </button>
-          ) : showEodButton ? (
-            <button
-              type="button"
-              className="hidden h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2.5 text-xs font-bold text-stone-800 hover:bg-stone-50 lg:inline-flex"
-              onClick={() => onEodReport?.()}
-              title={t('webPosEodReport')}
-            >
-              <span className="hidden sm:inline">{t('webPosEodReport')}</span>
-              <span className="sm:hidden">{t('webPosEodShort')}</span>
-            </button>
-          ) : null}
-
           {onSyncNow ? (
             <button
               type="button"
@@ -361,11 +333,30 @@ export default function WebPosTopBar({
           <button
             type="button"
             className="hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:inline-flex"
-            onClick={() => void toggleWebPosFullscreen()}
-            title={fullscreenActive ? t('webPosExitFullscreen') : t('webPosFullscreen')}
-            aria-label={fullscreenActive ? t('webPosExitFullscreen') : t('webPosFullscreen')}
+            onClick={() => {
+              // Sidebar visible after Menus → restore POS chrome; otherwise toggle browser FS.
+              if (!appMode) {
+                void toggleWebPosFullscreen({ forceEnterApp: true });
+                return;
+              }
+              void toggleWebPosFullscreen();
+            }}
+            title={
+              !appMode
+                ? t('webPosFullscreen')
+                : fullscreenActive
+                  ? t('webPosExitFullscreen')
+                  : t('webPosFullscreen')
+            }
+            aria-label={
+              !appMode
+                ? t('webPosFullscreen')
+                : fullscreenActive
+                  ? t('webPosExitFullscreen')
+                  : t('webPosFullscreen')
+            }
           >
-            {fullscreenActive ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+            {!appMode || !fullscreenActive ? <Maximize2 size={17} /> : <Minimize2 size={17} />}
           </button>
 
           <div className="relative" ref={settingsRef}>
@@ -380,17 +371,6 @@ export default function WebPosTopBar({
             </button>
             {settingsOpen ? settingsPanel : null}
           </div>
-
-          {appMode && canShowPanel ? (
-            <button
-              type="button"
-              className="hidden h-9 items-center gap-1 rounded-lg border border-stone-200 px-2 text-xs font-medium hover:bg-stone-50 lg:inline-flex"
-              onClick={onShowPanel}
-            >
-              <PanelLeft size={15} />
-              {t('webPosMenus')}
-            </button>
-          ) : null}
         </div>
       </div>
 
@@ -451,6 +431,9 @@ export function WebPosSettingsDropdown({
   staffName,
   canDrawer,
   onOpenDrawer,
+  canShowPanel,
+  appMode = true,
+  onShowPanel,
   colorTheme = 'teal',
   onColorThemeChange,
   appearance = 'light',
@@ -481,6 +464,9 @@ export function WebPosSettingsDropdown({
   staffName?: string | null;
   canDrawer?: boolean;
   onOpenDrawer?: () => void;
+  canShowPanel?: boolean;
+  appMode?: boolean;
+  onShowPanel?: () => void;
   colorTheme?: WebPosColorTheme;
   onColorThemeChange?: (theme: WebPosColorTheme) => void;
   appearance?: WebPosAppearance;
@@ -503,12 +489,28 @@ export function WebPosSettingsDropdown({
         <button
           type="button"
           className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm font-semibold text-stone-700 hover:bg-stone-50"
-          onClick={() => void toggleWebPosFullscreen()}
+          onClick={() => {
+            if (!appMode) {
+              void toggleWebPosFullscreen({ forceEnterApp: true });
+              return;
+            }
+            void toggleWebPosFullscreen();
+          }}
         >
-          {fullscreenActive ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-          {fullscreenActive ? t('webPosExitFullscreen') : t('webPosFullscreen')}
+          {!appMode || !fullscreenActive ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+          {!appMode || !fullscreenActive ? t('webPosFullscreen') : t('webPosExitFullscreen')}
         </button>
         <p className="px-2 text-[11px] leading-snug text-stone-500">{t('webPosFullscreenHint')}</p>
+        {canShowPanel && onShowPanel ? (
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={onShowPanel}
+          >
+            <PanelLeft size={16} />
+            {t('webPosMenus')}
+          </button>
+        ) : null}
       </div>
 
       {(onAppearanceChange || onTextSizeChange) && (
@@ -624,7 +626,7 @@ export function WebPosSettingsDropdown({
           {shiftOpen ? (
             <button
               type="button"
-              className="flex w-full items-center justify-center rounded-xl bg-[var(--webpos-accent)] py-2.5 text-sm font-bold text-white hover:opacity-90"
+              className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2.5 text-sm font-bold"
               onClick={onCloseShift}
             >
               {t('webPosShiftClose')}
@@ -632,7 +634,7 @@ export function WebPosSettingsDropdown({
           ) : (
             <button
               type="button"
-              className="flex w-full items-center justify-center rounded-xl bg-[var(--webpos-accent)] py-2.5 text-sm font-bold text-white hover:opacity-90"
+              className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2.5 text-sm font-bold"
               onClick={onStartShift}
             >
               {t('webPosShiftStart')}
@@ -649,7 +651,7 @@ export function WebPosSettingsDropdown({
           </p>
           <button
             type="button"
-            className="flex w-full items-center justify-center rounded-xl bg-[var(--webpos-accent)] py-2.5 text-sm font-bold text-white hover:opacity-90"
+            className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2.5 text-sm font-bold"
             onClick={onEodReport}
           >
             {t('webPosEodPrint')}

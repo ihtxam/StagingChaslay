@@ -45,9 +45,9 @@ export default function WebPosProductArea({
   }, [products, categoryId]);
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-stone-100">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
       {/* Category chips  - fixed sizes, wrap to a second row when needed */}
-      <div className="shrink-0 border-b border-stone-200/80 bg-stone-100/90 px-3 py-2">
+      <div className="shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2">
         <div className="webpos-cat-scroll flex flex-wrap gap-1.5">
           {giftCardsEnabled && onGiftCards ? (
             <button

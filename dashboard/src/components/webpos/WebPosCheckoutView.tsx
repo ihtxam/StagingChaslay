@@ -292,10 +292,14 @@ export default function WebPosCheckoutView({
     setBuffer('');
   };
 
-  /** +10 / +20: add to selected tender and update paid/remaining immediately. */
+  /**
+   * Quick cash (+20 / +50): customer handed that note toward the due amount.
+   * If tender still mirrors the auto-seeded due total, SET to the note value
+   * (not due+note). Otherwise stack additional notes.
+   */
   const applyQuickAdd = (n: number) => {
     if (busy || !(n > 0)) return;
-    const add = roundMoney2(n);
+    const note = roundMoney2(n);
     let targetId = ensureTargetPaymentId();
     if (!targetId) {
       const method: PosPaymentMethod = methods.cash
@@ -306,14 +310,15 @@ export default function WebPosCheckoutView({
             ? 'terminal'
             : 'cash';
       const id = newPayId();
-      setPayments([{ id, method, amount: add }]);
+      setPayments([{ id, method, amount: note }]);
       setSelectedPaymentId(id);
-      setBuffer(String(add));
+      setBuffer(String(note));
       return;
     }
     const row = payments.find((p) => p.id === targetId);
-    const base = bufferAmount != null ? bufferAmount : row?.amount ?? 0;
-    const next = roundMoney2(base + add);
+    const current = bufferAmount != null ? bufferAmount : row?.amount ?? 0;
+    const mirrorsDue = Math.abs(current - total) < 0.051;
+    const next = roundMoney2(mirrorsDue || current <= 0.001 ? note : current + note);
     setBuffer(String(next));
     setPayments((prev) => prev.map((p) => (p.id === targetId ? { ...p, amount: next } : p)));
   };

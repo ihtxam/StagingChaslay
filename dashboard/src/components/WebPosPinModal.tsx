@@ -151,11 +151,9 @@ export default function WebPosPinModal({
                       ? 'bg-stone-200 text-stone-800 hover:bg-stone-300'
                       : 'bg-stone-100 text-stone-900 hover:bg-stone-200'
                   }`
-                : `rounded-xl py-3 text-lg ${
-                    key === 'OK'
-                      ? 'bg-teal-700 text-white hover:bg-teal-800'
-                      : 'bg-[var(--bg-muted)] hover:bg-[var(--border)]'
-                  }`
+                : key === 'OK'
+                  ? 'webpos-accent-btn rounded-xl py-3 text-lg'
+                  : 'webpos-keypad-key'
             }`}
           >
             {busy && key === 'OK' ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : key}
@@ -211,16 +209,20 @@ export default function WebPosPinModal({
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <div
-        className={`w-full max-w-xs rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-5 shadow-2xl ${
+        className={`w-full max-w-xs rounded-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] p-5 text-[var(--webpos-text,var(--text))] shadow-2xl ${
           shake ? 'webpos-pin-shake' : ''
         }`}
       >
         <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 text-[var(--webpos-text,var(--text))]">
             <UserCircle2 className="h-5 w-5" />
             <h2 className="font-semibold">{t('webPosPinTitle')}</h2>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 hover:bg-[var(--bg-muted)]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-[var(--webpos-text-muted,var(--text-muted))] hover:bg-[var(--webpos-surface-2,var(--bg-muted))]"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -230,7 +232,9 @@ export default function WebPosPinModal({
             <span
               key={i}
               className={`h-3 w-3 rounded-full ${
-                i < Math.min(pin.length, PIN_MIN_LENGTH) ? 'bg-stone-900' : 'bg-stone-300'
+                i < Math.min(pin.length, PIN_MIN_LENGTH)
+                  ? 'bg-[var(--webpos-text,var(--text))]'
+                  : 'bg-[var(--webpos-border,var(--border))]'
               }`}
             />
           ))}

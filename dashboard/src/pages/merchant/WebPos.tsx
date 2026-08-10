@@ -4472,6 +4472,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setSettingsOpen(false);
               void openCashDrawer();
             }}
+            canShowPanel={canOpenPanel}
+            appMode={appMode}
+            onShowPanel={() => {
+              setSettingsOpen(false);
+              showPanelMenus();
+            }}
           />
         }
       />

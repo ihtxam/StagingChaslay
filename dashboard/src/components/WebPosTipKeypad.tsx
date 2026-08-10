@@ -68,10 +68,15 @@ export default function WebPosTipKeypad({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-3">
-      <div className="w-full max-w-xs rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
-          <h3 className="font-semibold">{title || t('webPosTip')}</h3>
-          <button type="button" className="p-2" onClick={onClose} aria-label={t('close')}>
+      <div className="w-full max-w-xs rounded-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] text-[var(--webpos-text,var(--text))] shadow-xl">
+        <div className="flex items-center justify-between border-b border-[var(--webpos-border,var(--border))] px-4 py-3">
+          <h3 className="font-semibold text-[var(--webpos-text,var(--text))]">{title || t('webPosTip')}</h3>
+          <button
+            type="button"
+            className="p-2 text-[var(--webpos-text-muted,var(--text-muted))]"
+            onClick={onClose}
+            aria-label={t('close')}
+          >
             <X size={18} />
           </button>
         </div>
@@ -87,7 +92,7 @@ export default function WebPosTipKeypad({
                 className={`rounded-lg py-2 text-xs font-bold uppercase ${
                   mode === 'amount'
                     ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
-                    : 'bg-stone-100 text-stone-600'
+                    : 'bg-[var(--webpos-surface-2,#f5f5f4)] text-[var(--webpos-text-muted,#78716c)] ring-1 ring-[var(--webpos-border,#e7e5e4)]'
                 }`}
               >
                 {t('webPosTipFixed')}
@@ -101,7 +106,7 @@ export default function WebPosTipKeypad({
                 className={`rounded-lg py-2 text-xs font-bold uppercase ${
                   mode === 'percent'
                     ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
-                    : 'bg-stone-100 text-stone-600'
+                    : 'bg-[var(--webpos-surface-2,#f5f5f4)] text-[var(--webpos-text-muted,#78716c)] ring-1 ring-[var(--webpos-border,#e7e5e4)]'
                 }`}
               >
                 {t('webPosTipPercent')}
@@ -126,7 +131,7 @@ export default function WebPosTipKeypad({
             </div>
           ) : null}
 
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-right text-xl font-semibold tabular-nums">
+          <div className="rounded-xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-bg,var(--bg))] px-4 py-3 text-right text-xl font-semibold tabular-nums text-[var(--webpos-text,var(--text))]">
             {display}
           </div>
 
@@ -136,7 +141,7 @@ export default function WebPosTipKeypad({
                 <button
                   key={k}
                   type="button"
-                  className="rounded-xl border border-[var(--border)] py-3 text-lg font-semibold hover:bg-[var(--bg)]"
+                  className="webpos-keypad-key"
                   onClick={() => {
                     if (k === '⌫') setBuf((p) => p.slice(0, -1));
                     else push(k);
@@ -151,7 +156,7 @@ export default function WebPosTipKeypad({
           <div className="flex gap-2">
             <button
               type="button"
-              className="btn-secondary flex-1"
+              className="webpos-keypad-key flex-1 !py-2.5 text-sm"
               onClick={() => {
                 setBuf('');
                 onConfirm(0, { mode, value: 0 });
@@ -161,7 +166,7 @@ export default function WebPosTipKeypad({
             </button>
             <button
               type="button"
-              className="btn-primary flex-1"
+              className="webpos-accent-btn flex-1 rounded-lg py-2.5 text-sm font-semibold"
               onClick={() => {
                 const value = Number(buf) || 0;
                 onConfirm(resolvedAmount, { mode, value });
