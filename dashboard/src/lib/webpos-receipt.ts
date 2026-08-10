@@ -1174,7 +1174,15 @@ export type PosOrderForReceipt = {
   completedAt?: string | null;
   createdAt: string;
   splitCheckNumber?: number | null;
-  items: Array<{ name?: string | null; quantity: number; totalPrice: number; unitPrice?: number }>;
+  items: Array<{
+    id?: string;
+    name?: string | null;
+    quantity: number;
+    totalPrice: number;
+    unitPrice?: number;
+    refundedQuantity?: number;
+  }>;
+  refundReason?: string | null;
 };
 
 export function posOrderToWebPosReceipt(

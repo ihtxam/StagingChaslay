@@ -147,3 +147,53 @@ export function resolvePosCancelReason(reason: string): string {
   );
   return (matched ? matched.en : raw).slice(0, 500);
 }
+
+export const POS_REFUND_REASONS = [
+  {
+    id: "didnt_like_food",
+    en: "Client didn't like the food",
+    fr: "Le client n'a pas aimé le plat",
+    de: "Gast mochte das Essen nicht",
+  },
+  {
+    id: "service_slow",
+    en: "Service was slow",
+    fr: "Service trop lent",
+    de: "Service war zu langsam",
+  },
+  {
+    id: "wrong_order",
+    en: "Wrong order",
+    fr: "Mauvaise commande",
+    de: "Falsche Bestellung",
+  },
+  {
+    id: "change_of_mind",
+    en: "Change of mind",
+    fr: "Changement d'avis",
+    de: "Meinungsänderung",
+  },
+  {
+    id: "quality_issue",
+    en: "Quality / preparation issue",
+    fr: "Problème de qualité / préparation",
+    de: "Qualitäts- / Zubereitungsproblem",
+  },
+  { id: "other", en: "Other (custom)", fr: "Autre (personnalisé)", de: "Sonstiges (frei)" },
+] as const;
+
+export function resolvePosRefundReason(reason: string): string {
+  const raw = String(reason || "").trim();
+  if (!raw) return "";
+  const lower = raw.toLowerCase();
+  const matched = POS_REFUND_REASONS.find(
+    (r) =>
+      r.id === lower ||
+      r.en.toLowerCase() === lower ||
+      r.fr.toLowerCase() === lower ||
+      r.de.toLowerCase() === lower
+  );
+  // Custom messages keep the typed text; presets normalize to English.
+  if (matched && matched.id !== "other") return matched.en.slice(0, 500);
+  return raw.slice(0, 500);
+}

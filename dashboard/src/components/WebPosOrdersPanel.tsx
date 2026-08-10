@@ -19,6 +19,9 @@ import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
+import WebPosRefundModal, {
+  type RefundReasonOption,
+} from '@/components/webpos/WebPosRefundModal';
 
 function orderPublicRefs(o: PosOrderForReceipt & { notes?: string | null }) {
   const meta = parseOrderMetaNotes(o.notes);
@@ -157,15 +160,15 @@ export default function WebPosOrdersPanel({
   const [held, setHeld] = useState<HeldRow[]>([]);
   const [orders, setOrders] = useState<PosOrder[]>([]);
   const [reasons, setReasons] = useState<CancelReason[]>([]);
+  const [refundReasons, setRefundReasons] = useState<RefundReasonOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [refundBusy, setRefundBusy] = useState(false);
   const [selectedHeld, setSelectedHeld] = useState<HeldRow | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
   const [cancelFor, setCancelFor] = useState<PosOrder | null>(null);
   const [cancelHeldFor, setCancelHeldFor] = useState<HeldRow | null>(null);
   const [refundFor, setRefundFor] = useState<PosOrder | null>(null);
-  const [refundPartial, setRefundPartial] = useState(false);
-  const [refundAmountText, setRefundAmountText] = useState('');
   const [paymentEditFor, setPaymentEditFor] = useState<PosOrder | null>(null);
   const [paymentMethodDraft, setPaymentMethodDraft] = useState('cash');
   const [page, setPage] = useState(0);
@@ -218,6 +221,7 @@ export default function WebPosOrdersPanel({
       setHeld(h.data.held || []);
       setOrders(o.data.orders || []);
       setReasons(o.data.cancelReasons || []);
+      setRefundReasons(o.data.refundReasons || []);
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosOrdersLoadFailed'));
     } finally {
@@ -363,27 +367,28 @@ export default function WebPosOrdersPanel({
     }
   };
 
-  const doRefund = async () => {
+  const doRefund = async (payload: {
+    mode: 'full' | 'items';
+    reason: string;
+    reasonId: string;
+    items?: Array<{ orderItemId: string; quantity: number }>;
+  }) => {
     if (!refundFor) return;
-    const remaining = round2(refundFor.total - refundFor.refundAmount);
-    let amount: number | undefined;
-    if (refundPartial) {
-      amount = round2(Number(refundAmountText));
-      if (!Number.isFinite(amount) || amount <= 0 || amount > remaining + 0.001) {
-        toast.error(t('webPosRefundInvalidAmount'));
-        return;
-      }
-    }
+    setRefundBusy(true);
     try {
-      await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, { amount });
+      await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
+        reason: payload.reason,
+        fullTicket: payload.mode === 'full',
+        items: payload.mode === 'items' ? payload.items : undefined,
+      });
       toast.success(t('webPosOrderRefunded'));
       setRefundFor(null);
-      setRefundPartial(false);
-      setRefundAmountText('');
       setSelectedOrder(null);
       void load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosRefundFailed'));
+    } finally {
+      setRefundBusy(false);
     }
   };
 
@@ -417,11 +422,9 @@ export default function WebPosOrdersPanel({
   };
 
   const startRefund = (order: PosOrder) => {
-    const remaining = round2(order.total - order.refundAmount);
     setRefundFor(order);
-    setRefundPartial(false);
-    setRefundAmountText(remaining.toFixed(2));
     setPaymentEditFor(null);
+    closeMenus();
   };
 
   const startEditPayment = (order: PosOrder) => {
@@ -1037,6 +1040,12 @@ export default function WebPosOrdersPanel({
                       {t('webPosCancelReason')}: {selectedOrder.cancelReason}
                     </p>
                   ) : null}
+                  {(selectedOrder as PosOrder & { refundReason?: string | null }).refundReason ? (
+                    <p className="mt-2 text-sm text-rose-700">
+                      {t('webPosRefundReason')}:{' '}
+                      {(selectedOrder as PosOrder & { refundReason?: string | null }).refundReason}
+                    </p>
+                  ) : null}
                 </div>
               </>
             ) : (
@@ -1046,50 +1055,6 @@ export default function WebPosOrdersPanel({
             )}
           </aside>
         </div>
-        {refundFor ? (
-          <div className="border-t border-stone-200 bg-white p-4 space-y-3">
-            <p className="text-sm font-medium">
-              {t('webPosRefund')} · {refundFor.orderNumber}
-            </p>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                checked={!refundPartial}
-                onChange={() => setRefundPartial(false)}
-              />
-              {t('webPosRefundFull').replace(
-                '{amount}',
-                money(round2(refundFor.total - refundFor.refundAmount))
-              )}
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                checked={refundPartial}
-                onChange={() => setRefundPartial(true)}
-              />
-              {t('webPosRefundPartial')}
-            </label>
-            {refundPartial ? (
-              <input
-                type="number"
-                step="0.05"
-                min="0.05"
-                className="input"
-                value={refundAmountText}
-                onChange={(e) => setRefundAmountText(e.target.value)}
-              />
-            ) : null}
-            <div className="flex gap-2">
-              <button type="button" className="btn-secondary flex-1" onClick={() => setRefundFor(null)}>
-                {t('cancel')}
-              </button>
-              <button type="button" className="btn-primary flex-1" onClick={() => void doRefund()}>
-                {t('webPosRefund')}
-              </button>
-            </div>
-          </div>
-        ) : null}
         {paymentEditFor ? (
           <div className="border-t border-stone-200 bg-white p-4 space-y-3">
             <p className="text-sm font-medium">
@@ -1140,6 +1105,24 @@ export default function WebPosOrdersPanel({
           if (cancelHeldFor) void doCancelHeld(reason);
           else void doCancelOrder(reason);
         }}
+      />
+
+      <WebPosRefundModal
+        open={!!refundFor}
+        orderNumber={refundFor?.orderNumber || ''}
+        total={refundFor?.total || 0}
+        alreadyRefunded={refundFor?.refundAmount || 0}
+        items={(refundFor?.items || []).map((it) => ({
+          id: String((it as { id?: string }).id || ''),
+          name: it.name,
+          quantity: Number(it.quantity) || 0,
+          totalPrice: Number(it.totalPrice) || 0,
+          refundedQuantity: Number((it as { refundedQuantity?: number }).refundedQuantity || 0),
+        }))}
+        reasons={refundReasons}
+        busy={refundBusy}
+        onClose={() => setRefundFor(null)}
+        onConfirm={(payload) => void doRefund(payload)}
       />
     </div>
   );

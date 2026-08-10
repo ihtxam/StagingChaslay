@@ -47,6 +47,14 @@ type EodReport = {
     cancelReason?: string | null;
     cancelledAt?: string | null;
   }>;
+  refundedOrders?: Array<{
+    orderNumber: string;
+    total: number;
+    refundAmount: number;
+    refundReason?: string | null;
+    refundedAt?: string | null;
+    status?: string;
+  }>;
   grandTotal: number;
   coversServed: number | null;
   cashTotal: number;
@@ -335,6 +343,35 @@ export default function ReportsPage() {
                           </p>
                         </div>
                         <p className="font-semibold tabular-nums shrink-0">{money(c.total)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {!!report.refundedOrders?.length && (
+                <section className="rounded-xl border border-[var(--border)] overflow-hidden">
+                  <h2 className="px-3 py-2 text-sm font-semibold bg-[var(--bg-muted)]">
+                    {t('reportsRefundedOrders')}
+                  </h2>
+                  <ul className="divide-y divide-[var(--border)]">
+                    {report.refundedOrders.map((r, idx) => (
+                      <li
+                        key={`${r.orderNumber}-rf-${idx}`}
+                        className="px-3 py-2.5 flex flex-wrap items-start justify-between gap-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold">{r.orderNumber}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                            {t('reportsRefundReason')}: {r.refundReason || '—'}
+                            {r.refundedAt
+                              ? ` · ${new Date(r.refundedAt).toLocaleString()}`
+                              : ''}
+                          </p>
+                        </div>
+                        <p className="font-semibold tabular-nums shrink-0 text-rose-700">
+                          −{money(r.refundAmount)}
+                        </p>
                       </li>
                     ))}
                   </ul>

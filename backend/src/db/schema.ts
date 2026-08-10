@@ -857,6 +857,8 @@ export const orders = pgTable(
     cancelledAt: timestamp("cancelled_at"),
     refundAmount: decimal("refund_amount", { precision: 10, scale: 2 }).default("0"),
     refundedAt: timestamp("refunded_at"),
+    /** Last refund reason (preset English or custom message) */
+    refundReason: text("refund_reason"),
   },
   (table) => ({
     merchantIdIdx: index("orders_merchant_id_idx").on(table.merchantId),
@@ -931,6 +933,8 @@ export const orderItems = pgTable(
     isOpenPrice: boolean("is_open_price").default(false).notNull(),
     // 1-based seat / person index when pax ordering is on (kitchen: "Person 1")
     seatNumber: integer("seat_number"),
+    /** Cumulative quantity refunded on this line (partial item refunds). */
+    refundedQuantity: decimal("refunded_quantity", { precision: 12, scale: 3 }).default("0"),
   },
   (table) => ({
     orderIdIdx: index("order_items_order_id_idx").on(table.orderId),

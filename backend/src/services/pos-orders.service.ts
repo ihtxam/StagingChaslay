@@ -1,6 +1,11 @@
 import { getDb, schema } from "@/db";
 import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
-import { POS_CANCEL_REASONS, resolvePosCancelReason } from "@/lib/pos-print-settings";
+import {
+  POS_CANCEL_REASONS,
+  POS_REFUND_REASONS,
+  resolvePosCancelReason,
+  resolvePosRefundReason,
+} from "@/lib/pos-print-settings";
 import { roundMoney2 } from "@/lib/money";
 import { zurichDayBounds } from "@/lib/vacation";
 import { resolveOrderItemName } from "@/lib/order-item-name";
@@ -54,6 +59,10 @@ function parseHeldCart(cartJson: unknown): {
 export class PosOrdersService {
   static cancelReasons() {
     return POS_CANCEL_REASONS;
+  }
+
+  static refundReasons() {
+    return POS_REFUND_REASONS;
   }
 
   static async listPosOrders(
@@ -122,6 +131,7 @@ export class PosOrdersService {
       cancelReason: o.cancelReason,
       cancelledAt: o.cancelledAt,
       refundedAt: o.refundedAt,
+      refundReason: o.refundReason || null,
       notes: o.notes,
       tableLabel: o.tableLabel,
       guestCount: o.guestCount,
@@ -145,6 +155,7 @@ export class PosOrdersService {
           quantity: Number(i.quantity),
           unitPrice: Number(i.unitPrice),
           totalPrice: Number(i.totalPrice),
+          refundedQuantity: Number(i.refundedQuantity || 0),
           selectedExtras: i.selectedExtras || [],
           comboSelections: i.comboSelections || [],
         };
@@ -229,11 +240,22 @@ export class PosOrdersService {
   static async refundOrder(
     merchantId: string,
     orderId: string,
-    amount?: number
+    opts: {
+      amount?: number;
+      reason?: string;
+      /** When set, refund selected line quantities (amount derived from lines). */
+      items?: Array<{ orderItemId: string; quantity: number }>;
+      /** true = refund entire remaining ticket */
+      fullTicket?: boolean;
+    } = {}
   ) {
     const db = getDb();
+    const reasonText = resolvePosRefundReason(String(opts.reason || ""));
+    if (!reasonText) throw new Error("Refund reason is required");
+
     const order = await db.query.orders.findFirst({
       where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
+      with: { items: true },
     });
     if (!order) throw new Error("Order not found");
     if (order.status === "cancelled") throw new Error("Cannot refund a cancelled order");
@@ -243,25 +265,70 @@ export class PosOrdersService {
     const remaining = roundMoney2(total - already);
     if (remaining <= 0) throw new Error("Nothing left to refund");
 
-    const refund = amount != null ? roundMoney2(Number(amount)) : remaining;
-    if (!Number.isFinite(refund) || refund <= 0) throw new Error("Invalid refund amount");
+    let refund = 0;
+    const itemUpdates: Array<{ id: string; refundedQuantity: string }> = [];
+
+    if (opts.fullTicket || (!opts.items?.length && opts.amount == null)) {
+      refund = remaining;
+      for (const item of order.items || []) {
+        const qty = Number(item.quantity) || 0;
+        itemUpdates.push({ id: item.id, refundedQuantity: qty.toFixed(3) });
+      }
+    } else if (opts.items?.length) {
+      const byId = new Map((order.items || []).map((i) => [i.id, i]));
+      for (const sel of opts.items) {
+        const item = byId.get(String(sel.orderItemId || ""));
+        if (!item) throw new Error("Refund item not found on this order");
+        const qty = Number(item.quantity) || 0;
+        const alreadyQty = Number(item.refundedQuantity || 0) || 0;
+        const left = Math.max(0, qty - alreadyQty);
+        const take = roundMoney2(Number(sel.quantity));
+        if (!Number.isFinite(take) || take <= 0) throw new Error("Invalid refund item quantity");
+        if (take > left + 0.0005) throw new Error("Refund quantity exceeds remaining item quantity");
+        const unit = qty > 0 ? Number(item.totalPrice) / qty : 0;
+        refund = roundMoney2(refund + unit * take);
+        itemUpdates.push({
+          id: item.id,
+          refundedQuantity: (alreadyQty + take).toFixed(3),
+        });
+      }
+      if (refund > remaining + 0.001) refund = remaining;
+    } else {
+      refund = roundMoney2(Number(opts.amount));
+      if (!Number.isFinite(refund) || refund <= 0) throw new Error("Invalid refund amount");
+    }
+
     if (refund > remaining + 0.001) throw new Error("Refund exceeds remaining amount");
+    if (refund <= 0) throw new Error("Invalid refund amount");
 
     const newRefundTotal = roundMoney2(already + refund);
     const fully = newRefundTotal >= total - 0.001;
+
+    for (const u of itemUpdates) {
+      await db
+        .update(schema.orderItems)
+        .set({ refundedQuantity: u.refundedQuantity })
+        .where(eq(schema.orderItems.id, u.id));
+    }
 
     const [updated] = await db
       .update(schema.orders)
       .set({
         refundAmount: newRefundTotal.toFixed(2),
         refundedAt: new Date(),
+        refundReason: reasonText,
         status: fully ? "refunded" : "partially_refunded",
         paymentStatus: fully ? "refunded" : "partially_refunded",
       })
       .where(eq(schema.orders.id, orderId))
       .returning();
 
-    return { order: updated, refunded: refund, refundTotal: newRefundTotal };
+    return {
+      order: updated,
+      refunded: refund,
+      refundTotal: newRefundTotal,
+      reason: reasonText,
+    };
   }
 
   static async listHeld(merchantId: string) {

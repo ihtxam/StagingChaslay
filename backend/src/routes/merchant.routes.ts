@@ -1719,7 +1719,12 @@ router.get("/pos/orders", async (req: Request, res: Response) => {
       to: req.query.to ? String(req.query.to) : undefined,
       limit: req.query.limit ? Number(req.query.limit) : 50,
     });
-    res.json({ success: true, orders, cancelReasons: PosOrdersService.cancelReasons() });
+    res.json({
+      success: true,
+      orders,
+      cancelReasons: PosOrdersService.cancelReasons(),
+      refundReasons: PosOrdersService.refundReasons(),
+    });
   } catch (error) {
     console.error("POS orders list failed:", error);
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list orders" });
@@ -1761,11 +1766,19 @@ router.post("/pos/orders/:id/refund", async (req: Request, res: Response) => {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
     const { PosOrdersService } = await import("@/services/pos-orders.service");
-    const result = await PosOrdersService.refundOrder(
-      merchantId,
-      req.params.id,
-      req.body?.amount != null ? Number(req.body.amount) : undefined
-    );
+    const body = req.body || {};
+    const items = Array.isArray(body.items)
+      ? body.items.map((it: any) => ({
+          orderItemId: String(it.orderItemId || it.id || ""),
+          quantity: Number(it.quantity),
+        }))
+      : undefined;
+    const result = await PosOrdersService.refundOrder(merchantId, req.params.id, {
+      amount: body.amount != null ? Number(body.amount) : undefined,
+      reason: body.reason != null ? String(body.reason) : undefined,
+      fullTicket: body.fullTicket === true || body.mode === "full",
+      items,
+    });
     res.json({ success: true, ...result });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Refund failed" });

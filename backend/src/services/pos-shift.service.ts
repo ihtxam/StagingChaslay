@@ -214,6 +214,8 @@ export class PosShiftService {
       .select({
         paymentMethod: schema.orders.paymentMethod,
         total: schema.orders.total,
+        refundAmount: schema.orders.refundAmount,
+        status: schema.orders.status,
       })
       .from(schema.orders)
       .where(
@@ -221,7 +223,7 @@ export class PosShiftService {
           eq(schema.orders.merchantId, merchantId),
           gte(schema.orders.createdAt, openedAt),
           lt(schema.orders.createdAt, until),
-          sql`lower(coalesce(${schema.orders.status}, '')) not in ('cancelled', 'canceled', 'refunded')`
+          sql`lower(coalesce(${schema.orders.status}, '')) not in ('cancelled', 'canceled')`
         )
       );
 
@@ -229,8 +231,16 @@ export class PosShiftService {
     let cardSales = 0;
     let terminalSales = 0;
     let otherSales = 0;
+    let orderCount = 0;
     for (const row of rows) {
-      const amount = num(row.total);
+      const status = String(row.status || "").toLowerCase();
+      // Fully refunded tickets contribute $0 net; partials keep total − refund.
+      const amount =
+        status === "refunded"
+          ? 0
+          : Math.max(0, num(row.total) - num(row.refundAmount));
+      if (amount <= 0) continue;
+      orderCount += 1;
       const method = String(row.paymentMethod || "").toLowerCase();
       if (method === "cash") cashSales += amount;
       else if (method === "card") cardSales += amount;
@@ -242,7 +252,7 @@ export class PosShiftService {
       cardSales: round2(cardSales),
       terminalSales: round2(terminalSales),
       otherSales: round2(otherSales),
-      orderCount: rows.length,
+      orderCount,
       totalSales: round2(cashSales + cardSales + terminalSales + otherSales),
     };
   }

@@ -178,21 +178,28 @@ export class PosReportsService {
 
     for (const o of completed) {
       const tip = money(o.tipAmount);
-      const brut = brutOf(o);
+      const refundAmt = money(o.refundAmount);
+      const brut = Math.max(0, brutOf(o) - Math.min(refundAmt, brutOf(o)));
       const tax = money(o.taxAmount);
+      // Reduce tax proportionally when part of the ticket was refunded.
+      const grossBefore = Math.max(0.0001, money(o.total));
+      const keepRatio = Math.max(0, Math.min(1, (grossBefore - refundAmt) / grossBefore));
+      const taxKept = round2(tax * keepRatio);
       revenue += brut;
-      taxTotal += tax;
-      subtotal += money(o.subtotal);
-      discountTotal += money(o.discountAmount) + money(o.pointsDiscount);
-      tipsTotal += tip;
-      refundTotal += money(o.refundAmount);
+      taxTotal += taxKept;
+      subtotal += round2(money(o.subtotal) * keepRatio);
+      discountTotal += round2(
+        (money(o.discountAmount) + money(o.pointsDiscount)) * keepRatio
+      );
+      tipsTotal += round2(tip * keepRatio);
+      refundTotal += refundAmt;
       if (o.guestCount) covers += Number(o.guestCount) || 0;
 
-      // Payment buckets: money received (incl. tips)
+      // Payment buckets: net money kept after refunds (incl. tips share)
       const pm = String(o.paymentMethod || "other");
       payments[pm] = payments[pm] || { count: 0, total: 0 };
       payments[pm].count += 1;
-      payments[pm].total += money(o.total);
+      payments[pm].total += round2(Math.max(0, money(o.total) - refundAmt));
 
       const ch = String(o.fulfillmentChannel || "takeaway");
       channels[ch] = channels[ch] || { count: 0, total: 0 };
@@ -201,7 +208,7 @@ export class PosReportsService {
 
       vatByChannel[ch] = vatByChannel[ch] || { brut: 0, tva: 0 };
       vatByChannel[ch]!.brut += brut;
-      vatByChannel[ch]!.tva += tax;
+      vatByChannel[ch]!.tva += taxKept;
 
       const staff = (o.staffName || "Unknown").trim() || "Unknown";
       const st = staffMap.get(staff) || { name: staff, count: 0, total: 0 };
@@ -212,9 +219,14 @@ export class PosReportsService {
       for (const item of o.items || []) {
         const key = item.productId || item.productName || "open";
         const name = item.productName || "Item";
+        const qty = money(item.quantity);
+        const refundedQty = money((item as { refundedQuantity?: unknown }).refundedQuantity);
+        const keptQty = Math.max(0, qty - refundedQty);
+        if (keptQty <= 0.0005) continue;
         const cur = products.get(key) || { name, qty: 0, total: 0 };
-        cur.qty += money(item.quantity);
-        cur.total += money(item.totalPrice);
+        const unit = qty > 0 ? money(item.totalPrice) / qty : 0;
+        cur.qty += keptQty;
+        cur.total += unit * keptQty;
         products.set(key, cur);
       }
     }
@@ -227,6 +239,17 @@ export class PosReportsService {
       channel: o.fulfillmentChannel || "takeaway",
       staffName: o.staffName || null,
       cancelledAt: o.cancelledAt?.toISOString?.() ?? o.createdAt?.toISOString?.() ?? null,
+    }));
+    const refundedOrders = refunded.map((o) => ({
+      id: o.id,
+      orderNumber: o.orderNumber,
+      total: round2(money(o.total)),
+      refundAmount: round2(money(o.refundAmount || o.total)),
+      refundReason: (o as { refundReason?: string | null }).refundReason || null,
+      channel: o.fulfillmentChannel || "takeaway",
+      staffName: o.staffName || null,
+      refundedAt: o.refundedAt?.toISOString?.() ?? o.completedAt?.toISOString?.() ?? null,
+      status: o.status,
     }));
     for (const o of cancelled) {
       cancelledTotal += money(o.total);
@@ -323,6 +346,7 @@ export class PosReportsService {
       cancelledCount: cancelled.length,
       cancelledOrders,
       refundCount: refunded.length,
+      refundedOrders,
       /** Taxable revenue / net sales (tips excluded — tips are not taxable) */
       revenue: round2(revenue),
       /** Alias of revenue for clients that want an explicit “excl. tips” field */
