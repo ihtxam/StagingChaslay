@@ -133,7 +133,7 @@ const emptyForm = (): FormState => ({
   soldByWeight: false,
   isCombo: false,
   comboSlots: [],
-  specifications: [{ id: 'default', name: 'Regular', price: 0, saleStatus: 'in_stock', isDefault: true }],
+  specifications: [{ id: 'default', name: '', price: 0, saleStatus: 'in_stock', isDefault: true }],
   modifierGroupIds: [],
   loyaltyRewardPoints: '',
 });
@@ -215,15 +215,18 @@ const parseFreePoints = (raw: string): number | null | 'too_many_digits' | 'out_
 
 type ProductTypeUi = 'standard' | 'combo' | 'open_price' | 'weighed';
 
-const productTypeLabel = (product: Product) => {
-  if (product.productType === 'combo' || (product.comboItems && product.comboItems.length)) return 'Combo';
-  if (product.soldByWeight) return 'Weighed';
-  if (product.isOpenPrice) return 'Open price';
-  return product.productType === 'standard' || !product.productType ? 'Standard' : product.productType;
-};
-
 export default function Products() {
   const { t } = useI18n();
+  const productTypeLabel = (product: Product) => {
+    if (product.productType === 'combo' || (product.comboItems && product.comboItems.length)) {
+      return t('productTypeComboShort');
+    }
+    if (product.soldByWeight) return t('productTypeWeighedShort');
+    if (product.isOpenPrice) return t('productTypeOpenPriceShort');
+    return product.productType === 'standard' || !product.productType
+      ? t('productTypeStandard')
+      : product.productType;
+  };
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -257,9 +260,9 @@ export default function Products() {
       fd.append('file', compressed);
       const res = await api.post('/merchant/media', fd);
       setForm((prev) => ({ ...prev, imageUrl: res.data.url || '' }));
-      toast.success('Image uploaded');
+      toast.success(t('imageUploaded'));
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Upload failed');
+      toast.error(error.response?.data?.error || t('uploadFailed'));
     } finally {
       setImageUploading(false);
       if (imageFileRef.current) imageFileRef.current.value = '';
@@ -277,7 +280,7 @@ export default function Products() {
       setCategories(c.data.categories || []);
       setAllModifierGroups(m.data.groups || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load products');
+      toast.error(error.response?.data?.error || t('failedLoadProducts'));
     } finally {
       setLoading(false);
     }
@@ -288,7 +291,7 @@ export default function Products() {
   }, []);
 
   const categoryName = (categoryId?: string | null) =>
-    categories.find((c) => c.id === categoryId)?.name || 'Uncategorized';
+    categories.find((c) => c.id === categoryId)?.name || t('uncategorized');
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -312,7 +315,7 @@ export default function Products() {
       }
     } catch (error: any) {
       setProducts(prev);
-      toast.error(error.response?.data?.error || 'Failed to save product order');
+      toast.error(error.response?.data?.error || t('failedSaveProductOrder'));
     } finally {
       setReordering(false);
     }
@@ -344,7 +347,18 @@ export default function Products() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm(emptyForm());
+    const base = emptyForm();
+    setForm({
+      ...base,
+      specifications: base.specifications.map((spec, i) =>
+        i === 0 ? { ...spec, name: t('default') } : spec
+      ),
+      comboSlots: [
+        emptySlot(t('comboStepMain')),
+        emptySlot(t('comboStepSide')),
+        emptySlot(t('comboStepDrink')),
+      ],
+    });
     setModalOpen(true);
   };
 
@@ -366,7 +380,7 @@ export default function Products() {
           : [
               {
                 id: 'default',
-                name: 'Default',
+                name: t('default'),
                 price: Number(full.price) || 0,
                 saleStatus: 'in_stock' as const,
                 isDefault: true,
@@ -411,7 +425,7 @@ export default function Products() {
         specifications: [
           {
             id: 'default',
-            name: 'Default',
+            name: t('default'),
             price: Number(product.price) || 0,
             saleStatus: 'in_stock',
             isDefault: true,
@@ -511,7 +525,7 @@ export default function Products() {
       soldByWeight: next === 'weighed',
       comboSlots:
         next === 'combo' && form.comboSlots.length === 0
-          ? [emptySlot('Main'), emptySlot('Side'), emptySlot('Drink')]
+          ? [emptySlot(t('comboStepMain')), emptySlot(t('comboStepSide')), emptySlot(t('comboStepDrink'))]
           : form.comboSlots,
     });
   };
@@ -519,7 +533,7 @@ export default function Products() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) {
-      toast.error('Product name is required');
+      toast.error(t('productNameRequired'));
       return;
     }
     if (!form.categoryId) {
@@ -527,43 +541,43 @@ export default function Products() {
       return;
     }
     if (form.sku.trim().length > SKU_MAX_LEN) {
-      toast.error(`Product code / SKU must be at most ${SKU_MAX_LEN} characters`);
+      toast.error(t('skuMaxLenError').replace('{n}', String(SKU_MAX_LEN)));
       return;
     }
     const parsedPoints = parseFreePoints(form.loyaltyRewardPoints);
     if (parsedPoints === 'too_many_digits') {
-      toast.error('Free points must be at most 10 digits');
+      toast.error(t('freePointsMaxDigits'));
       return;
     }
     if (parsedPoints === 'out_of_range') {
-      toast.error('Free points must be a whole number between 1 and 2147483647');
+      toast.error(t('freePointsRange'));
       return;
     }
     const stockNum = Number(form.stock);
     if (!Number.isFinite(stockNum) || stockNum < 0) {
-      toast.error('Stock cannot be negative');
+      toast.error(t('stockNegative'));
       return;
     }
     for (const spec of form.specifications) {
       if (digitCount(String(spec.price)) > MAX_MONEY_DIGITS) {
-        toast.error('Price must be at most 10 digits');
+        toast.error(t('priceMaxDigits'));
         return;
       }
     }
     if (form.price && digitCount(form.price) > MAX_MONEY_DIGITS) {
-      toast.error('Price must be at most 10 digits');
+      toast.error(t('priceMaxDigits'));
       return;
     }
     if (form.isCombo) {
       const validSlots = form.comboSlots.filter((s) => s.name.trim() && s.options.length > 0);
       if (!validSlots.length) {
-        toast.error('Add at least one combo step with products');
+        toast.error(t('comboNeedStep'));
         return;
       }
     } else if (!form.isOpenPrice) {
       const namedSizes = form.specifications.filter((s) => s.name.trim());
       if (!namedSizes.length) {
-        toast.error('Add at least one size with a name');
+        toast.error(t('sizeNeedName'));
         return;
       }
     }
@@ -572,29 +586,29 @@ export default function Products() {
       const payload = buildPayload();
       if (editingId) {
         await api.put(`/merchant/products/${editingId}`, payload);
-        toast.success('Product updated');
+        toast.success(t('productUpdated'));
       } else {
         await api.post('/merchant/products', payload);
-        toast.success('Product created');
+        toast.success(t('productCreated'));
       }
       closeModal();
       await load();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to save product');
+      toast.error(error.response?.data?.error || t('failedSaveProduct'));
     } finally {
       setSaving(false);
     }
   };
 
   const onDelete = async (id: string) => {
-    if (!confirm('Delete this product?')) return;
+    if (!confirm(t('deleteProductConfirm'))) return;
     try {
       await api.delete(`/merchant/products/${id}`);
-      toast.success('Deleted');
+      toast.success(t('deletedOk'));
       if (editingId === id) closeModal();
       await load();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Delete failed');
+      toast.error(error.response?.data?.error || t('deleteFailed'));
     }
   };
 
@@ -610,7 +624,7 @@ export default function Products() {
       a.click();
       window.URL.revokeObjectURL(url);
     } catch {
-      toast.error('Failed to download template');
+      toast.error(t('failedDownloadTemplate'));
     }
   };
 
@@ -624,12 +638,15 @@ export default function Products() {
       });
       const r = response.data;
       toast.success(
-        `Import done: +${r.categoriesCreated} categories, +${r.productsCreated} products, ~${r.productsUpdated} updated`
+        t('importDone')
+          .replace('{categories}', String(r.categoriesCreated))
+          .replace('{products}', String(r.productsCreated))
+          .replace('{updated}', String(r.productsUpdated))
       );
-      if (r.errors?.length) toast.error(`${r.errors.length} row error(s) - check file`);
+      if (r.errors?.length) toast.error(t('importRowErrors').replace('{n}', String(r.errors.length)));
       await load();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Import failed');
+      toast.error(error.response?.data?.error || t('importFailed'));
     } finally {
       setImporting(false);
       if (fileRef.current) fileRef.current.value = '';
@@ -639,7 +656,7 @@ export default function Products() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 muted text-sm">
-        Loading products…
+        {t('loadingProducts')}
       </div>
     );
   }
@@ -650,7 +667,7 @@ export default function Products() {
         <div>
           <h1 className="page-title">{t('products')}</h1>
           <p className="page-sub">
-            Catalog, sizes, modifiers, Excel import
+            {t('productsHint')}
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -660,7 +677,7 @@ export default function Products() {
             className="btn-secondary"
           >
             <Download size={14} />
-            Template
+            {t('templateShort')}
           </button>
           <button
             type="button"
@@ -669,7 +686,7 @@ export default function Products() {
             className="btn-secondary"
           >
             <FileSpreadsheet size={14} />
-            {importing ? 'Importing…' : 'Import'}
+            {importing ? t('importing') : t('importExcel')}
           </button>
           <button
             type="button"
@@ -677,7 +694,7 @@ export default function Products() {
             className="btn-primary"
           >
             <Plus size={14} />
-            Add
+            {t('addShort')}
           </button>
           <input
             ref={fileRef}
@@ -697,14 +714,14 @@ export default function Products() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search name, SKU, category…"
+          placeholder={t('searchProductsPlaceholder')}
           className="input pl-8"
         />
       </div>
 
       <section className="card">
         <h2 className="text-[11px] font-semibold uppercase tracking-wide muted mb-2">
-          Categories
+          {t('categories')}
         </h2>
         <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-6 gap-1.5">
           <button
@@ -716,7 +733,7 @@ export default function Products() {
                 : 'border-[var(--border)] bg-[var(--bg-muted)] hover:opacity-90'
             }`}
           >
-            <div className="text-[10px] opacity-80">All</div>
+            <div className="text-[10px] opacity-80">{t('all')}</div>
             <div className="mt-0.5 text-base font-semibold tabular-nums">{products.length}</div>
           </button>
           {categories.map((cat, idx) => (
@@ -817,7 +834,7 @@ export default function Products() {
                       {product.loyaltyRewardPoints != null &&
                         Number(product.loyaltyRewardPoints) >= 1 && (
                           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
-                            {product.loyaltyRewardPoints} pts free
+                            {t('ptsFreeBadge').replace('{n}', String(product.loyaltyRewardPoints))}
                           </span>
                         )}
                     </div>
@@ -826,16 +843,16 @@ export default function Products() {
                     )}
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
                       <span className="font-semibold text-emerald-700">{money(product.price)}</span>
-                      <span className="text-slate-500">SKU: {product.sku || '-'}</span>
+                      <span className="text-slate-500">{t('skuColon').replace('{sku}', product.sku || '-')}</span>
                       <span className={stockOk ? 'text-emerald-600' : 'text-amber-600'}>
-                        Stock: {product.stock}
+                        {t('stockColon').replace('{n}', String(product.stock))}
                       </span>
                       <span className="text-slate-500">{categoryName(product.categoryId)}</span>
                       {(extras.length > 0 || tiers.length > 0) && (
                         <span className="text-slate-400">
-                          {tiers.length ? `${tiers.length} tiers` : ''}
+                          {tiers.length ? t('tiersCount').replace('{n}', String(tiers.length)) : ''}
                           {tiers.length && extras.length ? ' · ' : ''}
-                          {extras.length ? `${extras.length} extras` : ''}
+                          {extras.length ? t('extrasCount').replace('{n}', String(extras.length)) : ''}
                         </span>
                       )}
                     </div>
@@ -850,7 +867,7 @@ export default function Products() {
                     type="button"
                     onClick={() => void openEdit(product)}
                     className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
-                    title="Edit"
+                    title={t('edit')}
                   >
                     <Edit2 size={18} />
                   </button>
@@ -858,7 +875,7 @@ export default function Products() {
                     type="button"
                     onClick={() => void onDelete(product.id)}
                     className="rounded-lg p-2 text-red-600 hover:bg-red-50"
-                    title="Delete"
+                    title={t('delete')}
                   >
                     <Trash2 size={18} />
                   </button>
@@ -869,7 +886,7 @@ export default function Products() {
                 <div className="border-t border-[var(--border)] bg-[var(--bg-muted)] p-3 space-y-3">
                   {sizes.length > 0 && (
                     <div>
-                      <h4 className="mb-1.5 text-xs font-semibold">Sizes</h4>
+                      <h4 className="mb-1.5 text-xs font-semibold">{t('sizes')}</h4>
                       <div className="grid gap-1.5 sm:grid-cols-2">
                         {sizes.map((size, idx) => (
                           <div
@@ -877,8 +894,8 @@ export default function Products() {
                             className="flex items-center justify-between rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs"
                           >
                             <span>
-                              {size.name || 'Size'}
-                              {size.isDefault ? ' · default' : ''}
+                              {size.name || t('sizeFallback')}
+                              {size.isDefault ? t('sizeDefaultSuffix') : ''}
                             </span>
                             <span className="font-semibold">{money(size.price)}</span>
                           </div>
@@ -889,14 +906,14 @@ export default function Products() {
 
                   {tiers.length > 0 && (
                     <div>
-                      <h4 className="mb-1.5 text-xs font-semibold">Bulk pricing</h4>
+                      <h4 className="mb-1.5 text-xs font-semibold">{t('bulkPricing')}</h4>
                       <div className="grid gap-1.5 sm:grid-cols-2">
                         {tiers.map((tier, idx) => (
                           <div
                             key={`${product.id}-tier-${idx}`}
                             className="flex items-center justify-between rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs"
                           >
-                            <span>From {tier.minQty} units</span>
+                            <span>{t('fromUnits').replace('{n}', String(tier.minQty))}</span>
                             <span className="font-semibold">{money(tier.price)}</span>
                           </div>
                         ))}
@@ -906,7 +923,7 @@ export default function Products() {
 
                   {extras.length > 0 && (
                     <div>
-                      <h4 className="mb-1.5 text-xs font-semibold">Add-ons</h4>
+                      <h4 className="mb-1.5 text-xs font-semibold">{t('addOns')}</h4>
                       <div className="grid gap-1.5 sm:grid-cols-2">
                         {extras.map((extra) => (
                           <div
@@ -922,14 +939,17 @@ export default function Products() {
                   )}
 
                   {!sizes.length && !tiers.length && !extras.length && (
-                    <p className="text-xs muted">No sizes, extras, or bulk tiers configured.</p>
+                    <p className="text-xs muted">{t('noSizeExtraBulk')}</p>
                   )}
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 text-sm">
                     <InfoCard label={t('category')} value={categoryName(product.categoryId)} />
                     <InfoCard label={t('type')} value={productTypeLabel(product)} />
                     <InfoCard label={t('productCode')} value={product.sku || '-'} />
-                    <InfoCard label={t('stock')} value={`${product.stock} units`} />
+                    <InfoCard
+                      label={t('stock')}
+                      value={t('stockUnits').replace('{n}', String(product.stock))}
+                    />
                     <InfoCard label={t('barcode')} value={product.barcode || '-'} />
                   </div>
                 </div>
@@ -1002,7 +1022,7 @@ export default function Products() {
                     value={formProductType}
                     onChange={(e) => setProductType(e.target.value as ProductTypeUi)}
                   >
-                    <option value="standard">Standard</option>
+                    <option value="standard">{t('productTypeStandard')}</option>
                     <option value="combo">{t('comboMeal')}</option>
                     <option value="open_price">{t('openPriceItem')}</option>
                     <option value="weighed">{t('weighingProduct')}</option>
@@ -1011,16 +1031,18 @@ export default function Products() {
                 <Field label={t('productCode')}>
                   <input
                     className="field-input"
-                    placeholder="For quick search when ordering"
+                    placeholder={t('skuPlaceholder')}
                     value={form.sku}
                     maxLength={SKU_MAX_LEN}
                     onChange={(e) =>
                       setForm({ ...form, sku: e.target.value.slice(0, SKU_MAX_LEN) })
                     }
                   />
-                  <p className="mt-1 text-xs muted">Max {SKU_MAX_LEN} characters</p>
+                  <p className="mt-1 text-xs muted">
+                    {t('maxCharacters').replace('{n}', String(SKU_MAX_LEN))}
+                  </p>
                 </Field>
-                <Field label="Stock">
+                <Field label={t('stock')}>
                   <input
                     className="field-input"
                     type="number"
@@ -1043,7 +1065,7 @@ export default function Products() {
                 />
               </Field>
 
-              <Field label="Product photo">
+              <Field label={t('productPhoto')}>
                 <div className="flex flex-wrap items-center gap-3">
                   {form.imageUrl ? (
                     <img
@@ -1063,7 +1085,11 @@ export default function Products() {
                       disabled={imageUploading}
                       onClick={() => imageFileRef.current?.click()}
                     >
-                      {imageUploading ? 'Uploading…' : form.imageUrl ? 'Replace photo' : 'Upload photo'}
+                      {imageUploading
+                        ? t('uploading')
+                        : form.imageUrl
+                          ? t('replacePhoto')
+                          : t('uploadPhoto')}
                     </button>
                     {form.imageUrl ? (
                       <button
@@ -1071,7 +1097,7 @@ export default function Products() {
                         className="btn-secondary text-sm"
                         onClick={() => setForm({ ...form, imageUrl: '' })}
                       >
-                        Remove
+                        {t('remove')}
                       </button>
                     ) : null}
                   </div>
@@ -1083,16 +1109,16 @@ export default function Products() {
                     onChange={(e) => void onUploadProductImage(e.target.files?.[0] || null)}
                   />
                 </div>
-                <p className="mt-1 text-xs muted">Compressed to ≤350 KB for the online shop.</p>
+                <p className="mt-1 text-xs muted">{t('photoHint')}</p>
               </Field>
 
-              <Field label="Free with points (optional)">
+              <Field label={t('freeWithPoints')}>
                 <input
                   className="field-input"
                   type="text"
                   inputMode="numeric"
                   autoComplete="off"
-                  placeholder="e.g. 200 - leave empty for none"
+                  placeholder={t('freeWithPointsPlaceholder')}
                   value={form.loyaltyRewardPoints}
                   onChange={(e) => {
                     // text + sanitize: avoids HTML number inputs silently blocking submit when > max
@@ -1100,20 +1126,22 @@ export default function Products() {
                   }}
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  Customers with at least this many points can add the product free (pays with points). Whole
-                  number, max 10 digits (up to {MAX_POINTS.toLocaleString('en-US')}).
+                  {t('freeWithPointsHint').replace('{max}', MAX_POINTS.toLocaleString('en-US'))}
                 </p>
                 {form.loyaltyRewardPoints &&
                 parseFreePoints(form.loyaltyRewardPoints) === 'out_of_range' ? (
                   <p className="mt-1 text-xs font-medium text-rose-600">
-                    Enter a whole number between 1 and {MAX_POINTS.toLocaleString('en-US')}.
+                    {t('freeWithPointsRangeError').replace(
+                      '{max}',
+                      MAX_POINTS.toLocaleString('en-US')
+                    )}
                   </p>
                 ) : null}
               </Field>
 
               <div>
                 <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide muted">
-                  
+                  {t('buttonColor')}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {BUTTON_COLORS.map((color) => (
@@ -1138,7 +1166,7 @@ export default function Products() {
 
               {form.isCombo && (
                 <div className="rounded-md border border-[var(--border)] p-3 space-y-3">
-                  <Field label={`${t('salePrice')} (combo)`}>
+                  <Field label={t('salePriceCombo')}>
                     <div className="relative max-w-xs">
                       <input
                         className="field-input money-input pr-14"
@@ -1174,7 +1202,10 @@ export default function Products() {
                       onClick={() =>
                         setForm({
                           ...form,
-                          comboSlots: [...form.comboSlots, emptySlot(`Choice ${form.comboSlots.length + 1}`)],
+                          comboSlots: [
+                            ...form.comboSlots,
+                            emptySlot(t('choiceN').replace('{n}', String(form.comboSlots.length + 1))),
+                          ],
                         })
                       }
                     >
@@ -1329,7 +1360,7 @@ export default function Products() {
                       })
                     }
                   >
-                    <Plus size={14} /> Size
+                    <Plus size={14} /> {t('addSizeShort')}
                   </button>
                 </div>
                 <div className="space-y-2">
@@ -1452,7 +1483,7 @@ export default function Products() {
                     onClick={() => setModifierPickerOpen(true)}
                     className="btn-primary !py-1 !text-xs"
                   >
-                    <Plus size={14} /> Add
+                    <Plus size={14} /> {t('addShort')}
                   </button>
                 </div>
                 <div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
@@ -1466,7 +1497,7 @@ export default function Products() {
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{g.title}</p>
                         <p className="text-[11px] muted truncate">
-                          {(g.options || []).map((o) => o.name).join(' · ') || 'No options'}
+                          {(g.options || []).map((o) => o.name).join(' · ') || t('noOptions')}
                         </p>
                       </div>
                       <button
@@ -1523,7 +1554,7 @@ export default function Products() {
             <div className="max-h-72 overflow-y-auto divide-y divide-[var(--border)]">
               {allModifierGroups.filter((g) => !form.modifierGroupIds.includes(g.id)).length === 0 && (
                 <p className="p-6 text-center text-xs muted">
-                  No more groups available. Create one under Modifiers.
+                  {t('noMoreModifierGroups')}
                 </p>
               )}
               {allModifierGroups
@@ -1543,7 +1574,12 @@ export default function Products() {
                     <span>
                       <span className="block text-sm font-medium">{g.title}</span>
                       <span className="text-[11px] muted">
-                        {g.selectionType || 'optional'} · {(g.options || []).length} options
+                        {t('modifierGroupMeta')
+                          .replace(
+                            '{type}',
+                            g.selectionType === 'required' ? t('required') : t('optional')
+                          )
+                          .replace('{n}', String((g.options || []).length))}
                       </span>
                     </span>
                     <Plus size={14} className="muted" />
@@ -1556,7 +1592,7 @@ export default function Products() {
                 onClick={() => setModifierPickerOpen(false)}
                 className="btn-primary"
               >
-                Done
+                {t('done')}
               </button>
             </div>
           </div>
