@@ -88,6 +88,19 @@ interface SettingsData {
     fromEmail?: string | null;
     fromName?: string | null;
   } | null;
+  emailBrevoSettings?: {
+    enabled?: boolean;
+    apiKeySet?: boolean;
+    apiKeyMasked?: string;
+    fromEmail?: string | null;
+    fromName?: string | null;
+    dailyLimit?: number | null;
+    monthlyLimit?: number | null;
+    dailySent?: number;
+    dailyPeriod?: string | null;
+    monthlySent?: number;
+    monthlyPeriod?: string | null;
+  } | null;
   marketingSettings?: {
     reorderReminderEnabled?: boolean;
     reorderReminderDays?: number;
@@ -277,8 +290,26 @@ export default function Settings() {
   const [cardFeeFixed, setCardFeeFixed] = useState('0');
   const [cardFeePercent, setCardFeePercent] = useState('0');
   const [smtpPassword, setSmtpPassword] = useState('');
+  const [brevoApiKey, setBrevoApiKey] = useState('');
   const [testEmailTo, setTestEmailTo] = useState('');
   const [testingEmail, setTestingEmail] = useState(false);
+  const [brevoUsage, setBrevoUsage] = useState<{
+    dailySent?: number;
+    dailyLimit?: number | null;
+    dailyRemaining?: number | null;
+    monthlySent?: number;
+    monthlyLimit?: number | null;
+    monthlyRemaining?: number | null;
+    dailyPeriod?: string | null;
+    monthlyPeriod?: string | null;
+    account?: {
+      email?: string;
+      planCredits?: number | null;
+      planCreditsType?: string | null;
+      planType?: string | null;
+      error?: string;
+    } | null;
+  } | null>(null);
   const [terminals, setTerminals] = useState<TerminalRow[]>([]);
   const [terminalId, setTerminalId] = useState('');
   const [terminalName, setTerminalName] = useState('');
@@ -486,7 +517,22 @@ export default function Settings() {
       {
         id: 'email-smtp',
         tab: 'email',
-        keywords: ['email', 'smtp', 'marketing', t('settingsEmail')],
+        keywords: [
+          'email',
+          'smtp',
+          'brevo',
+          'sendinblue',
+          'api',
+          'marketing',
+          'newsletter',
+          t('settingsEmail'),
+          t('settingsBrevo'),
+        ],
+      },
+      {
+        id: 'email-brevo',
+        tab: 'email',
+        keywords: ['brevo', 'sendinblue', 'api key', 'newsletter', t('settingsBrevo')],
       },
       {
         id: 'language-panel',
@@ -550,6 +596,12 @@ export default function Settings() {
         setMerchantAccount(a.merchantAccount || '');
         setClientId(a.clientId || '');
         setTerminals(terminalsRes.data.terminals || []);
+        try {
+          const usageRes = await api.get('/merchant/marketing/brevo-usage');
+          setBrevoUsage(usageRes.data.usage || null);
+        } catch {
+          setBrevoUsage(null);
+        }
 
         const stored = localStorage.getItem('manupos_panel_lang');
         if (
@@ -618,6 +670,14 @@ export default function Settings() {
           fromEmail: settings.emailSmtpSettings?.fromEmail || '',
           fromName: settings.emailSmtpSettings?.fromName || '',
         },
+        emailBrevoSettings: {
+          enabled: !!settings.emailBrevoSettings?.enabled,
+          apiKey: brevoApiKey || undefined,
+          fromEmail: settings.emailBrevoSettings?.fromEmail || '',
+          fromName: settings.emailBrevoSettings?.fromName || '',
+          dailyLimit: settings.emailBrevoSettings?.dailyLimit ?? null,
+          monthlyLimit: settings.emailBrevoSettings?.monthlyLimit ?? null,
+        },
         marketingSettings: {
           reorderReminderEnabled: !!settings.marketingSettings?.reorderReminderEnabled,
           reorderReminderDays: Number(settings.marketingSettings?.reorderReminderDays) || 5,
@@ -645,6 +705,14 @@ export default function Settings() {
         }
       } catch {
         if (next.panelLanguage) setLocale(next.panelLanguage as Locale);
+      }
+      setSmtpPassword('');
+      setBrevoApiKey('');
+      try {
+        const usageRes = await api.get('/merchant/marketing/brevo-usage');
+        setBrevoUsage(usageRes.data.usage || null);
+      } catch {
+        /* ignore */
       }
       toast.success(t('settingsSaved'));
     } catch (error: any) {
@@ -2121,6 +2189,14 @@ export default function Settings() {
 
           {tab === 'email' && (
             <form onSubmit={onSave} className="space-y-5">
+              <div
+                id="email-smtp"
+                className={
+                  isSectionHighlight('email-smtp')
+                    ? 'rounded-xl ring-2 ring-teal-500/40'
+                    : undefined
+                }
+              >
               <Section title={t('settingsSmtp')} description={t('settingsSmtpHint')}>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
                   <input
@@ -2300,6 +2376,253 @@ export default function Settings() {
                   </button>
                 </div>
               </Section>
+              </div>
+
+              <div
+                id="email-brevo"
+                className={
+                  isSectionHighlight('email-brevo')
+                    ? 'rounded-xl ring-2 ring-teal-500/40'
+                    : undefined
+                }
+              >
+              <Section title={t('settingsBrevo')} description={t('settingsBrevoHint')}>
+                <p className="text-xs muted -mt-1">{t('settingsBrevoPriorityHint')}</p>
+                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!settings.emailBrevoSettings?.enabled}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        emailBrevoSettings: {
+                          ...(settings.emailBrevoSettings || {}),
+                          enabled: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium block">{t('brevoEnabled')}</span>
+                    <span className="text-xs muted">{t('brevoEnabledHint')}</span>
+                  </span>
+                </label>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field
+                    label={t('brevoApiKey')}
+                    hint={
+                      settings.emailBrevoSettings?.apiKeySet
+                        ? `${t('brevoApiKeySetHint')} ${settings.emailBrevoSettings.apiKeyMasked || ''}`
+                        : t('brevoApiKeyCreateHint')
+                    }
+                  >
+                    <input
+                      className="input"
+                      type="password"
+                      value={brevoApiKey}
+                      onChange={(e) => setBrevoApiKey(e.target.value)}
+                      placeholder={
+                        settings.emailBrevoSettings?.apiKeySet ? '••••••••' : 'xkeysib-…'
+                      }
+                      autoComplete="new-password"
+                    />
+                  </Field>
+                  <Field label={t('smtpFromEmail')}>
+                    <input
+                      className="input"
+                      type="email"
+                      value={settings.emailBrevoSettings?.fromEmail || ''}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          emailBrevoSettings: {
+                            ...(settings.emailBrevoSettings || {}),
+                            fromEmail: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="noreply@yourshop.ch"
+                    />
+                  </Field>
+                  <Field label={t('smtpFromName')}>
+                    <input
+                      className="input"
+                      value={settings.emailBrevoSettings?.fromName || ''}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          emailBrevoSettings: {
+                            ...(settings.emailBrevoSettings || {}),
+                            fromName: e.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label={t('brevoDailyLimit')} hint={t('brevoLimitHint')}>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      value={settings.emailBrevoSettings?.dailyLimit ?? ''}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setSettings({
+                          ...settings,
+                          emailBrevoSettings: {
+                            ...(settings.emailBrevoSettings || {}),
+                            dailyLimit: raw === '' ? null : Number(raw) || null,
+                          },
+                        });
+                      }}
+                      placeholder="e.g. 300"
+                    />
+                  </Field>
+                  <Field label={t('brevoMonthlyLimit')} hint={t('brevoLimitHint')}>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      value={settings.emailBrevoSettings?.monthlyLimit ?? ''}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setSettings({
+                          ...settings,
+                          emailBrevoSettings: {
+                            ...(settings.emailBrevoSettings || {}),
+                            monthlyLimit: raw === '' ? null : Number(raw) || null,
+                          },
+                        });
+                      }}
+                      placeholder="e.g. 5000"
+                    />
+                  </Field>
+                </div>
+
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{t('brevoUsageTitle')}</p>
+                    <button
+                      type="button"
+                      className="btn-secondary text-xs"
+                      onClick={async () => {
+                        try {
+                          const usageRes = await api.get('/merchant/marketing/brevo-usage');
+                          setBrevoUsage(usageRes.data.usage || null);
+                          toast.success(t('brevoUsageRefreshed'));
+                        } catch (error: any) {
+                          toast.error(error.response?.data?.error || t('brevoUsageFailed'));
+                        }
+                      }}
+                    >
+                      {t('brevoRefreshUsage')}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 text-sm">
+                    <div className="rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide muted">
+                        {t('brevoToday')}
+                        {brevoUsage?.dailyPeriod ? ` · ${brevoUsage.dailyPeriod}` : ''}
+                      </p>
+                      <p className="mt-0.5 font-semibold tabular-nums">
+                        {brevoUsage?.dailySent ?? settings.emailBrevoSettings?.dailySent ?? 0}
+                        {brevoUsage?.dailyLimit != null ||
+                        settings.emailBrevoSettings?.dailyLimit != null
+                          ? ` / ${
+                              brevoUsage?.dailyLimit ??
+                              settings.emailBrevoSettings?.dailyLimit
+                            }`
+                          : ` · ${t('brevoNoLocalLimit')}`}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide muted">
+                        {t('brevoThisMonth')}
+                        {brevoUsage?.monthlyPeriod ? ` · ${brevoUsage.monthlyPeriod}` : ''}
+                      </p>
+                      <p className="mt-0.5 font-semibold tabular-nums">
+                        {brevoUsage?.monthlySent ??
+                          settings.emailBrevoSettings?.monthlySent ??
+                          0}
+                        {brevoUsage?.monthlyLimit != null ||
+                        settings.emailBrevoSettings?.monthlyLimit != null
+                          ? ` / ${
+                              brevoUsage?.monthlyLimit ??
+                              settings.emailBrevoSettings?.monthlyLimit
+                            }`
+                          : ` · ${t('brevoNoLocalLimit')}`}
+                      </p>
+                    </div>
+                  </div>
+                  {brevoUsage?.account?.planCredits != null ? (
+                    <p className="text-xs muted">
+                      {t('brevoAccountCredits')}:{' '}
+                      <span className="font-medium text-[var(--text)]">
+                        {brevoUsage.account.planCredits}
+                      </span>
+                      {brevoUsage.account.planType
+                        ? ` (${brevoUsage.account.planType})`
+                        : ''}
+                    </p>
+                  ) : null}
+                  {brevoUsage?.account?.error ? (
+                    <p className="text-xs text-amber-800">{brevoUsage.account.error}</p>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-2 items-end">
+                  <Field label={t('smtpTestTo')}>
+                    <input
+                      className="input"
+                      type="email"
+                      value={testEmailTo}
+                      onChange={(e) => setTestEmailTo(e.target.value)}
+                      placeholder={settings.email || 'you@example.com'}
+                    />
+                  </Field>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={testingEmail}
+                    onClick={async () => {
+                      if (settings.emailSmtpSettings?.enabled) {
+                        toast.error(t('brevoTestSmtpBlocks'));
+                        return;
+                      }
+                      setTestingEmail(true);
+                      try {
+                        await api.put('/merchant/settings', {
+                          emailBrevoSettings: {
+                            enabled: true,
+                            apiKey: brevoApiKey || undefined,
+                            fromEmail: settings.emailBrevoSettings?.fromEmail || '',
+                            fromName: settings.emailBrevoSettings?.fromName || '',
+                            dailyLimit: settings.emailBrevoSettings?.dailyLimit ?? null,
+                            monthlyLimit: settings.emailBrevoSettings?.monthlyLimit ?? null,
+                          },
+                        });
+                        await api.post('/merchant/marketing/test-email', {
+                          to: testEmailTo || settings.email,
+                        });
+                        toast.success(t('smtpTestSent'));
+                        setBrevoApiKey('');
+                        const usageRes = await api.get('/merchant/marketing/brevo-usage');
+                        setBrevoUsage(usageRes.data.usage || null);
+                        const refreshed = await api.get('/merchant/settings');
+                        if (refreshed.data?.settings) setSettings(refreshed.data.settings);
+                      } catch (error: any) {
+                        toast.error(error.response?.data?.error || t('smtpTestFailed'));
+                      } finally {
+                        setTestingEmail(false);
+                      }
+                    }}
+                  >
+                    {testingEmail ? t('saving') : t('brevoSendTest')}
+                  </button>
+                </div>
+              </Section>
+              </div>
 
               <Section title={t('reorderReminder')} description={t('reorderReminderHint')}>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">

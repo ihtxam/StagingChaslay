@@ -80,6 +80,26 @@ router.get("/email-status", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/marketing/brevo-usage
+ * Local daily/monthly counters + live Brevo account credits (when API key set).
+ */
+router.get("/brevo-usage", async (req: Request, res: Response) => {
+  try {
+    const usage = await EmailService.getMerchantBrevoUsage(req.merchantId!);
+    res.json({ success: true, usage });
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : "Failed";
+    const needsMigrate =
+      /email_brevo_settings/i.test(raw) && /does not exist|column/i.test(raw);
+    res.status(needsMigrate ? 400 : 500).json({
+      error: needsMigrate
+        ? "Database is missing email_brevo_settings. Run backend/sql/ensure-merchant-brevo-settings.sql"
+        : raw,
+    });
+  }
+});
+
+/**
  * POST /api/merchant/marketing/test-email
  */
 router.post("/test-email", async (req: Request, res: Response) => {

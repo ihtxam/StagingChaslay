@@ -1,5 +1,10 @@
 import { getDb, schema } from "@/db";
-import type { VacationSettings, MerchantSmtpSettings, MarketingSettings } from "@/db/schema";
+import type {
+  VacationSettings,
+  MerchantSmtpSettings,
+  MerchantBrevoSettings,
+  MarketingSettings,
+} from "@/db/schema";
 import { eq, and, or } from "drizzle-orm";
 import { normalizeCustomDomain } from "@/services/cms.service";
 import { normalizeVacationSettings } from "@/lib/vacation";
@@ -115,6 +120,7 @@ export class MerchantSettingsService {
       deliveryMenuMarkup: merchant.deliveryMenuMarkup ?? "0",
       vacationSettings: normalizeVacationSettings(merchant.vacationSettings),
       emailSmtpSettings: MarketingService.getSmtpPublic(merchant.emailSmtpSettings),
+      emailBrevoSettings: MarketingService.getBrevoPublic(merchant.emailBrevoSettings),
       marketingSettings: MarketingService.normalizeMarketing(merchant.marketingSettings),
       shopPathUrl: merchant.slug ? `https://${shopHost}/${merchant.slug}` : null,
       shopSubdomainUrl: merchant.subdomain ? `https://${merchant.subdomain}.${apex}` : null,
@@ -197,6 +203,7 @@ export class MerchantSettingsService {
       deliveryMenuMarkup?: number;
       vacationSettings?: VacationSettings | null;
       emailSmtpSettings?: MerchantSmtpSettings | null;
+      emailBrevoSettings?: MerchantBrevoSettings | null;
       marketingSettings?: MarketingSettings | null;
       adyenMerchantAccount?: string;
       adyenApiKey?: string;
@@ -364,6 +371,22 @@ export class MerchantSettingsService {
         if (prev.password) next.password = prev.password;
       }
       patch.emailSmtpSettings = next;
+    }
+    if (updates.emailBrevoSettings !== undefined) {
+      const next = MarketingService.normalizeBrevo(updates.emailBrevoSettings);
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: { emailBrevoSettings: true },
+      });
+      const prev = MarketingService.normalizeBrevo(current?.emailBrevoSettings || null);
+      // Keep API key when the form omits it (blank password-style field).
+      if (!next.apiKey && prev.apiKey) next.apiKey = prev.apiKey;
+      // Preserve usage counters from DB (UI does not edit them).
+      next.dailySent = prev.dailySent;
+      next.dailyPeriod = prev.dailyPeriod;
+      next.monthlySent = prev.monthlySent;
+      next.monthlyPeriod = prev.monthlyPeriod;
+      patch.emailBrevoSettings = next;
     }
     if (updates.marketingSettings !== undefined) {
       patch.marketingSettings = MarketingService.normalizeMarketing(updates.marketingSettings);

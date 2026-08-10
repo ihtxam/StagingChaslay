@@ -1,5 +1,11 @@
 import { and, desc, eq, gte, isNotNull, lt, ne } from "drizzle-orm";
-import { getDb, schema, type MarketingSettings, type MerchantSmtpSettings } from "@/db";
+import {
+  getDb,
+  schema,
+  type MarketingSettings,
+  type MerchantBrevoSettings,
+  type MerchantSmtpSettings,
+} from "@/db";
 import { EmailService } from "@/services/email.service";
 
 const DEFAULT_REORDER_DAYS = 5;
@@ -23,6 +29,41 @@ function normalizeSmtp(raw: MerchantSmtpSettings | null | undefined): MerchantSm
     password: raw.password != null ? String(raw.password) : "",
     fromEmail: String(raw.fromEmail || "").trim(),
     fromName: String(raw.fromName || "").trim(),
+  };
+}
+
+function clampLimit(n: unknown): number | null {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v <= 0) return null;
+  return Math.min(Math.round(v), 10_000_000);
+}
+
+function normalizeBrevo(raw: MerchantBrevoSettings | null | undefined): MerchantBrevoSettings {
+  if (!raw || typeof raw !== "object") {
+    return {
+      enabled: false,
+      apiKey: "",
+      fromEmail: "",
+      fromName: "",
+      dailyLimit: null,
+      monthlyLimit: null,
+      dailySent: 0,
+      dailyPeriod: null,
+      monthlySent: 0,
+      monthlyPeriod: null,
+    };
+  }
+  return {
+    enabled: !!raw.enabled,
+    apiKey: raw.apiKey != null ? String(raw.apiKey) : "",
+    fromEmail: String(raw.fromEmail || "").trim(),
+    fromName: String(raw.fromName || "").trim(),
+    dailyLimit: clampLimit(raw.dailyLimit),
+    monthlyLimit: clampLimit(raw.monthlyLimit),
+    dailySent: Math.max(0, Math.round(Number(raw.dailySent) || 0)),
+    dailyPeriod: raw.dailyPeriod ? String(raw.dailyPeriod).slice(0, 10) : null,
+    monthlySent: Math.max(0, Math.round(Number(raw.monthlySent) || 0)),
+    monthlyPeriod: raw.monthlyPeriod ? String(raw.monthlyPeriod).slice(0, 7) : null,
   };
 }
 
@@ -99,7 +140,28 @@ export class MarketingService {
     };
   }
 
+  static getBrevoPublic(raw: MerchantBrevoSettings | null | undefined) {
+    const s = normalizeBrevo(raw);
+    const key = (s.apiKey || "").trim();
+    const masked =
+      key.length >= 8 ? `${key.slice(0, 4)}••••${key.slice(-4)}` : key ? "••••••••" : "";
+    return {
+      enabled: s.enabled,
+      apiKeySet: !!key,
+      apiKeyMasked: masked,
+      fromEmail: s.fromEmail,
+      fromName: s.fromName,
+      dailyLimit: s.dailyLimit,
+      monthlyLimit: s.monthlyLimit,
+      dailySent: s.dailySent || 0,
+      dailyPeriod: s.dailyPeriod,
+      monthlySent: s.monthlySent || 0,
+      monthlyPeriod: s.monthlyPeriod,
+    };
+  }
+
   static normalizeSmtp = normalizeSmtp;
+  static normalizeBrevo = normalizeBrevo;
   static normalizeMarketing = normalizeMarketing;
 
   static async listAudience(merchantId: string) {
@@ -284,7 +346,7 @@ export class MarketingService {
 
     const configured = await EmailService.isConfigured(merchantId);
     if (!configured) {
-      throw new Error("Configure SMTP in Settings → Email before sending");
+      throw new Error("Configure SMTP or Brevo API in Settings -> Email before sending");
     }
 
     const merchant = await db.query.merchants.findFirst({

@@ -252,6 +252,8 @@ export const merchants = pgTable(
      * { enabled, host, port, secure, user, password, fromEmail, fromName }
      */
     emailSmtpSettings: json("email_smtp_settings").$type<MerchantSmtpSettings | null>(),
+    /** Per-merchant Brevo API key + from + usage counters */
+    emailBrevoSettings: json("email_brevo_settings").$type<MerchantBrevoSettings | null>(),
     /**
      * Marketing automation:
      * { reorderReminderEnabled, reorderReminderDays, reorderReminderSubject, reorderReminderBody }
@@ -1108,6 +1110,27 @@ export type MerchantSmtpSettings = {
   password?: string | null;
   fromEmail?: string | null;
   fromName?: string | null;
+};
+
+/** Per-merchant Brevo (Sendinblue) Transactional API settings + local usage counters. */
+export type MerchantBrevoSettings = {
+  enabled?: boolean;
+  /** Brevo v3 API key (xkeysib-…) */
+  apiKey?: string | null;
+  fromEmail?: string | null;
+  fromName?: string | null;
+  /** Soft daily cap (0 / omit = no local daily block). */
+  dailyLimit?: number | null;
+  /** Soft monthly cap (0 / omit = no local monthly block). */
+  monthlyLimit?: number | null;
+  /** Emails sent today via this merchant Brevo key (local counter). */
+  dailySent?: number;
+  /** YYYY-MM-DD (Europe/Zurich) for dailySent. */
+  dailyPeriod?: string | null;
+  /** Emails sent this month via this merchant Brevo key. */
+  monthlySent?: number;
+  /** YYYY-MM for monthlySent. */
+  monthlyPeriod?: string | null;
 };
 
 export type MarketingSettings = {
