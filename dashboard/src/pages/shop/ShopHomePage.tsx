@@ -8,6 +8,7 @@ import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import { CalendarDays, ShoppingBag } from 'lucide-react';
 import {
   emptyOpenPageBlocks,
+  isFullHtmlDocument,
   isOpenPageBlocks,
   rewriteOpenPageHtml,
 } from '@/lib/cms/openpage-types';
@@ -74,6 +75,7 @@ export default function ShopHomePage() {
   }, [locale]);
 
   const showReservationsNav = Boolean(merchant?.reservationsEnabled);
+  const useIframe = isFullHtmlDocument(html);
 
   if (loading) {
     return (
@@ -95,10 +97,10 @@ export default function ShopHomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-stone-900">
+    <div className="flex min-h-screen flex-col bg-white text-stone-900">
       <ShopVacationPopup shopKey={shopKey} />
-      <header className="sticky top-0 z-20 border-b border-stone-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+      <header className="sticky top-0 z-20 shrink-0 border-b border-stone-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <p className="truncate text-sm font-semibold">{merchant.name}</p>
           <div className="flex items-center gap-2">
             <ShopLangSwitcher />
@@ -121,19 +123,27 @@ export default function ShopHomePage() {
           </div>
         </div>
       </header>
-      <div
-        className="cms-openpage-page"
-        dangerouslySetInnerHTML={{ __html: extractBody(html) }}
-      />
+
+      {/*
+        OpenPage exports rely on Tailwind Play CDN + theme <script> in <head>.
+        Injecting only the body via dangerouslySetInnerHTML drops those scripts
+        (and browsers won't run script tags from innerHTML), so the page looks
+        unstyled / "mobile". Render the full document in an iframe instead.
+      */}
+      {useIframe ? (
+        <iframe
+          title={seoTitle || merchant.name || 'Homepage'}
+          srcDoc={html}
+          className="block w-full flex-1 border-0 bg-white"
+          style={{ minHeight: 'calc(100vh - 57px)' }}
+          sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-top-navigation-by-user-activation"
+        />
+      ) : (
+        <div
+          className="cms-openpage-page flex-1"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      )}
     </div>
   );
-}
-
-/** Prefer body inner HTML so we don't nest full documents; keep styles from head. */
-function extractBody(fullHtml: string): string {
-  if (!fullHtml) return '';
-  const styleMatches = [...fullHtml.matchAll(/<style[\s\S]*?<\/style>/gi)].map((m) => m[0]);
-  const bodyMatch = fullHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-  const body = bodyMatch ? bodyMatch[1] : fullHtml;
-  return `${styleMatches.join('\n')}${body}`;
 }

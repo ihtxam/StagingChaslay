@@ -35,6 +35,10 @@ export function isOpenPageBlocks(raw: unknown): raw is OpenPageBlocks {
 }
 
 export function emptyOpenPageBlocks(title = 'Homepage'): OpenPageBlocks {
+  const safe = String(title || 'Homepage')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
   const blocks = [
     {
       id: 'block-hero',
@@ -75,17 +79,49 @@ export function emptyOpenPageBlocks(title = 'Homepage'): OpenPageBlocks {
   return {
     engine: 'openpage',
     config,
-    html: `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${title}</title></head><body><main style="font-family:system-ui;padding:2rem;text-align:center"><h1>${title}</h1><p>Open the builder and click Save to publish a designed page.</p></main></body></html>`,
+    html: `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${safe}</title>
+<style>body{margin:0;font-family:system-ui,sans-serif;background:#fafaf9;color:#1c1917}main{max-width:40rem;margin:0 auto;padding:3rem 1.25rem;text-align:center}a{display:inline-block;margin-top:1rem;padding:.75rem 1.25rem;border-radius:.5rem;background:#0f766e;color:#fff;text-decoration:none;font-weight:700}</style>
+</head><body><main><h1>${safe}</h1><p>Open the website builder, design your page, click Save in the toolbar, then Publish.</p><p><a href="/menu">Order online</a></p></main></body></html>`,
   };
 }
 
-/** Rewrite relative shop links in exported OpenPage HTML for the public storefront. */
+/**
+ * Prepare OpenPage export HTML for the public shop iframe:
+ * - rewrite shop routes to the merchant base path
+ * - open in-page links in the parent window (not trapped in the iframe)
+ * - map common CTA labels without hrefs to /menu
+ */
 export function rewriteOpenPageHtml(html: string, basePath: string): string {
   const base = (basePath || '').replace(/\/$/, '');
-  if (!base) return html;
-  return html
-    .replace(/href="\/menu"/g, `href="${base}/menu"`)
-    .replace(/href='\/menu'/g, `href='${base}/menu'`)
-    .replace(/href="\/reservations"/g, `href="${base}/reservations"`)
-    .replace(/href='\/reservations'/g, `href='${base}/reservations'`);
+  let out = html || '';
+
+  // Prefer parent navigation so Order / Menu links leave the preview iframe.
+  if (/<head[\s>]/i.test(out)) {
+    out = out.replace(/<head([^>]*)>/i, '<head$1><base target="_parent" />');
+  } else {
+    out = `<base target="_parent" />${out}`;
+  }
+
+  const menu = base ? `${base}/menu` : '/menu';
+  const reservations = base ? `${base}/reservations` : '/reservations';
+
+  out = out
+    .replace(/href="\/menu"/g, `href="${menu}"`)
+    .replace(/href='\/menu'/g, `href='${menu}'`)
+    .replace(/href="\/reservations"/g, `href="${reservations}"`)
+    .replace(/href='\/reservations'/g, `href='${reservations}'`)
+    .replace(/href="\/"/g, `href="${base || '/'}"`)
+    .replace(/href='\/'/g, `href='${base || '/'}'`);
+
+  // Buttons exported as <span> (no URL) stay non-clickable — leave as-is.
+  // When export used href="#", send guests to the menu.
+  out = out
+    .replace(/href="#"/g, `href="${menu}"`)
+    .replace(/href='#'/g, `href='${menu}'`);
+
+  return out;
+}
+
+export function isFullHtmlDocument(html: string): boolean {
+  return /<!DOCTYPE html|<html[\s>]/i.test(html || '');
 }
