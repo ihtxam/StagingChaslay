@@ -1,17 +1,26 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import {
   Ban,
   ChevronLeft,
   ChevronRight,
+  Clock,
   CreditCard,
   Info,
+  LayoutGrid,
+  List,
   MoreHorizontal,
   Printer,
   RefreshCw,
   Search,
+  ShoppingBag,
+  Store,
   Trash2,
+  Truck,
   Undo2,
+  User,
+  UtensilsCrossed,
   X,
 } from 'lucide-react';
 import api from '@/lib/api';
@@ -22,6 +31,77 @@ import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
   type RefundReasonOption,
 } from '@/components/webpos/WebPosRefundModal';
+
+function orderTimeMs(o: PosOrderForReceipt & { completedAt?: string | number | Date | null; createdAt?: string | number | Date | null }) {
+  const raw = o.completedAt || o.createdAt;
+  const n = raw ? new Date(raw as string | number | Date).getTime() : 0;
+  return Number.isFinite(n) ? n : 0;
+}
+
+function heldTimeMs(h: { updatedAt?: string | null; createdAt?: string | null }) {
+  const raw = h.updatedAt || h.createdAt;
+  const n = raw ? new Date(raw).getTime() : 0;
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Portaled menu so ⋮ actions are not clipped by the orders list scrollport. */
+function PortaledActionMenu({
+  anchor,
+  align = 'right',
+  onClose,
+  children,
+}: {
+  anchor: HTMLElement | null;
+  align?: 'left' | 'right';
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const [style, setStyle] = useState<CSSProperties>({ opacity: 0 });
+
+  useLayoutEffect(() => {
+    if (!anchor) return;
+    const place = () => {
+      const r = anchor.getBoundingClientRect();
+      const menuH = 220;
+      const openUp = r.bottom + menuH > window.innerHeight - 8;
+      setStyle({
+        position: 'fixed',
+        top: openUp ? undefined : r.bottom + 4,
+        bottom: openUp ? Math.max(8, window.innerHeight - r.top + 4) : undefined,
+        left: align === 'right' ? undefined : Math.max(8, r.left),
+        right: align === 'right' ? Math.max(8, window.innerWidth - r.right) : undefined,
+        zIndex: 80,
+        opacity: 1,
+      });
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [anchor, align]);
+
+  if (!anchor || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <>
+      <button
+        type="button"
+        className="fixed inset-0 z-[70] cursor-default bg-transparent"
+        aria-label="close"
+        onClick={onClose}
+        onWheel={onClose}
+        onTouchMove={onClose}
+      />
+      <div
+        role="menu"
+        style={style}
+        className="min-w-[11rem] rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
+      >
+        {children}
+      </div>
+    </>,
+    document.body
+  );
+}
 
 function orderPublicRefs(o: PosOrderForReceipt & { notes?: string | null }) {
   const meta = parseOrderMetaNotes(o.notes);
@@ -49,7 +129,8 @@ export type HeldRow = {
   channel?: string | null;
   cartJson: unknown;
   notes?: string | null;
-  updatedAt: string;
+  updatedAt?: string | null;
+  createdAt?: string | null;
 };
 type StatusFilter = 'active' | 'completed' | 'all';
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'platform';
@@ -156,7 +237,52 @@ type ListItem =
   | { kind: 'held'; held: HeldRow }
   | { kind: 'order'; order: PosOrder };
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE_LIST = 10;
+const PAGE_SIZE_GRID = 24;
+const ORDERS_VIEW_KEY = 'webpos_orders_view';
+
+type OrdersViewMode = 'list' | 'grid';
+
+function readOrdersView(): OrdersViewMode {
+  try {
+    return localStorage.getItem(ORDERS_VIEW_KEY) === 'grid' ? 'grid' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
+function formatOrderAge(fromMs: number, nowMs: number): string {
+  const sec = Math.max(0, Math.floor((nowMs - fromMs) / 1000));
+  if (sec < 3600) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  const days = Math.floor(sec / 86400);
+  if (days >= 1) return `${days}d`;
+  return `${Math.floor(sec / 3600)}h`;
+}
+
+function channelHeaderClass(ch?: string | null): string {
+  switch ((ch || '').toLowerCase()) {
+    case 'dine_in':
+      return 'bg-emerald-600';
+    case 'delivery':
+      return 'bg-orange-500';
+    case 'takeaway':
+      return 'bg-sky-600';
+    default:
+      return 'bg-violet-600';
+  }
+}
+
+function ChannelGlyph({ ch }: { ch?: string | null }) {
+  const c = (ch || '').toLowerCase();
+  if (c === 'dine_in') return <UtensilsCrossed size={14} />;
+  if (c === 'delivery') return <Truck size={14} />;
+  if (c === 'takeaway') return <ShoppingBag size={14} />;
+  return <Store size={14} />;
+}
 
 export default function WebPosOrdersPanel({
   open,
@@ -191,10 +317,28 @@ export default function WebPosOrdersPanel({
   const [collectBusy, setCollectBusy] = useState(false);
   const [paymentMethodDraft, setPaymentMethodDraft] = useState('cash');
   const [page, setPage] = useState(0);
+  const [ordersView, setOrdersView] = useState<OrdersViewMode>(() => readOrdersView());
+  const [nowMs, setNowMs] = useState(() => Date.now());
   /** Overflow menu for selected order (side detail breadcrumb) */
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
   /** Row-level overflow menu order id */
   const [rowMenuOrderId, setRowMenuOrderId] = useState<string | null>(null);
+  const [rowMenuAnchor, setRowMenuAnchor] = useState<HTMLElement | null>(null);
+  const [detailMenuAnchor, setDetailMenuAnchor] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ORDERS_VIEW_KEY, ordersView);
+    } catch {
+      /* ignore */
+    }
+  }, [ordersView]);
+
+  useEffect(() => {
+    if (ordersView !== 'grid') return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 15000);
+    return () => window.clearInterval(id);
+  }, [ordersView]);
 
   const paymentLabel = (method?: string | null) => {
     const m = (method || '').toLowerCase();
@@ -280,6 +424,10 @@ export default function WebPosOrdersPanel({
   const listItems = useMemo(() => {
     const items: ListItem[] = [];
     const q = search.trim().toLowerCase();
+    const heldBucket: HeldRow[] = [];
+    const activeBucket: PosOrder[] = [];
+    const doneBucket: PosOrder[] = [];
+
     if (statusFilter === 'active' || statusFilter === 'all') {
       for (const h of held) {
         if (channelFilter !== 'all') {
@@ -305,7 +453,7 @@ export default function WebPosOrdersPanel({
             .toLowerCase();
           if (!hay.includes(q)) continue;
         }
-        items.push({ kind: 'held', held: h });
+        heldBucket.push(h);
       }
       for (const o of orders) {
         if (!canCancelOrder(o)) continue;
@@ -322,7 +470,7 @@ export default function WebPosOrdersPanel({
             `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
           if (!hay.includes(q)) continue;
         }
-        items.push({ kind: 'order', order: o });
+        activeBucket.push(o);
       }
     }
     if (statusFilter === 'completed' || statusFilter === 'all') {
@@ -342,16 +490,26 @@ export default function WebPosOrdersPanel({
             `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
           if (!hay.includes(q)) continue;
         }
-        items.push({ kind: 'order', order: o });
+        doneBucket.push(o);
       }
     }
+
+    // Recent first within each bucket; ongoing/held stay above completed.
+    heldBucket.sort((a, b) => heldTimeMs(b) - heldTimeMs(a));
+    activeBucket.sort((a, b) => orderTimeMs(b) - orderTimeMs(a));
+    doneBucket.sort((a, b) => orderTimeMs(b) - orderTimeMs(a));
+
+    for (const h of heldBucket) items.push({ kind: 'held', held: h });
+    for (const o of activeBucket) items.push({ kind: 'order', order: o });
+    for (const o of doneBucket) items.push({ kind: 'order', order: o });
     return items;
   }, [held, orders, statusFilter, channelFilter, search]);
 
-  const pageCount = Math.max(1, Math.ceil(listItems.length / PAGE_SIZE));
-  const pageItems = listItems.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-  const rangeStart = listItems.length === 0 ? 0 : page * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(listItems.length, (page + 1) * PAGE_SIZE);
+  const pageSize = ordersView === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
+  const pageCount = Math.max(1, Math.ceil(listItems.length / pageSize));
+  const pageItems = listItems.slice(page * pageSize, page * pageSize + pageSize);
+  const rangeStart = listItems.length === 0 ? 0 : page * pageSize + 1;
+  const rangeEnd = Math.min(listItems.length, (page + 1) * pageSize);
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
 
   const heldCartLines = (h: HeldRow) => {
@@ -494,6 +652,13 @@ export default function WebPosOrdersPanel({
   const closeMenus = () => {
     setDetailMenuOpen(false);
     setRowMenuOrderId(null);
+    setRowMenuAnchor(null);
+    setDetailMenuAnchor(null);
+  };
+
+  const openHeldInCart = (h: HeldRow) => {
+    onResumeHeld(h);
+    onClose();
   };
 
   const selectHeld = (h: HeldRow) => {
@@ -510,91 +675,83 @@ export default function WebPosOrdersPanel({
 
   const orderActionMenu = (
     order: PosOrder,
-    opts: { onClose: () => void; align?: 'left' | 'right' }
+    opts: { onClose: () => void; align?: 'left' | 'right'; anchor: HTMLElement | null }
   ) => {
     const showPrint = !!onPrintOrder;
     const showCancel = !!(canCancel && canCancelOrder(order));
     const showRefund = !!(canRefund && canRefundOrder(order));
     const showEditPay = canEditPayment(order);
     if (!showPrint && !showCancel && !showRefund && !showEditPay) return null;
+    if (!opts.anchor) return null;
     return (
-      <>
-        <button
-          type="button"
-          className="fixed inset-0 z-20 cursor-default"
-          aria-label={t('close')}
-          onClick={opts.onClose}
-        />
-        <div
-          role="menu"
-          className={`absolute top-full z-30 mt-1 min-w-[11rem] rounded-xl border border-stone-200 bg-white py-1 shadow-lg ${
-            opts.align === 'right' ? 'right-0' : 'left-0 right-0'
-          }`}
-        >
-          {showPrint ? (
+      <PortaledActionMenu
+        anchor={opts.anchor}
+        align={opts.align}
+        onClose={opts.onClose}
+      >
+        {showPrint ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+            disabled={printing}
+            onClick={() => {
+              opts.onClose();
+              void printOne(order);
+            }}
+          >
+            <Printer size={14} className="shrink-0 text-stone-500" />
+            {t('webPosPrintReceipt')}
+          </button>
+        ) : null}
+        {showRefund ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={() => {
+              opts.onClose();
+              selectOrder(order);
+              startRefund(order);
+            }}
+          >
+            <Undo2 size={14} className="shrink-0 text-stone-500" />
+            {t('webPosRefund')}
+          </button>
+        ) : null}
+        {showEditPay ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={() => {
+              opts.onClose();
+              selectOrder(order);
+              startEditPayment(order);
+            }}
+          >
+            <CreditCard size={14} className="shrink-0 text-stone-500" />
+            {t('webPosEditPayment')}
+          </button>
+        ) : null}
+        {showCancel ? (
+          <>
+            <div className="my-1 border-t border-stone-100" />
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
-              disabled={printing}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50"
               onClick={() => {
                 opts.onClose();
-                void printOne(order);
+                setCancelFor(order);
               }}
             >
-              <Printer size={14} className="shrink-0 text-stone-500" />
-              {t('webPosPrintReceipt')}
+              <Ban size={14} className="shrink-0" />
+              {t('webPosCancelOrder')}
             </button>
-          ) : null}
-          {showRefund ? (
-            <button
-              type="button"
-              role="menuitem"
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-              onClick={() => {
-                opts.onClose();
-                selectOrder(order);
-                startRefund(order);
-              }}
-            >
-              <Undo2 size={14} className="shrink-0 text-stone-500" />
-              {t('webPosRefund')}
-            </button>
-          ) : null}
-          {showEditPay ? (
-            <button
-              type="button"
-              role="menuitem"
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-              onClick={() => {
-                opts.onClose();
-                selectOrder(order);
-                startEditPayment(order);
-              }}
-            >
-              <CreditCard size={14} className="shrink-0 text-stone-500" />
-              {t('webPosEditPayment')}
-            </button>
-          ) : null}
-          {showCancel ? (
-            <>
-              <div className="my-1 border-t border-stone-100" />
-              <button
-                type="button"
-                role="menuitem"
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50"
-                onClick={() => {
-                  opts.onClose();
-                  setCancelFor(order);
-                }}
-              >
-                <Ban size={14} className="shrink-0" />
-                {t('webPosCancelOrder')}
-              </button>
-            </>
-          ) : null}
-        </div>
-      </>
+          </>
+        ) : null}
+      </PortaledActionMenu>
     );
   };
 
@@ -660,6 +817,41 @@ export default function WebPosOrdersPanel({
               </button>
             ))}
           </div>
+          <div className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+            <button
+              type="button"
+              title={t('webPosOrdersViewList')}
+              aria-label={t('webPosOrdersViewList')}
+              aria-pressed={ordersView === 'list'}
+              onClick={() => {
+                setOrdersView('list');
+                setPage(0);
+              }}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+                ordersView === 'list' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'
+              }`}
+            >
+              <List size={16} />
+            </button>
+            <button
+              type="button"
+              title={t('webPosOrdersViewGrid')}
+              aria-label={t('webPosOrdersViewGrid')}
+              aria-pressed={ordersView === 'grid'}
+              onClick={() => {
+                setOrdersView('grid');
+                setPage(0);
+                setSelectedHeld(null);
+                setSelectedOrder(null);
+                closeMenus();
+              }}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+                ordersView === 'grid' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'
+              }`}
+            >
+              <LayoutGrid size={16} />
+            </button>
+          </div>
           <div className="ml-auto flex items-center gap-1 text-xs text-stone-500">
             <span className="tabular-nums">
               {rangeStart}-{rangeEnd} / {listItems.length}
@@ -699,9 +891,11 @@ export default function WebPosOrdersPanel({
         <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
           <div
             className={
-              selectedHeld || selectedOrder
-                ? 'hidden min-h-0 min-w-0 flex-1 overflow-y-auto lg:block'
-                : 'min-h-0 min-w-0 w-full flex-1 overflow-y-auto'
+              ordersView === 'grid'
+                ? 'min-h-0 min-w-0 w-full flex-1 overflow-y-auto'
+                : selectedHeld || selectedOrder
+                  ? 'hidden min-h-0 min-w-0 flex-1 overflow-y-auto lg:block'
+                  : 'min-h-0 min-w-0 w-full flex-1 overflow-y-auto'
             }
           >
             {loading ? (
@@ -710,6 +904,121 @@ export default function WebPosOrdersPanel({
               <div className="space-y-1 p-4 text-sm text-stone-400">
                 <p>{t('webPosNoOrders')}</p>
                 <p className="text-xs text-stone-400">{t('webPosNoOrdersHint')}</p>
+              </div>
+            ) : ordersView === 'grid' ? (
+              <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {pageItems.map((item) => {
+                  if (item.kind === 'held') {
+                    const h = item.held;
+                    const total = heldTotal(h);
+                    const lines = heldCartLines(h);
+                    const sentCount = lines.filter((l: any) => l.sentToKitchen).length;
+                    const heldMeta =
+                      h.cartJson && typeof h.cartJson === 'object' && !Array.isArray(h.cartJson)
+                        ? (h.cartJson as {
+                            tabNumber?: string | null;
+                            ticketDisplay?: string | null;
+                            tableLabel?: string | null;
+                          })
+                        : {};
+                    const idLabel =
+                      heldMeta.tableLabel ||
+                      (heldMeta.tabNumber ? `#${heldMeta.tabNumber}` : null) ||
+                      heldMeta.ticketDisplay ||
+                      h.label ||
+                      '—';
+                    const age = formatOrderAge(heldTimeMs(h) || nowMs, nowMs);
+                    return (
+                      <button
+                        key={`hg-${h.id}`}
+                        type="button"
+                        onClick={() => openHeldInCart(h)}
+                        className="flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border border-stone-200 bg-stone-900 text-left text-white shadow-sm transition hover:ring-2 hover:ring-teal-400"
+                      >
+                        <div
+                          className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${channelHeaderClass(h.channel)}`}
+                        >
+                          <span className="inline-flex min-w-0 items-center gap-1">
+                            <ChannelGlyph ch={h.channel} />
+                            <span className="truncate">{channelLabel(h.channel)}</span>
+                          </span>
+                          <span className="shrink-0 tabular-nums">{idLabel}</span>
+                        </div>
+                        <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-3">
+                          <p className="text-[11px] text-stone-400">
+                            {sentCount}/{lines.length || 0}
+                          </p>
+                          <p className="text-lg font-bold tabular-nums tracking-tight">
+                            <span className="text-stone-300 text-sm font-semibold">CHF </span>
+                            <span className="text-amber-300">{Number(total).toFixed(2)}</span>
+                          </p>
+                          <p className="text-[11px] font-semibold uppercase text-stone-300">
+                            {statusLabel(h.status)}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 border-t border-stone-700 px-2.5 py-1.5 text-[10px] text-stone-400">
+                          <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                            <User size={11} />
+                            <span className="truncate">{t('webPosOngoing')}</span>
+                          </span>
+                          <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
+                            <Clock size={11} />
+                            {age}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  }
+                  const o = item.order;
+                  const refs = orderPublicRefs(o);
+                  const idLabel =
+                    o.tableLabel ||
+                    (refs.tabNumber ? `#${refs.tabNumber}` : null) ||
+                    refs.ticketDisplay ||
+                    o.orderNumber;
+                  const age = formatOrderAge(orderTimeMs(o) || nowMs, nowMs);
+                  const itemCount = Array.isArray(o.items) ? o.items.length : 0;
+                  return (
+                    <button
+                      key={`og-${o.id}`}
+                      type="button"
+                      onClick={() => selectOrder(o)}
+                      className="flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border border-stone-200 bg-stone-900 text-left text-white shadow-sm transition hover:ring-2 hover:ring-teal-400"
+                    >
+                      <div
+                        className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${channelHeaderClass(o.channel)}`}
+                      >
+                        <span className="inline-flex min-w-0 items-center gap-1">
+                          <ChannelGlyph ch={o.channel} />
+                          <span className="truncate">{channelLabel(o.channel)}</span>
+                        </span>
+                        <span className="shrink-0 tabular-nums">{idLabel}</span>
+                      </div>
+                      <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-3">
+                        <p className="text-[11px] text-stone-400">{itemCount}</p>
+                        <p className="text-lg font-bold tabular-nums tracking-tight">
+                          <span className="text-stone-300 text-sm font-semibold">CHF </span>
+                          <span className="text-amber-300">{Number(o.total).toFixed(2)}</span>
+                        </p>
+                        <p className="text-[11px] font-semibold uppercase text-stone-300">
+                          {canCollectPayment(o)
+                            ? t('webPosAwaitingPayment')
+                            : statusLabel(o.status)}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 border-t border-stone-700 px-2.5 py-1.5 text-[10px] text-stone-400">
+                        <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                          <User size={11} />
+                          <span className="truncate">{o.customerName || o.staffName || '—'}</span>
+                        </span>
+                        <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
+                          <Clock size={11} />
+                          {age}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <ul className="divide-y divide-stone-100">
@@ -742,7 +1051,7 @@ export default function WebPosOrdersPanel({
                                   {h.label || t('webPosHeldOrder')}
                                 </p>
                                 <p className="mt-0.5 text-xs text-stone-500">
-                                  {new Date(h.updatedAt).toLocaleString()}
+                                  {new Date(h.updatedAt || h.createdAt || Date.now()).toLocaleString()}
                                 </p>
                               </div>
                               <span className="shrink-0 text-sm font-bold tabular-nums text-teal-700">
@@ -888,8 +1197,17 @@ export default function WebPosOrdersPanel({
                             aria-expanded={rowMenuOpen}
                             onClick={(e) => {
                               e.stopPropagation();
+                              const el = e.currentTarget as HTMLElement;
                               setDetailMenuOpen(false);
-                              setRowMenuOrderId((id) => (id === o.id ? null : o.id));
+                              setDetailMenuAnchor(null);
+                              setRowMenuOrderId((id) => {
+                                if (id === o.id) {
+                                  setRowMenuAnchor(null);
+                                  return null;
+                                }
+                                setRowMenuAnchor(el);
+                                return o.id;
+                              });
                               setSelectedOrder(o);
                               setSelectedHeld(null);
                             }}
@@ -897,8 +1215,17 @@ export default function WebPosOrdersPanel({
                               if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                const el = e.currentTarget as HTMLElement;
                                 setDetailMenuOpen(false);
-                                setRowMenuOrderId((id) => (id === o.id ? null : o.id));
+                                setDetailMenuAnchor(null);
+                                setRowMenuOrderId((id) => {
+                                  if (id === o.id) {
+                                    setRowMenuAnchor(null);
+                                    return null;
+                                  }
+                                  setRowMenuAnchor(el);
+                                  return o.id;
+                                });
                                 setSelectedOrder(o);
                                 setSelectedHeld(null);
                               }
@@ -913,7 +1240,11 @@ export default function WebPosOrdersPanel({
                       {rowMenuOpen
                         ? orderActionMenu(o, {
                             align: 'right',
-                            onClose: () => setRowMenuOrderId(null),
+                            anchor: rowMenuAnchor,
+                            onClose: () => {
+                              setRowMenuOrderId(null);
+                              setRowMenuAnchor(null);
+                            },
                           })
                         : null}
                     </li>
@@ -1015,9 +1346,18 @@ export default function WebPosOrdersPanel({
                     <button
                       type="button"
                       className="flex w-full items-center gap-2 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-left hover:bg-stone-50"
-                      onClick={() => {
+                      onClick={(e) => {
                         setRowMenuOrderId(null);
-                        setDetailMenuOpen((v) => !v);
+                        setRowMenuAnchor(null);
+                        const el = e.currentTarget;
+                        setDetailMenuOpen((v) => {
+                          if (v) {
+                            setDetailMenuAnchor(null);
+                            return false;
+                          }
+                          setDetailMenuAnchor(el);
+                          return true;
+                        });
                       }}
                       title={t('webPosMoreActions')}
                       aria-haspopup="menu"
@@ -1044,7 +1384,11 @@ export default function WebPosOrdersPanel({
                     </button>
                     {detailMenuOpen
                       ? orderActionMenu(selectedOrder, {
-                          onClose: () => setDetailMenuOpen(false),
+                          anchor: detailMenuAnchor,
+                          onClose: () => {
+                            setDetailMenuOpen(false);
+                            setDetailMenuAnchor(null);
+                          },
                         })
                       : null}
                   </div>

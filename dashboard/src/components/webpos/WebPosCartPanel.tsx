@@ -277,12 +277,33 @@ export default function WebPosCartPanel({
         </div>
       ) : null}
 
-      {/* Cart overflow menu — ⋮ on the right */}
+      {/* Table / order type + ⋮ on one line */}
       <div className="relative shrink-0 border-b border-stone-100 px-2 py-1.5">
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {tableLabel ? (
+              <span className="inline-flex max-w-full items-center truncate rounded-lg bg-sky-100 px-2.5 py-1.5 text-xs font-bold text-sky-900">
+                {t('table')} {tableLabel}
+              </span>
+            ) : tabNumber ? (
+              <span className="inline-flex max-w-full items-center truncate rounded-lg bg-indigo-100 px-2.5 py-1.5 text-xs font-bold text-indigo-900">
+                {t('webPosTab')} #{tabNumber}
+              </span>
+            ) : (
+              <span className="inline-flex max-w-full items-center truncate rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-700">
+                {channel === 'dine_in'
+                  ? t('dineIn')
+                  : channel === 'delivery'
+                    ? t('delivery')
+                    : channel === 'takeaway'
+                      ? t('takeaway')
+                      : t('webPosOrderType')}
+              </span>
+            )}
+          </div>
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
             onClick={() => setMoreOpen((v) => !v)}
             title={t('webPosMoreActions')}
             aria-haspopup="menu"
