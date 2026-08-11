@@ -154,16 +154,21 @@ export default function Orders() {
     [orders]
   );
 
-  const board = useMemo(
-    () => ({
-      new: online.filter((o) => isAwaiting(o.status)),
-      kitchen: online.filter((o) => o.status === 'accepted' || o.status === 'preparing'),
-      ready: online.filter((o) => o.status === 'ready' || o.status === 'out_for_delivery'),
-      programmed: orders.filter(isProgrammed),
-      all: orders,
-    }),
-    [online, orders]
-  );
+  const board = useMemo(() => {
+    const byNewest = (a: Order, b: Order) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return {
+      new: online.filter((o) => isAwaiting(o.status)).sort(byNewest),
+      kitchen: online
+        .filter((o) => o.status === 'accepted' || o.status === 'preparing')
+        .sort(byNewest),
+      ready: online
+        .filter((o) => o.status === 'ready' || o.status === 'out_for_delivery')
+        .sort(byNewest),
+      programmed: orders.filter(isProgrammed).sort(byNewest),
+      all: [...orders].sort(byNewest),
+    };
+  }, [online, orders]);
 
   const runAction = async (orderId: string, action: string) => {
     setBusyId(orderId);

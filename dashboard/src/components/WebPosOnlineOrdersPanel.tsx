@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { X } from 'lucide-react';
 import api from '@/lib/api';
@@ -56,18 +56,24 @@ export default function WebPosOnlineOrdersPanel({ open, onClose, orders, onRefre
     },
     [onRefresh, t]
   );
+  const list = useMemo(() => {
+    const filtered =
+      tab === 'new'
+        ? orders.filter((o) => isNew(o.status))
+        : tab === 'active'
+          ? orders.filter(
+              (o) =>
+                !isNew(o.status) &&
+                o.status !== 'completed' &&
+                o.status !== 'cancelled'
+            )
+          : orders;
+    return [...filtered].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [orders, tab]);
+
   if (!open) return null;
-  const list =
-    tab === 'new'
-      ? orders.filter((o) => isNew(o.status))
-      : tab === 'active'
-        ? orders.filter(
-            (o) =>
-              !isNew(o.status) &&
-              o.status !== 'completed' &&
-              o.status !== 'cancelled'
-          )
-        : orders;
   const money = (n: string | number) => `CHF ${Number(n || 0).toFixed(2)}`;
   const channelLabel = (ch?: string | null) => {
     if (ch === 'delivery') return t('delivery');

@@ -32,16 +32,19 @@ import WebPosRefundModal, {
   type RefundReasonOption,
 } from '@/components/webpos/WebPosRefundModal';
 
-function orderTimeMs(o: PosOrderForReceipt & { completedAt?: string | number | Date | null; createdAt?: string | number | Date | null }) {
-  const raw = o.completedAt || o.createdAt;
-  const n = raw ? new Date(raw as string | number | Date).getTime() : 0;
+function toMs(raw: string | number | Date | null | undefined): number {
+  if (raw == null || raw === '') return 0;
+  const n = new Date(raw as string | number | Date).getTime();
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Newest activity first — prefer the later of created/completed. */
+function orderTimeMs(o: PosOrderForReceipt & { completedAt?: string | number | Date | null; createdAt?: string | number | Date | null }) {
+  return Math.max(toMs(o.completedAt), toMs(o.createdAt));
+}
+
 function heldTimeMs(h: { updatedAt?: string | null; createdAt?: string | null }) {
-  const raw = h.updatedAt || h.createdAt;
-  const n = raw ? new Date(raw).getTime() : 0;
-  return Number.isFinite(n) ? n : 0;
+  return Math.max(toMs(h.updatedAt), toMs(h.createdAt));
 }
 
 /** Portaled menu so ⋮ actions are not clipped by the orders list scrollport. */
@@ -236,6 +239,10 @@ function isPlatformChannel(ch?: string | null) {
 type ListItem =
   | { kind: 'held'; held: HeldRow }
   | { kind: 'order'; order: PosOrder };
+
+function listItemTimeMs(item: ListItem): number {
+  return item.kind === 'held' ? heldTimeMs(item.held) : orderTimeMs(item.order);
+}
 
 const PAGE_SIZE_LIST = 10;
 const PAGE_SIZE_GRID = 24;
@@ -494,14 +501,11 @@ export default function WebPosOrdersPanel({
       }
     }
 
-    // Recent first within each bucket; ongoing/held stay above completed.
-    heldBucket.sort((a, b) => heldTimeMs(b) - heldTimeMs(a));
-    activeBucket.sort((a, b) => orderTimeMs(b) - orderTimeMs(a));
-    doneBucket.sort((a, b) => orderTimeMs(b) - orderTimeMs(a));
-
     for (const h of heldBucket) items.push({ kind: 'held', held: h });
     for (const o of activeBucket) items.push({ kind: 'order', order: o });
     for (const o of doneBucket) items.push({ kind: 'order', order: o });
+    // Single chronology: newest activity at the top (held / open / completed interleaved).
+    items.sort((a, b) => listItemTimeMs(b) - listItemTimeMs(a));
     return items;
   }, [held, orders, statusFilter, channelFilter, search]);
 
