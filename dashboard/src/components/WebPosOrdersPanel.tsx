@@ -246,15 +246,18 @@ function listItemTimeMs(item: ListItem): number {
 
 const PAGE_SIZE_LIST = 10;
 const PAGE_SIZE_GRID = 24;
-const ORDERS_VIEW_KEY = 'webpos_orders_view';
+const ORDERS_VIEW_KEY = 'webpos_orders_view_v2';
 
 type OrdersViewMode = 'list' | 'grid';
 
 function readOrdersView(): OrdersViewMode {
   try {
-    return localStorage.getItem(ORDERS_VIEW_KEY) === 'grid' ? 'grid' : 'list';
+    const stored = localStorage.getItem(ORDERS_VIEW_KEY);
+    if (stored === 'list') return 'list';
+    // Default: block/card grid
+    return 'grid';
   } catch {
-    return 'list';
+    return 'grid';
   }
 }
 
@@ -304,7 +307,7 @@ export default function WebPosOrdersPanel({
   highlightOrderId = null,
 }: Props) {
   const { t } = useI18n();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
   const [search, setSearch] = useState('');
   const [held, setHeld] = useState<HeldRow[]>([]);
@@ -762,6 +765,7 @@ export default function WebPosOrdersPanel({
   if (!open) return null;
 
   const channelFilters: Array<{ id: ChannelFilter; label: string }> = [
+    { id: 'all', label: t('webPosAllOrders') },
     { id: 'dine_in', label: t('dineIn') },
     { id: 'takeaway', label: t('takeaway') },
     { id: 'delivery', label: t('delivery') },
@@ -810,7 +814,10 @@ export default function WebPosOrdersPanel({
               <button
                 key={f.id}
                 type="button"
-                onClick={() => setChannelFilter(channelFilter === f.id ? 'all' : f.id)}
+                onClick={() => {
+                  setChannelFilter(f.id);
+                  setPage(0);
+                }}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-bold ${
                   channelFilter === f.id
                     ? 'bg-stone-800 text-white'
