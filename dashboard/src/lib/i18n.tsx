@@ -43,9 +43,16 @@ const en: Dict = {
   newsletterSubject: 'Email subject',
   newsletterBody: 'Email body',
   newsletterBuilderHint:
-    'Drag blocks to reorder. Add headings, text, buttons, images, dividers. Switch to HTML anytime.',
+    'Design in OpenPage, then Save in the builder. HTML is sent via Brevo/SMTP.',
   newsletterUnlayerHint:
-    'Drag-and-drop Unlayer editor. Use Merge Tags for {{name}}, {{businessName}}, {{shopUrl}}. Save exports HTML for sending.',
+    'Design in OpenPage (self-hosted builder). Click Save in the editor, then Save draft / Send. Placeholders: {{name}}, {{businessName}}, {{shopUrl}}.',
+  newsletterOpenPageHint:
+    'OpenPage builder: design the email, click Save in the editor, then Save draft or Send. Placeholders work in exported HTML: {{name}}, {{businessName}}, {{shopUrl}}.',
+  newsletterNeedOpenPageSave: 'Click Save in the OpenPage editor before saving or sending.',
+  newsletterDesignReady: 'Design captured from OpenPage — save draft or send when ready.',
+  newsletterFilterAudience: 'Filter by name or email…',
+  newsletterCampaigns: 'Campaigns',
+  newsletterLoad: 'Reload',
   newsletterLegacyRedesign:
     'This draft was made in the old editor. Redesign it here, then Save draft (previous HTML is replaced).',
   newsletterNew: 'New campaign',
@@ -1523,8 +1530,10 @@ const en: Dict = {
   deleted: 'Deleted',
   cmsWebsite: 'Website',
   cmsWebsiteHint: 'Build a homepage with templates, embed your POS menu, and connect a custom domain.',
-  cmsChaiHint: 'Page builder: Puck (open-source drag & drop). Includes Custom HTML and POS Menu blocks.',
-  cmsPuckHint: 'Page builder: Puck (open-source drag & drop). Includes Custom HTML and POS Menu blocks.',
+  cmsChaiHint: 'Page builder: OpenPage (self-hosted Framer-style). Design visually, then Save and Publish.',
+  cmsPuckHint: 'Page builder: OpenPage (self-hosted Framer-style). Design visually, then Save and Publish.',
+  cmsOpenPageHint:
+    'OpenPage builder: design in the canvas, click Save in the editor, then Save draft or Publish. The public shop homepage shows the exported HTML.',
   cmsOpenBuilder: 'Open builder',
   cmsCustomDomain: 'Custom domain',
   cmsDnsRecordTitle: 'DNS record to create',
@@ -1603,9 +1612,16 @@ const fr: Dict = {
   newsletterSubject: 'Objet',
   newsletterBody: 'Corps de l’email',
   newsletterBuilderHint:
-    'Glissez les blocs pour réordonner. Ajoutez titres, texte, boutons, images, séparateurs. Passez en HTML à tout moment.',
+    'Concevez dans OpenPage, puis Enregistrer dans l’éditeur. L’HTML est envoyé via Brevo/SMTP.',
   newsletterUnlayerHint:
-    'Éditeur Unlayer glisser-déposer. Utilisez les Merge Tags pour {{name}}, {{businessName}}, {{shopUrl}}. L’enregistrement exporte le HTML.',
+    'Éditeur OpenPage (auto-hébergé). Enregistrez dans l’éditeur, puis brouillon / envoi. Variables : {{name}}, {{businessName}}, {{shopUrl}}.',
+  newsletterOpenPageHint:
+    'OpenPage : concevez l’email, cliquez Enregistrer dans l’éditeur, puis brouillon ou envoi. Variables : {{name}}, {{businessName}}, {{shopUrl}}.',
+  newsletterNeedOpenPageSave: 'Cliquez Enregistrer dans OpenPage avant de sauvegarder ou d’envoyer.',
+  newsletterDesignReady: 'Design OpenPage capturé — enregistrez le brouillon ou envoyez.',
+  newsletterFilterAudience: 'Filtrer par nom ou email…',
+  newsletterCampaigns: 'Campagnes',
+  newsletterLoad: 'Recharger',
   newsletterLegacyRedesign:
     'Brouillon de l’ancien éditeur. Refaites le design ici, puis Enregistrer (l’ancien HTML sera remplacé).',
   newsletterNew: 'Nouvelle campagne',
@@ -3017,8 +3033,10 @@ const fr: Dict = {
   deleted: 'Supprimé',
   cmsWebsite: 'Site web',
   cmsWebsiteHint: 'Créez une page d’accueil avec des modèles, le menu POS et un domaine personnalisé.',
-  cmsChaiHint: 'Éditeur : Puck (glisser-déposer open source). Blocs HTML et menu POS inclus.',
-  cmsPuckHint: 'Éditeur : Puck (glisser-déposer open source). Blocs HTML et menu POS inclus.',
+  cmsChaiHint: 'Éditeur : OpenPage (style Framer auto-hébergé). Concevez, Enregistrez, Publiez.',
+  cmsPuckHint: 'Éditeur : OpenPage (style Framer auto-hébergé). Concevez, Enregistrez, Publiez.',
+  cmsOpenPageHint:
+    'OpenPage : concevez sur le canvas, cliquez Enregistrer dans l’éditeur, puis brouillon ou Publier. La boutique affiche le HTML exporté.',
   cmsOpenBuilder: 'Ouvrir l’éditeur',
   cmsCustomDomain: 'Domaine personnalisé',
   cmsDnsRecordTitle: 'Enregistrement DNS à créer',
@@ -3097,9 +3115,16 @@ const de: Dict = {
   newsletterSubject: 'Betreff',
   newsletterBody: 'E-Mail-Inhalt',
   newsletterBuilderHint:
-    'Blöcke per Drag & Drop sortieren. Überschriften, Text, Buttons, Bilder, Trennlinien. HTML jederzeit möglich.',
+    'In OpenPage gestalten, dann im Editor speichern. HTML wird über Brevo/SMTP versendet.',
   newsletterUnlayerHint:
-    'Unlayer Drag-and-Drop-Editor. Merge Tags für {{name}}, {{businessName}}, {{shopUrl}}. Speichern exportiert HTML.',
+    'OpenPage-Editor (self-hosted). Im Editor speichern, dann Entwurf/Senden. Platzhalter: {{name}}, {{businessName}}, {{shopUrl}}.',
+  newsletterOpenPageHint:
+    'OpenPage: E-Mail gestalten, im Editor speichern, dann Entwurf speichern oder senden. Platzhalter: {{name}}, {{businessName}}, {{shopUrl}}.',
+  newsletterNeedOpenPageSave: 'Bitte zuerst im OpenPage-Editor speichern.',
+  newsletterDesignReady: 'OpenPage-Design erfasst — Entwurf speichern oder senden.',
+  newsletterFilterAudience: 'Nach Name oder E-Mail filtern…',
+  newsletterCampaigns: 'Kampagnen',
+  newsletterLoad: 'Neu laden',
   newsletterLegacyRedesign:
     'Entwurf aus dem alten Editor. Hier neu gestalten, dann Speichern (altes HTML wird ersetzt).',
   newsletterNew: 'Neue Kampagne',
@@ -4511,8 +4536,10 @@ const de: Dict = {
   deleted: 'Gelöscht',
   cmsWebsite: 'Website',
   cmsWebsiteHint: 'Homepage mit Vorlagen bauen, POS-Menü einbinden und eigene Domain verbinden.',
-  cmsChaiHint: 'Page-Builder: Puck (Open-Source Drag & Drop). Inkl. HTML- und POS-Menü-Blöcke.',
-  cmsPuckHint: 'Page-Builder: Puck (Open-Source Drag & Drop). Inkl. HTML- und POS-Menü-Blöcke.',
+  cmsChaiHint: 'Page-Builder: OpenPage (self-hosted, Framer-ähnlich). Gestalten, Speichern, Veröffentlichen.',
+  cmsPuckHint: 'Page-Builder: OpenPage (self-hosted, Framer-ähnlich). Gestalten, Speichern, Veröffentlichen.',
+  cmsOpenPageHint:
+    'OpenPage: auf der Canvas gestalten, im Editor speichern, dann Entwurf speichern oder veröffentlichen. Der Shop zeigt das exportierte HTML.',
   cmsOpenBuilder: 'Builder öffnen',
   cmsCustomDomain: 'Eigene Domain',
   cmsDnsRecordTitle: 'DNS-Eintrag erstellen',

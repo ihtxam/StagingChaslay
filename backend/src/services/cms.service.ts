@@ -1,5 +1,5 @@
 import { and, asc, desc, eq } from "drizzle-orm";
-import { getDb, schema, type CmsPuckData, type CmsTheme } from "@/db";
+import { getDb, schema, type CmsTheme } from "@/db";
 import { randomUUID } from "crypto";
 
 function slugify(raw: string): string {
@@ -16,102 +16,153 @@ function bid() {
   return randomUUID();
 }
 
-function item(type: string, props: Record<string, unknown> = {}) {
-  return { type, props: { id: bid(), ...props } };
-}
+export type OpenPageBlock = {
+  id: string;
+  type: string;
+  variant: string;
+  props: Record<string, unknown>;
+};
 
-function emptyData(title = ""): CmsPuckData {
-  return { content: [], root: { props: { title } } };
-}
+export type OpenPageSiteConfig = {
+  name: string;
+  blocks: OpenPageBlock[];
+  pages?: Array<{ id: string; name: string; path: string; blocks: OpenPageBlock[] }>;
+  theme?: Record<string, unknown>;
+};
 
-function restaurantData(shopName: string): CmsPuckData {
-  return {
-    root: { props: { title: shopName } },
-    content: [
-      item("Hero", {
-        title: shopName,
-        subtitle: "Fresh dishes, crafted with care. Order online for pickup or delivery.",
-        ctaLabel: "Order now",
-        ctaHref: "/menu",
-        secondaryCtaLabel: "Reservations",
-        secondaryCtaHref: "/reservations",
-        imageUrl: "",
-        align: "center",
-      }),
-      item("Text", {
-        text: `Welcome to ${shopName}. Explore our menu — the same catalog as our POS.`,
-      }),
-      item("PosMenu", {
-        title: "Our menu",
-        subtitle: "Straight from the kitchen",
-        mode: "full",
-        showPrices: true,
-        limit: 8,
-        ctaLabel: "Full menu & checkout",
-        ctaHref: "/menu",
-      }),
-      item("ReservationsCta", {
-        title: "Reserve a table",
-        subtitle: "Book online and we will have everything ready when you arrive.",
-        ctaLabel: "Book a table",
-        ctaHref: "/reservations",
-      }),
-      item("ShopHours", { title: "Opening hours", channel: "display" }),
-      item("Cta", {
-        title: "Hungry?",
-        subtitle: "Order online in minutes.",
-        primaryLabel: "Order online",
-        primaryHref: "/menu",
-        secondaryLabel: "Book a table",
-        secondaryHref: "/reservations",
-      }),
-    ],
+export type CmsOpenPageData = {
+  engine: "openpage";
+  config: OpenPageSiteConfig;
+  html: string;
+};
+
+function openPageScaffold(title: string, blocks: OpenPageBlock[]): CmsOpenPageData {
+  const config: OpenPageSiteConfig = {
+    name: title,
+    blocks,
+    pages: [{ id: "page-home", name: "Home", path: "/", blocks }],
   };
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${escapeHtml(title)}</title></head><body style="margin:0;font-family:system-ui,sans-serif"><main style="padding:3rem 1.5rem;text-align:center"><h1>${escapeHtml(title)}</h1><p>Open the OpenPage builder and click Save to publish your design.</p><p><a href="/menu">Order online</a></p></main></body></html>`;
+  return { engine: "openpage", config, html };
 }
 
-function foodTruckData(shopName: string): CmsPuckData {
-  return {
-    root: { props: { title: shopName } },
-    content: [
-      item("Hero", {
-        title: shopName,
-        subtitle: "Street food. Real flavor. Find us or order ahead.",
-        ctaLabel: "See the menu",
-        ctaHref: "/menu",
-        secondaryCtaLabel: "Reservations",
-        secondaryCtaHref: "/reservations",
-        imageUrl: "",
-        align: "center",
-      }),
-      item("PosMenu", {
-        title: "Today's favourites",
-        subtitle: "",
-        mode: "featured",
-        showPrices: true,
-        limit: 6,
-        ctaLabel: "Order now",
-        ctaHref: "/menu",
-      }),
-      item("ReservationsCta", {
-        title: "Reserve a table",
-        subtitle: "Book online and we will have everything ready when you arrive.",
-        ctaLabel: "Book a table",
-        ctaHref: "/reservations",
-      }),
-      item("Html", {
-        html: '<div style="padding:1.25rem;border:1px dashed #a8a29e;text-align:center"><p style="margin:0">Drop your own HTML here — maps, events, embeds…</p></div>',
-      }),
-      item("ShopHours", { title: "When we're open", channel: "display" }),
-      item("Cta", {
-        title: "Order ahead",
-        subtitle: "",
-        primaryLabel: "Start order",
-        primaryHref: "/menu",
-        secondaryLabel: "Book a table",
-        secondaryHref: "/reservations",
-      }),
-    ],
-  };
+function escapeHtml(s: string) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function emptyData(title = ""): CmsOpenPageData {
+  const name = title || "Homepage";
+  return openPageScaffold(name, [
+    {
+      id: bid(),
+      type: "hero",
+      variant: "centered",
+      props: {
+        badge: "Welcome",
+        headline: name,
+        subheadline: "Order online for pickup or delivery.",
+        primaryCta: "Order now",
+      },
+    },
+    {
+      id: bid(),
+      type: "cta",
+      variant: "simple",
+      props: {
+        headline: "Hungry?",
+        subheadline: "Browse the menu and checkout in minutes.",
+        buttonText: "See menu",
+      },
+    },
+    {
+      id: bid(),
+      type: "footer",
+      variant: "minimal",
+      props: { copyright: `${new Date().getFullYear()} ${name}`, links: ["Menu", "Contact"] },
+    },
+  ]);
+}
+
+function restaurantData(shopName: string): CmsOpenPageData {
+  return openPageScaffold(shopName, [
+    {
+      id: bid(),
+      type: "hero",
+      variant: "centered",
+      props: {
+        badge: "Restaurant",
+        headline: shopName,
+        subheadline: "Fresh dishes, crafted with care. Order online for pickup or delivery.",
+        primaryCta: "Order now",
+        secondaryCta: "Reservations",
+      },
+    },
+    {
+      id: bid(),
+      type: "features",
+      variant: "grid",
+      props: {
+        title: "Why guests come back",
+        items: [
+          { icon: "Utensils", title: "Kitchen fresh", description: "Same menu as our POS." },
+          { icon: "Clock", title: "Order ahead", description: "Pickup or delivery when you want." },
+          { icon: "Heart", title: "Local favourite", description: "Crafted with care." },
+        ],
+      },
+    },
+    {
+      id: bid(),
+      type: "cta",
+      variant: "simple",
+      props: {
+        headline: "Hungry?",
+        subheadline: "Order online in minutes.",
+        buttonText: "Order online",
+      },
+    },
+    {
+      id: bid(),
+      type: "footer",
+      variant: "simple",
+      props: { logo: shopName, copyright: `${new Date().getFullYear()} ${shopName}`, links: ["Menu", "Reservations"] },
+    },
+  ]);
+}
+
+function foodTruckData(shopName: string): CmsOpenPageData {
+  return openPageScaffold(shopName, [
+    {
+      id: bid(),
+      type: "hero",
+      variant: "gradient",
+      props: {
+        badge: "Food truck",
+        headline: shopName,
+        subheadline: "Street food. Real flavor. Find us or order ahead.",
+        primaryCta: "See the menu",
+      },
+    },
+    {
+      id: bid(),
+      type: "cta",
+      variant: "split",
+      props: {
+        headline: "Order ahead",
+        subheadline: "Skip the queue — we will have it ready.",
+        buttonText: "Start order",
+      },
+    },
+    {
+      id: bid(),
+      type: "footer",
+      variant: "minimal",
+      props: { copyright: `${new Date().getFullYear()} ${shopName}`, links: ["Menu"] },
+    },
+  ]);
 }
 
 export type CmsTemplateKey = "blank" | "restaurant" | "food_truck";
@@ -120,92 +171,58 @@ export const CMS_TEMPLATES: Array<{
   key: CmsTemplateKey;
   name: string;
   description: string;
-  data: (shopName: string) => CmsPuckData;
+  data: (shopName: string) => CmsOpenPageData;
 }> = [
   {
     key: "blank",
     name: "Blank",
-    description: "Empty canvas — drag blocks in the builder",
+    description: "Empty OpenPage canvas — design in the builder",
     data: (name) => emptyData(name),
   },
   {
     key: "restaurant",
     name: "Restaurant",
-    description: "Hero, story, POS menu, hours, and order CTA",
+    description: "Hero, features, order CTA (OpenPage)",
     data: restaurantData,
   },
   {
     key: "food_truck",
     name: "Food truck",
-    description: "Bold hero, featured menu, HTML spot, CTA",
+    description: "Bold hero and CTA (OpenPage)",
     data: foodTruckData,
   },
 ];
 
-/** Accept Puck data, or migrate legacy ChaiBuilder arrays. */
-export function normalizePuckData(raw: unknown, fallbackTitle = ""): CmsPuckData {
-  if (raw && typeof raw === "object" && !Array.isArray(raw) && Array.isArray((raw as any).content)) {
-    const data = raw as CmsPuckData;
-    return {
-      content: (data.content || []).map((c) => ({
-        type: String(c.type || "Text"),
-        props: {
-          id: typeof c.props?.id === "string" ? c.props.id : bid(),
-          ...(c.props || {}),
-        },
-      })),
-      root: data.root && typeof data.root === "object" ? data.root : { props: { title: fallbackTitle } },
-      zones: data.zones,
-    };
-  }
-
-  // Legacy ChaiBuilder array → best-effort Puck content
-  if (Array.isArray(raw)) {
-    const content: CmsPuckData["content"] = [];
-    for (const b of raw) {
-      if (!b || typeof b !== "object") continue;
-      const type = String((b as any)._type || (b as any).type || "");
-      if (type === "Heading" || type === "hero") {
-        content.push(
-          item("Hero", {
-            title: String((b as any).content || (b as any).title || fallbackTitle || "Welcome"),
-            subtitle: String((b as any).subtitle || ""),
-            ctaLabel: String((b as any).ctaLabel || "Order now"),
-            ctaHref: String((b as any).ctaHref || "/menu"),
-            imageUrl: String((b as any).imageUrl || ""),
-            align: "center",
-          })
-        );
-      } else if (type === "CustomHTML" || type === "html" || type === "richtext") {
-        content.push(item("Html", { html: String((b as any).htmlCode || (b as any).html || "") }));
-      } else if (type === "PosMenu" || type === "menu") {
-        content.push(
-          item("PosMenu", {
-            title: String((b as any).title || "Menu"),
-            subtitle: String((b as any).subtitle || ""),
-            mode: (b as any).mode === "featured" ? "featured" : "full",
-            showPrices: (b as any).showPrices !== false,
-            limit: Number((b as any).limit) || 8,
-            ctaLabel: String((b as any).ctaLabel || "Order online"),
-            ctaHref: String((b as any).ctaHref || "/menu"),
-          })
-        );
-      } else if (type === "ShopHours" || type === "hours") {
-        content.push(
-          item("ShopHours", {
-            title: String((b as any).title || "Hours"),
-            channel: String((b as any).channel || "display"),
-          })
-        );
-      } else if (type === "Paragraph") {
-        content.push(item("Text", { text: String((b as any).content || "") }));
-      }
+/** Accept OpenPage payloads; migrate legacy Puck/Chai into a starter OpenPage page. */
+export function normalizeCmsBlocks(raw: unknown, fallbackTitle = ""): CmsOpenPageData {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>;
+    if (
+      o.engine === "openpage" &&
+      o.config &&
+      typeof o.config === "object" &&
+      Array.isArray((o.config as OpenPageSiteConfig).blocks) &&
+      typeof o.html === "string"
+    ) {
+      return {
+        engine: "openpage",
+        config: o.config as OpenPageSiteConfig,
+        html: o.html as string,
+      };
     }
-    return { content, root: { props: { title: fallbackTitle } } };
+    // Legacy Puck `{ content, root }` → OpenPage starter (rebuild in editor)
+    if (Array.isArray((o as { content?: unknown }).content)) {
+      const title =
+        String((o as { root?: { props?: { title?: string } } }).root?.props?.title || fallbackTitle) ||
+        "Homepage";
+      return emptyData(title);
+    }
   }
-
   return emptyData(fallbackTitle);
 }
+
+/** @deprecated alias */
+export const normalizePuckData = normalizeCmsBlocks;
 
 export class CmsService {
   static listTemplates() {
@@ -228,7 +245,7 @@ export class CmsService {
     if (!page) throw new Error("Page not found");
     return {
       ...page,
-      blocks: normalizePuckData(page.blocks, page.title),
+      blocks: normalizeCmsBlocks(page.blocks, page.title),
     };
   }
 
@@ -239,7 +256,7 @@ export class CmsService {
       slug?: string;
       isHomepage?: boolean;
       templateKey?: CmsTemplateKey;
-      blocks?: CmsPuckData | unknown;
+      blocks?: CmsOpenPageData | unknown;
       theme?: CmsTheme | null;
       seoTitle?: string;
       seoDescription?: string;
@@ -272,7 +289,7 @@ export class CmsService {
     const status = input.status === "published" ? "published" : "draft";
     const blocks =
       input.blocks !== undefined
-        ? normalizePuckData(input.blocks, title)
+        ? normalizeCmsBlocks(input.blocks, title)
         : template
           ? template.data(merchant.name)
           : emptyData(title);
@@ -301,7 +318,7 @@ export class CmsService {
         .where(eq(schema.merchants.id, merchantId));
     }
 
-    return { ...page, blocks: normalizePuckData(page.blocks, page.title) };
+    return { ...page, blocks: normalizeCmsBlocks(page.blocks, page.title) };
   }
 
   static async updatePage(
@@ -311,7 +328,7 @@ export class CmsService {
       title?: string;
       slug?: string;
       isHomepage?: boolean;
-      blocks?: CmsPuckData | unknown;
+      blocks?: CmsOpenPageData | unknown;
       theme?: CmsTheme | null;
       seoTitle?: string | null;
       seoDescription?: string | null;
@@ -333,7 +350,7 @@ export class CmsService {
       patch.slug = slug;
     }
     if (input.blocks !== undefined) {
-      patch.blocks = normalizePuckData(input.blocks, String(patch.title || current.title));
+      patch.blocks = normalizeCmsBlocks(input.blocks, String(patch.title || current.title));
     }
     if (input.theme !== undefined) patch.theme = input.theme;
     if (input.seoTitle !== undefined) patch.seoTitle = input.seoTitle ? input.seoTitle.slice(0, 200) : null;
@@ -370,7 +387,7 @@ export class CmsService {
         .where(eq(schema.merchants.id, merchantId));
     }
 
-    return { ...page, blocks: normalizePuckData(page.blocks, page.title) };
+    return { ...page, blocks: normalizeCmsBlocks(page.blocks, page.title) };
   }
 
   static async deletePage(merchantId: string, pageId: string) {
@@ -399,7 +416,7 @@ export class CmsService {
       ),
     });
     if (!page) return null;
-    return { ...page, blocks: normalizePuckData(page.blocks, page.title) };
+    return { ...page, blocks: normalizeCmsBlocks(page.blocks, page.title) };
   }
 
   static async getPublishedBySlug(merchantId: string, slug: string) {
@@ -412,7 +429,7 @@ export class CmsService {
       ),
     });
     if (!page) return null;
-    return { ...page, blocks: normalizePuckData(page.blocks, page.title) };
+    return { ...page, blocks: normalizeCmsBlocks(page.blocks, page.title) };
   }
 
   static async updateSiteSettings(
@@ -421,46 +438,42 @@ export class CmsService {
   ) {
     const db = getDb();
     const patch: Record<string, unknown> = { updatedAt: new Date() };
-
     if (input.customDomain !== undefined) {
-      const domain = normalizeCustomDomain(input.customDomain);
-      if (domain) {
-        const taken = await db.query.merchants.findFirst({
-          where: eq(schema.merchants.customDomain, domain),
-        });
-        if (taken && taken.id !== merchantId) {
-          throw new Error("Custom domain already in use");
-        }
-      }
-      patch.customDomain = domain;
+      patch.customDomain = input.customDomain ? String(input.customDomain).trim().toLowerCase() : null;
     }
     if (input.cmsHomepageEnabled !== undefined) {
       patch.cmsHomepageEnabled = !!input.cmsHomepageEnabled;
     }
+    const [merchant] = await db
+      .update(schema.merchants)
+      .set(patch)
+      .where(eq(schema.merchants.id, merchantId))
+      .returning();
+    return {
+      customDomain: merchant.customDomain,
+      cmsHomepageEnabled: merchant.cmsHomepageEnabled,
+      shopEnabled: merchant.shopEnabled,
+      slug: merchant.slug,
+      subdomain: merchant.subdomain,
+      name: merchant.name,
+      shopCustomDomainUrl: merchant.customDomain ? `https://${merchant.customDomain}` : null,
+    };
+  }
 
-    await db.update(schema.merchants).set(patch).where(eq(schema.merchants.id, merchantId));
+  static async getSiteSettings(merchantId: string) {
+    const db = getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(schema.merchants.id, merchantId),
     });
+    if (!merchant) throw new Error("Merchant not found");
     return {
-      customDomain: merchant?.customDomain || null,
-      cmsHomepageEnabled: !!merchant?.cmsHomepageEnabled,
-      shopCustomDomainUrl: merchant?.customDomain ? `https://${merchant.customDomain}` : null,
+      customDomain: merchant.customDomain,
+      cmsHomepageEnabled: merchant.cmsHomepageEnabled,
+      shopEnabled: merchant.shopEnabled,
+      slug: merchant.slug,
+      subdomain: merchant.subdomain,
+      name: merchant.name,
+      shopCustomDomainUrl: merchant.customDomain ? `https://${merchant.customDomain}` : null,
     };
   }
-}
-
-export function normalizeCustomDomain(raw?: string | null): string | null {
-  if (!raw) return null;
-  let d = raw
-    .toLowerCase()
-    .trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/.*$/, "")
-    .replace(/:\d+$/, "")
-    .replace(/\.$/, "");
-  if (!d || d.includes(" ") || d.includes("/") || !d.includes(".")) return null;
-  if (d.length > 255) return null;
-  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)) return null;
-  return d;
 }

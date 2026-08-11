@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:openpage": "npm --prefix ../openpage ci && npm --prefix ../openpage run build && node ../scripts/copy-openpage.mjs",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "type-check": "tsc --noEmit"
@@ -16,7 +17,6 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^3.3.4",
-    "@puckeditor/core": "^0.22.2",
     "axios": "^1.6.5",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
@@ -25,7 +25,6 @@
     "motion-dom": "12.23.20",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-email-editor": "^2.0.0",
     "react-hook-form": "^7.52.0",
     "react-hot-toast": "^2.4.1",
     "react-leaflet": "^4.2.1",

@@ -1676,12 +1676,34 @@ export const dailyReports = pgTable(
 // CMS PAGES (merchant website / homepage builder)
 // ============================================================================
 
-/** Puck editor page data (`content` + `root`) */
+/** OpenPage site config + exported HTML (primary CMS engine) */
+export type CmsOpenPageBlock = {
+  id: string;
+  type: string;
+  variant: string;
+  props: Record<string, unknown>;
+};
+
+export type CmsOpenPageConfig = {
+  name: string;
+  blocks: CmsOpenPageBlock[];
+  pages?: Array<{ id: string; name: string; path: string; blocks: CmsOpenPageBlock[] }>;
+  theme?: Record<string, unknown>;
+};
+
+export type CmsOpenPageData = {
+  engine: "openpage";
+  config: CmsOpenPageConfig;
+  html: string;
+};
+
+/** @deprecated Puck editor page data — migrated to OpenPage on read */
 export type CmsPuckItem = {
   type: string;
   props: Record<string, unknown>;
 };
 
+/** @deprecated migrated to OpenPage on read */
 export type CmsPuckData = {
   content: CmsPuckItem[];
   root: { props?: Record<string, unknown> };
@@ -1710,8 +1732,11 @@ export const cmsPages = pgTable(
     isHomepage: boolean("is_homepage").notNull().default(false),
     status: varchar("status", { length: 20 }).notNull().default("draft"),
     templateKey: varchar("template_key", { length: 40 }),
-    /** Puck Data JSON (`{ content, root }`) — legacy Chai arrays are migrated in the service */
-    blocks: json("blocks").$type<CmsPuckData | CmsBlock[]>().notNull().default({ content: [], root: {} }),
+    /** OpenPage `{ engine, config, html }` — legacy Puck/Chai migrated in the service */
+    blocks: json("blocks")
+      .$type<CmsOpenPageData | CmsPuckData | CmsBlock[]>()
+      .notNull()
+      .default({ engine: "openpage", config: { name: "", blocks: [] }, html: "" }),
     /** Optional theme / metadata */
     theme: json("theme").$type<CmsTheme | null>(),
     seoTitle: varchar("seo_title", { length: 200 }),

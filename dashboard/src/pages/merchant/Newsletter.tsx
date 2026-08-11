@@ -1,11 +1,9 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import UnlayerEmailEditor, {
-  type UnlayerDesign,
-  type UnlayerEmailEditorHandle,
-} from '@/components/UnlayerEmailEditor';
+import OpenPageEmbed from '@/components/OpenPageEmbed';
 import { useI18n } from '@/lib/i18n';
+import type { OpenPageSiteConfig } from '@/lib/cms/openpage-types';
 
 type AudienceRow = {
   id: string | null;
@@ -19,7 +17,7 @@ type Campaign = {
   title: string;
   subject: string;
   bodyHtml: string;
-  designJson?: UnlayerDesign | null;
+  designJson?: OpenPageSiteConfig | { engine?: string; config?: OpenPageSiteConfig; html?: string } | null;
   status: string;
   audience: string;
   recipientCount?: number;
@@ -30,9 +28,19 @@ type Campaign = {
   createdAt?: string;
 };
 
+function extractConfig(design: Campaign['designJson']): OpenPageSiteConfig | null {
+  if (!design || typeof design !== 'object') return null;
+  if ('engine' in design && design.engine === 'openpage' && design.config) {
+    return design.config;
+  }
+  if ('blocks' in design && Array.isArray((design as OpenPageSiteConfig).blocks)) {
+    return design as OpenPageSiteConfig;
+  }
+  return null;
+}
+
 export default function Newsletter() {
   const { t } = useI18n();
-  const editorRef = useRef<UnlayerEmailEditorHandle>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
@@ -44,8 +52,8 @@ export default function Newsletter() {
   const [campaignId, setCampaignId] = useState<string | null>(null);
   const [title, setTitle] = useState('Newsletter');
   const [subject, setSubject] = useState('');
-  const [designJson, setDesignJson] = useState<UnlayerDesign | null>(null);
-  const [legacyHtml, setLegacyHtml] = useState<string | null>(null);
+  const [designConfig, setDesignConfig] = useState<OpenPageSiteConfig | null>(null);
+  const [bodyHtml, setBodyHtml] = useState('');
   const [audienceMode, setAudienceMode] = useState<'all' | 'selected'>('all');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState('');
@@ -86,32 +94,31 @@ export default function Newsletter() {
     [selected]
   );
 
-  const exportFromEditor = async () => {
-    const exported = await editorRef.current?.exportDesign();
-    if (!exported?.html?.trim()) {
-      throw new Error(t('newsletterNeedSubjectBody'));
-    }
-    setDesignJson(exported.design);
-    setLegacyHtml(null);
-    return exported;
+  const persistCampaign = async (html: string, config: OpenPageSiteConfig) => {
+    const res = await api.post('/merchant/marketing/campaigns', {
+      id: campaignId || undefined,
+      title,
+      subject,
+      bodyHtml: html,
+      designJson: { engine: 'openpage', config, html },
+      audience: audienceMode,
+      selectedEmails: audienceMode === 'selected' ? selectedEmails : undefined,
+    });
+    setCampaignId(res.data.campaign.id);
+    setDesignConfig(config);
+    setBodyHtml(html);
+    return res.data.campaign.id as string;
   };
 
   const saveDraft = async (e?: FormEvent) => {
     e?.preventDefault();
+    if (!bodyHtml.trim() || !designConfig) {
+      toast.error(t('newsletterNeedOpenPageSave'));
+      return;
+    }
     setSaving(true);
     try {
-      const { html, design } = await exportFromEditor();
-      const res = await api.post('/merchant/marketing/campaigns', {
-        id: campaignId || undefined,
-        title,
-        subject,
-        bodyHtml: html,
-        designJson: design,
-        audience: audienceMode,
-        selectedEmails: audienceMode === 'selected' ? selectedEmails : undefined,
-      });
-      setCampaignId(res.data.campaign.id);
-      setDesignJson((res.data.campaign.designJson as UnlayerDesign) || design);
+      await persistCampaign(bodyHtml, designConfig);
       toast.success(t('newsletterDraftSaved'));
       await load();
     } catch (error: any) {
@@ -119,6 +126,12 @@ export default function Newsletter() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const onBuilderSaved = (payload: { config: OpenPageSiteConfig; html: string }) => {
+    setDesignConfig(payload.config);
+    setBodyHtml(payload.html);
+    toast.success(t('newsletterDesignReady'));
   };
 
   const sendNow = async () => {
@@ -130,6 +143,10 @@ export default function Newsletter() {
       toast.error(t('newsletterNeedSubjectBody'));
       return;
     }
+    if (!bodyHtml.trim() || !designConfig) {
+      toast.error(t('newsletterNeedOpenPageSave'));
+      return;
+    }
     if (audienceMode === 'selected' && selectedEmails.length === 0) {
       toast.error(t('newsletterNeedRecipients'));
       return;
@@ -137,19 +154,7 @@ export default function Newsletter() {
     if (!window.confirm(t('newsletterSendConfirm'))) return;
     setSending(true);
     try {
-      const { html, design } = await exportFromEditor();
-      const saved = await api.post('/merchant/marketing/campaigns', {
-        id: campaignId || undefined,
-        title,
-        subject,
-        bodyHtml: html,
-        designJson: design,
-        audience: audienceMode,
-        selectedEmails: audienceMode === 'selected' ? selectedEmails : undefined,
-      });
-      const id = saved.data.campaign.id as string;
-      setCampaignId(id);
-      setDesignJson((saved.data.campaign.designJson as UnlayerDesign) || design);
+      const id = await persistCampaign(bodyHtml, designConfig);
       const res = await api.post(`/merchant/marketing/campaigns/${id}/send`);
       toast.success(
         t('newsletterSent')
@@ -168,12 +173,9 @@ export default function Newsletter() {
     setCampaignId(c.id);
     setTitle(c.title || 'Newsletter');
     setSubject(c.subject || '');
-    const design =
-      c.designJson && typeof c.designJson === 'object' && Object.keys(c.designJson).length > 0
-        ? c.designJson
-        : null;
-    setDesignJson(design);
-    setLegacyHtml(!design && c.bodyHtml?.trim() ? c.bodyHtml : null);
+    const cfg = extractConfig(c.designJson);
+    setDesignConfig(cfg);
+    setBodyHtml(c.bodyHtml || '');
     setAudienceMode(c.audience === 'selected' ? 'selected' : 'all');
     const next: Record<string, boolean> = {};
     (c.selectedEmails || []).forEach((e) => {
@@ -186,8 +188,8 @@ export default function Newsletter() {
     setCampaignId(null);
     setTitle('Newsletter');
     setSubject('');
-    setDesignJson(null);
-    setLegacyHtml(null);
+    setDesignConfig(null);
+    setBodyHtml('');
     setAudienceMode('all');
     setSelected({});
   };
@@ -214,7 +216,7 @@ export default function Newsletter() {
         </div>
       ) : (
         <p className="text-xs muted">
-          {t('newsletterEmailReady')} ({emailStatus.provider})
+          {t('newsletterEmailReady')} ({emailStatus.provider || 'brevo'})
         </p>
       )}
 
@@ -238,17 +240,16 @@ export default function Newsletter() {
 
         <div className="space-y-1">
           <span className="text-sm font-medium block">{t('newsletterBody')}</span>
-          <p className="text-[11px] muted">{t('newsletterUnlayerHint')}</p>
-          {legacyHtml ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-              {t('newsletterLegacyRedesign')}
-            </div>
+          <p className="text-[11px] muted">{t('newsletterOpenPageHint')}</p>
+          {bodyHtml ? (
+            <p className="text-[11px] text-emerald-700">{t('newsletterDesignReady')}</p>
           ) : null}
-          <UnlayerEmailEditor
-            ref={editorRef}
-            designJson={designJson}
-            minHeight="680px"
-            className="overflow-hidden rounded-lg border border-[var(--border)]"
+          <OpenPageEmbed
+            mode="newsletter"
+            title={title}
+            config={designConfig}
+            className="h-[680px] overflow-hidden rounded-lg border border-[var(--border)]"
+            onSaved={onBuilderSaved}
           />
         </div>
 
@@ -278,73 +279,55 @@ export default function Newsletter() {
           <div className="space-y-2">
             <input
               className="input"
-              placeholder={t('search')}
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
+              placeholder={t('newsletterFilterAudience')}
             />
-            <div className="max-h-56 overflow-y-auto border border-[var(--border)] rounded-md divide-y divide-[var(--border)]">
-              {filteredAudience.map((r) => (
-                <label
-                  key={r.email}
-                  className="flex items-start gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-[var(--bg-muted)]"
-                >
+            <div className="max-h-48 overflow-y-auto rounded border border-[var(--border)] divide-y divide-[var(--border)]">
+              {filteredAudience.map((row) => (
+                <label key={row.email} className="flex items-center gap-2 px-3 py-2 text-sm">
                   <input
                     type="checkbox"
-                    className="mt-0.5"
-                    checked={!!selected[r.email]}
+                    checked={!!selected[row.email]}
                     onChange={(e) =>
-                      setSelected((prev) => ({ ...prev, [r.email]: e.target.checked }))
+                      setSelected((prev) => ({ ...prev, [row.email]: e.target.checked }))
                     }
                   />
-                  <span className="min-w-0">
-                    <span className="font-medium block truncate">{r.name}</span>
-                    <span className="text-xs muted block truncate">{r.email}</span>
-                  </span>
+                  <span className="truncate">{row.name || row.email}</span>
+                  <span className="ml-auto text-xs muted truncate">{row.email}</span>
                 </label>
               ))}
-              {filteredAudience.length === 0 ? (
-                <p className="px-3 py-4 text-xs muted">{t('newsletterNoAudience')}</p>
-              ) : null}
             </div>
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-2 justify-end border-t border-[var(--border)] pt-3">
-          <button type="submit" className="btn-secondary" disabled={saving || sending}>
+        <div className="flex flex-wrap gap-2 justify-end">
+          <button type="submit" className="btn-secondary" disabled={saving}>
             {saving ? t('saving') : t('newsletterSaveDraft')}
           </button>
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={saving || sending}
-            onClick={() => void sendNow()}
-          >
-            {sending ? t('newsletterSending') : t('newsletterSend')}
+          <button type="button" className="btn-primary" disabled={sending} onClick={() => void sendNow()}>
+            {sending ? t('sending') : t('newsletterSend')}
           </button>
         </div>
       </form>
 
       <div className="card space-y-2">
-        <h2 className="text-sm font-semibold">{t('newsletterRecent')}</h2>
+        <h2 className="text-sm font-semibold">{t('newsletterCampaigns')}</h2>
         {campaigns.length === 0 ? (
-          <p className="text-xs muted">{t('newsletterNoCampaigns')}</p>
+          <p className="text-sm muted">{t('newsletterNoCampaigns')}</p>
         ) : (
           <ul className="divide-y divide-[var(--border)]">
             {campaigns.map((c) => (
-              <li key={c.id} className="py-2 flex items-start justify-between gap-3 text-sm">
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <div className="min-w-0">
-                  <p className="font-medium truncate">{c.subject}</p>
-                  <p className="text-xs muted">
-                    {c.status}
-                    {c.sentCount != null ? ` · ${c.sentCount}/${c.recipientCount || 0}` : ''}
+                  <p className="text-sm font-medium truncate">{c.title}</p>
+                  <p className="text-xs muted truncate">
+                    {c.subject} · {c.status}
+                    {c.sentCount != null ? ` · ${c.sentCount} sent` : ''}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="btn-secondary text-xs shrink-0"
-                  onClick={() => loadCampaign(c)}
-                >
-                  {t('edit')}
+                <button type="button" className="btn-secondary text-xs" onClick={() => loadCampaign(c)}>
+                  {t('newsletterLoad')}
                 </button>
               </li>
             ))}
