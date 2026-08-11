@@ -1695,6 +1695,10 @@ export type CmsOpenPageData = {
   engine: "openpage";
   config: CmsOpenPageConfig;
   html: string;
+  defaultLocale?: "en" | "fr" | "de";
+  locales?: Partial<
+    Record<"en" | "fr" | "de", { config: CmsOpenPageConfig; html: string }>
+  >;
 };
 
 /** @deprecated Puck editor page data — migrated to OpenPage on read */

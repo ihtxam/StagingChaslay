@@ -34,6 +34,10 @@ export type CmsOpenPageData = {
   engine: "openpage";
   config: OpenPageSiteConfig;
   html: string;
+  defaultLocale?: "en" | "fr" | "de";
+  locales?: Partial<
+    Record<"en" | "fr" | "de", { config: OpenPageSiteConfig; html: string }>
+  >;
 };
 
 function openPageScaffold(title: string, blocks: OpenPageBlock[]): CmsOpenPageData {
@@ -204,11 +208,18 @@ export function normalizeCmsBlocks(raw: unknown, fallbackTitle = ""): CmsOpenPag
       Array.isArray((o.config as OpenPageSiteConfig).blocks) &&
       typeof o.html === "string"
     ) {
-      return {
+      const next: CmsOpenPageData = {
         engine: "openpage",
         config: o.config as OpenPageSiteConfig,
         html: o.html as string,
       };
+      if (o.defaultLocale === "en" || o.defaultLocale === "fr" || o.defaultLocale === "de") {
+        next.defaultLocale = o.defaultLocale;
+      }
+      if (o.locales && typeof o.locales === "object") {
+        next.locales = o.locales as CmsOpenPageData["locales"];
+      }
+      return next;
     }
     // Legacy Puck `{ content, root }` → OpenPage starter (rebuild in editor)
     if (Array.isArray((o as { content?: unknown }).content)) {

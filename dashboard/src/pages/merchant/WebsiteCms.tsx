@@ -7,9 +7,14 @@ import OpenPageEmbed from '@/components/OpenPageEmbed';
 import {
   emptyOpenPageBlocks,
   isOpenPageBlocks,
+  resolveOpenPageConfig,
+  withLocaleBundle,
+  type CmsLocale,
   type OpenPageBlocks,
   type OpenPageSiteConfig,
 } from '@/lib/cms/openpage-types';
+
+const CMS_LOCALES: CmsLocale[] = ['en', 'fr', 'de'];
 
 type CmsPage = {
   id: string;
@@ -51,6 +56,7 @@ export default function WebsiteCms() {
   const [savingSite, setSavingSite] = useState(false);
   const [editing, setEditing] = useState<CmsPage | null>(null);
   const [draft, setDraft] = useState<OpenPageBlocks>(emptyOpenPageBlocks());
+  const [editLocale, setEditLocale] = useState<CmsLocale>('en');
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('Homepage');
   const [newTemplate, setNewTemplate] = useState('blank');
@@ -129,8 +135,10 @@ export default function WebsiteCms() {
     try {
       const res = await api.get(`/merchant/cms/pages/${pageId}`);
       const page = res.data.page as CmsPage;
+      const blocks = asOpenPage(page.blocks, page.title);
       setEditing(page);
-      setDraft(asOpenPage(page.blocks, page.title));
+      setDraft(blocks);
+      setEditLocale(blocks.defaultLocale || 'en');
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('cmsLoadFailed'));
     }
@@ -161,17 +169,21 @@ export default function WebsiteCms() {
   const onBuilderSaved = async (payload: { config: OpenPageSiteConfig; html: string }) => {
     setBusy(true);
     try {
-      const next: OpenPageBlocks = {
-        engine: 'openpage',
+      const next = withLocaleBundle(draft, editLocale, {
         config: payload.config,
         html: payload.html,
-      };
+      });
       setDraft(next);
       const ok = await persistPage(next);
-      if (ok) toast.success(t('saved'));
+      if (ok) toast.success(`${t('saved')} (${editLocale.toUpperCase()})`);
     } finally {
       setBusy(false);
     }
+  };
+
+  const switchEditLocale = (locale: CmsLocale) => {
+    if (locale === editLocale) return;
+    setEditLocale(locale);
   };
 
   const publish = async () => {
@@ -230,6 +242,27 @@ export default function WebsiteCms() {
               {t('cmsIsHomepage')}
             </label>
             <span className="shrink-0 text-xs text-stone-500">{editing.status}</span>
+            <div className="inline-flex overflow-hidden rounded-lg border border-stone-700">
+              {CMS_LOCALES.map((loc) => {
+                const has = !!draft.locales?.[loc]?.html || (loc === (draft.defaultLocale || 'en') && !!draft.html);
+                return (
+                  <button
+                    key={loc}
+                    type="button"
+                    onClick={() => switchEditLocale(loc)}
+                    className={`px-2.5 py-1 text-[11px] font-bold uppercase ${
+                      editLocale === loc
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-stone-900 text-stone-400 hover:text-white'
+                    }`}
+                    title={has ? t('cmsLocaleReady') : t('cmsLocaleMissing')}
+                  >
+                    {loc}
+                    {has ? '' : ' ·'}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <a
@@ -259,13 +292,14 @@ export default function WebsiteCms() {
           </div>
         </div>
         <p className="border-b border-amber-900/50 bg-amber-950/40 px-3 py-1.5 text-[11px] text-amber-100">
-          {t('cmsBuilderSaveHint')}
+          {t('cmsBuilderSaveHint')} {t('cmsLocaleHint').replace('{lang}', editLocale.toUpperCase())}
         </p>
         <div className="relative min-h-0 flex-1 overflow-hidden bg-stone-950">
           <OpenPageEmbed
+            key={`${editing.id}-${editLocale}`}
             mode="page"
             title={editing.title}
-            config={draft.config}
+            config={resolveOpenPageConfig(draft, editLocale)}
             className="relative h-full min-h-0 w-full rounded-none border-0 bg-stone-950"
             onSaved={(payload) => void onBuilderSaved(payload)}
           />
