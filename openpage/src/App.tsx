@@ -1,5 +1,12 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import {
+  BrowserRouter,
+  HashRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+} from 'react-router-dom'
 import { ErrorBoundary } from './layout/ErrorBoundary'
 import { AppLayout } from './layout/AppLayout'
 import { Dashboard } from './routes/Dashboard'
@@ -15,7 +22,8 @@ function EmbedBootstrap() {
   const navigate = useNavigate()
   useEffect(() => {
     if (!isEmbedMode()) return
-    navigate('/editor?embed=1', { replace: true })
+    // Keep embed=1 in the real query string; HashRouter only owns the hash path.
+    navigate('/editor', { replace: true })
   }, [navigate])
   return null
 }
@@ -26,10 +34,10 @@ function AppRoutes() {
 
   return (
     <>
-      <EmbedBootstrap />
+      {embed ? <EmbedBootstrap /> : null}
       <Routes>
         <Route element={<AppLayout />}>
-          <Route index element={embed ? <Navigate to="/editor?embed=1" replace /> : <Dashboard />} />
+          <Route index element={embed ? <Navigate to="/editor" replace /> : <Dashboard />} />
           <Route path="new" element={<Navigate to="/" replace />} />
           <Route path="editor" element={<Editor />} />
           {!embed ? (
@@ -39,7 +47,7 @@ function AppRoutes() {
               <Route path="settings" element={<Settings />} />
             </>
           ) : null}
-          <Route path="*" element={embed ? <Navigate to="/editor?embed=1" replace /> : <NotFound />} />
+          <Route path="*" element={embed ? <Navigate to="/editor" replace /> : <NotFound />} />
         </Route>
       </Routes>
     </>
@@ -47,14 +55,25 @@ function AppRoutes() {
 }
 
 export function App() {
+  const embed = isEmbedMode()
   const basename =
-    import.meta.env.BASE_URL === '/' ? undefined : String(import.meta.env.BASE_URL).replace(/\/$/, '')
+    import.meta.env.BASE_URL === '/'
+      ? undefined
+      : String(import.meta.env.BASE_URL).replace(/\/$/, '')
 
+  // HashRouter in embed mode so Caddy SPA fallback cannot replace OpenPage with the
+  // dashboard index.html when the iframe path becomes /openpage/editor.
   return (
     <ErrorBoundary>
-      <BrowserRouter basename={basename}>
-        <AppRoutes />
-      </BrowserRouter>
+      {embed ? (
+        <HashRouter>
+          <AppRoutes />
+        </HashRouter>
+      ) : (
+        <BrowserRouter basename={basename}>
+          <AppRoutes />
+        </BrowserRouter>
+      )}
     </ErrorBoundary>
   )
 }

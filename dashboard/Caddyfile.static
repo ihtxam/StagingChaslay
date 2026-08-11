@@ -1,6 +1,18 @@
 :80 {
 	encode gzip zstd
 	root * /srv
-	try_files {path} /index.html
-	file_server
+
+	# OpenPage builder (iframe) — keep SPA fallback inside /openpage/, never the dashboard shell
+	handle /openpage/* {
+		try_files {path} /openpage/index.html
+		file_server
+	}
+	handle /openpage {
+		redir * /openpage/ permanent
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
 }

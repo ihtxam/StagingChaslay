@@ -25,8 +25,8 @@ node_modules/
 # OpenPage (vendored builder) — install/build locally or in Docker
 openpage/node_modules/
 openpage/dist/
-# Built assets are produced by `npm run build:openpage` / Docker; do not commit
-dashboard/public/openpage/
+# dashboard/public/openpage is committed so /openpage/ is always in the SPA dist
+# (Docker still rebuilds/overwrites it during image build).
 
 # Print agent packaged binaries (rebuild via print-agent/build-installer.ps1)
 print-agent/dist/

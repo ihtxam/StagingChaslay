@@ -3,6 +3,8 @@ import type { OpenPageSiteConfig } from '@/lib/cms/openpage-types';
 
 const PARENT = 'foodtruckpos';
 const CHILD = 'openpage';
+/** Hash route lands on the editor without relying on Caddy path rewrites. */
+const OPENPAGE_SRC = '/openpage/?embed=1#/editor';
 
 type Props = {
   mode?: 'page' | 'newsletter';
@@ -26,8 +28,28 @@ export default function OpenPageEmbed({
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const onSavedRef = useRef(onSaved);
+  const configRef = useRef(config);
+  const modeRef = useRef(mode);
+  const titleRef = useRef(title);
   onSavedRef.current = onSaved;
+  configRef.current = config;
+  modeRef.current = mode;
+  titleRef.current = title;
+
+  const postInit = () => {
+    iframeRef.current?.contentWindow?.postMessage(
+      {
+        source: PARENT,
+        type: 'openpage:init',
+        config: configRef.current || null,
+        mode: modeRef.current,
+        title: titleRef.current,
+      },
+      '*'
+    );
+  };
 
   useEffect(() => {
     function onMessage(ev: MessageEvent) {
@@ -40,16 +62,8 @@ export default function OpenPageEmbed({
       if (!data || data.source !== CHILD) return;
       if (data.type === 'openpage:ready') {
         setReady(true);
-        iframeRef.current?.contentWindow?.postMessage(
-          {
-            source: PARENT,
-            type: 'openpage:init',
-            config: config || null,
-            mode,
-            title,
-          },
-          '*'
-        );
+        setError(null);
+        postInit();
         return;
       }
       if (data.type === 'openpage:saved' && data.config && typeof data.html === 'string') {
@@ -58,21 +72,34 @@ export default function OpenPageEmbed({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [config, mode, title]);
+  }, []);
 
   useEffect(() => {
     if (!ready) return;
-    iframeRef.current?.contentWindow?.postMessage(
-      {
-        source: PARENT,
-        type: 'openpage:init',
-        config: config || null,
-        mode,
-        title,
-      },
-      '*'
-    );
+    postInit();
   }, [config, mode, title, ready]);
+
+  useEffect(() => {
+    if (ready) return;
+    const t = window.setTimeout(() => {
+      setError(
+        'OpenPage failed to load. Hard-refresh the page. If it persists, redeploy so /openpage/ is included in the dashboard build.'
+      );
+    }, 12000);
+    return () => window.clearTimeout(t);
+  }, [ready]);
+
+  const onIframeLoad = () => {
+    // Probe: if the iframe loaded the wrong shell, ready will never fire (timeout shows error).
+    try {
+      const loc = iframeRef.current?.contentWindow?.location;
+      if (loc && typeof loc.pathname === 'string' && !loc.pathname.includes('openpage')) {
+        // Cross-origin or swapped document — ignore; timeout handles it.
+      }
+    } catch {
+      /* cross-origin opaque — expected when same-origin policy applies oddly */
+    }
+  };
 
   const requestSave = () => {
     iframeRef.current?.contentWindow?.postMessage(
@@ -82,20 +109,30 @@ export default function OpenPageEmbed({
   };
 
   return (
-    <div className={className || 'relative h-full min-h-[640px] w-full overflow-hidden rounded-lg border border-[var(--border)] bg-stone-950'}>
+    <div
+      className={
+        className ||
+        'relative h-full min-h-[640px] w-full overflow-hidden rounded-lg border border-[var(--border)] bg-stone-950'
+      }
+    >
       {!ready ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-stone-950 text-sm text-stone-300">
-          Loading OpenPage…
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-stone-950 px-4 text-center text-sm text-stone-300">
+          <p>{error || 'Loading OpenPage…'}</p>
+          {error ? (
+            <a className="text-xs underline text-stone-200" href={OPENPAGE_SRC} target="_blank" rel="noreferrer">
+              Open builder in new tab
+            </a>
+          ) : null}
         </div>
       ) : null}
       <iframe
         ref={iframeRef}
         title="OpenPage builder"
-        src="/openpage/?embed=1"
+        src={OPENPAGE_SRC}
         className="h-full min-h-[640px] w-full border-0"
         allow="clipboard-read; clipboard-write"
+        onLoad={onIframeLoad}
       />
-      {/* Hidden helper for parents that want to trigger save programmatically */}
       <button type="button" className="hidden" data-openpage-save onClick={requestSave} />
     </div>
   );
