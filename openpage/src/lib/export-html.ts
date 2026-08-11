@@ -136,13 +136,15 @@ function renderNavbar(block: BlockConfig): string {
   const logo = escapeHtml(prop(block.props, 'logo', 'Brand'))
   const logoImage = prop<string>(block.props, 'logoImage', '')
   const links = prop<string[]>(block.props, 'links', [])
-  const ctaText = escapeHtml(prop(block.props, 'ctaText', 'Get Started'))
+  const ctaText = prop(block.props, 'ctaText', 'Order now')
+  const ctaUrl = prop<string>(block.props, 'ctaUrl', '/menu')
 
   const navLinks = links
-    .map(
-      (l) =>
-        `          <span class="text-[13px] text-text-2 hover:text-text-0 transition-colors cursor-pointer">${escapeHtml(l)}</span>`
-    )
+    .map((l) => {
+      const href =
+        /menu/i.test(l) ? '/menu' : /reserv/i.test(l) ? '/reservations' : '#'
+      return `          ${renderLink(l, href, 'text-[13px] text-text-2 hover:text-text-0 transition-colors')}`
+    })
     .join('\n')
 
   const logoHtml = logoImage
@@ -158,7 +160,7 @@ function renderNavbar(block: BlockConfig): string {
 ${navLinks}
     </div>
     <div class="flex items-center gap-3">
-      <button class="px-4 py-2 rounded-lg bg-green text-black text-[13px] font-semibold hover:bg-green-dim transition-colors">${ctaText}</button>
+      ${renderLink(ctaText, ctaUrl, 'px-4 py-2 rounded-lg bg-green text-black text-[13px] font-semibold hover:bg-green-dim transition-colors inline-block')}
       <button class="lg:hidden w-9 h-9 rounded-lg border border-border-default flex items-center justify-center text-text-2 hover:text-text-0 hover:bg-bg-3 transition-colors">
         ${SVG_MENU}
       </button>
@@ -175,9 +177,9 @@ function renderHeroCentered(block: BlockConfig): string {
   const headline = escapeHtml(prop(block.props, 'headline', ''))
   const subheadline = escapeHtml(prop(block.props, 'subheadline', ''))
   const primaryCta = prop<string>(block.props, 'primaryCta', '')
-  const primaryCtaUrl = prop<string>(block.props, 'primaryCtaUrl', '')
+  const primaryCtaUrl = prop<string>(block.props, 'primaryCtaUrl', '/menu')
   const secondaryCta = prop<string>(block.props, 'secondaryCta', '')
-  const secondaryCtaUrl = prop<string>(block.props, 'secondaryCtaUrl', '')
+  const secondaryCtaUrl = prop<string>(block.props, 'secondaryCtaUrl', '/menu')
 
   const badgeHtml = badge
     ? `      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green/10 border border-green/20 text-green text-[11px] font-medium mb-6">
@@ -195,7 +197,7 @@ ${badgeHtml}
       <h1 class="text-4xl md:text-5xl font-bold tracking-tight leading-[1.1] mb-4 max-w-3xl mx-auto">${headline}</h1>
       <p class="text-text-2 text-base md:text-lg leading-relaxed max-w-xl mx-auto mb-8">${subheadline}</p>
       <div class="flex flex-wrap items-center justify-center gap-3">
-        ${renderLink(primaryCta, primaryCtaUrl, 'px-6 py-3 rounded-lg bg-green text-black text-sm font-semibold hover:bg-green-dim transition-all inline-flex items-center gap-2')}
+        ${renderLink(primaryCta, primaryCtaUrl || '/menu', 'px-6 py-3 rounded-lg bg-green text-black text-sm font-semibold hover:bg-green-dim transition-all inline-flex items-center gap-2')}
 ${secondaryHtml}
       </div>
   </section>`
@@ -206,9 +208,9 @@ function renderHeroSplit(block: BlockConfig): string {
   const headline = escapeHtml(prop(block.props, 'headline', ''))
   const subheadline = escapeHtml(prop(block.props, 'subheadline', ''))
   const primaryCta = prop<string>(block.props, 'primaryCta', '')
-  const primaryCtaUrl = prop<string>(block.props, 'primaryCtaUrl', '')
+  const primaryCtaUrl = prop<string>(block.props, 'primaryCtaUrl', '/menu')
   const secondaryCta = prop<string>(block.props, 'secondaryCta', '')
-  const secondaryCtaUrl = prop<string>(block.props, 'secondaryCtaUrl', '')
+  const secondaryCtaUrl = prop<string>(block.props, 'secondaryCtaUrl', '/menu')
   const heroImage = prop<string>(block.props, 'heroImage', '')
 
   const badgeHtml = badge
@@ -250,9 +252,9 @@ function renderHeroGradient(block: BlockConfig): string {
   const headline = escapeHtml(prop(block.props, 'headline', ''))
   const subheadline = escapeHtml(prop(block.props, 'subheadline', ''))
   const primaryCta = prop<string>(block.props, 'primaryCta', '')
-  const primaryCtaUrl = prop<string>(block.props, 'primaryCtaUrl', '')
+  const primaryCtaUrl = prop<string>(block.props, 'primaryCtaUrl', '/menu')
   const secondaryCta = prop<string>(block.props, 'secondaryCta', '')
-  const secondaryCtaUrl = prop<string>(block.props, 'secondaryCtaUrl', '')
+  const secondaryCtaUrl = prop<string>(block.props, 'secondaryCtaUrl', '/menu')
 
   const badgeHtml = badge
     ? `        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green/10 border border-green/20 text-green text-[11px] font-medium mb-6">
@@ -589,7 +591,7 @@ function renderCtaSimple(block: BlockConfig): string {
   const headline = escapeHtml(prop(block.props, 'headline', ''))
   const subheadline = prop<string>(block.props, 'subheadline', '')
   const buttonText = prop<string>(block.props, 'buttonText', '')
-  const buttonUrl = prop<string>(block.props, 'buttonUrl', '')
+  const buttonUrl = prop<string>(block.props, 'buttonUrl', '/menu')
 
   const subHtml = subheadline
     ? `        <p class="text-text-2 text-sm mb-6 max-w-md mx-auto">${escapeHtml(subheadline)}</p>`
@@ -600,7 +602,7 @@ function renderCtaSimple(block: BlockConfig): string {
       <div class="relative z-10">
         <h2 class="text-2xl md:text-3xl font-bold tracking-tight mb-3">${headline}</h2>
 ${subHtml}
-        ${renderLink(buttonText, buttonUrl, 'px-8 py-3 rounded-lg bg-green text-black text-sm font-semibold hover:bg-green-dim transition-all inline-flex items-center gap-2')}
+        ${renderLink(buttonText, buttonUrl || '/menu', 'px-8 py-3 rounded-lg bg-green text-black text-sm font-semibold hover:bg-green-dim transition-all inline-flex items-center gap-2')}
       </div>
   </section>`
 }
@@ -609,7 +611,7 @@ function renderCtaSplit(block: BlockConfig): string {
   const headline = escapeHtml(prop(block.props, 'headline', ''))
   const subheadline = prop<string>(block.props, 'subheadline', '')
   const buttonText = prop<string>(block.props, 'buttonText', '')
-  const buttonUrl = prop<string>(block.props, 'buttonUrl', '')
+  const buttonUrl = prop<string>(block.props, 'buttonUrl', '/menu')
 
   const subHtml = subheadline
     ? `          <p class="text-text-2 text-sm">${escapeHtml(subheadline)}</p>`
@@ -1288,8 +1290,25 @@ ${ogDescriptionMeta}${ogImageMeta}${faviconLink}
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="${fontUrl}" />
 
-  <!-- Tailwind CSS (Play CDN) -->
+  <!-- Tailwind CSS (Play CDN) + mirror fallback -->
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
   <script src="https://cdn.tailwindcss.com"></script>
+  <style id="op-cdn-fallback">
+    html,body{height:100%;margin:0}
+    body{background:var(--color-bg-0);color:var(--color-text-0);font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
+    .bg-green,.bg-green\\/10{background-color:var(--color-green)!important}.text-green{color:var(--color-green)!important}.text-black{color:#111!important}
+    .text-text-0{color:var(--color-text-0)!important}.text-text-1{color:var(--color-text-1)!important}.text-text-2{color:var(--color-text-2)!important}.text-text-3{color:var(--color-text-3)!important}
+    .bg-bg-2{background-color:var(--color-bg-2)!important}.bg-bg-3{background-color:var(--color-bg-3)!important}
+    .flex{display:flex}.grid{display:grid}.inline-flex{display:inline-flex}.hidden{display:none}
+    .flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.justify-center{justify-content:center}.justify-between{justify-content:space-between}
+    .gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}
+    .px-6{padding-left:1.5rem;padding-right:1.5rem}.py-3{padding-top:.75rem;padding-bottom:.75rem}.py-16{padding-top:4rem;padding-bottom:4rem}.py-20{padding-top:5rem;padding-bottom:5rem}
+    .text-center{text-align:center}.font-semibold{font-weight:600}.font-bold{font-weight:700}.rounded-lg{border-radius:.5rem}.rounded-xl{border-radius:.75rem}
+    .max-w-3xl{max-width:48rem}.max-w-xl{max-width:36rem}.mx-auto{margin-left:auto;margin-right:auto}
+    .text-4xl{font-size:2.25rem;line-height:1.1}.text-2xl{font-size:1.5rem}.text-sm{font-size:.875rem}
+    @media (min-width:768px){.md\\:px-10{padding-left:2.5rem;padding-right:2.5rem}.md\\:text-5xl{font-size:3rem;line-height:1.1}.md\\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+    @media (min-width:1024px){.lg\\:flex{display:flex}.lg\\:hidden{display:none}}
+  </style>
   <script>
     tailwind.config = {
       theme: {

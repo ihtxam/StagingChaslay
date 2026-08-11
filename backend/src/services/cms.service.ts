@@ -40,16 +40,6 @@ export type CmsOpenPageData = {
   >;
 };
 
-function openPageScaffold(title: string, blocks: OpenPageBlock[]): CmsOpenPageData {
-  const config: OpenPageSiteConfig = {
-    name: title,
-    blocks,
-    pages: [{ id: "page-home", name: "Home", path: "/", blocks }],
-  };
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${escapeHtml(title)}</title></head><body style="margin:0;font-family:system-ui,sans-serif"><main style="padding:3rem 1.5rem;text-align:center"><h1>${escapeHtml(title)}</h1><p>Open the OpenPage builder and click Save to publish your design.</p><p><a href="/menu">Order online</a></p></main></body></html>`;
-  return { engine: "openpage", config, html };
-}
-
 function escapeHtml(s: string) {
   return s
     .replace(/&/g, "&amp;")
@@ -58,115 +48,321 @@ function escapeHtml(s: string) {
     .replace(/"/g, "&quot;");
 }
 
+/** Self-contained starter HTML — no Tailwind Play CDN dependency. */
+function selfContainedHtml(
+  title: string,
+  opts: {
+    badge: string;
+    headline: string;
+    subheadline: string;
+    features?: Array<{ title: string; description: string }>;
+    ctaHeadline: string;
+    ctaSub: string;
+  }
+): string {
+  const year = new Date().getFullYear();
+  const safe = escapeHtml(title);
+  const features = (opts.features || [])
+    .map(
+      (f) =>
+        `<article style="background:#26201c;border:1px solid #352e28;border-radius:14px;padding:1.1rem 1.2rem"><h3 style="margin:0 0 .35rem;font-size:1rem">${escapeHtml(f.title)}</h3><p style="margin:0;color:#a89a88;font-size:.9rem">${escapeHtml(f.description)}</p></article>`
+    )
+    .join("");
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${safe}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+html,body{height:100%;margin:0}body{background:radial-gradient(1200px 480px at 50% -10%,rgba(232,168,56,.16),transparent 60%),#171210;color:#faf6f0;font-family:Outfit,system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.5}
+a{color:inherit;text-decoration:none}.wrap{max-width:72rem;margin:0 auto;padding:0 1.25rem}
+header{display:flex;align-items:center;justify-content:space-between;padding:1.1rem 0;gap:1rem}
+.logo{font-weight:700;letter-spacing:-.02em}.btn{display:inline-flex;align-items:center;justify-content:center;padding:.7rem 1.15rem;border-radius:.55rem;background:#e8a838;color:#171210;font-weight:700;font-size:.9rem}
+.btn-ghost{background:transparent;color:#faf6f0;border:1px solid #352e28}.hero{text-align:center;padding:4.5rem 0 3.5rem}
+.badge{display:inline-block;margin-bottom:1rem;padding:.3rem .75rem;border-radius:999px;border:1px solid rgba(232,168,56,.35);background:rgba(232,168,56,.12);color:#e8a838;font-size:.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+h1{margin:0 auto .85rem;max-width:18ch;font-size:clamp(2.2rem,5vw,3.4rem);line-height:1.05;letter-spacing:-.03em}
+.lead{margin:0 auto 1.75rem;max-width:36rem;color:#a89a88;font-size:1.05rem}
+.actions{display:flex;flex-wrap:wrap;gap:.75rem;justify-content:center}
+.features{display:grid;gap:.9rem;grid-template-columns:1fr;padding:1rem 0 2.5rem}
+@media(min-width:768px){.features{grid-template-columns:repeat(3,1fr)}}
+.cta{margin:1rem 0 2.5rem;padding:2rem 1.25rem;text-align:center;border-radius:1rem;border:1px solid #352e28;background:linear-gradient(180deg,rgba(232,168,56,.1),transparent)}
+.cta h2{margin:0 0 .4rem;font-size:1.55rem} .cta p{margin:0 0 1.1rem;color:#a89a88}
+footer{border-top:1px solid #352e28;padding:1.25rem 0 2rem;display:flex;flex-wrap:wrap;gap:.75rem;justify-content:space-between;color:#a89a88;font-size:.8rem}
+</style></head><body><div class="wrap">
+<header><div class="logo">${safe}</div><a class="btn" href="/menu">Order now</a></header>
+<section class="hero"><div class="badge">${escapeHtml(opts.badge)}</div><h1>${escapeHtml(opts.headline)}</h1>
+<p class="lead">${escapeHtml(opts.subheadline)}</p>
+<div class="actions"><a class="btn" href="/menu">See the menu</a><a class="btn btn-ghost" href="/menu">Order online</a></div></section>
+${features ? `<section class="features">${features}</section>` : ""}
+<section class="cta"><h2>${escapeHtml(opts.ctaHeadline)}</h2><p>${escapeHtml(opts.ctaSub)}</p><a class="btn" href="/menu">Start your order</a></section>
+<footer><span>© ${year} ${safe}</span><div><a href="/menu">Menu</a> · <a href="/reservations">Reservations</a></div></footer>
+</div></body></html>`;
+}
+
+function openPageScaffold(
+  title: string,
+  blocks: OpenPageBlock[],
+  html: string,
+  theme?: Record<string, unknown>
+): CmsOpenPageData {
+  const config: OpenPageSiteConfig = {
+    name: title,
+    blocks,
+    pages: [{ id: "page-home", name: "Home", path: "/", blocks }],
+    ...(theme ? { theme } : null),
+  };
+  const data: CmsOpenPageData = {
+    engine: "openpage",
+    config,
+    html,
+    defaultLocale: "en",
+    locales: { en: { config, html } },
+  };
+  return data;
+}
+
+const AMBER_THEME = {
+  presetId: "amber",
+  bg0: "#171210",
+  accent: "#e8a838",
+  fontSans: "Outfit",
+  fontDisplay: "Outfit",
+};
+
 function emptyData(title = ""): CmsOpenPageData {
   const name = title || "Homepage";
-  return openPageScaffold(name, [
-    {
-      id: bid(),
-      type: "hero",
-      variant: "centered",
-      props: {
-        badge: "Welcome",
-        headline: name,
-        subheadline: "Order online for pickup or delivery.",
-        primaryCta: "Order now",
+  return openPageScaffold(
+    name,
+    [
+      {
+        id: bid(),
+        type: "hero",
+        variant: "centered",
+        props: {
+          badge: "Welcome",
+          headline: name,
+          subheadline: "Order online for pickup or delivery.",
+          primaryCta: "Order now",
+          primaryCtaUrl: "/menu",
+        },
       },
-    },
-    {
-      id: bid(),
-      type: "cta",
-      variant: "simple",
-      props: {
-        headline: "Hungry?",
-        subheadline: "Browse the menu and checkout in minutes.",
-        buttonText: "See menu",
+      {
+        id: bid(),
+        type: "cta",
+        variant: "simple",
+        props: {
+          headline: "Hungry?",
+          subheadline: "Browse the menu and checkout in minutes.",
+          buttonText: "See menu",
+          buttonUrl: "/menu",
+        },
       },
-    },
-    {
-      id: bid(),
-      type: "footer",
-      variant: "minimal",
-      props: { copyright: `${new Date().getFullYear()} ${name}`, links: ["Menu", "Contact"] },
-    },
-  ]);
+      {
+        id: bid(),
+        type: "footer",
+        variant: "minimal",
+        props: { copyright: `${new Date().getFullYear()} ${name}`, links: ["Menu", "Contact"] },
+      },
+    ],
+    selfContainedHtml(name, {
+      badge: "Welcome",
+      headline: name,
+      subheadline: "Order online for pickup or delivery.",
+      ctaHeadline: "Hungry?",
+      ctaSub: "Browse the menu and checkout in minutes.",
+    })
+  );
 }
 
 function restaurantData(shopName: string): CmsOpenPageData {
-  return openPageScaffold(shopName, [
-    {
-      id: bid(),
-      type: "hero",
-      variant: "centered",
-      props: {
-        badge: "Restaurant",
-        headline: shopName,
-        subheadline: "Fresh dishes, crafted with care. Order online for pickup or delivery.",
-        primaryCta: "Order now",
-        secondaryCta: "Reservations",
+  return openPageScaffold(
+    shopName,
+    [
+      {
+        id: bid(),
+        type: "navbar",
+        variant: "centered",
+        props: {
+          logo: shopName,
+          links: ["Menu", "About", "Reservations"],
+          ctaText: "Book a table",
+          ctaUrl: "/reservations",
+        },
       },
-    },
-    {
-      id: bid(),
-      type: "features",
-      variant: "grid",
-      props: {
-        title: "Why guests come back",
-        items: [
-          { icon: "Utensils", title: "Kitchen fresh", description: "Same menu as our POS." },
-          { icon: "Clock", title: "Order ahead", description: "Pickup or delivery when you want." },
-          { icon: "Heart", title: "Local favourite", description: "Crafted with care." },
-        ],
+      {
+        id: bid(),
+        type: "hero",
+        variant: "centered",
+        props: {
+          badge: "Restaurant",
+          headline: `Welcome to ${shopName}`,
+          subheadline: "Fresh dishes, crafted with care. Order online for pickup or delivery.",
+          primaryCta: "Order now",
+          primaryCtaUrl: "/menu",
+          secondaryCta: "Reservations",
+          secondaryCtaUrl: "/reservations",
+        },
       },
-    },
-    {
-      id: bid(),
-      type: "cta",
-      variant: "simple",
-      props: {
-        headline: "Hungry?",
-        subheadline: "Order online in minutes.",
-        buttonText: "Order online",
+      {
+        id: bid(),
+        type: "features",
+        variant: "grid",
+        props: {
+          title: "Why guests come back",
+          items: [
+            { icon: "Utensils", title: "Kitchen fresh", description: "Same menu as our POS — cooked to order." },
+            { icon: "Clock", title: "Order ahead", description: "Pickup or delivery when you want it." },
+            { icon: "Heart", title: "Local favourite", description: "Crafted with care for the neighborhood." },
+          ],
+        },
       },
-    },
-    {
-      id: bid(),
-      type: "footer",
-      variant: "simple",
-      props: { logo: shopName, copyright: `${new Date().getFullYear()} ${shopName}`, links: ["Menu", "Reservations"] },
-    },
-  ]);
+      {
+        id: bid(),
+        type: "cta",
+        variant: "simple",
+        props: {
+          headline: "Hungry?",
+          subheadline: "Order online in minutes.",
+          buttonText: "Order online",
+          buttonUrl: "/menu",
+        },
+      },
+      {
+        id: bid(),
+        type: "footer",
+        variant: "simple",
+        props: { logo: shopName, copyright: `${new Date().getFullYear()} ${shopName}`, links: ["Menu", "Reservations"] },
+      },
+    ],
+    selfContainedHtml(shopName, {
+      badge: "Restaurant",
+      headline: `Welcome to ${shopName}`,
+      subheadline: "Fresh dishes, crafted with care. Order online for pickup or delivery.",
+      features: [
+        { title: "Kitchen fresh", description: "Same menu as our POS — cooked to order." },
+        { title: "Order ahead", description: "Pickup or delivery when you want it." },
+        { title: "Local favourite", description: "Crafted with care for the neighborhood." },
+      ],
+      ctaHeadline: "Hungry?",
+      ctaSub: "Order online in minutes.",
+    }),
+    AMBER_THEME
+  );
 }
 
 function foodTruckData(shopName: string): CmsOpenPageData {
-  return openPageScaffold(shopName, [
-    {
-      id: bid(),
-      type: "hero",
-      variant: "gradient",
-      props: {
-        badge: "Food truck",
-        headline: shopName,
-        subheadline: "Street food. Real flavor. Find us or order ahead.",
-        primaryCta: "See the menu",
+  return openPageScaffold(
+    shopName,
+    [
+      {
+        id: bid(),
+        type: "navbar",
+        variant: "default",
+        props: {
+          logo: shopName,
+          links: ["Menu", "About", "Find us"],
+          ctaText: "Order now",
+          ctaUrl: "/menu",
+        },
       },
-    },
-    {
-      id: bid(),
-      type: "cta",
-      variant: "split",
-      props: {
-        headline: "Order ahead",
-        subheadline: "Skip the queue — we will have it ready.",
-        buttonText: "Start order",
+      {
+        id: bid(),
+        type: "hero",
+        variant: "gradient",
+        props: {
+          badge: "Food truck",
+          headline: shopName,
+          subheadline: "Street food with real flavor. Order ahead for pickup — or find us on the road.",
+          primaryCta: "See the menu",
+          primaryCtaUrl: "/menu",
+          secondaryCta: "Order online",
+          secondaryCtaUrl: "/menu",
+        },
       },
-    },
-    {
-      id: bid(),
-      type: "footer",
-      variant: "minimal",
-      props: { copyright: `${new Date().getFullYear()} ${shopName}`, links: ["Menu"] },
-    },
-  ]);
+      {
+        id: bid(),
+        type: "features",
+        variant: "list",
+        props: {
+          label: "Why us",
+          title: "Made for the street",
+          subtitle: "Same kitchen as our truck — order ahead and skip the queue.",
+          items: [
+            { icon: "Flame", title: "Cooked fresh", description: "Hot off the grill, never sitting under a lamp." },
+            { icon: "MapPin", title: "Find the truck", description: "Order ahead so it’s ready when you arrive." },
+            { icon: "Zap", title: "Order in minutes", description: "Pickup or delivery — checkout on your phone." },
+          ],
+        },
+      },
+      {
+        id: bid(),
+        type: "stats",
+        variant: "bar",
+        props: {
+          items: [
+            { value: "Daily", label: "Fresh prep" },
+            { value: "Local", label: "Ingredients" },
+            { value: "Fast", label: "Pickup" },
+            { value: "5★", label: "Regulars" },
+          ],
+        },
+      },
+      {
+        id: bid(),
+        type: "testimonials",
+        variant: "cards",
+        props: {
+          title: "From the line",
+          items: [
+            {
+              name: "Jordan",
+              role: "Regular",
+              quote: "Best stop on my lunch route. Ordering ahead is a game changer.",
+              rating: 5,
+            },
+            {
+              name: "Samira",
+              role: "Office crew",
+              quote: "We order for the whole team — always hot, always on time.",
+              rating: 5,
+            },
+          ],
+        },
+      },
+      {
+        id: bid(),
+        type: "cta",
+        variant: "simple",
+        props: {
+          headline: "Hungry now?",
+          subheadline: "Browse the menu and we’ll have it ready.",
+          buttonText: "Start your order",
+          buttonUrl: "/menu",
+        },
+      },
+      {
+        id: bid(),
+        type: "footer",
+        variant: "simple",
+        props: {
+          logo: shopName,
+          copyright: `${new Date().getFullYear()} ${shopName}. All rights reserved.`,
+          links: ["Menu", "Reservations"],
+        },
+      },
+    ],
+    selfContainedHtml(shopName, {
+      badge: "Food truck",
+      headline: shopName,
+      subheadline: "Street food with real flavor. Order ahead for pickup — or find us on the road.",
+      features: [
+        { title: "Cooked fresh", description: "Hot off the grill, never sitting under a lamp." },
+        { title: "Find the truck", description: "Order ahead so it’s ready when you arrive." },
+        { title: "Order in minutes", description: "Pickup or delivery — checkout on your phone." },
+      ],
+      ctaHeadline: "Hungry now?",
+      ctaSub: "Browse the menu and we’ll have it ready.",
+    }),
+    AMBER_THEME
+  );
 }
 
 export type CmsTemplateKey = "blank" | "restaurant" | "food_truck";
@@ -178,22 +374,22 @@ export const CMS_TEMPLATES: Array<{
   data: (shopName: string) => CmsOpenPageData;
 }> = [
   {
-    key: "blank",
-    name: "Blank",
-    description: "Empty OpenPage canvas — design in the builder",
-    data: (name) => emptyData(name),
+    key: "food_truck",
+    name: "Food truck",
+    description: "Street-food homepage — menu CTAs, no Brand/Pricing fluff",
+    data: foodTruckData,
   },
   {
     key: "restaurant",
     name: "Restaurant",
-    description: "Hero, features, order CTA (OpenPage)",
+    description: "Hero, features, order + reservations CTAs",
     data: restaurantData,
   },
   {
-    key: "food_truck",
-    name: "Food truck",
-    description: "Bold hero and CTA (OpenPage)",
-    data: foodTruckData,
+    key: "blank",
+    name: "Blank",
+    description: "Minimal starter — design freely in the builder",
+    data: (name) => emptyData(name),
   },
 ];
 
@@ -280,7 +476,7 @@ export class CmsService {
     });
     if (!merchant) throw new Error("Merchant not found");
 
-    const template = CMS_TEMPLATES.find((t) => t.key === (input.templateKey || "blank"));
+    const template = CMS_TEMPLATES.find((t) => t.key === (input.templateKey || "food_truck"));
     const title = (input.title || "Homepage").trim().slice(0, 200);
     let slug = slugify(input.slug || (input.isHomepage ? "home" : title));
 

@@ -9,7 +9,7 @@ import { RightSidebar } from './RightSidebar'
 import { JsonDrawer } from './JsonDrawer'
 import { VersionHistory } from './VersionHistory'
 import { GenerationOverlay } from './GenerationOverlay'
-import { useConfigStore, defaultConfig } from '@/store/configStore'
+import { useConfigStore } from '@/store/configStore'
 import { useEditorStore } from '@/store/editorStore'
 import { useProjectsStore } from '@/store/projectsStore'
 import { generateSiteConfig } from '@/lib/generate-site'
@@ -23,6 +23,7 @@ import {
   postToParent,
   type EmbedParentMessage,
 } from '@/lib/embed-bridge'
+import { foodTruckStarter } from '@/lib/food-truck-starter'
 import type { SiteConfig } from '@/blocks/types'
 
 const templateIcons: Record<string, typeof Briefcase> = {
@@ -185,7 +186,7 @@ function useEmbedHostBridge() {
     if (!activeProjectId) {
       const id = addProject('Embedded site')
       setActiveProject(id)
-      setConfig(defaultConfig)
+      setConfig(foodTruckStarter('Food truck'))
     }
 
     if (!readySent.current) {
@@ -204,10 +205,7 @@ function useEmbedHostBridge() {
         } else if (data.mode === 'newsletter') {
           next = newsletterStarter(data.title || 'Newsletter')
         } else {
-          next = {
-            ...defaultConfig,
-            name: data.title || defaultConfig.name,
-          }
+          next = foodTruckStarter(data.title || 'Food truck')
         }
         if (data.title) next = { ...next, name: data.title }
         setConfig(next)

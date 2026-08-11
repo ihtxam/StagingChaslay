@@ -13,6 +13,7 @@ import {
   type OpenPageBlocks,
   type OpenPageSiteConfig,
 } from '@/lib/cms/openpage-types';
+import { starterForTemplate } from '@/lib/cms/openpage-starters';
 
 const CMS_LOCALES: CmsLocale[] = ['en', 'fr', 'de'];
 
@@ -59,7 +60,7 @@ export default function WebsiteCms() {
   const [editLocale, setEditLocale] = useState<CmsLocale>('en');
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('Homepage');
-  const [newTemplate, setNewTemplate] = useState('blank');
+  const [newTemplate, setNewTemplate] = useState('food_truck');
   const [asHomepage, setAsHomepage] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -112,9 +113,11 @@ export default function WebsiteCms() {
   const createPage = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const starter = emptyOpenPageBlocks(newTitle.trim() || 'Homepage');
+      const title = newTitle.trim() || 'Homepage';
+      // Use the selected template (food truck by default) — do not always send blank.
+      const starter = starterForTemplate(newTemplate, title);
       const res = await api.post('/merchant/cms/pages', {
-        title: newTitle.trim() || 'Homepage',
+        title,
         isHomepage: asHomepage,
         templateKey: newTemplate,
         status: 'draft',

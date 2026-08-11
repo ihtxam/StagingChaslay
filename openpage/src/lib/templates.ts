@@ -1,4 +1,5 @@
 import type { SiteConfig } from '@/blocks/types'
+import { foodTruckStarter } from './food-truck-starter'
 import { themePresets } from './theme-presets'
 
 interface Template {
@@ -12,6 +13,22 @@ function getTheme(id: string) {
 }
 
 const templates: Template[] = [
+  {
+    keywords: [
+      'food truck',
+      'foodtruck',
+      'street food',
+      'truck',
+      'trailer',
+      'van',
+      'taco',
+      'burger',
+      'kebab',
+      'catering',
+    ],
+    themePresetId: 'amber',
+    build: (name) => foodTruckStarter(name),
+  },
   {
     keywords: ['portfolio', 'personal', 'resume', 'freelance', 'designer', 'developer'],
     themePresetId: 'slate',
@@ -36,13 +53,13 @@ const templates: Template[] = [
       name,
       theme: getTheme('amber'),
       blocks: [
-        { id: 'block-navbar-1', type: 'navbar', variant: 'centered', props: { logo: name, links: ['Menu', 'About', 'Reservations', 'Gallery'], ctaText: 'Book a Table' } },
-        { id: 'block-hero-1', type: 'hero', variant: 'gradient', props: { headline: `Welcome to ${name}`, subheadline: 'Fresh ingredients, bold flavors, unforgettable dining experiences.', primaryCta: 'View Menu', secondaryCta: 'Make a Reservation' } },
+        { id: 'block-navbar-1', type: 'navbar', variant: 'centered', props: { logo: name, links: ['Menu', 'About', 'Reservations', 'Gallery'], ctaText: 'Book a Table', ctaUrl: '/reservations' } },
+        { id: 'block-hero-1', type: 'hero', variant: 'gradient', props: { headline: `Welcome to ${name}`, subheadline: 'Fresh ingredients, bold flavors, unforgettable dining experiences.', primaryCta: 'View Menu', primaryCtaUrl: '/menu', secondaryCta: 'Make a Reservation', secondaryCtaUrl: '/reservations' } },
         { id: 'block-features-1', type: 'features', variant: 'list', props: { title: 'Why Choose Us', items: [{ icon: 'Star', title: 'Farm to Table', description: 'We source locally from sustainable farms.' }, { icon: 'Globe', title: 'World Cuisine', description: 'Inspired by flavors from around the globe.' }, { icon: 'Zap', title: 'Fresh Daily', description: 'Our menu changes with the seasons.' }] } },
         { id: 'block-gallery-1', type: 'gallery', variant: 'masonry', props: { title: 'From Our Kitchen' } },
         { id: 'block-testimonials-1', type: 'testimonials', variant: 'spotlight', props: { items: [{ name: 'Maria Garcia', role: 'Food Critic', quote: 'A culinary gem. Every dish is a masterpiece of flavor and presentation.', rating: 5 }] } },
-        { id: 'block-cta-1', type: 'cta', variant: 'simple', props: { headline: 'Reserve Your Table', subheadline: 'Open Tuesday through Sunday, 5pm to 11pm.', buttonText: 'Book Now' } },
-        { id: 'block-footer-1', type: 'footer', variant: 'multi-column', props: { logo: name, copyright: `2026 ${name}. All rights reserved.`, links: ['Menu', 'Reservations', 'Privacy'] } },
+        { id: 'block-cta-1', type: 'cta', variant: 'simple', props: { headline: 'Order online', subheadline: 'Skip the wait — pickup or delivery.', buttonText: 'See menu', buttonUrl: '/menu' } },
+        { id: 'block-footer-1', type: 'footer', variant: 'simple', props: { logo: name, copyright: `2026 ${name}. All rights reserved.`, links: ['Menu', 'Reservations'] } },
       ],
     }),
   },
@@ -82,38 +99,24 @@ const templates: Template[] = [
     }),
   },
   {
-    // Default: SaaS landing page
+    // Default fallback for FoodTruckPOS embeds / unmatched prompts
     keywords: [],
-    themePresetId: 'default',
-    build: (name) => ({
-      name,
-      theme: getTheme('default'),
-      blocks: [
-        { id: 'block-navbar-1', type: 'navbar', variant: 'default', props: { logo: name, links: ['Features', 'Pricing', 'About'], ctaText: 'Get Started' } },
-        { id: 'block-hero-1', type: 'hero', variant: 'centered', props: { badge: 'Now in Beta', headline: `${name} - Build Better, Ship Faster`, subheadline: 'The all-in-one platform that helps teams move from idea to production in record time.', primaryCta: 'Start Free Trial', secondaryCta: 'Watch Demo' } },
-        { id: 'block-logocloud-1', type: 'logocloud', variant: 'default', props: { title: 'Trusted by innovative teams' } },
-        { id: 'block-features-1', type: 'features', variant: 'grid', props: { label: 'Features', title: 'Everything you need', subtitle: 'Powerful tools that grow with your team', items: [{ icon: 'Zap', title: 'Lightning Fast', description: 'Sub-100ms response times. Your team never waits.' }, { icon: 'Shield', title: 'Enterprise Security', description: 'SOC 2 compliant with end-to-end encryption.' }, { icon: 'Globe', title: 'Global Scale', description: 'Deploy to 30+ regions worldwide.' }, { icon: 'Bot', title: 'AI-Powered', description: 'Smart automation that learns your workflow.' }, { icon: 'Layers', title: 'Integrations', description: '200+ integrations with your favorite tools.' }, { icon: 'Rocket', title: 'Fast Setup', description: 'Go from signup to production in under 5 minutes.' }] } },
-        { id: 'block-pricing-1', type: 'pricing', variant: 'simple', props: { title: 'Simple, transparent pricing', subtitle: 'No hidden fees. Cancel anytime.' } },
-        { id: 'block-testimonials-1', type: 'testimonials', variant: 'cards', props: { title: 'Loved by developers', items: [{ name: 'Sarah Chen', role: 'CTO at TechCorp', quote: 'Cut our deployment time by 80%. The team productivity gains are incredible.', rating: 5 }, { name: 'Marcus Johnson', role: 'Lead Developer', quote: 'Best developer experience I have ever used. Period.', rating: 5 }, { name: 'Emma Wilson', role: 'Product Manager', quote: 'Finally, a tool the whole team can align on. Worth every penny.', rating: 5 }] } },
-        { id: 'block-cta-1', type: 'cta', variant: 'simple', props: { headline: 'Ready to get started?', subheadline: 'Join thousands of teams shipping faster.', buttonText: 'Start Free Trial' } },
-        { id: 'block-footer-1', type: 'footer', variant: 'multi-column', props: { logo: name, copyright: `2026 ${name}. All rights reserved.`, links: ['Features', 'Pricing', 'Docs', 'Blog', 'Privacy', 'Terms'] } },
-      ],
-    }),
+    themePresetId: 'amber',
+    build: (name) => foodTruckStarter(name),
   },
 ]
 
-// Metadata for the 4 featured template cards on Dashboard
-// icon: lucide-react icon name, mapped in rendering components
+// Featured template cards (indices match `templates` array above)
 export const templateMeta = [
-  { id: 'portfolio', name: 'Portfolio', description: 'Showcase your work and skills', accent: '#06b6d4', blockCount: 7, templateIndex: 0, icon: 'Briefcase' },
-  { id: 'restaurant', name: 'Restaurant', description: 'Menu, reservations, and ambiance', accent: '#e8a838', blockCount: 7, templateIndex: 1, icon: 'UtensilsCrossed' },
-  { id: 'agency', name: 'Agency', description: 'Services, case studies, and team', accent: '#228be6', blockCount: 8, templateIndex: 2, icon: 'Building2' },
-  { id: 'blog', name: 'Blog', description: 'Articles, topics, and subscribers', accent: '#4f46e5', blockCount: 7, templateIndex: 3, icon: 'BookOpen' },
+  { id: 'foodtruck', name: 'Food truck', description: 'Street food homepage with order CTAs', accent: '#e8a838', blockCount: 7, templateIndex: 0, icon: 'UtensilsCrossed' },
+  { id: 'restaurant', name: 'Restaurant', description: 'Menu, reservations, and ambiance', accent: '#e8a838', blockCount: 7, templateIndex: 2, icon: 'UtensilsCrossed' },
+  { id: 'portfolio', name: 'Portfolio', description: 'Showcase your work and skills', accent: '#06b6d4', blockCount: 7, templateIndex: 1, icon: 'Briefcase' },
+  { id: 'agency', name: 'Agency', description: 'Services, case studies, and team', accent: '#228be6', blockCount: 8, templateIndex: 3, icon: 'Building2' },
 ] as const
 
 export function buildTemplate(id: string, name: string): SiteConfig {
   const meta = templateMeta.find((m) => m.id === id)
-  if (!meta) return templates[templates.length - 1].build(name)
+  if (!meta) return foodTruckStarter(name)
   return templates[meta.templateIndex].build(name)
 }
 
@@ -126,7 +129,6 @@ export function getTemplateForPrompt(prompt: string): SiteConfig {
   const lower = prompt.toLowerCase()
   const name = extractName(prompt)
 
-  // Find first template with a keyword match
   for (const template of templates) {
     if (template.keywords.length === 0) continue
     if (template.keywords.some((kw) => lower.includes(kw))) {
@@ -134,6 +136,5 @@ export function getTemplateForPrompt(prompt: string): SiteConfig {
     }
   }
 
-  // Default: SaaS template (last in array)
-  return templates[templates.length - 1].build(name)
+  return foodTruckStarter(name)
 }

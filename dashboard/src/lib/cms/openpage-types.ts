@@ -1,3 +1,5 @@
+import { foodTruckStarter } from './openpage-starters';
+
 /** OpenPage SiteConfig stored in CMS / newsletter design JSON. */
 export type OpenPageSiteConfig = {
   name: string;
@@ -48,60 +50,9 @@ export function isOpenPageBlocks(raw: unknown): raw is OpenPageBlocks {
   );
 }
 
+/** Default CMS / shop fallback — food-truck starter (not SaaS Brand/Pricing). */
 export function emptyOpenPageBlocks(title = 'Homepage'): OpenPageBlocks {
-  const safe = String(title || 'Homepage')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  const blocks = [
-    {
-      id: 'block-hero',
-      type: 'hero',
-      variant: 'centered',
-      props: {
-        badge: 'Welcome',
-        headline: title,
-        subheadline: 'Order online for pickup or delivery.',
-        primaryCta: 'Order now',
-      },
-    },
-    {
-      id: 'block-cta',
-      type: 'cta',
-      variant: 'simple',
-      props: {
-        headline: 'Hungry?',
-        subheadline: 'Browse the menu and checkout in minutes.',
-        buttonText: 'See menu',
-      },
-    },
-    {
-      id: 'block-footer',
-      type: 'footer',
-      variant: 'minimal',
-      props: {
-        copyright: `${new Date().getFullYear()} ${title}`,
-        links: ['Menu', 'Contact'],
-      },
-    },
-  ];
-  const config: OpenPageSiteConfig = {
-    name: title,
-    blocks,
-    pages: [{ id: 'page-home', name: 'Home', path: '/', blocks }],
-  };
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${safe}</title>
-<style>html,body{margin:0;height:100%;font-family:system-ui,sans-serif;background:#0a0a0a;color:#fafafa}main{max-width:40rem;margin:0 auto;padding:4rem 1.25rem;text-align:center}a{display:inline-block;margin-top:1rem;padding:.75rem 1.25rem;border-radius:.5rem;background:#22c55e;color:#052e16;text-decoration:none;font-weight:700}</style>
-</head><body><main><h1>${safe}</h1><p>Open the website builder, design your page, click Save in the toolbar, then Publish.</p><p><a href="/menu">Order online</a></p></main></body></html>`;
-  return {
-    engine: 'openpage',
-    config,
-    html,
-    defaultLocale: 'en',
-    locales: {
-      en: { config, html },
-    },
-  };
+  return foodTruckStarter(title || 'Homepage');
 }
 
 /** Pick HTML for the visitor language; fall back to default / primary html. */
@@ -143,9 +94,53 @@ export function withLocaleBundle(
 }
 
 /**
+ * Critical styles so OpenPage CDN exports remain readable if Tailwind Play CDN
+ * is blocked (egress / offline). Uses theme CSS variables already in the export.
+ */
+const OPENPAGE_CDN_FALLBACK_CSS = `
+html,body{height:100%;margin:0}
+body{background:var(--color-bg-0,#171210);color:var(--color-text-0,#faf6f0);font-family:var(--font-sans,system-ui,sans-serif);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.bg-bg-0{background-color:var(--color-bg-0)!important}.bg-bg-1{background-color:var(--color-bg-1)!important}
+.bg-bg-2{background-color:var(--color-bg-2)!important}.bg-bg-3{background-color:var(--color-bg-3)!important}
+.bg-bg-4{background-color:var(--color-bg-4)!important}.bg-green,.bg-green\\/10{background-color:var(--color-green,#e8a838)!important}
+.text-text-0{color:var(--color-text-0)!important}.text-text-1{color:var(--color-text-1)!important}
+.text-text-2{color:var(--color-text-2)!important}.text-text-3{color:var(--color-text-3)!important}
+.text-green{color:var(--color-green,#e8a838)!important}.text-black{color:#111!important}
+.border-border-default{border-color:var(--color-border-default)!important}
+.border-border-subtle{border-color:var(--color-border-subtle)!important}
+.flex{display:flex}.hidden{display:none}.grid{display:grid}.inline-flex{display:inline-flex}
+.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}
+.justify-center{justify-content:center}.justify-between{justify-content:space-between}
+.gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}
+.px-6{padding-left:1.5rem;padding-right:1.5rem}.px-8{padding-left:2rem;padding-right:2rem}
+.py-3{padding-top:.75rem;padding-bottom:.75rem}.py-4{padding-top:1rem;padding-bottom:1rem}
+.py-16{padding-top:4rem;padding-bottom:4rem}.py-20{padding-top:5rem;padding-bottom:5rem}
+.text-center{text-align:center}.font-semibold{font-weight:600}.font-bold{font-weight:700}
+.rounded-lg{border-radius:.5rem}.rounded-xl{border-radius:.75rem}.rounded-full{border-radius:9999px}
+.max-w-3xl{max-width:48rem}.max-w-xl{max-width:36rem}.mx-auto{margin-left:auto;margin-right:auto}
+.text-4xl{font-size:2.25rem;line-height:1.1}.text-2xl{font-size:1.5rem}.text-sm{font-size:.875rem}
+.w-full{width:100%}.relative{position:relative}.absolute{position:absolute}.inset-0{inset:0}
+.overflow-hidden{overflow:hidden}
+@media (min-width:768px){
+  .md\\:px-10{padding-left:2.5rem;padding-right:2.5rem}
+  .md\\:text-5xl{font-size:3rem;line-height:1.1}
+  .md\\:py-28{padding-top:7rem;padding-bottom:7rem}
+  .md\\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .md\\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .md\\:flex-row{flex-direction:row}
+}
+@media (min-width:1024px){
+  .lg\\:flex{display:flex}.lg\\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .lg\\:hidden{display:none}
+}
+`.replace(/\n/g, '');
+
+/**
  * Prepare OpenPage export HTML for the public shop iframe:
  * - rewrite shop routes to the merchant base path
  * - open in-page links in the parent window (not trapped in the iframe)
+ * - harden Tailwind Play CDN exports with critical CSS fallback
  */
 export function rewriteOpenPageHtml(html: string, basePath: string): string {
   const base = (basePath || '').replace(/\/$/, '');
@@ -157,12 +152,31 @@ export function rewriteOpenPageHtml(html: string, basePath: string): string {
     out = `<base target="_parent" />${out}`;
   }
 
-  // Full-bleed page: prevent nested “letterbox” feel from default body margins
-  if (!/html\s*,\s*body\s*\{[^}]*height\s*:\s*100%/i.test(out)) {
-    out = out.replace(
-      /<\/head>/i,
-      `<style>html,body{height:100%;margin:0;}</style></head>`
-    );
+  const hardening = `
+<link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
+<link rel="dns-prefetch" href="https://cdn.tailwindcss.com" />
+<style id="op-cdn-fallback">${OPENPAGE_CDN_FALLBACK_CSS}</style>
+<script>
+(function(){
+  // If Tailwind Play CDN never boots, keep semantic theme colors via fallback CSS above.
+  function mark(){ try { document.documentElement.setAttribute('data-op-tw','pending'); } catch(e){} }
+  function ok(){ try { document.documentElement.setAttribute('data-op-tw','ok'); } catch(e){} }
+  mark();
+  var n = 0;
+  var t = setInterval(function(){
+    n++;
+    if (typeof window.tailwind !== 'undefined') { ok(); clearInterval(t); }
+    else if (n > 40) { clearInterval(t); }
+  }, 250);
+})();
+</script>`;
+
+  if (/<\/head>/i.test(out)) {
+    if (!/id="op-cdn-fallback"/.test(out)) {
+      out = out.replace(/<\/head>/i, `${hardening}</head>`);
+    }
+  } else if (!/html\s*,\s*body\s*\{[^}]*height\s*:\s*100%/i.test(out)) {
+    out = `${hardening}${out}`;
   }
 
   const menu = base ? `${base}/menu` : '/menu';
