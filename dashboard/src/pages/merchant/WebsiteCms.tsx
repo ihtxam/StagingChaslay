@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -204,23 +205,23 @@ export default function WebsiteCms() {
   }
 
   if (editing) {
-    return (
-      <div className="fixed inset-0 z-40 flex flex-col bg-[var(--bg)]">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2 bg-[var(--bg)]">
-          <div className="flex items-center gap-3 min-w-0">
+    return createPortal(
+      <div className="fixed inset-0 z-[200] flex flex-col bg-stone-950 text-white">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-800 bg-stone-950 px-3 py-2.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <button
               type="button"
-              className="text-sm muted hover:underline shrink-0"
+              className="shrink-0 text-sm text-stone-300 hover:text-white hover:underline"
               onClick={() => setEditing(null)}
             >
               ← {t('cmsBackToPages')}
             </button>
             <input
-              className="input text-sm max-w-[220px]"
+              className="input max-w-[220px] border-stone-700 bg-stone-900 text-sm text-white"
               value={editing.title}
               onChange={(e) => setEditing({ ...editing, title: e.target.value })}
             />
-            <label className="flex items-center gap-1.5 text-xs shrink-0">
+            <label className="flex shrink-0 items-center gap-1.5 text-xs text-stone-300">
               <input
                 type="checkbox"
                 checked={!!editing.isHomepage}
@@ -228,10 +229,17 @@ export default function WebsiteCms() {
               />
               {t('cmsIsHomepage')}
             </label>
-            <span className="text-xs muted shrink-0">{editing.status}</span>
-            <span className="text-xs muted shrink-0">OpenPage</span>
+            <span className="shrink-0 text-xs text-stone-500">{editing.status}</span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              className="text-xs text-stone-400 underline hover:text-white"
+              href="/openpage/?embed=1#/editor"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t('cmsOpenInNewTab')}
+            </a>
             <button
               type="button"
               className="btn-secondary text-sm"
@@ -240,24 +248,30 @@ export default function WebsiteCms() {
             >
               {t('cmsSaveDraft')}
             </button>
-            <button type="button" className="btn-primary text-sm" disabled={busy} onClick={() => void publish()}>
+            <button
+              type="button"
+              className="btn-primary text-sm"
+              disabled={busy}
+              onClick={() => void publish()}
+            >
               {t('cmsPublish')}
             </button>
           </div>
         </div>
-        <div className="flex-1 min-h-0 relative overflow-hidden">
+        <p className="border-b border-amber-900/50 bg-amber-950/40 px-3 py-1.5 text-[11px] text-amber-100">
+          {t('cmsBuilderSaveHint')}
+        </p>
+        <div className="relative min-h-0 flex-1 overflow-hidden bg-stone-950">
           <OpenPageEmbed
             mode="page"
             title={editing.title}
             config={draft.config}
-            className="h-full w-full border-0 rounded-none"
+            className="relative h-full min-h-0 w-full rounded-none border-0 bg-stone-950"
             onSaved={(payload) => void onBuilderSaved(payload)}
           />
         </div>
-        <p className="border-t border-[var(--border)] px-3 py-1.5 text-[11px] muted">
-          {t('cmsOpenPageHint')}
-        </p>
-      </div>
+      </div>,
+      document.body
     );
   }
 

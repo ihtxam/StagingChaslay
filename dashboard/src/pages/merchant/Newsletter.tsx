@@ -1,9 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import OpenPageEmbed from '@/components/OpenPageEmbed';
 import { useI18n } from '@/lib/i18n';
-import type { OpenPageSiteConfig } from '@/lib/cms/openpage-types';
+import {
+  buildNewsletterEmailHtml,
+  defaultNativeNewsletter,
+  isNativeNewsletterDesign,
+  type NativeNewsletterDesign,
+} from '@/lib/newsletter/email-html';
 
 type AudienceRow = {
   id: string | null;
@@ -17,7 +21,7 @@ type Campaign = {
   title: string;
   subject: string;
   bodyHtml: string;
-  designJson?: OpenPageSiteConfig | { engine?: string; config?: OpenPageSiteConfig; html?: string } | null;
+  designJson?: NativeNewsletterDesign | { engine?: string; html?: string } | null;
   status: string;
   audience: string;
   recipientCount?: number;
@@ -28,15 +32,9 @@ type Campaign = {
   createdAt?: string;
 };
 
-function extractConfig(design: Campaign['designJson']): OpenPageSiteConfig | null {
-  if (!design || typeof design !== 'object') return null;
-  if ('engine' in design && design.engine === 'openpage' && design.config) {
-    return design.config;
-  }
-  if ('blocks' in design && Array.isArray((design as OpenPageSiteConfig).blocks)) {
-    return design as OpenPageSiteConfig;
-  }
-  return null;
+function designFromCampaign(c: Campaign): NativeNewsletterDesign {
+  if (isNativeNewsletterDesign(c.designJson)) return { ...c.designJson };
+  return defaultNativeNewsletter(c.title || 'Newsletter');
 }
 
 export default function Newsletter() {
@@ -52,11 +50,12 @@ export default function Newsletter() {
   const [campaignId, setCampaignId] = useState<string | null>(null);
   const [title, setTitle] = useState('Newsletter');
   const [subject, setSubject] = useState('');
-  const [designConfig, setDesignConfig] = useState<OpenPageSiteConfig | null>(null);
-  const [bodyHtml, setBodyHtml] = useState('');
+  const [design, setDesign] = useState<NativeNewsletterDesign>(() => defaultNativeNewsletter());
   const [audienceMode, setAudienceMode] = useState<'all' | 'selected'>('all');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState('');
+
+  const bodyHtml = useMemo(() => buildNewsletterEmailHtml(design), [design]);
 
   const load = async () => {
     setLoading(true);
@@ -94,31 +93,34 @@ export default function Newsletter() {
     [selected]
   );
 
-  const persistCampaign = async (html: string, config: OpenPageSiteConfig) => {
+  const patchDesign = (partial: Partial<NativeNewsletterDesign>) => {
+    setDesign((prev) => ({ ...prev, ...partial, engine: 'native' }));
+  };
+
+  const persistCampaign = async () => {
+    const html = buildNewsletterEmailHtml({ ...design, headline: design.headline || title });
     const res = await api.post('/merchant/marketing/campaigns', {
       id: campaignId || undefined,
       title,
       subject,
       bodyHtml: html,
-      designJson: { engine: 'openpage', config, html },
+      designJson: { ...design, headline: design.headline || title, engine: 'native' },
       audience: audienceMode,
       selectedEmails: audienceMode === 'selected' ? selectedEmails : undefined,
     });
     setCampaignId(res.data.campaign.id);
-    setDesignConfig(config);
-    setBodyHtml(html);
-    return res.data.campaign.id as string;
+    return { id: res.data.campaign.id as string, html };
   };
 
   const saveDraft = async (e?: FormEvent) => {
     e?.preventDefault();
-    if (!bodyHtml.trim() || !designConfig) {
-      toast.error(t('newsletterNeedOpenPageSave'));
+    if (!subject.trim() || !design.body.trim()) {
+      toast.error(t('newsletterNeedSubjectBody'));
       return;
     }
     setSaving(true);
     try {
-      await persistCampaign(bodyHtml, designConfig);
+      await persistCampaign();
       toast.success(t('newsletterDraftSaved'));
       await load();
     } catch (error: any) {
@@ -128,23 +130,13 @@ export default function Newsletter() {
     }
   };
 
-  const onBuilderSaved = (payload: { config: OpenPageSiteConfig; html: string }) => {
-    setDesignConfig(payload.config);
-    setBodyHtml(payload.html);
-    toast.success(t('newsletterDesignReady'));
-  };
-
   const sendNow = async () => {
     if (!emailStatus.configured) {
       toast.error(t('newsletterEmailNotConfigured'));
       return;
     }
-    if (!subject.trim()) {
+    if (!subject.trim() || !design.body.trim()) {
       toast.error(t('newsletterNeedSubjectBody'));
-      return;
-    }
-    if (!bodyHtml.trim() || !designConfig) {
-      toast.error(t('newsletterNeedOpenPageSave'));
       return;
     }
     if (audienceMode === 'selected' && selectedEmails.length === 0) {
@@ -154,7 +146,7 @@ export default function Newsletter() {
     if (!window.confirm(t('newsletterSendConfirm'))) return;
     setSending(true);
     try {
-      const id = await persistCampaign(bodyHtml, designConfig);
+      const { id } = await persistCampaign();
       const res = await api.post(`/merchant/marketing/campaigns/${id}/send`);
       toast.success(
         t('newsletterSent')
@@ -173,9 +165,7 @@ export default function Newsletter() {
     setCampaignId(c.id);
     setTitle(c.title || 'Newsletter');
     setSubject(c.subject || '');
-    const cfg = extractConfig(c.designJson);
-    setDesignConfig(cfg);
-    setBodyHtml(c.bodyHtml || '');
+    setDesign(designFromCampaign(c));
     setAudienceMode(c.audience === 'selected' ? 'selected' : 'all');
     const next: Record<string, boolean> = {};
     (c.selectedEmails || []).forEach((e) => {
@@ -188,8 +178,7 @@ export default function Newsletter() {
     setCampaignId(null);
     setTitle('Newsletter');
     setSubject('');
-    setDesignConfig(null);
-    setBodyHtml('');
+    setDesign(defaultNativeNewsletter('Newsletter'));
     setAudienceMode('all');
     setSelected({});
   };
@@ -220,94 +209,176 @@ export default function Newsletter() {
         </p>
       )}
 
-      <form onSubmit={saveDraft} className="card space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+      <form onSubmit={saveDraft} className="grid gap-4 lg:grid-cols-2">
+        <div className="card space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1 text-sm sm:col-span-2">
+              <span className="font-medium">{t('newsletterTitle')}</span>
+              <input
+                className="input"
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  if (!design.headline || design.headline === 'Newsletter') {
+                    patchDesign({ headline: e.target.value });
+                  }
+                }}
+              />
+            </label>
+            <label className="block space-y-1 text-sm sm:col-span-2">
+              <span className="font-medium">{t('newsletterSubject')}</span>
+              <input
+                className="input"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="{{businessName}} — news"
+                required
+              />
+            </label>
+          </div>
+
           <label className="block space-y-1 text-sm">
-            <span className="font-medium">{t('newsletterTitle')}</span>
-            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
-          </label>
-          <label className="block space-y-1 text-sm sm:col-span-2">
-            <span className="font-medium">{t('newsletterSubject')}</span>
+            <span className="font-medium">{t('newsletterHeadline')}</span>
             <input
               className="input"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="{{businessName}} - news"
+              value={design.headline}
+              onChange={(e) => patchDesign({ headline: e.target.value })}
+            />
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium">{t('newsletterIntro')}</span>
+            <input
+              className="input"
+              value={design.intro}
+              onChange={(e) => patchDesign({ intro: e.target.value })}
+            />
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium">{t('newsletterBody')}</span>
+            <textarea
+              className="input min-h-[160px] font-sans"
+              value={design.body}
+              onChange={(e) => patchDesign({ body: e.target.value })}
+              placeholder={t('newsletterBodyPlaceholder')}
               required
             />
+            <span className="text-[11px] muted">{t('newsletterBodyHint')}</span>
           </label>
-        </div>
-
-        <div className="space-y-1">
-          <span className="text-sm font-medium block">{t('newsletterBody')}</span>
-          <p className="text-[11px] muted">{t('newsletterOpenPageHint')}</p>
-          {bodyHtml ? (
-            <p className="text-[11px] text-emerald-700">{t('newsletterDesignReady')}</p>
-          ) : null}
-          <OpenPageEmbed
-            mode="newsletter"
-            title={title}
-            config={designConfig}
-            className="h-[680px] overflow-hidden rounded-lg border border-[var(--border)]"
-            onSaved={onBuilderSaved}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-sm font-medium">{t('newsletterAudience')}</p>
-          <div className="flex flex-wrap gap-3 text-sm">
-            <label className="inline-flex items-center gap-2">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">{t('newsletterCtaLabel')}</span>
               <input
-                type="radio"
-                checked={audienceMode === 'all'}
-                onChange={() => setAudienceMode('all')}
+                className="input"
+                value={design.ctaLabel}
+                onChange={(e) => patchDesign({ ctaLabel: e.target.value })}
               />
-              {t('newsletterAllCustomers')} ({audience.length})
             </label>
-            <label className="inline-flex items-center gap-2">
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">{t('newsletterCtaUrl')}</span>
               <input
-                type="radio"
-                checked={audienceMode === 'selected'}
-                onChange={() => setAudienceMode('selected')}
+                className="input"
+                value={design.ctaUrl}
+                onChange={(e) => patchDesign({ ctaUrl: e.target.value })}
+                placeholder="{{shopUrl}}"
               />
-              {t('newsletterSelected')} ({selectedEmails.length})
             </label>
           </div>
-        </div>
-
-        {audienceMode === 'selected' ? (
-          <div className="space-y-2">
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium">{t('newsletterFooterNote')}</span>
             <input
               className="input"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder={t('newsletterFilterAudience')}
+              value={design.footerNote}
+              onChange={(e) => patchDesign({ footerNote: e.target.value })}
             />
-            <div className="max-h-48 overflow-y-auto rounded border border-[var(--border)] divide-y divide-[var(--border)]">
-              {filteredAudience.map((row) => (
-                <label key={row.email} className="flex items-center gap-2 px-3 py-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={!!selected[row.email]}
-                    onChange={(e) =>
-                      setSelected((prev) => ({ ...prev, [row.email]: e.target.checked }))
-                    }
-                  />
-                  <span className="truncate">{row.name || row.email}</span>
-                  <span className="ml-auto text-xs muted truncate">{row.email}</span>
-                </label>
-              ))}
+          </label>
+          <label className="block space-y-1 text-sm max-w-[12rem]">
+            <span className="font-medium">{t('newsletterAccent')}</span>
+            <input
+              type="color"
+              className="h-10 w-full cursor-pointer rounded border border-[var(--border)] bg-white"
+              value={design.accentColor}
+              onChange={(e) => patchDesign({ accentColor: e.target.value })}
+            />
+          </label>
+
+          <p className="text-[11px] muted">{t('newsletterPlaceholders')}</p>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">{t('newsletterAudience')}</p>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={audienceMode === 'all'}
+                  onChange={() => setAudienceMode('all')}
+                />
+                {t('newsletterAllCustomers')} ({audience.length})
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={audienceMode === 'selected'}
+                  onChange={() => setAudienceMode('selected')}
+                />
+                {t('newsletterSelected')} ({selectedEmails.length})
+              </label>
             </div>
           </div>
-        ) : null}
 
-        <div className="flex flex-wrap gap-2 justify-end">
-          <button type="submit" className="btn-secondary" disabled={saving}>
-            {saving ? t('saving') : t('newsletterSaveDraft')}
-          </button>
-          <button type="button" className="btn-primary" disabled={sending} onClick={() => void sendNow()}>
-            {sending ? t('sending') : t('newsletterSend')}
-          </button>
+          {audienceMode === 'selected' ? (
+            <div className="space-y-2">
+              <input
+                className="input"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder={t('newsletterFilterAudience')}
+              />
+              <div className="max-h-48 overflow-y-auto rounded border border-[var(--border)] divide-y divide-[var(--border)]">
+                {filteredAudience.map((row) => (
+                  <label key={row.email} className="flex items-center gap-2 px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={!!selected[row.email]}
+                      onChange={(e) =>
+                        setSelected((prev) => ({ ...prev, [row.email]: e.target.checked }))
+                      }
+                    />
+                    <span className="truncate">{row.name || row.email}</span>
+                    <span className="ml-auto text-xs muted truncate">{row.email}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2 justify-end pt-1">
+            <button type="submit" className="btn-secondary" disabled={saving}>
+              {saving ? t('saving') : t('newsletterSaveDraft')}
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={sending}
+              onClick={() => void sendNow()}
+            >
+              {sending ? t('sending') : t('newsletterSend')}
+            </button>
+          </div>
+        </div>
+
+        <div className="card space-y-2 !bg-stone-100">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-stone-800">{t('newsletterPreview')}</h2>
+            <span className="text-[11px] text-stone-500">{t('newsletterPreviewHint')}</span>
+          </div>
+          <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+            <iframe
+              title="Newsletter preview"
+              className="h-[min(720px,70vh)] w-full border-0 bg-white"
+              srcDoc={bodyHtml}
+              sandbox=""
+            />
+          </div>
         </div>
       </form>
 

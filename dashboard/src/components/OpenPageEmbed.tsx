@@ -129,7 +129,7 @@ export default function OpenPageEmbed({
         ref={iframeRef}
         title="OpenPage builder"
         src={OPENPAGE_SRC}
-        className="h-full min-h-[640px] w-full border-0"
+        className="absolute inset-0 h-full w-full border-0"
         allow="clipboard-read; clipboard-write"
         onLoad={onIframeLoad}
       />
