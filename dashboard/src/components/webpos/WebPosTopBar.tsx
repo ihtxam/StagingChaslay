@@ -297,14 +297,19 @@ export default function WebPosTopBar({
 
           <button
             type="button"
-            className="relative hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:inline-flex"
-            onClick={onOnlineOrders}
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onOnlineOrders();
+            }}
             title={t('webPosOnlineOrders')}
+            aria-label={t('webPosOnlineOrders')}
           >
             <Bell size={17} />
             {onlinePendingCount > 0 ? (
               <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
-                {onlinePendingCount}
+                {onlinePendingCount > 99 ? '99+' : onlinePendingCount}
               </span>
             ) : null}
           </button>

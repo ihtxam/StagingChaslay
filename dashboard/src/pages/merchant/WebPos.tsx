@@ -473,6 +473,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [ordersRefreshToken, setOrdersRefreshToken] = useState(0);
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
+  const [ordersChannelPref, setOrdersChannelPref] = useState<'online' | null>(null);
   const [onlineOrdersOpen, setOnlineOrdersOpen] = useState(false);
   const [onlineOrders, setOnlineOrders] = useState<OnlineOrder[]>([]);
   const knownOnlineIdsRef = useRef<Set<string> | null>(null);
@@ -4721,6 +4722,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             open
             onClose={() => {
               setHighlightOrderId(null);
+              setOrdersChannelPref(null);
               setPosTab('register');
               setPosView('register');
             }}
@@ -4728,6 +4730,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             canCancel={canCancelOrders}
             canRefund={canRefundOrders}
             highlightOrderId={highlightOrderId}
+            initialChannelFilter={ordersChannelPref}
             onResumeHeld={(held) => {
               const data = held.cartJson as
                 | {
@@ -5276,6 +5279,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onClose={() => setOnlineOrdersOpen(false)}
         orders={onlineOrders}
         onRefresh={() => void pollOnlineOrders()}
+        onGoToOrders={(orderId) => {
+          setOnlineOrdersOpen(false);
+          stopOrderAlertLoop();
+          setOrdersChannelPref('online');
+          setHighlightOrderId(orderId);
+          setOrdersRefreshToken((n) => n + 1);
+          setPosTab('orders');
+          setPosView('orders');
+        }}
       />
 
       {(channel === 'takeaway' || channel === 'delivery') && (

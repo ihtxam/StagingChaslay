@@ -124,6 +124,8 @@ export type PosOrder = PosOrderForReceipt & {
   cancelReason?: string | null;
   notes?: string | null;
   masterOrderId?: string | null;
+  /** pos | web_shop */
+  orderType?: string | null;
 };
 export type HeldRow = {
   id: string;
@@ -136,7 +138,7 @@ export type HeldRow = {
   createdAt?: string | null;
 };
 type StatusFilter = 'active' | 'completed' | 'all';
-type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'platform';
+type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
 type Props = {
   open: boolean;
   /** Full-width in-tab layout instead of slide-over overlay */
@@ -150,6 +152,8 @@ type Props = {
   canCancel?: boolean;
   canRefund?: boolean;
   highlightOrderId?: string | null;
+  /** Prefer opening on Online / Active when jumping from the bell panel */
+  initialChannelFilter?: ChannelFilter | null;
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal'] as const;
@@ -158,13 +162,30 @@ function todayIso(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
 }
 
-/** Ongoing / kitchen / unpaid — not completed sales */
+/** Ongoing / kitchen / unpaid — not completed sales (POS cancel rules) */
 function canCancelOrder(o: PosOrder): boolean {
   const status = (o.status || '').toLowerCase();
   const pay = (o.paymentStatus || '').toLowerCase();
   if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) return false;
   if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(pay)) return false;
   return true;
+}
+
+/** Still in kitchen / fulfillment — includes paid online shop orders */
+function isOpenFulfillmentOrder(o: PosOrder): boolean {
+  const status = (o.status || '').toLowerCase();
+  return !['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status);
+}
+
+function isOnlineShopOrder(o: PosOrder): boolean {
+  const t = (o.orderType || '').toLowerCase();
+  return t === 'web_shop' || t === 'online' || isPlatformChannel(o.channel);
+}
+
+function matchesChannelFilter(o: { channel?: string | null; orderType?: string | null }, filter: ChannelFilter) {
+  if (filter === 'all') return true;
+  if (filter === 'online') return isOnlineShopOrder(o as PosOrder);
+  return (o.channel || 'takeaway') === filter;
 }
 
 function canEditPayment(o: PosOrder): boolean {
@@ -305,10 +326,13 @@ export default function WebPosOrdersPanel({
   canCancel = true,
   canRefund = true,
   highlightOrderId = null,
+  initialChannelFilter = null,
 }: Props) {
   const { t } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
-  const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>(
+    () => initialChannelFilter || 'all'
+  );
   const [search, setSearch] = useState('');
   const [held, setHeld] = useState<HeldRow[]>([]);
   const [orders, setOrders] = useState<PosOrder[]>([]);
@@ -380,7 +404,7 @@ export default function WebPosOrdersPanel({
     if (ch === 'dine_in') return t('dineIn');
     if (ch === 'takeaway') return t('takeaway');
     if (ch === 'delivery') return t('delivery');
-    if (isPlatformChannel(ch)) return t('webPosFoodPlatform');
+    if (isPlatformChannel(ch)) return t('webPosOnlineOrders');
     return ch;
   };
 
@@ -408,12 +432,21 @@ export default function WebPosOrdersPanel({
   }, [open, load, refreshToken]);
 
   useEffect(() => {
+    if (!open || !initialChannelFilter) return;
+    setChannelFilter(initialChannelFilter);
+    setStatusFilter('active');
+    setPage(0);
+  }, [open, initialChannelFilter, refreshToken]);
+
+  useEffect(() => {
     if (!open || !highlightOrderId || orders.length === 0) return;
     const match = orders.find((o) => o.id === highlightOrderId || o.clientId === highlightOrderId);
     if (match) {
-      setStatusFilter('completed');
+      setStatusFilter(isOpenFulfillmentOrder(match) ? 'active' : 'completed');
+      if (isOnlineShopOrder(match)) setChannelFilter('online');
       setSelectedOrder(match);
       setSelectedHeld(null);
+      setOrdersView('list');
     }
   }, [open, highlightOrderId, orders]);
 
@@ -440,13 +473,9 @@ export default function WebPosOrdersPanel({
 
     if (statusFilter === 'active' || statusFilter === 'all') {
       for (const h of held) {
-        if (channelFilter !== 'all') {
-          if (channelFilter === 'platform') {
-            if (!isPlatformChannel(h.channel)) continue;
-          } else if ((h.channel || 'takeaway') !== channelFilter) {
-            continue;
-          }
-        }
+        // Held tickets are POS-only; hide when filtering Online shop.
+        if (channelFilter === 'online') continue;
+        if (!matchesChannelFilter(h, channelFilter)) continue;
         if (q) {
           const label = (h.label || '').toLowerCase();
           const cj = h.cartJson as
@@ -466,18 +495,12 @@ export default function WebPosOrdersPanel({
         heldBucket.push(h);
       }
       for (const o of orders) {
-        if (!canCancelOrder(o)) continue;
-        if (channelFilter !== 'all') {
-          if (channelFilter === 'platform') {
-            if (!isPlatformChannel(o.channel)) continue;
-          } else if ((o.channel || 'takeaway') !== channelFilter) {
-            continue;
-          }
-        }
+        if (!isOpenFulfillmentOrder(o)) continue;
+        if (!matchesChannelFilter(o, channelFilter)) continue;
         if (q) {
           const refs = orderPublicRefs(o);
           const hay =
-            `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
+            `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${o.orderType || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
           if (!hay.includes(q)) continue;
         }
         activeBucket.push(o);
@@ -486,18 +509,12 @@ export default function WebPosOrdersPanel({
     if (statusFilter === 'completed' || statusFilter === 'all') {
       for (const o of orders) {
         // Ongoing orders already listed under Active; skip them here (including "All").
-        if (canCancelOrder(o)) continue;
-        if (channelFilter !== 'all') {
-          if (channelFilter === 'platform') {
-            if (!isPlatformChannel(o.channel)) continue;
-          } else if ((o.channel || 'takeaway') !== channelFilter) {
-            continue;
-          }
-        }
+        if (isOpenFulfillmentOrder(o)) continue;
+        if (!matchesChannelFilter(o, channelFilter)) continue;
         if (q) {
           const refs = orderPublicRefs(o);
           const hay =
-            `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
+            `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${o.orderType || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
           if (!hay.includes(q)) continue;
         }
         doneBucket.push(o);
@@ -769,7 +786,7 @@ export default function WebPosOrdersPanel({
     { id: 'dine_in', label: t('dineIn') },
     { id: 'takeaway', label: t('takeaway') },
     { id: 'delivery', label: t('delivery') },
-    { id: 'platform', label: t('webPosFoodPlatform') },
+    { id: 'online', label: t('webPosOnlineOrders') },
   ];
 
   const cancelModalOpen = !!(cancelFor || cancelHeldFor);

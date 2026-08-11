@@ -78,7 +78,8 @@ export class PosOrdersService {
     const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
     const conditions = [
       eq(schema.orders.merchantId, merchantId),
-      eq(schema.orders.orderType, "pos"),
+      // POS register sales + online shop orders (web_shop) for the Orders board
+      inArray(schema.orders.orderType, ["pos", "web_shop"]),
     ];
 
     if (opts.status && opts.status !== "all") {
@@ -117,6 +118,7 @@ export class PosOrdersService {
       id: o.id,
       orderNumber: o.orderNumber,
       clientId: o.clientId,
+      orderType: o.orderType,
       status: o.status,
       channel: o.fulfillmentChannel,
       paymentMethod: o.paymentMethod,
