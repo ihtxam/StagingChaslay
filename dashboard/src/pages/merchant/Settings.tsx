@@ -1238,11 +1238,7 @@ export default function Settings() {
                   <p className="text-xs muted">{t('shopHoursNavPos')}</p>
                 </div>
               </Section>
-              <div className="flex justify-end border-t border-[var(--border)] pt-4">
-                <button type="submit" className="btn-primary" disabled={saving}>
-                  {saving ? t('saving') : t('save')}
-                </button>
-              </div>
+              <SettingsSaveBar saving={saving} />
             </form>
           )}
 
@@ -1252,9 +1248,12 @@ export default function Settings() {
 
           {tab === 'tables' && (
             <div className="space-y-5">
+              <SettingsPageHeader title={t('settingsTables')} subtitle={t('floorPlanSettingsHint')} />
               <form onSubmit={onSave} className="space-y-5">
                 <Section
                   id="tables-floor"
+                  icon={UtensilsCrossed}
+                  accent={settingsDash.accent}
                   title={t('settingsTables')}
                   description={t('floorPlanSettingsHint')}
                   highlight={isSectionHighlight('tables-floor')}
@@ -1302,22 +1301,30 @@ export default function Settings() {
                     </button>
                   </p>
                 </Section>
-                <div className="flex justify-end border-t border-[var(--border)] pt-4">
-                  <button type="submit" className="btn-primary" disabled={saving}>
-                    {saving ? t('saving') : t('save')}
-                  </button>
-                </div>
+                <SettingsSaveBar saving={saving} />
               </form>
-              <Section title={t('tableDesigner')} description={t('tableDesignerHint')}>
+              <Section icon={UtensilsCrossed} accent={settingsDash.info} title={t('tableDesigner')} description={t('tableDesignerHint')}>
                 <FloorPlan embedded />
               </Section>
             </div>
           )}
 
           {tab === 'pos' && (
-            <form onSubmit={onSave} className="space-y-8">
+            <form onSubmit={onSave} className="space-y-5">
+              <SettingsPageHeader
+                title={t('settingsPos')}
+                subtitle={t('posLayoutSettingsHint')}
+                action={
+                  <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={saving}>
+                    <Save className="h-4 w-4" aria-hidden />
+                    {saving ? t('saving') : t('save')}
+                  </button>
+                }
+              />
               <Section
                 id="pos-mode"
+                icon={Monitor}
+                accent={settingsDash.accent}
                 title={t('posMode')}
                 description={t('posModeHint')}
                 highlight={isSectionHighlight('pos-mode')}
@@ -1426,6 +1433,8 @@ export default function Settings() {
 
               <Section
                 id="pos-layout"
+                icon={Monitor}
+                accent={settingsDash.info}
                 title={t('posLayoutSettings')}
                 description={t('posLayoutSettingsHint')}
                 highlight={isSectionHighlight('pos-layout')}
@@ -1537,6 +1546,8 @@ export default function Settings() {
 
               <Section
                 id="pos-shifts"
+                icon={Monitor}
+                accent={settingsDash.warning}
                 title={t('settingsOperations')}
                 description={t('shiftsEnabledHint')}
                 highlight={isSectionHighlight('pos-shifts')}
@@ -1588,6 +1599,8 @@ export default function Settings() {
 
               <Section
                 id="pos-courses"
+                icon={Monitor}
+                accent={settingsDash.success}
                 title={t('coursesEnabled')}
                 description={t('coursesEnabledHint')}
                 highlight={isSectionHighlight('pos-courses')}
@@ -1635,6 +1648,8 @@ export default function Settings() {
 
               <Section
                 id="pos-checkout"
+                icon={CreditCard}
+                accent={settingsDash.accent}
                 title={t('posCheckoutSettings')}
                 description={t('posCheckoutHint')}
                 highlight={isSectionHighlight('pos-checkout')}
@@ -1697,6 +1712,8 @@ export default function Settings() {
 
               <Section
                 id="pos-payments"
+                icon={CreditCard}
+                accent={settingsDash.info}
                 title={t('webposPaymentMethods')}
                 description={t('webposPaymentMethodsHint')}
                 highlight={isSectionHighlight('pos-payments')}
@@ -1734,19 +1751,18 @@ export default function Settings() {
                 </div>
               </Section>
 
-              <div className="flex justify-end border-t border-[var(--border)] pt-4">
-                <button type="submit" className="btn-primary" disabled={saving}>
-                  {saving ? t('saving') : t('save')}
-                </button>
-              </div>
+              <SettingsSaveBar saving={saving} />
             </form>
           )}
 
           {tab === 'payments' && (
-            <div className="space-y-8">
+            <div className="space-y-5">
+              <SettingsPageHeader title={t('settingsPayments')} subtitle={t('adyenSettingsHint')} />
               <form onSubmit={saveAdyen} className="space-y-5">
                 <Section
                   id="payments-adyen"
+                  icon={CreditCard}
+                  accent={settingsDash.accent}
                   title={t('adyenCredentials')}
                   description={t('adyenSettingsHint')}
                   highlight={isSectionHighlight('payments-adyen')}
@@ -1800,15 +1816,11 @@ export default function Settings() {
                     </div>
                   </div>
                 </Section>
-                <div className="flex justify-end border-t border-[var(--border)] pt-4">
-                  <button type="submit" className="btn-primary" disabled={savingAdyen}>
-                    {savingAdyen ? t('saving') : t('save')}
-                  </button>
-                </div>
+                <SettingsSaveBar saving={savingAdyen} />
               </form>
 
-              <form onSubmit={saveCardFees} className="space-y-5 border-t border-[var(--border)] pt-6">
-                <Section title={t('onlineCardFees')} description={t('onlineCardFeesHint')}>
+              <form onSubmit={saveCardFees} className="space-y-5">
+                <Section icon={CreditCard} accent={settingsDash.warning} title={t('onlineCardFees')} description={t('onlineCardFeesHint')}>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Field label={t('cardFeeFixed')} hint={t('cardFeeFixedHint')}>
                       <input
@@ -1833,15 +1845,11 @@ export default function Settings() {
                     </Field>
                   </div>
                 </Section>
-                <div className="flex justify-end border-t border-[var(--border)] pt-4">
-                  <button type="submit" className="btn-primary" disabled={savingFee}>
-                    {savingFee ? t('saving') : t('save')}
-                  </button>
-                </div>
+                <SettingsSaveBar saving={savingFee} />
               </form>
 
-              <form onSubmit={saveWebposPayments} className="space-y-5 border-t border-[var(--border)] pt-6">
-                <Section title={t('adyenTerminalEnv')}>
+              <form onSubmit={saveWebposPayments} className="space-y-5">
+                <Section icon={CreditCard} accent={settingsDash.info} title={t('adyenTerminalEnv')}>
                   <p className="text-xs muted">
                     {t('webposPaymentMethodsMovedHint')}{' '}
                     <button
@@ -1883,15 +1891,10 @@ export default function Settings() {
                     {t('adyenLegacyEndpoint')}
                   </label>
                 </Section>
-                <div className="flex justify-end border-t border-[var(--border)] pt-4">
-                  <button type="submit" className="btn-primary" disabled={savingWebposPay}>
-                    {savingWebposPay ? t('saving') : t('save')}
-                  </button>
-                </div>
+                <SettingsSaveBar saving={savingWebposPay} />
               </form>
 
-              <div className="space-y-5 border-t border-[var(--border)] pt-6">
-                <Section title={t('paymentTerminals')} description={t('paymentTerminalsHint')}>
+              <Section icon={CreditCard} accent={settingsDash.success} title={t('paymentTerminals')} description={t('paymentTerminalsHint')}>
                   <form onSubmit={addTerminal} className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]">
                     <Field label={`${t('terminalId')} *`} hint={t('terminalIdHint')}>
                       <input
@@ -1955,12 +1958,21 @@ export default function Settings() {
                     </table>
                   </div>
                 </Section>
-              </div>
             </div>
           )}
 
           {tab === 'email' && (
             <form onSubmit={onSave} className="space-y-5">
+              <SettingsPageHeader
+                title={t('settingsEmail')}
+                subtitle={t('settingsSmtpHint')}
+                action={
+                  <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={saving}>
+                    <Save className="h-4 w-4" aria-hidden />
+                    {saving ? t('saving') : t('save')}
+                  </button>
+                }
+              />
               <div
                 id="email-smtp"
                 className={
@@ -1969,7 +1981,7 @@ export default function Settings() {
                     : undefined
                 }
               >
-              <Section title={t('settingsSmtp')} description={t('settingsSmtpHint')}>
+              <Section icon={Mail} accent={settingsDash.accent} title={t('settingsSmtp')} description={t('settingsSmtpHint')}>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
                   <input
                     type="checkbox"
@@ -2158,7 +2170,7 @@ export default function Settings() {
                     : undefined
                 }
               >
-              <Section title={t('settingsBrevo')} description={t('settingsBrevoHint')}>
+              <Section icon={Mail} accent={settingsDash.info} title={t('settingsBrevo')} description={t('settingsBrevoHint')}>
                 <p className="text-xs muted -mt-1">{t('settingsBrevoPriorityHint')}</p>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
                   <input
@@ -2396,7 +2408,7 @@ export default function Settings() {
               </Section>
               </div>
 
-              <Section title={t('reorderReminder')} description={t('reorderReminderHint')}>
+              <Section icon={Mail} accent={settingsDash.warning} title={t('reorderReminder')} description={t('reorderReminderHint')}>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
                   <input
                     type="checkbox"
@@ -2468,17 +2480,23 @@ export default function Settings() {
                 </Field>
               </Section>
 
-              <div className="flex justify-end border-t border-[var(--border)] pt-4">
-                <button type="submit" className="btn-primary" disabled={saving}>
-                  {saving ? t('saving') : t('save')}
-                </button>
-              </div>
+              <SettingsSaveBar saving={saving} />
             </form>
           )}
 
           {tab === 'receipt' && (
             <form className="space-y-5" onSubmit={saveReceiptPrint}>
-              <Section title={t('settingsReceipt')} description={t('settingsReceiptHint')}>
+              <SettingsPageHeader
+                title={t('settingsReceipt')}
+                subtitle={t('settingsReceiptHint')}
+                action={
+                  <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={savingReceipt}>
+                    <Save className="h-4 w-4" aria-hidden />
+                    {savingReceipt ? t('saving') : t('save')}
+                  </button>
+                }
+              />
+              <Section icon={Printer} accent={settingsDash.accent} title={t('settingsReceipt')} description={t('settingsReceiptHint')}>
                 <Field label={t('receiptLanguage')}>
                   <select
                     className="input"
@@ -2799,7 +2817,7 @@ export default function Settings() {
                 </label>
               </Section>
 
-              <Section title={t('printAgentDownload')} description={t('printAgentDownloadHint')}>
+              <Section icon={Printer} accent={settingsDash.info} title={t('printAgentDownload')} description={t('printAgentDownloadHint')}>
                 <div className="flex flex-wrap items-center gap-3">
                   <a
                     className="btn-primary inline-flex"
@@ -2828,7 +2846,7 @@ export default function Settings() {
                 </div>
               </Section>
 
-              <Section title={t('printerProfiles')} description={t('printerProfilesHint')}>
+              <Section icon={Printer} accent={settingsDash.success} title={t('printerProfiles')} description={t('printerProfilesHint')}>
                 {(settings.posPrintSettings?.printers || []).map((p, idx) => (
                   <div
                     key={p.id}
@@ -2918,17 +2936,14 @@ export default function Settings() {
                 </button>
               </Section>
 
-              <div className="flex justify-end border-t border-[var(--border)] pt-4">
-                <button type="submit" className="btn-primary" disabled={savingReceipt}>
-                  {savingReceipt ? t('saving') : t('save')}
-                </button>
-              </div>
+              <SettingsSaveBar saving={savingReceipt} />
             </form>
           )}
 
           {tab === 'language' && (
             <div className="space-y-5">
-              <Section title={t('language')} description={t('languageSettingsHint')}>
+              <SettingsPageHeader title={t('language')} subtitle={t('languageSettingsHint')} />
+              <Section icon={Languages} accent={settingsDash.accent} title={t('language')} description={t('languageSettingsHint')}>
                 <Field label={t('panelLanguage')} hint={t('panelLanguageHint')}>
                   <select
                     className="input"
