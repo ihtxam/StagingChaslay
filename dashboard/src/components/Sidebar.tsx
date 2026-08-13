@@ -181,9 +181,9 @@ export default function Sidebar({
   return (
     <>
       <aside
-        className={`${
+        className={`panel-sidebar ${
           isOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'
-        } fixed lg:relative lg:translate-x-0 lg:pointer-events-auto w-56 h-dvh max-h-dvh lg:h-full lg:max-h-full bg-[#1e293b] text-slate-100 transition-transform duration-200 z-40 flex flex-col shrink-0`}
+        } fixed lg:relative lg:translate-x-0 lg:pointer-events-auto w-56 h-dvh max-h-dvh lg:h-full lg:max-h-full bg-secondary text-slate-100 transition-transform duration-200 z-40 flex flex-col shrink-0`}
       >
         <div className="px-4 py-3 border-b border-slate-700/80 flex items-center justify-between shrink-0">
           <div>
@@ -311,7 +311,7 @@ export default function Sidebar({
           })}
         </nav>
 
-        <div className="p-3 border-t border-slate-700/80 space-y-2 shrink-0 bg-[#172033]">
+        <div className="panel-sidebar-footer p-3 border-t border-slate-700/80 space-y-2 shrink-0 bg-slate-900/70">
           {impersonating && (
             <button
               type="button"
@@ -337,7 +337,7 @@ export default function Sidebar({
 
           {onLanguageChange && (
             <select
-              className="w-full rounded-md border border-slate-600 bg-[#1e293b] px-2.5 py-1.5 text-xs text-slate-200"
+              className="w-full rounded-md border border-slate-600 bg-secondary px-2.5 py-1.5 text-xs text-slate-200"
               value={language || 'en'}
               onChange={(e) => onLanguageChange(e.target.value as Locale)}
               aria-label={t('language')}

@@ -117,6 +117,16 @@ button {
     overscroll-behavior: none;
   }
 
+  /* Merchant/reseller/superadmin nav — fixed color so JIT arbitrary classes cannot drop it */
+  .panel-sidebar {
+    background-color: #1e293b;
+    color: #f1f5f9;
+  }
+
+  .panel-sidebar-footer {
+    background-color: #172033;
+  }
+
   /* Fallback when dvh is unavailable */
   @supports not (height: 100dvh) {
     .panel-shell {

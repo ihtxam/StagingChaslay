@@ -194,7 +194,13 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
     }
   };
 
-  const onCanvasPointerDown = (e: PointerEvent<HTMLDivElement>, localId: string) => {
+  const onCanvasBackgroundPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-floor-table]')) return;
+    setSelectedId(null);
+  };
+
+  const onTablePointerDown = (e: PointerEvent<HTMLDivElement>, localId: string) => {
     e.stopPropagation();
     e.preventDefault();
     const table = tables.find((t) => t.localId === localId);
@@ -268,7 +274,7 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[240px_1fr_280px] gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[240px_1fr] gap-4">
         {/* Plans list */}
         <div className="card space-y-3">
           <h2 className="font-semibold text-slate-900">Floor plans</h2>
@@ -301,121 +307,45 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
           </div>
         </div>
 
-        {/* Canvas */}
-        <div className="card min-w-0">
-          <div className="sticky top-0 z-10 -mx-3 sm:-mx-4 mb-3 flex items-center justify-between gap-2 flex-wrap border-b border-slate-100 bg-[var(--bg-elevated)] px-3 sm:px-4 py-2">
-            <h2 className="font-semibold text-slate-900 truncate min-w-0">{activePlan?.name || 'Canvas'}</h2>
-            <div className="flex shrink-0 gap-2">
-              <button type="button" className="btn-secondary" onClick={addTable} disabled={!activePlan}>
-                + Table
-              </button>
-              <button type="button" className="btn-primary whitespace-nowrap" onClick={saveTables} disabled={!activePlan || saving}>
-                {saving ? 'Saving...' : t('save')}
-              </button>
-            </div>
-          </div>
-
-          {!activePlan ? (
-            <div className="h-[420px] flex items-center justify-center text-slate-500 border border-dashed rounded-xl">
-              Create a floor plan to design tables
-            </div>
-          ) : (
-            <div
-              className="relative rounded-xl border border-slate-200 bg-[linear-gradient(#e2e8f0_1px,transparent_1px),linear-gradient(90deg,#e2e8f0_1px,transparent_1px)] bg-[size:24px_24px]"
-              style={{
-                height: Math.min(activePlan.canvasHeight, 560),
-                overflow: drag ? 'hidden' : 'auto',
-                touchAction: drag ? 'none' : 'auto',
-              }}
-              onPointerMove={onCanvasPointerMove}
-              onPointerUp={onCanvasPointerUp}
-              onPointerLeave={onCanvasPointerUp}
-              onClick={() => setSelectedId(null)}
-            >
-              <div
-                ref={canvasRef}
-                className="relative bg-slate-50/40"
-                style={{ width: activePlan.canvasWidth, height: activePlan.canvasHeight }}
-              >
-                {tables.map((table) => (
-                  <div
-                    key={table.localId}
-                    onPointerDown={(e) => onCanvasPointerDown(e, table.localId)}
-                    className={`absolute flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none shadow-sm border-2 ${
-                      selectedId === table.localId ? 'border-indigo-600 ring-2 ring-indigo-200' : 'border-slate-700/40'
-                    } ${table.shape === 'round' ? 'rounded-full' : 'rounded-xl'} ${
-                      table.status === 'reserved' ? 'ring-4 ring-amber-400 ring-offset-1' : ''
-                    }`}
-                    style={{
-                      left: table.posX,
-                      top: table.posY,
-                      width: table.width,
-                      height: table.height,
-                      touchAction: 'none',
-                      backgroundColor: `${STATUS_COLOR[table.status]}22`,
-                      transform: table.rotation ? `rotate(${table.rotation}deg)` : undefined,
-                    }}
+        {/* Designer: details bar on top, canvas fills remaining space */}
+        <div className="flex flex-col gap-4 min-w-0 min-h-0">
+          <div className="card space-y-3">
+            <h2 className="font-semibold text-slate-900">Table details</h2>
+            {!selected ? (
+              <p className="text-sm text-slate-500">Select a table on the canvas to edit label, capacity, and shape.</p>
+            ) : (
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="min-w-[7rem] flex-1">
+                  <label className="block text-sm font-medium mb-1">Label</label>
+                  <input
+                    className="input"
+                    value={selected.label}
+                    onChange={(e) => updateSelected({ label: e.target.value })}
+                  />
+                </div>
+                <div className="w-24">
+                  <label className="block text-sm font-medium mb-1">PAX</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={selected.capacity}
+                    onChange={(e) => updateSelected({ capacity: Math.max(1, Number(e.target.value) || 1) })}
+                  />
+                </div>
+                <div className="w-32">
+                  <label className="block text-sm font-medium mb-1">Shape</label>
+                  <select
+                    className="input"
+                    value={selected.shape}
+                    onChange={(e) => updateSelected({ shape: e.target.value as TableShape })}
                   >
-                    <div className="font-bold text-slate-900 text-sm">{table.label}</div>
-                    <div className="text-[11px] text-slate-600">{table.capacity} PAX</div>
-                    <div
-                      className="mt-1 h-2 w-2 rounded-full"
-                      style={{ backgroundColor: STATUS_COLOR[table.status] }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
-            {Object.entries(STATUS_COLOR).map(([k, c]) => (
-              <span key={k} className="inline-flex items-center gap-1 capitalize">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c }} />
-                {k}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Inspector */}
-        <div className="card space-y-3">
-          <h2 className="font-semibold text-slate-900">Table details</h2>
-          {!selected ? (
-            <p className="text-sm text-slate-500">Select a table on the canvas to edit label, capacity, shape.</p>
-          ) : (
-            <>
-              <div>
-                <label className="block text-sm font-medium mb-1">Label</label>
-                <input
-                  className="input"
-                  value={selected.label}
-                  onChange={(e) => updateSelected({ label: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Capacity (PAX)</label>
-                <input
-                  className="input"
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={selected.capacity}
-                  onChange={(e) => updateSelected({ capacity: Math.max(1, Number(e.target.value) || 1) })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Shape</label>
-                <select
-                  className="input"
-                  value={selected.shape}
-                  onChange={(e) => updateSelected({ shape: e.target.value as TableShape })}
-                >
-                  <option value="rect">Rectangle</option>
-                  <option value="round">Round</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
+                    <option value="rect">Rectangle</option>
+                    <option value="round">Round</option>
+                  </select>
+                </div>
+                <div className="w-24">
                   <label className="block text-sm font-medium mb-1">Width</label>
                   <input
                     className="input"
@@ -424,7 +354,7 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                     onChange={(e) => updateSelected({ width: Math.max(40, Number(e.target.value) || 40) })}
                   />
                 </div>
-                <div>
+                <div className="w-24">
                   <label className="block text-sm font-medium mb-1">Height</label>
                   <input
                     className="input"
@@ -433,19 +363,94 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                     onChange={(e) => updateSelected({ height: Math.max(40, Number(e.target.value) || 40) })}
                   />
                 </div>
+                <button type="button" className="btn-secondary text-red-600 shrink-0" onClick={removeSelected}>
+                  {t('delete')}
+                </button>
               </div>
-              <button type="button" className="btn-secondary w-full text-red-600" onClick={removeSelected}>
-                {t('delete')} table
-              </button>
-            </>
-          )}
-          <div className="border-t pt-3 text-xs text-slate-500 space-y-1">
-            <p>
-              <strong>PAX ordering:</strong> when enabled in Settings, POS orders &amp; bills per person (Person 1…).
-            </p>
-            <p>
-              <strong>Split bill:</strong> at checkout use Pay all, /N equal split, or pay by person.
-            </p>
+            )}
+            <div className="border-t pt-3 text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+              <p>
+                <strong>PAX ordering:</strong> when enabled in Settings, POS orders &amp; bills per person (Person 1…).
+              </p>
+              <p>
+                <strong>Split bill:</strong> at checkout use Pay all, /N equal split, or pay by person.
+              </p>
+            </div>
+          </div>
+
+          <div className="card min-w-0 flex-1 flex flex-col min-h-[480px]">
+            <div className="sticky top-0 z-10 -mx-3 sm:-mx-4 mb-3 flex items-center justify-between gap-2 flex-wrap border-b border-slate-100 bg-[var(--bg-elevated)] px-3 sm:px-4 py-2 shrink-0">
+              <h2 className="font-semibold text-slate-900 truncate min-w-0">{activePlan?.name || 'Canvas'}</h2>
+              <div className="flex shrink-0 gap-2">
+                <button type="button" className="btn-secondary" onClick={addTable} disabled={!activePlan}>
+                  + Table
+                </button>
+                <button type="button" className="btn-primary whitespace-nowrap" onClick={saveTables} disabled={!activePlan || saving}>
+                  {saving ? 'Saving...' : t('save')}
+                </button>
+              </div>
+            </div>
+
+            {!activePlan ? (
+              <div className="flex-1 flex items-center justify-center text-slate-500 border border-dashed rounded-xl min-h-[360px]">
+                Create a floor plan to design tables
+              </div>
+            ) : (
+              <div
+                className="relative flex-1 rounded-xl border border-slate-200 bg-[linear-gradient(#e2e8f0_1px,transparent_1px),linear-gradient(90deg,#e2e8f0_1px,transparent_1px)] bg-[size:24px_24px] min-h-[360px]"
+                style={{
+                  overflow: drag ? 'hidden' : 'auto',
+                  touchAction: drag ? 'none' : 'auto',
+                }}
+                onPointerDown={onCanvasBackgroundPointerDown}
+                onPointerMove={onCanvasPointerMove}
+                onPointerUp={onCanvasPointerUp}
+                onPointerLeave={onCanvasPointerUp}
+              >
+                <div
+                  ref={canvasRef}
+                  className="relative bg-slate-50/40"
+                  style={{ width: activePlan.canvasWidth, height: activePlan.canvasHeight }}
+                >
+                  {tables.map((table) => (
+                    <div
+                      key={table.localId}
+                      data-floor-table
+                      onPointerDown={(e) => onTablePointerDown(e, table.localId)}
+                      className={`absolute flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none shadow-sm border-2 ${
+                        selectedId === table.localId ? 'border-indigo-600 ring-2 ring-indigo-200' : 'border-slate-700/40'
+                      } ${table.shape === 'round' ? 'rounded-full' : 'rounded-xl'} ${
+                        table.status === 'reserved' ? 'ring-4 ring-amber-400 ring-offset-1' : ''
+                      }`}
+                      style={{
+                        left: table.posX,
+                        top: table.posY,
+                        width: table.width,
+                        height: table.height,
+                        touchAction: 'none',
+                        backgroundColor: `${STATUS_COLOR[table.status]}22`,
+                        transform: table.rotation ? `rotate(${table.rotation}deg)` : undefined,
+                      }}
+                    >
+                      <div className="font-bold text-slate-900 text-sm">{table.label}</div>
+                      <div className="text-[11px] text-slate-600">{table.capacity} PAX</div>
+                      <div
+                        className="mt-1 h-2 w-2 rounded-full"
+                        style={{ backgroundColor: STATUS_COLOR[table.status] }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500 shrink-0">
+              {Object.entries(STATUS_COLOR).map(([k, c]) => (
+                <span key={k} className="inline-flex items-center gap-1 capitalize">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c }} />
+                  {k}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </div>
