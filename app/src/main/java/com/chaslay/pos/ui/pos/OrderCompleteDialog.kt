@@ -2,9 +2,11 @@ package com.chaslay.pos.ui.pos
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,9 +40,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -53,6 +57,15 @@ import com.chaslay.pos.data.local.entity.TransactionEntity
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.receipt.ReceiptQrGenerator
 import java.util.Locale
+
+private val OrderCompleteCardShape = RoundedCornerShape(24.dp)
+private val OrderCompleteActionShape = RoundedCornerShape(14.dp)
+private val OrderCompleteActionHeight = 56.dp
+private val OrderCompleteActionPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp)
+private val OrderCompleteSuccessGreen = Color(0xFF1F8F55)
+private val OrderCompleteTextPrimary = Color(0xFF121826)
+private val OrderCompleteTextSecondary = Color(0xFF556377)
+private val OrderCompleteHairline = Color(0x1A000000)
 
 @Composable
 fun OrderCompleteDialog(
@@ -84,26 +97,26 @@ fun OrderCompleteDialog(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth(0.58f)
-                .padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
+                .fillMaxWidth(0.74f)
+                .padding(20.dp),
+            shape = OrderCompleteCardShape,
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
         ) {
             Column(
-                modifier = Modifier.padding(28.dp),
+                modifier = Modifier.padding(horizontal = 36.dp, vertical = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
                     modifier = Modifier
-                        .size(72.dp)
-                        .background(Color(0xFF22C55E), CircleShape),
+                        .size(88.dp)
+                        .background(OrderCompleteSuccessGreen, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp))
+                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(44.dp))
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Order Complete", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(20.dp))
+                Text("Order Complete", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = OrderCompleteTextPrimary)
                 if (splitPaymentIndex != null && splitPaymentTotal != null) {
                     Text(
                         "Payment $splitPaymentIndex of $splitPaymentTotal",
@@ -115,9 +128,10 @@ fun OrderCompleteDialog(
                 }
                 Text(
                     successMessage ?: stringResource(R.string.payment_success),
-                    fontSize = 14.sp,
-                    color = Color(0xFF22C55E),
-                    modifier = Modifier.padding(top = 4.dp),
+                    fontSize = 16.sp,
+                    color = OrderCompleteSuccessGreen,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 6.dp),
                     textAlign = TextAlign.Center
                 )
 
@@ -146,46 +160,69 @@ fun OrderCompleteDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFFF8FAFC)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFFF7F7F7))
+                        .border(1.dp, OrderCompleteHairline, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 28.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("TOTAL PAID", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                    Text(
+                        "TOTAL PAID",
+                        fontSize = 12.sp,
+                        color = OrderCompleteTextSecondary,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.8.sp
+                    )
+                    Text(
+                        formatMoney(transaction.total, currencySymbol),
+                        fontSize = 48.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = OrderCompleteTextPrimary,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    )
+                    transaction.changeDue?.takeIf { it > 0 }?.let { change ->
                         Text(
-                            formatMoney(transaction.total, currencySymbol),
-                            fontSize = 36.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(vertical = 8.dp)
+                            "Change: ${formatMoney(change, currencySymbol)}",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF13A99A),
+                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                         )
-                        transaction.changeDue?.takeIf { it > 0 }?.let { change ->
-                            Text(
-                                "Change: ${formatMoney(change, currencySymbol)}",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF16A085)
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Receipt, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(18.dp))
-                                Column(modifier = Modifier.padding(start = 8.dp)) {
-                                    Text("Order", fontSize = 11.sp, color = Color.Gray)
-                                    Text("#${transaction.transactionNumber.takeLast(6).uppercase()}", fontWeight = FontWeight.SemiBold)
-                                }
+                    } ?: Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Receipt, contentDescription = null, tint = OrderCompleteTextSecondary, modifier = Modifier.size(20.dp))
+                            Column(modifier = Modifier.padding(start = 10.dp)) {
+                                Text("Order", fontSize = 11.sp, color = OrderCompleteTextSecondary, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "#${transaction.transactionNumber.takeLast(6).uppercase()}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = OrderCompleteTextPrimary
+                                )
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CreditCard, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(18.dp))
-                                Column(modifier = Modifier.padding(start = 8.dp)) {
-                                    Text("Payment", fontSize = 11.sp, color = Color.Gray)
-                                    Text(paymentLabel(transaction.paymentMethod), fontWeight = FontWeight.SemiBold)
-                                }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CreditCard, contentDescription = null, tint = OrderCompleteTextSecondary, modifier = Modifier.size(20.dp))
+                            Column(modifier = Modifier.padding(start = 10.dp)) {
+                                Text("Payment", fontSize = 11.sp, color = OrderCompleteTextSecondary, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    paymentLabel(transaction.paymentMethod),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = OrderCompleteTextPrimary
+                                )
                             }
                         }
                     }
@@ -224,110 +261,119 @@ fun OrderCompleteDialog(
                             }
                             Column(
                                 modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 if (showAdyenPaymentReceipt) {
                                     OutlinedButton(
                                         onClick = onPrintAdyenPaymentReceipt,
-                                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                                        shape = RoundedCornerShape(14.dp)
+                                        modifier = Modifier.fillMaxWidth().height(OrderCompleteActionHeight),
+                                        shape = OrderCompleteActionShape,
+                                        contentPadding = OrderCompleteActionPadding
                                     ) {
-                                        Icon(Icons.Default.CreditCard, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(stringResource(R.string.print_customer_card_receipt), fontSize = 13.sp)
+                                        Icon(Icons.Default.CreditCard, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(stringResource(R.string.print_customer_card_receipt), fontSize = 14.sp)
                                     }
                                 }
                                 if (showAdyenCashierReceipt) {
                                     OutlinedButton(
                                         onClick = onPrintAdyenCashierReceipt,
-                                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                                        shape = RoundedCornerShape(14.dp)
+                                        modifier = Modifier.fillMaxWidth().height(OrderCompleteActionHeight),
+                                        shape = OrderCompleteActionShape,
+                                        contentPadding = OrderCompleteActionPadding
                                     ) {
-                                        Icon(Icons.Default.Receipt, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(stringResource(R.string.print_merchant_card_receipt), fontSize = 13.sp)
+                                        Icon(Icons.Default.Receipt, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(stringResource(R.string.print_merchant_card_receipt), fontSize = 14.sp)
                                     }
                                 }
                                 OutlinedButton(
                                     onClick = onPrintReceipt,
-                                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                                    shape = RoundedCornerShape(14.dp)
+                                    modifier = Modifier.fillMaxWidth().height(OrderCompleteActionHeight),
+                                    shape = OrderCompleteActionShape,
+                                    contentPadding = OrderCompleteActionPadding
                                 ) {
-                                    Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
                                     Text(
                                         if (showAdyenPaymentReceipt) {
                                             stringResource(R.string.print_receipt_with_card_copy)
                                         } else {
                                             stringResource(R.string.print_receipt)
                                         },
-                                        fontSize = 13.sp
+                                        fontSize = 14.sp
                                     )
                                 }
                                 OutlinedButton(
                                     onClick = onShareEmail,
-                                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                                    shape = RoundedCornerShape(14.dp)
+                                    modifier = Modifier.fillMaxWidth().height(OrderCompleteActionHeight),
+                                    shape = OrderCompleteActionShape,
+                                    contentPadding = OrderCompleteActionPadding
                                 ) {
-                                    Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(stringResource(R.string.email_receipt), fontSize = 13.sp)
+                                    Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(stringResource(R.string.email_receipt), fontSize = 14.sp)
                                 }
                             }
                         }
                     }
                 } else {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (showAdyenPaymentReceipt) {
                             OutlinedButton(
                                 onClick = onPrintAdyenPaymentReceipt,
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
-                                shape = RoundedCornerShape(14.dp)
+                                modifier = Modifier.fillMaxWidth().height(OrderCompleteActionHeight),
+                                shape = OrderCompleteActionShape,
+                                contentPadding = OrderCompleteActionPadding
                             ) {
-                                Icon(Icons.Default.CreditCard, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.print_customer_card_receipt))
+                                Icon(Icons.Default.CreditCard, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(stringResource(R.string.print_customer_card_receipt), fontSize = 14.sp)
                             }
                         }
                         if (showAdyenCashierReceipt) {
                             OutlinedButton(
                                 onClick = onPrintAdyenCashierReceipt,
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
-                                shape = RoundedCornerShape(14.dp)
+                                modifier = Modifier.fillMaxWidth().height(OrderCompleteActionHeight),
+                                shape = OrderCompleteActionShape,
+                                contentPadding = OrderCompleteActionPadding
                             ) {
-                                Icon(Icons.Default.Receipt, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.print_merchant_card_receipt))
+                                Icon(Icons.Default.Receipt, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(stringResource(R.string.print_merchant_card_receipt), fontSize = 14.sp)
                             }
                         }
                         OutlinedButton(
                             onClick = onPrintReceipt,
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            shape = RoundedCornerShape(14.dp)
+                            modifier = Modifier.fillMaxWidth().height(OrderCompleteActionHeight),
+                            shape = OrderCompleteActionShape,
+                            contentPadding = OrderCompleteActionPadding
                         ) {
-                            Icon(Icons.Default.Print, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 if (showAdyenPaymentReceipt) {
                                     stringResource(R.string.print_receipt_with_card_copy)
                                 } else {
                                     stringResource(R.string.print_receipt)
-                                }
+                                },
+                                fontSize = 14.sp
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = onDone,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                    shape = OrderCompleteActionShape,
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A))
                 ) {
-                    Text("Done", fontWeight = FontWeight.Bold)
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.padding(start = 8.dp))
+                    Text("Done", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.padding(start = 10.dp))
                 }
             }
         }
