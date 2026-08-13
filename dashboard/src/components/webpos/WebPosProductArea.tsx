@@ -1,4 +1,15 @@
-import { ArrowRight, Banknote, CreditCard, Gift, MonitorSmartphone, Wallet } from 'lucide-react';
+import {
+  ArrowDownAZ,
+  ArrowRight,
+  Banknote,
+  CreditCard,
+  Gift,
+  Image as ImageIcon,
+  LayoutGrid,
+  MonitorSmartphone,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react';
 import { useMemo } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { categoryColor, categoryColorMap } from './categoryColors';
@@ -11,6 +22,9 @@ import {
   type Product,
 } from './types';
 
+export type ProductGridTileSize = 'sm' | 'md' | 'lg';
+export type ProductGridSort = 'default' | 'alpha' | 'bestseller';
+
 type Props = {
   categories: Category[];
   products: Product[];
@@ -20,6 +34,13 @@ type Props = {
   cartQtyByProduct: Map<string, number>;
   productHasCombo: (p: Product) => boolean;
   productHasMods: (p: Product) => boolean;
+  showProductImages?: boolean;
+  onToggleShowImages?: () => void;
+  tileSize?: ProductGridTileSize;
+  onCycleTileSize?: () => void;
+  productSort?: ProductGridSort;
+  onToggleSortAlpha?: () => void;
+  onToggleSortBestseller?: () => void;
   expressCheckout?: boolean;
   expressMethods?: { cash: boolean; card: boolean; terminal: boolean };
   onExpressPay?: (method: PosPaymentMethod) => void;
@@ -33,6 +54,12 @@ type Props = {
   onCustomAmount?: () => void;
 };
 
+const TILE_GRID: Record<ProductGridTileSize, string> = {
+  sm: 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8',
+  md: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7',
+  lg: 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6',
+};
+
 export default function WebPosProductArea({
   categories,
   products,
@@ -42,6 +69,13 @@ export default function WebPosProductArea({
   cartQtyByProduct,
   productHasCombo,
   productHasMods,
+  showProductImages = false,
+  onToggleShowImages,
+  tileSize = 'md',
+  onCycleTileSize,
+  productSort = 'default',
+  onToggleSortAlpha,
+  onToggleSortBestseller,
   expressCheckout = false,
   expressMethods,
   onExpressPay,
@@ -57,10 +91,69 @@ export default function WebPosProductArea({
   const { t } = useI18n();
   const colorByCat = useMemo(() => categoryColorMap(categories), [categories]);
   const isGiftCardCategory = categoryId === POS_GIFT_CARDS_CATEGORY;
+  const gridClass = TILE_GRID[tileSize] || TILE_GRID.md;
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
       <div className="shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2">
+        <div className="mb-2 flex items-center justify-end gap-1">
+          {onToggleShowImages ? (
+            <button
+              type="button"
+              onClick={onToggleShowImages}
+              title={t('webPosGridShowImages')}
+              aria-label={t('webPosGridShowImages')}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${
+                showProductImages
+                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
+                  : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
+              }`}
+            >
+              <ImageIcon size={16} aria-hidden />
+            </button>
+          ) : null}
+          {onCycleTileSize ? (
+            <button
+              type="button"
+              onClick={onCycleTileSize}
+              title={t('webPosGridTileSize')}
+              aria-label={t('webPosGridTileSize')}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-600 hover:bg-stone-50"
+            >
+              <LayoutGrid size={16} aria-hidden />
+            </button>
+          ) : null}
+          {onToggleSortAlpha ? (
+            <button
+              type="button"
+              onClick={onToggleSortAlpha}
+              title={t('webPosGridSortAlpha')}
+              aria-label={t('webPosGridSortAlpha')}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${
+                productSort === 'alpha'
+                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
+                  : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
+              }`}
+            >
+              <ArrowDownAZ size={16} aria-hidden />
+            </button>
+          ) : null}
+          {onToggleSortBestseller ? (
+            <button
+              type="button"
+              onClick={onToggleSortBestseller}
+              title={t('webPosGridSortBestseller')}
+              aria-label={t('webPosGridSortBestseller')}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${
+                productSort === 'bestseller'
+                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
+                  : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
+              }`}
+            >
+              <TrendingUp size={16} aria-hidden />
+            </button>
+          ) : null}
+        </div>
         <div className="webpos-cat-scroll flex flex-wrap gap-1.5">
           <button
             type="button"
@@ -147,7 +240,7 @@ export default function WebPosProductArea({
             {t('webPosNoProductsMatch')}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+          <div className={`grid gap-2 ${gridClass}`}>
             {onCustomAmount ? (
               <button
                 type="button"
@@ -179,6 +272,16 @@ export default function WebPosProductArea({
                   onClick={() => onProductClick(p)}
                   className="webpos-product-card group"
                 >
+                  {showProductImages && p.image ? (
+                    <div className="mx-auto mt-1 h-12 w-12 overflow-hidden rounded-md bg-stone-100">
+                      <img
+                        src={p.image}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null}
                   <div className="flex min-h-[4rem] flex-1 flex-col px-2 pt-2.5 pb-1">
                     <span className="line-clamp-3 text-center text-sm font-medium leading-snug text-stone-800">
                       {p.name}

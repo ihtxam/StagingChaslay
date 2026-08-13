@@ -236,6 +236,7 @@
     <string name="switch_to_takeaway">Switch to takeaway</string>
     <string name="switch_to_dine_in">Switch to dine-in</string>
     <string name="cancel_order_reason_prompt">Select a reason for cancelling this order:</string>
+    <string name="cancel_order_confirm">Are you sure you want to cancel this order?</string>
     <string name="cancel_requires_kitchen_or_receipt">Send to kitchen or print a receipt before cancelling.</string>
     <string name="create_customer">Create</string>
     <string name="search_customers">Search Customers…</string>

@@ -7,7 +7,9 @@ import com.chaslay.pos.data.local.entity.TransactionEntity
 import com.chaslay.pos.data.local.entity.TransactionItemEntity
 import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.HeldOrderRepository
+import com.chaslay.pos.data.repository.GiftCardRepository
 import com.chaslay.pos.data.repository.TransactionRepository
+import com.chaslay.pos.domain.model.GiftCardOp
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentStatus
 import com.chaslay.pos.domain.model.ServiceType
@@ -62,6 +64,7 @@ class OrderHistoryViewModel @Inject constructor(
     private val settingsRepository: com.chaslay.pos.data.repository.SettingsRepository,
     private val printerService: com.chaslay.pos.printer.BluetoothPrinterService,
     private val adyenTerminalService: com.chaslay.pos.payment.AdyenTerminalService,
+    private val giftCardRepository: GiftCardRepository,
     private val tableDao: RestaurantTableDao,
     private val sessionManager: SessionManager
 ) : ViewModel() {
@@ -345,6 +348,30 @@ class OrderHistoryViewModel @Inject constructor(
                 }
             }
 
+            val giftPaid = parseGiftCardPaymentAmount(order.notes)
+            val cardId = order.cardReference?.substringBefore("|")?.trim()?.takeIf { it.isNotBlank() }
+            if (
+                (order.paymentMethod == PaymentMethod.GIFT_CARD || giftPaid != null) &&
+                cardId != null &&
+                refundAmount > 0.0
+            ) {
+                val totalGift = giftPaid ?: order.total
+                val restore = if (fullRefund) totalGift else minOf(refundAmount, totalGift)
+                giftCardRepository.creditCard(
+                    op = GiftCardOp.RELOAD,
+                    cardNumber = "",
+                    amount = restore,
+                    cardId = cardId,
+                    orderId = orderId
+                ).onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        showRefundDialog = false,
+                        message = e.message ?: "Gift card refund failed"
+                    )
+                    return@launch
+                }
+            }
+
             transactionRepository.refundOrder(
                 transactionId = orderId,
                 amount = amount,
@@ -368,6 +395,15 @@ class OrderHistoryViewModel @Inject constructor(
         val parts = ref.split("|", limit = 2)
         return if (parts.size == 2) parts[0].trim() to parts[1].trim() else ref.trim() to null
     }
+
+    private fun parseGiftCardPaymentAmount(notes: String?): Double? =
+        notes?.lineSequence()
+            ?.map { it.trim() }
+            ?.firstOrNull { it.startsWith("Gift card payment:", ignoreCase = true) }
+            ?.substringAfter(":", "")
+            ?.trim()
+            ?.toDoubleOrNull()
+            ?.takeIf { it > 0.0 }
 
     fun requestDeleteOrder(order: TransactionEntity) {
         if (!_uiState.value.isAdminUser || !_uiState.value.deleteModeUnlocked) return

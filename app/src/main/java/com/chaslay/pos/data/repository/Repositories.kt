@@ -1162,7 +1162,13 @@ class SettingsRepository @Inject constructor(
 
 @Singleton
 class CartManager @Inject constructor() {
-    private val _cart = MutableStateFlow(CartSummary(emptyList()))
+    private val _cart = MutableStateFlow(
+        CartSummary(
+            items = emptyList(),
+            serviceType = ServiceType.TAKEAWAY,
+            fulfillmentType = FulfillmentType.PICKUP
+        )
+    )
     val cart: Flow<CartSummary> = _cart.asStateFlow()
 
     fun snapshot(): CartSummary = _cart.value

@@ -495,7 +495,62 @@ export class GiftCardService {
     return updated[0]!;
   }
 
-    static async addPoints(merchantId: string, cardId: string, points: number, orderId?: string) {
+  /** Restore gift-card balance after an order refund (same card that paid). */
+  static async refundToCard(
+    merchantId: string,
+    opts: {
+      cardId: string;
+      amount: number;
+      orderId?: string;
+    }
+  ) {
+    const db = getDb();
+    const settings = await this.getSettings(merchantId);
+    if (!settings.enabled) throw new Error("Gift cards are disabled");
+
+    const amount = money(opts.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Valid amount is required");
+    }
+
+    const card = await this.getById(merchantId, opts.cardId);
+    assertActive(card);
+
+    const newBalance = money(card.balance) + amount;
+    if (newBalance > settings.maxAmount) {
+      throw new Error(
+        `Balance cannot exceed CHF ${settings.maxAmount.toFixed(2)}`
+      );
+    }
+
+    const updated = await db
+      .update(schema.giftCards)
+      .set({
+        balance: newBalance.toFixed(2),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(schema.giftCards.id, opts.cardId),
+          eq(schema.giftCards.merchantId, merchantId)
+        )
+      )
+      .returning();
+
+    await db.insert(schema.giftCardTransactions).values({
+      merchantId,
+      cardId: opts.cardId,
+      transactionType: "adjust",
+      amount: amount.toFixed(2),
+      balanceAfter: newBalance.toFixed(2),
+      orderId: opts.orderId || null,
+      description: `Refund restored CHF ${amount.toFixed(2)}`,
+    });
+
+    return updated[0]!;
+  }
+
+  static async addPoints(merchantId: string, cardId: string, points: number, orderId?: string) {
     const db = getDb();
     const card = await this.getById(merchantId, cardId);
     if (!card.membershipEnabled || !card.customerId) {

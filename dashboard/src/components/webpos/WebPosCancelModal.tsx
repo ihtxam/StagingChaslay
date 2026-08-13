@@ -24,6 +24,8 @@ type Props = {
   open: boolean;
   scope: CancelScope;
   itemLabel?: string | null;
+  /** Unsent cart — confirm only, no reason list. */
+  simpleConfirm?: boolean;
   /** Optional API reasons (en/fr/de). Falls back to i18n keys. */
   reasons?: CancelReasonOption[];
   onClose: () => void;
@@ -35,6 +37,7 @@ export default function WebPosCancelModal({
   open,
   scope,
   itemLabel,
+  simpleConfirm = false,
   reasons: apiReasons,
   onClose,
   onConfirm,
@@ -63,6 +66,36 @@ export default function WebPosCancelModal({
 
   const title = scope === 'item' ? t('webPosCancelItem') : t('webPosCancelOrder');
   const selected = options.find((o) => o.id === reasonId) || options[0];
+
+  if (simpleConfirm && scope === 'order') {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/45 p-3">
+        <div className="w-full max-w-md rounded-2xl bg-[var(--bg-elevated)] shadow-xl border border-[var(--border)]">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+            <h2 className="font-semibold text-rose-700">{title}</h2>
+            <button type="button" className="p-2" onClick={onClose} aria-label={t('close')}>
+              <X size={18} />
+            </button>
+          </div>
+          <div className="p-4">
+            <p className="text-sm text-[var(--text-muted)]">{t('webPosCancelConfirm')}</p>
+          </div>
+          <div className="flex gap-2 border-t border-[var(--border)] p-4">
+            <button type="button" className="btn-secondary flex-1" onClick={onClose}>
+              {t('cancel')}
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-bold text-white hover:bg-rose-700"
+              onClick={() => onConfirm(t('webPosCancelConfirm'), 'unsent_cart')}
+            >
+              {t('confirm')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/45 p-3">

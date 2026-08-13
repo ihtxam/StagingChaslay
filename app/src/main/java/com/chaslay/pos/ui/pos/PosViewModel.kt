@@ -77,6 +77,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 
@@ -157,6 +158,7 @@ data class PosUiState(
     val splitPaymentIndex: Int? = null,
     val splitPaymentTotal: Int? = null,
     val showCartCancelDialog: Boolean = false,
+    val showCartCancelSimpleDialog: Boolean = false,
     val cartCancelReasons: List<String> = emptyList(),
     val showAttachCustomerDialog: Boolean = false,
     val canCancelCartOrder: Boolean = false,
@@ -184,7 +186,11 @@ data class PosUiState(
     val giftCardSettings: com.chaslay.pos.data.remote.dto.GiftCardSettingsDto? = null,
     val giftCardOpsBusy: Boolean = false,
     val giftCardOpsError: String? = null,
-    val giftCardOpsLookedUpCard: com.chaslay.pos.data.remote.dto.GiftCardDto? = null
+    val giftCardOpsLookedUpCard: com.chaslay.pos.data.remote.dto.GiftCardDto? = null,
+    val productGridShowImages: Boolean = false,
+    val productGridColumns: Int = 5,
+    val productGridSortAlpha: Boolean = false,
+    val productGridSortBestseller: Boolean = false
 ) {
     val kitchenMessagePresets: List<KitchenMessagePreset> = listOf(
         KitchenMessagePreset("Bring next dish", "Bring next dish"),
@@ -272,10 +278,11 @@ class PosViewModel @Inject constructor(
         val floorElements = extrasBundle.floorElements
         val giftCardsOn = extras.giftCardsEnabled
         val displayCategories = buildDisplayCategories(bundle.categories, giftCardsOn)
+        val displayProducts = applyProductGridSort(bundle.products, bundle.categoryId, extras)
         PosUiState(
             categories = bundle.categories,
             displayCategories = displayCategories,
-            products = bundle.products,
+            products = displayProducts,
             selectedCategoryId = bundle.categoryId,
             isMostSoldCategory = PosVirtualCategories.isMostSold(bundle.categoryId),
             isGiftCardCategory = PosVirtualCategories.isGiftCards(bundle.categoryId),
@@ -338,6 +345,7 @@ class PosViewModel @Inject constructor(
             splitPaymentIndex = extras.splitPaymentIndex,
             splitPaymentTotal = extras.splitPaymentTotal,
             showCartCancelDialog = extras.showCartCancelDialog,
+            showCartCancelSimpleDialog = extras.showCartCancelSimpleDialog,
             cartCancelReasons = extras.cartCancelReasons,
             showAttachCustomerDialog = extras.showAttachCustomerDialog,
             canCancelCartOrder = !cart.isEmpty || extras.orderCommittedForCancel,
@@ -365,7 +373,11 @@ class PosViewModel @Inject constructor(
             giftCardSettings = extras.giftCardSettings,
             giftCardOpsBusy = extras.giftCardOpsBusy,
             giftCardOpsError = extras.giftCardOpsError,
-            giftCardOpsLookedUpCard = extras.giftCardOpsLookedUpCard
+            giftCardOpsLookedUpCard = extras.giftCardOpsLookedUpCard,
+            productGridShowImages = extras.productGridShowImages,
+            productGridColumns = extras.productGridColumns,
+            productGridSortAlpha = extras.productGridSortAlpha,
+            productGridSortBestseller = extras.productGridSortBestseller
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PosUiState())
 
@@ -2339,6 +2351,11 @@ class PosViewModel @Inject constructor(
             }
             return
         }
+        val hasSent = cart.items.any { it.sentToKitchen } || _uiExtras.value.orderCommittedForCancel
+        if (!hasSent) {
+            updateExtras { it.copy(showCartCancelSimpleDialog = true) }
+            return
+        }
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
             val reasons = CancelReasonLabels.localizedLabels(settings.defaultLanguage)
@@ -2347,6 +2364,10 @@ class PosViewModel @Inject constructor(
             }
         }
     }
+
+    fun dismissCartCancelSimpleDialog() = updateExtras { it.copy(showCartCancelSimpleDialog = false) }
+
+    fun confirmCancelUnsentCartOrder() = confirmCancelCartOrder("")
 
     fun dismissCartCancelDialog() = updateExtras { it.copy(showCartCancelDialog = false) }
 
@@ -2365,6 +2386,7 @@ class PosViewModel @Inject constructor(
             updateExtras {
                 it.copy(
                     showCartCancelDialog = false,
+                    showCartCancelSimpleDialog = false,
                     selectedCartItemId = null,
                     keypadBuffer = "",
                     orderCommittedForCancel = false,
@@ -3649,6 +3671,7 @@ class PosViewModel @Inject constructor(
         val isSendingReceiptEmail: Boolean = false,
         val receiptEmailError: String? = null,
         val showCartCancelDialog: Boolean = false,
+        val showCartCancelSimpleDialog: Boolean = false,
         val cartCancelReasons: List<String> = emptyList(),
         val showAttachCustomerDialog: Boolean = false,
         val orderCommittedForCancel: Boolean = false,
@@ -3677,8 +3700,54 @@ class PosViewModel @Inject constructor(
         val giftCardSettings: com.chaslay.pos.data.remote.dto.GiftCardSettingsDto? = null,
         val giftCardOpsBusy: Boolean = false,
         val giftCardOpsError: String? = null,
-        val giftCardOpsLookedUpCard: com.chaslay.pos.data.remote.dto.GiftCardDto? = null
+        val giftCardOpsLookedUpCard: com.chaslay.pos.data.remote.dto.GiftCardDto? = null,
+        val productGridShowImages: Boolean = false,
+        val productGridColumns: Int = 5,
+        val productGridSortAlpha: Boolean = false,
+        val productGridSortBestseller: Boolean = false
     )
+
+    fun toggleProductGridShowImages() =
+        updateExtras { it.copy(productGridShowImages = !it.productGridShowImages) }
+
+    fun cycleProductGridColumns() = updateExtras {
+        val next = when (it.productGridColumns) {
+            4 -> 5
+            5 -> 6
+            else -> 4
+        }
+        it.copy(productGridColumns = next)
+    }
+
+    fun toggleProductGridSortAlpha() = updateExtras {
+        it.copy(
+            productGridSortAlpha = !it.productGridSortAlpha,
+            productGridSortBestseller = false
+        )
+    }
+
+    fun toggleProductGridSortBestseller() = updateExtras {
+        it.copy(
+            productGridSortBestseller = !it.productGridSortBestseller,
+            productGridSortAlpha = false
+        )
+    }
+
+    private fun applyProductGridSort(
+        products: List<ProductEntity>,
+        categoryId: Long?,
+        extras: PosDialogState
+    ): List<ProductEntity> {
+        val useBestseller = PosVirtualCategories.isMostSold(categoryId) || extras.productGridSortBestseller
+        if (useBestseller && _bestsellerIds.value.isNotEmpty()) {
+            val order = _bestsellerIds.value.withIndex().associate { it.value to it.index }
+            return products.sortedBy { order[it.id] ?: Int.MAX_VALUE }
+        }
+        if (extras.productGridSortAlpha) {
+            return products.sortedBy { it.name.lowercase(Locale.getDefault()) }
+        }
+        return products
+    }
 
     private fun updateExtras(block: (PosDialogState) -> PosDialogState) {
         _uiExtras.value = block(_uiExtras.value)

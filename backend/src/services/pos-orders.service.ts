@@ -404,10 +404,9 @@ export class PosOrdersService {
         const restore = roundMoney2(redeemed * refundRatio);
         if (restore <= 0) continue;
         try {
-          await GiftCardService.credit(merchantId, {
+          await GiftCardService.refundToCard(merchantId, {
             cardId: tx.cardId,
             amount: restore,
-            type: "reload",
             orderId,
           });
         } catch (gcErr) {

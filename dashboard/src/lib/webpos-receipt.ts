@@ -189,7 +189,7 @@ export type WebPosReceipt = {
   isProvisional?: boolean;
 };
 
-/** Prefer merchant print settings over per-printer width for kitchen tickets. */
+/** Prefer merchant print settings; kitchen defaults to full 80mm width. */
 export function resolveKitchenPaperWidthMm(
   printSettings?: PosPrintSettingsClient | null,
   printerWidthMm?: 58 | 80 | null
@@ -197,7 +197,8 @@ export function resolveKitchenPaperWidthMm(
   if (printSettings?.paperWidthMm === 58 || printSettings?.paperWidthMm === 80) {
     return printSettings.paperWidthMm;
   }
-  return printerWidthMm === 58 ? 58 : 80;
+  if (printerWidthMm === 58) return 58;
+  return 80;
 }
 
 /** Whether to append Adyen customer receipt on the order thermal ticket. */
@@ -638,10 +639,9 @@ function buildKitchenTicketLines(
     : 2) as 1 | 2 | 3;
   const headerWidth = kitchenColsForScale(opts.paperWidthMm, headerScale);
   const itemWidth = kitchenColsForScale(opts.paperWidthMm, itemScale);
-  const footWidth = lineWidthForPaper(opts.paperWidthMm);
+  const footWidth = lineWidthForPaper(opts.paperWidthMm ?? 80);
   const L = receiptLabels(opts.language);
-  // Short separator avoids wrap when a prior large-font mode was left on by a flaky printer.
-  const thin = '-'.repeat(Math.min(footWidth, 32));
+  const thin = '-'.repeat(footWidth);
   const orderedAt = new Date(opts.orderedAt || Date.now());
   const timeStr = orderedAt.toLocaleTimeString('de-CH', {
     hour: '2-digit',
@@ -673,12 +673,6 @@ function buildKitchenTicketLines(
       lines.push({ kind: 'header', text: w });
     }
   }
-  if (opts.tabNumber) {
-    for (const w of wrapKitchenWords(`TAB ${opts.tabNumber}`, headerWidth)) {
-      lines.push({ kind: 'header', text: w });
-    }
-  }
-
   if (cancelled && opts.cancelReason) {
     for (const w of wrapKitchenWords(String(opts.cancelReason), footWidth)) {
       lines.push({ kind: 'normal', text: w });
@@ -833,9 +827,9 @@ function buildKitchenMessageTicketLines(
   opts: KitchenMessageTicketOpts
 ): { width: number; L: ReturnType<typeof receiptLabels>; lines: KitchenLine[] } {
   const paperWidthMm = opts.paperWidthMm ?? 80;
-  const width = lineWidthForPaper(paperWidthMm);
+  const width = lineWidthForPaper(paperWidthMm ?? 80);
   const L = receiptLabels(opts.language);
-  const thin = '-'.repeat(Math.min(width, 32));
+  const thin = '-'.repeat(width);
   const orderedAt = new Date(opts.orderedAt || Date.now());
   const timeStr = orderedAt.toLocaleTimeString('de-CH', {
     hour: '2-digit',
@@ -855,11 +849,6 @@ function buildKitchenMessageTicketLines(
   lines.push({ kind: 'normal', text: thin });
   if (opts.tableLabel) {
     for (const w of wrapKitchenWords(`TABLE ${opts.tableLabel}`, width)) {
-      lines.push({ kind: 'header', text: w });
-    }
-  }
-  if (opts.tabNumber) {
-    for (const w of wrapKitchenWords(`TAB ${opts.tabNumber}`, width)) {
       lines.push({ kind: 'header', text: w });
     }
   }

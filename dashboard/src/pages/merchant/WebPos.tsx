@@ -97,6 +97,9 @@ import WebPosTopBar, {
 
 const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
 const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
+const WEBPOS_GRID_SHOW_IMAGES_KEY = 'webpos.grid.showImages';
+const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
+const WEBPOS_GRID_SORT_KEY = 'webpos.grid.sort';
 
 export type WebPosAppearance = 'light' | 'night';
 
@@ -118,6 +121,34 @@ function readStoredAppearance(): WebPosAppearance {
     /* ignore */
   }
   return 'light';
+}
+
+function readStoredGridShowImages(): boolean {
+  try {
+    return localStorage.getItem(WEBPOS_GRID_SHOW_IMAGES_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function readStoredGridTileSize(): 'sm' | 'md' | 'lg' {
+  try {
+    const v = localStorage.getItem(WEBPOS_GRID_TILE_SIZE_KEY);
+    if (v === 'sm' || v === 'md' || v === 'lg') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'md';
+}
+
+function readStoredGridSort(): 'default' | 'alpha' | 'bestseller' {
+  try {
+    const v = localStorage.getItem(WEBPOS_GRID_SORT_KEY);
+    if (v === 'alpha' || v === 'bestseller' || v === 'default') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'default';
 }
 import {
   clearPersistedWebPosCarts,
@@ -150,7 +181,10 @@ import {
 } from '@/components/webpos/WebPosShiftModals';
 import { generateEodReportText } from '@/lib/webpos-receipt';
 import WebPosCartPanel from '@/components/webpos/WebPosCartPanel';
-import WebPosProductArea from '@/components/webpos/WebPosProductArea';
+import WebPosProductArea, {
+  type ProductGridSort,
+  type ProductGridTileSize,
+} from '@/components/webpos/WebPosProductArea';
 import WebPosCheckoutView from '@/components/webpos/WebPosCheckoutView';
 import WebPosSuccessView from '@/components/webpos/WebPosSuccessView';
 import WebPosSendReceiptModal from '@/components/webpos/WebPosSendReceiptModal';
@@ -378,7 +412,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [categoryId, setCategoryId] = useState<PosCategoryId>(POS_MOST_SOLD_CATEGORY);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartLine[]>(() => bootActive?.cart || []);
-  const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? null);
+  const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? 'takeaway');
   const effectiveChannel: Channel = channel ?? 'takeaway';
   const [posTab, setPosTab] = useState<PosTab>('register');
   const [posView, setPosView] = useState<PosView>('register');
@@ -406,6 +440,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [posColorTheme, setPosColorTheme] = useState<WebPosColorTheme>('teal');
   const [posTextSize, setPosTextSize] = useState<WebPosTextSize>(() => readStoredTextSize());
   const [posAppearance, setPosAppearance] = useState<WebPosAppearance>(() => readStoredAppearance());
+  const [gridShowImages, setGridShowImages] = useState(() => readStoredGridShowImages());
+  const [gridTileSize, setGridTileSize] = useState<ProductGridTileSize>(() => readStoredGridTileSize());
+  const [gridSort, setGridSort] = useState<ProductGridSort>(() => readStoredGridSort());
   const [openShift, setOpenShift] = useState<{
     id: string;
     openingCash: number;
@@ -1017,13 +1054,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (q && !p.name.toLowerCase().includes(q)) return false;
       return true;
     });
-    if (categoryId === POS_MOST_SOLD_CATEGORY) {
+    const useBestsellerSort =
+      categoryId === POS_MOST_SOLD_CATEGORY || gridSort === 'bestseller';
+    if (useBestsellerSort && bestsellerIds.length) {
       return filtered.sort(
         (a, b) => (bestsellerOrder.get(a.id) ?? 999) - (bestsellerOrder.get(b.id) ?? 999)
       );
     }
+    if (gridSort === 'alpha') {
+      return filtered.sort((a, b) => a.name.localeCompare(b.name));
+    }
     return filtered;
-  }, [products, categoryId, search, bestsellerIds]);
+  }, [products, categoryId, search, bestsellerIds, gridSort]);
 
   const refreshAgent = useCallback(async () => {
     const ok = await isPrintAgentAvailable();
@@ -2613,8 +2655,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setActiveCourse(1);
     setOrderSent(false);
     setCoursesBulkSent(false);
-    setChannel(null);
-    setFulfillmentWhen(null);
+    setChannel('takeaway');
+    setFulfillmentWhen(asapFulfillment());
     setSelectedCustomer(null);
     clearAttachedMembership();
     setProvisionalPrinted(false);
@@ -3432,10 +3474,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (!guardOfflineCheckout(saleMethod, { payments })) {
         return;
       }
-      // Deduct gift balance before persisting sale (fail closed on empty/suspended cards)
-      await redeemGiftCardPayments(payments);
       const remainingSplits = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
-      await finalizeSale(saleMethod, undefined, undefined, extras, true);
+      // Deduct gift balance after order exists (orderId links redeem → refund).
+      await finalizeSale(saleMethod, undefined, undefined, extras, true, { payments });
       if (remainingSplits) {
         setSplitIndex((i) => i + 1);
       }
@@ -3963,7 +4004,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     whenOverride?: FulfillmentWhen | null,
     extrasOverride?: CheckoutExtras | null,
     showSuccessScreen = false,
-    opts?: { skipReceiptPrint?: boolean }
+    opts?: { skipReceiptPrint?: boolean; payments?: AppliedPayment[] }
   ) => {
     const saleLines = activeSale.lines;
     if (!saleLines.length) {
@@ -4069,6 +4110,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     // Credit gift-card sell/reload lines after successful online persistence only
     if (!queuedOffline) {
+      if (opts?.payments?.length) {
+        await redeemGiftCardPayments(opts.payments, backendOrderId);
+      }
       await creditGiftCardLines(saleLines, backendOrderId);
       if (
         attachedMembership?.membershipEnabled &&
@@ -5252,7 +5296,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onKeypadApply={applyKeypadToLine}
                 onKeypadAdjust={handleKeypadAdjust}
                 onKeypadBackspace={handleKeypadBackspace}
-                channel={channel}
+                channel={effectiveChannel}
                 onChannelChange={selectFulfillmentChannel}
                 activeCourse={activeCourse}
                 coursesEnabled={coursesEnabled}
@@ -5373,6 +5417,54 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 cartQtyByProduct={cartQtyByProduct}
                 productHasCombo={(p) => productHasComboSlots(p)}
                 productHasMods={(p) => productHasModifiers(p as ShopProductForModifiers)}
+                showProductImages={gridShowImages}
+                onToggleShowImages={() => {
+                  setGridShowImages((v) => {
+                    const next = !v;
+                    try {
+                      localStorage.setItem(WEBPOS_GRID_SHOW_IMAGES_KEY, next ? '1' : '0');
+                    } catch {
+                      /* ignore */
+                    }
+                    return next;
+                  });
+                }}
+                tileSize={gridTileSize}
+                onCycleTileSize={() => {
+                  setGridTileSize((cur) => {
+                    const next: ProductGridTileSize =
+                      cur === 'sm' ? 'md' : cur === 'md' ? 'lg' : 'sm';
+                    try {
+                      localStorage.setItem(WEBPOS_GRID_TILE_SIZE_KEY, next);
+                    } catch {
+                      /* ignore */
+                    }
+                    return next;
+                  });
+                }}
+                productSort={gridSort}
+                onToggleSortAlpha={() => {
+                  setGridSort((cur) => {
+                    const next: ProductGridSort = cur === 'alpha' ? 'default' : 'alpha';
+                    try {
+                      localStorage.setItem(WEBPOS_GRID_SORT_KEY, next);
+                    } catch {
+                      /* ignore */
+                    }
+                    return next;
+                  });
+                }}
+                onToggleSortBestseller={() => {
+                  setGridSort((cur) => {
+                    const next: ProductGridSort = cur === 'bestseller' ? 'default' : 'bestseller';
+                    try {
+                      localStorage.setItem(WEBPOS_GRID_SORT_KEY, next);
+                    } catch {
+                      /* ignore */
+                    }
+                    return next;
+                  });
+                }}
                 expressCheckout={enabledMethods.express}
                 expressMethods={{
                   cash: enabledMethods.cash,
@@ -5815,6 +5907,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       <WebPosCancelModal
         open={!!cancelModal}
         scope={cancelModal?.scope || 'order'}
+        simpleConfirm={
+          cancelModal?.scope === 'order' && !cart.some((l) => l.sentToKitchen) && !orderSent
+        }
         itemLabel={
           cancelModal?.scope === 'item'
             ? (() => {

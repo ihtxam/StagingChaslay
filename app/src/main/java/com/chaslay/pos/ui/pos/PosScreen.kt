@@ -381,6 +381,7 @@ fun PosScreen(
             CartActionSidebar(
                 isRestaurantMode = isRestaurantMode,
                 isTableMode = isTableServiceEnabled && state.activeTableName != null,
+                fulfillmentType = state.cart.fulfillmentType,
                 canReleaseEmptyTable =
                     isTableServiceEnabled &&
                     state.activeTableName != null &&
@@ -504,6 +505,14 @@ fun PosScreen(
                         products = state.products,
                         categories = state.displayCategories,
                         currencySymbol = state.currencySymbol,
+                        gridColumns = state.productGridColumns,
+                        showProductImages = state.productGridShowImages,
+                        onToggleShowImages = viewModel::toggleProductGridShowImages,
+                        onCycleGridColumns = viewModel::cycleProductGridColumns,
+                        onToggleSortAlpha = viewModel::toggleProductGridSortAlpha,
+                        onToggleSortBestseller = viewModel::toggleProductGridSortBestseller,
+                        sortAlpha = state.productGridSortAlpha,
+                        sortBestseller = state.productGridSortBestseller,
                         paymentEnabled = state.cart.isEmpty.not() && !state.isProcessingPayment,
                         expressEnabled = state.settings.expressEnabled,
                         cashEnabled = state.settings.cashEnabled,
@@ -648,6 +657,24 @@ fun PosScreen(
                 autoFocus = true
             )
         }
+    }
+
+    if (state.showCartCancelSimpleDialog) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissCartCancelSimpleDialog,
+            title = { Text(stringResource(R.string.cancel_order)) },
+            text = { Text(stringResource(R.string.cancel_order_confirm)) },
+            confirmButton = {
+                Button(onClick = viewModel::confirmCancelUnsentCartOrder) {
+                    Text(stringResource(R.string.confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissCartCancelSimpleDialog) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 
     if (state.showCartCancelDialog) {
@@ -1810,6 +1837,7 @@ private fun CartCancelOrderDialog(
 private fun CartActionSidebar(
     isRestaurantMode: Boolean,
     isTableMode: Boolean,
+    fulfillmentType: com.chaslay.pos.domain.model.FulfillmentType,
     canReleaseEmptyTable: Boolean,
     coursesEnabled: Boolean,
     activeTableName: String?,
@@ -1843,6 +1871,7 @@ private fun CartActionSidebar(
             shortLabel = stringResource(R.string.pickup_short),
             icon = Icons.Default.ShoppingBag,
             color = Color(0xFF1565C0),
+            selected = fulfillmentType == FulfillmentType.PICKUP,
             onClick = onPickup
         )
         CartSidebarButton(
@@ -1850,6 +1879,7 @@ private fun CartActionSidebar(
             shortLabel = stringResource(R.string.delivery_short),
             icon = Icons.Default.LocalShipping,
             color = Color(0xFF6A1B9A),
+            selected = fulfillmentType == FulfillmentType.DELIVERY,
             onClick = onDelivery
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
@@ -1973,13 +2003,19 @@ private fun CartSidebarButton(
     shortLabel: String? = null,
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     color: Color,
+    selected: Boolean = false,
     onClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(color)
+            .background(if (selected) color else color.copy(alpha = 0.55f))
+            .border(
+                width = if (selected) 2.dp else 0.dp,
+                color = if (selected) Color.White else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
             .clickable(onClick = onClick)
             .padding(vertical = 14.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -2386,6 +2422,14 @@ private fun VectronProductGrid(
     expressEnabled: Boolean = true,
     cashEnabled: Boolean = true,
     cardEnabled: Boolean = true,
+    gridColumns: Int = 5,
+    showProductImages: Boolean = false,
+    onToggleShowImages: (() -> Unit)? = null,
+    onCycleGridColumns: (() -> Unit)? = null,
+    onToggleSortAlpha: (() -> Unit)? = null,
+    onToggleSortBestseller: (() -> Unit)? = null,
+    sortAlpha: Boolean = false,
+    sortBestseller: Boolean = false,
     isGiftCardCategory: Boolean = false,
     highlightedProductId: Long? = null,
     onProductClick: (Long) -> Unit,
@@ -2401,6 +2445,33 @@ private fun VectronProductGrid(
     val vc = vectronColors()
     val colorByCategory = categories.associate { it.id to categoryColor(it.colorHex) }
     Column(modifier = modifier.background(vc.background)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            onToggleShowImages?.let { toggle ->
+                TextButton(onClick = toggle) {
+                    Text(if (showProductImages) "Img ✓" else "Img", fontSize = 11.sp)
+                }
+            }
+            onCycleGridColumns?.let { cycle ->
+                TextButton(onClick = cycle) {
+                    Text("${gridColumns}col", fontSize = 11.sp)
+                }
+            }
+            onToggleSortAlpha?.let { toggle ->
+                TextButton(onClick = toggle) {
+                    Text(if (sortAlpha) "A-Z ✓" else "A-Z", fontSize = 11.sp)
+                }
+            }
+            onToggleSortBestseller?.let { toggle ->
+                TextButton(onClick = toggle) {
+                    Text(if (sortBestseller) "Top ✓" else "Top", fontSize = 11.sp)
+                }
+            }
+        }
         if (isGiftCardCategory) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
@@ -2443,7 +2514,7 @@ private fun VectronProductGrid(
             }
         } else {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(5),
+            columns = GridCells.Fixed(gridColumns.coerceIn(3, 6)),
             modifier = Modifier
                 .weight(1f)
                 .padding(6.dp),

@@ -304,7 +304,7 @@ class BluetoothPrinterService @Inject constructor(
             val sb = StringBuilder()
             appendHeader(sb, settings.receiptHeader.ifBlank { settings.businessName }, lineWidth)
             sb.appendLine(center(title, lineWidth))
-            sb.appendLine(center("-".repeat(lineWidth.coerceAtMost(32)), lineWidth))
+            sb.appendLine(center(sepDash, lineWidth))
             lines.forEach { (label, amount) ->
                 sb.appendLine(label)
                 sb.appendLine(right(formatMoney(amount, settings.currencySymbol), lineWidth))
@@ -426,7 +426,7 @@ class BluetoothPrinterService @Inject constructor(
         for (printer in kitchenPrinters) {
             val subset = if (isFollowUp) emptyList() else items.filter { matchesPrinter(it, printer, products) }
             if (!isFollowUp && subset.isEmpty()) continue
-            val lineWidth = lineWidthFor(printer.paperWidthMm)
+            val lineWidth = lineWidthFor(defaultKitchenPaperWidthMm())
             val payload = buildKitchenTicket(
                 settings, tableName, serviceType, round, subset, isFollowUp, message, meta, lineWidth
             )
@@ -552,7 +552,7 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine(escBold(false))
         sb.appendLine(center(settings.businessName, lineWidth))
         sb.appendLine("Table: $tableName  Round: $round")
-        sb.appendLine(center("-".repeat(lineWidth.coerceAtMost(32)), lineWidth))
+        sb.appendLine(center(sepDash, lineWidth))
         items.forEach { item ->
             appendKitchenItemBlock(sb, item, settings, lineWidth)
         }
@@ -575,8 +575,8 @@ class BluetoothPrinterService @Inject constructor(
         val sb = StringBuilder()
         val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
         val timeFmt = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
-        val sepEq = "=".repeat(lineWidth.coerceAtMost(32))
-        val sepDash = "-".repeat(lineWidth.coerceAtMost(32))
+        val sepEq = "=".repeat(lineWidth)
+        val sepDash = "-".repeat(lineWidth)
 
         if (isFollowUp) {
             sb.appendLine(escBold(true))
@@ -965,7 +965,7 @@ class BluetoothPrinterService @Inject constructor(
             transaction.receiptUrl?.takeIf { it.isNotBlank() }
         } else null
         if (qrUrl != null) {
-            sb.appendLine(center("-".repeat(lineWidth.coerceAtMost(32)), lineWidth))
+            sb.appendLine(center(sepDash, lineWidth))
             sb.appendLine(center(labels.scanDigitalReceipt, lineWidth))
         }
         com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendable(appendAdyenCustomerReceipt)
@@ -979,7 +979,7 @@ class BluetoothPrinterService @Inject constructor(
         receipt: com.chaslay.pos.payment.AdyenTerminalReceipt,
         lineWidth: Int
     ) {
-        sb.appendLine(center("-".repeat(lineWidth.coerceAtMost(32)), lineWidth))
+        sb.appendLine(center(sepDash, lineWidth))
         sb.append(com.chaslay.pos.payment.AdyenPaymentReceiptFormatter.toPlainText(receipt, lineWidth))
     }
 
@@ -1193,7 +1193,7 @@ class BluetoothPrinterService @Inject constructor(
         lineWidth: Int
     ) {
         if ((pointsEarned ?: 0) <= 0 && pointsBalance == null) return
-        sb.appendLine(center("-".repeat(lineWidth.coerceAtMost(32)), lineWidth))
+        sb.appendLine(center(sepDash, lineWidth))
         pointsEarned?.takeIf { it > 0 }?.let {
             sb.appendLine(leftRight("Points earned", "+$it", lineWidth))
         }
@@ -1584,12 +1584,15 @@ class BluetoothPrinterService @Inject constructor(
         val line = formatKitchenItemQtyLabel(item)
         sb.append(escAlignLeft())
         val itemScale = effectiveKitchenItemScale(settings)
+        val wrapped = wrapText(line, lineWidth)
         if (itemScale > 1) {
-            sb.append(escKitchenSize(itemScale, bold = true))
-            sb.appendLine(line)
-            sb.append(escKitchenSizeReset())
+            wrapped.forEach { row ->
+                sb.append(escKitchenSize(itemScale, bold = true))
+                sb.appendLine(row)
+                sb.append(escKitchenSizeReset())
+            }
         } else {
-            sb.appendLine(line)
+            wrapped.forEach { row -> sb.appendLine(row) }
         }
         appendKitchenNotes(sb, item.notes)
     }
@@ -1622,7 +1625,7 @@ class BluetoothPrinterService @Inject constructor(
 
     private fun appendFooter(sb: StringBuilder, footer: String, lineWidth: Int = LINE_WIDTH_80) {
         if (footer.isBlank()) return
-        sb.appendLine(center("-".repeat(lineWidth.coerceAtMost(32)), lineWidth))
+        sb.appendLine(center(sepDash, lineWidth))
         footer.lines().forEach { line ->
             if (line.isNotBlank()) sb.appendLine(center(line.trim(), lineWidth))
         }
