@@ -368,6 +368,14 @@ export default function WebPosGiftCardModal({
                       setLookupError('');
                       setCode(v);
                     }}
+                    onScanComplete={(scanned) => {
+                      lastTriedRef.current = '';
+                      setLookupError('');
+                      setCode(scanned);
+                      void lookup(scanned, 'physical', {
+                        silent: step === 'sell' || step === 'balance',
+                      });
+                    }}
                     placeholder={t('tapCard')}
                     autoFocus
                     className="input w-full"

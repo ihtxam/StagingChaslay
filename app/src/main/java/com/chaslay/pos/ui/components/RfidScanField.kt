@@ -18,8 +18,11 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.stringResource
 import com.chaslay.pos.R
 
+private const val SCAN_GAP_MS = 100L
+
 /**
  * Captures HID keyboard-wedge RFID readers (rapid key burst + Enter), matching WebPOS [RfidScanInput].
+ * Rapid bursts are buffered locally; [onValueChange] is not called until Enter or manual typing.
  */
 @Composable
 fun RfidScanField(
@@ -39,16 +42,18 @@ fun RfidScanField(
     }
 
     OutlinedTextField(
-        value = value.ifBlank { buffer },
+        value = buffer.ifBlank { value },
         onValueChange = { newValue ->
             val now = System.currentTimeMillis()
-            if (now - lastKeyAt < 50 && newValue.length > value.length) {
+            val gap = now - lastKeyAt
+            lastKeyAt = now
+            val wedge = gap < SCAN_GAP_MS || buffer.isNotEmpty()
+            if (wedge) {
                 buffer = newValue
             } else {
                 onValueChange(newValue)
                 buffer = ""
             }
-            lastKeyAt = now
         },
         modifier = modifier
             .fillMaxWidth()
@@ -57,8 +62,8 @@ fun RfidScanField(
                 if (event.key == Key.Enter) {
                     val scanned = (buffer.ifBlank { value }).trim()
                     if (scanned.isNotEmpty()) {
+                        onValueChange(scanned)
                         onScanComplete(scanned)
-                        onValueChange("")
                         buffer = ""
                     }
                     true

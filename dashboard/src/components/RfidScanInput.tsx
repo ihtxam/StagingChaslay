@@ -3,18 +3,24 @@ import { useEffect, useRef, useState } from 'react';
 interface Props {
   value: string;
   onChange: (value: string) => void;
+  /** Called when the reader finishes a scan (Enter). Receives the full UID. */
+  onScanComplete?: (value: string) => void;
   placeholder?: string;
   className?: string;
   autoFocus?: boolean;
 }
 
+const SCAN_GAP_MS = 100;
+
 /**
  * HID keyboard-wedge RFID readers type the UID then send Enter.
- * This input captures rapid key bursts as a single card scan.
+ * Rapid key bursts are buffered locally; parent onChange is not called until Enter
+ * (or manual typing with gaps longer than SCAN_GAP_MS).
  */
 export default function RfidScanInput({
   value,
   onChange,
+  onScanComplete,
   placeholder = 'Tap RFID card on reader…',
   className = 'input',
   autoFocus,
@@ -27,22 +33,25 @@ export default function RfidScanInput({
     if (autoFocus) inputRef.current?.focus();
   }, [autoFocus]);
 
+  const display = buffer || value;
+
   return (
     <input
       ref={inputRef}
       className={className}
-      value={value || buffer}
+      value={display}
       placeholder={placeholder}
       onChange={(e) => {
         const now = Date.now();
-        // If keys arrive faster than typing (~40ms), treat as reader wedge
-        if (now - lastKeyAt.current < 50 && e.target.value.length > value.length) {
+        const gap = now - lastKeyAt.current;
+        lastKeyAt.current = now;
+        const wedge = gap < SCAN_GAP_MS || buffer.length > 0;
+        if (wedge) {
           setBuffer(e.target.value);
         } else {
           onChange(e.target.value);
           setBuffer('');
         }
-        lastKeyAt.current = now;
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
@@ -50,6 +59,7 @@ export default function RfidScanInput({
           const scanned = (buffer || value).trim();
           if (scanned) {
             onChange(scanned);
+            onScanComplete?.(scanned);
             setBuffer('');
           }
         }
