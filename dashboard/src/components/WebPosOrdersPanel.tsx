@@ -328,7 +328,7 @@ export default function WebPosOrdersPanel({
   highlightOrderId = null,
   initialChannelFilter = null,
 }: Props) {
-  const { t } = useI18n();
+  const { t, formatDateTime } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>(
     () => initialChannelFilter || 'all'
@@ -1082,7 +1082,7 @@ export default function WebPosOrdersPanel({
                                   {h.label || t('webPosHeldOrder')}
                                 </p>
                                 <p className="mt-0.5 text-xs text-stone-500">
-                                  {new Date(h.updatedAt || h.createdAt || Date.now()).toLocaleString()}
+                                  {formatDateTime(h.updatedAt || h.createdAt || Date.now())}
                                 </p>
                               </div>
                               <span className="shrink-0 text-sm font-bold tabular-nums text-teal-700">
@@ -1170,7 +1170,7 @@ export default function WebPosOrdersPanel({
                                   : o.orderNumber}
                               </p>
                               <p className="mt-0.5 text-xs text-stone-500">
-                                {new Date(o.completedAt || o.createdAt).toLocaleString()}
+                                {formatDateTime(o.completedAt || o.createdAt)}
                               </p>
                             </div>
                             <span className="shrink-0 text-sm font-bold tabular-nums text-teal-700">

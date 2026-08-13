@@ -32,7 +32,7 @@ type Props = {
 };
 
 export default function WebPosLicenseGate({ entitlement, businessName }: Props) {
-  const { t, locale } = useI18n();
+  const { t, formatDate } = useI18n();
   const navigate = useNavigate();
 
   const title =
@@ -54,12 +54,7 @@ export default function WebPosLicenseGate({ entitlement, businessName }: Props) 
       ? entitlement.subscriptionEndsAt
       : entitlement.trialEndsAt;
 
-  const endedLabel = endedAt
-    ? new Date(endedAt).toLocaleDateString(
-        locale === 'fr' ? 'fr-CH' : locale === 'de' ? 'de-CH' : 'en-GB',
-        { year: 'numeric', month: 'long', day: 'numeric' }
-      )
-    : null;
+  const endedLabel = endedAt ? formatDate(endedAt) : null;
 
   const reseller = entitlement.reseller;
 

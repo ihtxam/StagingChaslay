@@ -47,7 +47,7 @@ type SavedAddress = {
 const ADDRESS_LABELS = ['home', 'office', 'other'] as const;
 
 export default function CheckoutPage() {
-  const { t, setLocale, locale } = useI18n();
+  const { t, setLocale, locale, formatDateTime } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const navigate = useNavigate();
@@ -1501,9 +1501,7 @@ export default function CheckoutPage() {
                   <dt className="text-stone-500">{t('shopWhen')}</dt>
                   <dd className="font-medium">
                     {whenMode === 'later' && draft.scheduledFor
-                      ? new Date(localDateTimeToIso(draft.scheduledFor) || draft.scheduledFor).toLocaleString(locale === 'de' ? 'de-CH' : locale === 'fr' ? 'fr-CH' : 'en-CH', {
-                          timeZone: 'Europe/Zurich',
-                        })
+                      ? formatDateTime(localDateTimeToIso(draft.scheduledFor) || draft.scheduledFor)
                       : t('shopAsap')}
                   </dd>
                 </div>

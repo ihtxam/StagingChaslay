@@ -7,6 +7,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import {
+  formatDateDDMMYYYY,
+  formatDateTimeDDMMYYYY,
+  formatTimeHHMM,
+} from '@/lib/date-format';
 import { shopDe, shopEn, shopFr } from '@/lib/shop-i18n';
 
 export type Locale = 'en' | 'fr' | 'de';
@@ -171,7 +176,13 @@ const en: Dict = {
   reservationsEdit: 'Edit reservation',
   reservationsCancelTitle: 'Cancel reservation',
   reservationsCancelHint: 'The guest will receive a rejection email if an address is on file.',
-  reservationsCancelReason: 'Reason (optional, stored internally)',
+  reservationsCancelReasonPrompt: 'Why cancel this reservation?',
+  reservationsCancelReasonNoShow: 'No show',
+  reservationsCancelReasonCustomerRequested: 'Customer requested',
+  reservationsCancelReasonTableUnavailable: 'Table unavailable',
+  reservationsCancelReasonOverbooking: 'Overbooking / duplicate',
+  reservationsCancelReasonOther: 'Other',
+  reservationsCancelReasonOtherPlaceholder: 'Specify reason…',
   reservationsCancelSend: 'Cancel & notify guest',
   floorPlanEnabled: 'Enable floor plan / table service',
   paxOrderingEnabled: 'PAX per-person ordering & billing',
@@ -1832,6 +1843,20 @@ const fr: Dict = {
   reservationsSeat: 'Installer',
   reservationsComplete: 'Terminer',
   reservationsNoShow: 'No-show',
+  reservationsToday: 'Aujourd’hui',
+  reservationsFuture: 'À venir',
+  reservationsEmptyFuture: 'Aucune réservation à venir.',
+  reservationsEdit: 'Modifier la réservation',
+  reservationsCancelTitle: 'Annuler la réservation',
+  reservationsCancelHint: 'Le client recevra un e-mail de refus si une adresse est enregistrée.',
+  reservationsCancelReasonPrompt: 'Motif d’annulation ?',
+  reservationsCancelReasonNoShow: 'No-show',
+  reservationsCancelReasonCustomerRequested: 'Demande du client',
+  reservationsCancelReasonTableUnavailable: 'Table indisponible',
+  reservationsCancelReasonOverbooking: 'Surréservation / doublon',
+  reservationsCancelReasonOther: 'Autre',
+  reservationsCancelReasonOtherPlaceholder: 'Précisez le motif…',
+  reservationsCancelSend: 'Annuler et notifier le client',
   floorPlanEnabled: 'Activer plan de salle / tables',
   paxOrderingEnabled: 'Commande & addition par personne (PAX)',
   coursesEnabled: 'Courses — service par services',
@@ -3492,6 +3517,20 @@ const de: Dict = {
   reservationsSeat: 'Platzieren',
   reservationsComplete: 'Abschliessen',
   reservationsNoShow: 'No-show',
+  reservationsToday: 'Heute',
+  reservationsFuture: 'Kommend',
+  reservationsEmptyFuture: 'Keine kommenden Reservationen.',
+  reservationsEdit: 'Reservation bearbeiten',
+  reservationsCancelTitle: 'Reservation stornieren',
+  reservationsCancelHint: 'Der Gast erhält eine Ablehnungs-E-Mail, falls eine Adresse hinterlegt ist.',
+  reservationsCancelReasonPrompt: 'Warum stornieren?',
+  reservationsCancelReasonNoShow: 'No-show',
+  reservationsCancelReasonCustomerRequested: 'Auf Kundenwunsch',
+  reservationsCancelReasonTableUnavailable: 'Tisch nicht verfügbar',
+  reservationsCancelReasonOverbooking: 'Überbuchung / Duplikat',
+  reservationsCancelReasonOther: 'Sonstiges',
+  reservationsCancelReasonOtherPlaceholder: 'Grund angeben…',
+  reservationsCancelSend: 'Stornieren & Gast benachrichtigen',
   floorPlanEnabled: 'Tischplan / Tischservice aktivieren',
   paxOrderingEnabled: 'PAX-Bestellung & Rechnung pro Person',
   coursesEnabled: 'Gänge / Courses — Gang-Steuerung',
@@ -5014,6 +5053,9 @@ interface I18nContextValue {
   locale: Locale;
   setLocale: (locale: Locale) => void;
   t: (key: string) => string;
+  formatDate: typeof formatDateDDMMYYYY;
+  formatDateTime: typeof formatDateTimeDDMMYYYY;
+  formatTime: typeof formatTimeHHMM;
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -5090,6 +5132,9 @@ export function I18nProvider({
       locale,
       setLocale,
       t: (key: string) => dictionaries[locale][key] || dictionaries.en[key] || key,
+      formatDate: formatDateDDMMYYYY,
+      formatDateTime: formatDateTimeDDMMYYYY,
+      formatTime: formatTimeHHMM,
     }),
     [locale, setLocale]
   );
@@ -5104,6 +5149,9 @@ export function useI18n() {
       locale: 'en' as Locale,
       setLocale: (_locale: Locale) => undefined,
       t: (key: string) => dictionaries.en[key] || key,
+      formatDate: formatDateDDMMYYYY,
+      formatDateTime: formatDateTimeDDMMYYYY,
+      formatTime: formatTimeHHMM,
     };
   }
   return ctx;

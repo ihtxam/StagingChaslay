@@ -37,7 +37,7 @@ function hmZurich(d: Date = new Date()) {
 }
 
 export default function ReservationsPage() {
-  const { t, locale } = useI18n();
+  const { t, locale, formatDateTime } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const base = shopBasePath(shopKey);
@@ -271,11 +271,7 @@ export default function ReservationsPage() {
             </p>
             <p className="font-mono text-sm">{done.code}</p>
             <p className="text-sm">
-              {new Date(done.reservedAt).toLocaleString(undefined, {
-                timeZone: 'Europe/Zurich',
-                dateStyle: 'full',
-                timeStyle: 'short',
-              })}
+              {formatDateTime(done.reservedAt)}
             </p>
             <Link to={`${base}/menu`} className="inline-block mt-4 bg-stone-900 text-white px-5 py-2.5 text-sm font-semibold">
               {t('shopOrder')}

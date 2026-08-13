@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import ReservationCancelModal from '@/components/reservations/ReservationCancelModal';
 
 type DayKey = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
 type HoursSlot = { open: string; close: string };
@@ -87,7 +88,7 @@ function addDaysYmd(days: number) {
 }
 
 export default function Reservations() {
-  const { t } = useI18n();
+  const { t, formatDate, formatDateTime, formatTime } = useI18n();
   const [tab, setTab] = useState<'bookings' | 'settings'>('bookings');
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(false);
@@ -102,7 +103,6 @@ export default function Reservations() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState<string | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
   const [editForm, setEditForm] = useState({
     guestName: '',
     guestPhone: '',
@@ -211,7 +211,7 @@ export default function Reservations() {
     }
   };
 
-  const submitCancel = async () => {
+  const submitCancel = async (cancelReason: string) => {
     if (!cancelOpen) return;
     try {
       await api.post(`/merchant/reservations/${cancelOpen}/action`, {
@@ -221,7 +221,6 @@ export default function Reservations() {
       });
       toast.success(t('saved'));
       setCancelOpen(null);
-      setCancelReason('');
       await loadList();
       await loadConfig();
     } catch (err: any) {
@@ -911,9 +910,9 @@ export default function Reservations() {
                       const dt = new Date(r.reservedAt);
                       return (
                         <tr key={r.id} className="border-b border-[var(--border)] last:border-0">
-                          <td className="px-3 py-2 whitespace-nowrap">{dt.toLocaleDateString()}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{formatDate(dt)}</td>
                           <td className="px-3 py-2 whitespace-nowrap">
-                            {dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {formatTime(dt)}
                           </td>
                           <td className="px-3 py-2 font-medium">{r.guestName}</td>
                           <td className="px-3 py-2">{r.partySize}</td>
@@ -965,7 +964,7 @@ export default function Reservations() {
                       ) : null}
                     </div>
                     <p className="text-sm muted mt-0.5">
-                      {new Date(r.reservedAt).toLocaleString()} · {r.partySize} {t('reservationsGuests')} ·{' '}
+                      {formatDateTime(r.reservedAt)} · {r.partySize} {t('reservationsGuests')} ·{' '}
                       {r.guestPhone}
                       {r.tableLabel
                         ? ` · ${t('reservationsTable')} ${r.tableLabel}${
@@ -1109,28 +1108,11 @@ export default function Reservations() {
             </div>
           ) : null}
 
-          {cancelOpen ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-              <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg)] p-4 shadow-xl space-y-3">
-                <h3 className="text-lg font-semibold">{t('reservationsCancelTitle')}</h3>
-                <p className="text-sm muted">{t('reservationsCancelHint')}</p>
-                <textarea
-                  className="input min-h-24"
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder={t('reservationsCancelReason')}
-                />
-                <div className="flex justify-end gap-2">
-                  <button type="button" className="btn-secondary" onClick={() => setCancelOpen(null)}>
-                    {t('cancel')}
-                  </button>
-                  <button type="button" className="btn-primary !bg-red-700 hover:!bg-red-800" onClick={() => void submitCancel()}>
-                    {t('reservationsCancelSend')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
+          <ReservationCancelModal
+            open={!!cancelOpen}
+            onClose={() => setCancelOpen(null)}
+            onConfirm={(reason) => void submitCancel(reason)}
+          />
         </div>
       )}
     </div>

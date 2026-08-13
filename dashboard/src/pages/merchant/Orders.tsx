@@ -88,7 +88,7 @@ function statusLabel(status: string, t: (k: string) => string) {
 }
 
 export default function Orders() {
-  const { t } = useI18n();
+  const { t, formatDateTime } = useI18n();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<BoardTab>('new');
@@ -346,7 +346,7 @@ export default function Orders() {
                   </h3>
                   <p className="text-[11px] muted mt-0.5">
                     {order.orderType === 'web_shop' ? t('ordersOnlineShop') : t('ordersPos')} ·{' '}
-                    {new Date(order.createdAt).toLocaleString()}
+                    {formatDateTime(order.createdAt)}
                   </p>
                 </div>
                 <span
@@ -364,7 +364,7 @@ export default function Orders() {
                 </span>
                 <span className="rounded bg-[var(--bg-muted)] px-1.5 py-0.5">
                   {order.scheduledFor
-                    ? `${t('ordersScheduled')} ${new Date(order.scheduledFor).toLocaleString()}`
+                    ? `${t('ordersScheduled')} ${formatDateTime(order.scheduledFor)}`
                     : t('ordersAsap')}
                 </span>
                 <span className="rounded bg-[var(--bg-muted)] px-1.5 py-0.5">

@@ -78,7 +78,7 @@ type Preset = 'today' | 'yesterday' | 'last_week' | 'last_month' | 'last_3_month
 type Tab = 'eod' | 'sales' | 'products' | 'users';
 
 export default function ReportsPage() {
-  const { t, locale } = useI18n();
+  const { t, locale, formatDateTime } = useI18n();
   const [tab, setTab] = useState<Tab>('eod');
   const [preset, setPreset] = useState<Preset>('today');
   const [from, setFrom] = useState('');
@@ -361,7 +361,7 @@ export default function ReportsPage() {
                           <p className="text-xs text-[var(--text-muted)] mt-0.5">
                             {c.cancelReason || '—'}
                             {c.cancelledAt
-                              ? ` · ${new Date(c.cancelledAt).toLocaleString()}`
+                              ? ` · ${formatDateTime(c.cancelledAt)}`
                               : ''}
                           </p>
                         </div>
@@ -388,7 +388,7 @@ export default function ReportsPage() {
                           <p className="text-xs text-[var(--text-muted)] mt-0.5">
                             {t('reportsRefundReason')}: {r.refundReason || '—'}
                             {r.refundedAt
-                              ? ` · ${new Date(r.refundedAt).toLocaleString()}`
+                              ? ` · ${formatDateTime(r.refundedAt)}`
                               : ''}
                           </p>
                         </div>

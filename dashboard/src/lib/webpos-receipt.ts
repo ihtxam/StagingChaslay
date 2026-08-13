@@ -1,3 +1,4 @@
+import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY, formatTimeHHMM, ymdZurich } from '@/lib/date-format';
 import { roundMoney2 } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
 import { buildReceiptUrl, concatBytes, escposQrCode } from '@/lib/qr';
@@ -212,21 +213,11 @@ function resolveScheduledDate(scheduledFor?: string | number | null): Date | nul
 function formatKitchenWhen(scheduledFor?: string | number | null): string | null {
   const d = resolveScheduledDate(scheduledFor);
   if (!d) return null;
-  const time = d.toLocaleTimeString('de-CH', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Europe/Zurich',
-  });
-  const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
-  const dayKey = d.toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
+  const time = formatTimeHHMM(d);
+  const todayKey = ymdZurich();
+  const dayKey = ymdZurich(d);
   if (dayKey === todayKey) return time;
-  const dayLabel = d.toLocaleDateString('de-CH', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'Europe/Zurich',
-  });
-  return `${dayLabel} ${time}`;
+  return `${formatDateDDMMYYYY(d)} ${time}`;
 }
 
 function resolveLang(tx: WebPosReceipt, panelLang?: string): ReceiptLang {
@@ -274,8 +265,7 @@ function formatReceiptMetaFooter(
   locale: string,
   width: number
 ): string {
-  const date = new Date(tx.completedAt);
-  const dateStr = `${date.toLocaleDateString(locale, { timeZone: 'Europe/Zurich' })} ${date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zurich' })}`;
+  const dateStr = formatDateTimeDDMMYYYY(tx.completedAt);
   const rawRef = (tx.orderDisplay || tx.orderNumber || tx.id.slice(-8)).trim();
   const orderRef = shortenOrderRef(rawRef, 16);
   const channel = tx.channel ? channelLabel(L, tx.channel) : '';

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { formatDateTimeDDMMYYYY } from '@/lib/date-format';
 import { publicApi } from '@/lib/api';
 import { APP_NAME } from '@/lib/brand';
 import { normalizeReceiptDomain, qrImageUrl } from '@/lib/qr';
@@ -115,7 +116,7 @@ export default function ReceiptPage() {
           {receipt.completedAt && (
             <p>
               <span className="text-gray-500">Date:</span>{' '}
-              {new Date(receipt.completedAt).toLocaleString()}
+              {formatDateTimeDDMMYYYY(receipt.completedAt)}
             </p>
           )}
           {receipt.channel && (

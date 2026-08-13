@@ -11,6 +11,7 @@ import {
 } from "@/lib/geo";
 import { EmailService } from "@/services/email.service";
 import { FloorPlanService } from "@/services/floor-plan.service";
+import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
 
 const DAY_KEYS: DayKey[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
@@ -929,11 +930,7 @@ export class ReservationService {
     }
     if (!(await EmailService.isConfigured(merchant.id))) return;
 
-    const when = new Date(reservation.reservedAt).toLocaleString("en-CH", {
-      timeZone: MERCHANT_TZ,
-      dateStyle: "full",
-      timeStyle: "short",
-    });
+    const when = formatDateTimeDDMMYYYY(reservation.reservedAt);
     const shop = merchant.name || "Restaurant";
     const place = [merchant.address, merchant.city].filter(Boolean).join(", ");
     const subjects: Record<typeof kind, string> = {
@@ -1017,11 +1014,7 @@ export class ReservationService {
     if (!to) return;
     if (!(await EmailService.isConfigured(merchant.id))) return;
 
-    const when = new Date(reservation.reservedAt).toLocaleString("en-CH", {
-      timeZone: MERCHANT_TZ,
-      dateStyle: "full",
-      timeStyle: "short",
-    });
+    const when = formatDateTimeDDMMYYYY(reservation.reservedAt);
     const shop = merchant.name || "Restaurant";
     const subjects: Record<typeof kind, string> = {
       received: reservation.discountPercent
@@ -1205,13 +1198,7 @@ export class ReservationService {
       const lunchCovers = lunch.reduce((s, r) => s + Number(r.partySize || 0), 0);
       const dinnerCovers = dinner.reduce((s, r) => s + Number(r.partySize || 0), 0);
       const shop = merchant.name || "Restaurant";
-      const dateLabel = new Date(dayStart).toLocaleDateString("en-CH", {
-        timeZone: MERCHANT_TZ,
-        weekday: "long",
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      });
+      const dateLabel = formatDateDDMMYYYY(dayStart);
       const subject = `Today's reservations — ${shop} (${dateLabel})`;
       const html = `
         <div style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;color:#1c1917">

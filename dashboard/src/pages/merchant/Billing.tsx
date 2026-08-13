@@ -42,7 +42,7 @@ function money(amount: string | number, currency = 'CHF') {
 }
 
 export default function Billing() {
-  const { t } = useI18n();
+  const { t, formatDate, formatDateTime } = useI18n();
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [currentSlug, setCurrentSlug] = useState<string>('free');
@@ -202,7 +202,7 @@ export default function Billing() {
           {t('billingCurrentSubscription')}:{' '}
           <strong className="capitalize">{currentSlug}</strong>
           {subscriptionEndsAt
-            ? ` · renews / ends ${new Date(subscriptionEndsAt).toLocaleDateString()}`
+            ? ` · renews / ends ${formatDate(subscriptionEndsAt)}`
             : null}
         </p>
         {!adyenReady && (
@@ -340,7 +340,7 @@ export default function Billing() {
             <tbody>
               {payments.map((p) => (
                 <tr key={p.id} className="border-b last:border-0">
-                  <td className="py-2 pr-3">{new Date(p.paidAt || p.createdAt).toLocaleString()}</td>
+                  <td className="py-2 pr-3">{formatDateTime(p.paidAt || p.createdAt)}</td>
                   <td className="py-2 pr-3">{p.plan?.name || '-'}</td>
                   <td className="py-2 pr-3 capitalize">{p.billingCycle}</td>
                   <td className="py-2 pr-3">{money(p.amount, p.currency)}</td>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatDateDDMMYYYY } from '@/lib/date-format';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { Copy, KeyRound, Plus, RefreshCw, Ban, Clock } from 'lucide-react';
@@ -349,7 +350,7 @@ export default function Licenses() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {lic.expiresAt ? new Date(lic.expiresAt).toLocaleDateString() : '-'}
+                    {lic.expiresAt ? formatDateDDMMYYYY(lic.expiresAt) : '-'}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">

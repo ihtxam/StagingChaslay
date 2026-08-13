@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import ReservationCancelModal from '@/components/reservations/ReservationCancelModal';
 
 type Reservation = {
   id: string;
@@ -31,7 +32,7 @@ function addDaysYmd(days: number) {
 }
 
 export default function WebPosBookingsView() {
-  const { t } = useI18n();
+  const { t, formatDate, formatTime } = useI18n();
   const [loading, setLoading] = useState(true);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -39,7 +40,6 @@ export default function WebPosBookingsView() {
   const [maxDaysAhead, setMaxDaysAhead] = useState(30);
   const [editId, setEditId] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState<string | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
   const [editForm, setEditForm] = useState({
     guestName: '',
     guestPhone: '',
@@ -127,14 +127,13 @@ export default function WebPosBookingsView() {
       await api.post(`/merchant/reservations/${id}/action`, { action, ...extra });
       toast.success(t('saved'));
       setCancelOpen(null);
-      setCancelReason('');
       await load();
     } catch (err: any) {
       toast.error(err.response?.data?.error || t('cmsSaveFailed'));
     }
   };
 
-  const submitCancel = async () => {
+  const submitCancel = async (cancelReason: string) => {
     if (!cancelOpen) return;
     await runAction(cancelOpen, 'cancel', {
       cancelReason,
@@ -212,10 +211,10 @@ export default function WebPosBookingsView() {
                   return (
                     <tr key={r.id} className="border-b border-stone-100 last:border-0">
                       <td className="px-3 py-2 whitespace-nowrap">
-                        {dt.toLocaleDateString()}
+                        {formatDate(dt)}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        {dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatTime(dt)}
                       </td>
                       <td className="px-3 py-2 font-medium">{r.guestName}</td>
                       <td className="px-3 py-2">{r.partySize}</td>
@@ -264,10 +263,7 @@ export default function WebPosBookingsView() {
                   <div>
                     <p className="font-semibold">{r.guestName}</p>
                     <p className="text-xs text-stone-500">
-                      {new Date(r.reservedAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}{' '}
+                      {formatTime(r.reservedAt)}{' '}
                       · {r.partySize} {t('reservationsGuests')}
                     </p>
                     <p className="text-xs text-stone-500">{r.guestPhone}</p>
@@ -339,28 +335,12 @@ export default function WebPosBookingsView() {
         </div>
       ) : null}
 
-      {cancelOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-xl space-y-3">
-            <h3 className="text-lg font-semibold">{t('reservationsCancelTitle')}</h3>
-            <p className="text-sm text-stone-600">{t('reservationsCancelHint')}</p>
-            <textarea
-              className="input min-h-24"
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder={t('reservationsCancelReason')}
-            />
-            <div className="flex justify-end gap-2">
-              <button type="button" className="btn-secondary" onClick={() => setCancelOpen(null)}>
-                {t('cancel')}
-              </button>
-              <button type="button" className="btn-primary bg-red-700 hover:bg-red-800" onClick={() => void submitCancel()}>
-                {t('reservationsCancelSend')}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ReservationCancelModal
+        open={!!cancelOpen}
+        variant="webpos"
+        onClose={() => setCancelOpen(null)}
+        onConfirm={(reason) => void submitCancel(reason)}
+      />
     </div>
   );
 }

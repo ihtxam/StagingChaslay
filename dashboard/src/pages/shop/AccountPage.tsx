@@ -66,7 +66,7 @@ type MenuProduct = {
 };
 
 export default function AccountPage() {
-  const { t } = useI18n();
+  const { t, formatDate, formatDateTime } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const navigate = useNavigate();
@@ -484,7 +484,7 @@ export default function AccountPage() {
                         .replace('{n}', String(loyalty.expiringSoon.points))
                         .replace(
                           '{date}',
-                          new Date(loyalty.expiringSoon.expiresAt).toLocaleDateString()
+                          formatDate(loyalty.expiringSoon.expiresAt)
                         )}
                     </p>
                   ) : null}
@@ -663,7 +663,7 @@ export default function AccountPage() {
                         <div>
                           <p className="font-semibold text-sm">#{o.orderNumber}</p>
                           <p className="text-xs text-stone-500">
-                            {new Date(o.createdAt).toLocaleString()} · CHF{' '}
+                            {formatDateTime(o.createdAt)} · CHF{' '}
                             {Number(o.total).toFixed(2)}
                           </p>
                           <p className="text-xs text-stone-500 mt-0.5">

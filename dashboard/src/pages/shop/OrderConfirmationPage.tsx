@@ -70,7 +70,7 @@ const money = (v: string | number) =>
   new Intl.NumberFormat(undefined, { style: 'currency', currency: 'CHF' }).format(Number(v));
 
 export default function OrderConfirmationPage() {
-  const { t, locale } = useI18n();
+  const { t, formatDateTime } = useI18n();
   const { merchantSlug, orderId = '' } = useParams<{ merchantSlug?: string; orderId?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const [searchParams] = useSearchParams();
@@ -261,8 +261,6 @@ export default function OrderConfirmationPage() {
     ? t('shopCash')
     : translatePaymentStatus(order.paymentStatus, t);
 
-  const shopLocale = locale === 'de' ? 'de-CH' : locale === 'fr' ? 'fr-CH' : 'en-CH';
-
   return (
     <div className="min-h-screen bg-[#f6f5f2] text-stone-900">
       <header className="bg-white border-b border-stone-200">
@@ -335,14 +333,7 @@ export default function OrderConfirmationPage() {
           {order.scheduledFor && (
             <p className="text-sm font-medium">
               {t('shopScheduledFor')}{' '}
-              {new Date(order.scheduledFor).toLocaleString(shopLocale, {
-                timeZone: 'Europe/Zurich',
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
+              {formatDateTime(order.scheduledFor)}
             </p>
           )}
         </section>

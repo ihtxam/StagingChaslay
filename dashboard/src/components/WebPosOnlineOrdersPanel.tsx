@@ -48,7 +48,7 @@ export default function WebPosOnlineOrdersPanel({
   onRefresh,
   onGoToOrders,
 }: Props) {
-  const { t } = useI18n();
+  const { t, formatDateTime } = useI18n();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [tab, setTab] = useState<'new' | 'active' | 'all'>('new');
 
@@ -166,7 +166,7 @@ export default function WebPosOnlineOrdersPanel({
                     <p className="text-[11px] text-stone-500">
                       {channelLabel(o.fulfillmentChannel)} · {money(o.total)} ·{' '}
                       {o.scheduledFor
-                        ? new Date(o.scheduledFor).toLocaleString()
+                        ? formatDateTime(o.scheduledFor)
                         : t('webPosAsap')}
                     </p>
                     {(o.customerName || o.customerPhone) && (

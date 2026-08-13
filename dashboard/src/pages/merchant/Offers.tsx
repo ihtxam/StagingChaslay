@@ -134,7 +134,7 @@ const emptyForm = () => ({
 });
 
 export default function Offers() {
-  const { t } = useI18n();
+  const { t, formatDateTime } = useI18n();
   const typeLabels = useMemo(
     () =>
       Object.fromEntries(
@@ -823,8 +823,8 @@ export default function Offers() {
             </div>
             {(form.validFrom || form.validTo) && (
               <p className="text-[11px] text-stone-500">
-                {form.validFrom ? new Date(form.validFrom).toLocaleString() : '…'} →{' '}
-                {form.validTo ? new Date(form.validTo).toLocaleString() : '…'}
+                {form.validFrom ? formatDateTime(form.validFrom) : '…'} →{' '}
+                {form.validTo ? formatDateTime(form.validTo) : '…'}
               </p>
             )}
           </div>

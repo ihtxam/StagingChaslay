@@ -362,7 +362,7 @@ function MerchantsPage() {
               {t('cancel')}
             </button>
             <button type="submit" className="btn-primary text-sm" disabled={saving}>
-              {saving ? '…' : t('save')}
+              {saving ? '?' : t('save')}
             </button>
           </div>
         </form>
@@ -420,7 +420,7 @@ function MerchantsPage() {
             <h2 className="text-lg font-bold text-rose-900">{t('resellerPurgeSales')}</h2>
             <p className="text-sm text-stone-700">
               <span className="font-semibold">{purgeFor.name}</span>
-              {' — '}
+              {' ? '}
               {t('resellerPurgeBody')}
             </p>
             <ul className="text-xs text-stone-600 list-disc pl-5 space-y-1">
@@ -466,7 +466,7 @@ function MerchantsPage() {
 }
 
 function LicensesPage() {
-  const { t } = useI18n();
+  const { t, formatDate } = useI18n();
   const [licenses, setLicenses] = useState<any[]>([]);
   const [merchants, setMerchants] = useState<any[]>([]);
   const [pool, setPool] = useState({ licenseSeats: 0, seatsUsed: 0, seatsRemaining: 0 });
@@ -708,7 +708,7 @@ function LicensesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {lic.expiresAt ? new Date(lic.expiresAt).toLocaleDateString() : '-'}
+                    {lic.expiresAt ? formatDate(lic.expiresAt) : '-'}
                   </td>
                   <td className="px-4 py-3">
                     {lic.status === 'active' && (
@@ -835,7 +835,7 @@ function LicensesPage() {
                   {t('cancel')}
                 </button>
                 <button type="submit" className="btn-primary" disabled={issuing}>
-                  {issuing ? '…' : t('issueDeviceLicenses')}
+                  {issuing ? '?' : t('issueDeviceLicenses')}
                 </button>
               </div>
             </form>
@@ -892,7 +892,7 @@ function EditionsPage() {
     setShowForm(true);
   };
 
-  /** Platform templates are read-only — clone into an editable agency copy, then open editor. */
+  /** Platform templates are read-only ? clone into an editable agency copy, then open editor. */
   const customizePlatform = async (ed: any) => {
     try {
       setSaving(true);
@@ -1156,7 +1156,7 @@ function ResellerShell() {
       />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
         <Header
-          title={`${user?.name || 'Reseller'} — Agency`}
+          title={`${user?.name || 'Reseller'} ? Agency`}
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
           language={locale}
           onLanguageChange={(lang: Locale) => setLocale(lang)}
