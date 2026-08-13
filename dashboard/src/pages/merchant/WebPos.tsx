@@ -3341,7 +3341,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       pointsRedeemed,
       pointsDiscount,
     };
-    if (primary?.method === 'terminal' && payments.length === 1) {
+    if (primary?.method === 'terminal') {
+      if (payments.length > 1) {
+        toast.error(t('webPosTerminalSinglePayment'));
+        return;
+      }
+      if (!guardOfflineCheckout('terminal')) return;
       setCheckoutExtras(extras);
       await runTerminalPayment(undefined, extras);
       return;
@@ -4383,10 +4388,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setBusy(true);
 
     try {
+      const terminalAmount = roundMoney2(extras?.total ?? activeSale.totals.total);
       const res = await api.post(
         '/payment/terminal/poi',
         {
-          amount: activeSale.totals.total,
+          amount: terminalAmount,
           terminalId: selectedTerminalId,
           currency: 'CHF',
           saleRef: clientId,
@@ -5834,6 +5840,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           } as WebPosCustomer);
         }}
       />
+
+      {giftCardsFeatureOn &&
+      !offlineNow &&
+      posView === 'register' &&
+      !pinGateRequired &&
+      !pinModalOpen &&
+      !giftCardOpsOpen &&
+      !giftCardPayOpen &&
+      !paymentModalOpen &&
+      !splitOpen ? (
+        <div className="pointer-events-none fixed left-0 top-0 h-px w-px overflow-hidden opacity-0">
+          <RfidScanInput
+            value={rfidCapture}
+            onChange={setRfidCapture}
+            onScanComplete={(code) => void lookupMembershipCard(code)}
+            autoFocus
+          />
+        </div>
+      ) : null}
 
       <WebPosStartShiftModal
         open={startShiftOpen}
