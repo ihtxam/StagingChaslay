@@ -1,0 +1,96 @@
+import { APP_NAME } from '@/lib/brand';
+import {
+  browserPrintText,
+  isPrintAgentAvailable,
+  isUnsuitableRawPrinter,
+  unsuitableRawPrinterMessage,
+} from '@/lib/print-agent';
+import {
+  generateWebPosReceiptText,
+  logoUrlToEscPos,
+  posOrderToWebPosReceipt,
+  printersForRole,
+  textToEscPos,
+  uint8ToBase64,
+  type PosOrderForReceipt,
+  type PosPrintSettingsClient,
+} from '@/lib/webpos-receipt';
+import { printViaAgentOrQueue } from '@/lib/webpos-print-relay';
+
+type MerchantPrintCtx = {
+  name?: string | null;
+  address?: string | null;
+  city?: string | null;
+  phone?: string | null;
+  vatNumber?: string | null;
+  taxIncludedInPrice?: boolean;
+  vatRate?: string | null;
+  shopLogoUrl?: string | null;
+};
+
+export async function printMerchantOrderReceipt(
+  order: PosOrderForReceipt,
+  opts: {
+    merchant: MerchantPrintCtx;
+    printSettings?: PosPrintSettingsClient | null;
+    locale: string;
+    splitLabel?: string | null;
+    fallbackPrinterName?: string | null;
+  }
+): Promise<void> {
+  const taxRate = opts.merchant.vatRate != null ? Number(opts.merchant.vatRate) : 8.1;
+  const receiptPayload = posOrderToWebPosReceipt(order, {
+    businessName: opts.merchant.name || APP_NAME,
+    address: [opts.merchant.address, opts.merchant.city].filter(Boolean).join(', '),
+    phone: opts.merchant.phone || undefined,
+    vatNumber: opts.merchant.vatNumber || undefined,
+    taxRate,
+    vatIncludedInPrice: opts.merchant.taxIncludedInPrice === true,
+    printSettings: opts.printSettings,
+    panelLang: opts.locale,
+    splitLabel: opts.splitLabel,
+  });
+  const text = generateWebPosReceiptText(receiptPayload, opts.locale);
+  const targets = printersForRole(opts.printSettings, 'receipt');
+  const names =
+    targets.length > 0
+      ? targets.map((x) => x.name)
+      : [opts.fallbackPrinterName || localStorage.getItem('manupos_webpos_printer') || ''];
+  const named = names.map((n) => (n || '').trim()).filter(Boolean);
+  if (named.length > 0 && named.every((n) => isUnsuitableRawPrinter(n))) {
+    browserPrintText(text);
+    return;
+  }
+  const agentOk = await isPrintAgentAvailable();
+  if (!agentOk && named.length === 0) {
+    browserPrintText(text);
+    return;
+  }
+  const paper =
+    targets[0]?.paperWidthMm || opts.printSettings?.paperWidthMm || 80;
+  const logoUrl =
+    opts.printSettings?.receiptLogoUrl || opts.merchant.shopLogoUrl || null;
+  const logo = logoUrl
+    ? await logoUrlToEscPos(String(logoUrl), paper === 58 ? 240 : 384)
+    : null;
+  const qr =
+    opts.printSettings?.receiptShowQrCode !== false ? receiptPayload.receiptUrl : undefined;
+  const escpos = textToEscPos(text, qr, logo);
+  const dataBase64 = uint8ToBase64(escpos);
+  for (const name of names) {
+    const label = (name || '').trim();
+    if (label && isUnsuitableRawPrinter(label)) {
+      throw new Error(unsuitableRawPrinterMessage(label));
+    }
+    try {
+      await printViaAgentOrQueue({ printerName: label || undefined, dataBase64, text });
+    } catch (err: unknown) {
+      const msg = String((err as Error)?.message || '');
+      if (/OneNote|PDF|XPS|ESC-POS|virtual|receipt\/ESC-POS|corrupted|agent|offline/i.test(msg)) {
+        browserPrintText(text);
+        return;
+      }
+      throw err;
+    }
+  }
+}
