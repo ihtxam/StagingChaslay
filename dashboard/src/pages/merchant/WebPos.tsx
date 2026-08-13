@@ -80,6 +80,7 @@ import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
+import WebPosCustomAmountModal from '@/components/webpos/WebPosCustomAmountModal';
 import WebPosOnlineOrdersPanel, {
   type OnlineOrder,
 } from '@/components/WebPosOnlineOrdersPanel';
@@ -541,6 +542,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [pendingCombo, setPendingCombo] = useState<ShopComboProduct | null>(null);
   const [pendingOpenPrice, setPendingOpenPrice] = useState<Product | null>(null);
   const [pendingWeighed, setPendingWeighed] = useState<Product | null>(null);
+  const [customAmountOpen, setCustomAmountOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(() => {
     const hasItems = (bootActive?.cart?.length || 0) > 0 || !!bootActive?.orderSent;
@@ -3169,6 +3171,40 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     toast.success(t('giftCardAddedToCart'));
   };
 
+  const pushCustomAmountLine = (amount: number) => {
+    const price = roundMoney2(amount);
+    if (price <= 0) return;
+    const courseNumber = coursesEnabled ? activeCourse : undefined;
+    const lineId = `misc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setCart((prev) => [
+      ...prev,
+      {
+        lineId,
+        productId: '__misc__',
+        name: t('webPosCustomAmount'),
+        quantity: 1,
+        unitPrice: price,
+        lineTotal: price,
+        taxable: true,
+        selectedExtras: [],
+        comboSelections: [],
+        isOpenPrice: true,
+        courseNumber,
+      },
+    ]);
+    setSelectedLineId(lineId);
+    setPosTab('register');
+    setPosView('register');
+  };
+
+  const addCustomAmountLine = (amount: number) => {
+    ensureShift(() => pushCustomAmountLine(amount));
+  };
+
+  const openCustomAmountModal = () => {
+    ensureShift(() => setCustomAmountOpen(true));
+  };
+
   const creditGiftCardLines = async (saleLines: CartLine[], orderId?: string | null) => {
     for (const line of saleLines) {
       if (!line.giftCard) continue;
@@ -5271,6 +5307,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onBillDiscount={
                   checkoutSettings.discountsEnabled ? () => setBillDiscountOpen(true) : undefined
                 }
+                onCustomAmount={openCustomAmountModal}
                 canApplyBillDiscount={canApplyDiscounts}
                 billDiscountLabel={billDiscountLabel}
                 canReleaseTable={!!tableLabel && cart.length === 0 && !orderSent}
@@ -5333,6 +5370,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   }
                   setGiftCardOpsOpen(true);
                 }}
+                onCustomAmount={openCustomAmountModal}
               />
               {/* Odoo-style sticky Pay | Cart — only on narrow viewports (JS + CSS). */}
               {isNarrowViewport ? (
@@ -5582,6 +5620,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }}
       />
 
+      <WebPosCustomAmountModal
+        open={customAmountOpen}
+        onClose={() => setCustomAmountOpen(false)}
+        onConfirm={addCustomAmountLine}
+      />
+
       <WebPosWeightModal
         open={!!pendingWeighed}
         productName={pendingWeighed?.name || ''}
@@ -5644,7 +5688,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       <WebPosPaymentModal
         open={paymentModalOpen}
         phase={paymentPhase}
-        amountLabel={money(totals.total)}
+        amountLabel={money(checkoutExtras?.total ?? totals.total)}
         message={paymentMessage}
         onCancel={() => {
           paymentAbortRef.current?.abort();

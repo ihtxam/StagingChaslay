@@ -6,6 +6,7 @@ import {
   Printer,
   UtensilsCrossed,
   User,
+  Wallet,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
@@ -85,6 +86,8 @@ type Props = {
   onMoveDish?: () => void;
   /** Apply whole-bill discount. */
   onBillDiscount?: () => void;
+  /** Open custom / open amount entry. */
+  onCustomAmount?: () => void;
   canApplyBillDiscount?: boolean;
   billDiscountLabel?: string | null;
   /**
@@ -195,6 +198,7 @@ export default function WebPosCartPanel({
   onMoveTable,
   onMoveDish,
   onBillDiscount,
+  onCustomAmount,
   canApplyBillDiscount = true,
   billDiscountLabel,
   layout = 'side',
@@ -472,6 +476,21 @@ export default function WebPosCartPanel({
                   }}
                 >
                   {t('webPosMoveDishTo')}
+                </button>
+              ) : null}
+              {onCustomAmount ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                  disabled={busy}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onCustomAmount();
+                  }}
+                >
+                  <Wallet size={14} className="shrink-0 text-stone-500" />
+                  {t('webPosCustomAmount')}
                 </button>
               ) : null}
               {onBillDiscount ? (

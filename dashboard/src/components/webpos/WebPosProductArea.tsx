@@ -1,4 +1,4 @@
-import { ArrowRight, Banknote, CreditCard, Gift, MonitorSmartphone } from 'lucide-react';
+import { ArrowRight, Banknote, CreditCard, Gift, MonitorSmartphone, Wallet } from 'lucide-react';
 import { useMemo } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { categoryColor, categoryColorMap } from './categoryColors';
@@ -30,6 +30,7 @@ type Props = {
   onGiftCards?: () => void;
   onSellGiftCard?: () => void;
   onReloadGiftCard?: () => void;
+  onCustomAmount?: () => void;
 };
 
 export default function WebPosProductArea({
@@ -51,6 +52,7 @@ export default function WebPosProductArea({
   onGiftCards,
   onSellGiftCard,
   onReloadGiftCard,
+  onCustomAmount,
 }: Props) {
   const { t } = useI18n();
   const colorByCat = useMemo(() => categoryColorMap(categories), [categories]);
@@ -146,6 +148,22 @@ export default function WebPosProductArea({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+            {onCustomAmount ? (
+              <button
+                type="button"
+                onClick={onCustomAmount}
+                className="webpos-product-card group min-h-[5.5rem] !bg-[#5C4B7A] text-white hover:!bg-[#4a3d62]"
+                title={t('webPosCustomAmount')}
+              >
+                <div className="flex min-h-[4rem] flex-1 flex-col items-center justify-center px-2 py-2.5">
+                  <Wallet size={22} className="mb-1 opacity-90" aria-hidden />
+                  <span className="line-clamp-2 text-center text-sm font-bold leading-snug">
+                    {t('webPosCustomAmount')}
+                  </span>
+                </div>
+                <div className="relative h-1.5 w-full rounded-b-lg bg-[#4a3d62]" />
+              </button>
+            ) : null}
             {products.map((p) => {
               const accent =
                 (p.categoryId && colorByCat.get(p.categoryId)) ||
