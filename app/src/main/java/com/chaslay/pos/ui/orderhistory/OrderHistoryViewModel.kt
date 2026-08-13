@@ -236,12 +236,58 @@ class OrderHistoryViewModel @Inject constructor(
         amount: Double,
         fullRefund: Boolean,
         itemRefunds: List<Pair<Long, Int>> = emptyList(),
-        reason: String? = null
+        reason: String? = null,
+        refundKind: String = "referenced",
+        goodwillMethod: String = "cash"
     ) {
         val order = _uiState.value.selectedOrder ?: return
         val orderId = order.id
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
+
+            if (refundKind == "goodwill") {
+                val compensation = amount.coerceAtLeast(0.0)
+                if (compensation <= 0.0) {
+                    _uiState.value = _uiState.value.copy(message = "Enter a valid compensation amount")
+                    return@launch
+                }
+                if (goodwillMethod == "terminal" && settings.adyenTerminalEnabled) {
+                    when (
+                        val terminalResult = adyenTerminalService.processUnreferencedRefund(
+                            amount = compensation,
+                            currencyCode = order.currencyCode,
+                            settings = settings
+                        )
+                    ) {
+                        is com.chaslay.pos.payment.PaymentResult.Failure -> {
+                            _uiState.value = _uiState.value.copy(
+                                showRefundDialog = false,
+                                message = terminalResult.message
+                            )
+                            return@launch
+                        }
+                        is com.chaslay.pos.payment.PaymentResult.Cancelled -> {
+                            _uiState.value = _uiState.value.copy(
+                                showRefundDialog = false,
+                                message = "Terminal compensation cancelled"
+                            )
+                            return@launch
+                        }
+                        else -> Unit
+                    }
+                }
+                transactionRepository.recordGoodwillCompensation(orderId, compensation, reason)
+                val detail = transactionRepository.getTransaction(orderId)
+                _uiState.value = _uiState.value.copy(
+                    showRefundDialog = false,
+                    selectedOrder = detail?.first,
+                    selectedItems = detail?.second.orEmpty(),
+                    message = "Goodwill compensation recorded"
+                )
+                refresh()
+                return@launch
+            }
+
             val refundAmount = when {
                 fullRefund -> (order.total - order.refundAmount.coerceAtLeast(0.0)).coerceAtLeast(0.0)
                 itemRefunds.isNotEmpty() -> {
@@ -423,9 +469,9 @@ class OrderHistoryViewModel @Inject constructor(
             for (split in _uiState.value.splitOrders) {
                 val items = _uiState.value.splitItemsByOrderId[split.id].orEmpty()
                 val published = publishBeforePrint(split, items, settings)
-                val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
-                    .appendableForTransaction(published)
-                printerService.routeReceipt(settings, published, items, customerCopy, cashierCopy)
+                val customerCopy = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+                    .appendableForTransaction(published).first
+                printerService.routeReceipt(settings, published, items, customerCopy, null)
             }
             _uiState.value = _uiState.value.copy(message = "Split receipts printed")
         }
@@ -455,13 +501,13 @@ class OrderHistoryViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
-            val (customerCopy, cashierCopy) = if (includeCustomerCardCopy) {
-                com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendableForTransaction(order)
+            val customerCopy = if (includeCustomerCardCopy) {
+                com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendableForTransaction(order).first
             } else {
-                null to null
+                null
             }
             val published = publishBeforePrint(order, items, settings)
-            printerService.routeReceipt(settings, published, items, customerCopy, cashierCopy)
+            printerService.routeReceipt(settings, published, items, customerCopy, null)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(message = "Receipt printed")
                 }

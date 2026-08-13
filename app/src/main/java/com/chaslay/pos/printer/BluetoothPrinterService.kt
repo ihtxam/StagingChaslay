@@ -960,8 +960,7 @@ class BluetoothPrinterService @Inject constructor(
             sb.appendLine(center(labels.scanDigitalReceipt, lineWidth))
         }
         com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendable(appendAdyenCustomerReceipt)
-            ?.let { receipt -> appendAdyenReceiptBlock(sb, receipt, lineWidth) }
-        com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendable(appendAdyenCashierReceipt)
+            ?.takeIf { settings.adyenReceiptDigitalOnly != true }
             ?.let { receipt -> appendAdyenReceiptBlock(sb, receipt, lineWidth) }
         return finalizePayload(sb.toString(), settings, lineWidth, qrUrl)
     }

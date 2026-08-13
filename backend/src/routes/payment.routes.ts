@@ -242,6 +242,37 @@ router.post("/terminal/poi/refund", async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/payment/terminal/poi/refund/unreferenced
+ * Adyen Terminal API unreferenced refund (goodwill compensation).
+ */
+router.post("/terminal/poi/refund/unreferenced", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    const { amount, terminalId, currency } = req.body;
+
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+    if (amount == null || Number(amount) <= 0) {
+      return res.status(400).json({ error: "Valid compensation amount is required" });
+    }
+
+    const result = await AdyenTerminalPoiService.processUnreferencedTerminalRefund(
+      merchantId,
+      Number(amount),
+      { terminalId, currency: currency || "CHF" }
+    );
+
+    res.json({ success: result.status === "approved", result });
+  } catch (error) {
+    console.error("Error processing unreferenced terminal refund:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Unreferenced terminal refund failed",
+    });
+  }
+});
+
+/**
  * POST /api/payment/refund
  * Refund payment
  */

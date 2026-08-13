@@ -152,3 +152,13 @@ export function appendAdyenReceiptBlock(
     adyenReceiptToPlainText(receipt, lineWidth)
   );
 }
+
+export function parseAdyenReceiptJson(json?: string | null): AdyenTerminalReceipt | null {
+  if (!json?.trim()) return null;
+  try {
+    const parsed = JSON.parse(json) as AdyenTerminalReceipt;
+    return Array.isArray(parsed?.lines) && parsed.lines.length ? parsed : null;
+  } catch {
+    return null;
+  }
+}

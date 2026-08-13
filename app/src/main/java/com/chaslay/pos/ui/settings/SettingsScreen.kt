@@ -794,6 +794,10 @@ fun SettingsScreen(
             Checkbox(checked = state.receiptShowQrCode, onCheckedChange = viewModel::updateReceiptShowQrCode)
             Text(stringResource(R.string.receipt_show_qr))
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = state.adyenReceiptDigitalOnly, onCheckedChange = viewModel::updateAdyenReceiptDigitalOnly)
+            Text("Adyen card receipt: digital only (QR)")
+        }
         if (state.posMode == PosMode.RESTAURANT) {
             Text(stringResource(R.string.kitchen_text_size), fontWeight = FontWeight.SemiBold)
             Text(stringResource(R.string.kitchen_item_text_size), style = MaterialTheme.typography.bodySmall)

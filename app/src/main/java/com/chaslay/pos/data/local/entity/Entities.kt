@@ -148,6 +148,7 @@ data class TransactionEntity(
     val serviceType: ServiceType? = null,
     val syncStatus: SyncStatus = SyncStatus.PENDING,
     val refundAmount: Double = 0.0,
+    val goodwillAmount: Double = 0.0,
     val refundReason: String? = null,
     val refundedAt: Long? = null,
     val cancelReason: String? = null,
@@ -270,6 +271,8 @@ data class BusinessSettingsEntity(
     val receiptShowVatTable: Boolean = true,
     val receiptShowStaffLine: Boolean = true,
     val receiptShowQrCode: Boolean = true,
+    /** When true, Adyen card payment receipt is QR-only (not printed on thermal). */
+    val adyenReceiptDigitalOnly: Boolean = false,
     val kitchenLargeItemText: Boolean = true,
     val kitchenLargeHeaderText: Boolean = true,
     /** 1 = normal, 2 = large (double height), 3 = extra large (double width + height) */

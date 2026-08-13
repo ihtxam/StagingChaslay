@@ -1904,6 +1904,26 @@ router.post("/pos/orders/:id/refund", async (req: Request, res: Response) => {
   }
 });
 
+/** Goodwill / unreferenced compensation (open amount, not capped by order total). */
+router.post("/pos/orders/:id/goodwill", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { PosOrdersService } = await import("@/services/pos-orders.service");
+    const body = req.body || {};
+    const result = await PosOrdersService.goodwillCompensation(merchantId, req.params.id, {
+      amount: Number(body.amount),
+      reason: String(body.reason || ""),
+      method: body.method === "terminal" ? "terminal" : "cash",
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Goodwill compensation failed",
+    });
+  }
+});
+
 router.get("/pos/held", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;

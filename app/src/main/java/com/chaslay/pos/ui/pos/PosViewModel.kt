@@ -2010,6 +2010,9 @@ class PosViewModel @Inject constructor(
                     )
                 }
             }
+            cfg.print?.let { print ->
+                merged = merged.copy(adyenReceiptDigitalOnly = print.adyenReceiptDigitalOnly)
+            }
             merged = merged.copy(giftCardsEnabled = cfg.methods?.giftCard == true)
             if (merged != current) {
                 settingsRepository.saveSettings(merged)
@@ -2497,19 +2500,19 @@ class PosViewModel @Inject constructor(
             if (publicUrl != null) {
                 updateExtras { it.copy(receiptPublicUrl = publicUrl, completedTransaction = transaction) }
             }
-            val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+            val customerCopy = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
                 .appendableForTransaction(
                     transaction,
                     memoryCustomer = _uiExtras.value.adyenCustomerReceipt,
                     memoryCashier = _uiExtras.value.adyenCashierReceipt
-                )
+                ).first
             withContext(Dispatchers.IO) {
                 printerService.routeReceipt(
                     settings,
                     transaction,
                     full.second,
                     customerCopy,
-                    cashierCopy,
+                    null,
                     loyaltyPointsEarned = _uiExtras.value.lastLoyaltyPointsEarned,
                     loyaltyPointsBalance = _uiExtras.value.lastLoyaltyPointsBalance
                 )
@@ -3060,9 +3063,9 @@ class PosViewModel @Inject constructor(
             val full = transactionRepository.getTransaction(tx.id) ?: return@launch
             val settings = settingsRepository.getSettings()
             val (published, items) = publishAndPersistReceipt(full.first, full.second, settings)
-            val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
-                .appendableForTransaction(published)
-            printerService.routeReceipt(settings, published, items, customerCopy, cashierCopy)
+            val customerCopy = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+                .appendableForTransaction(published).first
+            printerService.routeReceipt(settings, published, items, customerCopy, null)
                 .onFailure { e -> updateExtras { it.copy(errorMessage = e.message) } }
             dismissReceiptOptions()
         }

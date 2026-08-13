@@ -4138,7 +4138,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       showVat: printSettings?.receiptShowVatTable !== false,
       showStaff: printSettings?.receiptShowStaffLine !== false,
       adyenCustomerReceipt: normalizeAdyenTerminalReceipt(terminalCapture?.customerReceipt),
-      adyenCashierReceipt: normalizeAdyenTerminalReceipt(terminalCapture?.cashierReceipt),
+      printAdyenReceiptOnTicket: printSettings?.adyenReceiptDigitalOnly !== true,
     };
     const receiptText = generateWebPosReceiptText(receiptPayload, locale);
     setLastReceipt(receiptText);

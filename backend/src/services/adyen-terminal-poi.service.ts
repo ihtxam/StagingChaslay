@@ -243,6 +243,47 @@ function buildReversalRequestBody(
   };
 }
 
+function buildUnreferencedRefundRequestBody(
+  amount: number,
+  currencyCode: string,
+  saleId: string,
+  poiId: string
+): Record<string, unknown> {
+  const serviceId = generateServiceId();
+  const requestedAmount = Math.round(amount * 100) / 100;
+
+  return {
+    SaleToPOIRequest: {
+      MessageHeader: {
+        ProtocolVersion: "3.0",
+        MessageClass: "Service",
+        MessageCategory: "Payment",
+        MessageType: "Request",
+        ServiceID: serviceId,
+        SaleID: saleId,
+        POIID: poiId,
+      },
+      PaymentRequest: {
+        SaleData: {
+          SaleTransactionID: {
+            TransactionID: crypto.randomUUID().replace(/-/g, "").slice(0, 16),
+            TimeStamp: new Date().toISOString(),
+          },
+        },
+        PaymentData: {
+          PaymentType: "Refund",
+        },
+        PaymentTransaction: {
+          AmountsReq: {
+            Currency: currencyCode.toUpperCase(),
+            RequestedAmount: requestedAmount,
+          },
+        },
+      },
+    },
+  };
+}
+
 function parseAdyenApiError(body: string): AdyenApiError | null {
   if (!body?.trim()) return null;
   try {
@@ -553,7 +594,7 @@ export class AdyenTerminalPoiService {
   }
 
   /**
-   * Referenced POI refund (ReversalRequest) ó returns funds to the customer's bank card.
+   * Referenced POI refund (ReversalRequest) ù returns funds to the customer's bank card.
    * Supports partial and full refunds when original POI transaction id + timestamp are known.
    */
   static async processTerminalRefund(
@@ -587,5 +628,30 @@ export class AdyenTerminalPoiService {
       originalTs
     );
     return executeSync(ctxOrErr, body, parseReversalResponse);
+  }
+
+  /**
+   * Unreferenced POI refund (PaymentRequest PaymentType=Refund) ó goodwill compensation
+   * not linked to an original terminal transaction.
+   */
+  static async processUnreferencedTerminalRefund(
+    merchantId: string,
+    amount: number,
+    opts: { terminalId?: string; currency?: string } = {}
+  ): Promise<TerminalPoiResult> {
+    const ctxOrErr = await resolveTerminalContext(merchantId, opts);
+    if ("status" in ctxOrErr) return ctxOrErr;
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { status: "error", message: "Valid compensation amount is required" };
+    }
+
+    const body = buildUnreferencedRefundRequestBody(
+      amount,
+      ctxOrErr.currency,
+      ctxOrErr.saleId,
+      ctxOrErr.terminalId
+    );
+    return executeSync(ctxOrErr, body, parsePaymentResponse);
   }
 }

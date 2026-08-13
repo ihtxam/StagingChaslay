@@ -135,6 +135,7 @@ interface SettingsData {
     receiptShowVatTable?: boolean;
     receiptShowStaffLine?: boolean;
     receiptShowQrCode?: boolean;
+    adyenReceiptDigitalOnly?: boolean;
     paperWidthMm?: 58 | 80;
     receiptLanguage?: 'en' | 'fr' | 'de' | 'panel';
     receiptLogoUrl?: string | null;
@@ -810,6 +811,7 @@ export default function Settings() {
           receiptShowVatTable: ps.receiptShowVatTable !== false,
           receiptShowStaffLine: ps.receiptShowStaffLine !== false,
           receiptShowQrCode: ps.receiptShowQrCode !== false,
+          adyenReceiptDigitalOnly: ps.adyenReceiptDigitalOnly === true,
           paperWidthMm: ps.paperWidthMm === 58 ? 58 : 80,
           receiptLanguage: ps.receiptLanguage || 'panel',
           receiptLogoUrl: ps.receiptLogoUrl || null,
@@ -2672,6 +2674,28 @@ export default function Settings() {
                     </label>
                   ))}
                 </div>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.posPrintSettings?.adyenReceiptDigitalOnly === true}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          adyenReceiptDigitalOnly: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{t('adyenReceiptDigitalOnly')}</span>
+                    <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                      {t('adyenReceiptDigitalOnlyHint')}
+                    </span>
+                  </span>
+                </label>
               </Section>
 
               <Section title={t('printAgentDownload')} description={t('printAgentDownloadHint')}>

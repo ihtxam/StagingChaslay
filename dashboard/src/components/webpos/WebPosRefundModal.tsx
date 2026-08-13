@@ -28,10 +28,13 @@ type Props = {
   busy?: boolean;
   onClose: () => void;
   onConfirm: (payload: {
+    refundKind: 'referenced' | 'goodwill';
     mode: 'full' | 'items';
     reason: string;
     reasonId: string;
     items?: Array<{ orderItemId: string; quantity: number }>;
+    goodwillAmount?: number;
+    goodwillMethod?: 'cash' | 'terminal';
   }) => void;
 };
 
@@ -100,10 +103,13 @@ export default function WebPosRefundModal({
     }));
   }, [apiReasons, locale]);
 
+  const [refundKind, setRefundKind] = useState<'referenced' | 'goodwill'>('referenced');
   const [mode, setMode] = useState<'full' | 'items'>('full');
   const [reasonId, setReasonId] = useState('');
   const [customReason, setCustomReason] = useState('');
   const [selectedQty, setSelectedQty] = useState<Record<string, number>>({});
+  const [goodwillAmountText, setGoodwillAmountText] = useState('');
+  const [goodwillMethod, setGoodwillMethod] = useState<'cash' | 'terminal'>('cash');
 
   const refundableItems = useMemo(
     () =>
@@ -120,9 +126,12 @@ export default function WebPosRefundModal({
 
   useEffect(() => {
     if (!open) return;
+    setRefundKind('referenced');
     setMode('full');
     setReasonId(options[0]?.id || '');
     setCustomReason('');
+    setGoodwillAmountText('');
+    setGoodwillMethod('cash');
     const init: Record<string, number> = {};
     for (const it of refundableItems) init[it.id] = 0;
     setSelectedQty(init);
@@ -139,7 +148,13 @@ export default function WebPosRefundModal({
     .filter((it) => it.quantity > 0);
 
   const itemsRefundAmount = selectedItems.reduce((s, it) => s + it.amount, 0);
-  const previewAmount = mode === 'full' ? remaining : Math.min(remaining, itemsRefundAmount);
+  const goodwillAmount = Number(goodwillAmountText.replace(',', '.')) || 0;
+  const previewAmount =
+    refundKind === 'goodwill'
+      ? goodwillAmount
+      : mode === 'full'
+        ? remaining
+        : Math.min(remaining, itemsRefundAmount);
   const isOther = reasonId === 'other';
   const reasonLabel =
     isOther
@@ -148,7 +163,9 @@ export default function WebPosRefundModal({
   const canConfirm =
     !!reasonLabel &&
     previewAmount > 0.001 &&
-    (mode === 'full' || selectedItems.length > 0) &&
+    (refundKind === 'goodwill' ||
+      mode === 'full' ||
+      selectedItems.length > 0) &&
     !busy;
 
   const pushChar = (ch: string) => {
@@ -171,6 +188,78 @@ export default function WebPosRefundModal({
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              className={`rounded-xl px-3 py-2.5 text-sm font-bold ${
+                refundKind === 'referenced'
+                  ? 'bg-rose-600 text-white'
+                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}
+              onClick={() => setRefundKind('referenced')}
+            >
+              {t('webPosRefundReferenced')}
+            </button>
+            <button
+              type="button"
+              className={`rounded-xl px-3 py-2.5 text-sm font-bold ${
+                refundKind === 'goodwill'
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}
+              onClick={() => setRefundKind('goodwill')}
+            >
+              {t('webPosRefundGoodwill')}
+            </button>
+          </div>
+
+          {refundKind === 'goodwill' ? (
+            <p className="text-xs text-stone-500">{t('webPosRefundGoodwillHint')}</p>
+          ) : null}
+
+          {refundKind === 'goodwill' ? (
+            <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-stone-600">
+                {t('webPosGoodwillAmount')}
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.05"
+                className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-bold"
+                value={goodwillAmountText}
+                onChange={(e) => setGoodwillAmountText(e.target.value)}
+                placeholder="0.00"
+              />
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-600">
+                {t('webPosGoodwillMethod')}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className={`rounded-lg px-3 py-2 text-sm font-bold ${
+                    goodwillMethod === 'cash'
+                      ? 'bg-stone-800 text-white'
+                      : 'bg-white ring-1 ring-stone-200'
+                  }`}
+                  onClick={() => setGoodwillMethod('cash')}
+                >
+                  {t('webPosGoodwillCash')}
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-lg px-3 py-2 text-sm font-bold ${
+                    goodwillMethod === 'terminal'
+                      ? 'bg-stone-800 text-white'
+                      : 'bg-white ring-1 ring-stone-200'
+                  }`}
+                  onClick={() => setGoodwillMethod('terminal')}
+                >
+                  {t('webPosGoodwillTerminal')}
+                </button>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -195,8 +284,9 @@ export default function WebPosRefundModal({
               {t('webPosRefundSomeItems')}
             </button>
           </div>
+          )}
 
-          {mode === 'items' ? (
+          {refundKind === 'referenced' && mode === 'items' ? (
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
                 {t('webPosRefundSelectItems')}
@@ -346,16 +436,19 @@ export default function WebPosRefundModal({
             disabled={!canConfirm}
             onClick={() =>
               onConfirm({
+                refundKind,
                 mode,
                 reason: reasonLabel,
                 reasonId,
                 items:
-                  mode === 'items'
+                  refundKind === 'referenced' && mode === 'items'
                     ? selectedItems.map((it) => ({
                         orderItemId: it.orderItemId,
                         quantity: it.quantity,
                       }))
                     : undefined,
+                goodwillAmount: refundKind === 'goodwill' ? goodwillAmount : undefined,
+                goodwillMethod: refundKind === 'goodwill' ? goodwillMethod : undefined,
               })
             }
           >

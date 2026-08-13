@@ -2,6 +2,11 @@ import { Router, Request, Response } from "express";
 import { getDb, schema } from "@/db";
 import { eq, or } from "drizzle-orm";
 import { resolveOrderItemName } from "@/lib/order-item-name";
+import {
+  adyenReceiptToPlainText,
+  parseAdyenReceiptJson,
+  type AdyenTerminalReceipt,
+} from "@/lib/adyen-receipt";
 
 const router = Router();
 
@@ -40,6 +45,10 @@ router.get("/:ref", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Receipt not found" });
     }
 
+    const adyenCustomerReceipt: AdyenTerminalReceipt | null = parseAdyenReceiptJson(
+      order.adyenCustomerReceiptJson
+    );
+
     res.json({
       success: true,
       receipt: {
@@ -62,6 +71,10 @@ router.get("/:ref", async (req: Request, res: Response) => {
         guestCount: order.guestCount,
         notes: order.notes,
         completedAt: order.completedAt || order.createdAt,
+        adyenCustomerReceipt,
+        adyenPaymentReceiptText: adyenCustomerReceipt
+          ? adyenReceiptToPlainText(adyenCustomerReceipt, 40)
+          : null,
         items: (order.items || []).map((i) => ({
           name: resolveOrderItemName(i.productName, i.product?.name),
           quantity: i.quantity,

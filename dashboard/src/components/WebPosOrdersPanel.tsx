@@ -584,25 +584,40 @@ export default function WebPosOrdersPanel({
   };
 
   const doRefund = async (payload: {
+    refundKind: 'referenced' | 'goodwill';
     mode: 'full' | 'items';
     reason: string;
     reasonId: string;
     items?: Array<{ orderItemId: string; quantity: number }>;
+    goodwillAmount?: number;
+    goodwillMethod?: 'cash' | 'terminal';
   }) => {
     if (!refundFor) return;
     setRefundBusy(true);
     try {
-      await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
-        reason: payload.reason,
-        fullTicket: payload.mode === 'full',
-        items: payload.mode === 'items' ? payload.items : undefined,
-      });
-      toast.success(t('webPosOrderRefunded'));
+      if (payload.refundKind === 'goodwill') {
+        await api.post(`/merchant/pos/orders/${refundFor.id}/goodwill`, {
+          amount: payload.goodwillAmount,
+          reason: payload.reason,
+          method: payload.goodwillMethod || 'cash',
+        });
+        toast.success(t('webPosGoodwillSubmitted'));
+      } else {
+        await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
+          reason: payload.reason,
+          fullTicket: payload.mode === 'full',
+          items: payload.mode === 'items' ? payload.items : undefined,
+        });
+        toast.success(t('webPosOrderRefunded'));
+      }
       setRefundFor(null);
       setSelectedOrder(null);
       void load();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('webPosRefundFailed'));
+      toast.error(
+        e.response?.data?.error ||
+          (payload.refundKind === 'goodwill' ? t('webPosGoodwillFailed') : t('webPosRefundFailed'))
+      );
     } finally {
       setRefundBusy(false);
     }

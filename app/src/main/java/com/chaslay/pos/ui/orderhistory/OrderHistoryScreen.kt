@@ -144,7 +144,7 @@ fun OrderHistoryScreen(
             onDismiss = viewModel::closeOrderDetail,
             onPrint = viewModel::printSelectedOrder,
             onPrintCustomerCard = viewModel::printAdyenCustomerReceiptForSelected,
-            onPrintMerchantCard = viewModel::printAdyenCashierReceiptForSelected,
+            onPrintMerchantCard = {},
             onPrintAllSplits = viewModel::printAllSplitOrders,
             onPrintSplit = viewModel::printSplitOrder,
             onCancel = viewModel::showCancelDialog,
@@ -168,8 +168,15 @@ fun OrderHistoryScreen(
             items = state.selectedItems,
             currencySymbol = state.currencySymbol,
             onDismiss = viewModel::dismissRefundDialog,
-            onConfirm = { amount, full, itemRefunds, reason ->
-                viewModel.refundSelectedOrder(amount, full, itemRefunds, reason)
+            onConfirm = { amount, full, itemRefunds, reason, refundKind, goodwillMethod ->
+                viewModel.refundSelectedOrder(
+                    amount,
+                    full,
+                    itemRefunds,
+                    reason,
+                    refundKind,
+                    goodwillMethod
+                )
             }
         )
     }
@@ -949,12 +956,21 @@ private fun RefundOrderDialog(
     items: List<com.chaslay.pos.data.local.entity.TransactionItemEntity>,
     currencySymbol: String,
     onDismiss: () -> Unit,
-    onConfirm: (Double, Boolean, List<Pair<Long, Int>>, String?) -> Unit
+    onConfirm: (
+        Double,
+        Boolean,
+        List<Pair<Long, Int>>,
+        String?,
+        String,
+        String
+    ) -> Unit
 ) {
+    var refundKind by remember { mutableStateOf("referenced") }
     var mode by remember { mutableStateOf("full") }
     var partial by remember { mutableStateOf(false) }
     var amountText by remember { mutableStateOf("") }
     var reasonText by remember { mutableStateOf("") }
+    var goodwillMethod by remember { mutableStateOf("cash") }
     val refundableItems = items.mapNotNull { item ->
         val left = (item.quantity - item.refundedQuantity).coerceAtLeast(0)
         if (left <= 0) null else item to left
@@ -972,6 +988,38 @@ private fun RefundOrderDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = refundKind == "referenced",
+                        onClick = { refundKind = "referenced" },
+                        label = { Text("Refund payment") }
+                    )
+                    FilterChip(
+                        selected = refundKind == "goodwill",
+                        onClick = { refundKind = "goodwill"; mode = "amount"; partial = true },
+                        label = { Text("Goodwill") }
+                    )
+                }
+                if (refundKind == "goodwill") {
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = { amountText = it },
+                        label = { Text("Compensation amount") },
+                        singleLine = true
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = goodwillMethod == "cash",
+                            onClick = { goodwillMethod = "cash" },
+                            label = { Text("Cash") }
+                        )
+                        FilterChip(
+                            selected = goodwillMethod == "terminal",
+                            onClick = { goodwillMethod = "terminal" },
+                            label = { Text("Terminal") }
+                        )
+                    }
+                } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = mode == "full",
@@ -1023,6 +1071,7 @@ private fun RefundOrderDialog(
                         }
                     }
                 }
+                }
                 OutlinedTextField(
                     value = reasonText,
                     onValueChange = { reasonText = it },
@@ -1035,15 +1084,26 @@ private fun RefundOrderDialog(
         confirmButton = {
             Button(onClick = {
                 val reason = reasonText.trim().takeIf { it.isNotBlank() }
-                when (mode) {
-                    "full" -> onConfirm(maxAmount, true, emptyList(), reason)
-                    "items" -> {
+                when {
+                    refundKind == "goodwill" ->
+                        onConfirm(
+                            amountText.toDoubleOrNull() ?: 0.0,
+                            false,
+                            emptyList(),
+                            reason,
+                            "goodwill",
+                            goodwillMethod
+                        )
+                    mode == "full" ->
+                        onConfirm(maxAmount, true, emptyList(), reason, "referenced", "cash")
+                    mode == "items" -> {
                         val picks = selectedQty.mapNotNull { (id, qty) ->
                             if (qty > 0) id to qty else null
                         }
-                        onConfirm(0.0, false, picks, reason)
+                        onConfirm(0.0, false, picks, reason, "referenced", "cash")
                     }
-                    else -> onConfirm(amountText.toDoubleOrNull() ?: 0.0, false, emptyList(), reason)
+                    else ->
+                        onConfirm(amountText.toDoubleOrNull() ?: 0.0, false, emptyList(), reason, "referenced", "cash")
                 }
             }) { Text(stringResource(R.string.confirm)) }
         },

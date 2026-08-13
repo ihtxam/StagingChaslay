@@ -109,6 +109,7 @@ data class SettingsUiState(
     val receiptShowVatTable: Boolean = true,
     val receiptShowStaffLine: Boolean = true,
     val receiptShowQrCode: Boolean = true,
+    val adyenReceiptDigitalOnly: Boolean = false,
     val kitchenLargeItemText: Boolean = true,
     val kitchenLargeHeaderText: Boolean = true,
     val kitchenItemTextScale: Int = 2,
@@ -237,6 +238,7 @@ class SettingsViewModel @Inject constructor(
                     receiptShowVatTable = settings.receiptShowVatTable,
                     receiptShowStaffLine = settings.receiptShowStaffLine,
                     receiptShowQrCode = settings.receiptShowQrCode,
+                    adyenReceiptDigitalOnly = settings.adyenReceiptDigitalOnly,
                     kitchenLargeItemText = settings.kitchenLargeItemText,
                     kitchenLargeHeaderText = settings.kitchenLargeHeaderText,
                     kitchenItemTextScale = settings.kitchenItemTextScale.coerceIn(1, 3),
@@ -682,6 +684,7 @@ class SettingsViewModel @Inject constructor(
     fun updateReceiptShowVatTable(value: Boolean) = _uiState.update { it.copy(receiptShowVatTable = value) }
     fun updateReceiptShowStaffLine(value: Boolean) = _uiState.update { it.copy(receiptShowStaffLine = value) }
     fun updateReceiptShowQrCode(value: Boolean) = _uiState.update { it.copy(receiptShowQrCode = value) }
+    fun updateAdyenReceiptDigitalOnly(value: Boolean) = _uiState.update { it.copy(adyenReceiptDigitalOnly = value) }
     fun updateKitchenLargeItems(value: Boolean) = _uiState.update { it.copy(kitchenLargeItemText = value) }
     fun updateKitchenLargeHeader(value: Boolean) = _uiState.update { it.copy(kitchenLargeHeaderText = value) }
     fun updateKitchenItemTextScale(scale: Int) = _uiState.update {
@@ -1135,6 +1138,7 @@ class SettingsViewModel @Inject constructor(
             receiptShowVatTable = state.receiptShowVatTable,
             receiptShowStaffLine = state.receiptShowStaffLine,
             receiptShowQrCode = state.receiptShowQrCode,
+            adyenReceiptDigitalOnly = state.adyenReceiptDigitalOnly,
             kitchenLargeItemText = state.kitchenLargeItemText,
             kitchenLargeHeaderText = state.kitchenLargeHeaderText,
             kitchenItemTextScale = state.kitchenItemTextScale.coerceIn(1, 3),

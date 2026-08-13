@@ -487,6 +487,9 @@ export class ChaslayCompatService {
         com_port: posPrintSettings.scaleComPort || null,
         usb_address: posPrintSettings.scaleUsbAddress || null,
       },
+      print: {
+        adyen_receipt_digital_only: posPrintSettings.adyenReceiptDigitalOnly === true,
+      },
     };
   }
 

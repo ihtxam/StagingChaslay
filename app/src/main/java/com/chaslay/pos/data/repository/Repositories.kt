@@ -1066,6 +1066,22 @@ class TransactionRepository @Inject constructor(
         )
     }
 
+    suspend fun recordGoodwillCompensation(
+        transactionId: String,
+        amount: Double,
+        reason: String?
+    ) {
+        val tx = transactionDao.getById(transactionId) ?: return
+        val increment = roundMoney(amount.coerceAtLeast(0.0))
+        if (increment <= 0.0) return
+        val newTotal = roundMoney(tx.goodwillAmount.coerceAtLeast(0.0) + increment)
+        transactionDao.recordGoodwillCompensation(
+            id = transactionId,
+            goodwillAmount = newTotal,
+            reason = reason?.trim()?.takeIf { it.isNotBlank() }
+        )
+    }
+
     suspend fun getOrdersByMasterId(masterOrderId: String): List<TransactionEntity> =
         transactionDao.getByMasterOrderId(masterOrderId)
 

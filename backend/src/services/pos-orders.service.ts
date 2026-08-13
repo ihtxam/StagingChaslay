@@ -439,6 +439,85 @@ export class PosOrdersService {
     };
   }
 
+  /**
+   * Goodwill / unreferenced compensation — open amount not capped by order total.
+   * May be paid as cash (record only) or via terminal unreferenced refund.
+   */
+  static async goodwillCompensation(
+    merchantId: string,
+    orderId: string,
+    opts: {
+      amount: number;
+      reason: string;
+      method: "cash" | "terminal";
+    }
+  ) {
+    const db = getDb();
+    const reasonText = resolvePosRefundReason(String(opts.reason || ""));
+    if (!reasonText) throw new Error("Compensation reason is required");
+
+    const amount = roundMoney2(Number(opts.amount));
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Invalid compensation amount");
+
+    const method = String(opts.method || "cash").toLowerCase();
+    if (method !== "cash" && method !== "terminal") {
+      throw new Error("Compensation method must be cash or terminal");
+    }
+
+    const order = await db.query.orders.findFirst({
+      where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
+    });
+    if (!order) throw new Error("Order not found");
+
+    let terminalRef: string | null = null;
+    if (method === "terminal") {
+      const terminalResult = await AdyenTerminalPoiService.processUnreferencedTerminalRefund(
+        merchantId,
+        amount,
+        { currency: "CHF" }
+      );
+      if (terminalResult.status !== "approved") {
+        throw new Error(
+          terminalResult.message || `Adyen terminal compensation failed (${terminalResult.status})`
+        );
+      }
+      terminalRef = terminalResult.reference || null;
+      try {
+        await AdyenService.recordPaymentTransaction(
+          merchantId,
+          orderId,
+          -amount,
+          "goodwill",
+          terminalRef || `goodwill-${Date.now()}`,
+          "completed"
+        );
+      } catch (logErr) {
+        console.warn("Goodwill terminal approved but transaction log failed:", logErr);
+      }
+    }
+
+    const already = Number(order.goodwillAmount || 0) || 0;
+    const newGoodwillTotal = roundMoney2(already + amount);
+
+    const [updated] = await db
+      .update(schema.orders)
+      .set({
+        goodwillAmount: newGoodwillTotal.toFixed(2),
+        refundReason: reasonText,
+      })
+      .where(eq(schema.orders.id, orderId))
+      .returning();
+
+    return {
+      order: updated,
+      compensated: amount,
+      goodwillTotal: newGoodwillTotal,
+      reason: reasonText,
+      method,
+      terminalReference: terminalRef,
+    };
+  }
+
   static async listHeld(merchantId: string) {
     const db = getDb();
     return db.query.heldOrders.findMany({

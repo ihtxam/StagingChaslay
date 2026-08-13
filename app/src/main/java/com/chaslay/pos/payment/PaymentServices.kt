@@ -141,6 +141,28 @@ class AdyenTerminalService @Inject constructor(
             is AdyenTerminalResponse.Error -> PaymentResult.Failure(response.message)
         }
     }
+
+    suspend fun processUnreferencedRefund(
+        amount: Double,
+        currencyCode: String,
+        settings: BusinessSettingsEntity
+    ): PaymentResult {
+        return when (
+            val response = adyenTerminalClient.sendUnreferencedRefundRequest(
+                amount = amount,
+                currencyCode = currencyCode,
+                settings = settings
+            )
+        ) {
+            is AdyenTerminalResponse.Approved -> PaymentResult.Success(
+                reference = response.reference,
+                method = PaymentMethod.ADYEN_TERMINAL
+            )
+            is AdyenTerminalResponse.Cancelled -> PaymentResult.Cancelled
+            is AdyenTerminalResponse.Declined -> PaymentResult.Failure(response.message)
+            is AdyenTerminalResponse.Error -> PaymentResult.Failure(response.message)
+        }
+    }
 }
 
 @Singleton

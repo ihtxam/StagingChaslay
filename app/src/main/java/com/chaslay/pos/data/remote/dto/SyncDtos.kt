@@ -183,6 +183,10 @@ data class SyncScaleDto(
     @SerializedName("usb_address") val usbAddress: String? = null
 )
 
+data class SyncPrintDto(
+    @SerializedName("adyen_receipt_digital_only") val adyenReceiptDigitalOnly: Boolean = false
+)
+
 data class PaymentConfigResponse(
     val serverTime: Long = 0L,
     val adyen: SyncAdyenConfigDto? = null,
@@ -193,7 +197,8 @@ data class PaymentConfigResponse(
     val features: SyncFeaturesDto? = null,
     val checkout: SyncCheckoutDto? = null,
     @SerializedName("receipt_base_url") val receiptBaseUrl: String? = null,
-    val scale: SyncScaleDto? = null
+    val scale: SyncScaleDto? = null,
+    val print: SyncPrintDto? = null
 )
 
 data class PushTerminalItemDto(

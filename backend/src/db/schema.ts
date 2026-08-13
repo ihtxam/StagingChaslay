@@ -875,6 +875,8 @@ export const orders = pgTable(
     refundedAt: timestamp("refunded_at"),
     /** Last refund reason (preset English or custom message) */
     refundReason: text("refund_reason"),
+    /** Cumulative goodwill / unreferenced compensation (not tied to original payment cap). */
+    goodwillAmount: decimal("goodwill_amount", { precision: 10, scale: 2 }).default("0"),
   },
   (table) => ({
     merchantIdIdx: index("orders_merchant_id_idx").on(table.merchantId),

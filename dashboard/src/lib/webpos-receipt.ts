@@ -110,6 +110,8 @@ export type PosPrintSettingsClient = {
   receiptShowVatTable?: boolean;
   receiptShowStaffLine?: boolean;
   receiptShowQrCode?: boolean;
+  /** When true, Adyen card payment receipt is QR-only (not printed on thermal). */
+  adyenReceiptDigitalOnly?: boolean;
   paperWidthMm?: 58 | 80;
   receiptLanguage?: 'en' | 'fr' | 'de' | 'panel';
   receiptLogoUrl?: string | null;
@@ -179,9 +181,18 @@ export type WebPosReceipt = {
   showStaff?: boolean;
   /** Adyen terminal customer receipt appended below order receipt */
   adyenCustomerReceipt?: AdyenTerminalReceipt | null;
-  /** Adyen terminal merchant/cashier receipt (printed after customer copy when set) */
+  /** @deprecated Merchant/cashier copy is never printed on thermal. */
   adyenCashierReceipt?: AdyenTerminalReceipt | null;
+  /** When false, skip Adyen customer receipt block on thermal (digital-only mode). */
+  printAdyenReceiptOnTicket?: boolean;
 };
+
+/** Whether to append Adyen customer receipt on the order thermal ticket. */
+export function shouldPrintAdyenReceiptOnTicket(
+  settings?: PosPrintSettingsClient | null
+): boolean {
+  return settings?.adyenReceiptDigitalOnly !== true;
+}
 
 function padLine(left: string, right: string, width: number): string {
   const gap = Math.max(1, width - left.length - right.length);
@@ -409,9 +420,8 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   r += formatReceiptMetaFooter(tx, L, locale, width) + '\n';
   const footer = (tx.footer || L.thankYou).trim();
   r += footer + '\n';
-  r = appendAdyenReceiptBlock(r, tx.adyenCustomerReceipt, width);
-  if (tx.adyenCashierReceipt?.lines?.length) {
-    r = appendAdyenReceiptBlock(r, tx.adyenCashierReceipt, width);
+  if (tx.printAdyenReceiptOnTicket !== false) {
+    r = appendAdyenReceiptBlock(r, tx.adyenCustomerReceipt, width);
   }
   r += '\n\n';
   return r;
@@ -1296,6 +1306,6 @@ export function posOrderToWebPosReceipt(
     showVat: ctx.printSettings?.receiptShowVatTable !== false,
     showStaff: ctx.printSettings?.receiptShowStaffLine !== false,
     adyenCustomerReceipt: adyen.customer,
-    adyenCashierReceipt: adyen.cashier,
+    printAdyenReceiptOnTicket: shouldPrintAdyenReceiptOnTicket(ctx.printSettings),
   };
 }

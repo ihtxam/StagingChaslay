@@ -729,6 +729,81 @@ class AdyenTerminalClient @Inject constructor() {
         return gson.toJson(payload)
     }
 
+    suspend fun sendUnreferencedRefundRequest(
+        amount: Double,
+        currencyCode: String,
+        settings: BusinessSettingsEntity
+    ): AdyenTerminalResponse = withContext(Dispatchers.IO) {
+        val validation = validateSettings(settings)
+        if (validation != null) {
+            return@withContext AdyenTerminalResponse.Error(validation)
+        }
+
+        val merchantAccount = settings.adyenMerchantAccount.trim()
+        val terminalId = normalizeTerminalId(settings.adyenTerminalId)
+        val apiKey = settings.adyenApiKey.trim()
+        val saleId = settings.adyenClientId.trim().ifBlank { "ChaslayPOS" }
+        val live = settings.adyenLiveEnvironment
+
+        val requestBody = buildUnreferencedRefundRequestBody(
+            amount = amount,
+            currencyCode = currencyCode.uppercase(),
+            saleId = saleId,
+            poiId = terminalId
+        )
+        val body = requestBody.toRequestBody(jsonMediaType)
+
+        if (settings.adyenUseLegacyEndpoint) {
+            return@withContext postSync(apiKey, legacySyncUrl(live), body, triedLegacy = true)
+        }
+
+        val cloudUrl = cloudDeviceSyncUrl(live, settings.adyenLiveRegion, merchantAccount, terminalId)
+        val cloudResult = postSync(apiKey, cloudUrl, body, triedLegacy = false)
+        if (cloudResult is AdyenTerminalResponse.Error && shouldRetryLegacy(cloudResult)) {
+            return@withContext postSync(apiKey, legacySyncUrl(live), body, triedLegacy = true)
+        }
+        cloudResult
+    }
+
+    private fun buildUnreferencedRefundRequestBody(
+        amount: Double,
+        currencyCode: String,
+        saleId: String,
+        poiId: String
+    ): String {
+        val serviceId = generateServiceId()
+        val requestedAmount = "%.2f".format(amount).toDouble()
+        val payload = mapOf(
+            "SaleToPOIRequest" to mapOf(
+                "MessageHeader" to mapOf(
+                    "ProtocolVersion" to "3.0",
+                    "MessageClass" to "Service",
+                    "MessageCategory" to "Payment",
+                    "MessageType" to "Request",
+                    "ServiceID" to serviceId,
+                    "SaleID" to saleId,
+                    "POIID" to poiId
+                ),
+                "PaymentRequest" to mapOf(
+                    "SaleData" to mapOf(
+                        "SaleTransactionID" to mapOf(
+                            "TransactionID" to UUID.randomUUID().toString().replace("-", "").take(16),
+                            "TimeStamp" to OffsetDateTime.now(ZoneOffset.UTC).format(timestampFormatter)
+                        )
+                    ),
+                    "PaymentData" to mapOf("PaymentType" to "Refund"),
+                    "PaymentTransaction" to mapOf(
+                        "AmountsReq" to mapOf(
+                            "Currency" to currencyCode,
+                            "RequestedAmount" to requestedAmount
+                        )
+                    )
+                )
+            )
+        )
+        return gson.toJson(payload)
+    }
+
     private fun generateServiceId(): String =
         (System.currentTimeMillis() % 10_000_000_000L).toString().padStart(10, '0')
 

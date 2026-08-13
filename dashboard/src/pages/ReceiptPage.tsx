@@ -20,6 +20,7 @@ type Receipt = {
   tableLabel?: string | null;
   guestCount?: number | null;
   completedAt?: string;
+  adyenPaymentReceiptText?: string | null;
   items: Array<{
     name?: string;
     quantity: string | number;
@@ -164,6 +165,16 @@ export default function ReceiptPage() {
             <p className="text-gray-500 pt-1">Paid: {receipt.paymentMethod.toUpperCase()}</p>
           )}
         </div>
+        {receipt.adyenPaymentReceiptText ? (
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+              Card payment receipt
+            </p>
+            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-800">
+              {receipt.adyenPaymentReceiptText}
+            </pre>
+          </div>
+        ) : null}
         {url && (
           <div className="text-center mt-6">
             <img src={qrImageUrl(url, 160)} alt="QR" className="mx-auto" width={160} height={160} />

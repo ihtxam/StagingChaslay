@@ -355,6 +355,20 @@ interface TransactionDao {
         refundedAt: Long
     )
 
+    @Query(
+        """
+        UPDATE transactions SET
+            goodwillAmount = :goodwillAmount,
+            refundReason = :reason
+        WHERE id = :id
+        """
+    )
+    suspend fun recordGoodwillCompensation(
+        id: String,
+        goodwillAmount: Double,
+        reason: String?
+    )
+
     @Query("UPDATE transaction_items SET refundedQuantity = :qty WHERE id = :id")
     suspend fun updateItemRefundedQuantity(id: Long, qty: Int)
 

@@ -264,10 +264,10 @@ fun PosScreen(
                     receiptPublicUrl = state.receiptPublicUrl,
                     orderCompleteNotice = state.orderCompleteNotice,
                     showAdyenPaymentReceipt = state.adyenCustomerReceipt != null,
-                    showAdyenCashierReceipt = state.adyenCashierReceipt != null,
+                    showAdyenCashierReceipt = false,
                     onPrintReceipt = viewModel::printCompletedReceipt,
                     onPrintAdyenPaymentReceipt = viewModel::printAdyenCustomerReceipt,
-                    onPrintAdyenCashierReceipt = viewModel::printAdyenCashierReceipt,
+                    onPrintAdyenCashierReceipt = {},
                     onShareEmail = viewModel::openReceiptEmailDialog,
                     onDone = viewModel::dismissOrderComplete
                 )
@@ -322,10 +322,10 @@ fun PosScreen(
             receiptPublicUrl = state.receiptPublicUrl,
             orderCompleteNotice = state.orderCompleteNotice,
             showAdyenPaymentReceipt = state.adyenCustomerReceipt != null,
-            showAdyenCashierReceipt = state.adyenCashierReceipt != null,
+            showAdyenCashierReceipt = false,
             onPrintReceipt = viewModel::printCompletedReceipt,
             onPrintAdyenPaymentReceipt = viewModel::printAdyenCustomerReceipt,
-            onPrintAdyenCashierReceipt = viewModel::printAdyenCashierReceipt,
+            onPrintAdyenCashierReceipt = {},
             onShareEmail = viewModel::openReceiptEmailDialog,
             onDone = viewModel::dismissOrderComplete
         )
