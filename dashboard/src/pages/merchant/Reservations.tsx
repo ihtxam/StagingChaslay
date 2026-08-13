@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -89,7 +90,10 @@ function addDaysYmd(days: number) {
 
 export default function Reservations() {
   const { t, formatDate, formatDateTime, formatTime } = useI18n();
-  const [tab, setTab] = useState<'bookings' | 'settings'>('bookings');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<'bookings' | 'settings'>(() =>
+    searchParams.get('tab') === 'settings' ? 'settings' : 'bookings'
+  );
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(false);
   const [settings, setSettings] = useState<ResSettings | null>(null);

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Building2,
@@ -335,6 +336,8 @@ export default function Settings() {
       if (q === 'tables') return 'tables';
       if (q === 'taxes') return 'taxes';
       if (q === 'pos' || q === 'operations') return 'pos';
+      if (q === 'shop') return 'shop';
+      if (q === 'business') return 'business';
     } catch {
       /* ignore */
     }
@@ -584,6 +587,17 @@ export default function Settings() {
 
   const isSectionVisible = (id: string) => !normalizedQuery || matchedIds.has(id);
   const isSectionHighlight = (id: string) => highlightId === id;
+
+  useEffect(() => {
+    if (loading) return;
+    const hash = window.location.hash.replace(/^#/, '');
+    if (!hash) return;
+    setHighlightId(hash);
+    const timer = window.setTimeout(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [loading, tab]);
 
   useEffect(() => {
     const load = async () => {
@@ -1139,6 +1153,23 @@ export default function Settings() {
                       placeholder="www.mycafe.ch"
                     />
                   </Field>
+                </div>
+
+                <div className="rounded-md border border-[var(--border)] bg-[var(--bg-muted)]/50 p-3 space-y-2">
+                  <p className="text-sm font-medium">{t('shopHoursNavTitle')}</p>
+                  <p className="text-xs muted">{t('shopHoursNavHint')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Link to="/merchant/online-shop#shop-opening-hours" className="btn-secondary text-sm">
+                      {t('shopHoursNavOpening')}
+                    </Link>
+                    <Link to="/merchant/reservations?tab=settings" className="btn-secondary text-sm">
+                      {t('shopHoursNavReservations')}
+                    </Link>
+                    <Link to="/merchant/settings?tab=business#business-vacation" className="btn-secondary text-sm">
+                      {t('shopHoursNavVacation')}
+                    </Link>
+                  </div>
+                  <p className="text-xs muted">{t('shopHoursNavPos')}</p>
                 </div>
               </Section>
               <div className="flex justify-end border-t border-[var(--border)] pt-4">

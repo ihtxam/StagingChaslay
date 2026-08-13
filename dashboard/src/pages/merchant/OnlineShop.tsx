@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import ZoneMapEditor, {
@@ -585,6 +586,25 @@ export default function OnlineShop() {
           </p>
         )}
 
+        <div className="rounded-xl border border-teal-200 bg-teal-50/60 p-4 mb-4 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight">{t('shopHoursNavTitle')}</h2>
+            <p className="text-xs text-stone-600 mt-0.5">{t('shopHoursNavHint')}</p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <a href="#shop-opening-hours" className="btn-secondary text-sm">
+              {t('shopHoursNavOpening')}
+            </a>
+            <Link to="/merchant/reservations?tab=settings" className="btn-secondary text-sm">
+              {t('shopHoursNavReservations')}
+            </Link>
+            <Link to="/merchant/settings?tab=business#business-vacation" className="btn-secondary text-sm">
+              {t('shopHoursNavVacation')}
+            </Link>
+          </div>
+          <p className="text-xs text-stone-600">{t('shopHoursNavPos')}</p>
+        </div>
+
         <form onSubmit={onSaveShopMeta} className="space-y-5">
           <div className="flex flex-wrap gap-4 text-sm">
             <label className="flex items-center gap-2">
@@ -857,7 +877,7 @@ export default function OnlineShop() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-stone-200 bg-stone-50/80 p-4 space-y-4">
+          <div id="shop-opening-hours" className="rounded-xl border border-stone-200 bg-stone-50/80 p-4 space-y-4 scroll-mt-4">
             <div>
               <h2 className="text-base font-semibold tracking-tight">Opening hours</h2>
               <p className="text-sm text-stone-500 mt-0.5">
