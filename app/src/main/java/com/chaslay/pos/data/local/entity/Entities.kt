@@ -244,6 +244,8 @@ data class BusinessSettingsEntity(
     val expressEnabled: Boolean = true,
     /** When true, payment method toggles are controlled by the merchant panel sync. */
     val paymentMethodsManagedByCloud: Boolean = false,
+    /** Gift card sell/reload/pay — synced from merchant panel; can be overridden locally. */
+    val giftCardsEnabled: Boolean = false,
     val printerPrintReceipts: Boolean = true,
     val printerPrintReports: Boolean = true,
     val printerPrintKitchen: Boolean = false,

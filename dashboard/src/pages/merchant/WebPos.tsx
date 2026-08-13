@@ -179,11 +179,12 @@ import type {
   GiftCardLineMeta,
   KeypadMode,
   OpenCartDraft,
+  PosCategoryId,
   PosChannel,
   PosTab,
   PosView,
 } from '@/components/webpos/types';
-import { openCartDraftKey } from '@/components/webpos/types';
+import { openCartDraftKey, POS_GIFT_CARDS_CATEGORY, POS_MOST_SOLD_CATEGORY } from '@/components/webpos/types';
 import {
   applyBillDiscountToTotals,
   merchandiseBase,
@@ -356,7 +357,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [merchant, setMerchant] = useState<any>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [categoryId, setCategoryId] = useState<string | 'all'>('all');
+  const [bestsellerIds, setBestsellerIds] = useState<string[]>([]);
+  const [categoryId, setCategoryId] = useState<PosCategoryId>(POS_MOST_SOLD_CATEGORY);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartLine[]>(() => bootActive?.cart || []);
   const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? null);
@@ -938,12 +940,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return products.filter((p) => {
-      if (categoryId !== 'all' && p.categoryId !== categoryId) return false;
+    const bestsellerOrder = new Map(bestsellerIds.map((id, i) => [id, i]));
+    const filtered = products.filter((p) => {
+      if (categoryId === POS_MOST_SOLD_CATEGORY) {
+        if (!bestsellerOrder.has(p.id)) return false;
+      } else if (categoryId === POS_GIFT_CARDS_CATEGORY) {
+        return false;
+      } else if (categoryId !== 'all' && p.categoryId !== categoryId) return false;
       if (q && !p.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [products, categoryId, search]);
+    if (categoryId === POS_MOST_SOLD_CATEGORY) {
+      return filtered.sort(
+        (a, b) => (bestsellerOrder.get(a.id) ?? 999) - (bestsellerOrder.get(b.id) ?? 999)
+      );
+    }
+    return filtered;
+  }, [products, categoryId, search, bestsellerIds]);
 
   const refreshAgent = useCallback(async () => {
     const ok = await isPrintAgentAvailable();
@@ -1074,12 +1087,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [settingsRes, catRes, prodRes, webposRes, staffRes] = await Promise.all([
+      const [settingsRes, catRes, prodRes, webposRes, staffRes, bestsellerRes] = await Promise.all([
         api.get('/merchant/settings'),
         api.get('/merchant/categories'),
         api.get('/merchant/products', { params: { limit: 500 } }),
         api.get('/merchant/webpos-config').catch(() => ({ data: { config: null } })),
         api.get('/merchant/staff').catch(() => ({ data: { staff: [] } })),
+        api.get('/merchant/bestsellers', { params: { limit: 20, days: 30 } }).catch(() => ({ data: { productIds: [] } })),
       ]);
       const merch = settingsRes.data.settings || settingsRes.data.merchant;
       setMerchant(merch);
@@ -1089,6 +1103,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         name: repairCatalogText(c.name),
       }));
       setCategories(mappedCategories);
+      setBestsellerIds(
+        Array.isArray(bestsellerRes.data?.productIds) ? bestsellerRes.data.productIds : []
+      );
       const cfg = webposRes.data.config as (WebPosPaymentConfig & {
         shiftsSchemaMissing?: boolean;
         entitlement?: WebPosEntitlement;
@@ -1238,6 +1255,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setLoading(false);
     }
   }, [applyCachedOfflineSnapshot, applyStaffRoster, refreshAgent, refreshCurrentShift, t]);
+
+  const refreshBestsellers = useCallback(async () => {
+    try {
+      const res = await api.get('/merchant/bestsellers', { params: { limit: 20, days: 30 } });
+      setBestsellerIds(Array.isArray(res.data?.productIds) ? res.data.productIds : []);
+    } catch {
+      /* keep previous list */
+    }
+  }, []);
 
   useEffect(() => {
     load();
@@ -3882,6 +3908,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ].slice(0, 30)
     );
     setOrdersRefreshToken((n) => n + 1);
+    if (!queuedOffline) void refreshBestsellers();
     if (shiftsEnabled) void refreshCurrentShift(true);
     const moreSplits = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
     if (!moreSplits) {
@@ -4404,8 +4431,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       (paymentConfig?.methods.giftCard === true) && canPay && giftCardsEditionOk && !offlineNow,
   };
   const giftCardsFeatureOn =
-    giftCardsEditionOk &&
-    (paymentConfig?.giftCardSettings?.enabled === true || enabledMethods.giftCard);
+    giftCardsEditionOk && enabledMethods.giftCard;
 
   const activeTerminals = useMemo(
     () => (paymentConfig?.terminals || []).filter((t) => t.status === 'active'),
@@ -4997,9 +5023,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   terminal: enabledMethods.terminal,
                 }}
                 onExpressPay={(m) => void runExpressPay(m)}
+                onOpenCheckout={openRegisterCheckout}
                 expressDisabled={!cart.length || busy || paymentModalOpen}
+                checkoutDisabled={!cart.length || busy || paymentModalOpen}
                 giftCardsEnabled={giftCardsFeatureOn && !offlineNow}
                 onGiftCards={() => {
+                  if (offlineNow) {
+                    toast.error(t('webPosOfflineGiftCardBlocked'));
+                    return;
+                  }
+                  setCategoryId(POS_GIFT_CARDS_CATEGORY);
+                }}
+                onSellGiftCard={() => {
+                  if (offlineNow) {
+                    toast.error(t('webPosOfflineGiftCardBlocked'));
+                    return;
+                  }
+                  setGiftCardOpsOpen(true);
+                }}
+                onReloadGiftCard={() => {
                   if (offlineNow) {
                     toast.error(t('webPosOfflineGiftCardBlocked'));
                     return;

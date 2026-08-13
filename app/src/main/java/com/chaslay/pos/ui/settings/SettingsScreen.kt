@@ -479,6 +479,7 @@ fun SettingsScreen(
         SettingSwitch(stringResource(R.string.payment_card), state.cardEnabled, viewModel::updateCardEnabled)
         SettingSwitch(stringResource(R.string.payment_terminal), state.terminalEnabled, viewModel::updateTerminalEnabled)
         SettingSwitch(stringResource(R.string.payment_express), state.expressEnabled, viewModel::updateExpressEnabled)
+        SettingSwitch(stringResource(R.string.payment_gift_cards), state.giftCardsEnabled, viewModel::updateGiftCardsEnabled)
         if (state.paymentMethodsManagedByCloud) {
             Text(
                 stringResource(R.string.payment_methods_managed_by_panel),

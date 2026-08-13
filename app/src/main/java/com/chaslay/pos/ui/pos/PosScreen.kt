@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TableBar
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -477,7 +478,7 @@ fun PosScreen(
                     )
 
                     VectronCategoryColumn(
-                        categories = state.categories,
+                        categories = state.displayCategories,
                         selectedCategoryId = state.selectedCategoryId,
                         onCategorySelected = viewModel::selectCategory,
                         modifier = Modifier
@@ -487,18 +488,22 @@ fun PosScreen(
 
                     VectronProductGrid(
                         products = state.products,
-                        categories = state.categories,
+                        categories = state.displayCategories,
                         currencySymbol = state.currencySymbol,
                         paymentEnabled = state.cart.isEmpty.not() && !state.isProcessingPayment,
                         expressEnabled = state.settings.expressEnabled,
                         cashEnabled = state.settings.cashEnabled,
                         cardEnabled = state.settings.cardEnabled,
+                        isGiftCardCategory = state.isGiftCardCategory,
                         highlightedProductId = state.lastClickedProductId,
                         onProductClick = viewModel::onProductClick,
                         onMiscClick = viewModel::addMiscItemQuick,
                         onCash = viewModel::initiateCashPayment,
                         onCard = viewModel::initiateCardPayment,
                         onXpress = viewModel::xpressSale,
+                        onOpenCheckout = { viewModel.openCheckout() },
+                        onSellGiftCard = viewModel::showGiftCardSellDialog,
+                        onReloadGiftCard = viewModel::showGiftCardReloadDialog,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
@@ -2284,17 +2289,62 @@ private fun VectronProductGrid(
     expressEnabled: Boolean = true,
     cashEnabled: Boolean = true,
     cardEnabled: Boolean = true,
+    isGiftCardCategory: Boolean = false,
     highlightedProductId: Long? = null,
     onProductClick: (Long) -> Unit,
     onMiscClick: () -> Unit,
     onCash: () -> Unit,
     onCard: () -> Unit,
     onXpress: () -> Unit,
+    onOpenCheckout: () -> Unit = {},
+    onSellGiftCard: () -> Unit = {},
+    onReloadGiftCard: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val vc = vectronColors()
     val colorByCategory = categories.associate { it.id to categoryColor(it.colorHex) }
     Column(modifier = modifier.background(vc.background)) {
+        if (isGiftCardCategory) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item(key = "gift_sell") {
+                    Button(
+                        onClick = onSellGiftCard,
+                        modifier = Modifier.fillMaxWidth().height(120.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D9488))
+                    ) {
+                        Text(
+                            stringResource(R.string.gift_card_sell),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+                item(key = "gift_reload") {
+                    Button(
+                        onClick = onReloadGiftCard,
+                        modifier = Modifier.fillMaxWidth().height(120.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF14B8A6))
+                    ) {
+                        Text(
+                            stringResource(R.string.gift_card_reload),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
         LazyVerticalGrid(
             columns = GridCells.Fixed(5),
             modifier = Modifier
@@ -2317,6 +2367,7 @@ private fun VectronProductGrid(
                 )
             }
         }
+        }
 
         if (expressEnabled || cashEnabled || cardEnabled) {
             Row(
@@ -2324,7 +2375,8 @@ private fun VectronProductGrid(
                     .fillMaxWidth()
                     .background(VectronColors.Header)
                     .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 if (expressEnabled) {
                     Button(
@@ -2367,6 +2419,24 @@ private fun VectronProductGrid(
                     ) {
                         Text(stringResource(R.string.payment_by_card), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
+                }
+                Button(
+                    onClick = onOpenCheckout,
+                    enabled = paymentEnabled,
+                    modifier = Modifier.width(64.dp).height(64.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = VectronColors.Header,
+                        disabledContainerColor = VectronColors.KeypadButton
+                    ),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = stringResource(R.string.open_checkout),
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
                 }
             }
         }

@@ -261,6 +261,21 @@ interface TransactionDao {
 
     @Query(
         """
+        SELECT ti.productId, SUM(ti.quantity) as qty
+        FROM transaction_items ti
+        INNER JOIN transactions t ON t.id = ti.transactionId
+        WHERE t.createdAt >= :startMs AND t.createdAt < :endMs
+        AND t.paymentStatus IN ('COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED')
+        AND ti.productId IS NOT NULL AND ti.productId > 0
+        GROUP BY ti.productId
+        ORDER BY qty DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getTopProductIdsByQuantity(startMs: Long, endMs: Long, limit: Int = 20): List<ProductIdQtyRow>
+
+    @Query(
+        """
         SELECT ti.productName, SUM(ti.quantity) as qty, SUM(ti.lineTotal) as revenue
         FROM transaction_items ti
         INNER JOIN transactions t ON t.id = ti.transactionId
@@ -360,6 +375,11 @@ data class ProductSalesRow(
     val productName: String,
     val qty: Int,
     val revenue: Double
+)
+
+data class ProductIdQtyRow(
+    val productId: Long,
+    val qty: Int
 )
 
 data class UserPerformanceRow(

@@ -601,6 +601,44 @@ export class PosReportsService {
       },
     };
   }
+
+  /** Top product ids by quantity sold over the last N days (for POS "Most Sold" category). */
+  static async getBestsellerProductIds(
+    merchantId: string,
+    opts: { limit?: number; days?: number } = {}
+  ): Promise<string[]> {
+    const limit = Math.min(50, Math.max(1, opts.limit ?? 20));
+    const days = Math.min(90, Math.max(1, opts.days ?? 30));
+    const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const db = getDb();
+    const orders = await db.query.orders.findMany({
+      where: and(
+        eq(schema.orders.merchantId, merchantId),
+        gte(schema.orders.createdAt, start),
+        or(
+          eq(schema.orders.status, "completed"),
+          eq(schema.orders.status, "partially_refunded")
+        )
+      ),
+      with: { items: true },
+    });
+    const qtyByProduct = new Map<string, number>();
+    for (const order of orders) {
+      for (const item of order.items || []) {
+        const pid = item.productId ? String(item.productId) : null;
+        if (!pid) continue;
+        const qty = Number(item.quantity) || 0;
+        const refunded = Number((item as { refundedQuantity?: unknown }).refundedQuantity) || 0;
+        const kept = Math.max(0, qty - refunded);
+        if (kept <= 0) continue;
+        qtyByProduct.set(pid, (qtyByProduct.get(pid) || 0) + kept);
+      }
+    }
+    return [...qtyByProduct.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([id]) => id);
+  }
 }
 
 function paymentLabel(method: string): string {

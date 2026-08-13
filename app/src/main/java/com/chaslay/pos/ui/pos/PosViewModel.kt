@@ -46,6 +46,7 @@ import com.chaslay.pos.domain.model.SelectedModifier
 import com.chaslay.pos.domain.model.SelectedAddon
 import com.chaslay.pos.domain.model.ProductVariantModel
 import com.chaslay.pos.domain.model.PosMode
+import com.chaslay.pos.domain.model.PosVirtualCategories
 import com.chaslay.pos.domain.model.ProductWithVariants
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.TableWithOrderInfo
@@ -91,8 +92,11 @@ enum class TableTransferMode {
 
 data class PosUiState(
     val categories: List<CategoryEntity> = emptyList(),
+    val displayCategories: List<CategoryEntity> = emptyList(),
     val products: List<ProductEntity> = emptyList(),
     val selectedCategoryId: Long? = null,
+    val isMostSoldCategory: Boolean = false,
+    val isGiftCardCategory: Boolean = false,
     val cart: CartSummary = CartSummary(emptyList()),
     val settings: BusinessSettingsEntity = BusinessSettingsEntity(),
     val currencySymbol: String = "CHF",
@@ -216,6 +220,7 @@ class PosViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _selectedCategoryId = MutableStateFlow<Long?>(null)
+    private val _bestsellerIds = MutableStateFlow<List<Long>>(emptyList())
     private val _uiExtras = MutableStateFlow(PosDialogState())
     private val _tables = MutableStateFlow<List<TableWithOrderInfo>>(emptyList())
     private val _floorElements = MutableStateFlow<Map<Long, List<FloorPlanElementEntity>>>(emptyMap())
@@ -228,7 +233,19 @@ class PosViewModel @Inject constructor(
     private val _comboPick = MutableStateFlow<ComboPickState?>(null)
 
     private val productsFlow = _selectedCategoryId.flatMapLatest { categoryId ->
-        productRepository.observeProducts(categoryId)
+        when {
+            PosVirtualCategories.isMostSold(categoryId) -> combine(
+                productRepository.observeAllProducts(),
+                _bestsellerIds
+            ) { allProducts, bestsellerIds ->
+                val order = bestsellerIds.withIndex().associate { it.value to it.index }
+                allProducts
+                    .filter { it.id in order.keys }
+                    .sortedBy { order[it.id] ?: Int.MAX_VALUE }
+            }
+            PosVirtualCategories.isGiftCards(categoryId) -> kotlinx.coroutines.flow.flowOf(emptyList())
+            else -> productRepository.observeProducts(categoryId)
+        }
     }
 
     val uiState: StateFlow<PosUiState> = combine(
@@ -252,10 +269,15 @@ class PosViewModel @Inject constructor(
         val comboPick = extrasBundle.comboPick
         val tables = extrasBundle.tables
         val floorElements = extrasBundle.floorElements
+        val giftCardsOn = extras.giftCardsEnabled
+        val displayCategories = buildDisplayCategories(bundle.categories, giftCardsOn)
         PosUiState(
             categories = bundle.categories,
+            displayCategories = displayCategories,
             products = bundle.products,
             selectedCategoryId = bundle.categoryId,
+            isMostSoldCategory = PosVirtualCategories.isMostSold(bundle.categoryId),
+            isGiftCardCategory = PosVirtualCategories.isGiftCards(bundle.categoryId),
             cart = bundle.cart,
             settings = bundle.settings,
             currencySymbol = bundle.settings.currencySymbol,
@@ -332,7 +354,7 @@ class PosViewModel @Inject constructor(
             tableTransferSelectedIds = extras.tableTransferSelectedIds,
             attachedMembership = extras.attachedMembership,
             showMembershipDialog = extras.showMembershipDialog,
-            giftCardsEnabled = extras.giftCardsEnabled,
+            giftCardsEnabled = giftCardsOn,
             membershipBusy = extras.membershipBusy,
             membershipLookupError = extras.membershipLookupError,
             lastLoyaltyPointsEarned = extras.lastLoyaltyPointsEarned,
@@ -350,6 +372,7 @@ class PosViewModel @Inject constructor(
         viewModelScope.launch {
             refreshGiftCardFeature()
             syncCloudPosSettings()
+            refreshBestsellers()
         }
         viewModelScope.launch {
             settingsRepository.observeSettings().collect { settings ->
@@ -372,9 +395,9 @@ class PosViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            productRepository.observeCategories().collect { categories ->
-                if (_selectedCategoryId.value == null && categories.isNotEmpty()) {
-                    _selectedCategoryId.value = categories.first().id
+            productRepository.observeCategories().collect {
+                if (_selectedCategoryId.value == null) {
+                    _selectedCategoryId.value = PosVirtualCategories.MOST_SOLD_ID
                 }
             }
         }
@@ -1896,11 +1919,48 @@ class PosViewModel @Inject constructor(
     fun refreshGiftCardFeature() {
         viewModelScope.launch {
             val token = syncPreferences.getDashboardToken()
-            val enabled = runCatching {
+            val cloudEnabled = runCatching {
                 syncApi.paymentConfig().methods?.giftCard == true && !token.isNullOrBlank()
             }.getOrDefault(false)
-            updateExtras { it.copy(giftCardsEnabled = enabled) }
+            val localEnabled = settingsRepository.getSettings().giftCardsEnabled
+            updateExtras { it.copy(giftCardsEnabled = localEnabled && cloudEnabled) }
+            if (!localEnabled || !cloudEnabled) {
+                if (_selectedCategoryId.value == PosVirtualCategories.GIFT_CARDS_ID) {
+                    _selectedCategoryId.value = PosVirtualCategories.MOST_SOLD_ID
+                }
+            }
         }
+    }
+
+    private fun refreshBestsellers() {
+        viewModelScope.launch {
+            _bestsellerIds.value = transactionRepository.getBestsellerProductIds()
+        }
+    }
+
+    private fun buildDisplayCategories(
+        categories: List<CategoryEntity>,
+        giftCardsEnabled: Boolean
+    ): List<CategoryEntity> {
+        val virtual = mutableListOf(
+            CategoryEntity(
+                id = PosVirtualCategories.MOST_SOLD_ID,
+                name = appContext.getString(R.string.most_sold_category),
+                colorHex = "#E67E22",
+                sortOrder = -1000
+            )
+        )
+        if (giftCardsEnabled) {
+            virtual.add(
+                CategoryEntity(
+                    id = PosVirtualCategories.GIFT_CARDS_ID,
+                    name = appContext.getString(R.string.gift_cards_category),
+                    colorHex = "#0D9488",
+                    sortOrder = -999
+                )
+            )
+        }
+        return virtual + categories
     }
 
     private suspend fun syncCloudPosSettings() {
@@ -1922,9 +1982,11 @@ class PosViewModel @Inject constructor(
                     )
                 }
             }
+            merged = merged.copy(giftCardsEnabled = cfg.methods?.giftCard == true)
             if (merged != current) {
                 settingsRepository.saveSettings(merged)
             }
+            refreshGiftCardFeature()
         }
     }
 
@@ -2575,6 +2637,7 @@ class PosViewModel @Inject constructor(
                 cartManager.clear()
             }
             refreshTables()
+            refreshBestsellers()
             updateExtras {
                 it.copy(
                     isProcessingPayment = false,
@@ -2857,6 +2920,7 @@ class PosViewModel @Inject constructor(
                     }
                     val remaining = cartManager.snapshot()
                     refreshTables()
+                    refreshBestsellers()
                     val isEqualSplit = fullCart.splitCount > 1 && !fullCart.splitByItems
                     val equalSplitPaid = if (isEqualSplit) _uiExtras.value.equalSplitPaidCount else 0
                     when {

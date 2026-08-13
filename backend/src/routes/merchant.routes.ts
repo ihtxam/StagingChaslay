@@ -1145,6 +1145,32 @@ router.get("/settings", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/bestsellers
+ * Top product ids by quantity sold (for POS "Most Sold" category).
+ */
+router.get("/bestsellers", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const days = Math.min(90, Math.max(1, Number(req.query.days) || 30));
+    const { PosReportsService } = await import("@/services/pos-reports.service");
+    const productIds = await PosReportsService.getBestsellerProductIds(merchantId, {
+      limit,
+      days,
+    });
+    res.json({ success: true, productIds });
+  } catch (error) {
+    console.error("Error getting bestsellers:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to get bestsellers",
+    });
+  }
+});
+
+/**
  * GET /api/merchant/webpos-config
  * Payment methods + terminals for WebPOS checkout
  */

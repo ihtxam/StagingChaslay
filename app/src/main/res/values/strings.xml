@@ -484,6 +484,10 @@
     <string name="default_rounding">Default Rounding</string>
     <string name="payment_cash">Accept Cash</string>
     <string name="payment_express">Express checkout</string>
+    <string name="payment_gift_cards">Gift cards</string>
+    <string name="most_sold_category">+ Most Sold</string>
+    <string name="gift_cards_category">Gift Cards</string>
+    <string name="open_checkout">Open checkout</string>
     <string name="payment_card">Accept Card</string>
     <string name="payment_terminal">Accept Terminal</string>
     <string name="payment_methods">Payment methods</string>

@@ -692,6 +692,13 @@ class TransactionRepository @Inject constructor(
         }
     }
 
+    /** Top product ids by quantity sold over the last [days] (default 30). */
+    suspend fun getBestsellerProductIds(limit: Int = 20, days: Int = 30): List<Long> {
+        val end = System.currentTimeMillis()
+        val start = end - days.toLong() * 24L * 60L * 60L * 1000L
+        return transactionDao.getTopProductIdsByQuantity(start, end, limit).map { it.productId }
+    }
+
     suspend fun getProductsSold(
         start: Long,
         end: Long,

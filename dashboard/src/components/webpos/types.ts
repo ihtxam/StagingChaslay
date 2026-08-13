@@ -1,5 +1,11 @@
 export type PosChannel = 'takeaway' | 'dine_in' | 'delivery';
 
+/** Virtual POS menu categories (not in catalog). */
+export const POS_MOST_SOLD_CATEGORY = '__most_sold__';
+export const POS_GIFT_CARDS_CATEGORY = '__gift_cards__';
+
+export type PosCategoryId = string | 'all' | typeof POS_MOST_SOLD_CATEGORY | typeof POS_GIFT_CARDS_CATEGORY;
+
 export type PosTab = 'tables' | 'register' | 'orders' | 'bookings';
 
 export type PosView = PosTab | 'checkout' | 'success';

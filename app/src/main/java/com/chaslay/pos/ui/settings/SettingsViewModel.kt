@@ -87,6 +87,7 @@ data class SettingsUiState(
     val cardEnabled: Boolean = true,
     val terminalEnabled: Boolean = true,
     val expressEnabled: Boolean = true,
+    val giftCardsEnabled: Boolean = false,
     val paymentMethodsManagedByCloud: Boolean = false,
     val printerPrintReceipts: Boolean = true,
     val printerPrintReports: Boolean = true,
@@ -220,6 +221,7 @@ class SettingsViewModel @Inject constructor(
                     cardEnabled = settings.cardEnabled,
                     terminalEnabled = settings.terminalEnabled,
                     expressEnabled = settings.expressEnabled,
+                    giftCardsEnabled = settings.giftCardsEnabled,
                     paymentMethodsManagedByCloud = settings.paymentMethodsManagedByCloud,
                     printerPrintReceipts = settings.printerPrintReceipts,
                     printerPrintReports = settings.printerPrintReports,
@@ -742,6 +744,9 @@ class SettingsViewModel @Inject constructor(
     fun updateExpressEnabled(enabled: Boolean) = _uiState.update {
         it.copy(expressEnabled = enabled, paymentMethodsManagedByCloud = false)
     }
+    fun updateGiftCardsEnabled(enabled: Boolean) = _uiState.update {
+        it.copy(giftCardsEnabled = enabled, paymentMethodsManagedByCloud = false)
+    }
     fun updatePrinterPrintReceipts(enabled: Boolean) = _uiState.update { it.copy(printerPrintReceipts = enabled) }
     fun updatePrinterPrintReports(enabled: Boolean) = _uiState.update { it.copy(printerPrintReports = enabled) }
     fun updatePrinterPrintKitchen(enabled: Boolean) = _uiState.update { it.copy(printerPrintKitchen = enabled) }
@@ -1109,6 +1114,7 @@ class SettingsViewModel @Inject constructor(
             cardEnabled = state.cardEnabled,
             terminalEnabled = state.terminalEnabled,
             expressEnabled = state.expressEnabled,
+            giftCardsEnabled = state.giftCardsEnabled,
             // POS Settings wins when staff change toggles locally.
             paymentMethodsManagedByCloud = state.paymentMethodsManagedByCloud,
             printerPrintReceipts = state.printerPrintReceipts,
