@@ -291,6 +291,14 @@ data class BusinessSettingsEntity(
     val floorConnectionMode: String = "AUTO"
 )
 
+/** Adyen terminal checkout when enabled in settings and credentials are configured. */
+fun BusinessSettingsEntity.isAdyenTerminalCheckoutEnabled(): Boolean =
+    terminalEnabled &&
+        adyenTerminalEnabled &&
+        adyenTerminalId.isNotBlank() &&
+        adyenApiKey.isNotBlank() &&
+        adyenMerchantAccount.isNotBlank()
+
 @Entity(tableName = "table_floors", indices = [androidx.room.Index("remoteId")])
 data class TableFloorEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

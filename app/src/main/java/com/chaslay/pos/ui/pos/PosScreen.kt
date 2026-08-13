@@ -99,6 +99,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.ProductEntity
+import com.chaslay.pos.data.local.entity.isAdyenTerminalCheckoutEnabled
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.ui.input.pointer.pointerInput
@@ -214,7 +215,7 @@ fun PosScreen(
             isProcessing = state.isProcessingPayment,
             cashEnabled = state.settings.cashEnabled,
             cardEnabled = state.settings.cardEnabled,
-            terminalEnabled = state.settings.terminalEnabled && state.settings.adyenTerminalEnabled,
+            terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
             tipsEnabled = state.settings.tipsEnabled,
             allowCustomTip = state.settings.allowCustomTip,
             tipPresetsPercent = state.settings.tipPresetsPercentCsv

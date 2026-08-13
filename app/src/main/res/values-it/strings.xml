@@ -383,6 +383,7 @@
     <string name="payment_cash">Accepter l\'argent comptant</string>
     <string name="payment_card">Accepter la carte</string>
     <string name="payment_terminal">Accepter le terminal</string>
+    <string name="checkout_terminal_subtitle">Paga sul terminale Adyen</string>
     <string name="printer_roles">Affectation de tâche d\'imprimante</string>
     <string name="print_receipts">Reçus</string>
     <string name="print_reports">Report</string>

@@ -275,7 +275,7 @@ export default function WebPosCheckoutView({
     { id: 'card', label: t('webPosCard'), icon: <CreditCard size={22} />, show: methods.card },
     {
       id: 'terminal',
-      label: t('webPosOnlinePayment'),
+      label: t('webPosTerminal'),
       icon: <MonitorSmartphone size={22} />,
       show: methods.terminal,
     },

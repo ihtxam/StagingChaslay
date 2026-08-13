@@ -263,9 +263,9 @@ fun CheckoutScreen(
                 }
                 if (terminalEnabled) {
                     PaymentMethodCard(
-                        title = "Terminal",
-                        subtitle = "Terminal Required",
-                        icon = Icons.Default.LocalAtm,
+                        title = stringResource(R.string.adyen_terminal),
+                        subtitle = stringResource(R.string.checkout_terminal_subtitle),
+                        icon = Icons.Default.PointOfSale,
                         selected = checkoutState.method == PaymentMethod.ADYEN_TERMINAL,
                         accent = Color(0xFF8B5CF6),
                         onClick = { onSelectMethod(PaymentMethod.ADYEN_TERMINAL) },

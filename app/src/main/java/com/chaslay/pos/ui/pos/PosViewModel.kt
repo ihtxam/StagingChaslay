@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
+import com.chaslay.pos.data.local.entity.isAdyenTerminalCheckoutEnabled
 import com.chaslay.pos.data.local.entity.FloorPlanElementEntity
 import com.chaslay.pos.data.local.entity.CustomerEntity
 import com.chaslay.pos.data.local.entity.CategoryEntity
@@ -1802,7 +1803,7 @@ class PosViewModel @Inject constructor(
         val enabled = buildList {
             if (settings.cashEnabled) add(PaymentMethod.CASH)
             if (settings.cardEnabled) add(PaymentMethod.CARD)
-            if (settings.terminalEnabled && settings.adyenTerminalEnabled) add(PaymentMethod.ADYEN_TERMINAL)
+            if (settings.isAdyenTerminalCheckoutEnabled()) add(PaymentMethod.ADYEN_TERMINAL)
         }
         if (enabled.isEmpty()) return preferred
         if (preferred in enabled) return preferred

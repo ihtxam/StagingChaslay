@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaslay.pos.R
+import com.chaslay.pos.data.local.entity.isAdyenTerminalCheckoutEnabled
 import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.TableStatus
 import com.chaslay.pos.domain.model.TableWithOrderInfo
@@ -106,6 +107,9 @@ fun WaiterPosScreen(
             discountPresets = state.discountPresets,
             checkoutState = state.checkoutState,
             isProcessing = state.isProcessingPayment,
+            cashEnabled = state.settings.cashEnabled,
+            cardEnabled = state.settings.cardEnabled,
+            terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
             onBack = viewModel::dismissCheckout,
             onSelectMethod = viewModel::updateCheckoutMethod,
             onTipAmount = viewModel::updateCheckoutTipAmount,

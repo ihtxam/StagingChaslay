@@ -383,6 +383,7 @@
     <string name="payment_cash">Bargeld akzeptieren</string>
     <string name="payment_card">Akzeptiert EC Karte</string>
     <string name="payment_terminal">Terminal akzeptieren</string>
+    <string name="checkout_terminal_subtitle">Am Adyen-Terminal bezahlen</string>
     <string name="printer_roles">Druckerauftragszuweisung</string>
     <string name="print_receipts">Quittungen</string>
     <string name="print_reports">Berichte, Meldet</string>
