@@ -108,3 +108,27 @@ export function scaleLinesByFactor<
 export function formatCHF(amount: number): string {
   return `CHF ${roundMoney2(amount).toFixed(2)}`;
 }
+
+/** Digits only (ignore decimal point/sign) for length checks. */
+export function moneyDigitCount(raw: string) {
+  return raw.replace(/[^\d]/g, '').length;
+}
+
+/** Keep partial decimal input (e.g. "0." / "0,") while limiting to 2 decimal places. */
+export function normalizeMoneyInput(raw: string) {
+  const cleaned = raw.replace(/,/g, '.').replace(/[^\d.]/g, '');
+  const parts = cleaned.split('.');
+  if (parts.length === 1) return parts[0];
+  const decimals = parts.slice(1).join('').slice(0, 2);
+  // Preserve trailing separator while user is still typing (e.g. "0." or "0,").
+  if (decimals.length === 0 && /[.,]$/.test(raw)) return `${parts[0]}.`;
+  return `${parts[0]}.${decimals}`;
+}
+
+/** Parse user-entered money text for API payloads. */
+export function parseMoney(raw: string | number) {
+  const trimmed = String(raw).trim().replace(/,/g, '.');
+  if (!trimmed || trimmed === '.') return 0;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : 0;
+}

@@ -14,6 +14,7 @@ import {
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 
 interface Extra {
@@ -196,27 +197,6 @@ const SKU_MAX_LEN = 100; // matches DB varchar(100)
 const MAX_MONEY_DIGITS = 10;
 const MAX_POINTS = 2_147_483_647; // PG integer max
 
-/** Digits only (ignore decimal point/sign) for length checks. */
-const digitCount = (raw: string) => raw.replace(/[^\d]/g, '').length;
-
-/** Keep partial decimal input (e.g. "0." / "0,") while limiting to 2 decimal places. */
-const normalizeMoneyInput = (raw: string) => {
-  const cleaned = raw.replace(/,/g, '.').replace(/[^\d.]/g, '');
-  const parts = cleaned.split('.');
-  if (parts.length === 1) return parts[0];
-  const decimals = parts.slice(1).join('').slice(0, 2);
-  // Preserve trailing separator while user is still typing (e.g. "0." or "0,").
-  if (decimals.length === 0 && /[.,]$/.test(raw)) return `${parts[0]}.`;
-  return `${parts[0]}.${decimals}`;
-};
-
-const parseMoney = (raw: string | number) => {
-  const trimmed = String(raw).trim().replace(/,/g, '.');
-  if (!trimmed || trimmed === '.') return 0;
-  const n = Number(trimmed);
-  return Number.isFinite(n) ? n : 0;
-};
-
 /** Free-points field: digits only, hard-capped at 10 (PG integer / product rule). */
 const sanitizeFreePointsInput = (raw: string) => raw.replace(/\D/g, '').slice(0, MAX_MONEY_DIGITS);
 
@@ -231,7 +211,7 @@ const clampNonNegativeInt = (raw: string) => {
 const parseFreePoints = (raw: string): number | null | 'too_many_digits' | 'out_of_range' => {
   const trimmed = raw.trim();
   if (!trimmed) return null;
-  if (digitCount(trimmed) > MAX_MONEY_DIGITS) return 'too_many_digits';
+  if (moneyDigitCount(trimmed) > MAX_MONEY_DIGITS) return 'too_many_digits';
   const points = Math.floor(Number(sanitizeFreePointsInput(trimmed)));
   if (!Number.isFinite(points) || points < 1 || points > MAX_POINTS) return 'out_of_range';
   return points;
@@ -591,12 +571,12 @@ export default function Products() {
       return;
     }
     for (const spec of form.specifications) {
-      if (digitCount(String(spec.price)) > MAX_MONEY_DIGITS) {
+      if (moneyDigitCount(String(spec.price)) > MAX_MONEY_DIGITS) {
         toast.error(t('priceMaxDigits'));
         return;
       }
     }
-    if (form.price && digitCount(form.price) > MAX_MONEY_DIGITS) {
+    if (form.price && moneyDigitCount(form.price) > MAX_MONEY_DIGITS) {
       toast.error(t('priceMaxDigits'));
       return;
     }
@@ -1226,7 +1206,7 @@ export default function Products() {
                         value={form.price}
                         onChange={(e) => {
                           const price = normalizeMoneyInput(e.target.value);
-                          if (digitCount(price) > MAX_MONEY_DIGITS) return;
+                          if (moneyDigitCount(price) > MAX_MONEY_DIGITS) return;
                           setForm({
                             ...form,
                             price,
@@ -1314,7 +1294,7 @@ export default function Products() {
                                     value={opt.extraPrice}
                                     onChange={(e) => {
                                       const raw = normalizeMoneyInput(e.target.value);
-                                      if (digitCount(raw) > MAX_MONEY_DIGITS) return;
+                                      if (moneyDigitCount(raw) > MAX_MONEY_DIGITS) return;
                                       const next = [...form.comboSlots];
                                       const options = [...next[slotIdx].options];
                                       options[optIdx] = {
@@ -1436,7 +1416,7 @@ export default function Products() {
                           value={spec.price}
                           onChange={(e) => {
                             const normalized = normalizeMoneyInput(e.target.value);
-                            if (digitCount(normalized) > MAX_MONEY_DIGITS) return;
+                            if (moneyDigitCount(normalized) > MAX_MONEY_DIGITS) return;
                             const next = [...form.specifications];
                             next[idx] = { ...next[idx], price: normalized };
                             setForm({ ...form, specifications: next, price: normalized });

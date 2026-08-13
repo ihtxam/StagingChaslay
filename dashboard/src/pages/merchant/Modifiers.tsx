@@ -10,6 +10,7 @@ import {
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 
 type PricingType = 'free' | 'fixed' | 'toppings_by_size';
@@ -20,6 +21,16 @@ interface ModifierOption {
   id?: string;
   name: string;
   price: number;
+  saleStatus: SaleStatus;
+  isDefault: boolean;
+  sortOrder?: number;
+}
+
+interface ModifierOptionForm {
+  id?: string;
+  name: string;
+  /** Raw price text while editing (keeps partial decimals like "0."). */
+  price: string;
   saleStatus: SaleStatus;
   isDefault: boolean;
   sortOrder?: number;
@@ -60,14 +71,16 @@ type FormState = {
   maxSelectable: number;
   defaultCollapsed: boolean;
   allowMultipleSameItem: boolean;
-  options: ModifierOption[];
+  options: ModifierOptionForm[];
   productIds: string[];
 };
 
-const emptyOption = (): ModifierOption => ({
+const MAX_MONEY_DIGITS = 10;
+
+const emptyOption = (): ModifierOptionForm => ({
   id: `opt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   name: '',
-  price: 0,
+  price: '',
   saleStatus: 'in_stock',
   isDefault: false,
 });
@@ -166,6 +179,7 @@ export default function Modifiers() {
         ? group.options.map((o, i) => ({
             ...o,
             id: o.id || `opt-${group.id}-${i}`,
+            price: String(o.price ?? ''),
           }))
         : [emptyOption()],
       productIds: [...(group.productIds || [])],
@@ -203,7 +217,7 @@ export default function Modifiers() {
       .map((o, idx) => ({
         ...o,
         name: o.name.trim(),
-        price: form.pricingType === 'free' ? 0 : Number(o.price) || 0,
+        price: form.pricingType === 'free' ? 0 : parseMoney(o.price),
         sortOrder: idx,
       }))
       .filter((o) => o.name);
@@ -548,17 +562,17 @@ export default function Modifiers() {
                                   </span>
                                   <div className="relative">
                                     <input
-                                      className="field min-w-0 !pr-14"
-                                      type="number"
+                                      className="field min-w-0 !pr-14 money-input"
+                                      type="text"
                                       inputMode="decimal"
-                                      step="0.01"
-                                      min="0"
                                       value={opt.price}
                                       onChange={(e) => {
+                                        const price = normalizeMoneyInput(e.target.value);
+                                        if (moneyDigitCount(price) > MAX_MONEY_DIGITS) return;
                                         const options = [...form.options];
                                         options[idx] = {
                                           ...options[idx],
-                                          price: Number(e.target.value) || 0,
+                                          price,
                                         };
                                         setForm({ ...form, options });
                                       }}
