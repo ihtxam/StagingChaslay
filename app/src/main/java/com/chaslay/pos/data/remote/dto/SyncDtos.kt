@@ -82,7 +82,8 @@ data class MenuBootstrapResponse(
     val business: SyncBusinessDto? = null,
     val categories: List<SyncCategoryDto> = emptyList(),
     val products: List<SyncProductDto> = emptyList(),
-    @SerializedName("floor_plans") val floorPlans: List<SyncFloorPlanDto> = emptyList()
+    @SerializedName("floor_plans") val floorPlans: List<SyncFloorPlanDto> = emptyList(),
+    @SerializedName("reserved_table_ids") val reservedTableIds: List<String> = emptyList()
 )
 
 data class MenuChangesResponse(

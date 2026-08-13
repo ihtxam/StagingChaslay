@@ -342,7 +342,16 @@ export class ChaslayCompatService {
     });
 
     const { FloorPlanService } = await import("@/services/floor-plan.service");
+    const { ReservationService } = await import("@/services/reservation.service");
     const floorPlans = await FloorPlanService.list(merchantId);
+    const reservedRows = await ReservationService.listForSync(merchantId);
+    const reservedTableIds = [
+      ...new Set(
+        reservedRows
+          .map((r) => r.tableId)
+          .filter((id): id is string => !!id)
+      ),
+    ];
 
     const categoryClientById = new Map(
       categories.map((c) => [c.id, c.clientId || c.id] as const)
@@ -405,6 +414,7 @@ export class ChaslayCompatService {
           sort_order: t.sortOrder ?? 0,
         })),
       })),
+      reserved_table_ids: reservedTableIds,
     };
   }
 

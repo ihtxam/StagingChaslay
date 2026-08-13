@@ -2,6 +2,7 @@ package com.chaslay.pos.sync
 
 import android.util.Log
 import com.chaslay.pos.data.preferences.SyncApiKeyStore
+import com.chaslay.pos.data.preferences.SyncPreferences
 import com.chaslay.pos.data.remote.SyncApi
 import com.chaslay.pos.data.repository.TableOrderRepository
 import javax.inject.Inject
@@ -11,6 +12,7 @@ import javax.inject.Singleton
 class FloorPlanSyncRepository @Inject constructor(
     private val syncApi: SyncApi,
     private val syncApiKeyStore: SyncApiKeyStore,
+    private val syncPreferences: SyncPreferences,
     private val tableOrderRepository: TableOrderRepository
 ) {
     suspend fun syncFloorPlans(): FloorPlanSyncResult {
@@ -20,6 +22,7 @@ class FloorPlanSyncRepository @Inject constructor(
         return try {
             val bootstrap = syncApi.bootstrap()
             val plans = bootstrap.floorPlans
+            syncPreferences.setReservedTableIds(bootstrap.reservedTableIds)
             if (plans.isEmpty()) {
                 return FloorPlanSyncResult(message = "No floor plans in cloud")
             }

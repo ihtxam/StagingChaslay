@@ -378,6 +378,11 @@ fun PosScreen(
             CartActionSidebar(
                 isRestaurantMode = isRestaurantMode,
                 isTableMode = isRestaurantMode && state.activeTableName != null,
+                canReleaseEmptyTable =
+                    isRestaurantMode &&
+                    state.activeTableName != null &&
+                    state.cart.isEmpty &&
+                    !state.canCancelCartOrder,
                 coursesEnabled = coursesEnabled,
                 activeTableName = state.activeTableName,
                 activeCourse = state.cart.activeCourse,
@@ -397,7 +402,8 @@ fun PosScreen(
                 onAddCourse = viewModel::addCourse,
                 onSendActiveCourse = viewModel::sendActiveCourseToKitchen,
                 onSendAllCourses = viewModel::sendAllCoursesToKitchen,
-                onKitchenMessage = viewModel::showKitchenMessageDialog
+                onKitchenMessage = viewModel::showKitchenMessageDialog,
+                onReleaseTable = viewModel::releaseEmptyTable
             )
             when (mainTab) {
                 PosMainTab.TABLES -> {
@@ -1063,6 +1069,11 @@ private fun OdooTableCard(
             .fillMaxWidth()
             .height(88.dp)
             .clip(RoundedCornerShape(10.dp))
+            .then(
+                if (table.hasReservation && table.status == TableStatus.FREE && !isActive) {
+                    Modifier.border(3.dp, Color(0xFFF59E0B), RoundedCornerShape(10.dp))
+                } else Modifier
+            )
             .border(
                 width = if (isActive) 3.dp else 0.dp,
                 color = if (isActive) Color.White else Color.Transparent,
@@ -1723,6 +1734,7 @@ private fun CartCancelOrderDialog(
 private fun CartActionSidebar(
     isRestaurantMode: Boolean,
     isTableMode: Boolean,
+    canReleaseEmptyTable: Boolean,
     coursesEnabled: Boolean,
     activeTableName: String?,
     activeCourse: Int,
@@ -1736,7 +1748,8 @@ private fun CartActionSidebar(
     onAddCourse: () -> Unit,
     onSendActiveCourse: () -> Unit,
     onSendAllCourses: () -> Unit,
-    onKitchenMessage: () -> Unit
+    onKitchenMessage: () -> Unit,
+    onReleaseTable: () -> Unit
 ) {
     val vc = vectronColors()
     Column(
@@ -1821,6 +1834,14 @@ private fun CartActionSidebar(
                 shortLabel = "MSG",
                 color = Color(0xFF7D6608),
                 onClick = onKitchenMessage
+            )
+        }
+        if (canReleaseEmptyTable) {
+            CartSidebarButton(
+                label = stringResource(R.string.close_table),
+                shortLabel = "Close",
+                color = Color(0xFF546E7A),
+                onClick = onReleaseTable
             )
         }
         if (activeTableName != null) {

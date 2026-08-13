@@ -553,7 +553,9 @@ data class TableWithOrderInfo(
     val planHeight: Float = 0.12f,
     val shape: String = "ROUND",
     val rotation: Float = 0f,
-    val guestCount: Int? = null
+    val guestCount: Int? = null,
+    val remoteId: String? = null,
+    val hasReservation: Boolean = false
 ) {
     val hasPlanPosition: Boolean get() = planX > 0f || planY > 0f
 }

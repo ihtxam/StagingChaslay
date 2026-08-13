@@ -343,7 +343,9 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                     onPointerDown={(e) => onCanvasPointerDown(e, table.localId)}
                     className={`absolute flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none shadow-sm border-2 ${
                       selectedId === table.localId ? 'border-indigo-600 ring-2 ring-indigo-200' : 'border-slate-700/40'
-                    } ${table.shape === 'round' ? 'rounded-full' : 'rounded-xl'}`}
+                    } ${table.shape === 'round' ? 'rounded-full' : 'rounded-xl'} ${
+                      table.status === 'reserved' ? 'ring-4 ring-amber-400 ring-offset-1' : ''
+                    }`}
                     style={{
                       left: table.posX,
                       top: table.posY,

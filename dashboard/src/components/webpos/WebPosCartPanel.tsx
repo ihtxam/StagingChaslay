@@ -91,6 +91,9 @@ type Props = {
   layout?: 'side' | 'page';
   /** Mobile cart: back to products. */
   onBack?: () => void;
+  /** Release table when dine-in cart is empty and nothing sent to kitchen. */
+  canReleaseTable?: boolean;
+  onReleaseTable?: () => void;
 };
 
 function lineExtrasLabel(l: CartLine) {
@@ -190,6 +193,8 @@ export default function WebPosCartPanel({
   billDiscountLabel,
   layout = 'side',
   onBack,
+  canReleaseTable = false,
+  onReleaseTable,
 }: Props) {
   const { t } = useI18n();
   const hasItems = cart.length > 0;
@@ -282,8 +287,19 @@ export default function WebPosCartPanel({
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
             {tableLabel ? (
-              <span className="inline-flex max-w-full items-center truncate rounded-lg bg-sky-100 px-2.5 py-1.5 text-xs font-bold text-sky-900">
-                {t('table')} {tableLabel}
+              <span className="inline-flex max-w-full items-center gap-2 truncate">
+                <span className="inline-flex items-center truncate rounded-lg bg-sky-100 px-2.5 py-1.5 text-xs font-bold text-sky-900">
+                  {t('table')} {tableLabel}
+                </span>
+                {canReleaseTable && onReleaseTable ? (
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-700 hover:bg-red-100"
+                    onClick={onReleaseTable}
+                  >
+                    {t('webPosReleaseTable')}
+                  </button>
+                ) : null}
               </span>
             ) : tabNumber ? (
               <span className="inline-flex max-w-full items-center truncate rounded-lg bg-indigo-100 px-2.5 py-1.5 text-xs font-bold text-indigo-900">
@@ -366,6 +382,20 @@ export default function WebPosCartPanel({
                       ? `${t('dineIn')} · ${t('table')} ${tableLabel}`
                       : t('dineIn')}
                   </span>
+                </button>
+              ) : null}
+              {canReleaseTable && onReleaseTable ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-red-700 hover:bg-red-50"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onReleaseTable();
+                  }}
+                >
+                  <Ban size={14} className="shrink-0" />
+                  {t('webPosReleaseTable')}
                 </button>
               ) : null}
               {kitchenEnabled ? (

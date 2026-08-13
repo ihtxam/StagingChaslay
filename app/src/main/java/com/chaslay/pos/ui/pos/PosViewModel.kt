@@ -427,7 +427,8 @@ class PosViewModel @Inject constructor(
 
     fun refreshTables() {
         viewModelScope.launch {
-            _tables.value = tableOrderRepository.getTablesWithStatus()
+            val reservedIds = syncPreferences.getReservedTableIds()
+            _tables.value = tableOrderRepository.getTablesWithStatus(reservedIds)
             val floors = tableOrderRepository.getAllFloors()
             _floorElements.value = floors.associate { floor ->
                 floor.id to tableOrderRepository.getFloorElements(floor.id)
@@ -565,9 +566,34 @@ class PosViewModel @Inject constructor(
         refreshTables()
     }
 
+    private suspend fun releaseEmptyTableOrderIfNeeded(): Boolean {
+        val cart = cartManager.snapshot()
+        if (cart.tableId == null || cart.tableOrderId == null) return false
+        if (!cart.isEmpty) return false
+        if (_uiExtras.value.orderCommittedForCancel || _uiExtras.value.kitchenSentToPrinter) return false
+        tableOrderRepository.voidOpenOrder(cart.tableOrderId!!, "Empty table released")
+        return true
+    }
+
+    fun releaseEmptyTable() {
+        viewModelScope.launch {
+            if (!releaseEmptyTableOrderIfNeeded()) return@launch
+            cartManager.resetForNewWalkInOrder()
+            refreshTables()
+            updateExtras {
+                it.copy(
+                    kitchenSentToPrinter = false,
+                    orderCommittedForCancel = false,
+                    snackbarMessage = "Table released"
+                )
+            }
+        }
+    }
+
     fun switchToWalkIn() {
         viewModelScope.launch {
             persistTableOrderIfNeeded()
+            releaseEmptyTableOrderIfNeeded()
             cartManager.resetForNewWalkInOrder()
             refreshTables()
             updateExtras { it.copy(showTablePicker = false, kitchenSentToPrinter = false, orderCommittedForCancel = false) }
@@ -577,6 +603,7 @@ class PosViewModel @Inject constructor(
     fun closeTable() {
         viewModelScope.launch {
             persistTableOrderIfNeeded()
+            releaseEmptyTableOrderIfNeeded()
             cartManager.resetForNewWalkInOrder()
             refreshTables()
             updateExtras { it.copy(kitchenSentToPrinter = false, orderCommittedForCancel = false) }

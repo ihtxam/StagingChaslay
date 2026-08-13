@@ -133,6 +133,7 @@ export default function WebPosTablesView({
             .map((table) => {
             const selected = selectedTableId === table.id;
             const hasDraft = draftTableIds.includes(table.id);
+            const isReserved = table.status === 'reserved';
             const statusColor = hasDraft ? STATUS_COLOR.occupied : STATUS_COLOR[table.status];
             return (
               <div
@@ -151,7 +152,9 @@ export default function WebPosTablesView({
                   onClick={() => onSelectTable?.({ id: table.id, label: table.label })}
                   className={`flex h-full w-full flex-col items-center justify-center border-2 text-xs font-bold transition hover:brightness-95 ${
                     table.shape === 'round' ? 'rounded-full' : 'rounded-lg'
-                  } ${selected ? 'ring-4 ring-[var(--webpos-accent-ring)] ring-offset-2' : ''}`}
+                  } ${selected ? 'ring-4 ring-[var(--webpos-accent-ring)] ring-offset-2' : ''} ${
+                    isReserved && !hasDraft ? 'ring-4 ring-amber-400 ring-offset-1' : ''
+                  }`}
                   style={{
                     backgroundColor: `${statusColor}22`,
                     borderColor: statusColor,

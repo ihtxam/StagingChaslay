@@ -1615,7 +1615,7 @@ class TableOrderRepository @Inject constructor(
         orderDao.deleteAll()
     }
 
-    suspend fun getTablesWithStatus(): List<TableWithOrderInfo> {
+    suspend fun getTablesWithStatus(reservedRemoteTableIds: Set<String> = emptySet()): List<TableWithOrderInfo> {
         val tables = tableDao.observeActive().first()
         return tables.map { table ->
             val order = orderDao.getOpenOrderForTable(table.id)
@@ -1647,7 +1647,9 @@ class TableOrderRepository @Inject constructor(
                 planHeight = table.planHeight,
                 shape = table.shape,
                 rotation = table.rotation,
-                guestCount = order?.guestCount
+                guestCount = order?.guestCount,
+                remoteId = table.remoteId,
+                hasReservation = table.remoteId?.let { reservedRemoteTableIds.contains(it) } == true
             )
         }
     }
@@ -2143,8 +2145,14 @@ class TableOrderRepository @Inject constructor(
     }
 
     suspend fun getOngoingTableOrders(): List<Pair<TableOrderEntity, List<TableOrderItemEntity>>> {
-        return orderDao.getActiveOrders().map { order ->
-            order to orderItemDao.getByOrder(order.id)
+        return orderDao.getActiveOrders().mapNotNull { order ->
+            val items = orderItemDao.getByOrder(order.id)
+            if (items.isEmpty()) {
+                orderDao.deleteById(order.id)
+                null
+            } else {
+                order to items
+            }
         }
     }
 

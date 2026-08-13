@@ -626,7 +626,12 @@ export class ReservationService {
       | "no_show"
       | "assign_table"
       | "unassign_table",
-    payload: { tableId?: string | null; internalNotes?: string | null } = {}
+    payload: {
+      tableId?: string | null;
+      internalNotes?: string | null;
+      cancelReason?: string | null;
+      sendRejectionEmail?: boolean;
+    } = {}
   ) {
     const db = getDb();
     const merchant = await getMerchant(merchantId);
@@ -636,6 +641,9 @@ export class ReservationService {
 
     if (payload.internalNotes !== undefined) {
       patch.internalNotes = payload.internalNotes;
+    }
+    if (payload.cancelReason?.trim()) {
+      patch.internalNotes = payload.cancelReason.trim().slice(0, 500);
     }
 
     switch (action) {
@@ -648,10 +656,21 @@ export class ReservationService {
         emailKind = "confirmed";
         break;
       case "reject":
-        if (current.status !== "pending") throw new Error("Only pending reservations can be rejected");
+        if (!["pending", "confirmed"].includes(current.status)) {
+          throw new Error("Only pending or confirmed reservations can be rejected");
+        }
         patch.status = "rejected";
         patch.cancelledAt = new Date();
         emailKind = "rejected";
+        if (current.tableId) {
+          try {
+            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
+          } catch {
+            /* ignore */
+          }
+          patch.tableId = null;
+          patch.tableLabel = null;
+        }
         break;
       case "seat":
         if (!["confirmed", "pending"].includes(current.status)) {
@@ -680,7 +699,7 @@ export class ReservationService {
       case "cancel":
         patch.status = "cancelled";
         patch.cancelledAt = new Date();
-        emailKind = "cancelled";
+        emailKind = payload.sendRejectionEmail ? "rejected" : "cancelled";
         if (current.tableId) {
           try {
             await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
@@ -761,6 +780,132 @@ export class ReservationService {
     } else if (emailKind) {
       await this.sendAdminNotifyEmail(merchant, updated, emailKind);
     }
+
+    return updated;
+  }
+
+  static async update(
+    merchantId: string,
+    id: string,
+    input: {
+      guestName?: string;
+      guestEmail?: string | null;
+      guestPhone?: string;
+      partySize?: number;
+      reservedAt?: Date | string;
+      date?: string;
+      time?: string;
+      notes?: string | null;
+      internalNotes?: string | null;
+      tableId?: string | null;
+    }
+  ) {
+    const db = getDb();
+    const merchant = await getMerchant(merchantId);
+    const current = await this.get(merchantId, id);
+    if (["cancelled", "rejected", "completed", "no_show"].includes(current.status)) {
+      throw new Error("Cannot edit a closed reservation");
+    }
+
+    const settings = resolveSettings(merchant.reservationSettings);
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+
+    if (input.guestName !== undefined) {
+      const name = input.guestName.trim().slice(0, 200);
+      if (!name) throw new Error("Guest name is required");
+      patch.guestName = name;
+    }
+    if (input.guestPhone !== undefined) {
+      const phone = input.guestPhone.trim().slice(0, 50);
+      if (!phone) throw new Error("Phone is required");
+      patch.guestPhone = phone;
+    }
+    if (input.guestEmail !== undefined) {
+      patch.guestEmail = input.guestEmail?.trim().toLowerCase().slice(0, 255) || null;
+    }
+    if (input.notes !== undefined) {
+      patch.notes = input.notes?.trim() || null;
+    }
+    if (input.internalNotes !== undefined) {
+      patch.internalNotes = input.internalNotes?.trim() || null;
+    }
+
+    let reservedAt = current.reservedAt;
+    if (input.date && input.time) {
+      reservedAt = zurichLocalToDate(String(input.date), String(input.time));
+      patch.reservedAt = reservedAt;
+    } else if (input.reservedAt) {
+      reservedAt = input.reservedAt instanceof Date ? input.reservedAt : new Date(input.reservedAt);
+      if (Number.isNaN(reservedAt.getTime())) throw new Error("Invalid reservation time");
+      patch.reservedAt = reservedAt;
+    }
+
+    let partySize = Number(current.partySize) || 2;
+    if (input.partySize !== undefined) {
+      partySize = clampInt(input.partySize, settings.minPartySize, settings.maxPartySize, partySize);
+      patch.partySize = partySize;
+    }
+
+    if (patch.reservedAt || input.partySize !== undefined) {
+      const dateYmd = formatZurichDate(new Date(reservedAt));
+      const hm = formatZurichHm(new Date(reservedAt));
+      const slotRes = await this.getSlots(merchantId, dateYmd, partySize);
+      const match = slotRes.slots.find((s) => s.time === hm && s.available);
+      const sameSlot =
+        formatZurichDate(new Date(current.reservedAt)) === dateYmd &&
+        formatZurichHm(new Date(current.reservedAt)) === hm &&
+        Number(current.partySize) === partySize;
+      if (!match && !sameSlot) {
+        throw new Error("Selected time is not available");
+      }
+      const slotDeal = matchSlotDiscount(settings, new Date(reservedAt));
+      patch.discountPercent = slotDeal?.percentOff ?? null;
+      patch.discountLabel = slotDeal?.label ?? null;
+    }
+
+    if (input.tableId !== undefined) {
+      const tableId = input.tableId || null;
+      if (!tableId) {
+        if (current.tableId) {
+          try {
+            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
+          } catch {
+            /* ignore */
+          }
+        }
+        patch.tableId = null;
+        patch.tableLabel = null;
+      } else {
+        const tables = await FloorPlanService.listTablesForSync(merchantId);
+        const table = tables.find((t) => t.id === tableId);
+        if (!table) throw new Error("Table not found");
+        if (Number(table.capacity) < partySize) {
+          throw new Error("Table is too small for this party");
+        }
+        if (current.tableId && current.tableId !== tableId) {
+          try {
+            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
+          } catch {
+            /* ignore */
+          }
+        }
+        patch.tableId = tableId;
+        patch.tableLabel = table.label;
+        if (["confirmed", "pending"].includes(current.status)) {
+          try {
+            await FloorPlanService.setTableStatus(merchantId, tableId, "reserved");
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }
+
+    const [updated] = await db
+      .update(schema.reservations)
+      .set(patch)
+      .where(and(eq(schema.reservations.id, id), eq(schema.reservations.merchantId, merchantId)))
+      .returning();
 
     return updated;
   }

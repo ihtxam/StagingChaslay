@@ -29,6 +29,24 @@ class SyncPreferences @Inject constructor(
     private val dashboardTokenKey = stringPreferencesKey("dashboard_token")
     private val dashboardUserJsonKey = stringPreferencesKey("dashboard_user_json")
     private val dashboardUrlKey = stringPreferencesKey("dashboard_url")
+    private val reservedTableIdsKey = stringPreferencesKey("reserved_table_ids")
+
+    suspend fun getReservedTableIds(): Set<String> =
+        context.syncDataStore.data.map { prefs ->
+            prefs[reservedTableIdsKey]
+                ?.split(',')
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.toSet()
+                ?: emptySet()
+        }.first()
+
+    suspend fun setReservedTableIds(ids: Collection<String>) {
+        context.syncDataStore.edit { prefs ->
+            if (ids.isEmpty()) prefs.remove(reservedTableIdsKey)
+            else prefs[reservedTableIdsKey] = ids.joinToString(",")
+        }
+    }
 
     /** Sync read for Room [DatabaseCallback] (runs before DataStore is ready). */
     fun isMenuCloudSyncedBlocking(): Boolean =

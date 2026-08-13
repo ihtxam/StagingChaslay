@@ -108,6 +108,29 @@ router.get("/:id", async (req: Request, res: Response) => {
 });
 
 /**
+ * PUT /api/merchant/reservations/:id
+ */
+router.put("/:id", async (req: Request, res: Response) => {
+  try {
+    const reservation = await ReservationService.update(req.merchantId!, req.params.id, {
+      guestName: req.body.guestName,
+      guestEmail: req.body.guestEmail,
+      guestPhone: req.body.guestPhone,
+      partySize: req.body.partySize,
+      reservedAt: req.body.reservedAt,
+      date: req.body.date,
+      time: req.body.time,
+      notes: req.body.notes,
+      internalNotes: req.body.internalNotes,
+      tableId: req.body.tableId,
+    });
+    res.json({ success: true, reservation });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Update failed" });
+  }
+});
+
+/**
  * POST /api/merchant/reservations/:id/action
  */
 router.post("/:id/action", async (req: Request, res: Response) => {
@@ -119,6 +142,8 @@ router.post("/:id/action", async (req: Request, res: Response) => {
       {
         tableId: req.body.tableId,
         internalNotes: req.body.internalNotes,
+        cancelReason: req.body.cancelReason,
+        sendRejectionEmail: req.body.sendRejectionEmail,
       }
     );
     res.json({ success: true, reservation });

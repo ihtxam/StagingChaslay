@@ -80,6 +80,12 @@ function ymd(d = new Date()) {
   return z.toISOString().slice(0, 10);
 }
 
+function addDaysYmd(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return ymd(d);
+}
+
 export default function Reservations() {
   const { t } = useI18n();
   const [tab, setTab] = useState<'bookings' | 'settings'>('bookings');
@@ -89,10 +95,24 @@ export default function Reservations() {
   const [dineInHours, setDineInHours] = useState<ChannelHours>(emptyWeek());
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
+  const [bookingsScope, setBookingsScope] = useState<'today' | 'future'>('today');
   const [dateFilter, setDateFilter] = useState(ymd());
   const [statusFilter, setStatusFilter] = useState('all');
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [cancelOpen, setCancelOpen] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [editForm, setEditForm] = useState({
+    guestName: '',
+    guestPhone: '',
+    guestEmail: '',
+    partySize: 2,
+    date: ymd(),
+    time: '19:00',
+    notes: '',
+    tableId: '',
+  });
   const [form, setForm] = useState({
     guestName: '',
     guestPhone: '',
@@ -113,8 +133,15 @@ export default function Reservations() {
   }, []);
 
   const loadList = useCallback(async () => {
-    const from = new Date(`${dateFilter}T00:00:00`);
-    const to = new Date(`${dateFilter}T23:59:59`);
+    const today = ymd();
+    const from =
+      bookingsScope === 'today'
+        ? new Date(`${today}T00:00:00`)
+        : new Date(`${addDaysYmd(1)}T00:00:00`);
+    const to =
+      bookingsScope === 'today'
+        ? new Date(`${today}T23:59:59`)
+        : new Date(`${addDaysYmd(settings?.maxDaysAhead || 30)}T23:59:59`);
     const res = await api.get('/merchant/reservations', {
       params: {
         from: from.toISOString(),
@@ -123,7 +150,7 @@ export default function Reservations() {
       },
     });
     setReservations(res.data.reservations || []);
-  }, [dateFilter, statusFilter]);
+  }, [bookingsScope, settings?.maxDaysAhead, statusFilter]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -143,7 +170,64 @@ export default function Reservations() {
 
   useEffect(() => {
     if (!loading) void loadList().catch(() => undefined);
-  }, [dateFilter, statusFilter]);
+  }, [bookingsScope, statusFilter, settings?.maxDaysAhead]);
+
+  const editing = useMemo(
+    () => reservations.find((r) => r.id === editId) || null,
+    [editId, reservations]
+  );
+
+  const openEdit = (r: Reservation) => {
+    const dt = new Date(r.reservedAt);
+    const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
+    setEditForm({
+      guestName: r.guestName,
+      guestPhone: r.guestPhone,
+      guestEmail: r.guestEmail || '',
+      partySize: r.partySize,
+      date: local.toISOString().slice(0, 10),
+      time: local.toISOString().slice(11, 16),
+      notes: r.notes || '',
+      tableId: r.tableId || '',
+    });
+    setEditId(r.id);
+  };
+
+  const saveEdit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editId) return;
+    try {
+      await api.put(`/merchant/reservations/${editId}`, {
+        ...editForm,
+        tableId: editForm.tableId || null,
+        partySize: Number(editForm.partySize),
+      });
+      toast.success(t('saved'));
+      setEditId(null);
+      await loadList();
+      await loadConfig();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('cmsSaveFailed'));
+    }
+  };
+
+  const submitCancel = async () => {
+    if (!cancelOpen) return;
+    try {
+      await api.post(`/merchant/reservations/${cancelOpen}/action`, {
+        action: 'cancel',
+        cancelReason,
+        sendRejectionEmail: true,
+      });
+      toast.success(t('saved'));
+      setCancelOpen(null);
+      setCancelReason('');
+      await loadList();
+      await loadConfig();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('cmsSaveFailed'));
+    }
+  };
 
   const saveSettings = async (e: FormEvent) => {
     e.preventDefault();
@@ -690,15 +774,22 @@ export default function Reservations() {
             </p>
           )}
           <div className="flex flex-wrap items-end gap-3">
-            <label className="text-sm">
-              <span className="muted block mb-1">{t('date')}</span>
-              <input
-                type="date"
-                className="input"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-              />
-            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={`rounded-lg px-3 py-2 text-sm ${bookingsScope === 'today' ? 'bg-slate-900 text-white' : 'border bg-white'}`}
+                onClick={() => setBookingsScope('today')}
+              >
+                {t('reservationsToday')}
+              </button>
+              <button
+                type="button"
+                className={`rounded-lg px-3 py-2 text-sm ${bookingsScope === 'future' ? 'bg-slate-900 text-white' : 'border bg-white'}`}
+                onClick={() => setBookingsScope('future')}
+              >
+                {t('reservationsFuture')}
+              </button>
+            </div>
             <label className="text-sm">
               <span className="muted block mb-1">{t('status')}</span>
               <select
@@ -798,10 +889,63 @@ export default function Reservations() {
           <div className="space-y-2">
             {reservations.length === 0 && (
               <p className="text-sm muted border border-dashed rounded-md p-6 text-center">
-                {t('reservationsEmpty')}
+                {bookingsScope === 'today' ? t('reservationsEmpty') : t('reservationsEmptyFuture')}
               </p>
             )}
-            {reservations.map((r) => (
+            {bookingsScope === 'future' && reservations.length > 0 ? (
+              <div className="overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--bg)]">
+                <table className="min-w-full text-sm">
+                  <thead className="border-b border-[var(--border)] bg-[var(--bg-muted)] text-left text-xs uppercase tracking-wide muted">
+                    <tr>
+                      <th className="px-3 py-2">{t('date')}</th>
+                      <th className="px-3 py-2">{t('time')}</th>
+                      <th className="px-3 py-2">{t('name')}</th>
+                      <th className="px-3 py-2">{t('reservationsGuests')}</th>
+                      <th className="px-3 py-2">{t('reservationsTable')}</th>
+                      <th className="px-3 py-2">{t('status')}</th>
+                      <th className="px-3 py-2">{t('actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reservations.map((r) => {
+                      const dt = new Date(r.reservedAt);
+                      return (
+                        <tr key={r.id} className="border-b border-[var(--border)] last:border-0">
+                          <td className="px-3 py-2 whitespace-nowrap">{dt.toLocaleDateString()}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="px-3 py-2 font-medium">{r.guestName}</td>
+                          <td className="px-3 py-2">{r.partySize}</td>
+                          <td className="px-3 py-2">{r.tableLabel || t('reservationsNoTable')}</td>
+                          <td className="px-3 py-2">
+                            <span className={`text-xs px-2 py-0.5 rounded ${statusBadge(r.status)}`}>
+                              {r.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap gap-2">
+                              {!['cancelled', 'rejected', 'completed', 'no_show'].includes(r.status) ? (
+                                <button type="button" className="text-xs underline" onClick={() => openEdit(r)}>
+                                  {t('edit')}
+                                </button>
+                              ) : null}
+                              {['pending', 'confirmed'].includes(r.status) ? (
+                                <button type="button" className="text-xs text-red-700" onClick={() => setCancelOpen(r.id)}>
+                                  {t('cancel')}
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            {bookingsScope === 'today'
+              ? reservations.map((r) => (
               <div
                 key={r.id}
                 className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-4 py-3 space-y-2"
@@ -834,6 +978,11 @@ export default function Reservations() {
                     {r.notes && <p className="text-xs mt-1">{r.notes}</p>}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
+                    {!['cancelled', 'rejected', 'completed', 'no_show'].includes(r.status) ? (
+                      <button type="button" className="btn-secondary text-xs !py-1" onClick={() => openEdit(r)}>
+                        {t('edit')}
+                      </button>
+                    ) : null}
                     {r.status === 'pending' && (
                       <>
                         <button
@@ -875,7 +1024,7 @@ export default function Reservations() {
                         <button
                           type="button"
                           className="text-xs text-red-700 px-2"
-                          onClick={() => void runAction(r.id, 'cancel')}
+                          onClick={() => setCancelOpen(r.id)}
                         >
                           {t('cancel')}
                         </button>
@@ -920,8 +1069,68 @@ export default function Reservations() {
                   </div>
                 )}
               </div>
-            ))}
+            ))
+              : null}
           </div>
+
+          {editId && editing ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <form
+                onSubmit={saveEdit}
+                className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-xl border border-[var(--border)] bg-[var(--bg)] p-4 shadow-xl space-y-3"
+              >
+                <h3 className="text-lg font-semibold">{t('reservationsEdit')}</h3>
+                <input className="input" required value={editForm.guestName} onChange={(e) => setEditForm({ ...editForm, guestName: e.target.value })} placeholder={t('name')} />
+                <input className="input" required value={editForm.guestPhone} onChange={(e) => setEditForm({ ...editForm, guestPhone: e.target.value })} placeholder={t('phone')} />
+                <input className="input" type="email" value={editForm.guestEmail} onChange={(e) => setEditForm({ ...editForm, guestEmail: e.target.value })} placeholder="Email" />
+                <input className="input" type="number" min={1} value={editForm.partySize} onChange={(e) => setEditForm({ ...editForm, partySize: Number(e.target.value) })} />
+                <div className="grid grid-cols-2 gap-2">
+                  <input className="input" type="date" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} />
+                  <input className="input" type="time" value={editForm.time} onChange={(e) => setEditForm({ ...editForm, time: e.target.value })} />
+                </div>
+                <select className="input" value={editForm.tableId} onChange={(e) => setEditForm({ ...editForm, tableId: e.target.value })}>
+                  <option value="">{t('reservationsNoTable')}</option>
+                  {tables.map((tb) => (
+                    <option key={tb.id} value={tb.id}>
+                      {tb.label} ({tb.capacity}) - {tb.status}
+                    </option>
+                  ))}
+                </select>
+                <textarea className="input min-h-24" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} placeholder={t('notes')} />
+                <div className="flex justify-end gap-2">
+                  <button type="button" className="btn-secondary" onClick={() => setEditId(null)}>
+                    {t('cancel')}
+                  </button>
+                  <button type="submit" className="btn-primary">
+                    {t('save')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : null}
+
+          {cancelOpen ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg)] p-4 shadow-xl space-y-3">
+                <h3 className="text-lg font-semibold">{t('reservationsCancelTitle')}</h3>
+                <p className="text-sm muted">{t('reservationsCancelHint')}</p>
+                <textarea
+                  className="input min-h-24"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder={t('reservationsCancelReason')}
+                />
+                <div className="flex justify-end gap-2">
+                  <button type="button" className="btn-secondary" onClick={() => setCancelOpen(null)}>
+                    {t('cancel')}
+                  </button>
+                  <button type="button" className="btn-primary !bg-red-700 hover:!bg-red-800" onClick={() => void submitCancel()}>
+                    {t('reservationsCancelSend')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

@@ -66,7 +66,8 @@ data class FloorPlanTableDisplay(
     val status: TableStatus = TableStatus.FREE,
     val orderTotal: Double = 0.0,
     val guestCount: Int? = null,
-    val isActive: Boolean = false
+    val isActive: Boolean = false,
+    val hasReservation: Boolean = false
 )
 
 data class FloorPlanElementDisplay(
@@ -95,7 +96,8 @@ fun TableWithOrderInfo.toFloorPlanDisplay(activeTableName: String?, currencySymb
         status = status,
         orderTotal = orderTotal,
         guestCount = guestCount,
-        isActive = name == activeTableName
+        isActive = name == activeTableName,
+        hasReservation = hasReservation
     )
 
 @Composable
@@ -287,6 +289,11 @@ private fun FloorPlanTableChip(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .then(
+                if (table.hasReservation && !table.isActive && table.status == TableStatus.FREE) {
+                    Modifier.border(3.dp, Color(0xFFF59E0B), clipShape)
+                } else Modifier
+            )
             .clip(clipShape)
             .background(bg)
             .border(

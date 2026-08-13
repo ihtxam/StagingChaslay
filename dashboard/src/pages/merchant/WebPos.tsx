@@ -545,14 +545,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
   const [draftVersion, setDraftVersion] = useState(0);
   const cartPersistReadyRef = useRef(false);
-  const draftTableIds = useMemo(
-    () =>
-      [...openCartDraftsRef.current.keys()]
-        .filter((k) => k.startsWith('table:'))
-        .map((k) => k.slice(6)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draftVersion]
-  );
+  const draftTableIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const [key, draft] of openCartDraftsRef.current.entries()) {
+      if (key.startsWith('table:') && (draft.cart.length > 0 || draft.orderSent)) {
+        ids.push(key.slice(6));
+      }
+    }
+    return ids;
+  }, [draftVersion]);
 
   const cartCount = useMemo(() => cart.reduce((n, l) => n + l.quantity, 0), [cart]);
 
@@ -636,6 +637,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const key = openCartDraftKey({ tableId, tabNumber, channel });
     if (cart.length > 0 || orderSent) {
       openCartDraftsRef.current.set(key, active);
+    } else {
+      openCartDraftsRef.current.delete(key);
+      setDraftVersion((n) => n + 1);
     }
     savePersistedWebPosCarts({
       drafts: draftsMapToRecord(openCartDraftsRef.current),
@@ -2528,6 +2532,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setFulfillmentWhen(null);
     setSelectedCustomer(null);
     setProvisionalPrinted(false);
+    savePersistedWebPosCarts({
+      drafts: draftsMapToRecord(openCartDraftsRef.current),
+      active: null,
+      mobileCartOpen: false,
+      customer: null,
+    });
+  };
+
+  const releaseEmptyTable = () => {
+    if (!tableId || cart.length > 0 || orderSent) return;
+    startNewOrder();
+    toast.success(t('webPosTableReleased'));
   };
 
   const getDraftForTable = (tid: string): OpenCartDraft | undefined => {
@@ -4995,6 +5011,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 }
                 canApplyBillDiscount={canApplyDiscounts}
                 billDiscountLabel={billDiscountLabel}
+                canReleaseTable={!!tableLabel && cart.length === 0 && !orderSent}
+                onReleaseTable={releaseEmptyTable}
                 layout={isNarrowViewport && mobileCartOpen ? 'page' : 'side'}
                 onBack={
                   isNarrowViewport && mobileCartOpen
