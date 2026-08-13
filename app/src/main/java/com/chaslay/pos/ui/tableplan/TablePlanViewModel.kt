@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 data class TablePlanUiState(
     val floors: List<TableFloorEntity> = emptyList(),
@@ -26,6 +27,8 @@ data class TablePlanUiState(
     val editName: String = "",
     val editSeats: String = "4",
     val editShape: TableShape = TableShape.ROUND,
+    val editPlanWidthPct: String = "12",
+    val editPlanHeightPct: String = "12",
     val showEditDialog: Boolean = false,
     val showElementEditDialog: Boolean = false,
     val editElementLabel: String = "",
@@ -125,6 +128,8 @@ class TablePlanViewModel @Inject constructor(
                 editName = table.name,
                 editSeats = table.seatCapacity.toString(),
                 editShape = TableShape.fromApi(table.shape),
+                editPlanWidthPct = (table.planWidth * 100f).roundToInt().toString(),
+                editPlanHeightPct = (table.planHeight * 100f).roundToInt().toString(),
                 showEditDialog = false,
                 showElementEditDialog = false
             )
@@ -139,6 +144,8 @@ class TablePlanViewModel @Inject constructor(
                 editName = table.name,
                 editSeats = table.seatCapacity.toString(),
                 editShape = TableShape.fromApi(table.shape),
+                editPlanWidthPct = (table.planWidth * 100f).roundToInt().toString(),
+                editPlanHeightPct = (table.planHeight * 100f).roundToInt().toString(),
                 showEditDialog = true,
                 showElementEditDialog = false
             )
@@ -177,6 +184,8 @@ class TablePlanViewModel @Inject constructor(
     fun updateEditName(value: String) = _uiState.update { it.copy(editName = value) }
     fun updateEditSeats(value: String) = _uiState.update { it.copy(editSeats = value) }
     fun updateEditShape(shape: TableShape) = _uiState.update { it.copy(editShape = shape) }
+    fun updateEditPlanWidthPct(value: String) = _uiState.update { it.copy(editPlanWidthPct = value) }
+    fun updateEditPlanHeightPct(value: String) = _uiState.update { it.copy(editPlanHeightPct = value) }
     fun updateEditElementLabel(value: String) = _uiState.update { it.copy(editElementLabel = value) }
     fun updateNewFloorName(value: String) = _uiState.update { it.copy(newFloorName = value) }
 
@@ -185,12 +194,19 @@ class TablePlanViewModel @Inject constructor(
         val tableId = state.selectedTableId ?: return
         val table = state.tables.find { it.id == tableId } ?: return
         val seats = state.editSeats.toIntOrNull()?.coerceIn(1, 99) ?: table.seatCapacity
+        val planWidth = state.editPlanWidthPct.toFloatOrNull()?.div(100f)?.coerceIn(0.04f, 0.5f) ?: table.planWidth
+        val planHeight = state.editPlanHeightPct.toFloatOrNull()?.div(100f)?.coerceIn(0.03f, 0.5f) ?: table.planHeight
+        val (planX, planY) = clampPlanPosition(table.planX, table.planY, planWidth, planHeight)
         viewModelScope.launch {
             tableOrderRepository.updateTable(
                 table.copy(
                     name = state.editName.trim().ifBlank { table.name },
                     seatCapacity = seats,
-                    shape = state.editShape.apiValue
+                    shape = state.editShape.apiValue,
+                    planX = planX,
+                    planY = planY,
+                    planWidth = planWidth,
+                    planHeight = planHeight
                 )
             )
             reload()
@@ -266,6 +282,30 @@ class TablePlanViewModel @Inject constructor(
         val updated = table.copy(planX = x, planY = y)
         _uiState.update { state ->
             state.copy(tables = state.tables.map { if (it.id == tableId) updated else it })
+        }
+        viewModelScope.launch { tableOrderRepository.updateTable(updated) }
+    }
+
+    fun resizeTable(tableId: Long, planX: Float, planY: Float, planWidth: Float, planHeight: Float) {
+        val table = _uiState.value.tables.find { it.id == tableId } ?: return
+        val w = planWidth.coerceIn(0.04f, 0.5f)
+        val h = planHeight.coerceIn(0.03f, 0.5f)
+        val (x, y) = clampPlanPosition(planX, planY, w, h)
+        val updated = table.copy(planX = x, planY = y, planWidth = w, planHeight = h)
+        _uiState.update { state ->
+            state.copy(
+                tables = state.tables.map { if (it.id == tableId) updated else it },
+                editPlanWidthPct = if (state.selectedTableId == tableId) {
+                    (w * 100f).roundToInt().toString()
+                } else {
+                    state.editPlanWidthPct
+                },
+                editPlanHeightPct = if (state.selectedTableId == tableId) {
+                    (h * 100f).roundToInt().toString()
+                } else {
+                    state.editPlanHeightPct
+                }
+            )
         }
         viewModelScope.launch { tableOrderRepository.updateTable(updated) }
     }

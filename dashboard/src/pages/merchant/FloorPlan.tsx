@@ -1,4 +1,4 @@
-import { FormEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, FormEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -31,6 +31,64 @@ interface FloorPlanData {
 
 function uid() {
   return `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+const MIN_TABLE_SIZE = 40;
+
+type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+
+const RESIZE_HANDLES: Array<{ handle: ResizeHandle; cursor: string; style: CSSProperties }> = [
+  { handle: 'nw', cursor: 'nwse-resize', style: { top: -5, left: -5 } },
+  { handle: 'n', cursor: 'ns-resize', style: { top: -5, left: '50%', transform: 'translateX(-50%)' } },
+  { handle: 'ne', cursor: 'nesw-resize', style: { top: -5, right: -5 } },
+  { handle: 'e', cursor: 'ew-resize', style: { top: '50%', right: -5, transform: 'translateY(-50%)' } },
+  { handle: 'se', cursor: 'nwse-resize', style: { bottom: -5, right: -5 } },
+  { handle: 's', cursor: 'ns-resize', style: { bottom: -5, left: '50%', transform: 'translateX(-50%)' } },
+  { handle: 'sw', cursor: 'nesw-resize', style: { bottom: -5, left: -5 } },
+  { handle: 'w', cursor: 'ew-resize', style: { top: '50%', left: -5, transform: 'translateY(-50%)' } },
+];
+
+function applyTableResize(
+  handle: ResizeHandle,
+  start: { posX: number; posY: number; width: number; height: number },
+  dx: number,
+  dy: number,
+  canvasWidth: number,
+  canvasHeight: number
+) {
+  let { posX, posY, width, height } = start;
+
+  if (handle.includes('e')) width = start.width + dx;
+  if (handle.includes('w')) {
+    width = start.width - dx;
+    posX = start.posX + dx;
+  }
+  if (handle.includes('s')) height = start.height + dy;
+  if (handle.includes('n')) {
+    height = start.height - dy;
+    posY = start.posY + dy;
+  }
+
+  if (width < MIN_TABLE_SIZE) {
+    if (handle.includes('w')) posX = start.posX + start.width - MIN_TABLE_SIZE;
+    width = MIN_TABLE_SIZE;
+  }
+  if (height < MIN_TABLE_SIZE) {
+    if (handle.includes('n')) posY = start.posY + start.height - MIN_TABLE_SIZE;
+    height = MIN_TABLE_SIZE;
+  }
+
+  posX = Math.max(0, Math.min(posX, canvasWidth - width));
+  posY = Math.max(0, Math.min(posY, canvasHeight - height));
+  width = Math.min(width, canvasWidth - posX);
+  height = Math.min(height, canvasHeight - posY);
+
+  return {
+    posX: Math.round(posX),
+    posY: Math.round(posY),
+    width: Math.round(width),
+    height: Math.round(height),
+  };
 }
 
 function toDesigner(tables: FloorPlanData['tables'] = []): DesignerTable[] {
@@ -67,6 +125,16 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
   const [newPlanName, setNewPlanName] = useState('');
   const [covers, setCovers] = useState<{ coversServed: number; dineInOrders: number; averagePartySize: number } | null>(null);
   const [drag, setDrag] = useState<{ localId: string; offsetX: number; offsetY: number } | null>(null);
+  const [resize, setResize] = useState<{
+    localId: string;
+    handle: ResizeHandle;
+    startPointerX: number;
+    startPointerY: number;
+    startPosX: number;
+    startPosY: number;
+    startWidth: number;
+    startHeight: number;
+  } | null>(null);
   /** Inner canvas (same coordinate space for pointer down + move). */
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
@@ -194,13 +262,16 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
     }
   };
 
+  const canvasPointerActive = drag || resize;
+
   const onCanvasBackgroundPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    if (target.closest('[data-floor-table]')) return;
+    if (target.closest('[data-floor-table]') || target.closest('[data-resize-handle]')) return;
     setSelectedId(null);
   };
 
   const onTablePointerDown = (e: PointerEvent<HTMLDivElement>, localId: string) => {
+    if ((e.target as HTMLElement).closest('[data-resize-handle]')) return;
     e.stopPropagation();
     e.preventDefault();
     const table = tables.find((t) => t.localId === localId);
@@ -216,10 +287,58 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
   };
 
-  const onCanvasPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (!drag || !activePlan) return;
+  const onResizeHandlePointerDown = (
+    e: PointerEvent<HTMLDivElement>,
+    localId: string,
+    handle: ResizeHandle
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const table = tables.find((t) => t.localId === localId);
+    if (!table) return;
+    setSelectedId(localId);
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
+    setResize({
+      localId,
+      handle,
+      startPointerX: e.clientX - rect.left,
+      startPointerY: e.clientY - rect.top,
+      startPosX: table.posX,
+      startPosY: table.posY,
+      startWidth: table.width,
+      startHeight: table.height,
+    });
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  const onCanvasPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect || !activePlan) return;
+
+    if (resize) {
+      const dx = e.clientX - rect.left - resize.startPointerX;
+      const dy = e.clientY - rect.top - resize.startPointerY;
+      const next = applyTableResize(
+        resize.handle,
+        {
+          posX: resize.startPosX,
+          posY: resize.startPosY,
+          width: resize.startWidth,
+          height: resize.startHeight,
+        },
+        dx,
+        dy,
+        activePlan.canvasWidth,
+        activePlan.canvasHeight
+      );
+      setTables((prev) =>
+        prev.map((t) => (t.localId === resize.localId ? { ...t, ...next } : t))
+      );
+      return;
+    }
+
+    if (!drag) return;
     const x = Math.max(
       0,
       Math.min(activePlan.canvasWidth - (tables.find((t) => t.localId === drag.localId)?.width || 40), e.clientX - rect.left - drag.offsetX)
@@ -234,7 +353,7 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
   };
 
   const onCanvasPointerUp = (e?: PointerEvent<HTMLDivElement>) => {
-    if (e && drag) {
+    if (e && (drag || resize)) {
       try {
         (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
       } catch {
@@ -242,6 +361,7 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
       }
     }
     setDrag(null);
+    setResize(null);
   };
 
   if (loading) return <div className="text-center py-12">Loading floor plans...</div>;
@@ -351,7 +471,7 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                     className="input"
                     type="number"
                     value={selected.width}
-                    onChange={(e) => updateSelected({ width: Math.max(40, Number(e.target.value) || 40) })}
+                    onChange={(e) => updateSelected({ width: Math.max(MIN_TABLE_SIZE, Number(e.target.value) || MIN_TABLE_SIZE) })}
                   />
                 </div>
                 <div className="w-24">
@@ -360,7 +480,7 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                     className="input"
                     type="number"
                     value={selected.height}
-                    onChange={(e) => updateSelected({ height: Math.max(40, Number(e.target.value) || 40) })}
+                    onChange={(e) => updateSelected({ height: Math.max(MIN_TABLE_SIZE, Number(e.target.value) || MIN_TABLE_SIZE) })}
                   />
                 </div>
                 <button type="button" className="btn-secondary text-red-600 shrink-0" onClick={removeSelected}>
@@ -399,8 +519,8 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
               <div
                 className="relative flex-1 rounded-xl border border-slate-200 bg-[linear-gradient(#e2e8f0_1px,transparent_1px),linear-gradient(90deg,#e2e8f0_1px,transparent_1px)] bg-[size:24px_24px] min-h-[360px]"
                 style={{
-                  overflow: drag ? 'hidden' : 'auto',
-                  touchAction: drag ? 'none' : 'auto',
+                  overflow: canvasPointerActive ? 'hidden' : 'auto',
+                  touchAction: canvasPointerActive ? 'none' : 'auto',
                 }}
                 onPointerDown={onCanvasBackgroundPointerDown}
                 onPointerMove={onCanvasPointerMove}
@@ -438,6 +558,16 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                         className="mt-1 h-2 w-2 rounded-full"
                         style={{ backgroundColor: STATUS_COLOR[table.status] }}
                       />
+                      {selectedId === table.localId &&
+                        RESIZE_HANDLES.map(({ handle, cursor, style }) => (
+                          <div
+                            key={handle}
+                            data-resize-handle
+                            onPointerDown={(e) => onResizeHandlePointerDown(e, table.localId, handle)}
+                            className="absolute z-10 h-2.5 w-2.5 rounded-sm border-2 border-indigo-600 bg-white shadow-sm"
+                            style={{ ...style, cursor, touchAction: 'none' }}
+                          />
+                        ))}
                     </div>
                   ))}
                 </div>

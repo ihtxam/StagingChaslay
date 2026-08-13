@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.chaslay.pos.domain.model.FloorPlanElementType
 import com.chaslay.pos.domain.model.TableShape
 import com.chaslay.pos.domain.model.TableStatus
@@ -51,6 +54,66 @@ internal fun clampPlanPosition(
     val x = planX.coerceIn(0f, (1f - w).coerceAtLeast(0f))
     val y = planY.coerceIn(0f, (1f - h).coerceAtLeast(0f))
     return x to y
+}
+
+internal enum class PlanResizeHandle {
+    NW, N, NE, E, SE, S, SW, W
+}
+
+internal data class PlanRect(
+    val planX: Float,
+    val planY: Float,
+    val planWidth: Float,
+    val planHeight: Float
+)
+
+internal fun applyPlanResize(
+    handle: PlanResizeHandle,
+    start: PlanRect,
+    deltaX: Float,
+    deltaY: Float
+): PlanRect {
+    var x = start.planX
+    var y = start.planY
+    var w = start.planWidth
+    var h = start.planHeight
+
+    when (handle) {
+        PlanResizeHandle.E, PlanResizeHandle.NE, PlanResizeHandle.SE -> w = start.planWidth + deltaX
+        PlanResizeHandle.W, PlanResizeHandle.NW, PlanResizeHandle.SW -> {
+            w = start.planWidth - deltaX
+            x = start.planX + deltaX
+        }
+        PlanResizeHandle.N, PlanResizeHandle.S -> Unit
+    }
+    when (handle) {
+        PlanResizeHandle.S, PlanResizeHandle.SE, PlanResizeHandle.SW -> h = start.planHeight + deltaY
+        PlanResizeHandle.N, PlanResizeHandle.NE, PlanResizeHandle.NW -> {
+            h = start.planHeight - deltaY
+            y = start.planY + deltaY
+        }
+        PlanResizeHandle.E, PlanResizeHandle.W -> Unit
+    }
+
+    val minW = 0.04f
+    val minH = 0.03f
+    if (w < minW) {
+        if (handle == PlanResizeHandle.W || handle == PlanResizeHandle.NW || handle == PlanResizeHandle.SW) {
+            x = start.planX + start.planWidth - minW
+        }
+        w = minW
+    }
+    if (h < minH) {
+        if (handle == PlanResizeHandle.N || handle == PlanResizeHandle.NE || handle == PlanResizeHandle.NW) {
+            y = start.planY + start.planHeight - minH
+        }
+        h = minH
+    }
+
+    w = w.coerceIn(minW, 0.5f)
+    h = h.coerceIn(minH, 0.5f)
+    val (cx, cy) = clampPlanPosition(x, y, w, h)
+    return PlanRect(cx, cy, w, h)
 }
 
 data class FloorPlanTableDisplay(
@@ -109,6 +172,7 @@ fun FloorPlanCanvas(
     selectedElementId: Long? = null,
     onTableClick: (Long) -> Unit,
     onTableMoved: ((Long, Float, Float) -> Unit)?,
+    onTableResized: ((Long, Float, Float, Float, Float) -> Unit)? = null,
     onElementClick: ((Long) -> Unit)? = null,
     onElementMoved: ((Long, Float, Float) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -151,6 +215,12 @@ fun FloorPlanCanvas(
                 canvasW = canvasW.value,
                 canvasH = canvasH.value,
                 editable = editable && onTableMoved != null,
+                isSelected = table.id == selectedTableId,
+                onResized = if (editable && onTableResized != null && table.id == selectedTableId) {
+                    { x, y, w, h -> onTableResized(table.id, x, y, w, h) }
+                } else {
+                    null
+                },
                 onMoved = { x, y -> onTableMoved?.invoke(table.id, x, y) },
                 onClick = { onTableClick(table.id) }
             ) {
@@ -173,16 +243,24 @@ private fun DraggablePlanItem(
     canvasW: Float,
     canvasH: Float,
     editable: Boolean,
+    isSelected: Boolean = false,
+    onResized: ((Float, Float, Float, Float) -> Unit)? = null,
     onMoved: (Float, Float) -> Unit,
     onClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    val w = (planWidth.coerceIn(0.04f, 0.5f) * canvasW).dp
-    val h = (planHeight.coerceIn(0.03f, 0.5f) * canvasH).dp
-    val baseX = planX.coerceIn(0f, 1f) * canvasW
-    val baseY = planY.coerceIn(0f, 1f) * canvasH
-    var dragOffsetX by remember(planX, planY) { mutableFloatStateOf(0f) }
-    var dragOffsetY by remember(planX, planY) { mutableFloatStateOf(0f) }
+    var previewRect by remember(planX, planY, planWidth, planHeight) { mutableStateOf<PlanRect?>(null) }
+    val displayX = previewRect?.planX ?: planX
+    val displayY = previewRect?.planY ?: planY
+    val displayW = previewRect?.planWidth ?: planWidth
+    val displayH = previewRect?.planHeight ?: planHeight
+
+    val w = (displayW.coerceIn(0.04f, 0.5f) * canvasW).dp
+    val h = (displayH.coerceIn(0.03f, 0.5f) * canvasH).dp
+    val baseX = displayX.coerceIn(0f, 1f) * canvasW
+    val baseY = displayY.coerceIn(0f, 1f) * canvasH
+    var dragOffsetX by remember(displayX, displayY) { mutableFloatStateOf(0f) }
+    var dragOffsetY by remember(displayX, displayY) { mutableFloatStateOf(0f) }
 
     Box(
         modifier = Modifier
@@ -193,7 +271,7 @@ private fun DraggablePlanItem(
                 )
             }
             .rotate(rotation)
-            .pointerInput(planX, planY, editable) {
+            .pointerInput(displayX, displayY, editable, isSelected, onResized) {
                 // Single gesture handler: tap selects, drag moves (no clickable conflict).
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -215,8 +293,8 @@ private fun DraggablePlanItem(
                         val (x, y) = clampPlanPosition(
                             planX = (baseX + dragOffsetX) / canvasW,
                             planY = (baseY + dragOffsetY) / canvasH,
-                            planWidth = planWidth,
-                            planHeight = planHeight
+                            planWidth = displayW,
+                            planHeight = displayH
                         )
                         onMoved(x, y)
                     }
@@ -227,7 +305,99 @@ private fun DraggablePlanItem(
     ) {
         Box(modifier = Modifier.size(width = w.coerceAtLeast(40.dp), height = h.coerceAtLeast(24.dp))) {
             content()
+            if (isSelected && editable && onResized != null) {
+                PlanResizeHandles(
+                    startRect = PlanRect(planX, planY, planWidth, planHeight),
+                    canvasW = canvasW,
+                    canvasH = canvasH,
+                    onPreview = { previewRect = it },
+                    onCommit = { rect ->
+                        onResized(rect.planX, rect.planY, rect.planWidth, rect.planHeight)
+                        previewRect = null
+                    },
+                    onCancelPreview = { previewRect = null }
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun BoxScope.PlanResizeHandles(
+    startRect: PlanRect,
+    canvasW: Float,
+    canvasH: Float,
+    onPreview: (PlanRect) -> Unit,
+    onCommit: (PlanRect) -> Unit,
+    onCancelPreview: () -> Unit
+) {
+    val handleSize = 12.dp
+    val handles = listOf(
+        PlanResizeHandle.NW to Alignment.TopStart,
+        PlanResizeHandle.N to Alignment.TopCenter,
+        PlanResizeHandle.NE to Alignment.TopEnd,
+        PlanResizeHandle.E to Alignment.CenterEnd,
+        PlanResizeHandle.SE to Alignment.BottomEnd,
+        PlanResizeHandle.S to Alignment.BottomCenter,
+        PlanResizeHandle.SW to Alignment.BottomStart,
+        PlanResizeHandle.W to Alignment.CenterStart
+    )
+
+    handles.forEach { (handle, alignment) ->
+        Box(
+            modifier = Modifier
+                .zIndex(2f)
+                .align(alignment)
+                .size(handleSize)
+                .offset(
+                    x = when (alignment) {
+                        Alignment.TopStart, Alignment.CenterStart, Alignment.BottomStart -> (-6).dp
+                        Alignment.TopEnd, Alignment.CenterEnd, Alignment.BottomEnd -> 6.dp
+                        else -> 0.dp
+                    },
+                    y = when (alignment) {
+                        Alignment.TopStart, Alignment.TopCenter, Alignment.TopEnd -> (-6).dp
+                        Alignment.BottomStart, Alignment.BottomCenter, Alignment.BottomEnd -> 6.dp
+                        else -> 0.dp
+                    }
+                )
+                .clip(RoundedCornerShape(2.dp))
+                .background(Color.White)
+                .border(2.dp, Color(0xFF00897B), RoundedCornerShape(2.dp))
+                .pointerInput(handle, startRect) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var totalDeltaX = 0f
+                        var totalDeltaY = 0f
+                        drag(down.id) { change ->
+                            val delta = change.positionChange()
+                            change.consume()
+                            totalDeltaX += delta.x / canvasW
+                            totalDeltaY += delta.y / canvasH
+                            onPreview(
+                                applyPlanResize(
+                                    handle = handle,
+                                    start = startRect,
+                                    deltaX = totalDeltaX,
+                                    deltaY = totalDeltaY
+                                )
+                            )
+                        }
+                        if (totalDeltaX != 0f || totalDeltaY != 0f) {
+                            onCommit(
+                                applyPlanResize(
+                                    handle = handle,
+                                    start = startRect,
+                                    deltaX = totalDeltaX,
+                                    deltaY = totalDeltaY
+                                )
+                            )
+                        } else {
+                            onCancelPreview()
+                        }
+                    }
+                }
+        )
     }
 }
 

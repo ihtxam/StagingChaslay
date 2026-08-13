@@ -243,6 +243,7 @@ fun TablePlanDesignerContent(
                     selectedElementId = state.selectedElementId,
                     onTableClick = viewModel::selectTable,
                     onTableMoved = viewModel::moveTable,
+                    onTableResized = viewModel::resizeTable,
                     onElementClick = viewModel::selectElement,
                     onElementMoved = viewModel::moveElement,
                     modifier = Modifier.fillMaxSize()
@@ -258,6 +259,8 @@ fun TablePlanDesignerContent(
                     onNameChange = viewModel::updateEditName,
                     onSeatsChange = viewModel::updateEditSeats,
                     onShapeChange = viewModel::updateEditShape,
+                    onPlanWidthChange = viewModel::updateEditPlanWidthPct,
+                    onPlanHeightChange = viewModel::updateEditPlanHeightPct,
                     onElementLabelChange = viewModel::updateEditElementLabel,
                     onSaveTable = viewModel::saveSelectedTable,
                     onDeleteTable = viewModel::deleteSelectedTable,
@@ -318,6 +321,8 @@ private fun TableEditSidePanel(
     onNameChange: (String) -> Unit,
     onSeatsChange: (String) -> Unit,
     onShapeChange: (TableShape) -> Unit,
+    onPlanWidthChange: (String) -> Unit,
+    onPlanHeightChange: (String) -> Unit,
     onElementLabelChange: (String) -> Unit,
     onSaveTable: () -> Unit,
     onDeleteTable: () -> Unit,
@@ -409,6 +414,24 @@ private fun TableEditSidePanel(
                             )
                         )
                     }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = state.editPlanWidthPct,
+                        onValueChange = onPlanWidthChange,
+                        label = { Text("Width %", fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = fieldColors,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = state.editPlanHeightPct,
+                        onValueChange = onPlanHeightChange,
+                        label = { Text("Height %", fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = fieldColors,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             } else {
                 OutlinedTextField(
