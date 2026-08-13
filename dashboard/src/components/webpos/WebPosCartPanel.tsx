@@ -39,6 +39,9 @@ type Props = {
   tableLabel?: string | null;
   tabNumber?: string | null;
   customerLabel?: string | null;
+  membershipName?: string | null;
+  membershipPointsBalance?: number | null;
+  onClearMembership?: () => void;
   fulfillmentLabel?: string | null;
   fulfillmentIsLater?: boolean;
   busy: boolean;
@@ -156,6 +159,9 @@ export default function WebPosCartPanel({
   tableLabel,
   tabNumber,
   customerLabel,
+  membershipName,
+  membershipPointsBalance,
+  onClearMembership,
   fulfillmentLabel,
   fulfillmentIsLater,
   busy,
@@ -531,11 +537,33 @@ export default function WebPosCartPanel({
       {(tableLabel ||
         tabNumber ||
         orderNote ||
+        membershipName ||
         channel === 'dine_in' ||
         fulfillmentLabel ||
         channel === 'takeaway' ||
         channel === 'delivery') && (
         <div className="shrink-0 flex flex-wrap items-center gap-1.5 border-b border-stone-100 px-3 py-1.5 text-[11px] text-stone-500">
+          {membershipName ? (
+            <span className="inline-flex max-w-full items-center gap-1 rounded bg-teal-100 px-1.5 py-0.5 font-semibold text-teal-900">
+              <span className="truncate">
+                {membershipName}
+                {membershipPointsBalance != null
+                  ? ` · ${t('webPosPointsBalance').replace('{n}', String(membershipPointsBalance))}`
+                  : ''}
+              </span>
+              {onClearMembership ? (
+                <button
+                  type="button"
+                  className="shrink-0 rounded px-0.5 text-teal-700 hover:bg-teal-200/80"
+                  title={t('webPosDetachMembership')}
+                  aria-label={t('webPosDetachMembership')}
+                  onClick={onClearMembership}
+                >
+                  ×
+                </button>
+              ) : null}
+            </span>
+          ) : null}
           {channel === 'dine_in' ? (
             <span className="rounded bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-800">
               {t('dineIn')}

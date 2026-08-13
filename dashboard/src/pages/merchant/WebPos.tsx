@@ -168,6 +168,15 @@ import WebPosGiftCardModal, {
   type GiftCardPayResult,
   type GiftCardSettingsClient,
 } from '@/components/webpos/WebPosGiftCardModal';
+import RfidScanInput from '@/components/RfidScanInput';
+import {
+  computeCashDiscount,
+  computeEarnPoints,
+  maxRedeemablePoints,
+  normalizeRfidUid,
+  REDEEM_THRESHOLD_POINTS,
+  type AttachedMembership,
+} from '@/lib/loyalty-math';
 import type { AppliedPayment } from '@/components/webpos/WebPosCheckoutView';
 
 type SplitReceiptPart = {
@@ -518,6 +527,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [giftCardPayOpen, setGiftCardPayOpen] = useState(false);
   const [giftCardPayDue, setGiftCardPayDue] = useState(0);
   const [giftPayInject, setGiftPayInject] = useState<AppliedPayment | null>(null);
+  const [attachedMembership, setAttachedMembership] = useState<AttachedMembership | null>(null);
+  const [membershipBusy, setMembershipBusy] = useState(false);
+  const [rfidCapture, setRfidCapture] = useState('');
+  const [payWithPoints, setPayWithPoints] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [splitQueue, setSplitQueue] = useState<SplitPart[]>([]);
   const [splitIndex, setSplitIndex] = useState(0);
@@ -945,6 +958,38 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   /** Payable cart totals for sidebar / pay buttons (includes bill discount). */
   const totals = splitQueue.length > 0 ? activeSale.totals : payableFullTotals;
+
+  const membershipCheckout = useMemo(() => {
+    if (
+      !attachedMembership?.membershipEnabled ||
+      attachedMembership.pointsBalance < REDEEM_THRESHOLD_POINTS
+    ) {
+      return {
+        canPayWithPoints: false,
+        pointsRedeemed: 0,
+        pointsDiscount: 0,
+      };
+    }
+    const payable = activeSale.totals.total;
+    const maxPoints = maxRedeemablePoints(payable, attachedMembership.pointsBalance);
+    const pointsRedeemed = payWithPoints ? maxPoints : 0;
+    const pointsDiscount =
+      pointsRedeemed > 0 ? computeCashDiscount(pointsRedeemed) : 0;
+    return {
+      canPayWithPoints: maxPoints > 0,
+      pointsRedeemed,
+      pointsDiscount,
+    };
+  }, [attachedMembership, activeSale.totals.total, payWithPoints]);
+
+  useEffect(() => {
+    if (posView !== 'checkout' || !attachedMembership?.membershipEnabled) return;
+    const payable = activeSale.totals.total;
+    const maxPts = maxRedeemablePoints(payable, attachedMembership.pointsBalance);
+    setPayWithPoints(
+      attachedMembership.pointsBalance >= REDEEM_THRESHOLD_POINTS && maxPts > 0
+    );
+  }, [posView, splitIndex, attachedMembership?.cardId, activeSale.totals.total]);
 
   const billDiscountLabel =
     billDiscount.percent > 0
@@ -2541,6 +2586,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setChannel(null);
     setFulfillmentWhen(null);
     setSelectedCustomer(null);
+    clearAttachedMembership();
     setProvisionalPrinted(false);
     savePersistedWebPosCarts({
       drafts: draftsMapToRecord(openCartDraftsRef.current),
@@ -3162,12 +3208,103 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
+  const clearAttachedMembership = () => {
+    setAttachedMembership(null);
+    setPayWithPoints(false);
+  };
+
+  const attachMembershipCard = (membership: AttachedMembership) => {
+    const displayName = membership.customerName?.trim();
+    if (displayName) {
+      setSelectedCustomer((prev) => {
+        if (prev?.id && membership.customerId && prev.id === membership.customerId) {
+          return prev;
+        }
+        if (membership.customerId) {
+          const parts = displayName.split(/\s+/);
+          return {
+            id: membership.customerId,
+            firstName: parts[0] || displayName,
+            lastName: parts.slice(1).join(' ') || '',
+            email: null,
+            phone: null,
+          } as WebPosCustomer;
+        }
+        return prev;
+      });
+    }
+    setAttachedMembership(membership);
+    toast.success(displayName || membership.cardNumber || t('webPosMembershipAttached'));
+  };
+
+  const lookupMembershipCard = async (rawCode: string) => {
+    const code = rawCode.trim();
+    if (!code || membershipBusy) return;
+    const normalized = normalizeRfidUid(code) || code;
+    setMembershipBusy(true);
+    try {
+      const res = await api.get(
+        `/gift-cards/lookup/${encodeURIComponent(normalized)}`,
+        { params: { mediaType: 'physical' } }
+      );
+      const c = res.data?.card;
+      if (!c?.id) throw new Error(t('webPosMembershipLookupFailed'));
+      const holder =
+        c.holderName ||
+        [c.customer?.firstName, c.customer?.lastName].filter(Boolean).join(' ') ||
+        null;
+      attachMembershipCard({
+        cardId: c.id,
+        cardNumber: c.cardNumber || normalized,
+        customerName: holder,
+        customerId: c.customerId || c.customer?.id || null,
+        pointsBalance: Math.max(0, Math.floor(Number(c.points ?? c.pointsBalance ?? 0))),
+        giftBalance: Number(c.balance ?? c.balanceAmount ?? 0),
+        membershipEnabled: !!c.membershipEnabled,
+      });
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || e.message || t('webPosMembershipLookupFailed'));
+    } finally {
+      setMembershipBusy(false);
+      setRfidCapture('');
+    }
+  };
+
+  const saleMerchandiseTotal = (lines: CartLine[]) => {
+    const merchLines = lines.filter(
+      (l) => !l.giftCard && !String(l.productId || '').startsWith('__gift_card_')
+    );
+    if (!merchLines.length) return 0;
+    return computeMerchandiseTotals(merchLines, taxRate, vatIncludedInPrice, roundingStep).total;
+  };
+
+  const applyLoyaltyAfterSale = async (
+    membership: AttachedMembership,
+    orderId: string,
+    paidSubtotal: number,
+    pointsRedeemed: number
+  ) => {
+    if (pointsRedeemed > 0) {
+      await api.post(`/gift-cards/${membership.cardId}/points/redeem`, {
+        points: pointsRedeemed,
+        orderId,
+      });
+    }
+    const earned = computeEarnPoints(paidSubtotal);
+    if (earned > 0) {
+      await api.post(`/gift-cards/${membership.cardId}/points/earn`, {
+        points: earned,
+        orderId,
+      });
+    }
+  };
+
   const completeMultiTenderCheckout = async (
     payments: AppliedPayment[],
     changeDue: number,
     tipAmount = 0
   ) => {
-    if (!activeSale.lines.length || activeSale.totals.total <= 0.001) {
+    if (!activeSale.lines.length) {
       toast.error(t('webPosNoItems'));
       setPosView('register');
       setPosTab('register');
@@ -3176,16 +3313,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     const tip = roundMoney2(Math.max(0, tipAmount));
     const part = splitQueue[splitIndex];
-    const partTotal = roundMoney2((part?.amount ?? totals.total) + tip);
+    const pointsDiscount = membershipCheckout.pointsDiscount;
+    const pointsRedeemed = membershipCheckout.pointsRedeemed;
+    const partTotal = roundMoney2(
+      Math.max(0, (part?.amount ?? totals.total) - pointsDiscount) + tip
+    );
     const primary = payments.find((p) => p.method === 'terminal')
       || payments.find((p) => p.method === 'card')
       || payments.find((p) => p.method === 'gift_card')
       || payments[0];
-    if (!primary) return;
-    const amountTendered = roundMoney2(payments.reduce((s, p) => s + p.amount, 0));
+    if (!primary && partTotal > 0.001) return;
+    const amountTendered = roundMoney2(
+      payments.length ? payments.reduce((s, p) => s + p.amount, 0) : 0
+    );
     const discExtras = checkoutBillDiscountExtras();
     const extras: CheckoutResult = {
-      method: (primary.method === 'gift_card' ? 'card' : primary.method) as CheckoutResult['method'],
+      method: ((primary?.method === 'gift_card' ? 'card' : primary?.method) ||
+        'cash') as CheckoutResult['method'],
       discountPercent: splitQueue.length > 0 ? 0 : discExtras.discountPercent,
       discountAmount: splitQueue.length > 0 ? 0 : discExtras.discountAmount,
       tipAmount: tip,
@@ -3194,8 +3338,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       amountTendered,
       changeDue: changeDue > 0 ? changeDue : null,
       tenders: payments.map((p) => ({ method: p.method, amount: roundMoney2(p.amount) })),
+      pointsRedeemed,
+      pointsDiscount,
     };
-    if (primary.method === 'terminal' && payments.length === 1) {
+    if (primary?.method === 'terminal' && payments.length === 1) {
       setCheckoutExtras(extras);
       await runTerminalPayment(undefined, extras);
       return;
@@ -3203,7 +3349,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setBusy(true);
     try {
       const saleMethod: PosPaymentMethod =
-        primary.method === 'pay_later'
+        !primary
+          ? 'cash'
+          : primary.method === 'pay_later'
           ? 'pay_later'
           : primary.method === 'gift_card'
             ? 'gift_card'
@@ -3677,6 +3825,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             ? `Rounding ${roundingAmount > 0 ? '+' : ''}${roundingAmount.toFixed(2)}`
             : '',
           tipAmount > 0 ? `Tip CHF ${tipAmount.toFixed(2)}` : '',
+          (extras?.pointsDiscount || 0) > 0
+            ? `Points −CHF ${(extras?.pointsDiscount || 0).toFixed(2)} (${extras?.pointsRedeemed || 0} pts)`
+            : '',
           extras?.amountTendered != null
             ? `Tendered CHF ${extras.amountTendered.toFixed(2)}`
             : '',
@@ -3739,7 +3890,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     opts?: { skipReceiptPrint?: boolean }
   ) => {
     const saleLines = activeSale.lines;
-    if (!saleLines.length || activeSale.totals.total <= 0.001) {
+    if (!saleLines.length) {
       toast.error(t('webPosNoItems'));
       setPosView('register');
       setPosTab('register');
@@ -3836,6 +3987,38 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     // Credit gift-card sell/reload lines after successful online persistence only
     if (!queuedOffline) {
       await creditGiftCardLines(saleLines, backendOrderId);
+      if (
+        attachedMembership?.membershipEnabled &&
+        backendOrderId &&
+        method !== 'pay_later'
+      ) {
+        const giftCardPaid = roundMoney2(
+          (extrasWithDisc?.tenders || [])
+            .filter((p) => p.method === 'gift_card')
+            .reduce((s, p) => s + p.amount, 0)
+        );
+        const merchandise = saleMerchandiseTotal(saleLines);
+        const billDisc = extrasWithDisc?.discountAmount || 0;
+        const payableMerch = roundMoney2(Math.max(0, merchandise - billDisc));
+        const paidSubtotal = roundMoney2(
+          Math.max(
+            0,
+            payableMerch -
+              (extrasWithDisc?.pointsDiscount || 0) -
+              giftCardPaid
+          )
+        );
+        try {
+          await applyLoyaltyAfterSale(
+            attachedMembership,
+            backendOrderId,
+            paidSubtotal,
+            extrasWithDisc?.pointsRedeemed || 0
+          );
+        } catch (e: any) {
+          toast.error(e.response?.data?.error || t('webPosLoyaltySyncFailed'));
+        }
+      }
     } else {
       toast(t('webPosSaleQueuedOffline'), { icon: '📴', duration: 4000 });
       void flushOfflineOutbox();
@@ -3986,6 +4169,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setCoursesBulkSent(false);
       setChannel(null);
       setMobileCartOpen(false);
+      clearAttachedMembership();
       clearPersistedWebPosCarts();
       terminalPaymentRef.current = null;
       setLastSplitReceipts([...splitReceiptsRef.current]);
@@ -4800,6 +4984,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }}
             busy={busy || paymentModalOpen}
             customerLabel={customerLabel}
+            membershipPointsBalance={
+              attachedMembership?.membershipEnabled
+                ? attachedMembership.pointsBalance
+                : null
+            }
+            canPayWithPoints={membershipCheckout.canPayWithPoints}
+            payWithPoints={payWithPoints}
+            onTogglePayWithPoints={setPayWithPoints}
+            pointsRedeemed={membershipCheckout.pointsRedeemed}
+            pointsDiscount={membershipCheckout.pointsDiscount}
             onCustomer={() => setCustomerOpen(true)}
             onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
             onSplit={
@@ -4985,6 +5179,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 tableLabel={tableLabel}
                 tabNumber={tabNumber}
                 customerLabel={customerLabel}
+                membershipName={
+                  attachedMembership
+                    ? attachedMembership.customerName ||
+                      attachedMembership.cardNumber ||
+                      null
+                    : null
+                }
+                membershipPointsBalance={
+                  attachedMembership?.membershipEnabled
+                    ? attachedMembership.pointsBalance
+                    : null
+                }
+                onClearMembership={
+                  attachedMembership ? clearAttachedMembership : undefined
+                }
                 fulfillmentLabel={fulfillmentWhen?.label || null}
                 fulfillmentIsLater={fulfillmentWhen?.mode === 'later'}
                 busy={busy || paymentModalOpen}
