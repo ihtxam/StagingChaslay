@@ -261,6 +261,8 @@ data class BusinessSettingsEntity(
     val vatIncludedInPrice: Boolean = false,
     val defaultServiceType: ServiceType = ServiceType.TAKEAWAY,
     val posMode: PosMode = PosMode.RESTAURANT,
+    /** Synced from merchant panel — show Tables tab / table picker in restaurant mode. */
+    val tablesEnabled: Boolean = true,
     /** Synced from merchant panel — multi-course firing on dine-in tables. */
     val coursesEnabled: Boolean = false,
     val receiptBaseUrl: String = "https://pay.chaslay.com/receipt",

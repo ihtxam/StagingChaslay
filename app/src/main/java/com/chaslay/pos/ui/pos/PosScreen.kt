@@ -187,6 +187,8 @@ fun PosScreen(
     }
 
     val isRestaurantMode = state.settings.posMode == PosMode.RESTAURANT
+    val tablesEnabled = state.settings.tablesEnabled
+    val isTableServiceEnabled = isRestaurantMode && tablesEnabled
     var showBarcodeScanner by remember { mutableStateOf(false) }
 
     BarcodeWedgeListener(
@@ -348,9 +350,9 @@ fun PosScreen(
     ) {
         var mainTab by remember { mutableStateOf(PosMainTab.REGISTER) }
 
-        LaunchedEffect(isRestaurantMode) {
+        LaunchedEffect(isRestaurantMode, tablesEnabled) {
             viewModel.ensureRetailMode()
-            if (!isRestaurantMode && mainTab == PosMainTab.TABLES) {
+            if (!isTableServiceEnabled && mainTab == PosMainTab.TABLES) {
                 mainTab = PosMainTab.REGISTER
             }
         }
@@ -358,7 +360,7 @@ fun PosScreen(
         val coursesEnabled = state.settings.coursesEnabled
         OdooPosNavBar(
             businessName = state.settings.businessName,
-            isRestaurantMode = isRestaurantMode,
+            isTableServiceEnabled = isTableServiceEnabled,
             selectedTab = mainTab,
             onTabSelected = { tab ->
                 when (tab) {
@@ -378,9 +380,9 @@ fun PosScreen(
             val orderingItemsForRail = state.cart.items.filter { !it.sentToKitchen }
             CartActionSidebar(
                 isRestaurantMode = isRestaurantMode,
-                isTableMode = isRestaurantMode && state.activeTableName != null,
+                isTableMode = isTableServiceEnabled && state.activeTableName != null,
                 canReleaseEmptyTable =
-                    isRestaurantMode &&
+                    isTableServiceEnabled &&
                     state.activeTableName != null &&
                     state.cart.isEmpty &&
                     !state.canCancelCartOrder,
@@ -475,6 +477,7 @@ fun PosScreen(
                         onPickup = viewModel::showPickupOrderDialog,
                         onDelivery = viewModel::showDeliveryOrderDialog,
                         isRestaurantMode = isRestaurantMode,
+                        tablesEnabled = tablesEnabled,
                         coursesEnabled = coursesEnabled,
                         giftCardsEnabled = state.giftCardsEnabled,
                         onMoveEntireTable = viewModel::startMoveEntireTable,
@@ -537,7 +540,7 @@ fun PosScreen(
         )
     }
 
-    if (state.showTablePicker && isRestaurantMode) {
+    if (state.showTablePicker && isTableServiceEnabled) {
         TablePickerDialog(
             tables = state.tables,
             currencySymbol = state.currencySymbol,
@@ -823,7 +826,7 @@ fun PosScreen(
 @Composable
 private fun OdooPosNavBar(
     businessName: String,
-    isRestaurantMode: Boolean,
+    isTableServiceEnabled: Boolean,
     selectedTab: PosMainTab,
     onTabSelected: (PosMainTab) -> Unit,
     userAccess: UserAccess,
@@ -844,7 +847,7 @@ private fun OdooPosNavBar(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.weight(1f)
         ) {
-            if (isRestaurantMode) {
+            if (isTableServiceEnabled) {
                 PosBottomTabChip(
                     label = stringResource(R.string.tables),
                     icon = Icons.Default.TableRestaurant,
@@ -1224,18 +1227,19 @@ private fun VectronOrderPanel(
     onPickup: () -> Unit,
     onDelivery: () -> Unit,
     isRestaurantMode: Boolean,
+    tablesEnabled: Boolean = true,
     coursesEnabled: Boolean = false,
     giftCardsEnabled: Boolean = false,
     onMoveEntireTable: () -> Unit = {},
     onMoveDishes: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val isTableMode = isRestaurantMode && activeTableName != null
+    val isTableMode = isRestaurantMode && tablesEnabled && activeTableName != null
     val showCourses = isTableMode && coursesEnabled
     val displayTotal = applyCashRounding(cart.displayTotal, roundingStep)
     val orderingItems = cart.items.filter { !it.sentToKitchen }
     val orderedItems = cart.items.filter { it.sentToKitchen }
-    val showCartTabs = isRestaurantMode && orderedItems.isNotEmpty()
+    val showCartTabs = isRestaurantMode && tablesEnabled && orderedItems.isNotEmpty()
     var cartTab by remember(activeTableName, orderedItems.size) {
         mutableStateOf(
             if (showCartTabs) TableCartTab.ORDERED else TableCartTab.ORDERING

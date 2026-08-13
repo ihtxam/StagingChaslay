@@ -36,6 +36,11 @@ export type PosCheckoutSettings = {
   postSuccessTarget: PostSuccessTarget;
   /** Restaurant (tables/kitchen) vs retail (register / barcode). */
   posMode: PosMode;
+  /**
+   * Restaurant only: show Tables tab + Set table in WebPOS / Android.
+   * Fast-food / counter service can turn this off and keep kitchen + takeaway.
+   */
+  tablesEnabled: boolean;
   /** Retail only: enable Takeaway channel (default off). */
   retailTakeawayEnabled: boolean;
   /** Retail only: enable Delivery channel (default off). */
@@ -62,6 +67,7 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   cartSide: "right",
   postSuccessTarget: "register",
   posMode: "restaurant",
+  tablesEnabled: true,
   retailTakeawayEnabled: false,
   retailDeliveryEnabled: false,
 };
@@ -129,6 +135,7 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
     cartSide,
     postSuccessTarget,
     posMode,
+    tablesEnabled: src.tablesEnabled !== false,
     retailTakeawayEnabled: src.retailTakeawayEnabled === true,
     retailDeliveryEnabled: src.retailDeliveryEnabled === true,
   };

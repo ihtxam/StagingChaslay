@@ -461,8 +461,11 @@ class PosViewModel @Inject constructor(
 
     private fun isRestaurantMode(): Boolean = cachedSettings.posMode == PosMode.RESTAURANT
 
+    private fun isTableServiceEnabled(): Boolean =
+        isRestaurantMode() && cachedSettings.tablesEnabled
+
     fun showTablePicker() {
-        if (!isRestaurantMode()) return
+        if (!isTableServiceEnabled()) return
         refreshTables()
         updateExtras { it.copy(showTablePicker = true) }
     }
@@ -472,7 +475,7 @@ class PosViewModel @Inject constructor(
     }
 
     fun openTable(tableId: Long) {
-        if (!isRestaurantMode()) return
+        if (!isTableServiceEnabled()) return
         viewModelScope.launch {
             persistTableOrderIfNeeded()
             val table = tableOrderRepository.getTable(tableId) ?: return@launch
@@ -612,7 +615,7 @@ class PosViewModel @Inject constructor(
     }
 
     fun startMoveEntireTable() {
-        if (!isRestaurantMode()) return
+        if (!isTableServiceEnabled()) return
         val cart = cartManager.snapshot()
         if (cart.tableId == null || cart.isEmpty) return
         refreshTables()
@@ -627,7 +630,7 @@ class PosViewModel @Inject constructor(
     }
 
     fun startMoveDishes() {
-        if (!isRestaurantMode()) return
+        if (!isTableServiceEnabled()) return
         val cart = cartManager.snapshot()
         if (cart.tableId == null || cart.isEmpty) return
         val preselected = _uiExtras.value.selectedCartItemId?.let { setOf(it) }.orEmpty()
@@ -2013,6 +2016,9 @@ class PosViewModel @Inject constructor(
             cfg.print?.let { print ->
                 merged = merged.copy(adyenReceiptDigitalOnly = print.adyenReceiptDigitalOnly)
             }
+            cfg.checkout?.let { checkout ->
+                merged = merged.copy(tablesEnabled = checkout.tablesEnabled)
+            }
             merged = merged.copy(giftCardsEnabled = cfg.methods?.giftCard == true)
             if (merged != current) {
                 settingsRepository.saveSettings(merged)
@@ -2299,7 +2305,7 @@ class PosViewModel @Inject constructor(
         }
         when (cart.serviceType) {
             ServiceType.TAKEAWAY -> {
-                if (isRestaurantMode()) {
+                if (isTableServiceEnabled()) {
                     refreshTables()
                     val pendingCart = cart.takeIf { !it.isEmpty }?.copy(
                         items = cart.items.map { item -> item.copy(sentToKitchen = false) }

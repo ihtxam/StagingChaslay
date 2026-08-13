@@ -174,7 +174,9 @@ data class SyncCheckoutDto(
     val quickCashDenominations: List<Double> = listOf(10.0, 20.0, 50.0, 100.0),
     val splitBillsEnabled: Boolean = true,
     val maxSplitParts: Int = 8,
-    val vatIncludedInPrice: Boolean = false
+    val vatIncludedInPrice: Boolean = false,
+    /** Restaurant only: hide table picker / Tables tab when false (fast-food mode). */
+    val tablesEnabled: Boolean = true
 )
 
 data class SyncScaleDto(
