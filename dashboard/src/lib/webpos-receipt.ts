@@ -479,7 +479,18 @@ function formatChannelWhen(
 }
 
 function kitchenItemCount(items: WebPosReceiptItem[]): number {
-  return items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+  return items.reduce((s, i) => {
+    if (i.weightKg != null && i.weightKg > 0) return s + 1;
+    return s + (Number(i.quantity) || 0);
+  }, 0);
+}
+
+function formatKitchenQtyPrefix(item: KitchenTicketItem): string {
+  const weightKg = item.weightKg;
+  if (weightKg != null && weightKg > 0) {
+    return `${weightKg.toFixed(3)} kg`;
+  }
+  return `${Number(item.quantity) || 0}x`;
 }
 
 type KitchenLine = {
@@ -533,7 +544,7 @@ function formatKitchenItemLines(
   cancelled: boolean,
   forEscPos: boolean
 ): KitchenLine[] {
-  const qty = `${Number(item.quantity) || 0}x`;
+  const qty = formatKitchenQtyPrefix(item);
   const fullName = String(item.name || '').replace(/\s+/g, ' ').trim();
   const paren = fullName.match(/^(.*?)\s*\((.*)\)\s*$/);
   const product = paren ? paren[1].trim() : fullName;

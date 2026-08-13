@@ -634,7 +634,7 @@ class BluetoothPrinterService @Inject constructor(
         }
 
         sb.appendLine(center(sepEq, lineWidth))
-        val itemCount = items.sumOf { it.quantity }
+        val itemCount = items.sumOf { if (it.isWeighed) 1 else it.quantity }
         val numsLabel = "($itemCount)"
         sb.appendLine(
             "${labels.itemsHeader}${" ".repeat((lineWidth - labels.itemsHeader.length - numsLabel.length).coerceAtLeast(1))}$numsLabel"
@@ -1554,17 +1554,26 @@ class BluetoothPrinterService @Inject constructor(
         }
     }
 
+    private fun formatKitchenItemQtyLabel(item: TableOrderItemEntity): String {
+        val label = buildString {
+            append(item.productName)
+            if (item.variantName != null) append(" (${item.variantName})")
+        }
+        return if (item.isWeighed) {
+            val kg = item.quantity / 1000.0
+            String.format(Locale.US, "%.3f kg %s", kg, label)
+        } else {
+            "${item.quantity}x $label"
+        }
+    }
+
     private fun appendKitchenItemBlock(
         sb: StringBuilder,
         item: TableOrderItemEntity,
         settings: BusinessSettingsEntity,
         lineWidth: Int
     ) {
-        val label = buildString {
-            append(item.productName)
-            if (item.variantName != null) append(" (${item.variantName})")
-        }
-        val line = "${item.quantity}x $label"
+        val line = formatKitchenItemQtyLabel(item)
         sb.append(escAlignLeft())
         val itemScale = effectiveKitchenItemScale(settings)
         if (itemScale > 1) {

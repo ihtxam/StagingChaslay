@@ -3683,6 +3683,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         quantity: l.quantity,
         unitPrice: l.unitPrice,
         lineTotal: l.lineTotal,
+        weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
         productId: l.productId,
         categoryId: l.categoryId,
         courseNumber: l.courseNumber,
