@@ -185,7 +185,20 @@ export type WebPosReceipt = {
   adyenCashierReceipt?: AdyenTerminalReceipt | null;
   /** When false, skip Adyen customer receipt block on thermal (digital-only mode). */
   printAdyenReceiptOnTicket?: boolean;
+  /** Provisional / preview receipt — no payment block. */
+  isProvisional?: boolean;
 };
+
+/** Prefer merchant print settings over per-printer width for kitchen tickets. */
+export function resolveKitchenPaperWidthMm(
+  printSettings?: PosPrintSettingsClient | null,
+  printerWidthMm?: 58 | 80 | null
+): 58 | 80 {
+  if (printSettings?.paperWidthMm === 58 || printSettings?.paperWidthMm === 80) {
+    return printSettings.paperWidthMm;
+  }
+  return printerWidthMm === 58 ? 58 : 80;
+}
 
 /** Whether to append Adyen customer receipt on the order thermal ticket. */
 export function shouldPrintAdyenReceiptOnTicket(
@@ -305,6 +318,9 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   const thin = '-'.repeat(width);
 
   let r = '';
+  if (tx.isProvisional) {
+    r += centerLine('PROVISIONAL', width) + '\n';
+  }
   r += sep + '\n';
   if (tx.header?.trim()) {
     for (const line of tx.header.trim().split(/\r?\n/)) r += line.slice(0, width) + '\n';
@@ -370,39 +386,41 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   r += sep + '\n';
   r += padLine(`${L.total}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
   r += sep + '\n';
-  const tenders =
-    tx.paymentLines && tx.paymentLines.length > 0
-      ? tx.paymentLines
-      : [{ method: tx.paymentMethod, amount: tx.total }];
-  if (tenders.length === 1) {
-    r += `${L.payment}: ${paymentLabel(L, tenders[0]!.method)}\n`;
-  } else {
-    r += `${L.payment}:\n`;
-    for (const p of tenders) {
+  if (!tx.isProvisional) {
+    const tenders =
+      tx.paymentLines && tx.paymentLines.length > 0
+        ? tx.paymentLines
+        : [{ method: tx.paymentMethod, amount: tx.total }];
+    if (tenders.length === 1) {
+      r += `${L.payment}: ${paymentLabel(L, tenders[0]!.method)}\n`;
+    } else {
+      r += `${L.payment}:\n`;
+      for (const p of tenders) {
+        r +=
+          padLine(
+            `  ${paymentLabel(L, p.method)}`,
+            `CHF ${roundMoney2(p.amount).toFixed(2)}`,
+            width
+          ) + '\n';
+      }
+    }
+    r += padLine(`${L.paid}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
+    if (
+      tx.amountTendered != null &&
+      tx.amountTendered > 0 &&
+      roundMoney2(tx.amountTendered) !== roundMoney2(tx.total)
+    ) {
       r +=
         padLine(
-          `  ${paymentLabel(L, p.method)}`,
-          `CHF ${roundMoney2(p.amount).toFixed(2)}`,
+          `${L.tendered}:`,
+          `CHF ${roundMoney2(tx.amountTendered).toFixed(2)}`,
           width
         ) + '\n';
     }
-  }
-  r += padLine(`${L.paid}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
-  if (
-    tx.amountTendered != null &&
-    tx.amountTendered > 0 &&
-    roundMoney2(tx.amountTendered) !== roundMoney2(tx.total)
-  ) {
-    r +=
-      padLine(
-        `${L.tendered}:`,
-        `CHF ${roundMoney2(tx.amountTendered).toFixed(2)}`,
-        width
-      ) + '\n';
-  }
-  if (tx.changeDue != null && tx.changeDue > 0) {
-    r +=
-      padLine(`${L.change}:`, `CHF ${roundMoney2(tx.changeDue).toFixed(2)}`, width) + '\n';
+    if (tx.changeDue != null && tx.changeDue > 0) {
+      r +=
+        padLine(`${L.change}:`, `CHF ${roundMoney2(tx.changeDue).toFixed(2)}`, width) + '\n';
+    }
   }
   // VAT calculations below payment section
   const vatSection = formatVatSection(tx, L, width);
@@ -452,9 +470,23 @@ export type KitchenTicketOpts = {
   /** Print COURSE N headers when items have courseNumber */
   groupByCourse?: boolean;
   tableLabel?: string | null;
+  /** Bar tab number (shown on ticket after tab is assigned). */
+  tabNumber?: string | null;
   /** Void ticket: title CANCELLED + strikethrough item lines */
   cancelled?: boolean;
   cancelReason?: string | null;
+};
+
+export type KitchenMessageTicketOpts = {
+  message: string;
+  language?: string;
+  paperWidthMm?: 58 | 80;
+  orderNumber?: string | null;
+  tableLabel?: string | null;
+  tabNumber?: string | null;
+  userName?: string | null;
+  orderedAt?: number;
+  orderSource?: KitchenOrderSource | string | null;
 };
 
 /** Unicode combining long stroke for text/preview strikethrough. */
@@ -504,7 +536,7 @@ type KitchenLine = {
 
 /** Columns available when GS ! enlarges text (scale 3 = double width). */
 function kitchenColsForScale(paperWidthMm: number | undefined, scale: 1 | 2 | 3): number {
-  const base = lineWidthForPaper(paperWidthMm);
+  const base = lineWidthForPaper(paperWidthMm ?? 80);
   return scale === 3 ? Math.max(16, Math.floor(base / 2)) : base;
 }
 
@@ -638,6 +670,11 @@ function buildKitchenTicketLines(
 
   if (opts.tableLabel) {
     for (const w of wrapKitchenWords(`TABLE ${opts.tableLabel}`, headerWidth)) {
+      lines.push({ kind: 'header', text: w });
+    }
+  }
+  if (opts.tabNumber) {
+    for (const w of wrapKitchenWords(`TAB ${opts.tabNumber}`, headerWidth)) {
       lines.push({ kind: 'header', text: w });
     }
   }
@@ -777,6 +814,115 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escUnderline(false),
         body(line.text)
       );
+      feedLine(line.blankAfter);
+    }
+  }
+
+  parts.push(
+    escAlign(0),
+    escKitchenSize(1),
+    escBold(false),
+    escUnderline(false),
+    new Uint8Array([0x1b, 0x64, 0x04]),
+    new Uint8Array([0x1d, 0x56, 0x41, 0x10])
+  );
+  return concatBytes(...parts);
+}
+
+function buildKitchenMessageTicketLines(
+  opts: KitchenMessageTicketOpts
+): { width: number; L: ReturnType<typeof receiptLabels>; lines: KitchenLine[] } {
+  const paperWidthMm = opts.paperWidthMm ?? 80;
+  const width = lineWidthForPaper(paperWidthMm);
+  const L = receiptLabels(opts.language);
+  const thin = '-'.repeat(Math.min(width, 32));
+  const orderedAt = new Date(opts.orderedAt || Date.now());
+  const timeStr = orderedAt.toLocaleTimeString('de-CH', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Zurich',
+  });
+  const user = (opts.userName || '').trim() || '-';
+  const source = String(opts.orderSource || 'WEBPOS').trim().toUpperCase() || 'WEBPOS';
+  const ticketNo = (opts.orderNumber || '-').trim();
+
+  const lines: KitchenLine[] = [
+    { kind: 'center', text: 'KITCHEN MESSAGE' },
+  ];
+  if (ticketNo && ticketNo !== '-') {
+    lines.push({ kind: 'center', text: ticketNo });
+  }
+  lines.push({ kind: 'normal', text: thin });
+  if (opts.tableLabel) {
+    for (const w of wrapKitchenWords(`TABLE ${opts.tableLabel}`, width)) {
+      lines.push({ kind: 'header', text: w });
+    }
+  }
+  if (opts.tabNumber) {
+    for (const w of wrapKitchenWords(`TAB ${opts.tabNumber}`, width)) {
+      lines.push({ kind: 'header', text: w });
+    }
+  }
+  const msg = String(opts.message || '').replace(/\s+/g, ' ').trim();
+  for (const w of wrapKitchenWords(msg, width)) {
+    lines.push({ kind: 'item', text: w, blankAfter: 0 });
+  }
+  lines.push({ kind: 'normal', text: thin });
+  lines.push({
+    kind: 'normal',
+    text: `${user}, ${timeStr} | ${source}`,
+    blankAfter: 3,
+  });
+  return { width, L, lines };
+}
+
+/** Plain-text kitchen message ticket (no qty prefix). */
+export function generateKitchenMessageTicketText(opts: KitchenMessageTicketOpts): string {
+  return buildKitchenMessageTicketLines(opts)
+    .lines.map((l) => `${l.text}\n${'\n'.repeat(l.blankAfter || 0)}`)
+    .join('');
+}
+
+/** ESC/POS kitchen message ticket — message body only, no "1x" prefix. */
+export function generateKitchenMessageTicketEscPos(opts: KitchenMessageTicketOpts): Uint8Array {
+  const headerScale = 2 as 1 | 2 | 3;
+  const itemScale = 2 as 1 | 2 | 3;
+  const { lines } = buildKitchenMessageTicketLines(opts);
+  const parts: Uint8Array[] = [new Uint8Array([0x1b, 0x40]), ESC_CODEPAGE_CP850];
+  const lf = new Uint8Array([0x0a]);
+  const feedLine = (blankAfter = 0) => {
+    parts.push(lf);
+    for (let i = 0; i < blankAfter; i++) parts.push(lf);
+  };
+  const resetSize = () => {
+    parts.push(escKitchenSize(1), escBold(false), escUnderline(false), escAlign(0));
+  };
+  const body = (text: string) =>
+    escposCp850Encode(String(text || '').replace(/[\r\n]+/g, ' ').trimEnd());
+
+  for (const line of lines) {
+    if (line.kind === 'center') {
+      parts.push(
+        escAlign(1),
+        escKitchenSize(headerScale),
+        escBold(true),
+        escUnderline(false),
+        body(line.text)
+      );
+      feedLine(line.blankAfter);
+      resetSize();
+    } else if (line.kind === 'header' || line.kind === 'item') {
+      parts.push(
+        escAlign(0),
+        escKitchenSize(itemScale),
+        escBold(true),
+        escUnderline(false),
+        body(line.text)
+      );
+      feedLine(line.blankAfter);
+      resetSize();
+    } else {
+      parts.push(escAlign(0), escKitchenSize(1), escBold(false), escUnderline(false), body(line.text));
       feedLine(line.blankAfter);
     }
   }
@@ -1151,6 +1297,7 @@ export function printersForRole(
   settings: PosPrintSettingsClient | null | undefined,
   role: 'receipt' | 'kitchen' | 'eod'
 ): Array<{ name: string; paperWidthMm: 58 | 80 }> {
+  const globalPaper: 58 | 80 = settings?.paperWidthMm === 58 ? 58 : 80;
   const list = (settings?.printers || []).filter((p) => p.enabled !== false && p.name);
   const matched = list.filter((p) => {
     if (role === 'receipt') return !!p.printReceipts;
@@ -1160,7 +1307,7 @@ export function printersForRole(
   if (matched.length) {
     return matched.map((p) => ({
       name: p.name,
-      paperWidthMm: (p.paperWidthMm === 58 ? 58 : 80) as 58 | 80,
+      paperWidthMm: (p.paperWidthMm === 58 ? 58 : globalPaper) as 58 | 80,
     }));
   }
   // Fallback: default paper width, caller supplies Windows printer name from localStorage

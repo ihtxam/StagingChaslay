@@ -340,7 +340,7 @@ class PosViewModel @Inject constructor(
             showCartCancelDialog = extras.showCartCancelDialog,
             cartCancelReasons = extras.cartCancelReasons,
             showAttachCustomerDialog = extras.showAttachCustomerDialog,
-            canCancelCartOrder = extras.orderCommittedForCancel,
+            canCancelCartOrder = !cart.isEmpty || extras.orderCommittedForCancel,
             showWeighedProductDialog = extras.showWeighedProductDialog,
             scaleReading = extras.scaleReading,
             showGuestCountDialog = extras.showGuestCountDialog,
@@ -2324,9 +2324,19 @@ class PosViewModel @Inject constructor(
     }
 
     fun showCartCancelDialog() {
-        if (cartManager.snapshot().isEmpty) return
-        if (!_uiExtras.value.orderCommittedForCancel) {
-            updateExtras { it.copy(snackbarMessage = "Send to kitchen or print a receipt before cancelling") }
+        val cart = cartManager.snapshot()
+        if (cart.isEmpty) {
+            if (!isRestaurantMode()) {
+                cartManager.resetForNewWalkInOrder()
+                updateExtras {
+                    it.copy(
+                        snackbarMessage = "Order cleared",
+                        orderCommittedForCancel = false,
+                        receiptPrintedForOrder = false,
+                        kitchenSentToPrinter = false
+                    )
+                }
+            }
             return
         }
         viewModelScope.launch {
@@ -2342,11 +2352,8 @@ class PosViewModel @Inject constructor(
 
     fun confirmCancelCartOrder(reason: String) {
         viewModelScope.launch {
-            if (!_uiExtras.value.orderCommittedForCancel) {
-                showError("Cancel", "Send to kitchen or print a receipt before cancelling")
-                return@launch
-            }
             val cart = cartManager.snapshot()
+            if (cart.isEmpty) return@launch
             val userId = sessionManager.currentUserId.first() ?: 0L
             val userName = sessionManager.currentUserName.first() ?: "Staff"
             transactionRepository.recordCancelledOrder(cart, userId, userName, reason)

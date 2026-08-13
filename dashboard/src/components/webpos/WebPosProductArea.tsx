@@ -206,7 +206,7 @@ export default function WebPosProductArea({
         )}
       </div>
 
-      {(expressCheckout && onExpressPay) || onOpenCheckout ? (
+      {(expressCheckout && onExpressPay) ? (
         <div className="hidden shrink-0 border-t border-stone-200 bg-white p-3 lg:block">
           <div className="flex items-stretch gap-2">
             <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
@@ -244,17 +244,6 @@ export default function WebPosProductArea({
                 </button>
               ) : null}
             </div>
-            {onOpenCheckout ? (
-              <button
-                type="button"
-                disabled={checkoutDisabled}
-                onClick={onOpenCheckout}
-                className="inline-flex w-16 shrink-0 items-center justify-center rounded-xl border-2 border-stone-300 bg-stone-50 text-stone-800 hover:bg-stone-100 disabled:opacity-40"
-                title={t('webPosOpenCheckout')}
-              >
-                <ArrowRight size={28} strokeWidth={2.5} />
-              </button>
-            ) : null}
           </div>
         </div>
       ) : null}

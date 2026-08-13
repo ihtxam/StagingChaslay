@@ -482,6 +482,10 @@ fun PosScreen(
                         giftCardsEnabled = state.giftCardsEnabled,
                         onMoveEntireTable = viewModel::startMoveEntireTable,
                         onMoveDishes = viewModel::startMoveDishes,
+                        onSendToKitchen = viewModel::sendCurrentOrderToKitchen,
+                        onSetTab = viewModel::showPickupOrderDialog,
+                        onPayment = { viewModel.openCheckout() },
+                        canSendKitchen = orderingItemsForRail.isNotEmpty(),
                         modifier = Modifier
                             .width(304.dp)
                             .fillMaxHeight()
@@ -1232,6 +1236,10 @@ private fun VectronOrderPanel(
     giftCardsEnabled: Boolean = false,
     onMoveEntireTable: () -> Unit = {},
     onMoveDishes: () -> Unit = {},
+    onSendToKitchen: () -> Unit = {},
+    onSetTab: () -> Unit = {},
+    onPayment: () -> Unit = {},
+    canSendKitchen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isTableMode = isRestaurantMode && tablesEnabled && activeTableName != null
@@ -1413,12 +1421,20 @@ private fun VectronOrderPanel(
         ) {
             if (cartRows.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    val emptyText = when {
-                        showCartTabs && cartTab == TableCartTab.ORDERED -> stringResource(R.string.cart_tab_ordered)
-                        showCartTabs -> stringResource(R.string.cart_empty)
-                        else -> stringResource(R.string.cart_empty)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val emptyText = when {
+                            showCartTabs && cartTab == TableCartTab.ORDERED -> stringResource(R.string.cart_tab_ordered)
+                            showCartTabs -> stringResource(R.string.cart_empty)
+                            else -> stringResource(R.string.cart_empty)
+                        }
+                        Text(emptyText, color = Color(0xFF888888), fontSize = 13.sp)
+                        if (!isRestaurantMode && canCancelOrder) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(onClick = onCancelOrder) {
+                                Text(stringResource(R.string.cancel_order), color = Color(0xFFC0392B))
+                            }
+                        }
                     }
-                    Text(emptyText, color = Color(0xFF888888), fontSize = 13.sp)
                 }
             } else {
                 LazyColumn(
@@ -1488,6 +1504,61 @@ private fun VectronOrderPanel(
             onClearAll = onKeypadClearAll,
             onEnter = onKeypadEnter
         )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (isRestaurantMode && !tablesEnabled) {
+                Button(
+                    onClick = onSetTab,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3949AB))
+                ) {
+                    Text(
+                        cart.orderNumber?.let { "#$it" } ?: stringResource(R.string.pickup_order),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else if (isRestaurantMode) {
+                Button(
+                    onClick = onSetTab,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3949AB))
+                ) {
+                    Text(
+                        cart.orderNumber?.let { "#$it" } ?: stringResource(R.string.pickup_order),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
+            if (isRestaurantMode) {
+                Button(
+                    onClick = onSendToKitchen,
+                    enabled = canSendKitchen,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = VectronColors.CashGreen)
+                ) {
+                    Text(stringResource(R.string.send_to_kitchen), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
+            Button(
+                onClick = onPayment,
+                enabled = cart.items.isNotEmpty(),
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBDBDBD))
+            ) {
+                Text(stringResource(R.string.payment), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
+            }
+        }
         }
     }
 }
@@ -2446,23 +2517,25 @@ private fun VectronProductGrid(
                         Text(stringResource(R.string.payment_by_card), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
                 }
-                Button(
-                    onClick = onOpenCheckout,
-                    enabled = paymentEnabled,
-                    modifier = Modifier.width(64.dp).height(64.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = VectronColors.Header,
-                        disabledContainerColor = VectronColors.KeypadButton
-                    ),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = stringResource(R.string.open_checkout),
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
+                if (expressEnabled) {
+                    Button(
+                        onClick = onOpenCheckout,
+                        enabled = paymentEnabled,
+                        modifier = Modifier.width(64.dp).height(64.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = VectronColors.Header,
+                            disabledContainerColor = VectronColors.KeypadButton
+                        ),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = stringResource(R.string.open_checkout),
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
                 }
             }
         }

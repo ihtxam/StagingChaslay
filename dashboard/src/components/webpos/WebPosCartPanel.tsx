@@ -6,7 +6,6 @@ import {
   Printer,
   UtensilsCrossed,
   User,
-  Wallet,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
@@ -323,7 +322,7 @@ export default function WebPosCartPanel({
                     ? t('delivery')
                     : channel === 'takeaway'
                       ? t('takeaway')
-                      : t('webPosOrderType')}
+                      : t('takeaway')}
               </span>
             )}
           </div>
@@ -422,20 +421,6 @@ export default function WebPosCartPanel({
                   {t('webPosKitchenMessage')}
                 </button>
               ) : null}
-              {kitchenEnabled && !tablesEnabled ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
-                  disabled={busy}
-                  onClick={() => {
-                    setMoreOpen(false);
-                    onSetTab();
-                  }}
-                >
-                  {tabNumber ? `${t('webPosTab')} #${tabNumber}` : t('webPosSetTab')}
-                </button>
-              ) : null}
               {onHoldOrder ? (
                 <button
                   type="button"
@@ -476,21 +461,6 @@ export default function WebPosCartPanel({
                   }}
                 >
                   {t('webPosMoveDishTo')}
-                </button>
-              ) : null}
-              {onCustomAmount ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
-                  disabled={busy}
-                  onClick={() => {
-                    setMoreOpen(false);
-                    onCustomAmount();
-                  }}
-                >
-                  <Wallet size={14} className="shrink-0 text-stone-500" />
-                  {t('webPosCustomAmount')}
                 </button>
               ) : null}
               {onBillDiscount ? (
@@ -657,7 +627,19 @@ export default function WebPosCartPanel({
       {/* Cart lines take remaining height; keypad + actions stay docked below */}
       <div className="webpos-cart-lines min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
         {!hasItems ? (
-          <p className="py-8 text-center text-sm text-stone-400">{t('webPosTapProducts')}</p>
+          <div className="py-8 text-center">
+            <p className="text-sm text-stone-400">{t('webPosTapProducts')}</p>
+            {!kitchenEnabled && onCancelOrder ? (
+              <button
+                type="button"
+                disabled={busy || !canCancelOrder}
+                onClick={onCancelOrder}
+                className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-40"
+              >
+                {t('webPosCancelOrder')}
+              </button>
+            ) : null}
+          </div>
         ) : visibleCart.length === 0 ? (
           <p className="py-8 text-center text-sm text-stone-400">
             {cartTab === 'ordered' ? t('webPosCartOrderedEmpty') : t('webPosCartOrderingEmpty')}
@@ -850,9 +832,7 @@ export default function WebPosCartPanel({
 
         <div
           className={`grid gap-1.5 border-t border-stone-200 bg-white p-2 ${
-            isPage && onBack
-              ? 'grid-cols-[auto_1fr_1fr_1.4fr]'
-              : 'grid-cols-[1fr_1fr_1.4fr]'
+            isPage && onBack ? 'grid-cols-[auto_1fr_1fr_1fr]' : 'grid-cols-3'
           }`}
         >
           {isPage && onBack ? (
@@ -875,42 +855,57 @@ export default function WebPosCartPanel({
             >
               {t('webPosNew')}
             </button>
-          ) : !kitchenEnabled ? (
-            <button
-              type="button"
-              disabled={!hasItems || busy}
-              onClick={() => (onHoldOrder ? onHoldOrder() : onNewOrder())}
-              className="col-span-2 rounded-lg bg-violet-700 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
-            >
-              {onHoldOrder ? t('webPosHoldOrder') : t('webPosNew')}
-            </button>
-          ) : effectiveShowSend || hideTab || orderSent || !tablesEnabled ? (
-            <button
-              type="button"
-              disabled={!canSendNow || busy}
-              onClick={onSend}
-              className="col-span-2 rounded-lg bg-violet-700 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
-            >
-              {sendLabel}
-            </button>
           ) : (
             <>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onSetTable}
-                className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
-              >
-                {tableLabel || t('webPosSetTable')}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onSetTab}
-                className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
-              >
-                {tabNumber ? `#${tabNumber}` : t('webPosSetTab')}
-              </button>
+              {kitchenEnabled && !tablesEnabled ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={onSetTab}
+                  className="rounded-lg bg-indigo-700 py-3 text-xs font-bold text-white hover:bg-indigo-800 disabled:opacity-40"
+                >
+                  {tabNumber ? `#${tabNumber}` : t('webPosSetTab')}
+                </button>
+              ) : kitchenEnabled && tablesEnabled && !hideTab && !effectiveShowSend && !orderSent ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={onSetTable}
+                  className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+                >
+                  {tableLabel || t('webPosSetTable')}
+                </button>
+              ) : !kitchenEnabled ? (
+                <button
+                  type="button"
+                  disabled={!hasItems || busy}
+                  onClick={() => (onHoldOrder ? onHoldOrder() : onNewOrder())}
+                  className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+                >
+                  {onHoldOrder ? t('webPosHoldOrder') : t('webPosNew')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={onSetTab}
+                  className="rounded-lg bg-indigo-700 py-3 text-xs font-bold text-white hover:bg-indigo-800 disabled:opacity-40"
+                >
+                  {tabNumber ? `#${tabNumber}` : t('webPosSetTab')}
+                </button>
+              )}
+              {kitchenEnabled ? (
+                <button
+                  type="button"
+                  disabled={!canSendNow || busy}
+                  onClick={onSend}
+                  className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+                >
+                  {sendLabel}
+                </button>
+              ) : (
+                <div />
+              )}
             </>
           )}
           <button

@@ -1505,6 +1505,9 @@ const en: Dict = {
   webPosTableReleased: 'Table released',
   webPosProvisionalPrinted: 'Provisional receipt sent to printer',
   webPosKitchenMessageSent: 'Kitchen message sent',
+  webPosNewOrderConfirmTitle: 'Start a new order?',
+  webPosNewOrderConfirmBody:
+    'The current cart will be saved to Orders before clearing. You can reopen it from the orders list.',
   webPosPayment: 'Payment',
   webPosShiftStartTitle: 'Start shift?',
   webPosShiftStartAsk: 'An open cash shift is required before selling. Start a shift now?',

@@ -417,7 +417,8 @@ class BluetoothPrinterService @Inject constructor(
             .filter { it.isEnabled && it.printKitchenTickets && it.address.isNotBlank() }
         if (kitchenPrinters.isEmpty()) {
             return@withContext printKitchenTicket(
-                settings, tableName, serviceType, round, items, isFollowUp, message, categories, products, meta, 80
+                settings, tableName, serviceType, round, items, isFollowUp, message, categories, products, meta,
+                defaultKitchenPaperWidthMm()
             )
         }
         var last: Result<Unit> = Result.success(Unit)
@@ -581,9 +582,15 @@ class BluetoothPrinterService @Inject constructor(
             sb.appendLine(escBold(true))
             sb.appendLine(center(labels.kitchenMessageTitle, lineWidth))
             sb.appendLine(escBold(false))
+            meta.orderNumber?.trim()?.takeIf { it.isNotBlank() }?.let {
+                sb.appendLine(center("#$it", lineWidth))
+            }
             if (tableName.isNotBlank()) sb.appendLine(center(tableName, lineWidth))
             sb.appendLine(center(sepDash, lineWidth))
-            sb.appendLine(message.orEmpty())
+            message.orEmpty().lines().forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.isNotBlank()) sb.appendLine(trimmed)
+            }
             appendFooter(sb, settings.kitchenTicketFooter, lineWidth)
             sb.appendLine("\n\n\n")
             return encodePayload(sb.toString())
@@ -712,7 +719,7 @@ class BluetoothPrinterService @Inject constructor(
         val vatRows = ReceiptVatCalculator.vatRowsFromCartItems(cart.items, discountFactor)
 
         if (context.isProvisional) {
-            appendCenteredLines(sb, labels.provisionalInvoice, lineWidth, bold = true)
+            appendCenteredLines(sb, "PROVISIONAL", lineWidth, bold = true)
             sb.appendLine(center(sepEq, lineWidth))
         }
         appendReceiptStoreBlock(sb, settings, lineWidth)
@@ -785,10 +792,12 @@ class BluetoothPrinterService @Inject constructor(
 
         appendLoyaltyReceiptLines(sb, context.loyaltyPointsEarned, context.loyaltyPointsBalance, lineWidth)
 
-        context.paymentMethod?.let { method ->
-            sb.appendLine(leftRight(labels.payment, labels.paymentMethod(method), lineWidth))
-            context.amountPaid?.let { paid ->
-                sb.appendLine(leftRight(labels.paid, twoDp(paid), lineWidth))
+        if (!context.isProvisional) {
+            context.paymentMethod?.let { method ->
+                sb.appendLine(leftRight(labels.payment, labels.paymentMethod(method), lineWidth))
+                context.amountPaid?.let { paid ->
+                    sb.appendLine(leftRight(labels.paid, twoDp(paid), lineWidth))
+                }
             }
         }
 
@@ -1630,6 +1639,13 @@ class BluetoothPrinterService @Inject constructor(
 
     private fun lineWidthFor(paperWidthMm: Int): Int =
         if (paperWidthMm >= 80) LINE_WIDTH_80 else LINE_WIDTH_58
+
+    /** Prefer widest configured printer (80mm default) for legacy kitchen routing. */
+    private fun defaultKitchenPaperWidthMm(): Int {
+        val printers = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
+            .filter { it.isEnabled && it.address.isNotBlank() }
+        return printers.maxOfOrNull { it.paperWidthMm } ?: 80
+    }
 
     private fun center(text: String, width: Int = LINE_WIDTH_80): String {
         if (text.length >= width) return text

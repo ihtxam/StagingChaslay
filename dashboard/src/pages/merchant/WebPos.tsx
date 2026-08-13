@@ -10,6 +10,9 @@ import {
   filterKitchenItems,
   generateKitchenTicketEscPos,
   generateKitchenTicketText,
+  generateKitchenMessageTicketEscPos,
+  generateKitchenMessageTicketText,
+  resolveKitchenPaperWidthMm,
   generateWebPosReceiptText,
   logoUrlToEscPos,
   encodeOrderMetaNotes,
@@ -448,6 +451,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
   const [billDiscountOpen, setBillDiscountOpen] = useState(false);
   const [setTabOpen, setSetTabOpen] = useState(false);
+  const [newOrderConfirmOpen, setNewOrderConfirmOpen] = useState(false);
+  const resumedHeldIdRef = useRef<string | null>(null);
   const [postSuccessTarget, setPostSuccessTarget] = useState<'register' | 'tables'>(() => {
     const stored = localStorage.getItem('manupos_webpos_post_success');
     return stored === 'tables' || stored === 'register' ? stored : 'register';
@@ -2190,10 +2195,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     // Print agent can take several seconds; never block the Send button on it.
     // printKitchenForCart captures ticket fields synchronously before its first await.
     void printKitchenForCart(lines, effectiveChannel, {
-      orderNumber: ticket.display,
-      when: fulfillmentWhen,
-      courseOnly,
-    }).catch((e: any) => {
+        orderNumber: kitchenOrderNumber({ ticket }),
+        when: fulfillmentWhen,
+        courseOnly,
+      }).catch((e: any) => {
       toast.error(e?.message || t('webPosKitchenPrintFailed'));
     });
   };
@@ -2410,6 +2415,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTicketOrderNumber(null);
   }, []);
 
+  /** Kitchen shout number — after tab assignment use tab #, not a stale pre-tab ticket. */
+  const kitchenOrderNumber = useCallback(
+    (opts?: { ticket?: { display: string; orderNumber: string } }) => {
+      if (tabNumber) return `#${tabNumber}`;
+      const ticket = opts?.ticket ?? (ticketDisplay ? { display: ticketDisplay, orderNumber: ticketOrderNumber! } : null);
+      if (ticket?.display) return ticket.display;
+      return ensureCartTicket().display;
+    },
+    [tabNumber, ticketDisplay, ticketOrderNumber, ensureCartTicket]
+  );
+
   /**
    * Persist cart to /merchant/pos/held so Orders can list kitchen / held tickets.
    * Upserts by ticket (or table / tab) so re-sends update the same row.
@@ -2568,7 +2584,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPosView('register');
   };
 
-  const startNewOrder = () => {
+  const startNewOrder = async (force = false) => {
+    if (cart.length > 0 && !force) {
+      setNewOrderConfirmOpen(true);
+      return;
+    }
+    if (cart.length > 0) {
+      try {
+        await persistHeldOrder(cart, orderSent || cart.some((l) => l.sentToKitchen));
+      } catch {
+        /* best-effort — do not lose held order on New */
+      }
+    }
+    resumedHeldIdRef.current = null;
     const key = openCartDraftKey({ tableId, tabNumber, channel });
     openCartDraftsRef.current.delete(key);
     setDraftVersion((n) => n + 1);
@@ -2939,11 +2967,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         phone: merchant?.phone || undefined,
         vatNumber: merchant?.vatNumber || undefined,
         id: `prov-${Date.now()}`,
-        orderDisplay: `${ticket.display} (PROV)`,
+        orderDisplay: ticket.display,
         orderNumber: ticket.orderNumber,
         completedAt: Date.now(),
         channel: effectiveChannel,
         paymentMethod: 'cash',
+        isProvisional: true,
         tableLabel,
         items: cart.map((l) => ({
           name: lineExtrasLabel(l) ? `${l.name} (${lineExtrasLabel(l)})` : l.name,
@@ -2982,27 +3011,30 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const onKitchenMessage = async (message: string) => {
     try {
-      const ticket = nextWebPosTicketNumber(merchant?.id);
+      const orderNumber = kitchenOrderNumber();
       const whenSnapshot = fulfillmentWhen;
-      const channelSnapshot = effectiveChannel;
       toast.success(t('webPosKitchenMessageSent'));
-      void printKitchenForCart(
-        [
-          {
-            lineId: 'msg',
-            productId: 'kitchen-msg',
-            name: `★ ${message}`,
-            quantity: 1,
-            unitPrice: 0,
-            lineTotal: 0,
-            taxable: false,
-            selectedExtras: [],
-            comboSelections: [],
-          },
-        ],
-        channelSnapshot,
-        { orderNumber: ticket.display, when: whenSnapshot }
-      ).catch((e: any) => {
+      const lang = resolveReceiptLanguage(printSettings, paymentConfig?.panelLanguage || locale);
+      const paperWidthMm = resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
+      const msgOpts = {
+        message,
+        language: lang,
+        paperWidthMm,
+        orderNumber,
+        tableLabel: tableLabel || null,
+        tabNumber: tabNumber || null,
+        userName: webposStaff?.name || null,
+        orderedAt: Date.now(),
+        orderSource: 'WEBPOS' as const,
+      };
+      const escpos = generateKitchenMessageTicketEscPos(msgOpts);
+      const text = generateKitchenMessageTicketText(msgOpts);
+      void printViaAgentOrQueue({
+        printerName: printerName || undefined,
+        dataBase64: uint8ToBase64(escpos),
+        text,
+        orderId: orderNumber,
+      }).catch((e: any) => {
         toast.error(e?.message || t('webPosKitchenPrintFailed'));
       });
     } catch (e: any) {
@@ -3087,7 +3119,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (kitchenLines.length) {
         const ticket = nextWebPosTicketNumber(merchant?.id);
         await printKitchenForCart(kitchenLines, effectiveChannel, {
-          orderNumber: ticket.display,
+          orderNumber: kitchenOrderNumber(),
           when: fulfillmentWhen,
           cancelled: true,
           cancelReason: reason,
@@ -3133,7 +3165,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (selectedLineId === lineId) setSelectedLineId(null);
         toast.success(t('webPosItemCancelled'));
       } else {
-        startNewOrder();
+        void startNewOrder(true);
         toast.success(t('webPosOrderCancelled'));
       }
     } catch (e: any) {
@@ -3706,7 +3738,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const kitchenOpts = {
       channel: saleChannel,
       language: lang,
-      orderNumber: opts?.orderNumber || null,
+      orderNumber: opts?.orderNumber || kitchenOrderNumber(),
       orderedAt: Date.now(),
       scheduledFor,
       userName,
@@ -3716,6 +3748,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       boldText: printSettings?.kitchenBoldText !== false,
       groupByCourse: coursesEnabled && !opts?.cancelled,
       tableLabel: tableLabel || null,
+      tabNumber: tabNumber || null,
       cancelled: !!opts?.cancelled,
       cancelReason: opts?.cancelReason || null,
     };
@@ -3725,15 +3758,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       for (const kp of kitchenPrinters) {
         const items = filterKitchenItems(receiptItems, kp);
         if (!items.length) continue;
+        const paperWidthMm = resolveKitchenPaperWidthMm(printSettings, kp.paperWidthMm);
         const escpos = generateKitchenTicketEscPos({
           ...kitchenOpts,
           items,
-          paperWidthMm: kp.paperWidthMm || printSettings?.paperWidthMm || 80,
+          paperWidthMm,
         });
         const text = generateKitchenTicketText({
           ...kitchenOpts,
           items,
-          paperWidthMm: kp.paperWidthMm || printSettings?.paperWidthMm || 80,
+          paperWidthMm,
         });
         const mode = await printViaAgentOrQueue({
           printerName: kp.name,
@@ -3747,7 +3781,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
 
-    const paperWidthMm = printSettings?.paperWidthMm || 80;
+    const paperWidthMm = resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
     const escpos = generateKitchenTicketEscPos({
       ...kitchenOpts,
       items: receiptItems,
@@ -5124,6 +5158,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             highlightOrderId={highlightOrderId}
             initialChannelFilter={ordersChannelPref}
             onResumeHeld={(held) => {
+              resumedHeldIdRef.current = held.id;
               const data = held.cartJson as
                 | {
                     cart?: CartLine[];
@@ -5264,13 +5299,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onNewOrder={startNewOrder}
                 onPayment={openRegisterCheckout}
                 onCancelOrder={() => {
-                  const can =
-                    cart.length > 0 &&
-                    (provisionalPrinted || orderSent || cart.some((l) => l.sentToKitchen));
-                  if (!can) {
-                    toast.error(t('webPosCancelNeedSend'));
+                  if (!cart.length && !orderSent) {
+                    void startNewOrder(true);
                     return;
                   }
+                  if (!cart.length) return;
                   setCancelModal({ scope: 'order' });
                 }}
                 onCancelItem={() => {
@@ -5289,10 +5322,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 }}
                 showSend={showSend}
                 hideTab={hideTab}
-                canCancelOrder={
-                  cart.length > 0 &&
-                  (provisionalPrinted || orderSent || cart.some((l) => l.sentToKitchen))
-                }
+                canCancelOrder={cart.length > 0 || (!kitchenEnabled && !orderSent)}
                 canCancelItem={!!cart.find((l) => l.lineId === selectedLineId)?.sentToKitchen}
                 dockSide={cartSide}
                 showChannelTabs={showChannelTabs}
@@ -5313,7 +5343,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onBillDiscount={
                   checkoutSettings.discountsEnabled ? () => setBillDiscountOpen(true) : undefined
                 }
-                onCustomAmount={openCustomAmountModal}
                 canApplyBillDiscount={canApplyDiscounts}
                 billDiscountLabel={billDiscountLabel}
                 canReleaseTable={!!tableLabel && cart.length === 0 && !orderSent}
@@ -5492,6 +5521,33 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onClose={() => setKitchenMsgOpen(false)}
         onSend={onKitchenMessage}
       />
+      {newOrderConfirmOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-stone-900">{t('webPosNewOrderConfirmTitle')}</h3>
+            <p className="mt-2 text-sm text-stone-600">{t('webPosNewOrderConfirmBody')}</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+                onClick={() => setNewOrderConfirmOpen(false)}
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-bold text-white hover:bg-violet-800"
+                onClick={() => {
+                  setNewOrderConfirmOpen(false);
+                  void startNewOrder(true);
+                }}
+              >
+                {t('webPosNew')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <WebPosOrderNoteModal
         open={noteOpen}
         initial={orderNote}
@@ -5572,6 +5628,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             setTableLabel(null);
             setChannel(tabChannel);
             setFulfillmentWhen(asapFulfillment());
+            if (!ticketDisplay) ensureCartTicket();
           }
         }}
       />
