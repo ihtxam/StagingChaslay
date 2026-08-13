@@ -51,7 +51,6 @@ data class PrinterLinkCategory(val id: Long, val name: String, val products: Lis
 
 enum class SettingsSection(@StringRes val titleRes: Int) {
     GENERAL(R.string.settings_section_general),
-    LICENSE(R.string.settings_section_license),
     TABLES(R.string.settings_section_tables),
     VAT(R.string.settings_section_vat),
     PAYMENTS(R.string.settings_section_payments),
@@ -59,7 +58,8 @@ enum class SettingsSection(@StringRes val titleRes: Int) {
     RECEIPTS(R.string.settings_section_receipts),
     FLOOR_DEVICES(R.string.settings_section_floor_devices),
     USERS_ACCOUNTS(R.string.settings_section_users),
-    APPEARANCE(R.string.settings_section_appearance)
+    APPEARANCE(R.string.settings_section_appearance),
+    LICENSE(R.string.settings_section_license)
 }
 
 data class SettingsUiState(
@@ -288,7 +288,11 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun selectSection(section: SettingsSection) {
-        _uiState.update { it.copy(selectedSection = section) }
+        _uiState.update { it.copy(selectedSection = section, message = null) }
+    }
+
+    fun clearMessage() {
+        _uiState.update { it.copy(message = null) }
     }
 
     /**
@@ -307,7 +311,6 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update { it.copy(message = appContext.getString(R.string.online_settings_need_login)) }
                 return@launch
             }
-            _uiState.update { it.copy(message = appContext.getString(R.string.online_settings_opening)) }
             // Refresh menu/terminals/settings cache before editing in the panel.
             runCatching { syncService.syncAll(force = true) }
             val dashboardUrl = syncPreferences.getDashboardUrl()
@@ -319,6 +322,7 @@ class SettingsViewModel @Inject constructor(
             )
             intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
             appContext.startActivity(intent)
+            _uiState.update { it.copy(message = null) }
         }
     }
 
@@ -734,6 +738,9 @@ class SettingsViewModel @Inject constructor(
     }
     fun updateTerminalEnabled(enabled: Boolean) = _uiState.update {
         it.copy(terminalEnabled = enabled, paymentMethodsManagedByCloud = false)
+    }
+    fun updateExpressEnabled(enabled: Boolean) = _uiState.update {
+        it.copy(expressEnabled = enabled, paymentMethodsManagedByCloud = false)
     }
     fun updatePrinterPrintReceipts(enabled: Boolean) = _uiState.update { it.copy(printerPrintReceipts = enabled) }
     fun updatePrinterPrintReports(enabled: Boolean) = _uiState.update { it.copy(printerPrintReports = enabled) }

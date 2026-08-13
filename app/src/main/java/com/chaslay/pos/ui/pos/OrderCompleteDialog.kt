@@ -71,8 +71,8 @@ fun OrderCompleteDialog(
     onShareEmail: () -> Unit = {},
     onDone: () -> Unit
 ) {
+    // Only show QR after the receipt was uploaded — never fall back to a stale local URL.
     val digitalUrl = receiptPublicUrl?.takeIf { it.isNotBlank() }
-        ?: transaction.receiptUrl?.takeIf { it.isNotBlank() }
     val qrGenerator = remember { ReceiptQrGenerator() }
     val qrBitmap = remember(digitalUrl) {
         digitalUrl?.let { qrGenerator.generateQrBitmap(it, 256) }
@@ -400,6 +400,7 @@ private fun paymentLabel(method: PaymentMethod): String = when (method) {
     PaymentMethod.TAP_TO_PAY -> "Tap-to-Pay"
     PaymentMethod.ADYEN_TERMINAL -> "Terminal"
     PaymentMethod.PAY_LATER -> "Pay Later"
+    PaymentMethod.GIFT_CARD -> "Gift card"
 }
 
 private fun formatMoney(amount: Double, symbol: String): String =

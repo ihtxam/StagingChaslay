@@ -5,12 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.SettingsRepository
 import com.chaslay.pos.data.repository.TransactionRepository
+import com.chaslay.pos.data.repository.AuthRepository
 import com.chaslay.pos.domain.model.DailySalesReport
 import com.chaslay.pos.domain.model.EndOfDayReport
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentStatus
 import com.chaslay.pos.domain.model.ProductSalesReport
 import com.chaslay.pos.domain.model.ServiceType
+import com.chaslay.pos.domain.model.isPaidSale
 import com.chaslay.pos.domain.model.UserPerformanceReport
 import com.chaslay.pos.printer.BluetoothPrinterService
 import com.chaslay.pos.domain.model.roundMoney
@@ -29,6 +31,8 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 enum class ReportRange { TODAY, YESTERDAY, LAST_WEEK, LAST_MONTH, LAST_3_MONTHS }
+
+data class EodStaffOption(val userId: Long?, val name: String)
 
 data class SalesReportSnapshot(
     val grossSales: Double = 0.0,
@@ -72,6 +76,9 @@ data class ReportsUiState(
     ),
     val topProducts: List<ProductSalesReport> = emptyList(),
     val userPerformance: List<UserPerformanceReport> = emptyList(),
+    val eodStaffOptions: List<EodStaffOption> = emptyList(),
+    val selectedEodStaffId: Long? = null,
+    val canViewAllSales: Boolean = true,
     val message: String? = null
 )
 
@@ -80,7 +87,8 @@ class ReportsViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val settingsRepository: SettingsRepository,
     private val printerService: BluetoothPrinterService,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReportsUiState())
@@ -101,19 +109,44 @@ class ReportsViewModel @Inject constructor(
             val settings = settingsRepository.getSettings()
             val access = sessionManager.currentUserAccess.first()
             val userId = sessionManager.currentUserId.first()
+            val viewAll = access == null || access.canViewAllSales()
             val ownOnly = access != null && !access.canViewAllSales()
-            val scopeUserId = if (ownOnly) userId else null
+            val selectedStaff = _uiState.value.selectedEodStaffId
+            val scopeUserId = when {
+                ownOnly -> userId
+                viewAll && selectedStaff != null -> selectedStaff
+                else -> null
+            }
+            val staffOptions = if (viewAll) {
+                val company = EodStaffOption(null, "Company-wide")
+                val waiters = authRepository.getAllUsersWithRoles()
+                    .filter { (user, _) -> user.isActive }
+                    .map { (user, _) -> EodStaffOption(user.id, user.name) }
+                    .sortedBy { it.name.lowercase() }
+                listOf(company) + waiters
+            } else {
+                emptyList()
+            }
             val allTx = transactionRepository.getTransactionsBetween(start, end)
             val transactions =
                 if (scopeUserId != null) allTx.filter { it.userId == scopeUserId } else allTx
-            val completed = transactions.filter { it.paymentStatus == PaymentStatus.COMPLETED }
+            val completed = transactions.filter { it.paymentStatus.isPaidSale() }
             val cancelled = transactions.filter { it.paymentStatus == PaymentStatus.CANCELLED }
             // Tips are not taxable and not part of sales: gross excludes tips (matches end-of-day brut).
             fun brutOf(tx: com.chaslay.pos.data.local.entity.TransactionEntity) =
                 (tx.total - tx.tipAmount).coerceAtLeast(0.0)
-            val grossSales = roundMoney(completed.sumOf { brutOf(it) })
+            fun netBrut(tx: com.chaslay.pos.data.local.entity.TransactionEntity): Double {
+                val refund = tx.refundAmount.coerceAtLeast(0.0)
+                return (brutOf(tx) - refund.coerceAtMost(brutOf(tx))).coerceAtLeast(0.0)
+            }
+            val grossSales = roundMoney(completed.sumOf { netBrut(it) })
             val cancelledTotal = roundMoney(cancelled.sumOf { brutOf(it) })
-            val taxTotal = roundMoney(completed.sumOf { it.taxTotal })
+            val taxTotal = roundMoney(completed.sumOf { tx ->
+                val grossBefore = tx.total.coerceAtLeast(0.0001)
+                val keepRatio = ((grossBefore - tx.refundAmount.coerceAtLeast(0.0)) / grossBefore)
+                    .coerceIn(0.0, 1.0)
+                tx.taxTotal * keepRatio
+            })
             val salesReport = SalesReportSnapshot(
                 grossSales = grossSales,
                 netSales = roundMoney(grossSales - taxTotal),
@@ -121,19 +154,28 @@ class ReportsViewModel @Inject constructor(
                 orderCount = completed.size,
                 cancelledCount = cancelled.size,
                 cancelledTotal = cancelledTotal,
-                totalTips = roundMoney(completed.sumOf { it.tipAmount }),
+                totalTips = roundMoney(completed.sumOf { tx ->
+                    val grossBefore = tx.total.coerceAtLeast(0.0001)
+                    val keepRatio = ((grossBefore - tx.refundAmount.coerceAtLeast(0.0)) / grossBefore)
+                        .coerceIn(0.0, 1.0)
+                    tx.tipAmount * keepRatio
+                }),
                 totalDiscount = roundMoney(completed.sumOf { it.discountAmount }),
-                totalRefunded = roundMoney(completed.sumOf { it.refundAmount }),
-                cashTotal = roundMoney(completed.filter { it.paymentMethod == PaymentMethod.CASH }.sumOf { it.total }),
+                totalRefunded = roundMoney(completed.sumOf { it.refundAmount.coerceAtLeast(0.0) }),
+                cashTotal = roundMoney(completed.filter { it.paymentMethod == PaymentMethod.CASH }.sumOf {
+                    (it.total - it.refundAmount.coerceAtLeast(0.0)).coerceAtLeast(0.0)
+                }),
                 cashCount = completed.count { it.paymentMethod == PaymentMethod.CASH },
-                cardTotal = roundMoney(completed.filter { it.paymentMethod != PaymentMethod.CASH }.sumOf { it.total }),
+                cardTotal = roundMoney(completed.filter { it.paymentMethod != PaymentMethod.CASH }.sumOf {
+                    (it.total - it.refundAmount.coerceAtLeast(0.0)).coerceAtLeast(0.0)
+                }),
                 cardCount = completed.count { it.paymentMethod != PaymentMethod.CASH },
                 taxTotal = taxTotal,
                 dineInVatRate = settings.dineInVatRate,
                 takeawayVatRate = settings.takeawayVatRate,
-                dineInTotal = roundMoney(completed.filter { it.serviceType == ServiceType.DINE_IN }.sumOf { brutOf(it) }),
+                dineInTotal = roundMoney(completed.filter { it.serviceType == ServiceType.DINE_IN }.sumOf { netBrut(it) }),
                 dineInCount = completed.count { it.serviceType == ServiceType.DINE_IN },
-                takeawayTotal = roundMoney(completed.filter { it.serviceType == ServiceType.TAKEAWAY }.sumOf { brutOf(it) }),
+                takeawayTotal = roundMoney(completed.filter { it.serviceType == ServiceType.TAKEAWAY }.sumOf { netBrut(it) }),
                 takeawayCount = completed.count { it.serviceType == ServiceType.TAKEAWAY }
             )
             _uiState.value = ReportsUiState(
@@ -148,7 +190,10 @@ class ReportsViewModel @Inject constructor(
                 ),
                 topProducts = transactionRepository.getProductsSold(start, end, scopeUserId),
                 userPerformance = if (ownOnly) emptyList()
-                else transactionRepository.getUserPerformance()
+                else transactionRepository.getUserPerformance(),
+                eodStaffOptions = staffOptions,
+                selectedEodStaffId = if (viewAll) selectedStaff else null,
+                canViewAllSales = viewAll
             )
         }
     }
@@ -190,8 +235,23 @@ class ReportsViewModel @Inject constructor(
         refresh()
     }
 
+    fun selectEodStaff(userId: Long?) {
+        _uiState.update { it.copy(selectedEodStaffId = userId) }
+        refresh()
+    }
+
     fun printEndOfDayReport() {
         viewModelScope.launch {
+            val access = sessionManager.currentUserAccess.first()
+            val userId = sessionManager.currentUserId.first()
+            if (access != null && !access.canViewAllSales()) {
+                // Waiters may only print their own EOD.
+                val report = _uiState.value.endOfDayReport
+                if (report.salesCount == 0 && report.revenue == 0.0) {
+                    _uiState.update { it.copy(message = "No sales to report for your shift") }
+                    return@launch
+                }
+            }
             val settings = settingsRepository.getSettings()
             val report = _uiState.value.endOfDayReport
             val printError = reportPrintGuard(settings)

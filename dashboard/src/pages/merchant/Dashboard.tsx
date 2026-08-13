@@ -27,6 +27,7 @@ import { APP_PANEL_TITLE } from '@/lib/brand';
 import { useAuthStore } from '@/store/auth';
 import {
   canAccessRoute,
+  canShowWebPosQuickAction,
   getEffectivePanelAccess,
   loadWebPosStaffSession,
   type Permission,
@@ -115,6 +116,11 @@ function MerchantShell() {
     document.title = APP_PANEL_TITLE;
   }, []);
 
+  const refreshSession = useAuthStore((s) => s.refreshSession);
+  useEffect(() => {
+    void refreshSession();
+  }, [refreshSession]);
+
   useEffect(() => {
     const showPanel = () => {
       const access = getEffectivePanelAccess({
@@ -164,6 +170,11 @@ function MerchantShell() {
     (path: string) =>
       canAccessRoute(path, effective.permissions, effective.isOwner, editionFeatures),
     [effective.permissions, effective.isOwner, editionFeatures]
+  );
+
+  const showWebPosQuickAction = useMemo(
+    () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
+    [jwtIsOwner, user?.permissions]
   );
 
   const menuItems = [
@@ -241,6 +252,11 @@ function MerchantShell() {
           onToggle={() => setSidebarOpen(!sidebarOpen)}
           menuItems={menuItems}
           panelKey="merchant"
+          quickAction={
+            showWebPosQuickAction
+              ? { label: t('webPos'), path: '/merchant/pos' }
+              : null
+          }
         />
       )}
 

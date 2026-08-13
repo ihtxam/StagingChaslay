@@ -58,7 +58,15 @@ fun ReportsScreen(viewModel: ReportsViewModel = hiltViewModel()) {
         }
 
         when (tab) {
-            0 -> EndOfDayTab(state.endOfDayReport, currency, viewModel::printEndOfDayReport)
+            0 -> EndOfDayReportScreen(
+                report = state.endOfDayReport,
+                currencySymbol = currency,
+                onPrint = viewModel::printEndOfDayReport,
+                staffOptions = if (state.canViewAllSales) state.eodStaffOptions else emptyList(),
+                selectedStaffId = state.selectedEodStaffId,
+                onStaffSelected = viewModel::selectEodStaff,
+                modifier = Modifier.weight(1f),
+            )
             1 -> SalesReportV5Screen(
                 state = state,
                 currencySymbol = currency,
@@ -186,69 +194,6 @@ private fun DailySalesTab(state: ReportsUiState, currency: String) {
         ReportRow(stringResource(R.string.tax), formatMoney(state.dailyReport.tax, currency))
         ReportRow(stringResource(R.string.cash_revenue), formatMoney(state.dailyReport.cashTotal, currency))
         ReportRow(stringResource(R.string.card_revenue), formatMoney(state.dailyReport.cardTotal, currency))
-    }
-}
-
-@Composable
-private fun EndOfDayTab(report: EndOfDayReport, currency: String, onPrint: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(stringResource(R.string.end_of_day), fontWeight = FontWeight.Bold, fontSize = 22.sp)
-            Button(onClick = onPrint) {
-                Text(stringResource(R.string.print_end_of_day))
-            }
-        }
-        Text("SALES SUMMARY", fontWeight = FontWeight.Bold)
-        report.vatRows.forEach { row ->
-            ReportRow(
-                row.label,
-                "Net ${formatMoney(row.net, currency)} · TVA ${formatMoney(row.tva, currency)} · Brut ${formatMoney(row.brut, currency)}"
-            )
-        }
-        ReportRow("Net total", formatMoney(report.netTotal, currency))
-        ReportRow("TVA total", formatMoney(report.taxTotal, currency))
-        ReportRow("TOTAL", formatMoney(report.brutTotal, currency))
-        if (report.tipsTotal > 0.0) {
-            ReportRow("Tips (not taxable)", formatMoney(report.tipsTotal, currency))
-            ReportRow("Grand total", formatMoney(report.grandTotal, currency))
-        }
-        ReportRow(stringResource(R.string.transactions), report.salesCount.toString())
-        report.coversServed?.let { covers ->
-            ReportRow(stringResource(R.string.covers_served), covers.toString())
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-        Text("PAYMENT METHODS", fontWeight = FontWeight.Bold)
-        report.paymentRows.forEach { row ->
-            ReportRow(row.label, "${"%.1f".format(row.percent)}% · ${formatMoney(row.amount, currency)}")
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-        Text("ORDER TYPES", fontWeight = FontWeight.Bold)
-        report.orderTypeRows.forEach { row ->
-            ReportRow(row.label, "${row.count} · ${"%.1f".format(row.percent)}% · ${formatMoney(row.amount, currency)}")
-        }
-
-        if (report.productsSold.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(stringResource(R.string.products_sold).uppercase(), fontWeight = FontWeight.Bold)
-            ReportRow(
-                stringResource(R.string.total_products_sold),
-                report.productsSold.sumOf { it.quantitySold }.toString()
-            )
-            report.productsSold.forEach { product ->
-                ReportRow(product.productName, product.quantitySold.toString())
-            }
-        }
     }
 }
 

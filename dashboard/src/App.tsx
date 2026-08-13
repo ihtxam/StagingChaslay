@@ -22,6 +22,12 @@ import PosEmbedPage from '@/pages/PosEmbedPage';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 
+function LegacyReceiptRedirect() {
+  const { saleId } = useParams();
+  if (!saleId) return <Navigate to="/" replace />;
+  return <Navigate to={`/receipt/${encodeURIComponent(saleId)}`} replace />;
+}
+
 function ShopRoutes({ children }: { children: React.ReactNode }) {
   const { merchantSlug } = useParams();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
@@ -84,6 +90,7 @@ function App() {
           {!shopMode && <Route path="/set-password" element={<SetPasswordPage />} />}
           {!shopMode && <Route path="/pos-embed" element={<PosEmbedPage />} />}
           <Route path="/receipt/:saleId" element={<ReceiptPage />} />
+          <Route path="/receipts/:saleId" element={<LegacyReceiptRedirect />} />
           <Route
             path="/shop/:merchantSlug"
             element={

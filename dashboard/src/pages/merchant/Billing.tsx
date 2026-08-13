@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { mountAdyenDropin, normalizeAdyenPaymentSession, formatAdyenError } from '@/lib/adyen-checkout';
 import { useI18n } from '@/lib/i18n';
 
 type Plan = {
@@ -53,8 +54,9 @@ export default function Billing() {
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [session, setSession] = useState<PaymentSession | null>(null);
   const [payMsg, setPayMsg] = useState('');
+  const [payDebug, setPayDebug] = useState('');
   const [busy, setBusy] = useState(false);
-  const dropinRef = useRef<HTMLDivElement>(null);
+  const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
 
   const load = useCallback(async () => {
@@ -77,22 +79,18 @@ export default function Billing() {
   }, [load]);
 
   useEffect(() => {
-    if (!session?.sessionData || !session.clientKey || !dropinRef.current || dropinMounted.current) {
+    if (!session?.sessionData || !session.clientKey || !dropinEl || dropinMounted.current) {
       return;
     }
     let cancelled = false;
 
     void (async () => {
       try {
-        await import(/* @vite-ignore */ '@adyen/adyen-web/dist/adyen.css').catch(() => undefined);
-        const AdyenCheckout = (await import('@adyen/adyen-web')).default;
-        if (cancelled || !dropinRef.current) return;
-
-        const checkout = await AdyenCheckout({
-          environment: session.environment === 'live' ? 'live' : 'test',
-          clientKey: session.clientKey,
-          session: { id: session.id, sessionData: session.sessionData },
-          onPaymentCompleted: async (result: { resultCode?: string }) => {
+        await mountAdyenDropin({
+          session,
+          container: dropinEl,
+          onPaymentCompleted: async (result) => {
+            if (cancelled) return;
             setPayMsg(t('billingActivating'));
             try {
               await api.post('/merchant/billing/confirm', {
@@ -109,26 +107,37 @@ export default function Billing() {
               toast.error(err.response?.data?.error || 'Payment received but activation failed');
             }
           },
-          onError: (err: { message?: string }) => {
-            setPayMsg(err.message || 'Payment failed');
+          onError: (err) => {
+            if (!cancelled) {
+              setPayMsg(formatAdyenError(err, 'dropin') || 'Payment failed');
+              setPayDebug(
+                `drop-in env=${session.environment ?? 'auto'} key=${session.clientKey?.slice(0, 8) ?? '?'}… session=${session.id?.slice(0, 8) ?? '?'}…`
+              );
+            }
           },
-        } as any);
-
-        checkout.create('dropin').mount(dropinRef.current);
-        dropinMounted.current = true;
-      } catch {
-        setPayMsg('Could not load Adyen payment form. Check platform Adyen client key.');
+        });
+        if (!cancelled) dropinMounted.current = true;
+      } catch (err) {
+        if (!cancelled) {
+          const message = formatAdyenError(err, 'dropin');
+          setPayMsg(message);
+          setPayDebug(
+            `drop-in mount · session=${session.id?.slice(0, 8) ?? '?'}… env=${session.environment ?? 'auto'} key=${session.clientKey?.slice(0, 8) ?? '?'}…`
+          );
+          console.error('[Billing] Adyen Drop-in mount failed:', err, session);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [session, paymentId, load, t]);
+  }, [session, paymentId, dropinEl, load, t]);
 
   const startCheckout = async (plan: Plan) => {
     setBusy(true);
     setPayMsg('');
+    setPayDebug('');
     setCheckoutPlan(plan);
     setSession(null);
     setPaymentId(null);
@@ -148,10 +157,34 @@ export default function Billing() {
       }
 
       setPaymentId(res.data.payment?.id || null);
-      setSession(res.data.paymentSession);
+      const normalized = normalizeAdyenPaymentSession(res.data.paymentSession);
+      if (!normalized) {
+        const raw = res.data.paymentSession;
+        const hint =
+          raw && typeof raw === 'object'
+            ? `keys: ${Object.keys(raw as object).join(', ')}`
+            : 'no paymentSession in response';
+        throw new Error(
+          `Checkout returned an invalid payment session (${hint}). Ensure Superadmin → Settings has a valid Client Key (test_/live_) for the same Adyen account as the API key.`
+        );
+      }
+      setSession(normalized);
     } catch (err: any) {
       setCheckoutPlan(null);
-      toast.error(err.response?.data?.error || 'Checkout failed');
+      const apiErr = err.response?.data?.error;
+      const msg =
+        apiErr ||
+        (err.response?.status === 401
+          ? 'Your session expired — please sign in again and retry checkout.'
+          : formatAdyenError(err, 'checkout')) ||
+        'Checkout failed';
+      toast.error(msg);
+      setPayMsg(msg);
+      if (apiErr) {
+        setPayDebug('backend POST /merchant/billing/checkout');
+      } else if (err.response?.status === 401) {
+        setPayDebug('merchant JWT unauthorized (not Adyen)');
+      }
     } finally {
       setBusy(false);
     }
@@ -275,8 +308,19 @@ export default function Billing() {
               Cancel
             </button>
           </div>
-          {session ? <div ref={dropinRef} className="min-h-[140px]" /> : <p className="text-sm text-gray-500">Preparing checkout…</p>}
-          {payMsg && <p className="text-sm mt-3 text-gray-700">{payMsg}</p>}
+          {session ? (
+            <div ref={setDropinEl} className="min-h-[140px]" />
+          ) : (
+            <p className="text-sm text-gray-500">Preparing checkout…</p>
+          )}
+          {payMsg && (
+            <p className="text-sm mt-3 text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+              {payMsg}
+              {payDebug ? (
+                <span className="block mt-1 text-xs text-red-600/80 font-mono">{payDebug}</span>
+              ) : null}
+            </p>
+          )}
         </div>
       )}
 

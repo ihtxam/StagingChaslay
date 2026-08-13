@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { Permission } from '@/lib/permissions';
+import { clearWebPosStaffSession } from '@/lib/permissions';
+import api from '@/lib/api';
 
 export interface User {
   id: string;
@@ -28,6 +30,8 @@ interface AuthStore {
   startImpersonation: (token: string, merchantUser: User) => void;
   /** Restore the stashed superadmin session. Returns false if none stored. */
   stopImpersonation: () => boolean;
+  /** Re-fetch role/permissions from server (staff role changes in portal). */
+  refreshSession: () => Promise<void>;
   logout: () => void;
   hydrate: () => void;
 }
@@ -99,19 +103,48 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       return false;
     }
   },
+  refreshSession: async () => {
+    const token = get().token || localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await api.get('/auth/me');
+      const { user, role, token: refreshedToken } = res.data;
+      if (!user || !role) return;
+
+      const updated: User = {
+        id: user.staffId || user.id,
+        email: user.email,
+        name: user.name,
+        role: role as User['role'],
+        merchantId: user.merchantId,
+        staffId: user.staffId,
+        resellerId: user.resellerId,
+        roleName: user.roleName,
+        permissions: user.permissions as Permission[] | undefined,
+        isOwner: role === 'merchant' && user.isOwner !== false,
+        impersonatedBy: get().user?.impersonatedBy,
+      };
+
+      if (refreshedToken) {
+        localStorage.setItem('token', refreshedToken);
+        set({ token: refreshedToken });
+      }
+      localStorage.setItem('user', JSON.stringify(updated));
+      set({ user: updated });
+    } catch {
+      /* session refresh is best-effort */
+    }
+  },
   logout: () => {
     clearReturnSession();
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    try {
-      sessionStorage.removeItem('webpos_staff_session');
-    } catch {
-      /* ignore */
-    }
+    clearWebPosStaffSession();
     set({ user: null, token: null, impersonating: false });
   },
   hydrate: () => {
     const stored = readStoredAuth();
     set({ ...stored, hydrated: true });
+    void get().refreshSession();
   },
 }));

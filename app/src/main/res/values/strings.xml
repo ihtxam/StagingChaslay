@@ -169,7 +169,10 @@
     <string name="delivery_order">Delivery order</string>
     <string name="order_number">Order number</string>
     <string name="pickup_asap">ASAP (now)</string>
+    <string name="choose_time">Choose time</string>
+    <string name="choose_customer">Choose customer</string>
     <string name="asap_now">ASAP / Now</string>
+    <string name="snackbar_delivery_asap_generic">Delivery — ASAP / Now</string>
     <string name="schedule_later">Schedule for later</string>
     <string name="pickup_time">Pickup time (HH:mm)</string>
     <string name="client_name">Client name</string>
@@ -227,7 +230,6 @@
     <string name="save_hold_order">Save / Hold</string>
     <string name="save_hold_short">Save</string>
     <string name="takeout">Takeout</string>
-    <string name="choose_customer">Choose Customer</string>
     <string name="add_customer">Add customer</string>
     <string name="cart_order_menu">Order options</string>
     <string name="print_kitchen_ticket">Print kitchen ticket</string>
@@ -267,6 +269,10 @@
     <string name="refund_order">Refund Order</string>
     <string name="refund_full">Full refund</string>
     <string name="refund_partial">Partial refund</string>
+    <string name="refund_by_item">By item</string>
+    <string name="refund_reason">Refund reason</string>
+    <string name="refunds_total">Refunds total</string>
+    <string name="refunds_count">Refunded orders</string>
     <string name="cancel_reason">Cancel reason</string>
     <string name="filter_date">Date</string>
     <string name="filter_payment">Payment</string>
@@ -401,6 +407,7 @@
     <string name="edit_combo">Edit combo</string>
     <string name="combo_name">Combo name</string>
     <string name="combo_fixed_price">Fixed combo price</string>
+    <string name="combo_price_format">CHF %.2f</string>
     <string name="combo_deal_price">Combo deal %1$s %2$.2f</string>
     <string name="combo_slots">Combo slots (rows)</string>
     <string name="slot_name">Slot name</string>
@@ -476,6 +483,7 @@
     <string name="adyen_setup_help">Use a Web service API key (not the client key). It must have the Cloud Device API role under Developers → API credentials → Permissions → POS. Enable Terminal API under In-person payments. Error 00_403 means the API key lacks this permission.</string>
     <string name="default_rounding">Default Rounding</string>
     <string name="payment_cash">Accept Cash</string>
+    <string name="payment_express">Express checkout</string>
     <string name="payment_card">Accept Card</string>
     <string name="payment_terminal">Accept Terminal</string>
     <string name="payment_methods">Payment methods</string>
@@ -590,8 +598,9 @@
     <!-- Table plan -->
     <string name="table_plan_designer">Table plan designer</string>
     <string name="open_table_plan_designer">Open table plan designer</string>
-    <string name="table_plan_help">Drag tables to arrange your floor. Tap a table to edit name, seats, and shape in the side panel.</string>
-    <string name="table_plan_edit_hint">Changes apply when you save.</string>
+    <string name="table_plan_help">Drag tables anywhere on the floor — position saves automatically. Tap a table to edit name, seats, and shape.</string>
+    <string name="table_plan_edit_hint">Drag to move (auto-saves). Use Save below for name, seats, or shape.</string>
+    <string name="table_plan_layout_saved">Layout saves automatically when you drag tables.</string>
     <string name="seat_capacity">Seat capacity</string>
     <string name="table_shape">Table shape</string>
     <string name="shape_round">Round</string>
@@ -644,11 +653,40 @@
     <string name="element_label_optional">Label (optional)</string>
 
     <!-- Demo mode -->
-    <string name="demo_mode_banner_label">DEMO MODE</string>
+    <string name="demo_mode_banner_label">Demo mode</string>
+    <string name="demo_mode_banner_subtitle">Practice sales — tap Go live when you are ready for real orders</string>
     <string name="demo_go_live_button">GO LIVE</string>
     <string name="demo_go_live_working">Clearing…</string>
     <string name="demo_go_live_confirm_title">Go live?</string>
     <string name="demo_go_live_confirm_body">This will permanently delete all demo sales data on this device (orders, payments, held orders, table orders, and reports). Your menu, staff, settings, and floor plan will be kept.</string>
     <string name="demo_go_live_success">You are now live. Demo sales data has been cleared.</string>
     <string name="demo_go_live_failed">Could not clear demo data. Please try again.</string>
+
+    <!-- Membership / gift cards -->
+    <string name="membership_gift_cards">Gift cards / Membership</string>
+    <string name="membership_scan_hint">Tap RFID card or enter card number</string>
+    <string name="membership_lookup">Look up</string>
+    <string name="membership_detach">Detach</string>
+    <string name="membership_points_balance">Points balance: %1$d</string>
+    <string name="membership_gift_balance">Gift balance: %1$s %2$s</string>
+    <string name="membership_card_number">Card: %1$s</string>
+    <string name="gift_card_sell">Sell gift card</string>
+    <string name="gift_card_reload">Reload gift card</string>
+    <string name="gift_card_sell_hint">Scan or enter RFID/code, choose amount, then add to cart.</string>
+    <string name="gift_card_reload_hint">Scan card to reload, choose amount, then add to cart.</string>
+    <string name="gift_card_amount">Amount</string>
+    <string name="gift_card_enter_amount">Enter amount between %1$.0f and %2$.0f</string>
+    <string name="gift_card_holder_optional">Holder name (optional)</string>
+    <string name="gift_card_custom_amount">Custom</string>
+    <string name="gift_card_add_to_cart">Add to cart</string>
+    <string name="checkout_gift_card_balance">Gift card balance</string>
+    <string name="checkout_pay_with_gift_card">Pay with gift card (%1$s available)</string>
+    <string name="checkout_gift_card_applied">Gift card applied: %1$s</string>
+    <string name="checkout_gift_card_remainder">Remaining due: %1$s</string>
+    <string name="rfid_scan_placeholder">Tap RFID card on reader…</string>
+    <string name="close">Close</string>
+    <string name="checkout_loyalty_points">Loyalty points</string>
+    <string name="checkout_pay_with_points">Pay with points (%1$d available)</string>
+    <string name="checkout_points_discount">Redeem %1$d pts → %2$s off</string>
+    <string name="checkout_points_applied">Points (%1$d)</string>
 </resources>

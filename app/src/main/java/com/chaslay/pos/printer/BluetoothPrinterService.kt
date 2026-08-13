@@ -200,9 +200,18 @@ class BluetoothPrinterService @Inject constructor(
         settings: BusinessSettingsEntity,
         transaction: TransactionEntity,
         items: List<TransactionItemEntity>,
-        appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null
+        appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
+        loyaltyPointsEarned: Int? = null,
+        loyaltyPointsBalance: Int? = null
     ): Result<Unit> {
-        val payload = buildEscPosReceipt(settings, transaction, items, appendAdyenCustomerReceipt = appendAdyenCustomerReceipt)
+        val payload = buildEscPosReceipt(
+            settings,
+            transaction,
+            items,
+            appendAdyenCustomerReceipt = appendAdyenCustomerReceipt,
+            loyaltyPointsEarned = loyaltyPointsEarned,
+            loyaltyPointsBalance = loyaltyPointsBalance
+        )
         return sendBytes(settings.printerMacAddress, settings, payload, "Receipt ${transaction.transactionNumber}")
     }
 
@@ -432,17 +441,34 @@ class BluetoothPrinterService @Inject constructor(
         settings: BusinessSettingsEntity,
         transaction: TransactionEntity,
         items: List<TransactionItemEntity>,
-        appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null
+        appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
+        loyaltyPointsEarned: Int? = null,
+        loyaltyPointsBalance: Int? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val receiptPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
             .filter { it.isEnabled && it.printOrderReceipts && it.address.isNotBlank() }
         if (receiptPrinters.isEmpty()) {
-            return@withContext printReceipt(settings, transaction, items, appendAdyenCustomerReceipt)
+            return@withContext printReceipt(
+                settings,
+                transaction,
+                items,
+                appendAdyenCustomerReceipt,
+                loyaltyPointsEarned,
+                loyaltyPointsBalance
+            )
         }
         var last: Result<Unit> = Result.success(Unit)
         for (printer in receiptPrinters) {
             val lineWidth = lineWidthFor(printer.paperWidthMm)
-            val payload = buildEscPosReceipt(settings, transaction, items, lineWidth, appendAdyenCustomerReceipt)
+            val payload = buildEscPosReceipt(
+                settings,
+                transaction,
+                items,
+                lineWidth,
+                appendAdyenCustomerReceipt,
+                loyaltyPointsEarned,
+                loyaltyPointsBalance
+            )
             last = sendBytes(printer.address, settings, payload, "Receipt ${printer.name}")
             if (printer.openCashDrawer) {
                 sendBytes(
@@ -752,6 +778,8 @@ class BluetoothPrinterService @Inject constructor(
 
         appendReceiptTotal(sb, labels.total, total, settings.currencySymbol, lineWidth)
 
+        appendLoyaltyReceiptLines(sb, context.loyaltyPointsEarned, context.loyaltyPointsBalance, lineWidth)
+
         context.paymentMethod?.let { method ->
             sb.appendLine(leftRight(labels.payment, labels.paymentMethod(method), lineWidth))
             context.amountPaid?.let { paid ->
@@ -789,7 +817,9 @@ class BluetoothPrinterService @Inject constructor(
         transaction: TransactionEntity,
         items: List<TransactionItemEntity>,
         lineWidth: Int = LINE_WIDTH_80,
-        appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null
+        appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
+        loyaltyPointsEarned: Int? = null,
+        loyaltyPointsBalance: Int? = null
     ): ByteArray {
         val sb = StringBuilder()
         val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
@@ -813,6 +843,16 @@ class BluetoothPrinterService @Inject constructor(
             sb.appendLine(
                 leftRight(label.take(lineWidth - 12), formatMoney(lineAmount, settings.currencySymbol), lineWidth)
             )
+            if (item.isWeighed) {
+                val kg = item.quantity / 1000.0
+                sb.appendLine(
+                    leftRight(
+                        "  ${String.format(Locale.US, "Weight %.3f kg", kg)}",
+                        "",
+                        lineWidth
+                    ).trimEnd()
+                )
+            }
             formatTxItemRateLabel(item, settings.currencySymbol)?.let { rate ->
                 sb.appendLine("  $rate")
             }
@@ -858,6 +898,18 @@ class BluetoothPrinterService @Inject constructor(
 
         appendReceiptTotal(sb, labels.total, transaction.total, settings.currencySymbol, lineWidth)
 
+        appendLoyaltyReceiptLines(sb, loyaltyPointsEarned, loyaltyPointsBalance, lineWidth)
+
+        parseGiftCardPaymentAmount(transaction.notes)?.let { giftPaid ->
+            sb.appendLine(
+                leftRight(
+                    "Gift card",
+                    "-${formatMoney(giftPaid, settings.currencySymbol)}",
+                    lineWidth
+                )
+            )
+        }
+
         sb.appendLine(leftRight(labels.payment, labels.paymentMethod(transaction.paymentMethod), lineWidth))
         sb.appendLine(leftRight(labels.paid, twoDp(transaction.total), lineWidth))
         transaction.cardReference?.takeIf { it.isNotBlank() }?.let { ref ->
@@ -888,7 +940,9 @@ class BluetoothPrinterService @Inject constructor(
             orderNumber = transaction.transactionNumber,
             orderType = orderType
         )
-        transaction.notes?.lines()?.filter { it.isNotBlank() }?.forEach { line ->
+        transaction.notes?.lines()
+            ?.filter { it.isNotBlank() && !it.startsWith("Gift card payment:") }
+            ?.forEach { line ->
             sb.appendLine(line)
         }
         appendFooter(sb, settings.receiptFooter, lineWidth)
@@ -921,8 +975,8 @@ class BluetoothPrinterService @Inject constructor(
     ): ByteArray {
         val sym = settings.currencySymbol
         val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-        val divider = "=".repeat(lineWidth.coerceAtMost(32))
-        val dashes = "-".repeat(lineWidth.coerceAtMost(32))
+        val divider = "=".repeat(lineWidth)
+        val dashes = "-".repeat(lineWidth)
         val compact = lineWidth <= LINE_WIDTH_58
         val sb = StringBuilder()
 
@@ -978,6 +1032,26 @@ class BluetoothPrinterService @Inject constructor(
         report.coversServed?.let { covers ->
             sb.appendLine(leftRight("Guests served", covers.toString(), lineWidth))
         }
+        if (report.refundTotal > 0.0) {
+            sb.appendLine("")
+            sb.appendLine(dashes)
+            sb.appendLine(center("REFUNDS", lineWidth))
+            sb.appendLine(dashes)
+            sb.appendLine(leftRight("Refunds total", formatMoney(report.refundTotal, sym), lineWidth))
+            sb.appendLine(leftRight("Refund count", report.refundCount.toString(), lineWidth))
+            report.refundedOrders.forEach { row ->
+                sb.appendLine(
+                    leftRight(
+                        row.orderNumber.take(18),
+                        "-${formatMoney(row.refundAmount, sym)}",
+                        lineWidth
+                    )
+                )
+                row.refundReason?.takeIf { it.isNotBlank() }?.let { reason ->
+                    wrapText(reason, lineWidth).forEach { sb.appendLine(it) }
+                }
+            }
+        }
         sb.appendLine("")
 
         sb.appendLine(dashes)
@@ -1020,10 +1094,10 @@ class BluetoothPrinterService @Inject constructor(
             sb.appendLine(center("PRODUCTS SOLD", lineWidth))
             sb.appendLine(dashes)
             sb.appendLine(leftRight("Total qty", report.productsSold.sumOf { it.quantitySold }.toString(), lineWidth))
-            val nameWidth = if (compact) 22 else 30
+            val nameWidth = (lineWidth - 6).coerceAtLeast(10)
             report.productsSold.forEach { product ->
                 val name = product.productName.take(nameWidth).padEnd(nameWidth.coerceAtMost(lineWidth - 6))
-                sb.appendLine(name + product.quantitySold.toString().padStart(6))
+                sb.appendLine(leftRight(name, product.quantitySold.toString(), lineWidth))
             }
         }
         sb.appendLine("\n\n\n")
@@ -1096,6 +1170,31 @@ class BluetoothPrinterService @Inject constructor(
         if (current.isNotEmpty()) lines.add(current)
         return lines.ifEmpty { listOf(text.take(width)) }
     }
+
+    private fun appendLoyaltyReceiptLines(
+        sb: StringBuilder,
+        pointsEarned: Int?,
+        pointsBalance: Int?,
+        lineWidth: Int
+    ) {
+        if ((pointsEarned ?: 0) <= 0 && pointsBalance == null) return
+        sb.appendLine(center("-".repeat(lineWidth.coerceAtMost(32)), lineWidth))
+        pointsEarned?.takeIf { it > 0 }?.let {
+            sb.appendLine(leftRight("Points earned", "+$it", lineWidth))
+        }
+        pointsBalance?.let {
+            sb.appendLine(leftRight("Points balance", "$it", lineWidth))
+        }
+    }
+
+    private fun parseGiftCardPaymentAmount(notes: String?): Double? =
+        notes?.lineSequence()
+            ?.map { it.trim() }
+            ?.firstOrNull { it.startsWith("Gift card payment:", ignoreCase = true) }
+            ?.substringAfter(":", "")
+            ?.trim()
+            ?.toDoubleOrNull()
+            ?.takeIf { it > 0.0 }
 
     private fun appendReceiptTotal(
         sb: StringBuilder,
@@ -1229,8 +1328,8 @@ class BluetoothPrinterService @Inject constructor(
     }
 
     private fun vatRow(type: String, net: String, tva: String, brut: String, lineWidth: Int = LINE_WIDTH_80): String {
-        val typeWidth = if (lineWidth <= LINE_WIDTH_58) 10 else 14
-        val numWidth = if (lineWidth <= LINE_WIDTH_58) 5 else 6
+        val numWidth = if (lineWidth <= LINE_WIDTH_58) 5 else 7
+        val typeWidth = (lineWidth - numWidth * 3).coerceAtLeast(8)
         val t = type.take(typeWidth).padEnd(typeWidth)
         return t + net.padStart(numWidth) + tva.padStart(numWidth) + brut.padStart(numWidth)
     }
@@ -1244,8 +1343,11 @@ class BluetoothPrinterService @Inject constructor(
         if (lineWidth <= LINE_WIDTH_58) {
             return leftRight("${label.take(12)} $percent", amount, lineWidth)
         }
-        val l = label.take(12).padEnd(12)
-        return l + percent.padStart(7) + amount.padStart(13)
+        val amountWidth = 12
+        val percentWidth = 7
+        val labelWidth = (lineWidth - amountWidth - percentWidth).coerceAtLeast(10)
+        val l = label.take(labelWidth).padEnd(labelWidth)
+        return l + percent.padStart(percentWidth) + amount.padStart(amountWidth)
     }
 
     private fun orderTypeRow(
@@ -1258,8 +1360,12 @@ class BluetoothPrinterService @Inject constructor(
         if (lineWidth <= LINE_WIDTH_58) {
             return leftRight("${label.take(8)} ${count}x $percent", amount, lineWidth)
         }
-        val l = label.take(9).padEnd(9)
-        return l + count.padStart(3) + percent.padStart(8) + amount.padStart(12)
+        val amountWidth = 12
+        val percentWidth = 8
+        val countWidth = 3
+        val labelWidth = (lineWidth - amountWidth - percentWidth - countWidth).coerceAtLeast(8)
+        val l = label.take(labelWidth).padEnd(labelWidth)
+        return l + count.padStart(countWidth) + percent.padStart(percentWidth) + amount.padStart(amountWidth)
     }
 
 
@@ -1504,6 +1610,7 @@ class BluetoothPrinterService @Inject constructor(
         PaymentMethod.TAP_TO_PAY -> "Tap-to-Pay"
         PaymentMethod.ADYEN_TERMINAL -> "Adyen"
         PaymentMethod.PAY_LATER -> "Pay Later"
+        PaymentMethod.GIFT_CARD -> "Gift card"
     }
 
     private fun lineWidthFor(paperWidthMm: Int): Int =

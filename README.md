@@ -66,7 +66,12 @@ A native Android Point of Sale app built for Chaslays and small businesses. Opti
 4. Click **File ? Sync Project with Gradle Files**.
 5. Select the **`app`** run configuration in the toolbar and run on a device/emulator.
 
-> **"No module" error?** This usually means Gradle sync did not complete. Ensure `gradlew.bat` exists in the project root, then re-sync. Do not open the parent `Downloads` directory as the project root.
+> **"Module not specified" error?**
+> 1. Open **`FoodTruckPOS`** (the folder that contains `settings.gradle.kts` and `app/`) — not `Downloads` or the `app` subfolder alone.
+> 2. **File → Sync Project with Gradle Files** and wait until it finishes (check the Build tool window for errors).
+> 3. **Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK** → pick **JDK 17** (not JDK 25+).
+> 4. **Run → Edit Configurations → app** → set **Module** to **`ChaslayPOS.app.main`** (or **`app`** if that is the only option).
+> 5. If the module dropdown is empty, use **File → Invalidate Caches → Invalidate and Restart**, then sync again.
 
 ### Demo Login
 

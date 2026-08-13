@@ -17,8 +17,10 @@ COPY dashboard/ ./
 COPY --from=openpage /openpage/dist ./public/openpage
 ARG VITE_API_URL=/api
 ARG VITE_PUBLIC_DOMAIN=manupos.webprintmedia.swiss
+ARG VITE_PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_PUBLIC_DOMAIN=$VITE_PUBLIC_DOMAIN
+ENV VITE_PUBLIC_RECEIPT_BASE_URL=$VITE_PUBLIC_RECEIPT_BASE_URL
 RUN npm run build
 
 FROM caddy:2.9-alpine

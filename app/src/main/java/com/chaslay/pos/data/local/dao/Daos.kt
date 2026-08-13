@@ -205,6 +205,9 @@ interface TransactionDao {
     @Query("UPDATE transactions SET receiptUrl = :url WHERE id = :id")
     suspend fun updateReceiptUrl(id: String, url: String)
 
+    @Query("UPDATE transactions SET receiptUrl = NULL WHERE id = :id")
+    suspend fun clearReceiptUrl(id: String)
+
     @Query(
         """
         SELECT * FROM transactions
@@ -248,7 +251,7 @@ interface TransactionDao {
         FROM transaction_items ti
         INNER JOIN transactions t ON t.id = ti.transactionId
         WHERE t.createdAt >= :startOfDay AND t.createdAt < :endOfDay
-        AND t.paymentStatus = 'COMPLETED'
+        AND t.paymentStatus IN ('COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED')
         GROUP BY ti.productName
         ORDER BY qty DESC
         LIMIT :limit
@@ -262,7 +265,7 @@ interface TransactionDao {
         FROM transaction_items ti
         INNER JOIN transactions t ON t.id = ti.transactionId
         WHERE t.createdAt >= :startMs AND t.createdAt < :endMs
-        AND t.paymentStatus = 'COMPLETED'
+        AND t.paymentStatus IN ('COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED')
         AND (:userId < 0 OR t.userId = :userId)
         GROUP BY ti.productName
         ORDER BY qty DESC, ti.productName ASC
@@ -322,11 +325,23 @@ interface TransactionDao {
     @Query(
         """
         UPDATE transactions
-        SET paymentStatus = :status, refundAmount = :refundAmount
+        SET paymentStatus = :status,
+            refundAmount = :refundAmount,
+            refundReason = :reason,
+            refundedAt = :refundedAt
         WHERE id = :id
         """
     )
-    suspend fun refundTransaction(id: String, status: PaymentStatus, refundAmount: Double)
+    suspend fun refundTransaction(
+        id: String,
+        status: PaymentStatus,
+        refundAmount: Double,
+        reason: String?,
+        refundedAt: Long
+    )
+
+    @Query("UPDATE transaction_items SET refundedQuantity = :qty WHERE id = :id")
+    suspend fun updateItemRefundedQuantity(id: Long, qty: Int)
 
     @Query("DELETE FROM transaction_items WHERE transactionId = :transactionId")
     suspend fun deleteItemsForTransaction(transactionId: String)
@@ -415,6 +430,9 @@ interface TableFloorDao {
     @Query("SELECT * FROM table_floors WHERE isActive = 1 ORDER BY sortOrder, name")
     suspend fun getAllActive(): List<TableFloorEntity>
 
+    @Query("SELECT * FROM table_floors WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun getByRemoteId(remoteId: String): TableFloorEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(floor: TableFloorEntity): Long
 
@@ -429,6 +447,9 @@ interface RestaurantTableDao {
 
     @Query("SELECT * FROM restaurant_tables WHERE isActive = 1 ORDER BY sortOrder, name")
     suspend fun getAllActive(): List<RestaurantTableEntity>
+
+    @Query("SELECT * FROM restaurant_tables WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun getByRemoteId(remoteId: String): RestaurantTableEntity?
 
     @Query("SELECT * FROM restaurant_tables WHERE isActive = 1 AND floorId = :floorId ORDER BY sortOrder, name")
     suspend fun getByFloor(floorId: Long): List<RestaurantTableEntity>

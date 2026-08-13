@@ -48,6 +48,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -161,11 +162,15 @@ fun OrderHistoryScreen(
     }
 
     if (state.showRefundDialog) {
+        val order = state.selectedOrder
         RefundOrderDialog(
-            maxAmount = state.selectedOrder?.total ?: 0.0,
+            maxAmount = ((order?.total ?: 0.0) - (order?.refundAmount ?: 0.0)).coerceAtLeast(0.0),
+            items = state.selectedItems,
             currencySymbol = state.currencySymbol,
             onDismiss = viewModel::dismissRefundDialog,
-            onConfirm = { amount, full -> viewModel.refundSelectedOrder(amount, full) }
+            onConfirm = { amount, full, itemRefunds, reason ->
+                viewModel.refundSelectedOrder(amount, full, itemRefunds, reason)
+            }
         )
     }
 
@@ -486,6 +491,7 @@ private fun paymentShortLabel(method: PaymentMethod): String = when (method) {
     PaymentMethod.TAP_TO_PAY -> "Tap"
     PaymentMethod.ADYEN_TERMINAL -> "Term"
     PaymentMethod.PAY_LATER -> "Later"
+    PaymentMethod.GIFT_CARD -> "Gift"
 }
 
 @Composable
@@ -700,6 +706,7 @@ private fun paymentLabel(method: PaymentMethod): String = when (method) {
     PaymentMethod.ADYEN_TERMINAL -> "Terminal"
     PaymentMethod.TAP_TO_PAY -> "Tap"
     PaymentMethod.PAY_LATER -> "Pay Later"
+    PaymentMethod.GIFT_CARD -> "Gift card"
 }
 
 private fun resolveOrderDiscount(order: TransactionEntity): Double {
@@ -842,6 +849,35 @@ private fun OrderDetailDialog(
                         Text("$discountLabel: -${formatMoney(orderDiscount, currencySymbol)}")
                     }
                     Text("Total: ${formatMoney(order.total, currencySymbol)}", fontWeight = FontWeight.Bold)
+                    if (order.refundAmount > 0.0) {
+                        Text(
+                            "Refunded: -${formatMoney(order.refundAmount, currencySymbol)}",
+                            color = Color(0xFFDC2626),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            "Net: ${formatMoney((order.total - order.refundAmount).coerceAtLeast(0.0), currencySymbol)}",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        order.refundReason?.takeIf { it.isNotBlank() }?.let { refundReason ->
+                            Text(
+                                "${stringResource(R.string.refund_reason)}: $refundReason",
+                                color = Color(0xFFDC2626),
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                    items.forEach { item ->
+                        if (item.refundedQuantity > 0) {
+                            Text(
+                                "${item.productName}: ${item.refundedQuantity} refunded",
+                                color = Color(0xFFDC2626),
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
                     if (order.paymentStatus == PaymentStatus.CANCELLED) {
                         order.cancelReason?.takeIf { it.isNotBlank() }?.let { reason ->
                             Text(
@@ -910,26 +946,52 @@ private fun CancelOrderDialog(
 @Composable
 private fun RefundOrderDialog(
     maxAmount: Double,
+    items: List<com.chaslay.pos.data.local.entity.TransactionItemEntity>,
     currencySymbol: String,
     onDismiss: () -> Unit,
-    onConfirm: (Double, Boolean) -> Unit
+    onConfirm: (Double, Boolean, List<Pair<Long, Int>>, String?) -> Unit
 ) {
+    var mode by remember { mutableStateOf("full") }
     var partial by remember { mutableStateOf(false) }
     var amountText by remember { mutableStateOf("") }
+    var reasonText by remember { mutableStateOf("") }
+    val refundableItems = items.mapNotNull { item ->
+        val left = (item.quantity - item.refundedQuantity).coerceAtLeast(0)
+        if (left <= 0) null else item to left
+    }
+    val selectedQty = remember(refundableItems) {
+        mutableStateMapOf<Long, Int>().apply {
+            refundableItems.forEach { (item, _) -> this[item.id] = 0 }
+        }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.refund_order)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = !partial, onClick = { partial = false })
-                    Text(stringResource(R.string.refund_full))
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = mode == "full",
+                        onClick = { mode = "full"; partial = false },
+                        label = { Text(stringResource(R.string.refund_full)) }
+                    )
+                    FilterChip(
+                        selected = mode == "amount",
+                        onClick = { mode = "amount"; partial = true },
+                        label = { Text(stringResource(R.string.refund_partial)) }
+                    )
+                    if (refundableItems.isNotEmpty()) {
+                        FilterChip(
+                            selected = mode == "items",
+                            onClick = { mode = "items"; partial = false },
+                            label = { Text(stringResource(R.string.refund_by_item)) }
+                        )
+                    }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = partial, onClick = { partial = true })
-                    Text(stringResource(R.string.refund_partial))
-                }
-                if (partial) {
+                if (mode == "amount") {
                     OutlinedTextField(
                         value = amountText,
                         onValueChange = { amountText = it },
@@ -937,14 +999,51 @@ private fun RefundOrderDialog(
                         singleLine = true
                     )
                 }
+                if (mode == "items") {
+                    refundableItems.forEach { (item, left) ->
+                        val qty = selectedQty[item.id] ?: 0
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(item.productName, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text("$left left", fontSize = 11.sp, color = Color.Gray)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = {
+                                    selectedQty[item.id] = (qty - 1).coerceAtLeast(0)
+                                }) { Text("−") }
+                                Text(qty.toString(), modifier = Modifier.padding(horizontal = 8.dp))
+                                TextButton(onClick = {
+                                    selectedQty[item.id] = (qty + 1).coerceAtMost(left)
+                                }) { Text("+") }
+                            }
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = reasonText,
+                    onValueChange = { reasonText = it },
+                    label = { Text(stringResource(R.string.refund_reason)) },
+                    singleLine = false,
+                    minLines = 2
+                )
             }
         },
         confirmButton = {
             Button(onClick = {
-                if (partial) {
-                    onConfirm(amountText.toDoubleOrNull() ?: 0.0, false)
-                } else {
-                    onConfirm(maxAmount, true)
+                val reason = reasonText.trim().takeIf { it.isNotBlank() }
+                when (mode) {
+                    "full" -> onConfirm(maxAmount, true, emptyList(), reason)
+                    "items" -> {
+                        val picks = selectedQty.mapNotNull { (id, qty) ->
+                            if (qty > 0) id to qty else null
+                        }
+                        onConfirm(0.0, false, picks, reason)
+                    }
+                    else -> onConfirm(amountText.toDoubleOrNull() ?: 0.0, false, emptyList(), reason)
                 }
             }) { Text(stringResource(R.string.confirm)) }
         },

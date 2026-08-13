@@ -27,6 +27,11 @@ interface SidebarProps {
   menuItems: SidebarNavEntry[];
   /** Distinguishes open-state persistence per panel (e.g. merchant / superadmin). */
   panelKey?: string;
+  /** Optional prominent action shown under panel branding (e.g. WebPOS). */
+  quickAction?: {
+    label: string;
+    path: string;
+  } | null;
 }
 
 const STORAGE_PREFIX = 'sidebar_groups_open:';
@@ -61,6 +66,7 @@ export default function Sidebar({
   onToggle,
   menuItems,
   panelKey = 'default',
+  quickAction = null,
 }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -182,6 +188,25 @@ export default function Sidebar({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {quickAction && (
+          <div className="px-3 pt-3 pb-3 border-b border-slate-800 shrink-0">
+            <Link
+              to={quickAction.path}
+              onClick={closeMobile}
+              className={`flex items-center justify-center gap-2 w-full px-4 py-3.5 rounded-lg text-sm font-bold uppercase tracking-wide transition-colors shadow-lg ${
+                isPathActive(location.pathname, quickAction.path)
+                  ? 'bg-emerald-400 text-white ring-2 ring-emerald-300/60'
+                  : 'bg-[#22c55e] hover:bg-emerald-400 text-white'
+              }`}
+            >
+              <span aria-hidden className="text-base leading-none">
+                🖥️
+              </span>
+              <span>{quickAction.label}</span>
+            </Link>
+          </div>
+        )}
 
         <nav className="flex-1 min-h-0 p-2 space-y-0.5 overflow-y-auto">
           {menuItems.map((entry) => {

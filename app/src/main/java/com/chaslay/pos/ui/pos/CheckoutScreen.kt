@@ -61,6 +61,8 @@ import com.chaslay.pos.ui.theme.VectronColors
 import com.chaslay.pos.ui.theme.vectronColors
 import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.DiscountPreset
+import com.chaslay.pos.domain.model.FulfillmentType
+import com.chaslay.pos.domain.model.LoyaltyMath
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.applyCashRounding
 import java.util.Locale
@@ -75,7 +77,12 @@ data class CheckoutState(
     val tenderAmount: Double = 0.0,
     val printReceipt: Boolean = false,
     val showTipPanel: Boolean = false,
-    val showDiscountPanel: Boolean = false
+    val showDiscountPanel: Boolean = false,
+    val payWithPoints: Boolean = false,
+    val pointsRedeemed: Int = 0,
+    val pointsDiscount: Double = 0.0,
+    val payWithGiftCard: Boolean = false,
+    val giftCardRedeemAmount: Double = 0.0
 )
 
 @Composable
@@ -99,6 +106,9 @@ fun CheckoutScreen(
     splitBillCount: Int? = null,
     isEqualSplit: Boolean = false,
     equalSplitPaidCount: Int = 0,
+    membershipPointsBalance: Int? = null,
+    membershipGiftBalance: Double? = null,
+    giftCardsEnabled: Boolean = false,
     onBack: () -> Unit,
     onSelectMethod: (PaymentMethod) -> Unit,
     onTipAmount: (Double) -> Unit,
@@ -114,7 +124,9 @@ fun CheckoutScreen(
     onComplete: () -> Unit,
     onPrevSplitBill: () -> Unit = {},
     onNextSplitBill: () -> Unit = {},
-    onScanBarcode: () -> Unit = {}
+    onScanBarcode: () -> Unit = {},
+    onTogglePayWithPoints: (Boolean) -> Unit = {},
+    onTogglePayWithGiftCard: (Boolean) -> Unit = {}
 ) {
     val equalSplitCount = if (isEqualSplit) splitBillCount ?: 1 else 1
     val totals = rememberCheckoutTotals(cart, checkoutState, equalSplitCount)
@@ -262,7 +274,7 @@ fun CheckoutScreen(
                 }
             }
 
-            if (cart.pickupTimeMs != null) {
+            if (cart.pickupTimeMs != null || cart.fulfillmentType == FulfillmentType.PICKUP || cart.fulfillmentType == FulfillmentType.DELIVERY) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     PaymentMethodCard(
@@ -274,6 +286,85 @@ fun CheckoutScreen(
                         onClick = { onSelectMethod(PaymentMethod.PAY_LATER) },
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+            }
+
+            if ((membershipPointsBalance ?: 0) >= LoyaltyMath.REDEEM_THRESHOLD_POINTS) {
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    stringResource(R.string.checkout_loyalty_points).uppercase(),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                FilterChip(
+                    selected = checkoutState.payWithPoints,
+                    onClick = { onTogglePayWithPoints(!checkoutState.payWithPoints) },
+                    label = {
+                        Text(
+                            stringResource(
+                                R.string.checkout_pay_with_points,
+                                membershipPointsBalance ?: 0
+                            )
+                        )
+                    }
+                )
+                if (checkoutState.payWithPoints && checkoutState.pointsDiscount > 0) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        stringResource(
+                            R.string.checkout_points_discount,
+                            checkoutState.pointsRedeemed,
+                            formatMoney(checkoutState.pointsDiscount, currencySymbol)
+                        ),
+                        fontSize = 12.sp,
+                        color = Color(0xFF1565C0)
+                    )
+                }
+            }
+
+            if (giftCardsEnabled && (membershipGiftBalance ?: 0.0) > 0.0) {
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    stringResource(R.string.checkout_gift_card_balance).uppercase(),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                FilterChip(
+                    selected = checkoutState.payWithGiftCard,
+                    onClick = { onTogglePayWithGiftCard(!checkoutState.payWithGiftCard) },
+                    label = {
+                        Text(
+                            stringResource(
+                                R.string.checkout_pay_with_gift_card,
+                                formatMoney(membershipGiftBalance ?: 0.0, currencySymbol)
+                            )
+                        )
+                    }
+                )
+                if (checkoutState.payWithGiftCard && checkoutState.giftCardRedeemAmount > 0) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        stringResource(
+                            R.string.checkout_gift_card_applied,
+                            formatMoney(checkoutState.giftCardRedeemAmount, currencySymbol)
+                        ),
+                        fontSize = 12.sp,
+                        color = Color(0xFF1565C0)
+                    )
+                    if (totals.roundedTotal > 0.001) {
+                        Text(
+                            stringResource(
+                                R.string.checkout_gift_card_remainder,
+                                formatMoney(totals.roundedTotal, currencySymbol)
+                            ),
+                            fontSize = 12.sp,
+                            color = vc.textSecondary
+                        )
+                    }
                 }
             }
 
@@ -433,6 +524,12 @@ fun CheckoutScreen(
                     }
                     if (checkoutState.tipAmount > 0) {
                         SummaryLine(stringResource(R.string.tip), formatMoney(checkoutState.tipAmount, currencySymbol))
+                    }
+                    if (checkoutState.pointsDiscount > 0) {
+                        SummaryLine(
+                            stringResource(R.string.checkout_points_applied, checkoutState.pointsRedeemed),
+                            "-${formatMoney(checkoutState.pointsDiscount, currencySymbol)}"
+                        )
                     }
                     if (totals.roundingAdj != 0.0) {
                         SummaryLine(stringResource(R.string.rounding), formatMoney(totals.roundingAdj, currencySymbol))
@@ -618,8 +715,11 @@ private fun rememberCheckoutTotals(
     }
     val preTipTotal = cart.merchandiseTotal(checkoutState.discountPercent)
     val shareTotal = if (equalSplitCount > 1) preTipTotal / equalSplitCount else preTipTotal
-    val roundedTotal = applyCashRounding(shareTotal + checkoutState.tipAmount, checkoutState.roundingStep)
-    val roundingAdj = roundedTotal - (shareTotal + checkoutState.tipAmount)
+    val afterPoints = (shareTotal + checkoutState.tipAmount - checkoutState.pointsDiscount).coerceAtLeast(0.0)
+    val giftApplied = if (checkoutState.payWithGiftCard) checkoutState.giftCardRedeemAmount else 0.0
+    val afterGiftCard = (afterPoints - giftApplied).coerceAtLeast(0.0)
+    val roundedTotal = applyCashRounding(afterGiftCard, checkoutState.roundingStep)
+    val roundingAdj = roundedTotal - afterGiftCard
     return CheckoutTotals(netSubtotal, cart.itemDiscountTotal, cartDiscount, preTipTotal, roundedTotal, roundingAdj)
 }
 

@@ -22,7 +22,12 @@ import com.chaslay.pos.data.repository.HeldOrderRepository
 import com.chaslay.pos.data.repository.TableOrderRepository
 import com.chaslay.pos.data.repository.TableTransferResult
 import com.chaslay.pos.data.repository.TransactionRepository
+import com.chaslay.pos.domain.model.AttachedMembership
 import com.chaslay.pos.domain.model.CartItem
+import com.chaslay.pos.domain.model.GiftCardLineMeta
+import com.chaslay.pos.domain.model.GiftCardOp
+import com.chaslay.pos.domain.model.GiftCardProducts
+import com.chaslay.pos.domain.model.LoyaltyMath
 import com.chaslay.pos.domain.model.ComboPickState
 import com.chaslay.pos.domain.model.ComboSelection
 import com.chaslay.pos.domain.model.CartSummary
@@ -161,7 +166,20 @@ data class PosUiState(
     val showTableTransferItemsDialog: Boolean = false,
     val showTableTransferDestDialog: Boolean = false,
     val tableTransferMode: TableTransferMode? = null,
-    val tableTransferSelectedIds: Set<String> = emptySet()
+    val tableTransferSelectedIds: Set<String> = emptySet(),
+    val attachedMembership: AttachedMembership? = null,
+    val showMembershipDialog: Boolean = false,
+    val giftCardsEnabled: Boolean = false,
+    val membershipBusy: Boolean = false,
+    val membershipLookupError: String? = null,
+    val lastLoyaltyPointsEarned: Int? = null,
+    val lastLoyaltyPointsBalance: Int? = null,
+    val showGiftCardOpsDialog: Boolean = false,
+    val giftCardOpsMode: GiftCardOp? = null,
+    val giftCardSettings: com.chaslay.pos.data.remote.dto.GiftCardSettingsDto? = null,
+    val giftCardOpsBusy: Boolean = false,
+    val giftCardOpsError: String? = null,
+    val giftCardOpsLookedUpCard: com.chaslay.pos.data.remote.dto.GiftCardDto? = null
 ) {
     val kitchenMessagePresets: List<KitchenMessagePreset> = listOf(
         KitchenMessagePreset("Bring next dish", "Bring next dish"),
@@ -191,6 +209,9 @@ class PosViewModel @Inject constructor(
     private val scaleService: com.chaslay.pos.scale.AclasScaleService,
     private val floorSyncRepository: FloorSyncRepository,
     private val floorSyncEvents: FloorSyncEvents,
+    private val giftCardRepository: com.chaslay.pos.data.repository.GiftCardRepository,
+    private val syncApi: com.chaslay.pos.data.remote.SyncApi,
+    private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences,
     @ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
@@ -308,11 +329,28 @@ class PosViewModel @Inject constructor(
             showTableTransferItemsDialog = extras.showTableTransferItemsDialog,
             showTableTransferDestDialog = extras.showTableTransferDestDialog,
             tableTransferMode = extras.tableTransferMode,
-            tableTransferSelectedIds = extras.tableTransferSelectedIds
+            tableTransferSelectedIds = extras.tableTransferSelectedIds,
+            attachedMembership = extras.attachedMembership,
+            showMembershipDialog = extras.showMembershipDialog,
+            giftCardsEnabled = extras.giftCardsEnabled,
+            membershipBusy = extras.membershipBusy,
+            membershipLookupError = extras.membershipLookupError,
+            lastLoyaltyPointsEarned = extras.lastLoyaltyPointsEarned,
+            lastLoyaltyPointsBalance = extras.lastLoyaltyPointsBalance,
+            showGiftCardOpsDialog = extras.showGiftCardOpsDialog,
+            giftCardOpsMode = extras.giftCardOpsMode,
+            giftCardSettings = extras.giftCardSettings,
+            giftCardOpsBusy = extras.giftCardOpsBusy,
+            giftCardOpsError = extras.giftCardOpsError,
+            giftCardOpsLookedUpCard = extras.giftCardOpsLookedUpCard
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PosUiState())
 
     init {
+        viewModelScope.launch {
+            refreshGiftCardFeature()
+            syncCloudPosSettings()
+        }
         viewModelScope.launch {
             settingsRepository.observeSettings().collect { settings ->
                 if (settings.scaleEnabled && !settings.scaleUsbAddress.isNullOrBlank()) {
@@ -404,7 +442,9 @@ class PosViewModel @Inject constructor(
         updateExtras { it.copy(showTablePicker = true) }
     }
 
-    fun dismissTablePicker() = updateExtras { it.copy(showTablePicker = false) }
+    fun dismissTablePicker() = updateExtras {
+        it.copy(showTablePicker = false, pendingDineInCart = null)
+    }
 
     fun openTable(tableId: Long) {
         if (!isRestaurantMode()) return
@@ -431,7 +471,9 @@ class PosViewModel @Inject constructor(
     }
 
     fun dismissGuestCountDialog() {
-        updateExtras { it.copy(showGuestCountDialog = false, pendingTableId = null) }
+        updateExtras {
+            it.copy(showGuestCountDialog = false, pendingTableId = null, pendingDineInCart = null)
+        }
     }
 
     fun confirmGuestCount(count: Int) {
@@ -460,6 +502,7 @@ class PosViewModel @Inject constructor(
             userName,
             guestCount = guestCount
         )
+        val pendingCart = _uiExtras.value.pendingDineInCart
         cartManager.loadTableOrder(
             tableId = table.id,
             tableName = table.name,
@@ -471,16 +514,29 @@ class PosViewModel @Inject constructor(
             guestCount = order.guestCount,
             vatIncludedInPrice = cachedSettings.vatIncludedInPrice
         )
+        if (pendingCart != null) {
+            pendingCart.items.forEach { cartManager.addItem(it) }
+            if (pendingCart.discountPercent > 0.0 || pendingCart.discountAmount > 0.0) {
+                cartManager.applyDiscount(pendingCart.discountPercent, pendingCart.discountAmount)
+            }
+            pendingCart.cartNotes?.let { cartManager.setNotes(it) }
+        }
+        applyServiceTypeRates(ServiceType.DINE_IN)
         val sentFlags = tableOrderRepository.getOrderItemEntities(order.id)
             .associate { it.id to (it.sentToKitchenAt != null) }
         cartManager.refreshSentFlags(sentFlags)
-        applyServiceTypeRates(ServiceType.DINE_IN)
-        val hasSentKitchen = items.any { it.sentToKitchen }
+        if (pendingCart != null) {
+            tableOrderMutex.withLock { flushTableOrderSync() }
+        }
+        val mergedItems = cartManager.snapshot().items
+        val hasSentKitchen = mergedItems.any { it.sentToKitchen }
         updateExtras {
             it.copy(
                 showTablePicker = false,
+                pendingDineInCart = null,
                 kitchenSentToPrinter = order.lastSentAt != null,
-                orderCommittedForCancel = hasSentKitchen || order.lastSentAt != null
+                orderCommittedForCancel = hasSentKitchen || order.lastSentAt != null,
+                snackbarMessage = pendingCart?.let { "Switched to dine-in" }
             )
         }
         refreshTables()
@@ -489,7 +545,7 @@ class PosViewModel @Inject constructor(
     fun switchToWalkIn() {
         viewModelScope.launch {
             persistTableOrderIfNeeded()
-            cartManager.clear()
+            cartManager.resetForNewWalkInOrder()
             refreshTables()
             updateExtras { it.copy(showTablePicker = false, kitchenSentToPrinter = false, orderCommittedForCancel = false) }
         }
@@ -498,7 +554,7 @@ class PosViewModel @Inject constructor(
     fun closeTable() {
         viewModelScope.launch {
             persistTableOrderIfNeeded()
-            cartManager.clear()
+            cartManager.resetForNewWalkInOrder()
             refreshTables()
             updateExtras { it.copy(kitchenSentToPrinter = false, orderCommittedForCancel = false) }
         }
@@ -1108,6 +1164,44 @@ class PosViewModel @Inject constructor(
         persistTableOrderAsync()
     }
 
+    fun sendCurrentOrderToKitchen() {
+        val cart = cartManager.snapshot()
+        if (cart.isEmpty) {
+            showError("Kitchen", "Add items before sending to kitchen")
+            return
+        }
+        if (cart.tableId != null) {
+            sendToKitchen(courseNumber = null)
+            return
+        }
+        viewModelScope.launch {
+            val unsent = cart.items.filter { !it.sentToKitchen }
+            if (unsent.isEmpty()) {
+                showError("Kitchen", "No new items to send")
+                return@launch
+            }
+            runCatching {
+                printWalkInKitchenTicket(cart.copy(items = unsent))
+                cartManager.refreshSentFlags(
+                    cart.items.associate { item ->
+                        item.id to (item.sentToKitchen || unsent.any { it.id == item.id })
+                    }
+                )
+            }.onSuccess {
+                updateExtras {
+                    it.copy(
+                        orderCommittedForCancel = true,
+                        snackbarMessage = "Sent ${unsent.size} item(s) to kitchen",
+                        selectedCartItemId = null,
+                        keypadBuffer = ""
+                    )
+                }
+            }.onFailure { e ->
+                showError("Kitchen", e.message ?: "Kitchen print failed")
+            }
+        }
+    }
+
     fun sendToKitchen(courseNumber: Int? = null) {
         if (!isRestaurantMode()) return
         val cart = cartManager.snapshot()
@@ -1261,7 +1355,6 @@ class PosViewModel @Inject constructor(
     }
 
     fun holdOrder(sendToKitchen: Boolean) {
-        if (sendToKitchen && !isRestaurantMode()) return
         val cart = cartManager.snapshot()
         if (cart.isEmpty) {
             showError("Hold", "Add items before holding the order")
@@ -1323,7 +1416,7 @@ class PosViewModel @Inject constructor(
             }
 
             result.onSuccess {
-                cartManager.clear()
+                cartManager.resetForNewWalkInOrder()
                 updateExtras {
                     it.copy(
                         selectedCartItemId = null,
@@ -1594,11 +1687,46 @@ class PosViewModel @Inject constructor(
         }
     }
 
+    fun beginPayLaterCheckout() {
+        val cart = cartManager.snapshot()
+        if (cart.isEmpty) return
+        if (cart.fulfillmentType == FulfillmentType.DELIVERY && cart.deliveryName.isNullOrBlank()) {
+            showAttachCustomerDialog()
+            return
+        }
+        viewModelScope.launch {
+            if (cart.fulfillmentType !in setOf(FulfillmentType.PICKUP, FulfillmentType.DELIVERY)) {
+                cartManager.setPickupOrder(suggestOrderNumber(), pickupTimeMs = null)
+            }
+            openCheckout(PaymentMethod.PAY_LATER)
+        }
+    }
+
     fun openCheckout(method: PaymentMethod = PaymentMethod.CASH, fromSplit: Boolean = false) {
         val full = cartManager.snapshot()
         val payable = cartManager.paymentSnapshot()
         if (payable.isEmpty && !(full.splitCount > 1 && !full.splitByItems)) return
         val resolvedMethod = resolveCheckoutMethod(method)
+        val membership = _uiExtras.value.attachedMembership
+        val cartForMerchandise = cartManager.paymentSnapshot()
+        val merchandiseTotal = cartForMerchandise.merchandiseTotal()
+        val canPayWithPoints = membership?.membershipEnabled == true &&
+            membership.pointsBalance >= LoyaltyMath.REDEEM_THRESHOLD_POINTS
+        val defaultPayWithPoints = canPayWithPoints
+        val maxPoints = membership?.let {
+            LoyaltyMath.maxRedeemablePoints(merchandiseTotal, it.pointsBalance)
+        } ?: 0
+        val pointsDiscount = if (defaultPayWithPoints && maxPoints > 0) {
+            LoyaltyMath.computeCashDiscount(maxPoints)
+        } else 0.0
+        val afterPoints = (merchandiseTotal - pointsDiscount).coerceAtLeast(0.0)
+        val giftBalance = membership?.giftBalance ?: 0.0
+        val canPayWithGiftCard = _uiExtras.value.giftCardsEnabled &&
+            giftBalance > 0.01 &&
+            cartForMerchandise.items.any { !it.isGiftCardLine }
+        val defaultGiftRedeem = if (canPayWithGiftCard) {
+            kotlin.math.min(giftBalance, afterPoints)
+        } else 0.0
         updateExtras {
             it.copy(
                 showCheckoutScreen = true,
@@ -1606,7 +1734,12 @@ class PosViewModel @Inject constructor(
                 returnToSplitAfterCheckout = false,
                 checkoutState = CheckoutState(
                     method = resolvedMethod,
-                    roundingStep = checkoutRoundingDefault()
+                    roundingStep = checkoutRoundingDefault(),
+                    payWithPoints = defaultPayWithPoints && pointsDiscount > 0,
+                    pointsRedeemed = if (defaultPayWithPoints) maxPoints else 0,
+                    pointsDiscount = pointsDiscount,
+                    payWithGiftCard = defaultGiftRedeem > 0.01,
+                    giftCardRedeemAmount = defaultGiftRedeem
                 ),
                 errorMessage = null,
                 errorTitle = null
@@ -1661,6 +1794,58 @@ class PosViewModel @Inject constructor(
         updateExtras { it.copy(checkoutState = it.checkoutState.copy(printReceipt = print)) }
     }
 
+    fun updateCheckoutPayWithPoints(enabled: Boolean) {
+        val membership = _uiExtras.value.attachedMembership ?: return
+        val cart = cartManager.paymentSnapshot()
+        val merchandiseTotal = cart.merchandiseTotal(_uiExtras.value.checkoutState.discountPercent)
+        val equalSplit = cart.splitCount > 1 && !cart.splitByItems
+        val shareTotal = if (equalSplit) merchandiseTotal / cart.splitCount else merchandiseTotal
+        val payable = (shareTotal + _uiExtras.value.checkoutState.tipAmount).coerceAtLeast(0.0)
+        val maxPoints = LoyaltyMath.maxRedeemablePoints(payable, membership.pointsBalance)
+        val points = if (enabled) maxPoints else 0
+        val discount = if (enabled) LoyaltyMath.computeCashDiscount(points) else 0.0
+        val afterPoints = (payable - discount).coerceAtLeast(0.0)
+        val giftRedeem = recomputeGiftCardRedeem(afterPoints, membership.giftBalance, enabledGiftCard = _uiExtras.value.checkoutState.payWithGiftCard)
+        updateExtras {
+            it.copy(
+                checkoutState = it.checkoutState.copy(
+                    payWithPoints = enabled && points > 0,
+                    pointsRedeemed = points,
+                    pointsDiscount = discount,
+                    giftCardRedeemAmount = giftRedeem
+                )
+            )
+        }
+    }
+
+    fun updateCheckoutPayWithGiftCard(enabled: Boolean) {
+        val membership = _uiExtras.value.attachedMembership ?: return
+        val cart = cartManager.paymentSnapshot()
+        val merchandiseTotal = cart.merchandiseTotal(_uiExtras.value.checkoutState.discountPercent)
+        val equalSplit = cart.splitCount > 1 && !cart.splitByItems
+        val shareTotal = if (equalSplit) merchandiseTotal / cart.splitCount else merchandiseTotal
+        val payable = (shareTotal + _uiExtras.value.checkoutState.tipAmount).coerceAtLeast(0.0)
+        val afterPoints = (payable - _uiExtras.value.checkoutState.pointsDiscount).coerceAtLeast(0.0)
+        val giftRedeem = if (enabled) recomputeGiftCardRedeem(afterPoints, membership.giftBalance, enabledGiftCard = true) else 0.0
+        updateExtras {
+            it.copy(
+                checkoutState = it.checkoutState.copy(
+                    payWithGiftCard = enabled && giftRedeem > 0,
+                    giftCardRedeemAmount = giftRedeem
+                )
+            )
+        }
+    }
+
+    private fun recomputeGiftCardRedeem(
+        amountDue: Double,
+        giftBalance: Double,
+        enabledGiftCard: Boolean
+    ): Double {
+        if (!enabledGiftCard || giftBalance <= 0.01 || amountDue <= 0.001) return 0.0
+        return kotlin.math.min(giftBalance, amountDue)
+    }
+
     fun toggleCheckoutTipPanel() {
         updateExtras {
             it.copy(checkoutState = it.checkoutState.copy(showTipPanel = !it.checkoutState.showTipPanel))
@@ -1708,14 +1893,294 @@ class PosViewModel @Inject constructor(
 
     fun dismissAttachCustomerDialog() = updateExtras { it.copy(showAttachCustomerDialog = false) }
 
-    fun attachCustomerToCart(customer: CustomerEntity) {
-        cartManager.setCustomerInfo(
-            name = customer.name,
-            phone = customer.phone,
-            email = customer.email,
-            address = customer.address,
-            zip = customer.zip
+    fun refreshGiftCardFeature() {
+        viewModelScope.launch {
+            val token = syncPreferences.getDashboardToken()
+            val enabled = runCatching {
+                syncApi.paymentConfig().methods?.giftCard == true && !token.isNullOrBlank()
+            }.getOrDefault(false)
+            updateExtras { it.copy(giftCardsEnabled = enabled) }
+        }
+    }
+
+    private suspend fun syncCloudPosSettings() {
+        runCatching {
+            val cfg = syncApi.paymentConfig()
+            val current = settingsRepository.getSettings()
+            var merged = current
+            cfg.receiptBaseUrl?.takeIf { it.isNotBlank() }?.let { base ->
+                merged = merged.copy(
+                    receiptBaseUrl = com.chaslay.pos.data.repository.ReceiptPublicUrls.normalizeBase(base)
+                )
+            }
+            cfg.scale?.let { scale ->
+                val usb = scale.usbAddress?.trim()?.takeIf { it.isNotEmpty() }
+                if (scale.enabled || usb != null) {
+                    merged = merged.copy(
+                        scaleEnabled = scale.enabled || usb != null || current.scaleEnabled,
+                        scaleUsbAddress = usb ?: current.scaleUsbAddress
+                    )
+                }
+            }
+            if (merged != current) {
+                settingsRepository.saveSettings(merged)
+            }
+        }
+    }
+
+    fun showMembershipDialog() {
+        refreshGiftCardFeature()
+        updateExtras {
+            it.copy(showMembershipDialog = true, membershipLookupError = null)
+        }
+    }
+
+    fun showGiftCardSellDialog() = openGiftCardOpsDialog(GiftCardOp.SELL)
+
+    fun showGiftCardReloadDialog() = openGiftCardOpsDialog(GiftCardOp.RELOAD)
+
+    private fun openGiftCardOpsDialog(mode: GiftCardOp) {
+        refreshGiftCardFeature()
+        updateExtras {
+            it.copy(
+                showGiftCardOpsDialog = true,
+                giftCardOpsMode = mode,
+                giftCardOpsBusy = true,
+                giftCardOpsError = null,
+                giftCardOpsLookedUpCard = null
+            )
+        }
+        viewModelScope.launch {
+            giftCardRepository.fetchSettings()
+                .onSuccess { settings ->
+                    updateExtras {
+                        it.copy(giftCardSettings = settings, giftCardOpsBusy = false)
+                    }
+                }
+                .onFailure { e ->
+                    updateExtras {
+                        it.copy(
+                            giftCardOpsBusy = false,
+                            giftCardOpsError = e.message ?: "Gift card settings unavailable"
+                        )
+                    }
+                }
+        }
+    }
+
+    fun dismissGiftCardOpsDialog() {
+        updateExtras {
+            it.copy(
+                showGiftCardOpsDialog = false,
+                giftCardOpsMode = null,
+                giftCardOpsError = null,
+                giftCardOpsLookedUpCard = null
+            )
+        }
+    }
+
+    fun lookupGiftCardForOps(rawCode: String) {
+        val code = rawCode.trim()
+        if (code.isEmpty()) return
+        viewModelScope.launch {
+            updateExtras { it.copy(giftCardOpsBusy = true, giftCardOpsError = null) }
+            giftCardRepository.lookupPhysical(code)
+                .onSuccess { card ->
+                    updateExtras {
+                        it.copy(
+                            giftCardOpsLookedUpCard = card,
+                            giftCardOpsBusy = false,
+                            giftCardOpsError = null
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    updateExtras {
+                        it.copy(
+                            giftCardOpsBusy = false,
+                            giftCardOpsError = e.message ?: "Card not found",
+                            giftCardOpsLookedUpCard = null
+                        )
+                    }
+                }
+        }
+    }
+
+    fun addGiftCardLineToCart(
+        amount: Double,
+        cardNumber: String,
+        cardId: String?,
+        holderName: String?
+    ) {
+        val mode = _uiExtras.value.giftCardOpsMode ?: return
+        val settings = _uiExtras.value.giftCardSettings
+        val min = settings?.minAmount ?: 5.0
+        val max = settings?.maxAmount ?: 500.0
+        if (amount !in min..max) {
+            updateExtras { it.copy(giftCardOpsError = "Amount must be between $min and $max") }
+            return
+        }
+        if (mode == GiftCardOp.RELOAD && cardId.isNullOrBlank()) {
+            updateExtras { it.copy(giftCardOpsError = "Look up the card before reloading") }
+            return
+        }
+        val normalizedNumber = LoyaltyMath.normalizeRfidUid(cardNumber).ifBlank { cardNumber.trim() }
+        if (normalizedNumber.isBlank()) {
+            updateExtras { it.copy(giftCardOpsError = "Card number is required") }
+            return
+        }
+        val meta = GiftCardLineMeta(
+            op = mode,
+            cardNumber = normalizedNumber,
+            cardId = cardId,
+            amount = com.chaslay.pos.domain.model.roundMoney(amount),
+            holderName = holderName
         )
+        val lineName = when (mode) {
+            GiftCardOp.SELL -> "Gift card (new)"
+            GiftCardOp.RELOAD -> "Gift card reload"
+        }
+        val productId = when (mode) {
+            GiftCardOp.SELL -> GiftCardProducts.SELL_PRODUCT_ID
+            GiftCardOp.RELOAD -> GiftCardProducts.RELOAD_PRODUCT_ID
+        }
+        cartManager.addItem(
+            CartItem(
+                id = "gc-${System.currentTimeMillis()}",
+                productId = productId,
+                productName = lineName,
+                unitPrice = meta.amount,
+                quantity = 1,
+                taxRate = 0.0,
+                notes = holderName?.let { "Holder: $it" },
+                giftCard = meta
+            )
+        )
+        dismissGiftCardOpsDialog()
+        updateExtras { it.copy(snackbarMessage = "$lineName added to cart") }
+    }
+
+    private suspend fun creditGiftCardLinesAfterSale(items: List<CartItem>, orderId: String) {
+        items.filter { it.giftCard != null }.forEach { item ->
+            val meta = item.giftCard ?: return@forEach
+            giftCardRepository.creditCard(
+                op = meta.op,
+                cardNumber = meta.cardNumber,
+                amount = meta.amount,
+                cardId = meta.cardId,
+                orderId = orderId,
+                mediaType = meta.mediaType
+            ).onFailure { e ->
+                Log.w("POS", "Gift card credit failed for ${meta.cardNumber}", e)
+                updateExtras { it.copy(snackbarMessage = e.message ?: "Gift card credit failed") }
+            }
+        }
+    }
+
+    fun dismissMembershipDialog() = updateExtras { it.copy(showMembershipDialog = false, membershipLookupError = null) }
+
+    fun clearAttachedMembership() {
+        updateExtras { it.copy(attachedMembership = null, membershipLookupError = null) }
+    }
+
+    fun lookupMembershipCard(rawCode: String) {
+        val code = rawCode.trim()
+        if (code.isEmpty()) return
+        viewModelScope.launch {
+            updateExtras { it.copy(membershipBusy = true, membershipLookupError = null) }
+            giftCardRepository.lookupPhysical(code)
+                .onSuccess { card -> attachMembershipCard(giftCardRepository.toAttachedMembership(card)) }
+                .onFailure { e ->
+                    updateExtras {
+                        it.copy(
+                            membershipBusy = false,
+                            membershipLookupError = e.message ?: "Card not found"
+                        )
+                    }
+                }
+        }
+    }
+
+    fun onRfidScanned(rawCode: String) {
+        if (rawCode.isBlank()) return
+        lookupMembershipCard(rawCode)
+    }
+
+    private fun attachMembershipCard(membership: AttachedMembership) {
+        membership.customerName?.takeIf { it.isNotBlank() }?.let { name ->
+            cartManager.setCustomerInfo(
+                name = name,
+                phone = null,
+                email = null,
+                address = null,
+                zip = null
+            )
+        }
+        updateExtras {
+            it.copy(
+                attachedMembership = membership,
+                membershipBusy = false,
+                membershipLookupError = null,
+                showMembershipDialog = false,
+                snackbarMessage = membership.customerName ?: membership.cardNumber
+            )
+        }
+    }
+
+    private fun clearMembershipOnNewSale() {
+        updateExtras {
+            it.copy(
+                attachedMembership = null,
+                membershipLookupError = null,
+                lastLoyaltyPointsEarned = null,
+                lastLoyaltyPointsBalance = null
+            )
+        }
+    }
+
+    private suspend fun applyLoyaltyAfterSale(
+        membership: AttachedMembership,
+        transactionId: String,
+        paidSubtotal: Double,
+        pointsRedeemed: Int
+    ) {
+        if (pointsRedeemed > 0) {
+            giftCardRepository.redeemPoints(membership.cardId, pointsRedeemed, transactionId)
+        }
+        val earned = LoyaltyMath.computeEarnPoints(paidSubtotal)
+        if (earned > 0) {
+            giftCardRepository.earnPoints(membership.cardId, earned, transactionId)
+                .onSuccess { balance ->
+                    updateExtras {
+                        it.copy(
+                            lastLoyaltyPointsEarned = earned,
+                            lastLoyaltyPointsBalance = balance
+                        )
+                    }
+                }
+        }
+    }
+
+    fun attachCustomerToCart(customer: CustomerEntity) {
+        val cart = cartManager.snapshot()
+        if (cart.fulfillmentType == FulfillmentType.DELIVERY) {
+            cartManager.setDeliveryOrder(
+                name = customer.name,
+                address = customer.address.orEmpty(),
+                zip = customer.zip.orEmpty(),
+                phone = customer.phone.orEmpty(),
+                orderNumber = cart.orderNumber ?: suggestOrderNumber().replace("P-", "D-"),
+                deliveryTimeMs = cart.pickupTimeMs
+            )
+        } else {
+            cartManager.setCustomerInfo(
+                name = customer.name,
+                phone = customer.phone,
+                email = customer.email,
+                address = customer.address,
+                zip = customer.zip
+            )
+        }
         updateExtras {
             it.copy(
                 showAttachCustomerDialog = false,
@@ -1743,7 +2208,10 @@ class PosViewModel @Inject constructor(
             ServiceType.TAKEAWAY -> {
                 if (isRestaurantMode()) {
                     refreshTables()
-                    updateExtras { it.copy(showTablePicker = true) }
+                    val pendingCart = cart.takeIf { !it.isEmpty }?.copy(
+                        items = cart.items.map { item -> item.copy(sentToKitchen = false) }
+                    )
+                    updateExtras { it.copy(showTablePicker = true, pendingDineInCart = pendingCart) }
                 } else {
                     setServiceType(ServiceType.DINE_IN)
                     updateExtras { it.copy(snackbarMessage = "Switched to dine-in") }
@@ -1812,6 +2280,10 @@ class PosViewModel @Inject constructor(
             val settings = settingsRepository.getSettings()
             val total = applyCashRounding(cart.merchandiseTotal(), settings.roundingStep)
             val staffName = sessionManager.currentUserName.first() ?: "Staff"
+            val membership = _uiExtras.value.attachedMembership
+            val pointsEarned = membership?.takeIf { it.membershipEnabled }?.let {
+                LoyaltyMath.computeEarnPoints(cart.merchandiseTotal())
+            }
             val context = com.chaslay.pos.printer.ReceiptPrintContext(
                 orderNumber = cart.orderNumber,
                 serviceType = cart.serviceType,
@@ -1819,7 +2291,11 @@ class PosViewModel @Inject constructor(
                 tableName = cart.tableName,
                 paymentMethod = null,
                 staffName = staffName,
-                isProvisional = true
+                isProvisional = true,
+                loyaltyPointsEarned = pointsEarned,
+                loyaltyPointsBalance = membership?.pointsBalance?.let { balance ->
+                    if (pointsEarned != null && pointsEarned > 0) balance + pointsEarned else balance
+                }
             )
             withContext(Dispatchers.IO) {
                 printerService.routeCartReceipt(
@@ -1916,6 +2392,10 @@ class PosViewModel @Inject constructor(
                 }
             }
         }
+        val after = cartManager.snapshot()
+        if (after.isEmpty && after.tableId == null) {
+            cartManager.resetForNewWalkInOrder()
+        }
     }
 
     fun printCompletedReceipt() {
@@ -1930,7 +2410,14 @@ class PosViewModel @Inject constructor(
             val customerCopy = _uiExtras.value.adyenCustomerReceipt
                 ?: com.chaslay.pos.payment.AdyenPaymentReceiptStorage.customerReceipt(transaction)
             withContext(Dispatchers.IO) {
-                printerService.routeReceipt(settings, transaction, full.second, customerCopy)
+                printerService.routeReceipt(
+                    settings,
+                    transaction,
+                    full.second,
+                    customerCopy,
+                    loyaltyPointsEarned = _uiExtras.value.lastLoyaltyPointsEarned,
+                    loyaltyPointsBalance = _uiExtras.value.lastLoyaltyPointsBalance
+                )
             }.onSuccess {
                 updateExtras { it.copy(orderCompleteNotice = "Receipt printed") }
             }.onFailure { e ->
@@ -2094,6 +2581,7 @@ class PosViewModel @Inject constructor(
                     showOrderComplete = true,
                     completedTransaction = publishedTx,
                     receiptPublicUrl = publicReceiptUrl,
+                    orderCompleteNotice = receiptUploadNotice(publicReceiptUrl),
                     successMessage = "Payment completed",
                     selectedCartItemId = null,
                     keypadBuffer = "",
@@ -2140,9 +2628,12 @@ class PosViewModel @Inject constructor(
                     merchandiseTotal / fullCart.splitCount + checkout.tipAmount
                 else -> merchandiseTotal + checkout.tipAmount
             }
+            val afterPoints = (rawTotal - checkout.pointsDiscount).coerceAtLeast(0.0)
+            val giftCardRedeem = if (checkout.payWithGiftCard) checkout.giftCardRedeemAmount else 0.0
+            val afterGiftCard = (afterPoints - giftCardRedeem).coerceAtLeast(0.0)
             val roundingStep = checkout.roundingStep.takeIf { it > 0 } ?: settings.roundingStep
-            val roundedTotal = applyCashRounding(rawTotal, roundingStep)
-            val roundingAmount = roundedTotal - rawTotal
+            val roundedTotal = applyCashRounding(afterGiftCard, roundingStep)
+            val roundingAmount = roundedTotal - afterGiftCard
 
             val masterId = _uiExtras.value.masterOrderId ?: UUID.randomUUID().toString().also { id ->
                 updateExtras { it.copy(masterOrderId = id) }
@@ -2150,11 +2641,20 @@ class PosViewModel @Inject constructor(
 
             if (method == PaymentMethod.PAY_LATER) {
                 val saleCart = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart else payable
-                if (saleCart.pickupTimeMs == null) {
+                if (saleCart.fulfillmentType !in setOf(FulfillmentType.PICKUP, FulfillmentType.DELIVERY)) {
                     updateExtras {
                         it.copy(
                             isProcessingPayment = false,
-                            errorMessage = "Schedule a pickup or delivery time before using Pay Later"
+                            errorMessage = "Pay Later is only available for takeaway or delivery orders"
+                        )
+                    }
+                    return@launch
+                }
+                if (saleCart.fulfillmentType == FulfillmentType.DELIVERY && saleCart.deliveryName.isNullOrBlank()) {
+                    updateExtras {
+                        it.copy(
+                            isProcessingPayment = false,
+                            errorMessage = "Select a delivery customer before using Pay Later"
                         )
                     }
                     return@launch
@@ -2168,7 +2668,7 @@ class PosViewModel @Inject constructor(
                         finalTotal = roundedTotal
                     )
                 }.onSuccess {
-                    cartManager.clear()
+                    cartManager.resetForNewWalkInOrder()
                     cartManager.resetSplit()
                     updateExtras {
                         it.copy(
@@ -2194,10 +2694,8 @@ class PosViewModel @Inject constructor(
 
             val saleCartForPayment = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart else payable
             var pendingTransactionId: String? = null
-            var pendingReceiptUrl: String? = null
             if (method == PaymentMethod.ADYEN_TERMINAL && settings.adyenTerminalEnabled) {
                 pendingTransactionId = UUID.randomUUID().toString()
-                pendingReceiptUrl = receiptRepository.buildPublicUrl(pendingTransactionId!!, settings)
                 runCatching {
                     receiptRepository.publishPendingReceipt(
                         transactionId = pendingTransactionId!!,
@@ -2209,9 +2707,48 @@ class PosViewModel @Inject constructor(
                 }
             }
 
-            val paymentResult = when (method) {
-                PaymentMethod.CASH -> cashPaymentService.processPayment()
-                PaymentMethod.ADYEN_TERMINAL -> {
+            var redeemedGiftCardAmount = 0.0
+            if (giftCardRedeem > 0.001) {
+                val membership = _uiExtras.value.attachedMembership
+                if (membership == null) {
+                    updateExtras {
+                        it.copy(
+                            isProcessingPayment = false,
+                            errorMessage = "Attach a gift card before paying with balance"
+                        )
+                    }
+                    return@launch
+                }
+                val redeemResult = giftCardRepository.redeemBalance(
+                    cardId = membership.cardId,
+                    cardNumber = membership.cardNumber,
+                    amount = giftCardRedeem,
+                    orderId = masterId,
+                    allowPartial = true
+                )
+                if (redeemResult.isFailure) {
+                    updateExtras {
+                        it.copy(
+                            isProcessingPayment = false,
+                            errorMessage = redeemResult.exceptionOrNull()?.message ?: "Gift card redeem failed"
+                        )
+                    }
+                    return@launch
+                }
+                redeemedGiftCardAmount = redeemResult.getOrThrow().amountRedeemed
+                val updatedMembership = giftCardRepository.toAttachedMembership(redeemResult.getOrThrow().card)
+                updateExtras { it.copy(attachedMembership = updatedMembership) }
+            }
+
+            val paymentResult = when {
+                roundedTotal <= 0.001 && redeemedGiftCardAmount > 0 -> {
+                    PaymentResult.Success(
+                        method = PaymentMethod.GIFT_CARD,
+                        reference = _uiExtras.value.attachedMembership?.cardId
+                    )
+                }
+                method == PaymentMethod.CASH -> cashPaymentService.processPayment()
+                method == PaymentMethod.ADYEN_TERMINAL -> {
                     if (!settings.adyenTerminalEnabled) {
                         PaymentResult.Failure("Enable Adyen terminal in Settings")
                     } else {
@@ -2222,7 +2759,7 @@ class PosViewModel @Inject constructor(
                         )
                     }
                 }
-                PaymentMethod.CARD -> {
+                method == PaymentMethod.CARD -> {
                     paymentOrchestrator.processCardPayment(activity, roundedTotal, settings.defaultCurrency, settings)
                 }
                 else -> PaymentResult.Failure("Unsupported payment method")
@@ -2230,9 +2767,10 @@ class PosViewModel @Inject constructor(
 
             when (paymentResult) {
                 is PaymentResult.Success -> {
-                    val resolvedMethod = when (method) {
-                        PaymentMethod.CASH -> PaymentMethod.CASH
-                        PaymentMethod.ADYEN_TERMINAL -> PaymentMethod.ADYEN_TERMINAL
+                    val resolvedMethod = when {
+                        redeemedGiftCardAmount > 0 && roundedTotal <= 0.001 -> PaymentMethod.GIFT_CARD
+                        method == PaymentMethod.CASH -> PaymentMethod.CASH
+                        method == PaymentMethod.ADYEN_TERMINAL -> PaymentMethod.ADYEN_TERMINAL
                         else -> paymentResult.method
                     }
                     val tender = checkout.tenderAmount.takeIf { it > 0 && resolvedMethod == PaymentMethod.CASH }
@@ -2241,6 +2779,7 @@ class PosViewModel @Inject constructor(
                     if (method == PaymentMethod.ADYEN_TERMINAL) {
                         printPendingKitchenForCurrentTable()
                     }
+                    val transactionTotal = roundedTotal + redeemedGiftCardAmount
                     val transaction = transactionRepository.completeSale(
                         cart = saleCart,
                         paymentMethod = resolvedMethod,
@@ -2250,19 +2789,20 @@ class PosViewModel @Inject constructor(
                         tipAmount = checkout.tipAmount,
                         roundingAmount = roundingAmount,
                         checkoutDiscountPercent = checkout.discountPercent,
-                        overrideTotal = roundedTotal,
+                        overrideTotal = transactionTotal,
                         masterOrderId = masterId,
                         splitCheckNumber = if (fullCart.splitByItems) fullCart.activeSplitCheck else null,
                         amountTendered = tender,
                         changeDue = changeDue,
                         transactionId = pendingTransactionId,
-                        receiptUrl = pendingReceiptUrl,
+                        receiptUrl = null,
                         adyenCustomerReceiptJson = com.chaslay.pos.payment.AdyenPaymentReceiptStorage.toJson(
                             paymentResult.adyenCustomerReceipt
                         ),
                         adyenCashierReceiptJson = com.chaslay.pos.payment.AdyenPaymentReceiptStorage.toJson(
                             paymentResult.adyenCashierReceipt
-                        )
+                        ),
+                        giftCardPaymentAmount = redeemedGiftCardAmount.takeIf { it > 0.0 }
                     )
                     val receiptItems = transactionRepository.getTransaction(transaction.id)?.second.orEmpty()
                     val (publishedTx, publicReceiptUrl) = publishAndPersistReceipt(
@@ -2270,17 +2810,36 @@ class PosViewModel @Inject constructor(
                         receiptItems,
                         settings
                     )
-                    if (method == PaymentMethod.ADYEN_TERMINAL && settings.adyenTerminalEnabled) {
+                    _uiExtras.value.attachedMembership?.takeIf { it.membershipEnabled }?.let { membership ->
                         runCatching {
-                            adyenTerminalService.showDigitalReceipt(
-                                settings = settings,
-                                items = saleCart.items,
-                                total = publishedTx.total,
-                                currencySymbol = settings.currencySymbol,
-                                receiptUrl = publicReceiptUrl ?: publishedTx.receiptUrl.orEmpty()
+                            applyLoyaltyAfterSale(
+                                membership = membership,
+                                transactionId = publishedTx.id,
+                                paidSubtotal = merchandiseTotal - checkout.pointsDiscount - redeemedGiftCardAmount,
+                                pointsRedeemed = checkout.pointsRedeemed
                             )
                         }.onFailure { e ->
-                            Log.w("POS", "Could not show digital receipt on terminal", e)
+                            Log.w("POS", "Loyalty sync failed", e)
+                        }
+                    }
+                    runCatching {
+                        creditGiftCardLinesAfterSale(saleCart.items, publishedTx.id)
+                    }.onFailure { e ->
+                        Log.w("POS", "Gift card credit failed", e)
+                    }
+                    if (method == PaymentMethod.ADYEN_TERMINAL && settings.adyenTerminalEnabled) {
+                        publicReceiptUrl?.let { url ->
+                            runCatching {
+                                adyenTerminalService.showDigitalReceipt(
+                                    settings = settings,
+                                    items = saleCart.items,
+                                    total = publishedTx.total,
+                                    currencySymbol = settings.currencySymbol,
+                                    receiptUrl = url
+                                )
+                            }.onFailure { e ->
+                                Log.w("POS", "Could not show digital receipt on terminal", e)
+                            }
                         }
                     }
                     if (fullCart.splitByItems) {
@@ -2289,7 +2848,7 @@ class PosViewModel @Inject constructor(
                         val paid = _uiExtras.value.equalSplitPaidCount + 1
                         updateExtras { it.copy(equalSplitPaidCount = paid) }
                         if (paid >= fullCart.splitCount) {
-                            cartManager.clear()
+                            cartManager.resetForNewWalkInOrder()
                             cartManager.resetSplit()
                             updateExtras { it.copy(masterOrderId = null, equalSplitPaidCount = 0) }
                         }
@@ -2331,8 +2890,9 @@ class PosViewModel @Inject constructor(
                     if (remaining.items.isEmpty()) {
                         remaining.tableOrderId?.let { tableOrderRepository.closeOrder(it) }
                         if (!isEqualSplit || equalSplitPaid >= fullCart.splitCount) {
-                            cartManager.clear()
+                            cartManager.resetForNewWalkInOrder()
                             cartManager.resetSplit()
+                            clearMembershipOnNewSale()
                             updateExtras { it.copy(masterOrderId = null, equalSplitPaidCount = 0) }
                         }
                     }
@@ -2437,12 +2997,14 @@ class PosViewModel @Inject constructor(
     fun dismissClearCartDialog() = updateExtras { it.copy(showClearCartDialog = false) }
 
     fun confirmClearCart() {
-        cartManager.clear()
+        cartManager.resetForNewWalkInOrder()
+        clearMembershipOnNewSale()
         updateExtras {
             it.copy(
                 showClearCartDialog = false,
                 orderCommittedForCancel = false,
                 receiptPrintedForOrder = false,
+                kitchenSentToPrinter = false,
                 snackbarMessage = "Cart cleared"
             )
         }
@@ -2452,27 +3014,31 @@ class PosViewModel @Inject constructor(
     fun showPickupOrderDialog() {
         viewModelScope.launch {
             val parked = parkCartIfNeeded()
+            val orderNumber = suggestOrderNumber()
+            cartManager.setPickupOrder(orderNumber, pickupTimeMs = null)
             updateExtras {
                 it.copy(
-                    showPickupDialog = true,
-                    suggestedOrderNumber = suggestOrderNumber(),
                     snackbarMessage = if (parked) {
                         appContext.getString(R.string.snackbar_cart_parked_for_new_order)
                     } else {
-                        it.snackbarMessage
+                        appContext.getString(R.string.snackbar_pickup_asap, orderNumber)
                     }
                 )
             }
         }
     }
 
+    fun showPickupTimeEditor() {
+        updateExtras { it.copy(showPickupDialog = true) }
+    }
+
     fun dismissPickupDialog() = updateExtras { it.copy(showPickupDialog = false) }
 
     fun confirmPickup(pickupTimeMs: Long?) {
         viewModelScope.launch {
-            val orderNumber = suggestOrderNumber()
-            cartManager.setPickupOrder(orderNumber, pickupTimeMs)
             val cart = cartManager.snapshot()
+            val orderNumber = cart.orderNumber ?: suggestOrderNumber()
+            cartManager.setPickupOrder(orderNumber, pickupTimeMs)
             if (pickupTimeMs != null && !isRestaurantMode() && !cart.isEmpty) {
                 printFulfillmentSlip("SCHEDULED TAKEAWAY", pickupTimeMs)
             }
@@ -2492,19 +3058,38 @@ class PosViewModel @Inject constructor(
     fun showDeliveryOrderDialog() {
         viewModelScope.launch {
             val parked = parkCartIfNeeded()
-            val customers = customerRepository.getAll()
+            val orderNumber = suggestOrderNumber().replace("P-", "D-")
+            cartManager.startDeliveryAsap(orderNumber)
             updateExtras {
                 it.copy(
-                    showDeliveryDialog = true,
-                    deliveryCustomers = customers,
-                    suggestedOrderNumber = suggestOrderNumber(),
                     snackbarMessage = if (parked) {
                         appContext.getString(R.string.snackbar_cart_parked_for_new_order)
                     } else {
-                        it.snackbarMessage
+                        appContext.getString(R.string.snackbar_delivery_asap_generic)
                     }
                 )
             }
+        }
+    }
+
+    fun showDeliveryTimeEditor() {
+        updateExtras { it.copy(showDeliveryTimeDialog = true, pendingDeliveryCustomer = null) }
+    }
+
+    fun updateDeliveryTime(deliveryTimeMs: Long?) {
+        cartManager.setDeliveryTime(deliveryTimeMs)
+        updateExtras {
+            it.copy(
+                showDeliveryTimeDialog = false,
+                snackbarMessage = if (deliveryTimeMs == null) {
+                    appContext.getString(R.string.snackbar_delivery_asap_generic)
+                } else {
+                    appContext.getString(
+                        R.string.snackbar_delivery_scheduled,
+                        cartManager.snapshot().deliveryName.orEmpty().ifBlank { "Delivery" }
+                    )
+                }
+            )
         }
     }
 
@@ -2626,7 +3211,8 @@ class PosViewModel @Inject constructor(
             },
             onFailure = { e ->
                 Log.w("POS", "Receipt publish failed: ${e.message}", e)
-                transaction to null
+                transactionRepository.clearReceiptUrl(transaction.id)
+                transaction.copy(receiptUrl = null) to null
             }
         )
     }
@@ -2956,10 +3542,24 @@ class PosViewModel @Inject constructor(
         val guestCountSeatCapacity: Int = 4,
         val guestCountDefault: Int = 2,
         val pendingTableId: Long? = null,
+        val pendingDineInCart: CartSummary? = null,
         val showTableTransferItemsDialog: Boolean = false,
         val showTableTransferDestDialog: Boolean = false,
         val tableTransferMode: TableTransferMode? = null,
-        val tableTransferSelectedIds: Set<String> = emptySet()
+        val tableTransferSelectedIds: Set<String> = emptySet(),
+        val attachedMembership: AttachedMembership? = null,
+        val showMembershipDialog: Boolean = false,
+        val giftCardsEnabled: Boolean = false,
+        val membershipBusy: Boolean = false,
+        val membershipLookupError: String? = null,
+        val lastLoyaltyPointsEarned: Int? = null,
+        val lastLoyaltyPointsBalance: Int? = null,
+        val showGiftCardOpsDialog: Boolean = false,
+        val giftCardOpsMode: GiftCardOp? = null,
+        val giftCardSettings: com.chaslay.pos.data.remote.dto.GiftCardSettingsDto? = null,
+        val giftCardOpsBusy: Boolean = false,
+        val giftCardOpsError: String? = null,
+        val giftCardOpsLookedUpCard: com.chaslay.pos.data.remote.dto.GiftCardDto? = null
     )
 
     private fun updateExtras(block: (PosDialogState) -> PosDialogState) {

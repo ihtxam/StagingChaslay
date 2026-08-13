@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +29,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -267,6 +269,44 @@ fun TablePlanDesignerContent(
                 )
             }
         }
+
+        HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 4.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                stringResource(
+                    if (state.selectedTableId != null || state.selectedElementId != null) {
+                        R.string.table_plan_edit_hint
+                    } else {
+                        R.string.table_plan_layout_saved
+                    }
+                ),
+                fontSize = 12.sp,
+                color = colors.textSecondary,
+                modifier = Modifier.weight(1f).padding(end = 8.dp)
+            )
+            if (state.selectedTableId != null) {
+                Button(
+                    onClick = viewModel::saveSelectedTable,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            } else if (state.selectedElementId != null) {
+                Button(
+                    onClick = viewModel::saveSelectedElement,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            }
+        }
     }
 }
 
@@ -383,7 +423,9 @@ private fun TableEditSidePanel(
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             TextButton(onClick = if (editingTable) onDeleteTable else onDeleteElement) {

@@ -156,11 +156,69 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
     }
 
     if (req.user.role === "merchant") {
-      const merchant = await AuthService.getMerchantById(req.user.id);
-      res.json({ user: merchant, role: "merchant" });
-    } else {
-      res.json({ user: { id: req.user.id, email: req.user.email }, role: "superadmin" });
+      const merchantId = req.user.merchantId || req.user.id;
+      const merchant = await AuthService.getMerchantById(merchantId);
+      res.json({
+        user: {
+          id: merchant.id,
+          email: merchant.email,
+          name: merchant.name,
+          merchantId: merchant.id,
+          roleName: "Owner",
+          isOwner: true,
+        },
+        role: "merchant",
+      });
+      return;
     }
+
+    if (req.user.role === "staff" && req.user.staffId && req.user.merchantId) {
+      const { StaffService } = await import("@/services/staff.service");
+      const profile = await StaffService.getStaffProfile(req.user.merchantId, req.user.staffId);
+      const token = AuthService.generateToken({
+        id: profile.id,
+        email: profile.email || req.user.email,
+        role: "staff",
+        merchantId: req.user.merchantId,
+        staffId: profile.id,
+        name: profile.name,
+        roleName: profile.roleName,
+        permissions: profile.permissions,
+      });
+      res.json({
+        user: {
+          id: profile.id,
+          email: profile.email || req.user.email,
+          name: profile.name,
+          merchantId: req.user.merchantId,
+          staffId: profile.id,
+          roleName: profile.roleName,
+          permissions: profile.permissions,
+          isOwner: false,
+        },
+        role: "staff",
+        token,
+      });
+      return;
+    }
+
+    if (req.user.role === "reseller" && req.user.resellerId) {
+      res.json({
+        user: {
+          id: req.user.resellerId,
+          email: req.user.email,
+          name: req.user.name,
+          resellerId: req.user.resellerId,
+        },
+        role: "reseller",
+      });
+      return;
+    }
+
+    res.json({
+      user: { id: req.user.id, email: req.user.email, name: req.user.name },
+      role: req.user.role,
+    });
   } catch (error) {
     console.error("Error getting user info:", error);
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get user info" });

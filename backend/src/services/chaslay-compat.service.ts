@@ -5,6 +5,7 @@ import { resolveOrderItemName } from "@/lib/order-item-name";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { AuthService } from "./auth.service";
 import { MerchantSettingsService } from "./merchant-settings.service";
+import { receiptPublicUrl } from "@/lib/receipt-public-url";
 
 export function normalizeChaslayDeviceId(deviceId: string): string {
   if (!deviceId) return "";
@@ -340,10 +341,14 @@ export class ChaslayCompatService {
       where: and(eq(schema.products.merchantId, merchantId), eq(schema.products.isActive, true)),
     });
 
+    const { FloorPlanService } = await import("@/services/floor-plan.service");
+    const floorPlans = await FloorPlanService.list(merchantId);
+
     const categoryClientById = new Map(
       categories.map((c) => [c.id, c.clientId || c.id] as const)
     );
     const addressParts = [merchant.address, merchant.city, merchant.country].filter(Boolean);
+    const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
     return {
       serverTime: Date.now(),
       tenant: {
@@ -365,10 +370,41 @@ export class ChaslayCompatService {
         tax_included_in_price: merchant.taxIncludedInPrice === true,
         default_language: merchant.panelLanguage || "en",
         store_hours: merchant.storeHours || {},
+        receipt_base_url: receiptPublicBaseUrl(),
       },
       categories: categories.map((c) => this.mapCategory(c)),
       products: products.map((p) => this.mapProduct(p, false, categoryClientById)),
       paymentConfig: await this.getPaymentConfigPayload(merchantId),
+      floor_plans: floorPlans.map((p) => ({
+        id: p.id,
+        name: p.name,
+        canvas_width: p.canvasWidth,
+        canvas_height: p.canvasHeight,
+        sort_order: p.sortOrder,
+        tables: (p.tables || []).map((t: {
+          id: string;
+          label: string;
+          capacity?: number;
+          shape?: string;
+          posX?: number;
+          posY?: number;
+          width?: number;
+          height?: number;
+          rotation?: number;
+          sortOrder?: number;
+        }) => ({
+          id: t.id,
+          label: t.label,
+          capacity: t.capacity ?? 4,
+          shape: t.shape ?? "rect",
+          pos_x: t.posX ?? 40,
+          pos_y: t.posY ?? 40,
+          width: t.width ?? 100,
+          height: t.height ?? 80,
+          rotation: t.rotation ?? 0,
+          sort_order: t.sortOrder ?? 0,
+        })),
+      })),
     };
   }
 
@@ -395,6 +431,10 @@ export class ChaslayCompatService {
       !!merchant.adyenApiKey &&
       !!merchant.adyenMerchantAccount &&
       active.length > 0;
+
+    const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
+    const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
+    const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
 
     return {
       adyen: {
@@ -430,6 +470,12 @@ export class ChaslayCompatService {
           merchant.posCheckoutSettings
         ),
         vatIncludedInPrice: merchant.taxIncludedInPrice === true,
+      },
+      receipt_base_url: receiptPublicBaseUrl(),
+      scale: {
+        enabled: posPrintSettings.scaleEnabled === true,
+        com_port: posPrintSettings.scaleComPort || null,
+        usb_address: posPrintSettings.scaleUsbAddress || null,
       },
     };
   }
@@ -657,10 +703,6 @@ export class ChaslayCompatService {
   }
 
   static receiptPublicUrl(ref: string): string {
-    const base =
-      process.env.PUBLIC_RECEIPT_BASE_URL ||
-      process.env.PUBLIC_APP_URL ||
-      "https://pay.chaslay.com";
-    return `${base.replace(/\/$/, "")}/receipt/${encodeURIComponent(ref)}`;
+    return receiptPublicUrl(ref);
   }
 }

@@ -69,4 +69,9 @@ object NetworkModule {
     @Singleton
     fun provideReceiptApi(retrofit: Retrofit): com.chaslay.pos.data.remote.ReceiptApi =
         retrofit.create(com.chaslay.pos.data.remote.ReceiptApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideGiftCardApi(retrofit: Retrofit): com.chaslay.pos.data.remote.GiftCardApi =
+        retrofit.create(com.chaslay.pos.data.remote.GiftCardApi::class.java)
 }

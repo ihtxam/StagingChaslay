@@ -9,6 +9,14 @@ const api: AxiosInstance = axios.create({
   },
 });
 
+/** Unauthenticated client for public pages (digital receipts). */
+export const publicApi: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
 // Add token to requests; never force JSON Content-Type on FormData (breaks multer).
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
@@ -39,9 +47,15 @@ api.interceptors.response.use(
       if (reqUrl.includes('/staff/verify-pin')) {
         return Promise.reject(error);
       }
-      if (!path.startsWith('/set-password') && !path.startsWith('/login')) {
+      if (
+        !path.startsWith('/receipt') &&
+        !path.startsWith('/receipts') &&
+        !path.startsWith('/set-password') &&
+        !path.startsWith('/login')
+      ) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        sessionStorage.removeItem('webpos_staff_session');
         sessionStorage.removeItem('sa_return_token');
         sessionStorage.removeItem('sa_return_user');
         window.location.href = '/login';

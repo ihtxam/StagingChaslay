@@ -40,6 +40,19 @@ import com.chaslay.pos.ui.theme.VectronColors
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+internal fun clampPlanPosition(
+    planX: Float,
+    planY: Float,
+    planWidth: Float,
+    planHeight: Float
+): Pair<Float, Float> {
+    val w = planWidth.coerceIn(0.04f, 0.5f)
+    val h = planHeight.coerceIn(0.03f, 0.5f)
+    val x = planX.coerceIn(0f, (1f - w).coerceAtLeast(0f))
+    val y = planY.coerceIn(0f, (1f - h).coerceAtLeast(0f))
+    return x to y
+}
+
 data class FloorPlanTableDisplay(
     val id: Long,
     val name: String,
@@ -197,10 +210,13 @@ private fun DraggablePlanItem(
                     if (!moved) {
                         onClick()
                     } else if (editable) {
-                        onMoved(
-                            ((baseX + dragOffsetX) / canvasW).coerceIn(0.02f, 0.92f),
-                            ((baseY + dragOffsetY) / canvasH).coerceIn(0.02f, 0.92f)
+                        val (x, y) = clampPlanPosition(
+                            planX = (baseX + dragOffsetX) / canvasW,
+                            planY = (baseY + dragOffsetY) / canvasH,
+                            planWidth = planWidth,
+                            planHeight = planHeight
                         )
+                        onMoved(x, y)
                     }
                     dragOffsetX = 0f
                     dragOffsetY = 0f

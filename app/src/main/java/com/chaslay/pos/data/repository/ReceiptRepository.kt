@@ -1,7 +1,6 @@
 package com.chaslay.pos.data.repository
 
 import android.util.Log
-import com.chaslay.pos.BuildConfig
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
 import com.chaslay.pos.data.local.entity.TransactionEntity
 import com.chaslay.pos.data.local.entity.TransactionItemEntity
@@ -16,17 +15,36 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import retrofit2.HttpException
 
+object ReceiptPublicUrls {
+    private const val DEFAULT_BASE = "https://pay.chaslay.com/receipt"
+
+    fun normalizeBase(raw: String): String {
+        var base = raw.trim().trimEnd('/')
+            .replace(Regex("chasly\\.com", RegexOption.IGNORE_CASE), "chaslay.com")
+        if (Regex("^https?://app\\.", RegexOption.IGNORE_CASE).containsMatchIn(base)) {
+            base = base.replace(Regex("^https?://app\\.", RegexOption.IGNORE_CASE), "https://pay.")
+        }
+        if (base.isBlank()) base = DEFAULT_BASE
+        if (base.endsWith("/receipts", ignoreCase = true)) {
+            base = base.dropLast("/receipts".length) + "/receipt"
+        } else if (!base.endsWith("/receipt", ignoreCase = true)) {
+            base = "$base/receipt"
+        }
+        return base
+    }
+
+    fun build(receiptBaseUrl: String, saleRef: String): String {
+        return "${normalizeBase(receiptBaseUrl)}/$saleRef"
+    }
+}
+
 @Singleton
 class ReceiptRepository @Inject constructor(
     private val receiptApi: ReceiptApi
 ) {
     private val gson = Gson()
     fun buildPublicUrl(transactionId: String, settings: BusinessSettingsEntity): String {
-        val base = settings.receiptBaseUrl.trim().trimEnd('/')
-        return when {
-            base.contains("chaslay.com", ignoreCase = true) -> "$base/$transactionId"
-            else -> "${BuildConfig.LICENSE_API_BASE_URL.trimEnd('/')}/v1/receipts/$transactionId"
-        }
+        return ReceiptPublicUrls.build(settings.receiptBaseUrl, transactionId)
     }
 
     suspend fun publishReceipt(

@@ -1411,6 +1411,12 @@ router.get(
           error: "Own-sales reports require a staff PIN session",
         });
       }
+      let staffId = scope.staffId;
+      let staffName = scope.staffName;
+      if (scope.viewAll && req.query.staffId) {
+        staffId = String(req.query.staffId);
+        staffName = req.query.staffName ? String(req.query.staffName) : null;
+      }
       const { PosReportsService } = await import("@/services/pos-reports.service");
       const preset = String(req.query.preset || "today") as
         | "today"
@@ -1424,8 +1430,8 @@ router.get(
         from: req.query.from ? String(req.query.from) : undefined,
         to: req.query.to ? String(req.query.to) : undefined,
         channel: req.query.channel ? String(req.query.channel) : undefined,
-        staffId: scope.staffId,
-        staffName: scope.staffName,
+        staffId,
+        staffName,
       });
       res.json({ success: true, report });
     } catch (error) {
@@ -1647,7 +1653,11 @@ router.post("/pos/send-receipt-email", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Valid email required" });
     }
 
-    const receiptUrl = String(req.body?.receiptUrl || "").trim();
+    const rawReceiptUrl = String(req.body?.receiptUrl || "").trim();
+    const { normalizeReceiptPublicUrl } = await import("@/lib/receipt-public-url");
+    const receiptUrl = rawReceiptUrl
+      ? normalizeReceiptPublicUrl(rawReceiptUrl, String(req.body?.orderId || req.body?.clientId || "").trim() || undefined)
+      : "";
     const receiptText = String(req.body?.receiptText || "").trim();
     const orderNumber = String(req.body?.orderNumber || "").trim();
     const amount =

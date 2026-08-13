@@ -87,6 +87,7 @@ export type WebPosReceiptItem = {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  weightKg?: number | null;
   seatNumber?: number | null;
   productId?: string | null;
   categoryId?: string | null;
@@ -108,6 +109,11 @@ export type PosPrintSettingsClient = {
   receiptLogoUrl?: string | null;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  /** Print Agent USB scale COM port (WebPOS). */
+  scaleComPort?: string | null;
+  /** Android USB scale address synced from panel. */
+  scaleUsbAddress?: string | null;
+  scaleEnabled?: boolean;
   printers?: Array<{
     id: string;
     name: string;
@@ -323,9 +329,13 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
 
   for (const item of tx.items) {
     r += item.name.slice(0, width) + '\n';
+    const qtyLabel =
+      item.weightKg != null && item.weightKg > 0
+        ? `${item.weightKg.toFixed(3)} kg @ ${item.unitPrice.toFixed(2)}/kg`
+        : `  ${item.quantity} x ${item.unitPrice.toFixed(2)}`;
     r +=
       padLine(
-        `  ${item.quantity} x ${item.unitPrice.toFixed(2)}`,
+        qtyLabel,
         item.lineTotal.toFixed(2),
         width
       ) + '\n';
@@ -832,8 +842,8 @@ function vatCols(
 export function generateEodReportText(report: EodReportPrint): string {
   const width = lineWidthForPaper(report.paperWidthMm ?? 80);
   const L = receiptLabels(report.language);
-  const sep = '='.repeat(Math.min(width, 32));
-  const thin = '-'.repeat(Math.min(width, 32));
+  const sep = '='.repeat(width);
+  const thin = '-'.repeat(width);
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
   const two = (n: number) => Number(n || 0).toFixed(2);
   const tips = Number(report.tipsTotal || 0);
@@ -1245,6 +1255,7 @@ export function posOrderToWebPosReceipt(
       quantity: i.quantity,
       unitPrice: Number(i.unitPrice ?? (i.quantity ? i.totalPrice / i.quantity : i.totalPrice)),
       lineTotal: Number(i.totalPrice),
+      weightKg: (i as { weightKg?: number | null }).weightKg ?? null,
     })),
     subtotal,
     discount: Number(order.discountAmount ?? 0),
@@ -1255,7 +1266,7 @@ export function posOrderToWebPosReceipt(
     total: Number(order.total),
     vatIncludedInPrice: ctx.vatIncludedInPrice === true,
     splitLabel,
-    receiptUrl: order.clientId ? buildReceiptUrl(order.clientId) : undefined,
+    receiptUrl: order.clientId || order.id ? buildReceiptUrl(String(order.clientId || order.id)) : undefined,
     includeQr: ctx.printSettings?.receiptShowQrCode !== false,
     staffName: order.staffName,
     language: lang,

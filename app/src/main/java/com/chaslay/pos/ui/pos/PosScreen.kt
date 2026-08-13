@@ -141,6 +141,7 @@ import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
@@ -243,25 +244,32 @@ fun PosScreen(
             onComplete = { viewModel.completeCheckout(activity) },
             onPrevSplitBill = { viewModel.navigateSplitBill(-1) },
             onNextSplitBill = { viewModel.navigateSplitBill(1) },
-            onScanBarcode = { showBarcodeScanner = true }
+            onScanBarcode = { showBarcodeScanner = true },
+            membershipPointsBalance = state.attachedMembership?.pointsBalance,
+            membershipGiftBalance = state.attachedMembership?.giftBalance,
+            giftCardsEnabled = state.giftCardsEnabled,
+            onTogglePayWithPoints = viewModel::updateCheckoutPayWithPoints,
+            onTogglePayWithGiftCard = viewModel::updateCheckoutPayWithGiftCard
         )
-        if (state.showOrderComplete && state.completedTransaction != null) {
-            OrderCompleteDialog(
-                transaction = state.completedTransaction!!,
-                currencySymbol = state.currencySymbol,
-                splitPaymentIndex = state.splitPaymentIndex,
-                splitPaymentTotal = state.splitPaymentTotal,
-                successMessage = state.successMessage,
-                receiptPublicUrl = state.receiptPublicUrl,
-                orderCompleteNotice = state.orderCompleteNotice,
-                showAdyenPaymentReceipt = state.adyenCustomerReceipt != null,
-                showAdyenCashierReceipt = state.adyenCashierReceipt != null,
-                onPrintReceipt = viewModel::printCompletedReceipt,
-                onPrintAdyenPaymentReceipt = viewModel::printAdyenCustomerReceipt,
-                onPrintAdyenCashierReceipt = viewModel::printAdyenCashierReceipt,
-                onShareEmail = viewModel::openReceiptEmailDialog,
-                onDone = viewModel::dismissOrderComplete
-            )
+        if (state.showOrderComplete) {
+            state.completedTransaction?.let { transaction ->
+                OrderCompleteDialog(
+                    transaction = transaction,
+                    currencySymbol = state.currencySymbol,
+                    splitPaymentIndex = state.splitPaymentIndex,
+                    splitPaymentTotal = state.splitPaymentTotal,
+                    successMessage = state.successMessage,
+                    receiptPublicUrl = state.receiptPublicUrl,
+                    orderCompleteNotice = state.orderCompleteNotice,
+                    showAdyenPaymentReceipt = state.adyenCustomerReceipt != null,
+                    showAdyenCashierReceipt = state.adyenCashierReceipt != null,
+                    onPrintReceipt = viewModel::printCompletedReceipt,
+                    onPrintAdyenPaymentReceipt = viewModel::printAdyenCustomerReceipt,
+                    onPrintAdyenCashierReceipt = viewModel::printAdyenCashierReceipt,
+                    onShareEmail = viewModel::openReceiptEmailDialog,
+                    onDone = viewModel::dismissOrderComplete
+                )
+            }
         }
         if (state.showReceiptEmailDialog) {
             ReceiptEmailDialog(
@@ -301,9 +309,10 @@ fun PosScreen(
         return
     }
 
-    if (state.showOrderComplete && state.completedTransaction != null) {
+    if (state.showOrderComplete) {
+        state.completedTransaction?.let { transaction ->
         OrderCompleteDialog(
-            transaction = state.completedTransaction!!,
+            transaction = transaction,
             currencySymbol = state.currencySymbol,
             splitPaymentIndex = state.splitPaymentIndex,
             splitPaymentTotal = state.splitPaymentTotal,
@@ -318,6 +327,7 @@ fun PosScreen(
             onShareEmail = viewModel::openReceiptEmailDialog,
             onDone = viewModel::dismissOrderComplete
         )
+        }
         if (state.showReceiptEmailDialog) {
             ReceiptEmailDialog(
                 isSending = state.isSendingReceiptEmail,
@@ -382,6 +392,7 @@ fun PosScreen(
                     viewModel.showDeliveryOrderDialog()
                 },
                 onHold = { viewModel.holdOrder(false) },
+                onSend = viewModel::sendCurrentOrderToKitchen,
                 onAddCourse = viewModel::addCourse,
                 onSendActiveCourse = viewModel::sendActiveCourseToKitchen,
                 onSendAllCourses = viewModel::sendAllCoursesToKitchen,
@@ -430,9 +441,20 @@ fun PosScreen(
                         onPrintReceipt = viewModel::printProvisionalReceipt,
                         onPrintKitchen = viewModel::printKitchenTicket,
                         onAddCustomer = viewModel::showAttachCustomerDialog,
+                        onGiftCards = viewModel::showMembershipDialog,
+                        onSellGiftCard = viewModel::showGiftCardSellDialog,
+                        onReloadGiftCard = viewModel::showGiftCardReloadDialog,
                         onChangeOrderType = viewModel::toggleCartOrderType,
                         onCancelOrder = viewModel::showCartCancelDialog,
                         canCancelOrder = state.canCancelCartOrder,
+                        onChooseTime = {
+                            when (state.cart.fulfillmentType) {
+                                FulfillmentType.DELIVERY -> viewModel.showDeliveryTimeEditor()
+                                FulfillmentType.PICKUP -> viewModel.showPickupTimeEditor()
+                                else -> viewModel.showPickupTimeEditor()
+                            }
+                        },
+                        onPayLater = viewModel::beginPayLaterCheckout,
                         serviceType = state.cart.serviceType,
                         onSendActiveCourse = viewModel::sendActiveCourseToKitchen,
                         onSendAllCourses = viewModel::sendAllCoursesToKitchen,
@@ -446,6 +468,7 @@ fun PosScreen(
                         onDelivery = viewModel::showDeliveryOrderDialog,
                         isRestaurantMode = isRestaurantMode,
                         coursesEnabled = coursesEnabled,
+                        giftCardsEnabled = state.giftCardsEnabled,
                         onMoveEntireTable = viewModel::startMoveEntireTable,
                         onMoveDishes = viewModel::startMoveDishes,
                         modifier = Modifier
@@ -559,6 +582,55 @@ fun PosScreen(
         )
     }
 
+    if (state.showMembershipDialog) {
+        MembershipDialog(
+            attached = state.attachedMembership,
+            busy = state.membershipBusy,
+            lookupError = state.membershipLookupError,
+            currencySymbol = state.currencySymbol,
+            onDismiss = viewModel::dismissMembershipDialog,
+            onLookup = viewModel::lookupMembershipCard,
+            onClear = viewModel::clearAttachedMembership,
+            showGiftCardActions = state.giftCardsEnabled,
+            onSellGiftCard = {
+                viewModel.dismissMembershipDialog()
+                viewModel.showGiftCardSellDialog()
+            },
+            onReloadGiftCard = {
+                viewModel.dismissMembershipDialog()
+                viewModel.showGiftCardReloadDialog()
+            }
+        )
+    }
+
+    state.giftCardOpsMode?.let { opsMode ->
+        if (state.showGiftCardOpsDialog) {
+            GiftCardOpsDialog(
+                mode = opsMode,
+                settings = state.giftCardSettings,
+                currencySymbol = state.currencySymbol,
+                busy = state.giftCardOpsBusy,
+                lookupError = state.giftCardOpsError,
+                lookedUpCard = state.giftCardOpsLookedUpCard,
+                onDismiss = viewModel::dismissGiftCardOpsDialog,
+                onLookup = viewModel::lookupGiftCardForOps,
+                onAddToCart = viewModel::addGiftCardLineToCart
+            )
+        }
+    }
+
+    if (state.giftCardsEnabled && !state.showMembershipDialog && !state.showCheckoutScreen) {
+        var rfidCapture by remember { mutableStateOf("") }
+        Box(modifier = Modifier.size(1.dp)) {
+            com.chaslay.pos.ui.components.RfidScanField(
+                value = rfidCapture,
+                onValueChange = { rfidCapture = it },
+                onScanComplete = viewModel::onRfidScanned,
+                autoFocus = true
+            )
+        }
+    }
+
     if (state.showCartCancelDialog) {
         CartCancelOrderDialog(
             reasons = state.cartCancelReasons,
@@ -585,7 +657,7 @@ fun PosScreen(
         )
     }
 
-    if (state.showDeliveryTimeDialog && state.pendingDeliveryCustomer != null) {
+    if (state.showDeliveryTimeDialog) {
         TakeoutScheduleDialog(
             title = stringResource(R.string.delivery),
             showAsapOption = true,
@@ -593,7 +665,11 @@ fun PosScreen(
             openMinute = state.settings.openMinute,
             closeHour = state.settings.closeHour,
             closeMinute = state.settings.closeMinute,
-            onConfirm = viewModel::confirmDeliveryTime,
+            onConfirm = if (state.pendingDeliveryCustomer != null) {
+                viewModel::confirmDeliveryTime
+            } else {
+                viewModel::updateDeliveryTime
+            },
             onDismiss = viewModel::dismissDeliveryTimeDialog
         )
     }
@@ -653,25 +729,29 @@ fun PosScreen(
         )
     }
 
-    if (state.showOpenPriceDialog && state.selectedProduct != null) {
+    if (state.showOpenPriceDialog) {
+        state.selectedProduct?.let { product ->
         PriceKeypadDialog(
-            title = state.selectedProduct!!.name,
+            title = product.name,
             currencySymbol = state.currencySymbol,
             onConfirm = viewModel::addOpenPriceProduct,
             onDismiss = viewModel::dismissDialogs
         )
+        }
     }
 
-    if (state.showWeighedProductDialog && state.selectedProduct != null) {
+    if (state.showWeighedProductDialog) {
+        state.selectedProduct?.let { product ->
         WeighedProductDialog(
-            productName = state.selectedProduct!!.name,
-            pricePerKg = state.selectedProduct!!.price,
+            productName = product.name,
+            pricePerKg = product.price,
             currencySymbol = state.currencySymbol,
             scaleEnabled = state.settings.scaleEnabled,
             reading = state.scaleReading,
             onConfirm = viewModel::addWeighedProductToCart,
             onDismiss = viewModel::dismissWeighedProductDialog
         )
+        }
     }
 
     state.productCustomize?.let { customize ->
@@ -856,7 +936,8 @@ private fun OdooTablesScreen(
         }
     }
     var selectedFloor by remember(tables) { mutableIntStateOf(0) }
-    val floorTables = floorGroups.getOrElse(selectedFloor) { floorGroups.first() }.second
+    val safeFloorIndex = selectedFloor.coerceIn(0, floorGroups.lastIndex.coerceAtLeast(0))
+    val floorTables = floorGroups.getOrNull(safeFloorIndex)?.second.orEmpty()
     val floorId = floorTables.firstOrNull()?.floorId ?: 1L
     val planElements = floorElementsByFloorId[floorId].orEmpty().map { element ->
         FloorPlanElementDisplay(
@@ -1106,9 +1187,14 @@ private fun VectronOrderPanel(
     onPrintReceipt: () -> Unit,
     onPrintKitchen: () -> Unit,
     onAddCustomer: () -> Unit,
+    onGiftCards: () -> Unit = {},
+    onSellGiftCard: () -> Unit = {},
+    onReloadGiftCard: () -> Unit = {},
     onChangeOrderType: () -> Unit,
     onCancelOrder: () -> Unit,
     canCancelOrder: Boolean,
+    onChooseTime: () -> Unit = {},
+    onPayLater: () -> Unit = {},
     serviceType: ServiceType,
     onSendActiveCourse: () -> Unit,
     onSendAllCourses: () -> Unit,
@@ -1122,6 +1208,7 @@ private fun VectronOrderPanel(
     onDelivery: () -> Unit,
     isRestaurantMode: Boolean,
     coursesEnabled: Boolean = false,
+    giftCardsEnabled: Boolean = false,
     onMoveEntireTable: () -> Unit = {},
     onMoveDishes: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -1180,32 +1267,69 @@ private fun VectronOrderPanel(
         ) {
             CartOrderMenuButton(
                 enabled = !cart.isEmpty,
-                isDineIn = activeTableName != null || serviceType == ServiceType.DINE_IN,
+                isRestaurantMode = isRestaurantMode,
+                isDineIn = isTableMode,
                 isTableMode = isTableMode,
+                showFulfillmentActions = cart.fulfillmentType == FulfillmentType.PICKUP ||
+                    cart.fulfillmentType == FulfillmentType.DELIVERY,
+                giftCardsEnabled = giftCardsEnabled,
                 canCancelOrder = canCancelOrder,
                 onPrintReceipt = onPrintReceipt,
                 onPrintKitchen = onPrintKitchen,
                 onAddCustomer = onAddCustomer,
+                onGiftCards = onGiftCards,
+                onSellGiftCard = onSellGiftCard,
+                onReloadGiftCard = onReloadGiftCard,
                 onChangeOrderType = onChangeOrderType,
                 onCancelOrder = onCancelOrder,
+                onChooseTime = onChooseTime,
+                onPayLater = onPayLater,
                 onMoveEntireTable = onMoveEntireTable,
                 onMoveDishes = onMoveDishes
             )
+            if (cart.fulfillmentType == FulfillmentType.DELIVERY) {
+                TextButton(
+                    onClick = onAddCustomer,
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                    modifier = Modifier.padding(end = 4.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = stringResource(R.string.choose_customer),
+                        modifier = Modifier.size(16.dp),
+                        tint = Color(0xFF6A1B9A)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = cart.deliveryName?.takeIf { it.isNotBlank() }
+                            ?: stringResource(R.string.choose_customer),
+                        color = Color(0xFF333333),
+                        fontSize = 11.sp,
+                        maxLines = 1
+                    )
+                }
+            }
             Column(horizontalAlignment = Alignment.End) {
                 Text(stringResource(R.string.receipt), color = Color(0xFF333333), fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Text(
                     text = when {
                         activeTableName != null -> activeTableName
-                        serviceType == ServiceType.DINE_IN -> stringResource(R.string.dine_in)
-                        cart.fulfillmentType == FulfillmentType.DELIVERY ||
-                            !cart.deliveryName.isNullOrBlank() -> stringResource(R.string.delivery)
+                        cart.fulfillmentType == FulfillmentType.DELIVERY -> stringResource(R.string.delivery)
                         cart.fulfillmentType == FulfillmentType.PICKUP -> stringResource(R.string.takeout)
+                        serviceType == ServiceType.DINE_IN -> stringResource(R.string.dine_in)
                         else -> stringResource(R.string.take_away)
                     },
                     color = Color(0xFF666666),
                     fontSize = 11.sp
                 )
-                cart.deliveryName?.takeIf { it.isNotBlank() }?.let { name ->
+                if (cart.fulfillmentType == FulfillmentType.PICKUP || cart.fulfillmentType == FulfillmentType.DELIVERY) {
+                    Text(
+                        formatScheduledTimeLabel(cart.pickupTimeMs),
+                        color = Color(0xFF666666),
+                        fontSize = 10.sp
+                    )
+                }
+                cart.deliveryName?.takeIf { it.isNotBlank() && cart.fulfillmentType != FulfillmentType.DELIVERY }?.let { name ->
                     Text(name, color = Color(0xFF666666), fontSize = 10.sp, maxLines = 1)
                 }
             }
@@ -1412,14 +1536,22 @@ private fun formatScheduledTimeLabel(timeMs: Long?): String {
 @Composable
 private fun CartOrderMenuButton(
     enabled: Boolean,
+    isRestaurantMode: Boolean,
     isDineIn: Boolean,
     isTableMode: Boolean,
+    showFulfillmentActions: Boolean,
+    giftCardsEnabled: Boolean,
     canCancelOrder: Boolean,
     onPrintReceipt: () -> Unit,
     onPrintKitchen: () -> Unit,
     onAddCustomer: () -> Unit,
+    onGiftCards: () -> Unit,
+    onSellGiftCard: () -> Unit,
+    onReloadGiftCard: () -> Unit,
     onChangeOrderType: () -> Unit,
     onCancelOrder: () -> Unit,
+    onChooseTime: () -> Unit,
+    onPayLater: () -> Unit,
     onMoveEntireTable: () -> Unit,
     onMoveDishes: () -> Unit
 ) {
@@ -1447,13 +1579,15 @@ private fun CartOrderMenuButton(
                     onPrintReceipt()
                 }
             )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.print_kitchen_ticket)) },
-                onClick = {
-                    expanded = false
-                    onPrintKitchen()
-                }
-            )
+            if (isRestaurantMode) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.print_kitchen_ticket)) },
+                    onClick = {
+                        expanded = false
+                        onPrintKitchen()
+                    }
+                )
+            }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.add_customer)) },
                 onClick = {
@@ -1461,6 +1595,45 @@ private fun CartOrderMenuButton(
                     onAddCustomer()
                 }
             )
+            if (giftCardsEnabled) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.membership_gift_cards)) },
+                    onClick = {
+                        expanded = false
+                        onGiftCards()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.gift_card_sell)) },
+                    onClick = {
+                        expanded = false
+                        onSellGiftCard()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.gift_card_reload)) },
+                    onClick = {
+                        expanded = false
+                        onReloadGiftCard()
+                    }
+                )
+            }
+            if (showFulfillmentActions) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.choose_time)) },
+                    onClick = {
+                        expanded = false
+                        onChooseTime()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.pay_later)) },
+                    onClick = {
+                        expanded = false
+                        onPayLater()
+                    }
+                )
+            }
             if (isTableMode) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.move_table_to)) },
@@ -1477,18 +1650,20 @@ private fun CartOrderMenuButton(
                     }
                 )
             }
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        if (isDineIn) stringResource(R.string.switch_to_takeaway)
-                        else stringResource(R.string.switch_to_dine_in)
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onChangeOrderType()
-                }
-            )
+            if (isRestaurantMode) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            if (isDineIn) stringResource(R.string.switch_to_takeaway)
+                            else stringResource(R.string.switch_to_dine_in)
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onChangeOrderType()
+                    }
+                )
+            }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.cancel_order), color = Color(0xFFC0392B)) },
                 onClick = {
@@ -1551,6 +1726,7 @@ private fun CartActionSidebar(
     unsentCourseCount: Int,
     onPickup: () -> Unit,
     onDelivery: () -> Unit,
+    onSend: () -> Unit,
     onHold: () -> Unit,
     onAddCourse: () -> Unit,
     onSendActiveCourse: () -> Unit,
@@ -1583,6 +1759,15 @@ private fun CartActionSidebar(
             onClick = onDelivery
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
+        if (hasUnsentItems) {
+            CartSidebarButton(
+                label = stringResource(R.string.send_to_kitchen),
+                shortLabel = "Send",
+                icon = Icons.Default.Send,
+                color = VectronColors.CashGreen,
+                onClick = onSend
+            )
+        }
         CartSidebarButton(
             label = stringResource(R.string.save_hold_order),
             shortLabel = stringResource(R.string.save_hold_short),

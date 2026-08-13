@@ -148,6 +148,8 @@ data class TransactionEntity(
     val serviceType: ServiceType? = null,
     val syncStatus: SyncStatus = SyncStatus.PENDING,
     val refundAmount: Double = 0.0,
+    val refundReason: String? = null,
+    val refundedAt: Long? = null,
     val cancelReason: String? = null,
     val cancelledAt: Long? = null,
     val masterOrderId: String? = null,
@@ -193,7 +195,8 @@ data class TransactionItemEntity(
     val lineDiscountPerUnit: Double = 0.0,
     val notes: String? = null,
     /** When true, [quantity] is grams and [unitPrice] is per kg. */
-    val isWeighed: Boolean = false
+    val isWeighed: Boolean = false,
+    val refundedQuantity: Int = 0
 )
 
 @Entity(tableName = "business_settings")
@@ -257,7 +260,7 @@ data class BusinessSettingsEntity(
     val posMode: PosMode = PosMode.RESTAURANT,
     /** Synced from merchant panel — multi-course firing on dine-in tables. */
     val coursesEnabled: Boolean = false,
-    val receiptBaseUrl: String = "https://pay.chaslay.com/receipts",
+    val receiptBaseUrl: String = "https://pay.chaslay.com/receipt",
     val receiptHeader: String = "",
     val receiptFooter: String = "Merci / Thank you!",
     val kitchenTicketHeader: String = "",
@@ -286,21 +289,33 @@ data class BusinessSettingsEntity(
     val floorConnectionMode: String = "AUTO"
 )
 
-@Entity(tableName = "table_floors")
+@Entity(tableName = "table_floors", indices = [androidx.room.Index("remoteId")])
 data class TableFloorEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val sortOrder: Int = 0,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    /** Cloud floor plan UUID from merchant panel. */
+    val remoteId: String? = null,
+    val canvasWidth: Int = 1000,
+    val canvasHeight: Int = 1000
 )
 
-@Entity(tableName = "restaurant_tables")
+@Entity(
+    tableName = "restaurant_tables",
+    indices = [
+        Index("floorId"),
+        Index("remoteId")
+    ]
+)
 data class RestaurantTableEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val sortOrder: Int = 0,
     val isActive: Boolean = true,
     val floorId: Long = 1,
+    /** Cloud dining table UUID from merchant panel. */
+    val remoteId: String? = null,
     /** Maximum guests / seat count for this table. */
     val seatCapacity: Int = 4,
     /** Normalized 0..1 position on floor plan. */

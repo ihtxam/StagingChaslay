@@ -38,6 +38,8 @@ import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.HeldOrderStatus
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentStatus
+import com.chaslay.pos.domain.model.RefundedOrderRow
+import com.chaslay.pos.domain.model.isPaidSale
 import com.chaslay.pos.domain.model.roundMoney
 import com.chaslay.pos.domain.model.ProductSalesReport
 import com.chaslay.pos.domain.model.BarcodeLookupResult
@@ -142,8 +144,29 @@ class AuthRepository @Inject constructor(
             val remote = body.staff ?: return null
             val user = userDao.getByEmail("sync:${remote.id}") ?: return null
             if (!user.isActive) return null
-            val role = roleDao.getById(user.roleId) ?: return null
-            AuthSession(user, role)
+
+            val permissionSet = mapServerPermissions(remote.permissions)
+            val roleName = remote.roleName.trim().ifEmpty { "Staff" }
+            val existingRole = roleDao.getAll().find { it.name.equals(roleName, ignoreCase = true) }
+            val role = if (existingRole != null) {
+                val updated = existingRole.copy(permissions = PosPermission.encode(permissionSet))
+                roleDao.update(updated)
+                updated
+            } else {
+                val created = com.chaslay.pos.data.local.entity.RoleEntity(
+                    name = roleName,
+                    permissions = PosPermission.encode(permissionSet),
+                    isSystem = false
+                )
+                val newId = roleDao.insert(created)
+                created.copy(id = newId)
+            }
+            val syncedUser = if (user.roleId != role.id) {
+                user.copy(roleId = role.id).also { userDao.update(it) }
+            } else {
+                user
+            }
+            AuthSession(syncedUser, role)
         } catch (_: Exception) {
             null
         }
@@ -532,13 +555,14 @@ class TransactionRepository @Inject constructor(
         transactionId: String? = null,
         receiptUrl: String? = null,
         adyenCustomerReceiptJson: String? = null,
-        adyenCashierReceiptJson: String? = null
+        adyenCashierReceiptJson: String? = null,
+        giftCardPaymentAmount: Double? = null
     ): TransactionEntity {
         val settings = settingsDao.get() ?: BusinessSettingsEntity()
         val resolvedTransactionId = transactionId ?: UUID.randomUUID().toString()
         val txNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() } ?: generateTransactionNumber()
+        // Receipt URL is set only after a successful server publish — never pre-fill a local URL.
         val resolvedReceiptUrl = receiptUrl
-            ?: "${settings.receiptBaseUrl.trim().trimEnd('/')}/$resolvedTransactionId"
 
         val subtotal = cart.subtotal
         val itemDiscount = cart.itemDiscountTotal
@@ -580,7 +604,7 @@ class TransactionRepository @Inject constructor(
             paymentMethod = paymentMethod,
             paymentStatus = PaymentStatus.COMPLETED,
             currencyCode = settings.defaultCurrency,
-            notes = buildOrderNotes(cart),
+            notes = buildOrderNotes(cart, giftCardPaymentAmount),
             receiptUrl = resolvedReceiptUrl,
             cardReference = cardReference,
             tableId = cart.tableId,
@@ -630,6 +654,10 @@ class TransactionRepository @Inject constructor(
 
     suspend fun updateReceiptUrl(transactionId: String, url: String) {
         transactionDao.updateReceiptUrl(transactionId, url)
+    }
+
+    suspend fun clearReceiptUrl(transactionId: String) {
+        transactionDao.clearReceiptUrl(transactionId)
     }
 
     suspend fun getTransactionsBetween(start: Long, end: Long): List<TransactionEntity> =
@@ -701,16 +729,38 @@ class TransactionRepository @Inject constructor(
         val scoped =
             if (scopeUserId != null) transactions.filter { it.userId == scopeUserId }
             else transactions
-        val completed = scoped.filter { it.paymentStatus == PaymentStatus.COMPLETED }
+        val paidSales = scoped.filter { it.paymentStatus.isPaidSale() }
 
-        // Brut (taxable gross incl. VAT) excludes tips because tips are not taxable.
         fun brutOf(tx: TransactionEntity) = (tx.total - tx.tipAmount).coerceAtLeast(0.0)
+        fun netPayment(tx: TransactionEntity) =
+            (tx.total - tx.refundAmount.coerceAtLeast(0.0)).coerceAtLeast(0.0)
 
-        val vatRows = completed
+        val refundTotal = roundMoney(paidSales.sumOf { it.refundAmount.coerceAtLeast(0.0) })
+        val refundedOrders = paidSales
+            .filter { it.refundAmount > 0.0 }
+            .sortedByDescending { it.refundedAt ?: it.createdAt }
+            .map {
+                RefundedOrderRow(
+                    orderNumber = it.transactionNumber,
+                    refundAmount = roundMoney(it.refundAmount),
+                    refundReason = it.refundReason,
+                    refundedAt = it.refundedAt
+                )
+            }
+
+        val vatRows = paidSales
             .groupBy { it.serviceType ?: ServiceType.TAKEAWAY }
             .map { (serviceType, txs) ->
-                val brut = roundMoney(txs.sumOf { brutOf(it) })
-                val tva = roundMoney(txs.sumOf { it.taxTotal })
+                val brut = roundMoney(txs.sumOf { tx ->
+                    val refund = tx.refundAmount.coerceAtLeast(0.0)
+                    (brutOf(tx) - refund.coerceAtMost(brutOf(tx))).coerceAtLeast(0.0)
+                })
+                val tva = roundMoney(txs.sumOf { tx ->
+                    val grossBefore = tx.total.coerceAtLeast(0.0001)
+                    val keepRatio = ((grossBefore - tx.refundAmount.coerceAtLeast(0.0)) / grossBefore)
+                        .coerceIn(0.0, 1.0)
+                    tx.taxTotal * keepRatio
+                })
                 val rate = when (serviceType) {
                     ServiceType.DINE_IN -> settings.dineInVatRate
                     ServiceType.TAKEAWAY -> settings.takeawayVatRate
@@ -728,15 +778,20 @@ class TransactionRepository @Inject constructor(
         val brutTotal = roundMoney(vatRows.sumOf { it.brut })
         val tvaTotal = roundMoney(vatRows.sumOf { it.tva })
         val netTotal = roundMoney(brutTotal - tvaTotal)
-        val tipsTotal = roundMoney(completed.sumOf { it.tipAmount })
+        val tipsTotal = roundMoney(paidSales.sumOf { tx ->
+            val grossBefore = tx.total.coerceAtLeast(0.0001)
+            val keepRatio = ((grossBefore - tx.refundAmount.coerceAtLeast(0.0)) / grossBefore)
+                .coerceIn(0.0, 1.0)
+            tx.tipAmount * keepRatio
+        })
         val grandTotal = roundMoney(brutTotal + tipsTotal)
 
         val paymentRows = listOf(
-            "Cash" to completed.filter { it.paymentMethod == PaymentMethod.CASH }.sumOf { it.total },
-            "Card" to completed.filter {
+            "Cash" to paidSales.filter { it.paymentMethod == PaymentMethod.CASH }.sumOf { netPayment(it) },
+            "Card" to paidSales.filter {
                 it.paymentMethod == PaymentMethod.CARD || it.paymentMethod == PaymentMethod.ADYEN_TERMINAL
-            }.sumOf { it.total },
-            "Tap-to-Pay" to completed.filter { it.paymentMethod == PaymentMethod.TAP_TO_PAY }.sumOf { it.total }
+            }.sumOf { netPayment(it) },
+            "Tap-to-Pay" to paidSales.filter { it.paymentMethod == PaymentMethod.TAP_TO_PAY }.sumOf { netPayment(it) }
         ).map { (label, amount) ->
             val roundedAmount = roundMoney(amount)
             PaymentMethodRow(
@@ -747,12 +802,15 @@ class TransactionRepository @Inject constructor(
         }
 
         val orderTypeRows = ServiceType.entries.map { serviceType ->
-            val txs = completed.filter { it.serviceType == serviceType }
-            val amount = roundMoney(txs.sumOf { brutOf(it) })
+            val txs = paidSales.filter { it.serviceType == serviceType }
+            val amount = roundMoney(txs.sumOf { tx ->
+                val refund = tx.refundAmount.coerceAtLeast(0.0)
+                (brutOf(tx) - refund.coerceAtMost(brutOf(tx))).coerceAtLeast(0.0)
+            })
             OrderTypeRow(
                 label = serviceType.displayName,
                 count = txs.size,
-                percent = if (completed.isNotEmpty()) roundMoney(txs.size.toDouble() / completed.size * 100.0) else 0.0,
+                percent = if (paidSales.isNotEmpty()) roundMoney(txs.size.toDouble() / paidSales.size * 100.0) else 0.0,
                 amount = amount
             )
         }
@@ -764,7 +822,7 @@ class TransactionRepository @Inject constructor(
             }
 
         val coversServed = if (settings.trackCoversFromSeatingPlan) {
-            completed
+            paidSales
                 .filter { it.serviceType == ServiceType.DINE_IN && (it.guestCount ?: 0) > 0 }
                 .sumOf { it.guestCount ?: 0 }
                 .takeIf { it > 0 }
@@ -775,8 +833,8 @@ class TransactionRepository @Inject constructor(
         return EndOfDayReport(
             periodStart = start,
             periodEnd = end,
-            salesCount = completed.size,
-            revenue = roundMoney(completed.sumOf { it.total }),
+            salesCount = paidSales.size,
+            revenue = roundMoney(paidSales.sumOf { netPayment(it) }),
             taxTotal = tvaTotal,
             subtotal = brutTotal,
             netTotal = netTotal,
@@ -786,15 +844,24 @@ class TransactionRepository @Inject constructor(
             vatRows = vatRows,
             paymentRows = paymentRows,
             orderTypeRows = orderTypeRows,
-            cashTotal = roundMoney(completed.filter { it.paymentMethod == PaymentMethod.CASH }.sumOf { it.total }),
-            cardTotal = roundMoney(completed.filter { it.paymentMethod == PaymentMethod.CARD }.sumOf { it.total }),
-            tapToPayTotal = roundMoney(completed.filter { it.paymentMethod == PaymentMethod.TAP_TO_PAY }.sumOf { it.total }),
-            adyenTotal = roundMoney(completed.filter { it.paymentMethod == PaymentMethod.ADYEN_TERMINAL }.sumOf { it.total }),
-            dineInTotal = roundMoney(completed.filter { it.serviceType == ServiceType.DINE_IN }.sumOf { brutOf(it) }),
-            dineInCount = completed.count { it.serviceType == ServiceType.DINE_IN },
-            takeawayTotal = roundMoney(completed.filter { it.serviceType == ServiceType.TAKEAWAY }.sumOf { brutOf(it) }),
-            takeawayCount = completed.count { it.serviceType == ServiceType.TAKEAWAY },
+            cashTotal = roundMoney(paidSales.filter { it.paymentMethod == PaymentMethod.CASH }.sumOf { netPayment(it) }),
+            cardTotal = roundMoney(paidSales.filter { it.paymentMethod == PaymentMethod.CARD }.sumOf { netPayment(it) }),
+            tapToPayTotal = roundMoney(paidSales.filter { it.paymentMethod == PaymentMethod.TAP_TO_PAY }.sumOf { netPayment(it) }),
+            adyenTotal = roundMoney(paidSales.filter { it.paymentMethod == PaymentMethod.ADYEN_TERMINAL }.sumOf { netPayment(it) }),
+            dineInTotal = roundMoney(paidSales.filter { it.serviceType == ServiceType.DINE_IN }.sumOf { tx ->
+                val refund = tx.refundAmount.coerceAtLeast(0.0)
+                (brutOf(tx) - refund.coerceAtMost(brutOf(tx))).coerceAtLeast(0.0)
+            }),
+            dineInCount = paidSales.count { it.serviceType == ServiceType.DINE_IN },
+            takeawayTotal = roundMoney(paidSales.filter { it.serviceType == ServiceType.TAKEAWAY }.sumOf { tx ->
+                val refund = tx.refundAmount.coerceAtLeast(0.0)
+                (brutOf(tx) - refund.coerceAtMost(brutOf(tx))).coerceAtLeast(0.0)
+            }),
+            takeawayCount = paidSales.count { it.serviceType == ServiceType.TAKEAWAY },
             productsSold = productsSold,
+            refundTotal = refundTotal,
+            refundCount = refundedOrders.size,
+            refundedOrders = refundedOrders,
             coversServed = coversServed
         )
     }
@@ -938,15 +1005,58 @@ class TransactionRepository @Inject constructor(
         return transaction
     }
 
-    suspend fun refundOrder(transactionId: String, amount: Double, fullRefund: Boolean) {
+    suspend fun refundOrder(
+        transactionId: String,
+        amount: Double,
+        fullRefund: Boolean,
+        itemRefunds: List<Pair<Long, Int>> = emptyList(),
+        reason: String? = null
+    ) {
         val tx = transactionDao.getById(transactionId) ?: return
-        val refundAmount = if (fullRefund) tx.total else amount.coerceIn(0.0, tx.total)
-        val status = if (fullRefund || refundAmount >= tx.total) {
+        val items = transactionDao.getItems(transactionId)
+        val already = tx.refundAmount.coerceAtLeast(0.0)
+        val remaining = (tx.total - already).coerceAtLeast(0.0)
+        if (remaining <= 0.0) return
+
+        val itemUpdates = mutableMapOf<Long, Int>()
+        val refundIncrement = when {
+            fullRefund -> remaining
+            itemRefunds.isNotEmpty() -> {
+                var sum = 0.0
+                for ((itemId, qty) in itemRefunds) {
+                    val item = items.find { it.id == itemId } ?: continue
+                    val left = (item.quantity - item.refundedQuantity).coerceAtLeast(0)
+                    val take = qty.coerceIn(0, left)
+                    if (take <= 0) continue
+                    val unit = if (item.quantity > 0) item.lineTotal / item.quantity else 0.0
+                    sum += unit * take
+                    itemUpdates[item.id] = item.refundedQuantity + take
+                }
+                sum.coerceIn(0.0, remaining)
+            }
+            else -> amount.coerceIn(0.0, remaining)
+        }
+        if (refundIncrement <= 0.0) return
+
+        val newRefundTotal = roundMoney(already + refundIncrement)
+        val status = if (newRefundTotal >= tx.total - 0.001) {
             PaymentStatus.REFUNDED
         } else {
             PaymentStatus.PARTIALLY_REFUNDED
         }
-        transactionDao.refundTransaction(transactionId, status, refundAmount)
+        if (fullRefund) {
+            items.forEach { itemUpdates[it.id] = it.quantity }
+        }
+        itemUpdates.forEach { (id, qty) ->
+            transactionDao.updateItemRefundedQuantity(id, qty)
+        }
+        transactionDao.refundTransaction(
+            id = transactionId,
+            status = status,
+            refundAmount = newRefundTotal,
+            reason = reason?.trim()?.takeIf { it.isNotBlank() },
+            refundedAt = System.currentTimeMillis()
+        )
     }
 
     suspend fun getOrdersByMasterId(masterOrderId: String): List<TransactionEntity> =
@@ -1048,6 +1158,8 @@ class CartManager @Inject constructor() {
                         it.addons == stamped.addons &&
                         it.comboSelections == stamped.comboSelections &&
                         it.isCombo == stamped.isCombo &&
+                        it.giftCard == null &&
+                        stamped.giftCard == null &&
                         !it.isWeighed &&
                         it.notes == stamped.notes &&
                         it.courseNumber == stamped.courseNumber &&
@@ -1342,6 +1454,45 @@ class CartManager @Inject constructor() {
                 tableOrderId = null,
                 tableName = null,
                 serviceType = ServiceType.TAKEAWAY
+            )
+        }
+    }
+
+    /** After a completed sale or cleared cart — default next order to takeaway ASAP (not dine-in). */
+    fun resetForNewWalkInOrder() {
+        _cart.update { cart ->
+            CartSummary(
+                items = emptyList(),
+                vatIncludedInPrice = cart.vatIncludedInPrice,
+                serviceType = ServiceType.TAKEAWAY,
+                fulfillmentType = FulfillmentType.PICKUP,
+                pickupTimeMs = null
+            )
+        }
+    }
+
+    fun setPickupTime(pickupTimeMs: Long?) {
+        _cart.update { it.copy(pickupTimeMs = pickupTimeMs) }
+    }
+
+    fun setDeliveryTime(deliveryTimeMs: Long?) {
+        _cart.update { it.copy(pickupTimeMs = deliveryTimeMs) }
+    }
+
+    fun startDeliveryAsap(orderNumber: String) {
+        _cart.update {
+            it.copy(
+                fulfillmentType = FulfillmentType.DELIVERY,
+                orderNumber = orderNumber,
+                pickupTimeMs = null,
+                tableId = null,
+                tableOrderId = null,
+                tableName = null,
+                serviceType = ServiceType.TAKEAWAY,
+                deliveryName = null,
+                deliveryAddress = null,
+                deliveryZip = null,
+                deliveryPhone = null
             )
         }
     }
@@ -1843,6 +1994,76 @@ class TableOrderRepository @Inject constructor(
         }
     }
 
+    /** Import floor plans + table positions from merchant panel sync bootstrap. */
+    suspend fun importFloorPlansFromSync(plans: List<com.chaslay.pos.data.remote.dto.SyncFloorPlanDto>): Int {
+        if (plans.isEmpty()) return 0
+        var upserted = 0
+        plans.forEach { plan ->
+            val remotePlanId = plan.id.trim()
+            if (remotePlanId.isEmpty()) return@forEach
+            val canvasW = (plan.canvasWidth ?: 1000).coerceAtLeast(100)
+            val canvasH = (plan.canvasHeight ?: 1000).coerceAtLeast(100)
+            val existingFloor = floorDao.getByRemoteId(remotePlanId)
+            val floorId = if (existingFloor != null) {
+                floorDao.update(
+                    existingFloor.copy(
+                        name = plan.name.ifBlank { existingFloor.name },
+                        sortOrder = plan.sortOrder ?: existingFloor.sortOrder,
+                        canvasWidth = canvasW,
+                        canvasHeight = canvasH
+                    )
+                )
+                existingFloor.id
+            } else {
+                floorDao.insert(
+                    com.chaslay.pos.data.local.entity.TableFloorEntity(
+                        name = plan.name.ifBlank { "Floor" },
+                        sortOrder = plan.sortOrder ?: 0,
+                        remoteId = remotePlanId,
+                        canvasWidth = canvasW,
+                        canvasHeight = canvasH
+                    )
+                )
+            }
+            plan.tables.forEachIndexed { index, remoteTable ->
+                val remoteTableId = remoteTable.id.trim()
+                if (remoteTableId.isEmpty()) return@forEachIndexed
+                val planX = ((remoteTable.posX ?: 40.0) / canvasW).toFloat().coerceIn(0f, 1f)
+                val planY = ((remoteTable.posY ?: 40.0) / canvasH).toFloat().coerceIn(0f, 1f)
+                val planW = ((remoteTable.width ?: 100.0) / canvasW).toFloat().coerceIn(0.04f, 0.5f)
+                val planH = ((remoteTable.height ?: 80.0) / canvasH).toFloat().coerceIn(0.03f, 0.5f)
+                val shape = when (remoteTable.shape?.lowercase()) {
+                    "round" -> "ROUND"
+                    "rect", "square" -> "RECT"
+                    else -> "ROUND"
+                }
+                val existing = tableDao.getByRemoteId(remoteTableId)
+                val entity = RestaurantTableEntity(
+                    id = existing?.id ?: 0L,
+                    name = remoteTable.label.ifBlank { "Table" },
+                    sortOrder = remoteTable.sortOrder ?: index,
+                    floorId = floorId,
+                    remoteId = remoteTableId,
+                    seatCapacity = (remoteTable.capacity ?: 4).coerceAtLeast(1),
+                    planX = planX,
+                    planY = planY,
+                    planWidth = planW,
+                    planHeight = planH,
+                    shape = shape,
+                    rotation = (remoteTable.rotation ?: 0.0).toFloat(),
+                    isActive = true
+                )
+                if (existing == null) {
+                    tableDao.insert(entity)
+                } else {
+                    tableDao.update(entity.copy(id = existing.id))
+                }
+                upserted++
+            }
+        }
+        return upserted
+    }
+
     suspend fun getFloorElements(floorId: Long): List<com.chaslay.pos.data.local.entity.FloorPlanElementEntity> =
         floorPlanElementDao.getByFloor(floorId)
 
@@ -2187,9 +2408,12 @@ class HeldOrderRepository @Inject constructor(
     )
 }
 
-private fun buildOrderNotes(cart: CartSummary): String? {
+private fun buildOrderNotes(cart: CartSummary, giftCardPaymentAmount: Double? = null): String? {
     val lines = mutableListOf<String>()
     cart.cartNotes?.trim()?.takeIf { it.isNotBlank() }?.let { lines.add(it) }
+    giftCardPaymentAmount?.takeIf { it > 0.0 }?.let { amount ->
+        lines.add(String.format(Locale.US, "Gift card payment: %.2f", amount))
+    }
     when (cart.fulfillmentType) {
         FulfillmentType.PICKUP -> {
             cart.orderNumber?.let { lines.add("Pickup order: $it") }

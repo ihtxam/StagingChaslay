@@ -17,6 +17,7 @@ import { dashboardVersionLabel } from '@/lib/app-version';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { compressImageIfNeeded } from '@/lib/compress-image';
 import FloorPlan from './FloorPlan';
+import SettingsBusinessTab from './settings/SettingsBusinessTab';
 
 interface SettingsData {
   name: string;
@@ -139,6 +140,9 @@ interface SettingsData {
     receiptLogoUrl?: string | null;
     autoPrintReceipt?: boolean;
     autoPrintKitchen?: boolean;
+    scaleComPort?: string | null;
+    scaleUsbAddress?: string | null;
+    scaleEnabled?: boolean;
     printers?: Array<{
       id: string;
       name: string;
@@ -930,349 +934,14 @@ export default function Settings() {
 
         <div className="p-4 sm:p-5 pb-24 sm:pb-5">
           {tab === 'business' && (
-            <form onSubmit={onSave} className="space-y-5">
-              <Section title={t('businessSettings')} description={t('businessSettingsHint')}>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Field label={t('businessName')}>
-                    <input
-                      className="input"
-                      value={settings.name}
-                      onChange={(e) => setSettings({ ...settings, name: e.target.value })}
-                      required
-                    />
-                  </Field>
-                  <Field label={t('businessEmail')}>
-                    <input className="input bg-[var(--bg-muted)]" value={settings.email} disabled />
-                  </Field>
-                  <Field label={t('phone')}>
-                    <input
-                      className="input"
-                      value={settings.phone || ''}
-                      onChange={(e) => setSettings({ ...settings, phone: e.target.value })}
-                    />
-                  </Field>
-                  <Field label={t('vatNumber')}>
-                    <input
-                      className="input"
-                      value={settings.vatNumber || ''}
-                      onChange={(e) => setSettings({ ...settings, vatNumber: e.target.value })}
-                      placeholder="CHE-000.000.000 MWST"
-                    />
-                  </Field>
-                  <Field label={t('address')}>
-                    <input
-                      className="input"
-                      value={settings.address || ''}
-                      onChange={(e) => setSettings({ ...settings, address: e.target.value })}
-                    />
-                  </Field>
-                  <Field label={t('city')}>
-                    <input
-                      className="input"
-                      value={settings.city || ''}
-                      onChange={(e) => setSettings({ ...settings, city: e.target.value })}
-                    />
-                  </Field>
-                  <Field label={t('country')}>
-                    <input
-                      className="input"
-                      value={settings.country || ''}
-                      onChange={(e) => setSettings({ ...settings, country: e.target.value })}
-                    />
-                  </Field>
-                </div>
-              </Section>
-
-              <Section title={t('vacationHolidays')} description={t('vacationHolidaysHint')}>
-                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={!!settings.vacationSettings?.enabled}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        vacationSettings: {
-                          ...(settings.vacationSettings || { periods: [] }),
-                          enabled: e.target.checked,
-                        },
-                      })
-                    }
-                  />
-                  <span>
-                    <span className="font-medium block">{t('vacationEnabled')}</span>
-                    <span className="text-xs muted">{t('vacationEnabledHint')}</span>
-                  </span>
-                </label>
-
-                <div className="rounded-md border-2 border-dashed border-[var(--border)] bg-[var(--bg-muted)] p-4 space-y-3">
-                  <div>
-                    <p className="text-sm font-semibold">{t('vacationPopupImage')}</p>
-                    <p className="text-xs muted mt-0.5">{t('vacationPopupImageHint')}</p>
-                  </div>
-                  {settings.vacationSettings?.popupImageUrl ? (
-                    <img
-                      src={settings.vacationSettings.popupImageUrl}
-                      alt=""
-                      className="max-h-36 sm:max-h-44 w-auto max-w-full border border-[var(--border)] object-contain bg-[var(--bg-elevated)]"
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="w-full min-h-[5.5rem] sm:min-h-[7rem] rounded-md border border-dashed border-[var(--border)] bg-[var(--bg-elevated)] text-sm text-[var(--text-muted)] hover:border-[var(--text)] hover:text-[var(--text)] transition-colors"
-                      onClick={() => vacationImageInputRef.current?.click()}
-                    >
-                      {t('vacationUploadImage')}
-                    </button>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    <input
-                      ref={vacationImageInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      className="sr-only"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        e.target.value = '';
-                        if (!file) return;
-                        try {
-                          const compressed = await compressImageIfNeeded(file, {
-                            maxBytes: 500 * 1024,
-                            targetBytes: 350 * 1024,
-                            maxWidth: 1600,
-                          });
-                          const form = new FormData();
-                          form.append('file', compressed);
-                          const res = await api.post('/merchant/media', form);
-                          const url = res.data?.url;
-                          if (!url) throw new Error('No URL returned');
-                          setSettings({
-                            ...settings,
-                            vacationSettings: {
-                              ...(settings.vacationSettings || { periods: [] }),
-                              popupImageUrl: url,
-                            },
-                          });
-                          toast.success(t('vacationImageUploaded'));
-                        } catch (error: any) {
-                          toast.error(
-                            error.response?.data?.error || t('vacationImageUploadFailed')
-                          );
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      onClick={() => vacationImageInputRef.current?.click()}
-                    >
-                      {t('vacationUploadImage')}
-                    </button>
-                    {settings.vacationSettings?.popupImageUrl ? (
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() =>
-                          setSettings({
-                            ...settings,
-                            vacationSettings: {
-                              ...(settings.vacationSettings || { periods: [] }),
-                              popupImageUrl: '',
-                            },
-                          })
-                        }
-                      >
-                        {t('vacationClearImage')}
-                      </button>
-                    ) : null}
-                  </div>
-                  <Field label={t('vacationOrPasteUrl')}>
-                    <input
-                      className="input"
-                      value={settings.vacationSettings?.popupImageUrl || ''}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          vacationSettings: {
-                            ...(settings.vacationSettings || { periods: [] }),
-                            popupImageUrl: e.target.value,
-                          },
-                        })
-                      }
-                      placeholder="https://…"
-                    />
-                  </Field>
-                </div>
-
-                <LocalizedFields
-                  label={t('vacationPopupTitle')}
-                  value={settings.vacationSettings?.popupTitle}
-                  placeholder={t('vacationPopupTitlePlaceholder')}
-                  onChange={(popupTitle) =>
-                    setSettings({
-                      ...settings,
-                      vacationSettings: {
-                        ...(settings.vacationSettings || { periods: [] }),
-                        popupTitle,
-                      },
-                    })
-                  }
-                />
-                <LocalizedFields
-                  label={t('vacationMessage')}
-                  value={settings.vacationSettings?.message}
-                  multiline
-                  placeholder={t('vacationMessagePlaceholder')}
-                  onChange={(message) =>
-                    setSettings({
-                      ...settings,
-                      vacationSettings: {
-                        ...(settings.vacationSettings || { periods: [] }),
-                        message,
-                      },
-                    })
-                  }
-                />
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium">{t('vacationPeriods')}</span>
-                    <button
-                      type="button"
-                      className="btn-secondary text-xs"
-                      onClick={() => {
-                        const id =
-                          typeof crypto !== 'undefined' && crypto.randomUUID
-                            ? crypto.randomUUID()
-                            : `p-${Date.now()}`;
-                        const today = new Date().toISOString().slice(0, 10);
-                        setSettings({
-                          ...settings,
-                          vacationSettings: {
-                            ...(settings.vacationSettings || {}),
-                            periods: [
-                              ...(settings.vacationSettings?.periods || []),
-                              {
-                                id,
-                                startDate: today,
-                                startTime: '00:00',
-                                endDate: today,
-                                endTime: '23:59',
-                              },
-                            ],
-                          },
-                        });
-                      }}
-                    >
-                      {t('vacationAddPeriod')}
-                    </button>
-                  </div>
-                  <p className="text-xs muted">{t('vacationPeriodsHint')}</p>
-                  {(settings.vacationSettings?.periods || []).length === 0 ? (
-                    <p className="text-xs muted">{t('vacationEmptyPeriods')}</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {(settings.vacationSettings?.periods || []).map((period, idx) => (
-                        <div
-                          key={period.id || idx}
-                          className="rounded-md border border-[var(--border)] p-3 space-y-2"
-                        >
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            <Field label={t('vacationStart')}>
-                              <input
-                                className="input"
-                                type="date"
-                                value={period.startDate}
-                                onChange={(e) => {
-                                  const periods = [...(settings.vacationSettings?.periods || [])];
-                                  periods[idx] = { ...period, startDate: e.target.value };
-                                  setSettings({
-                                    ...settings,
-                                    vacationSettings: { ...settings.vacationSettings, periods },
-                                  });
-                                }}
-                                required
-                              />
-                            </Field>
-                            <Field label={t('vacationStartTime')}>
-                              <input
-                                className="input"
-                                type="time"
-                                value={period.startTime || '00:00'}
-                                onChange={(e) => {
-                                  const periods = [...(settings.vacationSettings?.periods || [])];
-                                  periods[idx] = { ...period, startTime: e.target.value };
-                                  setSettings({
-                                    ...settings,
-                                    vacationSettings: { ...settings.vacationSettings, periods },
-                                  });
-                                }}
-                              />
-                            </Field>
-                            <Field label={t('vacationEnd')}>
-                              <input
-                                className="input"
-                                type="date"
-                                value={period.endDate}
-                                min={period.startDate}
-                                onChange={(e) => {
-                                  const periods = [...(settings.vacationSettings?.periods || [])];
-                                  periods[idx] = { ...period, endDate: e.target.value };
-                                  setSettings({
-                                    ...settings,
-                                    vacationSettings: { ...settings.vacationSettings, periods },
-                                  });
-                                }}
-                                required
-                              />
-                            </Field>
-                            <Field label={t('vacationEndTime')}>
-                              <input
-                                className="input"
-                                type="time"
-                                value={period.endTime || '23:59'}
-                                onChange={(e) => {
-                                  const periods = [...(settings.vacationSettings?.periods || [])];
-                                  periods[idx] = { ...period, endTime: e.target.value };
-                                  setSettings({
-                                    ...settings,
-                                    vacationSettings: { ...settings.vacationSettings, periods },
-                                  });
-                                }}
-                              />
-                            </Field>
-                          </div>
-                          <button
-                            type="button"
-                            className="text-xs text-red-700 underline"
-                            onClick={() => {
-                              const periods = (settings.vacationSettings?.periods || []).filter(
-                                (_, i) => i !== idx
-                              );
-                              setSettings({
-                                ...settings,
-                                vacationSettings: { ...settings.vacationSettings, periods },
-                              });
-                            }}
-                          >
-                            {t('vacationRemove')}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </Section>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-4">
-                <p className="text-xs muted">
-                  {t('plan')}: {settings.subscriptionPlan || 'free'} · {t('status')}:{' '}
-                  {settings.status || 'active'}
-                </p>
-                <button type="submit" className="btn-primary" disabled={saving}>
-                  {saving ? t('saving') : t('save')}
-                </button>
-              </div>
-            </form>
+            <SettingsBusinessTab
+              settings={settings}
+              setSettings={(next) => setSettings(next)}
+              onSave={onSave}
+              saving={saving}
+              vacationImageInputRef={vacationImageInputRef}
+              highlightId={highlightId}
+            />
           )}
 
           {tab === 'taxes' && (
@@ -2744,6 +2413,47 @@ export default function Settings() {
                     <option value={80}>80mm</option>
                     <option value={58}>58mm</option>
                   </select>
+                </Field>
+                <Field
+                  label="Scale COM port (WebPOS)"
+                  hint="Print Agent serial port, e.g. COM3. Skips port scan for faster reads."
+                >
+                  <input
+                    className="input font-mono"
+                    value={settings.posPrintSettings?.scaleComPort || ''}
+                    placeholder="COM3"
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          scaleComPort: e.target.value.trim() || null,
+                          scaleEnabled: !!e.target.value.trim(),
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field
+                  label="Scale USB address (Android POS)"
+                  hint="Stable USB address from Android Settings → Printers & Scale. Synced on menu sync."
+                >
+                  <input
+                    className="input font-mono text-sm"
+                    value={settings.posPrintSettings?.scaleUsbAddress || ''}
+                    placeholder="usb:1234:5678"
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          scaleUsbAddress: e.target.value.trim() || null,
+                          scaleEnabled:
+                            !!e.target.value.trim() || !!settings.posPrintSettings?.scaleComPort,
+                        },
+                      })
+                    }
+                  />
                 </Field>
                 <Field label={t('receiptLogoUpload')} hint={t('receiptLogoUploadHint')}>
                   <div className="space-y-2">

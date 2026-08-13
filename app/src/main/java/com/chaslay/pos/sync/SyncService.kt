@@ -13,7 +13,8 @@ class SyncService @Inject constructor(
     private val menuSyncRepository: MenuSyncRepository,
     private val terminalSyncRepository: TerminalSyncRepository,
     private val staffSyncRepository: StaffSyncRepository,
-    private val onlineOrderSyncRepository: OnlineOrderSyncRepository
+    private val onlineOrderSyncRepository: OnlineOrderSyncRepository,
+    private val floorPlanSyncRepository: FloorPlanSyncRepository
 ) {
     private val mutex = Mutex()
     private var lastFullSyncAt = 0L
@@ -35,11 +36,14 @@ class SyncService @Inject constructor(
         val orders = runCatching { onlineOrderSyncRepository.syncIncomingOrders() }
             .onFailure { Log.w(TAG, "Online order sync failed", it) }
             .getOrDefault(OnlineOrderSyncResult())
+        val floorPlans = runCatching { floorPlanSyncRepository.syncFloorPlans() }
+            .onFailure { Log.w(TAG, "Floor plan sync failed", it) }
+            .getOrDefault(FloorPlanSyncResult())
         val tx = runCatching { syncPendingTransactions() }
             .onFailure { Log.w(TAG, "Transaction sync failed", it) }
             .getOrDefault(SyncResult(0, 0))
         lastFullSyncAt = now
-        FullSyncResult(menu = menu, terminals = terminals, staff = staff, orders = orders, transactions = tx)
+        FullSyncResult(menu = menu, terminals = terminals, staff = staff, orders = orders, floorPlans = floorPlans, transactions = tx)
     }
 
     suspend fun pullMenuReplace(): MenuSyncResult =
@@ -92,6 +96,7 @@ data class FullSyncResult(
     val terminals: TerminalSyncResult = TerminalSyncResult(),
     val staff: StaffSyncResult = StaffSyncResult(),
     val orders: OnlineOrderSyncResult = OnlineOrderSyncResult(),
+    val floorPlans: FloorPlanSyncResult = FloorPlanSyncResult(),
     val transactions: SyncResult = SyncResult(0, 0),
     val skipped: Boolean = false
 )

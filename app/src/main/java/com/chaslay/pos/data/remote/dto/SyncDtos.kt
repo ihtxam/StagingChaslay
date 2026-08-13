@@ -46,7 +46,8 @@ data class SyncBusinessDto(
     @SerializedName("tax_delivery_rate") val taxDeliveryRate: Double? = null,
     @SerializedName("tax_included_in_price") val taxIncludedInPrice: Boolean? = null,
     @SerializedName("default_language") val defaultLanguage: String? = null,
-    @SerializedName("store_hours") val storeHours: Map<String, Map<String, List<SyncStoreHoursSlotDto>>>? = null
+    @SerializedName("store_hours") val storeHours: Map<String, Map<String, List<SyncStoreHoursSlotDto>>>? = null,
+    @SerializedName("receipt_base_url") val receiptBaseUrl: String? = null
 )
 
 data class SyncStoreHoursSlotDto(
@@ -54,11 +55,34 @@ data class SyncStoreHoursSlotDto(
     val close: String
 )
 
+data class SyncDiningTableDto(
+    val id: String,
+    val label: String,
+    val capacity: Int? = null,
+    val shape: String? = null,
+    @SerializedName("pos_x") val posX: Double? = null,
+    @SerializedName("pos_y") val posY: Double? = null,
+    val width: Double? = null,
+    val height: Double? = null,
+    val rotation: Double? = null,
+    @SerializedName("sort_order") val sortOrder: Int? = null
+)
+
+data class SyncFloorPlanDto(
+    val id: String,
+    val name: String,
+    @SerializedName("canvas_width") val canvasWidth: Int? = null,
+    @SerializedName("canvas_height") val canvasHeight: Int? = null,
+    @SerializedName("sort_order") val sortOrder: Int? = null,
+    val tables: List<SyncDiningTableDto> = emptyList()
+)
+
 data class MenuBootstrapResponse(
     val serverTime: Long,
     val business: SyncBusinessDto? = null,
     val categories: List<SyncCategoryDto> = emptyList(),
-    val products: List<SyncProductDto> = emptyList()
+    val products: List<SyncProductDto> = emptyList(),
+    @SerializedName("floor_plans") val floorPlans: List<SyncFloorPlanDto> = emptyList()
 )
 
 data class MenuChangesResponse(
@@ -122,7 +146,8 @@ data class SyncPaymentMethodsDto(
     val express: Boolean = true,
     val cash: Boolean = true,
     val card: Boolean = true,
-    val terminal: Boolean = false
+    val terminal: Boolean = false,
+    @SerializedName("giftCard") val giftCard: Boolean = false
 )
 
 data class SyncFeaturesDto(
@@ -151,6 +176,12 @@ data class SyncCheckoutDto(
     val vatIncludedInPrice: Boolean = false
 )
 
+data class SyncScaleDto(
+    val enabled: Boolean = false,
+    @SerializedName("com_port") val comPort: String? = null,
+    @SerializedName("usb_address") val usbAddress: String? = null
+)
+
 data class PaymentConfigResponse(
     val serverTime: Long = 0L,
     val adyen: SyncAdyenConfigDto? = null,
@@ -159,7 +190,9 @@ data class PaymentConfigResponse(
     val terminal_ready: Boolean = false,
     val methods: SyncPaymentMethodsDto? = null,
     val features: SyncFeaturesDto? = null,
-    val checkout: SyncCheckoutDto? = null
+    val checkout: SyncCheckoutDto? = null,
+    @SerializedName("receipt_base_url") val receiptBaseUrl: String? = null,
+    val scale: SyncScaleDto? = null
 )
 
 data class PushTerminalItemDto(

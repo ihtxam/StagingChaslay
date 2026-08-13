@@ -18,6 +18,8 @@ type Props = {
   /** Catalog price = CHF per kg */
   pricePerKg: number;
   weightUnit?: 'kg' | 'g' | 'lb' | string | null;
+  /** Merchant panel / print settings COM port — skips discovery when set. */
+  configuredPort?: string | null;
   onClose: () => void;
   onConfirm: (weightKg: number) => void;
 };
@@ -31,6 +33,7 @@ export default function WebPosWeightModal({
   productName,
   pricePerKg,
   weightUnit = 'kg',
+  configuredPort,
   onClose,
   onConfirm,
 }: Props) {
@@ -43,12 +46,24 @@ export default function WebPosWeightModal({
   const [scaleMsg, setScaleMsg] = useState('');
   const [agentOk, setAgentOk] = useState(false);
 
+  const fixedPort = (configuredPort || '').trim();
+
   useEffect(() => {
     if (!open) return;
     setBuffer('');
     setScaleReading(null);
     setScaleMsg('');
     setEntryUnit(weightUnit === 'g' ? 'g' : 'kg');
+
+    if (fixedPort) {
+      setPort(fixedPort);
+      void (async () => {
+        const ok = await isPrintAgentAvailable();
+        setAgentOk(ok);
+      })();
+      return;
+    }
+
     try {
       setPort(localStorage.getItem(SCALE_PORT_KEY) || '');
     } catch {
@@ -66,19 +81,18 @@ export default function WebPosWeightModal({
         setPorts([]);
       }
     })();
-  }, [open, weightUnit]);
+  }, [open, weightUnit, fixedPort]);
 
   useEffect(() => {
     if (!open || !agentOk || !port) return;
     let cancelled = false;
     const tick = async () => {
       try {
-        const res = await readScaleWeight(port, 1800);
+        const res = await readScaleWeight(port, fixedPort ? 800 : 1800);
         if (cancelled) return;
         if (res.reading) {
           setScaleReading(res.reading);
           setScaleMsg('');
-          // Live-fill keypad from stable scale weight.
           if (res.reading.status === 'STABLE' && res.reading.weightKg > 0) {
             const kg = res.reading.weightKg;
             setBuffer(
@@ -95,12 +109,13 @@ export default function WebPosWeightModal({
       }
     };
     void tick();
-    const id = window.setInterval(() => void tick(), 2000);
+    const intervalMs = fixedPort ? 600 : 2000;
+    const id = window.setInterval(() => void tick(), intervalMs);
     return () => {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [open, agentOk, port, entryUnit, t]);
+  }, [open, agentOk, port, entryUnit, t, fixedPort]);
 
   const weightKg = useMemo(() => {
     const n = Number(buffer);
@@ -185,26 +200,32 @@ export default function WebPosWeightModal({
             </div>
             {agentOk ? (
               <>
-                <select
-                  className="input mb-1.5 w-full text-sm"
-                  value={port}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setPort(v);
-                    try {
-                      localStorage.setItem(SCALE_PORT_KEY, v);
-                    } catch {
-                      /* ignore */
-                    }
-                  }}
-                >
-                  <option value="">{t('webPosScaleSelectPort')}</option>
-                  {ports.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
+                {fixedPort ? (
+                  <p className="mb-1.5 text-xs font-mono text-[var(--webpos-text-muted,var(--text-muted))]">
+                    {fixedPort}
+                  </p>
+                ) : (
+                  <select
+                    className="input mb-1.5 w-full text-sm"
+                    value={port}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setPort(v);
+                      try {
+                        localStorage.setItem(SCALE_PORT_KEY, v);
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                  >
+                    <option value="">{t('webPosScaleSelectPort')}</option>
+                    {ports.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <p className="text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
                   {scaleReading
                     ? `${t('webPosScaleLive')}: ${scaleReading.weightKg.toFixed(3)} kg (${scaleReading.status})`

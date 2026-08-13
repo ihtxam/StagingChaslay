@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { publicApi } from '@/lib/api';
 import { APP_NAME } from '@/lib/brand';
-import { qrImageUrl } from '@/lib/qr';
+import { normalizeReceiptDomain, qrImageUrl } from '@/lib/qr';
 
 type Receipt = {
   id: string;
@@ -31,8 +32,25 @@ function money(v: string | number | undefined) {
   return `CHF ${n.toFixed(2)}`;
 }
 
+function decodeSaleRef(raw: string | undefined): string {
+  if (!raw) return '';
+  let ref = raw.trim();
+  try {
+    ref = decodeURIComponent(ref);
+  } catch {
+    /* keep raw */
+  }
+  // If a full URL was pasted into the path, take the last segment.
+  if (ref.includes('://')) {
+    const parts = ref.replace(/\/$/, '').split('/');
+    ref = parts[parts.length - 1] || ref;
+  }
+  return ref.trim();
+}
+
 export default function ReceiptPage() {
-  const { saleId } = useParams();
+  const { saleId: rawSaleId } = useParams();
+  const saleId = decodeSaleRef(rawSaleId);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -42,10 +60,22 @@ export default function ReceiptPage() {
     (async () => {
       try {
         setLoading(true);
-        const res = await api.get(`/receipts/${encodeURIComponent(saleId)}`);
+        setError('');
+        const res = await publicApi.get(`/receipts/${encodeURIComponent(saleId)}`, {
+          // Never attach merchant JWT to public receipt lookups.
+          headers: { Authorization: undefined },
+        });
         setReceipt(res.data.receipt);
       } catch (e: any) {
-        setError(e.response?.data?.error || 'Receipt not found');
+        const status = e.response?.status;
+        const apiError = e.response?.data?.error;
+        if (status === 404) {
+          setError('Receipt not found. The order may not be uploaded to the server yet.');
+        } else if (status === 401 || /unauthorized/i.test(String(apiError || ''))) {
+          setError('Could not load receipt (server rejected the request). Try again later.');
+        } else {
+          setError(apiError || e.message || 'Receipt not found');
+        }
       } finally {
         setLoading(false);
       }
@@ -68,7 +98,7 @@ export default function ReceiptPage() {
     );
   }
 
-  const url = typeof window !== 'undefined' ? window.location.href : '';
+  const url = normalizeReceiptDomain(typeof window !== 'undefined' ? window.location.href : '');
 
   return (
     <div className="min-h-screen bg-slate-100 py-8 px-4">

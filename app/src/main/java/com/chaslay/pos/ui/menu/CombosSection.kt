@@ -93,9 +93,16 @@ fun CombosSection(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(combo.name, fontWeight = FontWeight.SemiBold)
                                 Text(
-                                    "${combo.price} � ${categories.find { it.id == combo.categoryId }?.name ?: "�"}",
+                                    categories.find { it.id == combo.categoryId }?.name
+                                        ?: stringResource(R.string.category),
                                     fontSize = 12.sp,
                                     color = Color.Gray
+                                )
+                                Text(
+                                    stringResource(R.string.combo_price_format, combo.price),
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF00897B),
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                             TextButton(onClick = { editing = combo; showDialog = true }) {

@@ -6,7 +6,7 @@ import type {
   MarketingSettings,
 } from "@/db/schema";
 import { eq, and, or } from "drizzle-orm";
-import { normalizeCustomDomain } from "@/services/cms.service";
+import { normalizeCustomDomain } from "@/lib/domain";
 import { normalizeVacationSettings } from "@/lib/vacation";
 import { MarketingService } from "@/services/marketing.service";
 import {

@@ -55,6 +55,14 @@ app.chaslay.com {
 		reverse_proxy api:3000
 	}
 
+	handle /receipt/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /receipts/* {
+		reverse_proxy dashboard:80
+	}
+
 	handle {
 		reverse_proxy dashboard:80
 	}
@@ -85,6 +93,10 @@ pay.chaslay.com {
 	}
 
 	handle /receipt/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /receipts/* {
 		reverse_proxy dashboard:80
 	}
 

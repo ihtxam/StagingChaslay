@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -65,24 +66,27 @@ class MainActivity : AppCompatActivity() {
 
             ChaslayPosTheme(darkTheme = darkTheme) {
                 ProvideVectronTheme(darkTheme = darkTheme) {
-                    when (licenseState.gateState) {
-                        LicenseGateState.LOADING -> {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator()
+                    // Keep keypad / checkout / PIN controls above the Android nav bar on all screens.
+                    Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+                        when (licenseState.gateState) {
+                            LicenseGateState.LOADING -> {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator()
+                                }
                             }
-                        }
-                        LicenseGateState.NEEDS_ACTIVATION, LicenseGateState.EXPIRED -> {
-                            ActivationScreen()
-                        }
-                        else -> {
-                            if (userAccess == null) {
-                                com.chaslay.pos.ui.auth.LoginScreen(
-                                    onLoggedIn = { /* reactive via session flow */ }
-                                )
-                            } else {
-                                ChaslayNavHost(
-                                    userAccess = userAccess
-                                )
+                            LicenseGateState.NEEDS_ACTIVATION, LicenseGateState.EXPIRED -> {
+                                ActivationScreen()
+                            }
+                            else -> {
+                                if (userAccess == null) {
+                                    com.chaslay.pos.ui.auth.LoginScreen(
+                                        onLoggedIn = { /* reactive via session flow */ }
+                                    )
+                                } else {
+                                    ChaslayNavHost(
+                                        userAccess = userAccess
+                                    )
+                                }
                             }
                         }
                     }

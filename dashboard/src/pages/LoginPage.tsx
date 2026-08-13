@@ -7,6 +7,7 @@ import { LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { clearWebPosStaffSession } from '@/lib/permissions';
 import { APP_NAME, APP_PANEL_TITLE } from '@/lib/brand';
 
 /** Temporary profile picker — remove when ready for production-only login. */
@@ -131,6 +132,7 @@ export default function LoginPage() {
 
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    clearWebPosStaffSession();
     setToken(token);
     setUser(user);
     toast.success(`Signed in — opening ${kind} panel`);

@@ -3,9 +3,7 @@ package com.chaslay.pos.ui.navigation
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -86,15 +84,9 @@ fun ChaslayNavHost(
         )
     }
 
-    // Apply system insets once here. Scaffold contentWindowInsets are cleared so we don't get
-    // a double status-bar gap under the demo banner — but we MUST keep navigationBarsPadding
-    // or the POS keypad / Save buttons sit under the Android nav bar and look "hidden".
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-    ) {
+    // System bar insets are applied once in MainActivity. Scaffold contentWindowInsets are
+    // cleared so we don't get a double status-bar gap under the demo banner.
+    Column(modifier = Modifier.fillMaxSize()) {
         if (isDemoMode) {
             DemoModeBanner(
                 onGoLiveClick = demoModeViewModel::requestGoLive,

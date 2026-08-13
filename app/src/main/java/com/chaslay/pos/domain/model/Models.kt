@@ -20,7 +20,8 @@ enum class PaymentMethod {
     CARD,
     TAP_TO_PAY,
     ADYEN_TERMINAL,
-    PAY_LATER
+    PAY_LATER,
+    GIFT_CARD
 }
 
 enum class PaymentStatus {
@@ -31,6 +32,11 @@ enum class PaymentStatus {
     CANCELLED,
     PARTIALLY_REFUNDED
 }
+
+fun PaymentStatus.isPaidSale(): Boolean =
+    this == PaymentStatus.COMPLETED ||
+        this == PaymentStatus.PARTIALLY_REFUNDED ||
+        this == PaymentStatus.REFUNDED
 
 enum class SyncStatus {
     PENDING,
@@ -201,8 +207,10 @@ data class CartItem(
     /** When true, [quantity] stores grams and [unitPrice] is per kg. */
     val isWeighed: Boolean = false,
     val isCombo: Boolean = false,
-    val comboSelections: List<ComboSelection> = emptyList()
+    val comboSelections: List<ComboSelection> = emptyList(),
+    val giftCard: GiftCardLineMeta? = null
 ) {
+    val isGiftCardLine: Boolean get() = giftCard != null
     val catalogUnitPrice: Double get() = originalUnitPrice ?: unitPrice
     val weightKg: Double? get() = if (isWeighed) quantity / 1000.0 else null
     /** Catalog amount before item discount (weight-aware). */
@@ -583,6 +591,13 @@ data class OrderTypeRow(
     val amount: Double
 )
 
+data class RefundedOrderRow(
+    val orderNumber: String,
+    val refundAmount: Double,
+    val refundReason: String? = null,
+    val refundedAt: Long? = null
+)
+
 data class EndOfDayReport(
     val periodStart: Long = 0L,
     val periodEnd: Long = 0L,
@@ -606,6 +621,9 @@ data class EndOfDayReport(
     val takeawayTotal: Double,
     val takeawayCount: Int,
     val productsSold: List<ProductSalesReport> = emptyList(),
+    val refundTotal: Double = 0.0,
+    val refundCount: Int = 0,
+    val refundedOrders: List<RefundedOrderRow> = emptyList(),
     /** Sum of guest/cover counts from dine-in transactions (when seating plan tracking enabled). */
     val coversServed: Int? = null
 )

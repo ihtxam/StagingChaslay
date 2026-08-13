@@ -209,7 +209,7 @@ class DatabaseCallback(
                 'CHF', 'CHF', 'fr',
                 0, 0, '', '', '',
                 8.1, 2.6, 'TAKEAWAY', 'RESTAURANT',
-                'https://pay.chaslay.com/receipts',
+                'https://pay.chaslay.com/receipt',
                 '${q("Sushi Sake")}', '${q("Merci!")}', '', ''
             )
             """.trimIndent()

@@ -23,6 +23,8 @@ type Plan = {
 type AdyenSettings = {
   merchantAccount: string;
   clientKey: string;
+  clientKeySet?: boolean;
+  clientKeyMasked?: string;
   environment: string;
   apiKeyMasked: string;
   apiKeySet: boolean;
@@ -87,7 +89,7 @@ export default function Settings() {
       setAdyen(a);
       setAdyenForm({
         merchantAccount: a.merchantAccount || '',
-        clientKey: a.clientKey || '',
+        clientKey: a.clientKeySet ? '' : a.clientKey || '',
         environment: a.environment || 'TEST',
         apiKey: '',
         hmacKey: '',
@@ -188,7 +190,7 @@ export default function Settings() {
     try {
       const res = await api.put('/superadmin/platform-settings/adyen', {
         merchantAccount: adyenForm.merchantAccount,
-        clientKey: adyenForm.clientKey,
+        ...(adyenForm.clientKey.trim() ? { clientKey: adyenForm.clientKey.trim() } : {}),
         environment: adyenForm.environment,
         apiKey: adyenForm.apiKey || undefined,
         hmacKey: adyenForm.hmacKey || undefined,
@@ -324,13 +326,23 @@ export default function Settings() {
             />
           </label>
           <label className="block">
-            <span className="text-sm font-medium">Client key</span>
+            <span className="text-sm font-medium">
+              Client key (Drop-in){' '}
+              {adyen?.clientKeySet
+                ? `(set: ${adyen.clientKeyMasked || '••••'})`
+                : '(not set — required for subscription checkout)'}
+            </span>
             <input
               className="input mt-1"
               value={adyenForm.clientKey}
               onChange={(e) => setAdyenForm({ ...adyenForm, clientKey: e.target.value })}
-              placeholder="test_…"
+              placeholder={adyen?.clientKeySet ? 'Leave blank to keep current' : 'test_…'}
             />
+            <span className="mt-1 block text-xs text-gray-500">
+              From Adyen Customer Area → Developers → Client settings. Must start with{' '}
+              <code className="text-[11px]">test_</code> or <code className="text-[11px]">live_</code> — not
+              the API key (<code className="text-[11px]">AQE…</code>).
+            </span>
           </label>
           <label className="block">
             <span className="text-sm font-medium">Environment</span>

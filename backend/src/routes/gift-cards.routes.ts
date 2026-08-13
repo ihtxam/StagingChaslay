@@ -258,4 +258,44 @@ router.post("/:cardId/reactivate", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/gift-cards/:cardId/points/earn
+ */
+router.post("/:cardId/points/earn", async (req: Request, res: Response) => {
+  try {
+    const points = Math.floor(Number(req.body?.points));
+    const card = await GiftCardService.addPoints(
+      req.merchantId!,
+      req.params.cardId,
+      points,
+      req.body?.orderId
+    );
+    res.json({ success: true, card, message: `Added ${points} points` });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to earn points",
+    });
+  }
+});
+
+/**
+ * POST /api/gift-cards/:cardId/points/redeem
+ */
+router.post("/:cardId/points/redeem", async (req: Request, res: Response) => {
+  try {
+    const points = Math.floor(Number(req.body?.points));
+    const card = await GiftCardService.redeemPoints(
+      req.merchantId!,
+      req.params.cardId,
+      points,
+      req.body?.orderId
+    );
+    res.json({ success: true, card, message: `Redeemed ${points} points` });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to redeem points",
+    });
+  }
+});
+
 export default router;

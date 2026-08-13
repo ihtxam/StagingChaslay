@@ -198,10 +198,13 @@ import {
   getEffectivePanelAccess,
   hasPermission,
   loadWebPosStaffSession,
+  resolveWebPosStaffSession,
   saveWebPosStaffSession,
   type Permission,
+  type StaffRosterRow,
   type WebPosStaffSession,
 } from '@/lib/permissions';
+import { useAuthStore } from '@/store/auth';
 import { openCashDrawerViaAgent } from '@/lib/print-agent';
 
 type Channel = PosChannel;
@@ -339,6 +342,7 @@ function mergeBillDiscounts(
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const { t, locale } = useI18n();
+  const authUser = useAuthStore((s) => s.user);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
   if (bootCartRef.current === undefined) {
@@ -526,6 +530,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
   const [webposStaff, setWebposStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [staffConfigured, setStaffConfigured] = useState(false);
+  const [staffRoster, setStaffRoster] = useState<StaffRosterRow[]>([]);
+  const [panelStaff, setPanelStaff] = useState<Array<{ id: string; name: string }>>([]);
+  const [eodPickerOpen, setEodPickerOpen] = useState(false);
   const scanBufferRef = useRef('');
   const scanTimerRef = useRef<number | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -559,6 +566,42 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   // Waiter / staff phone: USE_WEBPOS PIN gate works on mobile Safari; kitchen + receipt
   // print still goes through the print agent / main till printers (not the phone).
   const pinGateRequired = staffConfigured && !webposStaff;
+
+  const applyStaffRoster = useCallback(
+    (staffList: StaffRosterRow[], opts?: { openPinGate?: boolean }) => {
+      const hasPins = staffList.some(
+        (s) => !!(s as { pinSet?: boolean }).pinSet && s.isActive !== false
+      );
+      setStaffConfigured(hasPins);
+      setPanelStaff(
+        staffList
+          .filter((s) => s.isActive !== false)
+          .map((s) => ({ id: s.id, name: s.name }))
+      );
+      const session = resolveWebPosStaffSession({
+        staffList,
+        authStaffId: authUser?.staffId,
+        authRole: authUser?.role,
+        authPermissions: authUser?.permissions,
+      });
+      setWebposStaff(session);
+      if (session) {
+        window.dispatchEvent(new CustomEvent('webpos:staff-session'));
+      }
+      const shouldOpenPinGate =
+        opts?.openPinGate !== false && hasPins && !session && authUser?.role !== 'staff';
+      if (shouldOpenPinGate) {
+        setPinModalMode('gate');
+        setPinModalOpen(true);
+      }
+    },
+    [authUser?.staffId, authUser?.role, authUser?.permissions]
+  );
+
+  useEffect(() => {
+    if (!staffRoster.length) return;
+    applyStaffRoster(staffRoster, { openPinGate: false });
+  }, [staffRoster, applyStaffRoster]);
 
   useEffect(() => {
     localStorage.setItem('manupos_webpos_post_success', postSuccessTarget);
@@ -654,8 +697,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [settingsOpen]);
 
   const showPanelMenus = useCallback(() => {
+    const jwtIsOwner = authUser?.role === 'merchant' && authUser?.isOwner !== false;
+    if (jwtIsOwner) {
+      window.dispatchEvent(new CustomEvent('webpos:show-panel'));
+      return;
+    }
     const access = getEffectivePanelAccess({
-      jwtPermissions: undefined,
+      jwtPermissions: authUser?.permissions as Permission[] | undefined,
       isOwner: false,
       staffConfigured,
       pinSession: webposStaff,
@@ -666,7 +714,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     window.dispatchEvent(new CustomEvent('webpos:show-panel'));
-  }, [staffConfigured, webposStaff, t]);
+  }, [authUser?.role, authUser?.isOwner, authUser?.permissions, staffConfigured, webposStaff, t]);
 
   const enterPosApp = useCallback(() => {
     window.dispatchEvent(new CustomEvent('webpos:enter-app'));
@@ -1014,19 +1062,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (pick) setPaymentMethod(pick);
       }
       const staffList = Array.isArray(snap.config.staff) ? snap.config.staff : [];
-      const hasPins = staffList.some(
-        (s: any) => s?.pinSet && s?.isActive !== false
-      );
-      setStaffConfigured(hasPins);
-      if (hasPins && !loadWebPosStaffSession()) {
-        setPinModalMode('gate');
-        setPinModalOpen(true);
-      }
+      setStaffRoster(staffList as StaffRosterRow[]);
+      applyStaffRoster(staffList as StaffRosterRow[], { openPinGate: true });
       setLoadedFromOfflineCache(true);
       toast(reason || t('webPosOfflineCacheLoaded'), { icon: '📴', duration: 4500 });
       return true;
     },
-    [t]
+    [t, applyStaffRoster]
   );
 
   const load = useCallback(async () => {
@@ -1107,15 +1149,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           setAutoPrint(cfg.posPrintSettings.autoPrintReceipt !== false);
         }
       }
-      const staffList = staffRes.data.staff || [];
-      const hasPins = staffList.some(
-        (s: { pinSet?: boolean; isActive?: boolean }) => s.pinSet && s.isActive !== false
-      );
-      setStaffConfigured(hasPins);
-      if (hasPins && !loadWebPosStaffSession()) {
-        setPinModalMode('gate');
-        setPinModalOpen(true);
-      }
+      const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
+      setStaffRoster(staffList);
+      applyStaffRoster(staffList, { openPinGate: true });
       const prods = prodRes.data.products || prodRes.data || [];
       const mappedProducts = prods.map((p: any) => ({
         ...p,
@@ -1201,7 +1237,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     } finally {
       setLoading(false);
     }
-  }, [applyCachedOfflineSnapshot, refreshAgent, refreshCurrentShift, t]);
+  }, [applyCachedOfflineSnapshot, applyStaffRoster, refreshAgent, refreshCurrentShift, t]);
 
   useEffect(() => {
     load();
@@ -1739,14 +1775,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   /** EOD print/download when cash shifts are disabled (late-night venues). */
-  const printTodayEod = async () => {
+  const printTodayEod = async (
+    scopeStaffId?: string | null,
+    scopeStaffName?: string | null
+  ) => {
     try {
       const headers: Record<string, string> = {};
       if (webposStaff?.accessToken) {
         headers['X-WebPos-Staff-Access'] = webposStaff.accessToken;
       }
+      const params: Record<string, string> = { preset: 'today' };
+      const adminViewAll =
+        !staffConfigured ||
+        (!!webposStaff && hasPermission(webposStaff.permissions, 'VIEW_ALL_SALES', false));
+      if (adminViewAll && scopeStaffId) {
+        params.staffId = scopeStaffId;
+        if (scopeStaffName) params.staffName = scopeStaffName;
+      }
       const repRes = await api.get('/merchant/reports/eod', {
-        params: { preset: 'today' },
+        params,
         headers,
       });
       const report = repRes.data.report as {
@@ -1785,11 +1832,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         periodFrom: report?.range?.from,
         periodTo: report?.range?.to,
         scopeStaffName:
-          staffConfigured &&
+          scopeStaffName ||
+          (staffConfigured &&
           webposStaff &&
           !hasPermission(webposStaff.permissions, 'VIEW_ALL_SALES')
             ? webposStaff.name
-            : null,
+            : null),
         salesCount: report?.salesCount ?? 0,
         revenue: report?.revenue ?? 0,
         subtotal: report?.subtotal ?? report?.revenue ?? 0,
@@ -3723,7 +3771,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       void flushOfflineOutbox();
     }
 
-    const receiptUrl = buildReceiptUrl(clientId);
+    const receiptRef = queuedOffline ? null : backendOrderId || clientId;
+    const receiptUrl = receiptRef ? buildReceiptUrl(receiptRef) : undefined;
     const lang = resolveReceiptLanguage(
       printSettings,
       paymentConfig?.panelLanguage || locale
@@ -3769,6 +3818,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           quantity: l.quantity,
           unitPrice: l.unitPrice,
           lineTotal: l.lineTotal,
+          weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
           productId: l.productId,
           categoryId: l.categoryId,
         };
@@ -3783,7 +3833,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       vatIncludedInPrice,
       splitLabel: activeSale.label,
       receiptUrl,
-      includeQr: printSettings?.receiptShowQrCode !== false,
+      includeQr: !queuedOffline && printSettings?.receiptShowQrCode !== false,
       staffName: webposStaff?.name,
       language: lang,
       paperWidthMm,
@@ -3894,7 +3944,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       !payLater &&
       autoPrint &&
       printSettings?.autoPrintReceipt !== false;
-    if (shouldPrintReceipt) {
+    if (shouldPrintReceipt && receiptUrl) {
       // Never hold checkout/busy on the print agent.
       void printReceipt(receiptText, receiptUrl).catch((e: any) => {
         toast.error(e?.message || t('webPosPrintFailed'));
@@ -4138,7 +4188,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         hasPermission(staffPerms, 'END_OF_DAY', false)));
   const canOpenPanel =
     !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'ACCESS_PANEL', false));
+  const canViewAllSales =
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'VIEW_ALL_SALES', false));
   const showEodButton = !shiftsEnabled && canViewReports;
+
+  const openEodPrint = () => {
+    setSettingsOpen(false);
+    if (canViewAllSales && panelStaff.length > 0) {
+      setEodPickerOpen(true);
+      return;
+    }
+    void printTodayEod();
+  };
 
   const openCashDrawer = async () => {
     if (!canDrawer) {
@@ -4484,10 +4546,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           setStartShiftOpen(true);
         }}
         showEodButton={showEodButton}
-        onEodReport={() => {
-          setSettingsOpen(false);
-          void printTodayEod();
-        }}
+        onEodReport={openEodPrint}
         hideTablesTab={!tablesUiEnabled}
         hideBookingsTab={!tablesUiEnabled}
         colorTheme={posColorTheme}
@@ -4543,10 +4602,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setStartShiftOpen(true);
             }}
             showEodButton={showEodButton}
-            onEodReport={() => {
-              setSettingsOpen(false);
-              void printTodayEod();
-            }}
+            onEodReport={openEodPrint}
             onlinePendingCount={onlinePendingCount}
             onOnlineOrders={() => {
               setSettingsOpen(false);
@@ -5204,6 +5260,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         productName={pendingWeighed?.name || ''}
         pricePerKg={Number(pendingWeighed?.price) || 0}
         weightUnit={pendingWeighed?.weightUnit}
+        configuredPort={printSettings?.scaleComPort}
         onClose={() => setPendingWeighed(null)}
         onConfirm={(weightKg) => {
           if (!pendingWeighed) return;
@@ -5474,6 +5531,46 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onCancel={() => setCloseShiftOpen(false)}
         onConfirm={(cash) => void handleCloseShift(cash)}
       />
+      {eodPickerOpen ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">{t('webPosEodReport')}</h3>
+            <p className="mt-1 text-sm text-slate-600">Choose company-wide or an individual waiter.</p>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 px-4 py-2 text-left font-semibold hover:bg-slate-50"
+                onClick={() => {
+                  setEodPickerOpen(false);
+                  void printTodayEod();
+                }}
+              >
+                Company-wide
+              </button>
+              {panelStaff.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-left hover:bg-slate-50"
+                  onClick={() => {
+                    setEodPickerOpen(false);
+                    void printTodayEod(s.id, s.name);
+                  }}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="mt-4 w-full rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100"
+              onClick={() => setEodPickerOpen(false)}
+            >
+              {t('cancel')}
+            </button>
+          </div>
+        </div>
+      ) : null}
       <WebPosShiftClosedModal
         open={shiftClosedOpen}
         balanced={shiftBalanced}

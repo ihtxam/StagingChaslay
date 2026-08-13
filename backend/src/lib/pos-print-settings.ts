@@ -36,6 +36,11 @@ export type PosPrintSettings = {
   receiptLogoUrl?: string | null;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  /** WebPOS / Print Agent USB scale COM port (e.g. COM3). Skips port discovery when set. */
+  scaleComPort?: string | null;
+  /** Android USB scale stable address synced from panel (optional). */
+  scaleUsbAddress?: string | null;
+  scaleEnabled?: boolean;
   printers?: PosPrinterProfile[];
 };
 
@@ -55,10 +60,13 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   paperWidthMm: 80,
   receiptLanguage: "panel",
   receiptLogoUrl: null,
-  autoPrintReceipt: true,
-  autoPrintKitchen: true,
-  printers: [],
-};
+    autoPrintReceipt: true,
+    autoPrintKitchen: true,
+    scaleComPort: null,
+    scaleUsbAddress: null,
+    scaleEnabled: false,
+    printers: [],
+  };
 
 export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
   const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -121,6 +129,15 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
         : String(src.receiptLogoUrl).trim().slice(0, 500) || null,
     autoPrintReceipt: src.autoPrintReceipt !== false,
     autoPrintKitchen: src.autoPrintKitchen !== false,
+    scaleComPort:
+      src.scaleComPort === null || src.scaleComPort === undefined
+        ? null
+        : String(src.scaleComPort).trim().slice(0, 32) || null,
+    scaleUsbAddress:
+      src.scaleUsbAddress === null || src.scaleUsbAddress === undefined
+        ? null
+        : String(src.scaleUsbAddress).trim().slice(0, 120) || null,
+    scaleEnabled: src.scaleEnabled === true,
     printers,
   };
 }

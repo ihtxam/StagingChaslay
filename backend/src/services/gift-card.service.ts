@@ -495,7 +495,7 @@ export class GiftCardService {
     return updated[0]!;
   }
 
-  static async addPoints(merchantId: string, cardId: string, points: number, orderId?: string) {
+    static async addPoints(merchantId: string, cardId: string, points: number, orderId?: string) {
     const db = getDb();
     const card = await this.getById(merchantId, cardId);
     if (!card.membershipEnabled || !card.customerId) {
@@ -520,6 +520,37 @@ export class GiftCardService {
       pointsAfter: newPoints,
       orderId: orderId || null,
       description: `Earned ${pts} points`,
+    });
+    return updated[0]!;
+  }
+
+  static async redeemPoints(merchantId: string, cardId: string, points: number, orderId?: string) {
+    const db = getDb();
+    const card = await this.getById(merchantId, cardId);
+    if (!card.membershipEnabled || !card.customerId) {
+      throw new Error("Card has no membership");
+    }
+    assertActive(card);
+    const pts = Math.floor(Number(points));
+    if (!Number.isFinite(pts) || pts <= 0) throw new Error("Valid points required");
+    const balance = card.pointsBalance || 0;
+    if (pts > balance) throw new Error("Insufficient points");
+
+    const newPoints = balance - pts;
+    const updated = await db
+      .update(schema.giftCards)
+      .set({ pointsBalance: newPoints, updatedAt: new Date() })
+      .where(eq(schema.giftCards.id, cardId))
+      .returning();
+
+    await db.insert(schema.giftCardTransactions).values({
+      merchantId,
+      cardId,
+      transactionType: "points_redeem",
+      points: -pts,
+      pointsAfter: newPoints,
+      orderId: orderId || null,
+      description: `Redeemed ${pts} points`,
     });
     return updated[0]!;
   }

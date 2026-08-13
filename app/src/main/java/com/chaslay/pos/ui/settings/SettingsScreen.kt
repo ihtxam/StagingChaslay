@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +72,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Business
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.LocalOffer
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Settings
 import com.chaslay.pos.ui.license.LicenseSettingsSection
 import com.chaslay.pos.ui.tableplan.TablePlanDesignerContent
 import com.chaslay.pos.ui.theme.vectronColors
@@ -102,6 +110,13 @@ fun SettingsScreen(
     ) { grants ->
         hasBluetoothPermission = grants.values.all { it }
         viewModel.discoverPrinters(hasBluetoothPermission)
+    }
+
+    LaunchedEffect(state.message) {
+        state.message?.let { msg ->
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.clearMessage()
+        }
     }
 
     val showTablesDesigner =
@@ -205,40 +220,28 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
         if (state.selectedSection == SettingsSection.GENERAL) {
-        Text(
-            stringResource(R.string.general_settings),
-            fontWeight = FontWeight.Bold,
-            fontSize = 18.sp,
-            color = colors.textPrimary
+        SettingsPageHeader(
+            title = stringResource(R.string.general_settings),
+            subtitle = stringResource(R.string.online_settings_hint)
         )
 
-        Card(
-            colors = CardDefaults.cardColors(containerColor = colors.panelLight),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+        SettingsSectionCard(title = stringResource(R.string.online_settings_title), icon = Icons.Outlined.Cloud) {
+            Text(
+                stringResource(R.string.online_settings_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = viewModel::openOnlineSettings,
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = SettingsDashColors.Accent)
             ) {
-                Text(
-                    stringResource(R.string.online_settings_title),
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textPrimary
-                )
-                Text(
-                    stringResource(R.string.online_settings_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.textSecondary
-                )
-                Button(
-                    onClick = viewModel::openOnlineSettings,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.online_settings_open))
-                }
+                Text(stringResource(R.string.online_settings_open))
             }
         }
 
+        SettingsSectionCard(title = stringResource(R.string.business_name), icon = Icons.Outlined.Business) {
         OutlinedTextField(
             value = state.businessName,
             onValueChange = viewModel::updateBusinessName,
@@ -270,10 +273,10 @@ fun SettingsScreen(
             label = { Text(stringResource(R.string.email)) },
             modifier = Modifier.fillMaxWidth()
         )
+        }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(stringResource(R.string.pos_mode), fontWeight = FontWeight.SemiBold)
-        Text(stringResource(R.string.pos_mode_help), style = MaterialTheme.typography.bodySmall)
+        SettingsSectionCard(title = stringResource(R.string.pos_mode), icon = Icons.Outlined.Settings) {
+        Text(stringResource(R.string.pos_mode_help), style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PosMode.entries.forEach { mode ->
                 FilterChip(
@@ -304,10 +307,10 @@ fun SettingsScreen(
                 color = colors.textSecondary
             )
         }
+        }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(stringResource(R.string.business_hours), fontWeight = FontWeight.SemiBold)
-        Text(stringResource(R.string.business_hours_help), style = MaterialTheme.typography.bodySmall)
+        SettingsSectionCard(title = stringResource(R.string.business_hours), icon = Icons.Outlined.Schedule) {
+        Text(stringResource(R.string.business_hours_help), style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = state.openHour,
@@ -340,9 +343,10 @@ fun SettingsScreen(
                 singleLine = true
             )
         }
+        }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(stringResource(R.string.currency_settings))
+        SettingsSectionCard(title = stringResource(R.string.currency_settings), icon = Icons.Outlined.Language) {
+        Text(stringResource(R.string.language_settings), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         ExposedDropdownMenuBox(expanded = currencyExpanded, onExpandedChange = { currencyExpanded = it }) {
             OutlinedTextField(
                 value = state.defaultCurrency,
@@ -368,7 +372,6 @@ fun SettingsScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
-        Text(stringResource(R.string.language_settings))
         ExposedDropdownMenuBox(expanded = languageExpanded, onExpandedChange = { languageExpanded = it }) {
             OutlinedTextField(
                 value = state.language.displayName,
@@ -392,9 +395,9 @@ fun SettingsScreen(
                 }
             }
         }
+        }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(stringResource(R.string.discount_presets))
+        SettingsSectionCard(title = stringResource(R.string.discount_presets), icon = Icons.Outlined.LocalOffer) {
         state.discountPresets.forEach { preset ->
             Text("• ${preset.name}: ${preset.percent.toInt()}%", style = MaterialTheme.typography.bodySmall)
         }
@@ -414,9 +417,11 @@ fun SettingsScreen(
             Text(stringResource(R.string.add_preset))
         }
         }
+        }
 
         if (state.selectedSection == SettingsSection.VAT) {
-        Text(stringResource(R.string.vat_settings), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        SettingsPageHeader(title = stringResource(R.string.vat_settings))
+        SettingsSectionCard(title = stringResource(R.string.vat_settings), icon = Icons.Outlined.LocalOffer) {
         OutlinedTextField(
             value = state.dineInVatRate,
             onValueChange = viewModel::updateDineInVatRate,
@@ -455,6 +460,7 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         }
+        }
 
         if (state.selectedSection == SettingsSection.PAYMENTS) {
         Text(
@@ -472,6 +478,14 @@ fun SettingsScreen(
         SettingSwitch(stringResource(R.string.payment_cash), state.cashEnabled, viewModel::updateCashEnabled)
         SettingSwitch(stringResource(R.string.payment_card), state.cardEnabled, viewModel::updateCardEnabled)
         SettingSwitch(stringResource(R.string.payment_terminal), state.terminalEnabled, viewModel::updateTerminalEnabled)
+        SettingSwitch(stringResource(R.string.payment_express), state.expressEnabled, viewModel::updateExpressEnabled)
+        if (state.paymentMethodsManagedByCloud) {
+            Text(
+                stringResource(R.string.payment_methods_managed_by_panel),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
         Text(stringResource(R.string.default_rounding), color = colors.textPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -943,11 +957,6 @@ fun SettingsScreen(
 
         if (state.selectedSection == SettingsSection.LICENSE) {
             LicenseSettingsSection()
-        }
-
-        state.message?.let { Text(it, color = colors.textPrimary) }
-
-        if (state.selectedSection == SettingsSection.GENERAL) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -970,6 +979,9 @@ fun SettingsScreen(
                     color = colors.textPrimary
                 )
             }
+        }
+
+        if (state.selectedSection == SettingsSection.GENERAL) {
             // Extra space so last fields aren't covered by sticky Save.
             Spacer(modifier = Modifier.height(8.dp))
         }

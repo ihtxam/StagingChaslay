@@ -2,6 +2,7 @@ package com.chaslay.pos.ui.demo
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -21,8 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chaslay.pos.R
 
-private val DemoBannerBackground = Color(0xFFF59E0B)
-private val DemoBannerButton = Color(0xFF1F2937)
+private val DemoBannerBackground = Color(0xFF92400E)
+private val DemoBannerButton = Color(0xFF00897B)
 
 @Composable
 fun DemoModeBanner(
@@ -34,19 +35,29 @@ fun DemoModeBanner(
         modifier = modifier
             .fillMaxWidth()
             .background(DemoBannerBackground)
-            .heightIn(min = 40.dp)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .heightIn(min = 44.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = stringResource(R.string.demo_mode_banner_label),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            fontSize = 13.sp,
-            modifier = Modifier.weight(1f)
-        )
+        Column(
+            modifier = Modifier.weight(1f).padding(end = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.demo_mode_banner_label),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                fontSize = 13.sp
+            )
+            Text(
+                text = stringResource(R.string.demo_mode_banner_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 11.sp
+            )
+        }
         Button(
             onClick = onGoLiveClick,
             enabled = !isPurging,

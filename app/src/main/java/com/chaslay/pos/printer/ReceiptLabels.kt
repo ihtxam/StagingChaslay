@@ -71,6 +71,7 @@ data class ReceiptLabels(
         PaymentMethod.TAP_TO_PAY -> tapToPay
         PaymentMethod.ADYEN_TERMINAL -> terminal
         PaymentMethod.PAY_LATER -> payLater
+        PaymentMethod.GIFT_CARD -> "Gift card"
     }
 
     fun orderSourceLabel(source: String?): String {

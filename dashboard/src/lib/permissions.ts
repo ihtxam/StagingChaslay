@@ -100,6 +100,18 @@ export function hasPermission(
   return !!permissions?.includes(required);
 }
 
+/**
+ * Prominent sidebar WebPOS shortcut — uses JWT identity, not PIN-scoped panel access.
+ * Merchant owners always see it; panel staff need USE_WEBPOS on their login role.
+ */
+export function canShowWebPosQuickAction(
+  jwtIsOwner: boolean,
+  jwtPermissions: Permission[] | undefined
+): boolean {
+  if (jwtIsOwner) return true;
+  return hasPermission(jwtPermissions, 'USE_WEBPOS', false);
+}
+
 export type WebPosStaffSession = {
   id: string;
   name: string;
@@ -132,6 +144,93 @@ export function saveWebPosStaffSession(session: WebPosStaffSession | null) {
 
 export function clearWebPosStaffSession() {
   sessionStorage.removeItem(WEBPOS_STAFF_KEY);
+}
+
+export type StaffRosterRow = {
+  id: string;
+  name: string;
+  roleId: string;
+  roleName: string;
+  permissions?: Permission[];
+  isActive?: boolean;
+};
+
+export function webPosSessionFromStaffProfile(profile: {
+  id: string;
+  name: string;
+  roleId: string;
+  roleName: string;
+  permissions: Permission[];
+  accessToken?: string;
+}): WebPosStaffSession {
+  return {
+    id: profile.id,
+    name: profile.name,
+    roleId: profile.roleId,
+    roleName: profile.roleName,
+    permissions: profile.permissions,
+    accessToken: profile.accessToken,
+  };
+}
+
+/** True when a stored PIN session no longer matches the server staff roster. */
+export function isStaleWebPosStaffSession(
+  session: WebPosStaffSession,
+  staffList: StaffRosterRow[]
+): boolean {
+  const row = staffList.find((s) => s.id === session.id);
+  if (!row || row.isActive === false) return true;
+  if (row.roleId !== session.roleId) return true;
+  if (row.roleName !== session.roleName) return true;
+  return false;
+}
+
+/**
+ * Resolve WebPOS staff session after catalog load:
+ * - drop stale PIN sessions (role changed in portal)
+ * - auto-bind panel staff JWT users to their current server role (skip PIN gate)
+ */
+export function resolveWebPosStaffSession(opts: {
+  staffList: StaffRosterRow[];
+  authStaffId?: string | null;
+  authRole?: string | null;
+  authPermissions?: Permission[];
+  existing?: WebPosStaffSession | null;
+}): WebPosStaffSession | null {
+  const staffList = opts.staffList.filter((s) => s.isActive !== false);
+  let session = opts.existing ?? loadWebPosStaffSession();
+
+  if (session && isStaleWebPosStaffSession(session, staffList)) {
+    session = null;
+    clearWebPosStaffSession();
+  }
+
+  if (opts.authRole === 'staff' && opts.authStaffId) {
+    const row = staffList.find((s) => s.id === opts.authStaffId);
+    if (row) {
+      const fresh = webPosSessionFromStaffProfile({
+        id: row.id,
+        name: row.name,
+        roleId: row.roleId,
+        roleName: row.roleName,
+        permissions: row.permissions?.length
+          ? row.permissions
+          : opts.authPermissions || [],
+        accessToken: session?.id === row.id ? session.accessToken : undefined,
+      });
+      if (
+        !session ||
+        session.id !== fresh.id ||
+        session.roleId !== fresh.roleId ||
+        session.roleName !== fresh.roleName
+      ) {
+        session = fresh;
+        saveWebPosStaffSession(session);
+      }
+    }
+  }
+
+  return session;
 }
 
 /**

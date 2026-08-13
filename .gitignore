@@ -2,6 +2,16 @@
 .gradle
 /local.properties
 /.idea/
+!.idea/.name
+!.idea/gradle.xml
+!.idea/misc.xml
+!.idea/compiler.xml
+!.idea/vcs.xml
+!.idea/modules.xml
+!.idea/runConfigurations/
+!.idea/runConfigurations/**
+!.idea/codeStyles/
+!.idea/codeStyles/**
 .DS_Store
 /build
 /captures

@@ -180,6 +180,18 @@ class TerminalSyncRepository @Inject constructor(
             )
         }
 
+        config.receiptBaseUrl?.takeIf { it.isNotBlank() }?.let { url ->
+            merged = merged.copy(receiptBaseUrl = com.chaslay.pos.data.repository.ReceiptPublicUrls.normalizeBase(url))
+        }
+
+        config.scale?.let { scale ->
+            val usb = scale.usbAddress?.trim().orEmpty()
+            merged = merged.copy(
+                scaleEnabled = scale.enabled || usb.isNotEmpty(),
+                scaleUsbAddress = usb.takeIf { it.isNotEmpty() } ?: merged.scaleUsbAddress
+            )
+        }
+
         return merged
     }
 }

@@ -15,6 +15,7 @@ import com.chaslay.pos.data.remote.dto.SyncBusinessDto
 import com.chaslay.pos.data.remote.dto.SyncCategoryDto
 import com.chaslay.pos.data.remote.dto.SyncProductDto
 import com.chaslay.pos.data.repository.SettingsRepository
+import com.chaslay.pos.data.repository.ReceiptPublicUrls
 import java.time.Instant
 import java.util.Calendar
 import javax.inject.Inject
@@ -174,6 +175,8 @@ class MenuSyncRepository @Inject constructor(
             dineInVatRate = dto.taxDineInRate?.takeIf { it > 0.0 } ?: current.dineInVatRate,
             vatIncludedInPrice = dto.taxIncludedInPrice ?: current.vatIncludedInPrice,
             defaultLanguage = dto.defaultLanguage?.takeIf { it.isNotBlank() } ?: current.defaultLanguage,
+            receiptBaseUrl = dto.receiptBaseUrl?.takeIf { it.isNotBlank() }?.let { ReceiptPublicUrls.normalizeBase(it) }
+                ?: current.receiptBaseUrl,
             openHour = hours?.getOrNull(0) ?: current.openHour,
             openMinute = hours?.getOrNull(1) ?: current.openMinute,
             closeHour = hours?.getOrNull(2) ?: current.closeHour,

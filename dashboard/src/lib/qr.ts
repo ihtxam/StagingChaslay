@@ -2,13 +2,43 @@
  * Minimal helpers for receipt QR codes (browser + ESC/POS).
  */
 
+/** Normalize legacy domain typos and receipt path variants. */
+export function normalizeReceiptDomain(raw: string): string {
+  let base = String(raw || '')
+    .trim()
+    .replace(/chasly\.com/gi, 'chaslay.com')
+    .replace(/^https?:\/\/app\./i, 'https://pay.');
+  return base;
+}
+
+/** Normalize merchant/env base to .../receipt (legacy configs used .../receipts). */
+export function normalizeReceiptPublicBase(raw: string): string {
+  let base = normalizeReceiptDomain(raw).replace(/\/$/, '');
+  if (/\/receipts$/i.test(base)) {
+    base = base.replace(/\/receipts$/i, '/receipt');
+  } else if (!/\/receipt$/i.test(base)) {
+    base = `${base}/receipt`;
+  }
+  return base;
+}
+
+/** Fix chasly typo and force receipt links onto pay.* (not app.*). */
+export function sanitizeReceiptOrigin(raw: string): string {
+  let base = normalizeReceiptDomain(raw).replace(/\/+$/, '');
+  if (!base) return 'https://pay.chaslay.com';
+  base = base.replace(/^https?:\/\/app\./i, 'https://pay.');
+  return base;
+}
+
+/** Public receipt page origin + /receipt path (no trailing slash). */
+export function receiptPublicBase(_origin?: string): string {
+  const envBase = import.meta.env.VITE_PUBLIC_RECEIPT_BASE_URL as string | undefined;
+  return normalizeReceiptPublicBase(sanitizeReceiptOrigin(envBase || 'https://pay.chaslay.com'));
+}
+
 /** Build a public digital-receipt URL for a sale id */
 export function buildReceiptUrl(saleId: string, origin?: string): string {
-  const base = (origin || (typeof window !== 'undefined' ? window.location.origin : '')).replace(
-    /\/$/,
-    ''
-  );
-  return `${base}/receipt/${encodeURIComponent(saleId)}`;
+  return `${receiptPublicBase(origin)}/${encodeURIComponent(saleId)}`;
 }
 
 /** External PNG QR (works in browser print without npm dep) */

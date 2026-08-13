@@ -440,6 +440,34 @@ export class StaffService {
     throw new Error("Invalid PIN");
   }
 
+  /** Fresh staff profile for session refresh (panel / WebPOS after role change). */
+  static async getStaffProfile(merchantId: string, staffId: string) {
+    const db = getDb();
+    const staff = await db.query.merchantStaff.findFirst({
+      where: and(
+        eq(schema.merchantStaff.id, staffId),
+        eq(schema.merchantStaff.merchantId, merchantId),
+        eq(schema.merchantStaff.isActive, true)
+      ),
+    });
+    if (!staff) throw new Error("Staff member not found");
+
+    const role = await db.query.merchantRoles.findFirst({
+      where: eq(schema.merchantRoles.id, staff.roleId),
+    });
+    const permissions = parsePermissions(role?.permissions);
+
+    return {
+      id: staff.id,
+      name: staff.name,
+      email: staff.email,
+      roleId: staff.roleId,
+      roleName: role?.name || "Staff",
+      permissions,
+      canAccessPanel: staff.canAccessPanel,
+    };
+  }
+
   static async loginStaff(email: string, password: string) {
     const db = getDb();
     const normalized = email.trim().toLowerCase();

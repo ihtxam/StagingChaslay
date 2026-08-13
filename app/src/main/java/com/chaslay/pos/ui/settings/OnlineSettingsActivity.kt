@@ -13,14 +13,16 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.FrameLayout
-import android.widget.ProgressBar
-import android.widget.Toast
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.enableEdgeToEdge
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.chaslay.pos.BuildConfig
 import com.chaslay.pos.R
 import java.net.URLEncoder
@@ -36,6 +38,7 @@ class OnlineSettingsActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         if (!isOnline(this)) {
             Toast.makeText(this, R.string.online_settings_offline, Toast.LENGTH_LONG).show()
@@ -58,17 +61,23 @@ class OnlineSettingsActivity : ComponentActivity() {
             return
         }
 
-        val root = FrameLayout(this)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(8), dp(8), dp(8), dp(8))
             setBackgroundColor(0xFF00897B.toInt())
-            layoutParams = FrameLayout.LayoutParams(
+            layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             val back = Button(this@OnlineSettingsActivity).apply {
-                text = "?"
+                text = getString(R.string.checkout_back)
                 setOnClickListener { finish() }
             }
             val title = TextView(this@OnlineSettingsActivity).apply {
@@ -83,16 +92,17 @@ class OnlineSettingsActivity : ComponentActivity() {
         val progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = true
             visibility = android.view.View.GONE
-            layoutParams = FrameLayout.LayoutParams(
+            layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(3)
-            ).apply { topMargin = dp(56) }
+            )
         }
         val wv = WebView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
+            layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            ).apply { topMargin = dp(56) }
+                0,
+                1f
+            )
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.cacheMode = WebSettings.LOAD_DEFAULT
@@ -101,7 +111,6 @@ class OnlineSettingsActivity : ComponentActivity() {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val url = request?.url?.toString().orEmpty()
-                    // Keep navigation inside the merchant panel origin.
                     return url.isNotBlank() && !url.startsWith(dashboardBase)
                 }
 
@@ -116,9 +125,15 @@ class OnlineSettingsActivity : ComponentActivity() {
         }
         webView = wv
         root.addView(header)
-        root.addView(wv)
         root.addView(progress)
+        root.addView(wv)
         setContentView(root)
+
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            header.setPadding(header.paddingLeft, bars.top + dp(8), header.paddingRight, dp(8))
+            insets
+        }
 
         onBackPressedDispatcher.addCallback(
             this,

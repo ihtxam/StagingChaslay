@@ -30,7 +30,8 @@ interface BulkTier {
 interface SpecRow {
   id: string;
   name: string;
-  price: number;
+  /** Raw price text while editing (keeps partial decimals like "0."). */
+  price: string;
   saleStatus: 'in_stock' | 'out_of_stock';
   isDefault: boolean;
 }
@@ -45,7 +46,8 @@ interface ModifierGroupSummary {
 
 interface ComboOptionForm {
   productId: string;
-  extraPrice: number;
+  /** Raw extra price text while editing. */
+  extraPrice: string;
 }
 
 interface ComboSlotForm {
@@ -137,7 +139,7 @@ const emptyForm = (): FormState => ({
   weightUnit: 'kg',
   isCombo: false,
   comboSlots: [],
-  specifications: [{ id: 'default', name: '', price: 0, saleStatus: 'in_stock', isDefault: true }],
+  specifications: [{ id: 'default', name: '', price: '', saleStatus: 'in_stock', isDefault: true }],
   modifierGroupIds: [],
   loyaltyRewardPoints: '',
 });
@@ -156,7 +158,7 @@ function normalizeComboSlotsFromProduct(raw: Product['comboItems']): ComboSlotFo
             .filter((o) => o?.productId)
             .map((o) => ({
               productId: o.productId,
-              extraPrice: Math.max(0, Number(o.extraPrice) || 0),
+              extraPrice: String(Math.max(0, Number(o.extraPrice) || 0)),
             })),
         };
       }
@@ -166,7 +168,7 @@ function normalizeComboSlotsFromProduct(raw: Product['comboItems']): ComboSlotFo
           name: row.name || `Item ${idx + 1}`,
           minPick: 1,
           maxPick: 1,
-          options: [{ productId: row.productId, extraPrice: 0 }],
+          options: [{ productId: row.productId, extraPrice: '0' }],
         };
       }
       return null;
@@ -196,6 +198,24 @@ const MAX_POINTS = 2_147_483_647; // PG integer max
 
 /** Digits only (ignore decimal point/sign) for length checks. */
 const digitCount = (raw: string) => raw.replace(/[^\d]/g, '').length;
+
+/** Keep partial decimal input (e.g. "0." / "0,") while limiting to 2 decimal places. */
+const normalizeMoneyInput = (raw: string) => {
+  const cleaned = raw.replace(/,/g, '.').replace(/[^\d.]/g, '');
+  const parts = cleaned.split('.');
+  if (parts.length === 1) return parts[0];
+  const decimals = parts.slice(1).join('').slice(0, 2);
+  // Preserve trailing separator while user is still typing (e.g. "0." or "0,").
+  if (decimals.length === 0 && /[.,]$/.test(raw)) return `${parts[0]}.`;
+  return `${parts[0]}.${decimals}`;
+};
+
+const parseMoney = (raw: string | number) => {
+  const trimmed = String(raw).trim().replace(/,/g, '.');
+  if (!trimmed || trimmed === '.') return 0;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : 0;
+};
 
 /** Free-points field: digits only, hard-capped at 10 (PG integer / product rule). */
 const sanitizeFreePointsInput = (raw: string) => raw.replace(/\D/g, '').slice(0, MAX_MONEY_DIGITS);
@@ -377,7 +397,7 @@ export default function Products() {
           ? full.specifications.map((s, i) => ({
               id: s.id || `spec-${i}`,
               name: s.name,
-              price: Number(s.price) || 0,
+              price: String(s.price ?? ''),
               saleStatus: s.saleStatus === 'out_of_stock' ? 'out_of_stock' : 'in_stock',
               isDefault: !!s.isDefault,
             }))
@@ -385,7 +405,7 @@ export default function Products() {
               {
                 id: 'default',
                 name: t('default'),
-                price: Number(full.price) || 0,
+                price: String(full.price ?? ''),
                 saleStatus: 'in_stock' as const,
                 isDefault: true,
               },
@@ -436,7 +456,7 @@ export default function Products() {
           {
             id: 'default',
             name: t('default'),
-            price: Number(product.price) || 0,
+            price: String(product.price ?? ''),
             saleStatus: 'in_stock',
             isDefault: true,
           },
@@ -465,7 +485,7 @@ export default function Products() {
   const buildPayload = () => {
     const defaultSpec =
       form.specifications.find((s) => s.isDefault) || form.specifications[0];
-    const price = Number(defaultSpec?.price ?? form.price) || 0;
+    const price = parseMoney(defaultSpec?.price ?? form.price);
     const comboSlots = form.isCombo
       ? form.comboSlots
           .filter((s) => s.name.trim() && s.options.length > 0)
@@ -476,7 +496,7 @@ export default function Products() {
             maxPick: Math.max(1, Number(s.maxPick) || 1),
             options: s.options.map((o) => ({
               productId: o.productId,
-              extraPrice: Math.max(0, Number(o.extraPrice) || 0),
+              extraPrice: Math.max(0, parseMoney(o.extraPrice)),
             })),
           }))
       : [];
@@ -506,7 +526,7 @@ export default function Products() {
         .map((s, i) => ({
           id: s.id || `spec-${i + 1}`,
           name: s.name.trim(),
-          price: Number(s.price) || 0,
+          price: parseMoney(s.price),
           saleStatus: s.saleStatus,
           isDefault: !!s.isDefault,
           sortOrder: i,
@@ -1205,18 +1225,13 @@ export default function Products() {
                         inputMode="decimal"
                         value={form.price}
                         onChange={(e) => {
-                          const raw = e.target.value.replace(/[^\d.]/g, '');
-                          const parts = raw.split('.');
-                          const price =
-                            parts.length > 1
-                              ? `${parts[0]}.${parts.slice(1).join('').slice(0, 2)}`
-                              : parts[0];
+                          const price = normalizeMoneyInput(e.target.value);
                           if (digitCount(price) > MAX_MONEY_DIGITS) return;
                           setForm({
                             ...form,
                             price,
                             specifications: form.specifications.map((s, i) =>
-                              i === 0 || s.isDefault ? { ...s, price: Number(price) || 0 } : s
+                              i === 0 || s.isDefault ? { ...s, price } : s
                             ),
                           });
                         }}
@@ -1293,19 +1308,18 @@ export default function Products() {
                                 <div className="relative">
                                   <input
                                     className="field-input money-input pr-8"
-                                    type="number"
-                                    step="0.05"
-                                    min="0"
+                                    type="text"
+                                    inputMode="decimal"
                                     title={t('extraPrice')}
                                     value={opt.extraPrice}
                                     onChange={(e) => {
-                                      const raw = e.target.value;
+                                      const raw = normalizeMoneyInput(e.target.value);
                                       if (digitCount(raw) > MAX_MONEY_DIGITS) return;
                                       const next = [...form.comboSlots];
                                       const options = [...next[slotIdx].options];
                                       options[optIdx] = {
                                         ...options[optIdx],
-                                        extraPrice: Number(raw) || 0,
+                                        extraPrice: raw,
                                       };
                                       next[slotIdx] = { ...next[slotIdx], options };
                                       setForm({ ...form, comboSlots: next });
@@ -1344,7 +1358,7 @@ export default function Products() {
                             const next = [...form.comboSlots];
                             next[slotIdx] = {
                               ...next[slotIdx],
-                              options: [...next[slotIdx].options, { productId, extraPrice: 0 }],
+                              options: [...next[slotIdx].options, { productId, extraPrice: '0' }],
                             };
                             setForm({ ...form, comboSlots: next });
                           }}
@@ -1387,7 +1401,7 @@ export default function Products() {
                           {
                             id: `size-${Date.now()}`,
                             name: '',
-                            price: Number(form.price) || 0,
+                            price: form.price,
                             saleStatus: 'in_stock',
                             isDefault: false,
                           },
@@ -1421,15 +1435,10 @@ export default function Products() {
                           inputMode="decimal"
                           value={spec.price}
                           onChange={(e) => {
-                            const raw = e.target.value.replace(/[^\d.]/g, '');
-                            const parts = raw.split('.');
-                            const normalized =
-                              parts.length > 1
-                                ? `${parts[0]}.${parts.slice(1).join('').slice(0, 2)}`
-                                : parts[0];
+                            const normalized = normalizeMoneyInput(e.target.value);
                             if (digitCount(normalized) > MAX_MONEY_DIGITS) return;
                             const next = [...form.specifications];
-                            next[idx] = { ...next[idx], price: Number(normalized) || 0 };
+                            next[idx] = { ...next[idx], price: normalized };
                             setForm({ ...form, specifications: next, price: normalized });
                           }}
                         />
@@ -1464,7 +1473,7 @@ export default function Products() {
                                 ...s,
                                 isDefault: i === idx,
                               })),
-                              price: String(spec.price),
+                              price: spec.price,
                             })
                           }
                         />
@@ -1485,7 +1494,7 @@ export default function Products() {
                                     {
                                       id: `size-${Date.now()}`,
                                       name: '',
-                                      price: Number(form.price) || 0,
+                                      price: form.price,
                                       saleStatus: 'in_stock',
                                       isDefault: true,
                                     },

@@ -1,7 +1,10 @@
 import axios from "axios";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { PlatformSettingsService } from "@/services/platform-settings.service";
+import {
+  PlatformSettingsService,
+  formatAdyenCheckoutApiError,
+} from "@/services/platform-settings.service";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 
 export type BillingCycle = "monthly" | "yearly";
@@ -128,11 +131,6 @@ export class SubscriptionBillingService {
     }
 
     const creds = await PlatformSettingsService.resolvePlatformAdyenCredentials();
-    if (!creds.clientKey) {
-      throw new Error(
-        "Platform Adyen client key is missing. Set it in Superadmin → Settings → Payment (Adyen)."
-      );
-    }
 
     const [payment] = await db
       .insert(schema.subscriptionPayments)
@@ -154,53 +152,61 @@ export class SubscriptionBillingService {
       `${process.env.MERCHANT_DASHBOARD_URL || process.env.PUBLIC_APP_URL || ""}/merchant/billing?paymentId=${payment!.id}`;
 
     try {
-      const response = await axios.post(
-        `${creds.apiBase}/sessions`,
-        {
-          amount: {
-            value: Math.round(amount * 100),
-            currency,
-          },
-          merchantAccount: creds.merchantAccount,
-          reference,
-          returnUrl: defaultReturn,
-          channel: "Web",
-          countryCode: "CH",
-          shopperReference: merchantId,
-          metadata: {
-            type: "subscription",
-            paymentId: payment!.id,
-            merchantId,
-            planId: plan.id,
-            billingCycle: cycle,
-          },
+      const sessionPayload: Record<string, unknown> = {
+        amount: {
+          value: Math.round(amount * 100),
+          currency,
         },
-        {
-          headers: {
-            "x-api-key": creds.apiKey,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+        merchantAccount: creds.merchantAccount,
+        reference,
+        returnUrl: defaultReturn,
+        channel: "Web",
+        countryCode: "CH",
+        shopperReference: merchantId,
+        clientKey: creds.clientKey,
+        metadata: {
+          type: "subscription",
+          paymentId: payment!.id,
+          merchantId,
+          planId: plan.id,
+          billingCycle: cycle,
+        },
+      };
+
+      const response = await axios.post(`${creds.apiBase}/sessions`, sessionPayload, {
+        headers: {
+          "x-api-key": creds.apiKey,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const sessionId = response.data?.id;
+      const sessionData = response.data?.sessionData;
+      if (!sessionId || !sessionData) {
+        console.error("Adyen /sessions response missing id or sessionData:", response.data);
+        throw new Error(
+          "Adyen session response was incomplete. Check platform API key and merchant account match the client key account."
+        );
+      }
 
       await db
         .update(schema.subscriptionPayments)
         .set({
-          adyenSessionId: response.data.id,
+          adyenSessionId: sessionId,
           updatedAt: new Date(),
         })
         .where(eq(schema.subscriptionPayments.id, payment!.id));
 
       return {
         free: false,
-        payment: { ...payment!, adyenSessionId: response.data.id },
+        payment: { ...payment!, adyenSessionId: sessionId },
         plan,
         billingCycle: cycle,
         paymentSession: {
-          id: response.data.id,
-          sessionData: response.data.sessionData,
+          id: sessionId,
+          sessionData,
           clientKey: creds.clientKey,
-          environment: creds.environment === "LIVE" ? "live" : "test",
+          environment: creds.dropinEnvironment,
         },
       };
     } catch (error: any) {
@@ -209,12 +215,21 @@ export class SubscriptionBillingService {
         .set({ status: "failed", updatedAt: new Date() })
         .where(eq(schema.subscriptionPayments.id, payment!.id));
 
-      const msg =
-        error?.response?.data?.message ||
-        error?.response?.data?.error ||
-        error?.message ||
-        "Failed to start Adyen checkout";
-      throw new Error(typeof msg === "string" ? msg : "Failed to start Adyen checkout");
+      const msg = formatAdyenCheckoutApiError(error, {
+        apiBase: creds.apiBase,
+        merchantAccount: creds.merchantAccount,
+        phase: "sessions",
+      });
+      console.error("Subscription Adyen checkout failed:", {
+        status: error?.response?.status,
+        data: error?.response?.data,
+        merchantAccount: creds.merchantAccount,
+        apiBase: creds.apiBase,
+        environment: creds.environment,
+        clientKeyPrefix: creds.clientKey.slice(0, 12),
+        message: msg,
+      });
+      throw new Error(msg);
     }
   }
 

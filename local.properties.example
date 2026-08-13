@@ -1,0 +1,2 @@
+# Copy to local.properties (gitignored) if Android Studio cannot find the SDK.
+sdk.dir=C\:\\Users\\Hussain\\AppData\\Local\\Android\\Sdk

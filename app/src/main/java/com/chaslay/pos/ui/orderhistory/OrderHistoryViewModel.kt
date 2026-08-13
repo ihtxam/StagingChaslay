@@ -57,6 +57,7 @@ data class OrderHistoryUiState(
 @HiltViewModel
 class OrderHistoryViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
+    private val receiptRepository: com.chaslay.pos.data.repository.ReceiptRepository,
     private val heldOrderRepository: HeldOrderRepository,
     private val settingsRepository: com.chaslay.pos.data.repository.SettingsRepository,
     private val printerService: com.chaslay.pos.printer.BluetoothPrinterService,
@@ -230,14 +231,26 @@ class OrderHistoryViewModel @Inject constructor(
         }
     }
 
-    fun refundSelectedOrder(amount: Double, fullRefund: Boolean) {
+    fun refundSelectedOrder(
+        amount: Double,
+        fullRefund: Boolean,
+        itemRefunds: List<Pair<Long, Int>> = emptyList(),
+        reason: String? = null
+    ) {
         val orderId = _uiState.value.selectedOrder?.id ?: return
         viewModelScope.launch {
-            transactionRepository.refundOrder(orderId, amount, fullRefund)
+            transactionRepository.refundOrder(
+                transactionId = orderId,
+                amount = amount,
+                fullRefund = fullRefund,
+                itemRefunds = itemRefunds,
+                reason = reason
+            )
+            val detail = transactionRepository.getTransaction(orderId)
             _uiState.value = _uiState.value.copy(
                 showRefundDialog = false,
-                selectedOrder = null,
-                selectedItems = emptyList(),
+                selectedOrder = detail?.first,
+                selectedItems = detail?.second.orEmpty(),
                 message = if (fullRefund) "Full refund processed" else "Partial refund processed"
             )
             refresh()
@@ -343,10 +356,28 @@ class OrderHistoryViewModel @Inject constructor(
             val settings = settingsRepository.getSettings()
             for (split in _uiState.value.splitOrders) {
                 val items = _uiState.value.splitItemsByOrderId[split.id].orEmpty()
-                printerService.routeReceipt(settings, split, items)
+                val published = publishBeforePrint(split, items, settings)
+                printerService.routeReceipt(settings, published, items)
             }
             _uiState.value = _uiState.value.copy(message = "Split receipts printed")
         }
+    }
+
+    private suspend fun publishBeforePrint(
+        order: TransactionEntity,
+        items: List<TransactionItemEntity>,
+        settings: com.chaslay.pos.data.local.entity.BusinessSettingsEntity
+    ): TransactionEntity {
+        return receiptRepository.ensureReceiptPublished(order, items, settings).fold(
+            onSuccess = { url ->
+                transactionRepository.updateReceiptUrl(order.id, url)
+                order.copy(receiptUrl = url)
+            },
+            onFailure = {
+                transactionRepository.clearReceiptUrl(order.id)
+                order.copy(receiptUrl = null)
+            }
+        )
     }
 
     private fun printOrder(
@@ -361,7 +392,8 @@ class OrderHistoryViewModel @Inject constructor(
             } else {
                 null
             }
-            printerService.routeReceipt(settings, order, items, customerCopy)
+            val published = publishBeforePrint(order, items, settings)
+            printerService.routeReceipt(settings, published, items, customerCopy)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(message = "Receipt printed")
                 }

@@ -35,7 +35,8 @@ data class TablePlanUiState(
 
 @HiltViewModel
 class TablePlanViewModel @Inject constructor(
-    private val tableOrderRepository: TableOrderRepository
+    private val tableOrderRepository: TableOrderRepository,
+    private val floorPlanSyncRepository: com.chaslay.pos.sync.FloorPlanSyncRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TablePlanUiState())
@@ -47,13 +48,14 @@ class TablePlanViewModel @Inject constructor(
 
     fun reload() {
         viewModelScope.launch {
+            runCatching { floorPlanSyncRepository.syncFloorPlans() }
             val floors = tableOrderRepository.getAllFloors()
             val floorId = _uiState.value.selectedFloorId.takeIf { id ->
                 floors.any { it.id == id }
             } ?: floors.firstOrNull()?.id ?: 1L
             var tables = tableOrderRepository.getTablesForFloor(floorId)
-            // Old/broken layouts often dump every table into one thin strip — re-grid once.
-            if (tablesAreClustered(tables)) {
+            // Skip auto-grid when tables were synced from the merchant panel.
+            if (tables.none { !it.remoteId.isNullOrBlank() } && tablesAreClustered(tables)) {
                 tableOrderRepository.autoLayoutFloor(floorId)
                 tables = tableOrderRepository.getTablesForFloor(floorId)
             }
@@ -96,7 +98,7 @@ class TablePlanViewModel @Inject constructor(
     fun selectFloor(floorId: Long) {
         viewModelScope.launch {
             var tables = tableOrderRepository.getTablesForFloor(floorId)
-            if (tablesAreClustered(tables)) {
+            if (tables.none { !it.remoteId.isNullOrBlank() } && tablesAreClustered(tables)) {
                 tableOrderRepository.autoLayoutFloor(floorId)
                 tables = tableOrderRepository.getTablesForFloor(floorId)
             }
@@ -260,7 +262,8 @@ class TablePlanViewModel @Inject constructor(
 
     fun moveTable(tableId: Long, planX: Float, planY: Float) {
         val table = _uiState.value.tables.find { it.id == tableId } ?: return
-        val updated = table.copy(planX = planX.coerceIn(0.02f, 0.92f), planY = planY.coerceIn(0.02f, 0.92f))
+        val (x, y) = clampPlanPosition(planX, planY, table.planWidth, table.planHeight)
+        val updated = table.copy(planX = x, planY = y)
         _uiState.update { state ->
             state.copy(tables = state.tables.map { if (it.id == tableId) updated else it })
         }
@@ -269,7 +272,8 @@ class TablePlanViewModel @Inject constructor(
 
     fun moveElement(elementId: Long, planX: Float, planY: Float) {
         val element = _uiState.value.elements.find { it.id == elementId } ?: return
-        val updated = element.copy(planX = planX.coerceIn(0.02f, 0.92f), planY = planY.coerceIn(0.02f, 0.92f))
+        val (x, y) = clampPlanPosition(planX, planY, element.planWidth, element.planHeight)
+        val updated = element.copy(planX = x, planY = y)
         _uiState.update { state ->
             state.copy(elements = state.elements.map { if (it.id == elementId) updated else it })
         }

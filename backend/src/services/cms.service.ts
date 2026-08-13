@@ -1,5 +1,6 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb, schema, type CmsTheme } from "@/db";
+import { normalizeCustomDomain } from "@/lib/domain";
 import { randomUUID } from "crypto";
 
 function slugify(raw: string): string {
@@ -646,7 +647,7 @@ export class CmsService {
     const db = getDb();
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     if (input.customDomain !== undefined) {
-      patch.customDomain = input.customDomain ? String(input.customDomain).trim().toLowerCase() : null;
+      patch.customDomain = normalizeCustomDomain(input.customDomain);
     }
     if (input.cmsHomepageEnabled !== undefined) {
       patch.cmsHomepageEnabled = !!input.cmsHomepageEnabled;
