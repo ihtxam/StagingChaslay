@@ -13,6 +13,7 @@ import {
 } from '@/lib/receipt-labels';
 import {
   appendAdyenReceiptBlock,
+  resolveOrderAdyenReceipts,
   type AdyenTerminalReceipt,
 } from '@/lib/adyen-receipt';
 
@@ -1217,6 +1218,10 @@ export type PosOrderForReceipt = {
   completedAt?: string | null;
   createdAt: string;
   splitCheckNumber?: number | null;
+  /** Persisted Adyen Terminal API CustomerReceipt JSON (order history reprint). */
+  adyenCustomerReceiptJson?: string | null;
+  /** Persisted Adyen Terminal API CashierReceipt JSON (order history reprint). */
+  adyenCashierReceiptJson?: string | null;
   items: Array<{
     id?: string;
     name?: string | null;
@@ -1258,6 +1263,7 @@ export function posOrderToWebPosReceipt(
       : null);
   const meta = parseOrderMetaNotes(order.notes);
   const ticketDisplay = order.ticketDisplay || meta.ticketDisplay || null;
+  const adyen = resolveOrderAdyenReceipts(order);
   return {
     businessName: ctx.businessName,
     address: ctx.address,
@@ -1299,5 +1305,7 @@ export function posOrderToWebPosReceipt(
     footer: ctx.printSettings?.receiptFooter,
     showVat: ctx.printSettings?.receiptShowVatTable !== false,
     showStaff: ctx.printSettings?.receiptShowStaffLine !== false,
+    adyenCustomerReceipt: adyen.customer,
+    adyenCashierReceipt: adyen.cashier,
   };
 }

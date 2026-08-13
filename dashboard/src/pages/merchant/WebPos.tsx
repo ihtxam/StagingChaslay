@@ -3987,8 +3987,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       saleTotals,
       splitMeta,
       ticket,
-      method === 'terminal' ? terminalPaymentRef.current : null
+      terminalPaymentRef.current
     );
+    const terminalCapture = terminalPaymentRef.current;
 
     const offlineEligible =
       isWebPosOfflineEnabled() && canCompleteSaleOffline(method, saleLines);
@@ -4136,12 +4137,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       footer: printSettings?.receiptFooter,
       showVat: printSettings?.receiptShowVatTable !== false,
       showStaff: printSettings?.receiptShowStaffLine !== false,
-      adyenCustomerReceipt:
-        method === 'terminal'
-          ? terminalPaymentRef.current?.customerReceipt || null
-          : null,
-      adyenCashierReceipt:
-        method === 'terminal' ? terminalPaymentRef.current?.cashierReceipt || null : null,
+      adyenCustomerReceipt: normalizeAdyenTerminalReceipt(terminalCapture?.customerReceipt),
+      adyenCashierReceipt: normalizeAdyenTerminalReceipt(terminalCapture?.cashierReceipt),
     };
     const receiptText = generateWebPosReceiptText(receiptPayload, locale);
     setLastReceipt(receiptText);

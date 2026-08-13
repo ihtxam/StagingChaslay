@@ -131,8 +131,16 @@ class ProgrammedOrdersViewModel @Inject constructor(
         viewModelScope.launch {
             val detail = transactionRepository.getTransaction(card.id) ?: return@launch
             val settings = settingsRepository.getSettings()
+            val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+                .appendableForTransaction(detail.first)
             withContext(Dispatchers.IO) {
-                printerService.routeReceipt(settings, detail.first, detail.second)
+                printerService.routeReceipt(
+                    settings,
+                    detail.first,
+                    detail.second,
+                    customerCopy,
+                    cashierCopy
+                )
             }.onSuccess {
                 _uiState.value = _uiState.value.copy(message = "Receipt printed")
             }.onFailure { e ->

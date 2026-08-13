@@ -152,6 +152,9 @@ export class PosOrdersService {
       shippingAddress: o.shippingAddress,
       createdAt: o.createdAt,
       completedAt: o.completedAt,
+      adyenReference: o.adyenReference ?? null,
+      adyenCustomerReceiptJson: o.adyenCustomerReceiptJson ?? null,
+      adyenCashierReceiptJson: o.adyenCashierReceiptJson ?? null,
       items: (o.items || []).map((i) => {
         const name = resolveOrderItemName(i.productName, i.product?.name);
         return {

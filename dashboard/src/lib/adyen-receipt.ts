@@ -104,5 +104,28 @@ export function normalizeAdyenTerminalReceipt(raw: unknown): AdyenTerminalReceip
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as AdyenTerminalReceipt;
   if (!Array.isArray(r.lines)) return null;
-  return r;
+  return r.lines.length ? r : null;
+}
+
+/** Parse persisted order JSON (sync / order history) into a printable receipt. */
+export function parseAdyenReceiptJson(json?: string | null): AdyenTerminalReceipt | null {
+  if (!json?.trim()) return null;
+  try {
+    return normalizeAdyenTerminalReceipt(JSON.parse(json));
+  } catch {
+    return null;
+  }
+}
+
+export function resolveOrderAdyenReceipts(order: {
+  adyenCustomerReceiptJson?: string | null;
+  adyenCashierReceiptJson?: string | null;
+}): {
+  customer: AdyenTerminalReceipt | null;
+  cashier: AdyenTerminalReceipt | null;
+} {
+  return {
+    customer: parseAdyenReceiptJson(order.adyenCustomerReceiptJson),
+    cashier: parseAdyenReceiptJson(order.adyenCashierReceiptJson),
+  };
 }
