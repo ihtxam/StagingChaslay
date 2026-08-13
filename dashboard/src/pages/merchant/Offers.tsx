@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -47,15 +47,33 @@ const DAYS = [
   { key: 'sun', label: 'Sun' },
 ];
 
-const TYPE_LABELS: Record<string, string> = {
-  percent_order: '% off whole order',
-  percent_category: '% off category or products',
-  fixed_off: 'Fixed CHF off',
-  package_deal: 'Package (pick N + free, one price)',
-  bogo: 'Buy X get Y (same list)',
-  pay_n_get_m: 'Pay N get M (e.g. 3+1)',
-  combo_deal: 'Combo (legacy)',
+const TYPE_LABEL_KEYS: Record<string, string> = {
+  percent_order: 'offerTypePercentOrder',
+  percent_category: 'offerTypePercentCategory',
+  fixed_off: 'offerTypeFixedOff',
+  package_deal: 'offerTypePackageDeal',
+  bogo: 'offerTypeBogo',
+  pay_n_get_m: 'offerTypePayNGetM',
+  combo_deal: 'offerTypeComboDeal',
 };
+
+const MAX_MIN_ORDER_DIGITS = 10;
+const MAX_PERCENT_OFF = 100;
+
+function clampMoneyDigits(raw: string, maxDigits: number) {
+  const cleaned = raw.replace(/[^\d.]/g, '');
+  const parts = cleaned.split('.');
+  const intPart = (parts[0] || '').slice(0, maxDigits);
+  if (parts.length <= 1) return intPart;
+  return `${intPart}.${parts.slice(1).join('').slice(0, 2)}`;
+}
+
+function clampNonNegativeIntStr(raw: string) {
+  if (raw.trim() === '' || raw === '-') return raw;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return '0';
+  return String(Math.max(0, Math.floor(n)));
+}
 
 function endOfZurichDay(d: Date) {
   const copy = new Date(d);
@@ -117,6 +135,13 @@ const emptyForm = () => ({
 
 export default function Offers() {
   const { t } = useI18n();
+  const typeLabels = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(TYPE_LABEL_KEYS).map(([k, key]) => [k, t(key)])
+      ) as Record<string, string>,
+    [t]
+  );
   const [offers, setOffers] = useState<Offer[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<ProductOpt[]>([]);
@@ -136,7 +161,7 @@ export default function Offers() {
       setCategories(c.data.categories || []);
       setProducts(p.data.products || []);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to load offers');
+      toast.error(e.response?.data?.error || t('offerLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -230,7 +255,7 @@ export default function Offers() {
       featured: form.featured,
       isActive: form.isActive,
       badgeLabel: form.badgeLabel.trim() || null,
-      priority: Number(form.priority) || 0,
+      priority: priorityNum,
       stackable: form.stackable,
     };
   };
@@ -238,8 +263,23 @@ export default function Offers() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) {
-      toast.error('Name is required');
+      toast.error(t('offerNameRequired'));
       return;
+    }
+    const priorityNum = Math.max(0, Math.floor(Number(form.priority) || 0));
+    if (form.offerType === 'percent_category' || form.offerType === 'percent_order') {
+      const pct = Number(form.percentOff) || 0;
+      if (pct < 1 || pct > MAX_PERCENT_OFF) {
+        toast.error(t('offerPercentRange').replace('{max}', String(MAX_PERCENT_OFF)));
+        return;
+      }
+    }
+    if (form.minOrderAmount) {
+      const digitCount = form.minOrderAmount.replace(/\D/g, '').length;
+      if (digitCount > MAX_MIN_ORDER_DIGITS) {
+        toast.error(t('offerMinOrderTooManyDigits').replace('{n}', String(MAX_MIN_ORDER_DIGITS)));
+        return;
+      }
     }
     if (form.offerType === 'package_deal') {
       if (form.buyProductIds.length < Number(form.buyQty || 0)) {
@@ -260,29 +300,29 @@ export default function Offers() {
       const payload = buildPayload();
       if (editingId) {
         await api.put(`/merchant/offers/${editingId}`, payload);
-        toast.success('Offer updated');
+        toast.success(t('offerUpdated'));
       } else {
         await api.post('/merchant/offers', payload);
-        toast.success('Offer created');
+        toast.success(t('offerSaved'));
       }
       reset();
       await load();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Save failed');
+      toast.error(err.response?.data?.error || t('offerSaveFailed'));
     } finally {
       setSaving(false);
     }
   };
 
   const onDelete = async (id: string) => {
-    if (!confirm('Delete this offer?')) return;
+    if (!confirm(t('offerDeleteConfirm'))) return;
     try {
       await api.delete(`/merchant/offers/${id}`);
-      toast.success('Deleted');
+      toast.success(t('offerDeleted'));
       if (editingId === id) reset();
       await load();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Delete failed');
+      toast.error(err.response?.data?.error || t('offerDeleteFailed'));
     }
   };
 
@@ -398,13 +438,13 @@ export default function Offers() {
               />
             </label>
             <label className="text-sm block">
-              <span className="muted block mb-1">Type</span>
+              <span className="muted block mb-1">{t('offerType')}</span>
               <select
                 className="input"
                 value={form.offerType}
                 onChange={(e) => setForm({ ...form, offerType: e.target.value as OfferType })}
               >
-                {Object.entries(TYPE_LABELS).map(([k, v]) => (
+                {Object.entries(typeLabels).map(([k, v]) => (
                   <option key={k} value={k}>
                     {v}
                   </option>
@@ -414,26 +454,29 @@ export default function Offers() {
           </div>
 
           <label className="text-sm block">
-            <span className="muted block mb-1">Description</span>
+            <span className="muted block mb-1">{t('offerDescription')}</span>
             <textarea
               className="input min-h-[60px]"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Shown on the Offers shelf"
+              placeholder={t('offerDescriptionPlaceholder')}
             />
           </label>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {(form.offerType === 'percent_category' || form.offerType === 'percent_order') && (
               <label className="text-sm block">
-                <span className="muted block mb-1">% off</span>
+                <span className="muted block mb-1">{t('offerPercentOff')}</span>
                 <input
                   className="input"
                   type="number"
                   min="1"
-                  max="90"
+                  max={MAX_PERCENT_OFF}
                   value={form.percentOff}
-                  onChange={(e) => setForm({ ...form, percentOff: e.target.value })}
+                  onChange={(e) => {
+                    const n = Math.min(MAX_PERCENT_OFF, Math.max(0, Number(e.target.value) || 0));
+                    setForm({ ...form, percentOff: e.target.value === '' ? '' : String(n) });
+                  }}
                 />
               </label>
             )}
@@ -545,17 +588,22 @@ export default function Offers() {
               </>
             )}
             <label className="text-sm block">
-              <span className="muted block mb-1">Min order CHF (optional)</span>
+              <span className="muted block mb-1">{t('offerMinOrder')}</span>
               <input
                 className="input"
                 type="number"
                 min="0"
                 value={form.minOrderAmount}
-                onChange={(e) => setForm({ ...form, minOrderAmount: e.target.value })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    minOrderAmount: clampMoneyDigits(e.target.value, MAX_MIN_ORDER_DIGITS),
+                  })
+                }
               />
             </label>
             <label className="text-sm block">
-              <span className="muted block mb-1">Badge</span>
+              <span className="muted block mb-1">{t('offerBadge')}</span>
               <input
                 className="input"
                 value={form.badgeLabel}
@@ -564,12 +612,13 @@ export default function Offers() {
               />
             </label>
             <label className="text-sm block">
-              <span className="muted block mb-1">Priority</span>
+              <span className="muted block mb-1">{t('offerPriority')}</span>
               <input
                 className="input"
                 type="number"
+                min="0"
                 value={form.priority}
-                onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                onChange={(e) => setForm({ ...form, priority: clampNonNegativeIntStr(e.target.value) })}
               />
             </label>
           </div>
@@ -860,7 +909,7 @@ export default function Offers() {
                     ) : null}
                   </div>
                   <p className="text-xs muted mt-0.5">
-                    {TYPE_LABELS[o.offerType] || o.offerType}
+                    {typeLabels[o.offerType] || o.offerType}
                     {o.scheduleMode === 'days' && o.daysOfWeek?.length
                       ? ` · ${o.daysOfWeek.join(', ')}`
                       : ' · always'}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Users, Lock, TrendingUp, DollarSign } from 'lucide-react';
+import { Users, Lock, TrendingUp, DollarSign, UserCircle2 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 interface Stats {
@@ -10,6 +10,23 @@ interface Stats {
   activeLicenses: number;
   totalRevenue: number;
   platformGrowth: number;
+  merchantUserCount?: number;
+}
+
+function normalizeOverview(raw: Record<string, unknown> | null | undefined): Stats {
+  if (!raw) {
+    return { totalMerchants: 0, activeLicenses: 0, totalRevenue: 0, platformGrowth: 0, merchantUserCount: 0 };
+  }
+  const merchants = raw.merchants as { total?: number } | undefined;
+  const licenses = raw.licenses as { active?: number } | undefined;
+  const orders = raw.orders as { totalRevenue?: number } | undefined;
+  return {
+    totalMerchants: Number(raw.totalMerchants ?? merchants?.total ?? 0),
+    activeLicenses: Number(raw.activeLicenses ?? licenses?.active ?? 0),
+    totalRevenue: Number(raw.totalRevenue ?? orders?.totalRevenue ?? 0),
+    platformGrowth: Number(raw.platformGrowth ?? 0),
+    merchantUserCount: Number(raw.merchantUserCount ?? 0),
+  };
 }
 
 export default function Overview() {
@@ -21,7 +38,7 @@ export default function Overview() {
     const fetchStats = async () => {
       try {
         const response = await api.get('/superadmin/analytics/overview');
-        setStats(response.data.overview);
+        setStats(normalizeOverview(response.data.overview));
       } catch {
         toast.error(t('saDashLoadFailed'));
       } finally {
@@ -54,6 +71,12 @@ export default function Overview() {
       value: `$${(stats?.totalRevenue || 0).toFixed(2)}`,
       icon: DollarSign,
       color: 'bg-purple-500',
+    },
+    {
+      label: t('saDashMerchantUsers'),
+      value: stats?.merchantUserCount || 0,
+      icon: UserCircle2,
+      color: 'bg-indigo-500',
     },
     {
       label: t('saDashGrowthRate'),

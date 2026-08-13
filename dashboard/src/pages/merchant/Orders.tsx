@@ -73,16 +73,16 @@ function isAwaiting(status: string) {
   return status === 'pending' || status === 'pending_approval';
 }
 
-function statusLabel(status: string) {
+function statusLabel(status: string, t: (k: string) => string) {
   const map: Record<string, string> = {
-    pending: 'To approve',
-    pending_approval: 'To approve',
-    accepted: 'Accepted',
-    preparing: 'Preparing',
-    ready: 'Ready',
-    out_for_delivery: 'Out for delivery',
-    completed: 'Completed',
-    cancelled: 'Cancelled',
+    pending: t('orderStatusPending'),
+    pending_approval: t('orderStatusPending'),
+    accepted: t('orderStatusAccepted'),
+    preparing: t('orderStatusPreparing'),
+    ready: t('orderStatusReady'),
+    out_for_delivery: t('orderStatusOutForDelivery'),
+    completed: t('orderStatusCompleted'),
+    cancelled: t('orderStatusCancelled'),
   };
   return map[status] || status;
 }
@@ -123,7 +123,7 @@ export default function Orders() {
         if (newIds.length === 0) stopOrderAlertLoop();
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load orders');
+      toast.error(error.response?.data?.error || t('ordersLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -174,7 +174,7 @@ export default function Orders() {
     setBusyId(orderId);
     try {
       await api.post(`/merchant/orders/${orderId}/action`, { action });
-      toast.success('Updated');
+      toast.success(t('updated'));
 
       // Reload board, then sync the open popup from that list so actions
       // (Start kitchen → Mark ready) update even if the detail endpoint fails.
@@ -193,7 +193,7 @@ export default function Orders() {
         }
       }
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Action failed');
+      toast.error(e.response?.data?.error || t('actionFailed'));
       await load();
     } finally {
       setBusyId(null);
@@ -214,10 +214,10 @@ export default function Orders() {
 
     if (isProgrammed(order)) {
       if (s === 'accepted') {
-        btns.push({ action: 'start_preparing', label: 'Start kitchen', style: 'bg-slate-900' });
+        btns.push({ action: 'start_preparing', label: t('webPosStartKitchen'), style: 'bg-slate-900' });
       }
       if (s === 'preparing' || s === 'accepted') {
-        btns.push({ action: 'mark_ready', label: 'Mark ready', style: 'bg-teal-600' });
+        btns.push({ action: 'mark_ready', label: t('webPosMarkReady'), style: 'bg-teal-600' });
       }
       btns.push({
         action: 'complete_and_collect',
@@ -228,24 +228,24 @@ export default function Orders() {
     }
 
     if (isAwaiting(s)) {
-      btns.push({ action: 'accept', label: 'Accept', style: 'bg-emerald-600' });
-      btns.push({ action: 'reject', label: 'Reject', style: 'bg-red-600' });
+      btns.push({ action: 'accept', label: t('webPosAcceptOrder'), style: 'bg-emerald-600' });
+      btns.push({ action: 'reject', label: t('webPosRejectOrder'), style: 'bg-red-600' });
       return btns;
     }
     if (s === 'accepted') {
-      btns.push({ action: 'start_preparing', label: 'Start kitchen', style: 'bg-slate-900' });
+      btns.push({ action: 'start_preparing', label: t('webPosStartKitchen'), style: 'bg-slate-900' });
     }
     if (s === 'preparing' || s === 'accepted') {
-      btns.push({ action: 'mark_ready', label: 'Mark ready', style: 'bg-teal-600' });
+      btns.push({ action: 'mark_ready', label: t('webPosMarkReady'), style: 'bg-teal-600' });
     }
     if (s === 'ready' && ch === 'delivery') {
-      btns.push({ action: 'out_for_delivery', label: 'Send delivery', style: 'bg-emerald-600' });
+      btns.push({ action: 'out_for_delivery', label: t('ordersActionSendDelivery'), style: 'bg-emerald-600' });
     }
     if ((s === 'ready' || s === 'out_for_delivery') && !paid && cash) {
       if (!(ch === 'delivery' && s === 'ready')) {
         btns.push({
           action: 'complete_and_collect',
-          label: 'Collect & complete',
+          label: t('ordersCollectCash'),
           style: 'bg-emerald-700',
         });
       }
@@ -253,17 +253,17 @@ export default function Orders() {
     if (s === 'out_for_delivery') {
       btns.push({
         action: paid ? 'complete' : 'complete_and_collect',
-        label: paid ? 'Mark delivered' : 'Delivered + collect',
+        label: paid ? t('ordersActionMarkDelivered') : t('ordersActionDeliveredCollect'),
         style: 'bg-emerald-700',
       });
     }
     if (s === 'ready' && ch !== 'delivery' && paid) {
-      btns.push({ action: 'complete', label: 'Complete handover', style: 'bg-emerald-700' });
+      btns.push({ action: 'complete', label: t('ordersActionCompleteHandover'), style: 'bg-emerald-700' });
     }
     return btns;
   };
 
-  if (loading) return <div className="text-center py-10 muted text-sm">Loading orders...</div>;
+  if (loading) return <div className="text-center py-10 muted text-sm">{t('ordersLoading')}</div>;
 
   const list =
     tab === 'new'
@@ -281,34 +281,32 @@ export default function Orders() {
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
         <div>
           <h1 className="page-title">{t('orders')}</h1>
-          <p className="page-sub">
-            Online shop: approve → kitchen → ready / delivery → collect
-          </p>
+          <p className="page-sub">{t('ordersBoardHint')}</p>
           <div className="mt-1.5 flex flex-wrap gap-2.5 text-[11px] font-medium muted">
             <span className="inline-flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-amber-500" /> Takeaway
+              <span className="h-2 w-2 rounded-full bg-amber-500" /> {t('takeaway')}
             </span>
             <span className="inline-flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-sky-500" /> Dine in
+              <span className="h-2 w-2 rounded-full bg-sky-500" /> {t('dineIn')}
             </span>
             <span className="inline-flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" /> Delivery
+              <span className="h-2 w-2 rounded-full bg-emerald-500" /> {t('delivery')}
             </span>
           </div>
         </div>
         <button type="button" onClick={() => void load()} className="btn-secondary self-start">
-          Refresh
+          {t('ordersRefresh')}
         </button>
       </div>
 
       <div className="flex gap-1.5 table-scroll pb-0.5 -mx-0.5 px-0.5">
         {(
           [
-            ['new', `To approve (${board.new.length})`],
-            ['kitchen', `Kitchen (${board.kitchen.length})`],
-            ['ready', `Ready (${board.ready.length})`],
+            ['new', `${t('ordersTabToApprove')} (${board.new.length})`],
+            ['kitchen', `${t('ordersTabKitchen')} (${board.kitchen.length})`],
+            ['ready', `${t('ordersTabReady')} (${board.ready.length})`],
             ['programmed', `${t('ordersProgrammed')} (${board.programmed.length})`],
-            ['all', `All (${board.all.length})`],
+            ['all', `${t('ordersTabAll')} (${board.all.length})`],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -329,7 +327,7 @@ export default function Orders() {
       <div className="grid gap-2 sm:gap-2.5 lg:grid-cols-2">
         {list.length === 0 && (
           <div className="col-span-full card border-dashed py-10 text-center muted text-sm">
-            No orders in this view.
+            {t('ordersEmpty')}
           </div>
         )}
         {list.map((order) => {
@@ -347,7 +345,7 @@ export default function Orders() {
                     {order.orderNumber || order.id.slice(0, 8)}
                   </h3>
                   <p className="text-[11px] muted mt-0.5">
-                    {order.orderType === 'web_shop' ? 'Online shop' : 'POS'} ·{' '}
+                    {order.orderType === 'web_shop' ? t('ordersOnlineShop') : t('ordersPos')} ·{' '}
                     {new Date(order.createdAt).toLocaleString()}
                   </p>
                 </div>
@@ -362,12 +360,12 @@ export default function Orders() {
 
               <div className="mt-2 flex flex-wrap gap-1 text-[10px] font-medium">
                 <span className="rounded bg-[var(--bg-muted)] px-1.5 py-0.5">
-                  {statusLabel(order.status)}
+                  {statusLabel(order.status, t)}
                 </span>
                 <span className="rounded bg-[var(--bg-muted)] px-1.5 py-0.5">
                   {order.scheduledFor
-                    ? `Scheduled ${new Date(order.scheduledFor).toLocaleString()}`
-                    : 'ASAP'}
+                    ? `${t('ordersScheduled')} ${new Date(order.scheduledFor).toLocaleString()}`
+                    : t('ordersAsap')}
                 </span>
                 <span className="rounded bg-[var(--bg-muted)] px-1.5 py-0.5">
                   {order.paymentMethod || '-'} / {order.paymentStatus || '-'}
@@ -409,7 +407,7 @@ export default function Orders() {
                   }}
                   className="btn-secondary !py-1 !text-[11px]"
                 >
-                  Details
+                  {t('ordersDetails')}
                 </button>
               </div>
             </article>
@@ -423,7 +421,7 @@ export default function Orders() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="text-base font-semibold truncate">{selected.orderNumber}</h2>
-                <p className="text-xs muted">{statusLabel(selected.status)}</p>
+                <p className="text-xs muted">{statusLabel(selected.status, t)}</p>
               </div>
               <button
                 type="button"
@@ -435,21 +433,21 @@ export default function Orders() {
             </div>
             <div className="mt-3 space-y-1.5 text-sm">
               <p>
-                <span className="muted">Customer:</span>{' '}
+                <span className="muted">{t('ordersCustomer')}:</span>{' '}
                 {selected.customerName || '-'} {selected.customerPhone || ''}
               </p>
               {selected.shippingAddress && (
                 <p>
-                  <span className="muted">Address:</span> {selected.shippingAddress}
+                  <span className="muted">{t('ordersAddress')}:</span> {selected.shippingAddress}
                 </p>
               )}
               <p>
-                <span className="muted">Payment:</span> {selected.paymentMethod} /{' '}
+                <span className="muted">{t('ordersPayment')}:</span> {selected.paymentMethod} /{' '}
                 {selected.paymentStatus}
               </p>
               {selected.notes && (
                 <p>
-                  <span className="muted">Notes:</span> {selected.notes}
+                  <span className="muted">{t('ordersNotes')}:</span> {selected.notes}
                 </p>
               )}
             </div>

@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { and, eq, gte, lte, desc, or, isNull } from "drizzle-orm";
+import { and, eq, gte, lte, desc, or, isNull, inArray } from "drizzle-orm";
 
 export type ReportPreset =
   | "today"
@@ -171,6 +171,34 @@ export class PosReportsService {
       orderBy: [desc(schema.orders.createdAt)],
     });
 
+    const staffIds = [
+      ...new Set(
+        rows.map((o) => o.staffId).filter((id): id is string => !!id)
+      ),
+    ];
+    const staffNameById = new Map<string, string>();
+    if (staffIds.length) {
+      const staffRows = await db.query.merchantStaff.findMany({
+        where: and(
+          eq(schema.merchantStaff.merchantId, merchantId),
+          inArray(schema.merchantStaff.id, staffIds)
+        ),
+      });
+      for (const s of staffRows) {
+        staffNameById.set(s.id, s.name.trim());
+      }
+    }
+
+    const resolveStaffName = (o: (typeof rows)[0]) => {
+      const fromOrder = (o.staffName || "").trim();
+      if (fromOrder) return fromOrder;
+      if (o.staffId) {
+        const fromStaff = staffNameById.get(o.staffId);
+        if (fromStaff) return fromStaff;
+      }
+      return "Unassigned";
+    };
+
     const completed = rows.filter((o) =>
       ["completed", "partially_refunded"].includes(String(o.status))
     );
@@ -234,7 +262,7 @@ export class PosReportsService {
       vatByChannel[ch]!.brut += brut;
       vatByChannel[ch]!.tva += taxKept;
 
-      const staff = (o.staffName || "Unknown").trim() || "Unknown";
+      const staff = resolveStaffName(o);
       const st = staffMap.get(staff) || { name: staff, count: 0, total: 0 };
       st.count += 1;
       st.total += brut;

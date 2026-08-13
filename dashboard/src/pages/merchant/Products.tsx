@@ -103,6 +103,7 @@ type FormState = {
   price: string;
   stock: string;
   sku: string;
+  barcode: string;
   categoryId: string;
   buttonColor: string;
   imageUrl: string;
@@ -132,6 +133,7 @@ const emptyForm = (): FormState => ({
   price: '',
   stock: '0',
   sku: '',
+  barcode: '',
   categoryId: '',
   buttonColor: '#0f172a',
   imageUrl: '',
@@ -195,16 +197,16 @@ const money = (value: string | number) =>
 
 const SKU_MAX_LEN = 100; // matches DB varchar(100)
 const MAX_MONEY_DIGITS = 10;
+const MAX_STOCK_DIGITS = 5;
 const MAX_POINTS = 2_147_483_647; // PG integer max
 
 /** Free-points field: digits only, hard-capped at 10 (PG integer / product rule). */
 const sanitizeFreePointsInput = (raw: string) => raw.replace(/\D/g, '').slice(0, MAX_MONEY_DIGITS);
 
-const clampNonNegativeInt = (raw: string) => {
-  if (raw.trim() === '' || raw === '-') return raw;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return '0';
-  return String(Math.max(0, Math.floor(n)));
+const clampNonNegativeInt = (raw: string, maxDigits = MAX_MONEY_DIGITS) => {
+  const digits = raw.replace(/\D/g, '').slice(0, maxDigits);
+  if (digits === '') return '';
+  return String(Math.max(0, Math.floor(Number(digits))));
 };
 
 /** Parse free-points for API; null when empty/invalid. */
@@ -397,6 +399,7 @@ export default function Products() {
         price: String(full.price ?? ''),
         stock: String(full.stock ?? 0),
         sku: full.sku || '',
+        barcode: full.barcode || '',
         categoryId: full.categoryId || '',
         buttonColor: full.buttonColor || '#0f172a',
         imageUrl: full.imageUrl || '',
@@ -421,6 +424,7 @@ export default function Products() {
         price: String(product.price ?? ''),
         stock: String(product.stock ?? 0),
         sku: product.sku || '',
+        barcode: product.barcode || '',
         categoryId: product.categoryId || '',
         buttonColor: product.buttonColor || '#0f172a',
         imageUrl: product.imageUrl || '',
@@ -493,6 +497,7 @@ export default function Products() {
       price,
       stock: Math.max(0, Math.floor(Number(form.stock) || 0)),
       sku: form.sku.trim() || undefined,
+      barcode: form.barcode.trim() || undefined,
       categoryId: form.categoryId || undefined,
       buttonColor: form.buttonColor || undefined,
       imageUrl: form.imageUrl.trim() || null,
@@ -568,6 +573,10 @@ export default function Products() {
     const stockNum = Number(form.stock);
     if (!Number.isFinite(stockNum) || stockNum < 0) {
       toast.error(t('stockNegative'));
+      return;
+    }
+    if (String(Math.floor(stockNum)).replace(/\D/g, '').length > MAX_STOCK_DIGITS) {
+      toast.error(t('stockTooManyDigits').replace('{n}', String(MAX_STOCK_DIGITS)));
       return;
     }
     for (const spec of form.specifications) {
@@ -1073,6 +1082,17 @@ export default function Products() {
                     {t('maxCharacters').replace('{n}', String(SKU_MAX_LEN))}
                   </p>
                 </Field>
+                <Field label={t('barcode')}>
+                  <input
+                    className="field-input"
+                    placeholder={t('barcodePlaceholder')}
+                    value={form.barcode}
+                    maxLength={SKU_MAX_LEN}
+                    onChange={(e) =>
+                      setForm({ ...form, barcode: e.target.value.slice(0, SKU_MAX_LEN) })
+                    }
+                  />
+                </Field>
                 <Field label={t('stock')}>
                   <input
                     className="field-input"
@@ -1081,7 +1101,7 @@ export default function Products() {
                     step={1}
                     value={form.stock}
                     onChange={(e) =>
-                      setForm({ ...form, stock: clampNonNegativeInt(e.target.value) })
+                      setForm({ ...form, stock: clampNonNegativeInt(e.target.value, MAX_STOCK_DIGITS) })
                     }
                   />
                 </Field>

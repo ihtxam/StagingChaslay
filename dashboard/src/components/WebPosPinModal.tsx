@@ -229,11 +229,11 @@ export default function WebPosPinModal({
         </div>
 
         <div className="mb-4 flex justify-center gap-2">
-          {Array.from({ length: PIN_MIN_LENGTH }).map((_, i) => (
+          {Array.from({ length: dots }).map((_, i) => (
             <span
               key={i}
               className={`h-3 w-3 rounded-full ${
-                i < Math.min(pin.length, PIN_MIN_LENGTH)
+                i < pin.length
                   ? 'bg-[var(--webpos-text,var(--text))]'
                   : 'bg-[var(--webpos-border,var(--border))]'
               }`}

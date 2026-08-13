@@ -17,7 +17,9 @@ export class AnalyticsService {
 
       // Get license statistics
       const licenses = await db.query.licenses.findMany();
-      const activeLicenses = licenses.filter((l) => l.status === "active").length;
+      const activeLicenses = licenses.filter(
+        (l) => l.status === "active" && l.expiresAt > now
+      ).length;
       const expiredLicenses = licenses.filter((l) => l.status === "expired").length;
 
       // Get device count
@@ -28,7 +30,32 @@ export class AnalyticsService {
       const totalOrders = orders.length;
       const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
 
+      const staffRows = await db.query.merchantStaff.findMany();
+      const merchantUserCount = staffRows.filter((s) => s.isActive).length;
+
+      const now = new Date();
+      const thisMonthKey = now.toISOString().substring(0, 7);
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const prevMonthKey = prev.toISOString().substring(0, 7);
+      const merchantsThisMonth = merchants.filter(
+        (m) => m.createdAt.toISOString().substring(0, 7) === thisMonthKey
+      ).length;
+      const merchantsPrevMonth = merchants.filter(
+        (m) => m.createdAt.toISOString().substring(0, 7) === prevMonthKey
+      ).length;
+      const platformGrowth =
+        merchantsPrevMonth > 0
+          ? Math.round(((merchantsThisMonth - merchantsPrevMonth) / merchantsPrevMonth) * 1000) / 10
+          : merchantsThisMonth > 0
+            ? 100
+            : 0;
+
       return {
+        totalMerchants: merchants.length,
+        activeLicenses,
+        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        platformGrowth,
+        merchantUserCount,
         merchants: {
           total: merchants.length,
           active: activeMerchants,
