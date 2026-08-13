@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, LogOut, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, LogOut, User, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { APP_NAME } from '@/lib/brand';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type Locale } from '@/lib/i18n';
 
 export interface SidebarLeaf {
   label: string;
@@ -32,6 +32,8 @@ interface SidebarProps {
     label: string;
     path: string;
   } | null;
+  language?: Locale;
+  onLanguageChange?: (locale: Locale) => void;
 }
 
 const STORAGE_PREFIX = 'sidebar_groups_open:';
@@ -67,13 +69,22 @@ export default function Sidebar({
   menuItems,
   panelKey = 'default',
   quickAction = null,
+  language,
+  onLanguageChange,
 }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useI18n();
+  const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
+
+  const roleLabel = impersonating
+    ? 'Merchant (SA)'
+    : user?.isOwner
+      ? t('staffOwnerTitle')
+      : user?.roleName || user?.role || '';
 
   const activeGroupIds = useMemo(() => {
     const ids = new Set<string>();
@@ -300,7 +311,7 @@ export default function Sidebar({
           })}
         </nav>
 
-        <div className="p-3 border-t border-slate-700 space-y-1.5 shrink-0 bg-slate-950">
+        <div className="p-3 border-t border-slate-700 space-y-2 shrink-0 bg-slate-950">
           {impersonating && (
             <button
               type="button"
@@ -311,6 +322,32 @@ export default function Sidebar({
               {t('backToSuperadmin')}
             </button>
           )}
+
+          <div className="flex items-center gap-2.5 px-2 py-1.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-slate-300">
+              <User className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-slate-100">{user?.name}</p>
+              <p className="truncate text-[11px] text-slate-400" title={roleLabel}>
+                {roleLabel}
+              </p>
+            </div>
+          </div>
+
+          {onLanguageChange && (
+            <select
+              className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-200"
+              value={language || 'en'}
+              onChange={(e) => onLanguageChange(e.target.value as Locale)}
+              aria-label={t('language')}
+            >
+              <option value="en">English</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+            </select>
+          )}
+
           <button
             type="button"
             onClick={handleLogout}

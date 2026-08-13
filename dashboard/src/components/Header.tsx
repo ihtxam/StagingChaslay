@@ -1,16 +1,14 @@
-import { ArrowLeft, LogOut, Menu, Bell, User, Moon, Sun } from 'lucide-react';
+import { ArrowLeft, Menu, Bell, Moon, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { useTheme } from '@/lib/theme';
-import { useI18n, type Locale } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import AcceptingMenu from '@/components/AcceptingMenu';
 
 interface HeaderProps {
   title: string;
   onMenuClick: () => void;
-  language?: Locale;
-  onLanguageChange?: (locale: Locale) => void;
   /** Show Accepting orders/reservations dropdown (merchant panel only) */
   showAcceptingMenu?: boolean;
 }
@@ -18,13 +16,11 @@ interface HeaderProps {
 export default function Header({
   title,
   onMenuClick,
-  language,
-  onLanguageChange,
   showAcceptingMenu = false,
 }: HeaderProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const { user, impersonating, stopImpersonation, logout } = useAuthStore();
+  const { user, impersonating, stopImpersonation } = useAuthStore();
   const { theme, toggleTheme } = useTheme();
 
   const backToSuperadmin = () => {
@@ -35,11 +31,6 @@ export default function Header({
     }
     toast.success('Back to Superadmin');
     navigate('/superadmin/merchants');
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
   };
 
   return (
@@ -76,19 +67,6 @@ export default function Header({
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {showAcceptingMenu ? <AcceptingMenu /> : null}
 
-          {onLanguageChange && (
-            <select
-              className="input py-1 text-xs w-auto min-w-0 hidden sm:block"
-              value={language || 'en'}
-              onChange={(e) => onLanguageChange(e.target.value as Locale)}
-              aria-label="Language"
-            >
-              <option value="en">EN</option>
-              <option value="fr">FR</option>
-              <option value="de">DE</option>
-            </select>
-          )}
-
           <button
             type="button"
             onClick={toggleTheme}
@@ -103,42 +81,6 @@ export default function Header({
             <Bell className="w-4 h-4 muted" />
             <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full" />
           </button>
-
-          <div className="flex items-center gap-2 pl-2 border-l border-[var(--border)]">
-            <div className="text-right hidden sm:block max-w-[9rem]">
-              <p className="font-medium text-xs truncate">{user?.name}</p>
-              <p className="text-[10px] muted truncate" title={
-                impersonating
-                  ? 'Merchant (SA)'
-                  : user?.isOwner
-                    ? t('staffOwnerTitle')
-                    : user?.roleName || user?.role || ''
-              }>
-                {impersonating
-                  ? 'Merchant (SA)'
-                  : user?.isOwner
-                    ? t('staffOwnerTitle')
-                    : user?.roleName || user?.role}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="p-1.5 rounded-md hover:bg-[var(--bg-muted)] hidden sm:inline-flex"
-              aria-label="Account"
-            >
-              <User className="w-4 h-4 muted" />
-            </button>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
-              title={t('logout')}
-              aria-label={t('logout')}
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{t('logout')}</span>
-            </button>
-          </div>
         </div>
       </div>
     </header>

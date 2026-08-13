@@ -53,14 +53,14 @@ function SuperadminShell() {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         menuItems={menuItems}
         panelKey="superadmin"
+        language={locale}
+        onLanguageChange={changeLanguage}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
         <Header
           title={t('superadminDashboard')}
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-          language={locale}
-          onLanguageChange={changeLanguage}
         />
 
         <main className="panel-main flex-1 p-3 sm:p-4">

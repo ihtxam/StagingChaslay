@@ -37,6 +37,15 @@ import type { EditionFeatureKey } from '@/lib/edition-features';
 
 const WebsiteCms = lazy(() => import('./WebsiteCms'));
 
+function LegacyReservationsRedirect() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  if (params.get('tab') === 'settings') {
+    return <Navigate to="/merchant/settings?tab=reservations" replace />;
+  }
+  return <Navigate to="/merchant/sales/reservations" replace />;
+}
+
 function PanelRouteGuard({
   path,
   allow,
@@ -185,8 +194,8 @@ function MerchantShell() {
       icon: '📦',
       children: [
         { label: t('orders'), path: '/merchant/orders', icon: '📦' },
-        { label: t('webPos'), path: '/merchant/pos', icon: '🖥️' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
+        { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
       ].filter((item) => allow(item.path)),
     },
     {
@@ -217,7 +226,6 @@ function MerchantShell() {
       children: [
         { label: t('shop'), path: '/merchant/online-shop', icon: '🌐' },
         { label: t('cmsWebsite'), path: '/merchant/website', icon: '✏️' },
-        { label: t('reservations'), path: '/merchant/reservations', icon: '📅' },
       ].filter((item) => allow(item.path)),
     },
     ...(allow('/merchant/floor-plan')
@@ -257,6 +265,8 @@ function MerchantShell() {
               ? { label: t('webPos'), path: '/merchant/pos' }
               : null
           }
+          language={locale}
+          onLanguageChange={changeLanguage}
         />
       )}
 
@@ -265,8 +275,6 @@ function MerchantShell() {
           <Header
             title={t('merchantDashboard')}
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-            language={locale}
-            onLanguageChange={changeLanguage}
             showAcceptingMenu
           />
         )}
@@ -388,11 +396,17 @@ function MerchantShell() {
               }
             />
             <Route
-              path="reservations"
+              path="sales/reservations"
               element={
-                <PanelRouteGuard path="/merchant/reservations" allow={allow}>
+                <PanelRouteGuard path="/merchant/sales/reservations" allow={allow}>
                   <Reservations />
                 </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="reservations"
+              element={
+                <LegacyReservationsRedirect />
               }
             />
             <Route
