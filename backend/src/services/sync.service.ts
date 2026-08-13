@@ -360,7 +360,12 @@ export class SyncService {
    */
   static async pushSales(merchantId: string, sales: SyncSalePayload[]) {
     const db = getDb();
-    const results: Array<{ clientId: string; orderId: string; created: boolean }> = [];
+    const results: Array<{
+      clientId: string;
+      orderId: string;
+      created: boolean;
+      skipped?: boolean;
+    }> = [];
 
     for (const sale of sales) {
       const existing = await db.query.orders.findFirst({
@@ -376,7 +381,8 @@ export class SyncService {
       const earlyTotal = roundTo005(Number(sale.total) || 0);
       const itemCount = Array.isArray(sale.items) ? sale.items.length : 0;
       if (!isCancelledEarly && (itemCount === 0 || earlyTotal <= 0.001)) {
-        results.push({ clientId: sale.clientId, orderId: sale.clientId, created: false });
+        // Do not return a phantom orderId — callers must not build QR URLs for skipped sales.
+        results.push({ clientId: sale.clientId, orderId: "", created: false, skipped: true });
         continue;
       }
 

@@ -40,6 +40,15 @@ api.chaslay.com {
 }
 
 app.chaslay.com {
+	# Digital receipts live on pay.chaslay.com
+	handle /receipt/* {
+		redir https://pay.chaslay.com{uri} permanent
+	}
+
+	handle /receipts/* {
+		redir https://pay.chaslay.com{uri} permanent
+	}
+
 	# Dashboard download link is same-origin /downloads/... — proxy to API (not SPA index.html)
 	handle /downloads/* {
 		reverse_proxy api:3000

@@ -57,6 +57,16 @@ export default function ReceiptPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Canonical host for public receipts is pay.chaslay.com (not app.* or chasly typo).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const host = window.location.hostname.toLowerCase().replace(/chasly\.com/gi, 'chaslay.com');
+    if (host.startsWith('app.')) {
+      const target = `https://pay.chaslay.com${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.location.replace(target);
+    }
+  }, []);
+
   useEffect(() => {
     if (!saleId) return;
     (async () => {

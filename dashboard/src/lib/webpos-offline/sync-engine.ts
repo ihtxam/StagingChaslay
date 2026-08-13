@@ -74,9 +74,16 @@ async function pushOne(sale: OutboxSale): Promise<'ok' | 'fatal' | 'retry'> {
   try {
     const res = await api.post('/sync/push-sales', { sales: [sale.payload] });
     const orderId =
-      res.data?.results?.find((r: { clientId?: string }) => r.clientId === sale.clientId)?.orderId ||
-      res.data?.results?.[0]?.orderId ||
-      null;
+      (() => {
+        const match = res.data?.results?.find(
+          (r: { clientId?: string; orderId?: string; skipped?: boolean }) =>
+            r.clientId === sale.clientId
+        );
+        const first = res.data?.results?.[0];
+        const pick = (row?: { orderId?: string; skipped?: boolean }) =>
+          row?.orderId && !row.skipped ? row.orderId : null;
+        return pick(match) || pick(first) || null;
+      })();
     await updateOutboxSale(sale.clientId, {
       status: 'synced',
       lastError: null,

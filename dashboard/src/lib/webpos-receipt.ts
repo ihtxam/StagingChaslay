@@ -1296,7 +1296,7 @@ export function posOrderToWebPosReceipt(
     total: Number(order.total),
     vatIncludedInPrice: ctx.vatIncludedInPrice === true,
     splitLabel,
-    receiptUrl: order.clientId || order.id ? buildReceiptUrl(String(order.clientId || order.id)) : undefined,
+    receiptUrl: order.id || order.clientId ? buildReceiptUrl(String(order.id || order.clientId)) : undefined,
     includeQr: ctx.printSettings?.receiptShowQrCode !== false,
     staffName: order.staffName,
     language: lang,

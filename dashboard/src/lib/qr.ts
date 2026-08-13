@@ -2,6 +2,8 @@
  * Minimal helpers for receipt QR codes (browser + ESC/POS).
  */
 
+import { publicApi } from '@/lib/api';
+
 /** Normalize legacy domain typos and receipt path variants. */
 export function normalizeReceiptDomain(raw: string): string {
   let base = String(raw || '')
@@ -39,6 +41,23 @@ export function receiptPublicBase(_origin?: string): string {
 /** Build a public digital-receipt URL for a sale id */
 export function buildReceiptUrl(saleId: string, origin?: string): string {
   return `${receiptPublicBase(origin)}/${encodeURIComponent(saleId)}`;
+}
+
+/** Return the first ref that exists on the public receipt API (backend UUID preferred). */
+export async function resolvePublishedReceiptRef(
+  backendOrderId: string | null | undefined,
+  clientId: string
+): Promise<string | null> {
+  const candidates = [...new Set([backendOrderId, clientId].filter(Boolean))] as string[];
+  for (const ref of candidates) {
+    try {
+      await publicApi.get(`/receipts/${encodeURIComponent(ref)}`);
+      return ref;
+    } catch {
+      /* try next candidate */
+    }
+  }
+  return null;
 }
 
 /** External PNG QR (works in browser print without npm dep) */

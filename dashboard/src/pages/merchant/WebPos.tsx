@@ -57,7 +57,7 @@ import {
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
 } from '@/lib/webpos-print-relay';
-import { buildReceiptUrl } from '@/lib/qr';
+import { buildReceiptUrl, resolvePublishedReceiptRef } from '@/lib/qr';
 import {
   lineSignature,
   type ShopComboSelection,
@@ -4022,10 +4022,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     const backendOrderId = queuedOffline
       ? null
-      : pushRes?.data?.results?.find((r: { clientId?: string }) => r.clientId === clientId)
-          ?.orderId ||
-        pushRes?.data?.results?.[0]?.orderId ||
-        null;
+      : (() => {
+          const match = pushRes?.data?.results?.find(
+            (r: { clientId?: string; orderId?: string; skipped?: boolean }) =>
+              r.clientId === clientId
+          );
+          const first = pushRes?.data?.results?.[0];
+          const pick = (row?: { orderId?: string; skipped?: boolean }) =>
+            row?.orderId && !row.skipped ? row.orderId : null;
+          return pick(match) || pick(first) || null;
+        })();
 
     // Credit gift-card sell/reload lines after successful online persistence only
     if (!queuedOffline) {
@@ -4067,7 +4073,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       void flushOfflineOutbox();
     }
 
-    const receiptRef = queuedOffline ? null : backendOrderId || clientId;
+    const receiptRef = queuedOffline
+      ? null
+      : await resolvePublishedReceiptRef(backendOrderId, clientId);
     const receiptUrl = receiptRef ? buildReceiptUrl(receiptRef) : undefined;
     const lang = resolveReceiptLanguage(
       printSettings,

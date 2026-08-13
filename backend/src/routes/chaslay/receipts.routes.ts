@@ -73,9 +73,22 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
       },
     ]);
 
-    const orderId = pushResults[0]?.orderId || id;
-    const url = buildReceiptPublicUrl(orderId);
-    res.status(201).json({ id: orderId, clientId: id, url });
+    const pushed = pushResults[0];
+    if (!pushed?.orderId || pushed.skipped) {
+      return res.status(400).json({
+        error: "Receipt could not be saved (empty or invalid sale data)",
+      });
+    }
+
+    const order =
+      (await findOrderForReceipt(req.chaslayMerchantId!, pushed.orderId)) ||
+      (await findOrderForReceipt(req.chaslayMerchantId!, id));
+    if (!order) {
+      return res.status(502).json({ error: "Receipt publish failed — order not found after sync" });
+    }
+
+    const url = buildReceiptPublicUrl(order.id);
+    res.status(201).json({ id: order.id, clientId: id, url });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Receipt publish failed" });
   }

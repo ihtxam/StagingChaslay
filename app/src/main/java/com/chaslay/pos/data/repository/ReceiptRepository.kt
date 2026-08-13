@@ -117,8 +117,12 @@ class ReceiptRepository @Inject constructor(
         val response = receiptApi.publishReceipt(
             buildPublishRequest(transaction, items, settings, itemDiscountTotal)
         )
-        response.url?.takeIf { it.isNotBlank() }
-            ?: buildPublicUrl(transaction.id, settings)
+        val url = response.url?.takeIf { it.isNotBlank() }
+            ?: buildPublicUrl(
+                response.id?.takeIf { it.isNotBlank() } ?: transaction.id,
+                settings
+            )
+        url
     }.recoverCatching { error ->
         throw Exception(apiErrorMessage(error, "Could not upload receipt to server"), error)
     }

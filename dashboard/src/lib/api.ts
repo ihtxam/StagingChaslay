@@ -17,6 +17,18 @@ export const publicApi: AxiosInstance = axios.create({
   },
 });
 
+publicApi.interceptors.request.use((config) => {
+  const headers = config.headers as any;
+  if (headers && typeof headers.delete === 'function') {
+    headers.delete('Authorization');
+    headers.delete('authorization');
+  } else if (headers) {
+    delete headers.Authorization;
+    delete headers.authorization;
+  }
+  return config;
+});
+
 // Add token to requests; never force JSON Content-Type on FormData (breaks multer).
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
