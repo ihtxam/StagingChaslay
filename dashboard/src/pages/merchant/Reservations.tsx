@@ -1,44 +1,8 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import ReservationCancelModal from '@/components/reservations/ReservationCancelModal';
-
-type DayKey = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
-type HoursSlot = { open: string; close: string };
-type ChannelHours = Partial<Record<DayKey, HoursSlot[]>>;
-
-type ResSettings = {
-  dineInHoursMode: 'same_as_takeaway' | 'custom';
-  slotIntervalMinutes: number;
-  seatingDurationMinutes: number;
-  bufferMinutes: number;
-  minPartySize: number;
-  maxPartySize: number;
-  minHoursBefore: number;
-  maxDaysAhead: number;
-  autoAccept: boolean;
-  sendConfirmationEmail: boolean;
-  sendStatusEmails: boolean;
-  reminderEnabled: boolean;
-  reminderHoursBefore: number;
-  sendReminderEmail: boolean;
-  notifyAdminEmail: boolean;
-  dailySummaryEnabled: boolean;
-  maxCoversPerSlot: number | null;
-  policiesText: string | null;
-  slotDiscounts: Array<{
-    id: string;
-    name: string;
-    percentOff: number;
-    scheduleMode: 'specific_days' | 'whole_week';
-    daysOfWeek: string[];
-    timeStart?: string | null;
-    timeEnd?: string | null;
-    enabled?: boolean;
-  }>;
-};
 
 type Reservation = {
   id: string;
@@ -61,22 +25,6 @@ type Reservation = {
 
 type Table = { id: string; label: string; capacity: number; status: string; floorPlanName?: string };
 
-const DAYS: { key: DayKey; label: string }[] = [
-  { key: 'mon', label: 'Mon' },
-  { key: 'tue', label: 'Tue' },
-  { key: 'wed', label: 'Wed' },
-  { key: 'thu', label: 'Thu' },
-  { key: 'fri', label: 'Fri' },
-  { key: 'sat', label: 'Sat' },
-  { key: 'sun', label: 'Sun' },
-];
-
-function emptyWeek(): ChannelHours {
-  const w: ChannelHours = {};
-  for (const d of DAYS) w[d.key] = [{ open: '11:00', close: '14:00' }, { open: '17:00', close: '22:00' }];
-  return w;
-}
-
 function ymd(d = new Date()) {
   const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return z.toISOString().slice(0, 10);
@@ -90,20 +38,14 @@ function addDaysYmd(days: number) {
 
 export default function Reservations() {
   const { t, formatDate, formatDateTime, formatTime } = useI18n();
-  const [searchParams] = useSearchParams();
-  const [tab, setTab] = useState<'bookings' | 'settings'>(() =>
-    searchParams.get('tab') === 'settings' ? 'settings' : 'bookings'
-  );
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(false);
-  const [settings, setSettings] = useState<ResSettings | null>(null);
-  const [dineInHours, setDineInHours] = useState<ChannelHours>(emptyWeek());
+  const [maxDaysAhead, setMaxDaysAhead] = useState(30);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [bookingsScope, setBookingsScope] = useState<'today' | 'future'>('today');
   const [dateFilter, setDateFilter] = useState(ymd());
   const [statusFilter, setStatusFilter] = useState('all');
-  const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState<string | null>(null);
@@ -131,8 +73,7 @@ export default function Reservations() {
   const loadConfig = useCallback(async () => {
     const res = await api.get('/merchant/reservations/config');
     setEnabled(!!res.data.config?.enabled);
-    setSettings(res.data.config?.settings);
-    if (res.data.config?.hours) setDineInHours(res.data.config.hours);
+    setMaxDaysAhead(res.data.config?.settings?.maxDaysAhead || 30);
     setTables(res.data.tables || []);
   }, []);
 
@@ -145,7 +86,7 @@ export default function Reservations() {
     const to =
       bookingsScope === 'today'
         ? new Date(`${today}T23:59:59`)
-        : new Date(`${addDaysYmd(settings?.maxDaysAhead || 30)}T23:59:59`);
+        : new Date(`${addDaysYmd(maxDaysAhead)}T23:59:59`);
     const res = await api.get('/merchant/reservations', {
       params: {
         from: from.toISOString(),
@@ -154,7 +95,7 @@ export default function Reservations() {
       },
     });
     setReservations(res.data.reservations || []);
-  }, [bookingsScope, settings?.maxDaysAhead, statusFilter]);
+  }, [bookingsScope, maxDaysAhead, statusFilter]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -174,7 +115,7 @@ export default function Reservations() {
 
   useEffect(() => {
     if (!loading) void loadList().catch(() => undefined);
-  }, [bookingsScope, statusFilter, settings?.maxDaysAhead]);
+  }, [bookingsScope, statusFilter, maxDaysAhead]);
 
   const editing = useMemo(
     () => reservations.find((r) => r.id === editId) || null,
@@ -229,27 +170,6 @@ export default function Reservations() {
       await loadConfig();
     } catch (err: any) {
       toast.error(err.response?.data?.error || t('cmsSaveFailed'));
-    }
-  };
-
-  const saveSettings = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!settings) return;
-    setSaving(true);
-    try {
-      const res = await api.put('/merchant/reservations/config', {
-        enabled,
-        settings,
-        dineInHours: settings.dineInHoursMode === 'custom' ? dineInHours : undefined,
-      });
-      setEnabled(!!res.data.config?.enabled);
-      setSettings(res.data.config?.settings);
-      if (res.data.config?.hours) setDineInHours(res.data.config.hours);
-      toast.success(t('saved'));
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || t('cmsSaveFailed'));
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -313,7 +233,7 @@ export default function Reservations() {
     [reservations]
   );
 
-  if (loading || !settings) {
+  if (loading) {
     return <div className="p-4 text-sm muted">{t('loading')}</div>;
   }
 
@@ -324,453 +244,14 @@ export default function Reservations() {
           <h1 className="text-xl font-semibold">{t('reservationsTitle')}</h1>
           <p className="text-sm muted mt-1">{t('reservationsHint')}</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className={`rounded-lg px-3 py-2 text-sm ${tab === 'bookings' ? 'bg-slate-900 text-white' : 'border bg-white'}`}
-            onClick={() => setTab('bookings')}
-          >
-            {t('reservationsBookings')}
-            {pendingCount > 0 ? ` (${pendingCount})` : ''}
-          </button>
-          <button
-            type="button"
-            className={`rounded-lg px-3 py-2 text-sm ${tab === 'settings' ? 'bg-slate-900 text-white' : 'border bg-white'}`}
-            onClick={() => setTab('settings')}
-          >
-            {t('reservationsSettings')}
-          </button>
-        </div>
+        {pendingCount > 0 ? (
+          <span className="text-sm rounded-lg bg-amber-100 text-amber-900 px-3 py-2">
+            {t('reservationsPendingCount').replace('{n}', String(pendingCount))}
+          </span>
+        ) : null}
       </div>
 
-      {tab === 'settings' && (
-        <form onSubmit={saveSettings} className="space-y-4 rounded-md border border-[var(--border)] bg-[var(--bg)] p-4">
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-            {t('reservationsEnable')}
-          </label>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-sm block">
-              <span className="muted block mb-1">{t('reservationsHoursMode')}</span>
-              <select
-                className="input"
-                value={settings.dineInHoursMode}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    dineInHoursMode: e.target.value as ResSettings['dineInHoursMode'],
-                  })
-                }
-              >
-                <option value="same_as_takeaway">{t('reservationsSameAsTakeaway')}</option>
-                <option value="custom">{t('reservationsCustomHours')}</option>
-              </select>
-            </label>
-            <label className="text-sm block">
-              <span className="muted block mb-1">{t('reservationsSlotInterval')}</span>
-              <select
-                className="input"
-                value={settings.slotIntervalMinutes}
-                onChange={(e) =>
-                  setSettings({ ...settings, slotIntervalMinutes: Number(e.target.value) })
-                }
-              >
-                {[15, 30, 45, 60].map((n) => (
-                  <option key={n} value={n}>
-                    {n} min
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm block">
-              <span className="muted block mb-1">{t('reservationsSeatingDuration')}</span>
-              <input
-                type="number"
-                min={30}
-                max={360}
-                className="input"
-                value={settings.seatingDurationMinutes}
-                onChange={(e) =>
-                  setSettings({ ...settings, seatingDurationMinutes: Number(e.target.value) })
-                }
-              />
-            </label>
-            <label className="text-sm block">
-              <span className="muted block mb-1">{t('reservationsBuffer')}</span>
-              <input
-                type="number"
-                min={0}
-                max={120}
-                className="input"
-                value={settings.bufferMinutes}
-                onChange={(e) => setSettings({ ...settings, bufferMinutes: Number(e.target.value) })}
-              />
-            </label>
-            <label className="text-sm block">
-              <span className="muted block mb-1">{t('reservationsMinHoursBefore')}</span>
-              <input
-                type="number"
-                min={0}
-                max={72}
-                className="input"
-                value={settings.minHoursBefore}
-                onChange={(e) => setSettings({ ...settings, minHoursBefore: Number(e.target.value) })}
-              />
-            </label>
-            <label className="text-sm block">
-              <span className="muted block mb-1">{t('reservationsMaxDaysAhead')}</span>
-              <input
-                type="number"
-                min={1}
-                max={180}
-                className="input"
-                value={settings.maxDaysAhead}
-                onChange={(e) => setSettings({ ...settings, maxDaysAhead: Number(e.target.value) })}
-              />
-            </label>
-            <label className="text-sm block">
-              <span className="muted block mb-1">{t('reservationsMinParty')}</span>
-              <input
-                type="number"
-                min={1}
-                className="input"
-                value={settings.minPartySize}
-                onChange={(e) => setSettings({ ...settings, minPartySize: Number(e.target.value) })}
-              />
-            </label>
-            <label className="text-sm block">
-              <span className="muted block mb-1">{t('reservationsMaxParty')}</span>
-              <input
-                type="number"
-                min={1}
-                className="input"
-                value={settings.maxPartySize}
-                onChange={(e) => setSettings({ ...settings, maxPartySize: Number(e.target.value) })}
-              />
-            </label>
-            <label className="text-sm block">
-              <span className="muted block mb-1">{t('reservationsMaxCovers')}</span>
-              <input
-                type="number"
-                min={0}
-                className="input"
-                placeholder={t('reservationsMaxCoversAuto')}
-                value={settings.maxCoversPerSlot ?? ''}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    maxCoversPerSlot: e.target.value === '' ? null : Number(e.target.value),
-                  })
-                }
-              />
-            </label>
-          </div>
-
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.autoAccept}
-                onChange={(e) => setSettings({ ...settings, autoAccept: e.target.checked })}
-              />
-              {t('reservationsAutoAccept')}
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.sendConfirmationEmail}
-                onChange={(e) =>
-                  setSettings({ ...settings, sendConfirmationEmail: e.target.checked })
-                }
-              />
-              {t('reservationsSendConfirmEmail')}
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.notifyAdminEmail !== false}
-                onChange={(e) => setSettings({ ...settings, notifyAdminEmail: e.target.checked })}
-              />
-              Email restaurant (admin) on new / updated reservations
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.sendStatusEmails}
-                onChange={(e) => setSettings({ ...settings, sendStatusEmails: e.target.checked })}
-              />
-              {t('reservationsSendStatusEmails')}
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.reminderEnabled !== false}
-                onChange={(e) => setSettings({ ...settings, reminderEnabled: e.target.checked })}
-              />
-              Send reservation reminders by email
-            </label>
-            {settings.reminderEnabled !== false ? (
-              <label className="text-sm flex items-center gap-2 flex-wrap">
-                <span className="muted">Remind</span>
-                <input
-                  className="input !w-20"
-                  type="number"
-                  min={1}
-                  max={168}
-                  value={settings.reminderHoursBefore ?? 24}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      reminderHoursBefore: Number(e.target.value) || 24,
-                    })
-                  }
-                />
-                <span className="muted">hours before the booking</span>
-              </label>
-            ) : null}
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.dailySummaryEnabled !== false}
-                onChange={(e) =>
-                  setSettings({ ...settings, dailySummaryEnabled: e.target.checked })
-                }
-              />
-              Daily summary email at 10:00 (lunch & dinner for today)
-            </label>
-          </div>
-
-          <div className="space-y-3 border-t border-[var(--border)] pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-semibold">Off-peak / slot discounts</h3>
-                <p className="text-xs muted">
-                  Show “20% off” on reservation time slots (specific days or whole week, optional hours).
-                </p>
-              </div>
-              <button
-                type="button"
-                className="btn-secondary text-sm"
-                onClick={() =>
-                  setSettings({
-                    ...settings,
-                    slotDiscounts: [
-                      ...(settings.slotDiscounts || []),
-                      {
-                        id: `disc-${Date.now()}`,
-                        name: 'Off-peak 20%',
-                        percentOff: 20,
-                        scheduleMode: 'whole_week',
-                        daysOfWeek: [],
-                        timeStart: '13:00',
-                        timeEnd: '17:00',
-                        enabled: true,
-                      },
-                    ],
-                  })
-                }
-              >
-                Add discount
-              </button>
-            </div>
-            {(settings.slotDiscounts || []).map((d, idx) => (
-              <div
-                key={d.id}
-                className="rounded-lg border border-[var(--border)] p-3 space-y-2 bg-[var(--bg-muted)]/40"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                  <input
-                    className="input"
-                    value={d.name}
-                    onChange={(e) => {
-                      const next = [...(settings.slotDiscounts || [])];
-                      next[idx] = { ...d, name: e.target.value };
-                      setSettings({ ...settings, slotDiscounts: next });
-                    }}
-                    placeholder="Name"
-                  />
-                  <label className="text-sm flex items-center gap-1">
-                    <input
-                      className="input !w-20"
-                      type="number"
-                      min={1}
-                      max={90}
-                      value={d.percentOff}
-                      onChange={(e) => {
-                        const next = [...(settings.slotDiscounts || [])];
-                        next[idx] = { ...d, percentOff: Number(e.target.value) || 0 };
-                        setSettings({ ...settings, slotDiscounts: next });
-                      }}
-                    />
-                    % off
-                  </label>
-                  <select
-                    className="input"
-                    value={d.scheduleMode || 'specific_days'}
-                    onChange={(e) => {
-                      const next = [...(settings.slotDiscounts || [])];
-                      next[idx] = {
-                        ...d,
-                        scheduleMode: e.target.value as 'specific_days' | 'whole_week',
-                      };
-                      setSettings({ ...settings, slotDiscounts: next });
-                    }}
-                  >
-                    <option value="whole_week">Whole week</option>
-                    <option value="specific_days">Certain days</option>
-                  </select>
-                  <button
-                    type="button"
-                    className="btn-secondary text-sm"
-                    onClick={() =>
-                      setSettings({
-                        ...settings,
-                        slotDiscounts: (settings.slotDiscounts || []).filter((_, i) => i !== idx),
-                      })
-                    }
-                  >
-                    Remove
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2 items-center">
-                  <input
-                    type="time"
-                    className="input !w-auto"
-                    value={d.timeStart || ''}
-                    onChange={(e) => {
-                      const next = [...(settings.slotDiscounts || [])];
-                      next[idx] = { ...d, timeStart: e.target.value || null };
-                      setSettings({ ...settings, slotDiscounts: next });
-                    }}
-                  />
-                  <span>-</span>
-                  <input
-                    type="time"
-                    className="input !w-auto"
-                    value={d.timeEnd || ''}
-                    onChange={(e) => {
-                      const next = [...(settings.slotDiscounts || [])];
-                      next[idx] = { ...d, timeEnd: e.target.value || null };
-                      setSettings({ ...settings, slotDiscounts: next });
-                    }}
-                  />
-                  <span className="text-xs muted">Empty times = all open hours</span>
-                </div>
-                {d.scheduleMode !== 'whole_week' ? (
-                  <div className="flex flex-wrap gap-1">
-                    {DAYS.map((day) => {
-                      const on = (d.daysOfWeek || []).includes(day.key);
-                      return (
-                        <button
-                          key={day.key}
-                          type="button"
-                          className={`rounded-full px-2 py-0.5 text-[11px] border ${
-                            on
-                              ? 'bg-amber-700 text-white border-amber-700'
-                              : 'bg-white border-[var(--border)]'
-                          }`}
-                          onClick={() => {
-                            const days = new Set(d.daysOfWeek || []);
-                            if (on) days.delete(day.key);
-                            else days.add(day.key);
-                            const next = [...(settings.slotDiscounts || [])];
-                            next[idx] = { ...d, daysOfWeek: [...days] };
-                            setSettings({ ...settings, slotDiscounts: next });
-                          }}
-                        >
-                          {day.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-
-          <label className="text-sm block">
-            <span className="muted block mb-1">{t('reservationsPolicies')}</span>
-            <textarea
-              className="input min-h-24"
-              value={settings.policiesText || ''}
-              onChange={(e) => setSettings({ ...settings, policiesText: e.target.value || null })}
-            />
-          </label>
-
-          {settings.dineInHoursMode === 'custom' && (
-            <div className="space-y-2 border-t border-[var(--border)] pt-4">
-              <h3 className="text-sm font-semibold">{t('reservationsCustomHours')}</h3>
-              <p className="text-xs muted">{t('reservationsCustomHoursHint')}</p>
-              {DAYS.map((day) => (
-                <div key={day.key} className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="w-10 font-medium">{day.label}</span>
-                  {(dineInHours[day.key] || []).map((slot, idx) => (
-                    <span key={idx} className="flex items-center gap-1">
-                      <input
-                        type="time"
-                        className="input !w-auto"
-                        value={slot.open}
-                        onChange={(e) => {
-                          const next = { ...dineInHours };
-                          const slots = [...(next[day.key] || [])];
-                          slots[idx] = { ...slots[idx], open: e.target.value };
-                          next[day.key] = slots;
-                          setDineInHours(next);
-                        }}
-                      />
-                      <span>-</span>
-                      <input
-                        type="time"
-                        className="input !w-auto"
-                        value={slot.close}
-                        onChange={(e) => {
-                          const next = { ...dineInHours };
-                          const slots = [...(next[day.key] || [])];
-                          slots[idx] = { ...slots[idx], close: e.target.value };
-                          next[day.key] = slots;
-                          setDineInHours(next);
-                        }}
-                      />
-                    </span>
-                  ))}
-                  <button
-                    type="button"
-                    className="text-xs underline"
-                    onClick={() => {
-                      const next = { ...dineInHours };
-                      next[day.key] = [...(next[day.key] || []), { open: '18:00', close: '22:00' }];
-                      setDineInHours(next);
-                    }}
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs muted"
-                    onClick={() => {
-                      const next = { ...dineInHours };
-                      next[day.key] = [];
-                      setDineInHours(next);
-                    }}
-                  >
-                    {t('reservationsClosedDay')}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex justify-end">
-            <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? t('saving') : t('save')}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {tab === 'bookings' && (
-        <div className="space-y-4">
+      <div className="space-y-4">
           {!enabled && (
             <p className="text-sm rounded-md border border-amber-200 bg-amber-50 text-amber-900 px-3 py-2">
               {t('reservationsDisabledHint')}
@@ -1117,8 +598,7 @@ export default function Reservations() {
             onClose={() => setCancelOpen(null)}
             onConfirm={(reason) => void submitCancel(reason)}
           />
-        </div>
-      )}
+      </div>
     </div>
   );
 }

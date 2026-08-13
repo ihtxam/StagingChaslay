@@ -1,8 +1,11 @@
 import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import type { LucideIcon } from 'lucide-react';
 import {
   Building2,
+  CalendarClock,
+  Clock,
   CreditCard,
   Globe2,
   Languages,
@@ -10,15 +13,25 @@ import {
   Monitor,
   Percent,
   Printer,
+  Save,
   Search,
+  SlidersHorizontal,
   UtensilsCrossed,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { compressImageIfNeeded } from '@/lib/compress-image';
+import {
+  settingsDash,
+  SettingsField,
+  SettingsPageHeader,
+  SettingsReportCard,
+} from '@/components/settings/SettingsReportUi';
 import FloorPlan from './FloorPlan';
 import SettingsBusinessTab from './settings/SettingsBusinessTab';
+import SettingsHoursTab from './settings/SettingsHoursTab';
+import SettingsReservationsTab from './settings/SettingsReservationsTab';
 
 interface SettingsData {
   name: string;
@@ -178,6 +191,8 @@ type TabId =
   | 'taxes'
   | 'tables'
   | 'shop'
+  | 'hours'
+  | 'reservations'
   | 'pos'
   | 'payments'
   | 'receipt'
@@ -200,11 +215,9 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="block text-sm font-medium text-[var(--text)]">{label}</span>
+    <SettingsField label={label} hint={hint}>
       {children}
-      {hint ? <span className="block text-[11px] muted break-all">{hint}</span> : null}
-    </label>
+    </SettingsField>
   );
 }
 
@@ -215,6 +228,8 @@ function Section({
   id,
   highlight,
   dimmed,
+  icon: Icon = SlidersHorizontal,
+  accent = settingsDash.accent,
 }: {
   title: string;
   description?: string;
@@ -222,21 +237,42 @@ function Section({
   id?: string;
   highlight?: boolean;
   dimmed?: boolean;
+  icon?: LucideIcon;
+  accent?: string;
 }) {
   return (
-    <section
-      id={id}
-      data-settings-section={id}
-      className={`space-y-4 rounded-md transition-colors ${
-        highlight ? 'bg-[var(--bg-muted)] ring-2 ring-[var(--ring)] p-3 sm:p-4' : ''
-      } ${dimmed ? 'opacity-40' : ''}`}
-    >
-      <div>
-        <h2 className="text-base font-semibold tracking-tight">{title}</h2>
-        {description ? <p className="page-sub mt-1">{description}</p> : null}
-      </div>
-      {children}
-    </section>
+    <div className={`transition-opacity ${dimmed ? 'pointer-events-none opacity-40' : ''}`}>
+      <SettingsReportCard
+        id={id}
+        icon={Icon}
+        accent={accent}
+        title={title}
+        description={description}
+        highlight={highlight}
+      >
+        {children}
+      </SettingsReportCard>
+    </div>
+  );
+}
+
+function SettingsSaveBar({
+  saving,
+  label,
+  disabled,
+}: {
+  saving: boolean;
+  label?: string;
+  disabled?: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-muted)]/30 px-4 py-3">
+      <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={disabled ?? saving}>
+        <Save className="h-4 w-4" aria-hidden />
+        {saving ? t('saving') : label || t('save')}
+      </button>
+    </div>
   );
 }
 
@@ -337,6 +373,8 @@ export default function Settings() {
       if (q === 'taxes') return 'taxes';
       if (q === 'pos' || q === 'operations') return 'pos';
       if (q === 'shop') return 'shop';
+      if (q === 'hours') return 'hours';
+      if (q === 'reservations') return 'reservations';
       if (q === 'business') return 'business';
     } catch {
       /* ignore */
@@ -351,6 +389,8 @@ export default function Settings() {
         { id: 'taxes' as const, label: t('settingsTaxes'), icon: Percent },
         { id: 'tables' as const, label: t('settingsTables'), icon: UtensilsCrossed },
         { id: 'shop' as const, label: t('shop'), icon: Globe2 },
+        { id: 'hours' as const, label: t('settingsHours'), icon: Clock },
+        { id: 'reservations' as const, label: t('settingsReservations'), icon: CalendarClock },
         { id: 'pos' as const, label: t('settingsPos'), icon: Monitor },
         { id: 'payments' as const, label: t('settingsPayments'), icon: CreditCard },
         { id: 'receipt' as const, label: t('settingsReceipt'), icon: Printer },
@@ -516,6 +556,16 @@ export default function Settings() {
         id: 'shop-online',
         tab: 'shop',
         keywords: ['shop', 'online', 'domain', 'subdomain', t('shop')],
+      },
+      {
+        id: 'hours-schedule',
+        tab: 'hours',
+        keywords: ['hours', 'opening', 'pickup', 'delivery', 'dine', 'schedule', t('settingsHours')],
+      },
+      {
+        id: 'reservations-config',
+        tab: 'reservations',
+        keywords: ['reservations', 'booking', 'slots', t('settingsReservations'), t('reservationsEnable')],
       },
       {
         id: 'receipt-print',
@@ -962,7 +1012,17 @@ export default function Settings() {
 
           {tab === 'taxes' && (
             <form onSubmit={onSave} className="space-y-5">
-              <Section title={t('taxRates')} description={t('taxRatesHint')}>
+              <SettingsPageHeader
+                title={t('settingsTaxes')}
+                subtitle={t('taxRatesHint')}
+                action={
+                  <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={saving}>
+                    <Save className="h-4 w-4" aria-hidden />
+                    {saving ? t('saving') : t('save')}
+                  </button>
+                }
+              />
+              <Section icon={Percent} accent={settingsDash.warning} title={t('taxRates')} description={t('taxRatesHint')}>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label={`${t('defaultVatRate')} (%)`}>
                     <input
@@ -1002,7 +1062,7 @@ export default function Settings() {
                   </Field>
                 </div>
               </Section>
-              <Section title={t('taxPriceMode')} description={t('taxPriceModeHint')}>
+              <Section icon={Percent} accent={settingsDash.info} title={t('taxPriceMode')} description={t('taxPriceModeHint')}>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
                     className={`flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm ${
@@ -1044,17 +1104,23 @@ export default function Settings() {
                   </label>
                 </div>
               </Section>
-              <div className="flex justify-end border-t border-[var(--border)] pt-4">
-                <button type="submit" className="btn-primary" disabled={saving}>
-                  {saving ? t('saving') : t('save')}
-                </button>
-              </div>
+              <SettingsSaveBar saving={saving} />
             </form>
           )}
 
           {tab === 'shop' && (
             <form onSubmit={onSave} className="space-y-5">
-              <Section title={t('shop')} description={t('shopSettingsHint')}>
+              <SettingsPageHeader
+                title={t('shop')}
+                subtitle={t('shopSettingsHint')}
+                action={
+                  <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={saving}>
+                    <Save className="h-4 w-4" aria-hidden />
+                    {saving ? t('saving') : t('save')}
+                  </button>
+                }
+              />
+              <Section icon={Globe2} accent={settingsDash.info} title={t('shop')} description={t('shopSettingsHint')}>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-2.5 text-sm">
                   <input
                     type="checkbox"
@@ -1159,10 +1225,10 @@ export default function Settings() {
                   <p className="text-sm font-medium">{t('shopHoursNavTitle')}</p>
                   <p className="text-xs muted">{t('shopHoursNavHint')}</p>
                   <div className="flex flex-wrap gap-2">
-                    <Link to="/merchant/online-shop#shop-opening-hours" className="btn-secondary text-sm">
+                    <Link to="/merchant/settings?tab=hours" className="btn-secondary text-sm">
                       {t('shopHoursNavOpening')}
                     </Link>
-                    <Link to="/merchant/reservations?tab=settings" className="btn-secondary text-sm">
+                    <Link to="/merchant/settings?tab=reservations" className="btn-secondary text-sm">
                       {t('shopHoursNavReservations')}
                     </Link>
                     <Link to="/merchant/settings?tab=business#business-vacation" className="btn-secondary text-sm">
@@ -1179,6 +1245,10 @@ export default function Settings() {
               </div>
             </form>
           )}
+
+          {tab === 'hours' && <SettingsHoursTab />}
+
+          {tab === 'reservations' && <SettingsReservationsTab />}
 
           {tab === 'tables' && (
             <div className="space-y-5">

@@ -90,6 +90,7 @@ export const EDITION_ROUTE_FEATURES: Record<string, EditionFeatureKey[]> = {
   '/merchant/newsletter': ['online_shop'],
   '/merchant/online-shop': ['online_shop'],
   '/merchant/website': ['website_cms'],
+  '/merchant/sales/reservations': ['reservations'],
   '/merchant/reservations': ['reservations'],
   '/merchant/reports': ['reports'],
   '/merchant/users': ['staff_roles'],
