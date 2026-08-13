@@ -169,17 +169,75 @@ router.post("/terminal/poi", async (req: Request, res: Response) => {
           Number(amount),
           "terminal",
           result.reference || `terminal-${Date.now()}`,
-          "captured"
+          "captured",
+          {
+            poiTransactionTimestamp: result.poiTransactionTimestamp,
+            currency: currency || "CHF",
+          }
         );
       } catch (logErr) {
         console.warn("Terminal payment approved but transaction log failed:", logErr);
       }
     }
 
-    res.json({ success: result.status === "approved", result });
+    res.json({
+      success: result.status === "approved",
+      result: {
+        ...result,
+        customerReceipt: result.customerReceipt ?? null,
+        cashierReceipt: result.cashierReceipt ?? null,
+      },
+    });
   } catch (error) {
     console.error("Error processing terminal POI payment:", error);
     res.status(400).json({ error: error instanceof Error ? error.message : "Terminal payment failed" });
+  }
+});
+
+/**
+ * POST /api/payment/terminal/poi/refund
+ * Adyen Terminal API referenced refund (ReversalRequest) to customer's bank card.
+ */
+router.post("/terminal/poi/refund", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    const {
+      amount,
+      originalPoiTransactionId,
+      originalPoiTransactionTimestamp,
+      terminalId,
+      currency,
+    } = req.body;
+
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+    if (amount == null || Number(amount) <= 0) {
+      return res.status(400).json({ error: "Valid refund amount is required" });
+    }
+    if (!originalPoiTransactionId || !originalPoiTransactionTimestamp) {
+      return res.status(400).json({
+        error: "Original POI transaction id and timestamp are required for card refund",
+      });
+    }
+
+    const result = await AdyenTerminalPoiService.processTerminalRefund(
+      merchantId,
+      Number(amount),
+      {
+        terminalId,
+        currency: currency || "CHF",
+        originalPoiTransactionId: String(originalPoiTransactionId),
+        originalPoiTransactionTimestamp: String(originalPoiTransactionTimestamp),
+      }
+    );
+
+    res.json({ success: result.status === "approved", result });
+  } catch (error) {
+    console.error("Error processing terminal POI refund:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Terminal refund failed",
+    });
   }
 });
 

@@ -11,6 +11,10 @@ import {
   receiptLabels,
   type ReceiptLang,
 } from '@/lib/receipt-labels';
+import {
+  appendAdyenReceiptBlock,
+  type AdyenTerminalReceipt,
+} from '@/lib/adyen-receipt';
 
 /** Where the kitchen ticket was printed from */
 export type KitchenOrderSource = 'WEBPOS' | 'ONLINE' | 'POSAPP' | 'WAITERAPP';
@@ -171,6 +175,10 @@ export type WebPosReceipt = {
   footer?: string;
   showVat?: boolean;
   showStaff?: boolean;
+  /** Adyen terminal customer receipt appended below order receipt */
+  adyenCustomerReceipt?: AdyenTerminalReceipt | null;
+  /** Adyen terminal merchant/cashier receipt (printed after customer copy when set) */
+  adyenCashierReceipt?: AdyenTerminalReceipt | null;
 };
 
 function padLine(left: string, right: string, width: number): string {
@@ -409,7 +417,12 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
 
   r += formatReceiptMetaFooter(tx, L, locale, width) + '\n';
   const footer = (tx.footer || L.thankYou).trim();
-  r += footer + '\n\n\n';
+  r += footer + '\n';
+  r = appendAdyenReceiptBlock(r, tx.adyenCustomerReceipt, width);
+  if (tx.adyenCashierReceipt?.lines?.length) {
+    r = appendAdyenReceiptBlock(r, tx.adyenCashierReceipt, width);
+  }
+  r += '\n\n';
   return r;
 }
 

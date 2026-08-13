@@ -2875,7 +2875,10 @@ class PosViewModel @Inject constructor(
                         paymentMethod = resolvedMethod,
                         userId = userId,
                         userName = userName,
-                        cardReference = paymentResult.reference,
+                        cardReference = paymentResult.reference?.let { ref ->
+                            val ts = paymentResult.poiTimestamp?.trim().orEmpty()
+                            if (ts.isNotBlank()) "$ref|$ts" else ref
+                        },
                         tipAmount = checkout.tipAmount,
                         roundingAmount = roundingAmount,
                         checkoutDiscountPercent = checkout.discountPercent,

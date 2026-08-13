@@ -207,20 +207,27 @@ export class AdyenService {
     amount: number,
     paymentMethod: string,
     adyenReference: string,
-    status: "pending" | "captured" | "completed" | "failed"
+    status: "pending" | "captured" | "completed" | "failed",
+    opts?: { poiTransactionTimestamp?: string | null; currency?: string }
   ) {
     const db = getDb();
 
     try {
+      const poiTs = opts?.poiTransactionTimestamp
+        ? new Date(opts.poiTransactionTimestamp)
+        : null;
       const transaction = await db
         .insert(schema.paymentTransactions)
         .values({
           orderId,
           merchantId,
           amount: amount.toString(),
+          currency: opts?.currency || "CHF",
           paymentMethod,
           status: status === "completed" ? "captured" : status,
           adyenReference,
+          adyenPoiTransactionTs:
+            poiTs && !Number.isNaN(poiTs.getTime()) ? poiTs : null,
           completedAt: status === "pending" ? null : new Date(),
         })
         .returning();
@@ -239,7 +246,8 @@ export class AdyenService {
     amount: number,
     paymentMethod: string,
     adyenReference: string,
-    status: "pending" | "captured" | "completed" | "failed" = "captured"
+    status: "pending" | "captured" | "completed" | "failed" = "captured",
+    opts?: { poiTransactionTimestamp?: string | null; currency?: string }
   ) {
     const db = getDb();
     const ref = String(clientRef || "").trim();
@@ -264,7 +272,8 @@ export class AdyenService {
       amount,
       paymentMethod,
       adyenReference,
-      status
+      status,
+      opts
     );
   }
 

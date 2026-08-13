@@ -24,6 +24,10 @@ import {
   type WebPosReceipt,
 } from '@/lib/webpos-receipt';
 import {
+  normalizeAdyenTerminalReceipt,
+  type AdyenTerminalReceipt,
+} from '@/lib/adyen-receipt';
+import {
   normalizePosCheckoutSettings,
   type PosCheckoutSettings,
 } from '@/lib/pos-checkout';
@@ -448,6 +452,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [paymentPhase, setPaymentPhase] = useState<WebPosPaymentPhase>('processing');
   const [paymentMessage, setPaymentMessage] = useState('');
   const paymentAbortRef = useRef<AbortController | null>(null);
+  const terminalPaymentRef = useRef<{
+    reference: string;
+    poiTransactionTimestamp: string;
+    customerReceipt?: AdyenTerminalReceipt | null;
+    cashierReceipt?: AdyenTerminalReceipt | null;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [agentOk, setAgentOk] = useState(false);
@@ -3576,7 +3586,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     saleLines: CartLine[] = cart,
     saleTotals = activeSale.totals,
     splitMeta?: { masterOrderId?: string; splitCheckNumber?: number },
-    ticketMeta?: { display?: string | null; orderNumber?: string | null } | null
+    ticketMeta?: { display?: string | null; orderNumber?: string | null } | null,
+    terminalCapture?: {
+      reference: string;
+      poiTransactionTimestamp: string;
+      customerReceipt?: AdyenTerminalReceipt | null;
+      cashierReceipt?: AdyenTerminalReceipt | null;
+    } | null
   ) => {
     const saleTicketDisplay = ticketMeta?.display || ticketDisplay;
     const saleTabNumber = tabNumber;
@@ -3647,6 +3663,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       splitCheckNumber: splitMeta?.splitCheckNumber ?? null,
       ticketDisplay: saleTicketDisplay || undefined,
       tabNumber: saleTabNumber || undefined,
+      adyenReference: terminalCapture?.reference || undefined,
+      adyenPoiTransactionTimestamp: terminalCapture?.poiTransactionTimestamp || undefined,
+      adyenCustomerReceiptJson: terminalCapture?.customerReceipt
+        ? JSON.stringify(terminalCapture.customerReceipt)
+        : undefined,
+      adyenCashierReceiptJson: terminalCapture?.cashierReceipt
+        ? JSON.stringify(terminalCapture.cashierReceipt)
+        : undefined,
       notes: encodeOrderMetaNotes({
         existing: [
           roundingAmount
@@ -3769,7 +3793,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       saleLines,
       saleTotals,
       splitMeta,
-      ticket
+      ticket,
+      method === 'terminal' ? terminalPaymentRef.current : null
     );
 
     const offlineEligible =
@@ -3886,6 +3911,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       footer: printSettings?.receiptFooter,
       showVat: printSettings?.receiptShowVatTable !== false,
       showStaff: printSettings?.receiptShowStaffLine !== false,
+      adyenCustomerReceipt:
+        method === 'terminal'
+          ? terminalPaymentRef.current?.customerReceipt || null
+          : null,
+      adyenCashierReceipt:
+        method === 'terminal' ? terminalPaymentRef.current?.cashierReceipt || null : null,
     };
     const receiptText = generateWebPosReceiptText(receiptPayload, locale);
     setLastReceipt(receiptText);
@@ -3956,6 +3987,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setChannel(null);
       setMobileCartOpen(false);
       clearPersistedWebPosCarts();
+      terminalPaymentRef.current = null;
       setLastSplitReceipts([...splitReceiptsRef.current]);
     }
     setCheckoutExtras(null);
@@ -4178,10 +4210,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         { signal: abort.signal, timeout: 170_000 }
       );
 
-      const result = res.data.result as { status: string; message?: string; reference?: string };
+      const result = res.data.result as {
+        status: string;
+        message?: string;
+        reference?: string;
+        poiTransactionTimestamp?: string;
+        customerReceipt?: AdyenTerminalReceipt | null;
+        cashierReceipt?: AdyenTerminalReceipt | null;
+      };
       const approved = res.data.success === true || result.status === 'approved';
 
       if (approved) {
+        terminalPaymentRef.current = {
+          reference: String(result.reference || ''),
+          poiTransactionTimestamp: String(
+            result.poiTransactionTimestamp || new Date().toISOString()
+          ),
+          customerReceipt: normalizeAdyenTerminalReceipt(result.customerReceipt),
+          cashierReceipt: normalizeAdyenTerminalReceipt(result.cashierReceipt),
+        };
         closePaymentModal();
         await finalizeSale('terminal', clientId, whenOverride, extras, true);
         return;

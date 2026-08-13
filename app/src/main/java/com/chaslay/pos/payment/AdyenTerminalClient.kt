@@ -22,6 +22,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 sealed class AdyenTerminalResponse {
     data class Approved(
         val reference: String?,
+        val poiTimestamp: String? = null,
         val customerReceipt: AdyenTerminalReceipt? = null,
         val cashierReceipt: AdyenTerminalReceipt? = null
     ) : AdyenTerminalResponse()
@@ -488,15 +489,16 @@ class AdyenTerminalClient @Inject constructor() {
 
             when {
                 result.equals("Success", ignoreCase = true) -> {
-                    val transactionId = paymentResponse
+                    val poiTx = paymentResponse
                         .getAsJsonObject("POIData")
                         ?.getAsJsonObject("POITransactionID")
-                        ?.get("TransactionID")
-                        ?.asString
+                    val transactionId = poiTx?.get("TransactionID")?.asString
+                    val poiTimestamp = poiTx?.get("TimeStamp")?.asString
                     val (customerReceipt, cashierReceipt) =
                         AdyenPaymentReceiptParser.parsePaymentReceipts(paymentResponse)
                     AdyenTerminalResponse.Approved(
                         reference = transactionId,
+                        poiTimestamp = poiTimestamp,
                         customerReceipt = customerReceipt,
                         cashierReceipt = cashierReceipt
                     )
@@ -549,6 +551,171 @@ class AdyenTerminalClient @Inject constructor() {
                             "TimeStamp" to timestamp
                         ),
                         "SaleToAcquirerData" to "tenderOption=ReceiptHandler"
+                    ),
+                    "PaymentTransaction" to mapOf(
+                        "AmountsReq" to mapOf(
+                            "Currency" to currencyCode,
+                            "RequestedAmount" to requestedAmount
+                        )
+                    )
+                )
+            )
+        )
+        return gson.toJson(payload)
+    }
+
+    suspend fun sendRefundRequest(
+        amount: Double,
+        currencyCode: String,
+        settings: BusinessSettingsEntity,
+        originalTransactionId: String,
+        originalTimestamp: String
+    ): AdyenTerminalResponse = withContext(Dispatchers.IO) {
+        val validation = validateSettings(settings)
+        if (validation != null) {
+            return@withContext AdyenTerminalResponse.Error(validation)
+        }
+
+        val merchantAccount = settings.adyenMerchantAccount.trim()
+        val terminalId = normalizeTerminalId(settings.adyenTerminalId)
+        val apiKey = settings.adyenApiKey.trim()
+        val saleId = settings.adyenClientId.trim().ifBlank { "ChaslayPOS" }
+        val live = settings.adyenLiveEnvironment
+
+        val requestBody = buildReversalRequestBody(
+            amount = amount,
+            currencyCode = currencyCode.uppercase(),
+            saleId = saleId,
+            poiId = terminalId,
+            originalTransactionId = originalTransactionId,
+            originalTimestamp = originalTimestamp
+        )
+        val body = requestBody.toRequestBody(jsonMediaType)
+
+        if (settings.adyenUseLegacyEndpoint) {
+            return@withContext postReversalSync(apiKey, legacySyncUrl(live), body, triedLegacy = true)
+        }
+
+        val cloudUrl = cloudDeviceSyncUrl(live, settings.adyenLiveRegion, merchantAccount, terminalId)
+        val cloudResult = postReversalSync(apiKey, cloudUrl, body, triedLegacy = false)
+        if (cloudResult is AdyenTerminalResponse.Error && shouldRetryLegacy(cloudResult)) {
+            return@withContext postReversalSync(apiKey, legacySyncUrl(live), body, triedLegacy = true)
+        }
+        cloudResult
+    }
+
+    private fun postReversalSync(
+        apiKey: String,
+        url: String,
+        body: okhttp3.RequestBody,
+        triedLegacy: Boolean
+    ): AdyenTerminalResponse {
+        val request = Request.Builder()
+            .url(url)
+            .post(body)
+            .header("X-API-Key", apiKey)
+            .header("Content-Type", "application/json")
+            .build()
+
+        return try {
+            httpClient.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                Log.d(TAG, "Adyen reversal HTTP ${response.code}: ${responseBody.take(500)}")
+                if (!response.isSuccessful) {
+                    val apiError = parseAdyenApiError(responseBody)
+                    return AdyenTerminalResponse.Error(
+                        formatHttpError(response.code, apiError, triedLegacy)
+                    )
+                }
+                parseReversalResponse(responseBody)
+            }
+        } catch (e: IOException) {
+            AdyenTerminalResponse.Error("Network error: ${e.message ?: "Could not reach Adyen"}")
+        }
+    }
+
+    private fun parseReversalResponse(body: String): AdyenTerminalResponse {
+        if (body.isBlank()) {
+            return AdyenTerminalResponse.Error("Empty response from Adyen terminal.")
+        }
+        return runCatching {
+            val root = gson.fromJson(body, JsonObject::class.java)
+            val reversalResponse = root
+                .getAsJsonObject("SaleToPOIResponse")
+                ?.getAsJsonObject("ReversalResponse")
+                ?: return AdyenTerminalResponse.Error("Unexpected Adyen reversal response format.")
+
+            val responseNode = reversalResponse.getAsJsonObject("Response")
+                ?: return AdyenTerminalResponse.Error("Missing reversal response from terminal.")
+
+            val result = responseNode.get("Result")?.asString.orEmpty()
+            val errorCondition = responseNode.get("ErrorCondition")?.asString
+            val additionalResponse = responseNode.get("AdditionalResponse")?.asString
+
+            when {
+                result.equals("Success", ignoreCase = true) -> {
+                    val poiTx = reversalResponse
+                        .getAsJsonObject("POIData")
+                        ?.getAsJsonObject("POITransactionID")
+                    AdyenTerminalResponse.Approved(
+                        reference = poiTx?.get("TransactionID")?.asString,
+                        poiTimestamp = poiTx?.get("TimeStamp")?.asString
+                    )
+                }
+                result.equals("Failure", ignoreCase = true) &&
+                    errorCondition.equals("Cancel", ignoreCase = true) -> {
+                    AdyenTerminalResponse.Cancelled()
+                }
+                else -> {
+                    val message = buildString {
+                        append("Terminal refund failed")
+                        if (!errorCondition.isNullOrBlank()) append(": $errorCondition")
+                        if (!additionalResponse.isNullOrBlank()) append(" ($additionalResponse)")
+                    }
+                    AdyenTerminalResponse.Declined(message)
+                }
+            }
+        }.getOrElse {
+            AdyenTerminalResponse.Error("Could not parse Adyen reversal response.")
+        }
+    }
+
+    private fun buildReversalRequestBody(
+        amount: Double,
+        currencyCode: String,
+        saleId: String,
+        poiId: String,
+        originalTransactionId: String,
+        originalTimestamp: String
+    ): String {
+        val serviceId = generateServiceId()
+        val requestedAmount = "%.2f".format(amount).toDouble()
+        val payload = mapOf(
+            "SaleToPOIRequest" to mapOf(
+                "MessageHeader" to mapOf(
+                    "ProtocolVersion" to "3.0",
+                    "MessageClass" to "Service",
+                    "MessageCategory" to "Reversal",
+                    "MessageType" to "Request",
+                    "ServiceID" to serviceId,
+                    "SaleID" to saleId,
+                    "POIID" to poiId
+                ),
+                "ReversalRequest" to mapOf(
+                    "OriginalPOITransaction" to mapOf(
+                        "POITransactionID" to mapOf(
+                            "TransactionID" to originalTransactionId,
+                            "TimeStamp" to originalTimestamp
+                        )
+                    ),
+                    "ReversalReason" to "MerchantCancel",
+                    "ReversedAmount" to requestedAmount,
+                    "PaymentData" to mapOf("PaymentType" to "Normal"),
+                    "SaleData" to mapOf(
+                        "SaleTransactionID" to mapOf(
+                            "TransactionID" to UUID.randomUUID().toString().replace("-", "").take(16),
+                            "TimeStamp" to OffsetDateTime.now(ZoneOffset.UTC).format(timestampFormatter)
+                        )
                     ),
                     "PaymentTransaction" to mapOf(
                         "AmountsReq" to mapOf(

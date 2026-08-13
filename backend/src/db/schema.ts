@@ -280,6 +280,10 @@ export const merchants = pgTable(
     subscriptionPlan: varchar("subscription_plan", { length: 50 }).default("free"), // free, starter, professional, enterprise
     trialEndsAt: timestamp("trial_ends_at"),
     subscriptionEndsAt: timestamp("subscription_ends_at"),
+    /** Active billing interval for auto-renewal */
+    subscriptionBillingCycle: varchar("subscription_billing_cycle", { length: 20 }),
+    /** Adyen Checkout recurringDetailReference for platform subscription renewals */
+    adyenRecurringDetailReference: varchar("adyen_recurring_detail_reference", { length: 255 }),
     /** Owning reseller/agency (null = legacy unassigned) */
     resellerId: uuid("reseller_id").references(() => resellers.id, { onDelete: "set null" }),
     /** Assigned POS edition / feature pack (null = legacy full access) */
@@ -413,6 +417,8 @@ export const subscriptionPayments = pgTable(
     status: varchar("status", { length: 30 }).notNull().default("pending"), // pending | paid | failed | cancelled
     adyenSessionId: varchar("adyen_session_id", { length: 255 }),
     adyenPspReference: varchar("adyen_psp_reference", { length: 255 }),
+    adyenRecurringDetailReference: varchar("adyen_recurring_detail_reference", { length: 255 }),
+    isRecurring: boolean("is_recurring").default(false).notNull(),
     adyenResultCode: varchar("adyen_result_code", { length: 50 }),
     paidAt: timestamp("paid_at"),
     periodStart: timestamp("period_start"),
@@ -823,6 +829,12 @@ export const orders = pgTable(
     paymentMethod: varchar("payment_method", { length: 50 }), // cash, card, terminal, loyalty, online
     paymentStatus: varchar("payment_status", { length: 50 }), // pending, awaiting_payment, completed, failed
     adyenReference: varchar("adyen_reference", { length: 255 }),
+    /** Original Adyen POI transaction timestamp (required for terminal card refunds) */
+    adyenPoiTransactionTs: timestamp("adyen_poi_transaction_ts"),
+    /** Serialized Adyen Terminal API CustomerReceipt JSON */
+    adyenCustomerReceiptJson: text("adyen_customer_receipt_json"),
+    /** Serialized Adyen Terminal API CashierReceipt JSON */
+    adyenCashierReceiptJson: text("adyen_cashier_receipt_json"),
     notes: text("notes"),
     shippingAddress: text("shipping_address"),
     deliveryZoneId: uuid("delivery_zone_id"),
@@ -1383,6 +1395,7 @@ export const paymentTransactions = pgTable(
     currency: varchar("currency", { length: 3 }).default("USD").notNull(),
     paymentMethod: varchar("payment_method", { length: 50 }).notNull(), // card, cash, terminal
     adyenReference: varchar("adyen_reference", { length: 255 }),
+    adyenPoiTransactionTs: timestamp("adyen_poi_transaction_ts"),
     status: varchar("status", { length: 50 }).notNull(), // pending, authorized, captured, failed, refunded
     createdAt: timestamp("created_at").defaultNow().notNull(),
     completedAt: timestamp("completed_at"),

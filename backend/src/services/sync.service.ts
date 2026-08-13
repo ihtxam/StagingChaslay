@@ -102,6 +102,11 @@ export interface SyncSalePayload {
   masterOrderId?: string | null;
   /** 1-based split check number */
   splitCheckNumber?: number | null;
+  /** Adyen POI transaction id from terminal payment */
+  adyenReference?: string | null;
+  adyenPoiTransactionTimestamp?: string | null;
+  adyenCustomerReceiptJson?: string | null;
+  adyenCashierReceiptJson?: string | null;
   items: SyncSaleItem[];
 }
 
@@ -453,6 +458,19 @@ export class SyncService {
         total: total.toFixed(2),
         paymentMethod: isCancelled ? sale.paymentMethod || null : sale.paymentMethod,
         paymentStatus: payStatus,
+        adyenReference: sale.adyenReference ? String(sale.adyenReference).trim() : null,
+        adyenPoiTransactionTs: (() => {
+          if (
+            sale.adyenPoiTransactionTimestamp == null ||
+            !String(sale.adyenPoiTransactionTimestamp).trim()
+          ) {
+            return null;
+          }
+          const d = new Date(String(sale.adyenPoiTransactionTimestamp));
+          return Number.isNaN(d.getTime()) ? null : d;
+        })(),
+        adyenCustomerReceiptJson: sale.adyenCustomerReceiptJson || null,
+        adyenCashierReceiptJson: sale.adyenCashierReceiptJson || null,
         notes: encodeOrderMetaNotes({
           existing: sale.notes,
           ticketDisplay: sale.ticketDisplay,

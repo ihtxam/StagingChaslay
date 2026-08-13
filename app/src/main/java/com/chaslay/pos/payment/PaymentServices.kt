@@ -10,6 +10,7 @@ import javax.inject.Singleton
 sealed class PaymentResult {
     data class Success(
         val reference: String? = null,
+        val poiTimestamp: String? = null,
         val method: PaymentMethod,
         val adyenCustomerReceipt: AdyenTerminalReceipt? = null,
         val adyenCashierReceipt: AdyenTerminalReceipt? = null
@@ -78,6 +79,7 @@ class AdyenTerminalService @Inject constructor(
         return when (val response = adyenTerminalClient.sendPaymentRequest(amount, currencyCode, settings)) {
             is AdyenTerminalResponse.Approved -> PaymentResult.Success(
                 reference = response.reference,
+                poiTimestamp = response.poiTimestamp,
                 method = PaymentMethod.ADYEN_TERMINAL,
                 adyenCustomerReceipt = response.customerReceipt,
                 adyenCashierReceipt = response.cashierReceipt
@@ -112,6 +114,32 @@ class AdyenTerminalService @Inject constructor(
             android.util.Base64.NO_WRAP
         )
         adyenTerminalClient.sendDisplayReceipt(settings, base64)
+    }
+
+    suspend fun processRefund(
+        amount: Double,
+        currencyCode: String,
+        settings: BusinessSettingsEntity,
+        originalTransactionId: String,
+        originalTimestamp: String
+    ): PaymentResult {
+        return when (
+            val response = adyenTerminalClient.sendRefundRequest(
+                amount = amount,
+                currencyCode = currencyCode,
+                settings = settings,
+                originalTransactionId = originalTransactionId,
+                originalTimestamp = originalTimestamp
+            )
+        ) {
+            is AdyenTerminalResponse.Approved -> PaymentResult.Success(
+                reference = response.reference,
+                method = PaymentMethod.ADYEN_TERMINAL
+            )
+            is AdyenTerminalResponse.Cancelled -> PaymentResult.Cancelled
+            is AdyenTerminalResponse.Declined -> PaymentResult.Failure(response.message)
+            is AdyenTerminalResponse.Error -> PaymentResult.Failure(response.message)
+        }
     }
 }
 

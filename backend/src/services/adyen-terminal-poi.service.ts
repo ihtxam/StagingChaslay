@@ -1,12 +1,19 @@
 import axios from "axios";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import {
+  parsePaymentReceipts,
+  type AdyenTerminalReceipt,
+} from "@/lib/adyen-receipt";
 import { AdyenService } from "@/services/adyen.service";
 
 export type TerminalPoiResult = {
   status: "approved" | "declined" | "cancelled" | "error";
   message?: string;
   reference?: string | null;
+  poiTransactionTimestamp?: string | null;
+  customerReceipt?: AdyenTerminalReceipt | null;
+  cashierReceipt?: AdyenTerminalReceipt | null;
 };
 
 type AdyenApiError = {
@@ -14,6 +21,17 @@ type AdyenApiError = {
   detail?: string;
   requestId?: string;
   title?: string;
+};
+
+type TerminalContext = {
+  apiKey: string;
+  merchantAccount: string;
+  terminalId: string;
+  saleId: string;
+  live: boolean;
+  region: string;
+  useLegacy: boolean;
+  currency: string;
 };
 
 const REFUSAL_MESSAGES: Record<string, string> = {
@@ -174,6 +192,57 @@ function buildPaymentRequestBody(
   };
 }
 
+function buildReversalRequestBody(
+  amount: number,
+  currencyCode: string,
+  saleId: string,
+  poiId: string,
+  originalTransactionId: string,
+  originalTimestamp: string
+): Record<string, unknown> {
+  const serviceId = generateServiceId();
+  const requestedAmount = Math.round(amount * 100) / 100;
+
+  return {
+    SaleToPOIRequest: {
+      MessageHeader: {
+        ProtocolVersion: "3.0",
+        MessageClass: "Service",
+        MessageCategory: "Reversal",
+        MessageType: "Request",
+        ServiceID: serviceId,
+        SaleID: saleId,
+        POIID: poiId,
+      },
+      ReversalRequest: {
+        OriginalPOITransaction: {
+          POITransactionID: {
+            TransactionID: originalTransactionId,
+            TimeStamp: originalTimestamp,
+          },
+        },
+        ReversalReason: "MerchantCancel",
+        ReversedAmount: requestedAmount,
+        PaymentData: {
+          PaymentType: "Normal",
+        },
+        SaleData: {
+          SaleTransactionID: {
+            TransactionID: crypto.randomUUID().replace(/-/g, "").slice(0, 16),
+            TimeStamp: new Date().toISOString(),
+          },
+        },
+        PaymentTransaction: {
+          AmountsReq: {
+            Currency: currencyCode.toUpperCase(),
+            RequestedAmount: requestedAmount,
+          },
+        },
+      },
+    },
+  };
+}
+
 function parseAdyenApiError(body: string): AdyenApiError | null {
   if (!body?.trim()) return null;
   try {
@@ -226,6 +295,18 @@ function shouldRetryLegacy(message: string): boolean {
   );
 }
 
+function extractPoiTransactionId(paymentResponse: Record<string, unknown>): {
+  transactionId: string | null;
+  timestamp: string | null;
+} {
+  const poiData = paymentResponse.POIData as Record<string, unknown> | undefined;
+  const poiTx = poiData?.POITransactionID as Record<string, unknown> | undefined;
+  const transactionId =
+    typeof poiTx?.TransactionID === "string" ? poiTx.TransactionID : null;
+  const timestamp = typeof poiTx?.TimeStamp === "string" ? poiTx.TimeStamp : null;
+  return { transactionId, timestamp };
+}
+
 function parsePaymentResponse(body: string): TerminalPoiResult {
   if (!body?.trim()) {
     return { status: "error", message: "Empty response from Adyen terminal." };
@@ -253,11 +334,14 @@ function parsePaymentResponse(body: string): TerminalPoiResult {
         : undefined;
 
     if (result.toLowerCase() === "success") {
-      const poiData = paymentResponse.POIData as Record<string, unknown> | undefined;
-      const txId = (poiData?.POITransactionID as Record<string, unknown> | undefined)?.TransactionID;
+      const { transactionId, timestamp } = extractPoiTransactionId(paymentResponse);
+      const { customer, cashier } = parsePaymentReceipts(paymentResponse);
       return {
         status: "approved",
-        reference: typeof txId === "string" ? txId : null,
+        reference: transactionId,
+        poiTransactionTimestamp: timestamp,
+        customerReceipt: customer,
+        cashierReceipt: cashier,
       };
     }
 
@@ -280,11 +364,69 @@ function parsePaymentResponse(body: string): TerminalPoiResult {
   }
 }
 
+function parseReversalResponse(body: string): TerminalPoiResult {
+  if (!body?.trim()) {
+    return { status: "error", message: "Empty response from Adyen terminal." };
+  }
+
+  try {
+    const root = JSON.parse(body) as Record<string, unknown>;
+    const reversalResponse = (root.SaleToPOIResponse as Record<string, unknown> | undefined)
+      ?.ReversalResponse as Record<string, unknown> | undefined;
+    if (!reversalResponse) {
+      return { status: "error", message: "Unexpected Adyen reversal response format." };
+    }
+
+    const responseNode = reversalResponse.Response as Record<string, unknown> | undefined;
+    if (!responseNode) {
+      return { status: "error", message: "Missing reversal response from terminal." };
+    }
+
+    const result = String(responseNode.Result || "");
+    const errorCondition =
+      typeof responseNode.ErrorCondition === "string" ? responseNode.ErrorCondition : undefined;
+    const additionalResponse =
+      typeof responseNode.AdditionalResponse === "string"
+        ? responseNode.AdditionalResponse
+        : undefined;
+
+    if (result.toLowerCase() === "success") {
+      const { transactionId, timestamp } = extractPoiTransactionId(reversalResponse);
+      const { customer, cashier } = parsePaymentReceipts(reversalResponse);
+      return {
+        status: "approved",
+        reference: transactionId,
+        poiTransactionTimestamp: timestamp,
+        customerReceipt: customer,
+        cashierReceipt: cashier,
+      };
+    }
+
+    if (
+      result.toLowerCase() === "failure" &&
+      errorCondition?.toLowerCase() === "cancel"
+    ) {
+      return {
+        status: "cancelled",
+        message: friendlyTerminalPaymentMessage(errorCondition, additionalResponse),
+      };
+    }
+
+    return {
+      status: "declined",
+      message: friendlyTerminalPaymentMessage(errorCondition, additionalResponse),
+    };
+  } catch {
+    return { status: "error", message: "Could not parse Adyen reversal response." };
+  }
+}
+
 async function postSync(
   apiKey: string,
   url: string,
   body: Record<string, unknown>,
-  triedLegacy: boolean
+  triedLegacy: boolean,
+  parseFn: (body: string) => TerminalPoiResult = parsePaymentResponse
 ): Promise<TerminalPoiResult> {
   try {
     const response = await axios.post(url, body, {
@@ -307,7 +449,7 @@ async function postSync(
       };
     }
 
-    return parsePaymentResponse(responseBody);
+    return parseFn(responseBody);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Could not reach Adyen";
     return { status: "error", message: `Network error: ${msg}` };
@@ -323,54 +465,127 @@ function looksLikeClientKey(key: string): boolean {
   );
 }
 
+async function resolveTerminalContext(
+  merchantId: string,
+  opts: { terminalId?: string; currency?: string } = {}
+): Promise<TerminalContext | TerminalPoiResult> {
+  const creds = await AdyenService.resolveCredentials(merchantId, opts.terminalId);
+  const db = getDb();
+  const merchant = await db.query.merchants.findFirst({
+    where: eq(schema.merchants.id, merchantId),
+  });
+
+  const apiKey = creds.apiKey?.trim() || "";
+  const merchantAccount = creds.merchantAccount?.trim() || "";
+  const terminalId = String(creds.terminalId || opts.terminalId || "").trim();
+  const saleId = creds.clientId?.trim() || "ChaslayWebPOS";
+  const live = !!merchant?.adyenLiveEnvironment;
+  const region = merchant?.adyenLiveRegion || "EU";
+  const useLegacy = !!merchant?.adyenUseLegacyEndpoint;
+  const currency = String(opts.currency || "CHF").toUpperCase();
+
+  if (!apiKey) return { status: "error", message: "Adyen API key not configured" };
+  if (!merchantAccount) return { status: "error", message: "Adyen merchant account not configured" };
+  if (!terminalId) {
+    return {
+      status: "error",
+      message: "Adyen terminal ID not configured (POIID, e.g. V400m-324688179)",
+    };
+  }
+  if (looksLikeClientKey(apiKey)) {
+    return {
+      status: "error",
+      message:
+        "This looks like an Adyen client key, not a Web service API key. Use a Web service API key with the Cloud Device API role.",
+    };
+  }
+
+  return {
+    apiKey,
+    merchantAccount,
+    terminalId,
+    saleId,
+    live,
+    region,
+    useLegacy,
+    currency,
+  };
+}
+
+async function executeSync(
+  ctx: TerminalContext,
+  body: Record<string, unknown>,
+  parseFn: (body: string) => TerminalPoiResult
+): Promise<TerminalPoiResult> {
+  if (ctx.useLegacy) {
+    return postSync(ctx.apiKey, legacySyncUrl(ctx.live), body, true, parseFn);
+  }
+
+  const cloudUrl = cloudDeviceSyncUrl(
+    ctx.live,
+    ctx.region,
+    ctx.merchantAccount,
+    ctx.terminalId
+  );
+  const cloudResult = await postSync(ctx.apiKey, cloudUrl, body, false, parseFn);
+  if (cloudResult.status === "error" && shouldRetryLegacy(cloudResult.message || "")) {
+    return postSync(ctx.apiKey, legacySyncUrl(ctx.live), body, true, parseFn);
+  }
+  return cloudResult;
+}
+
 export class AdyenTerminalPoiService {
   static async processTerminalPayment(
     merchantId: string,
     amount: number,
     opts: { terminalId?: string; currency?: string } = {}
   ): Promise<TerminalPoiResult> {
-    const creds = await AdyenService.resolveCredentials(merchantId, opts.terminalId);
-    const db = getDb();
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-    });
+    const ctxOrErr = await resolveTerminalContext(merchantId, opts);
+    if ("status" in ctxOrErr) return ctxOrErr;
 
-    const apiKey = creds.apiKey?.trim() || "";
-    const merchantAccount = creds.merchantAccount?.trim() || "";
-    const terminalId = String(creds.terminalId || opts.terminalId || "").trim();
-    const saleId = creds.clientId?.trim() || "ChaslayWebPOS";
-    const live = !!merchant?.adyenLiveEnvironment;
-    const region = merchant?.adyenLiveRegion || "EU";
-    const useLegacy = !!merchant?.adyenUseLegacyEndpoint;
-    const currency = String(opts.currency || "CHF").toUpperCase();
+    const body = buildPaymentRequestBody(
+      amount,
+      ctxOrErr.currency,
+      ctxOrErr.saleId,
+      ctxOrErr.terminalId
+    );
+    return executeSync(ctxOrErr, body, parsePaymentResponse);
+  }
 
-    if (!apiKey) return { status: "error", message: "Adyen API key not configured" };
-    if (!merchantAccount) return { status: "error", message: "Adyen merchant account not configured" };
-    if (!terminalId) {
+  /**
+   * Referenced POI refund (ReversalRequest) — returns funds to the customer's bank card.
+   * Supports partial and full refunds when original POI transaction id + timestamp are known.
+   */
+  static async processTerminalRefund(
+    merchantId: string,
+    amount: number,
+    opts: {
+      terminalId?: string;
+      currency?: string;
+      originalPoiTransactionId: string;
+      originalPoiTransactionTimestamp: string;
+    }
+  ): Promise<TerminalPoiResult> {
+    const ctxOrErr = await resolveTerminalContext(merchantId, opts);
+    if ("status" in ctxOrErr) return ctxOrErr;
+
+    const originalId = String(opts.originalPoiTransactionId || "").trim();
+    const originalTs = String(opts.originalPoiTransactionTimestamp || "").trim();
+    if (!originalId || !originalTs) {
       return {
         status: "error",
-        message: "Adyen terminal ID not configured (POIID, e.g. V400m-324688179)",
-      };
-    }
-    if (looksLikeClientKey(apiKey)) {
-      return {
-        status: "error",
-        message:
-          "This looks like an Adyen client key, not a Web service API key. Use a Web service API key with the Cloud Device API role.",
+        message: "Original Adyen POI transaction reference is missing for card refund.",
       };
     }
 
-    const body = buildPaymentRequestBody(amount, currency, saleId, terminalId);
-
-    if (useLegacy) {
-      return postSync(apiKey, legacySyncUrl(live), body, true);
-    }
-
-    const cloudUrl = cloudDeviceSyncUrl(live, region, merchantAccount, terminalId);
-    const cloudResult = await postSync(apiKey, cloudUrl, body, false);
-    if (cloudResult.status === "error" && shouldRetryLegacy(cloudResult.message || "")) {
-      return postSync(apiKey, legacySyncUrl(live), body, true);
-    }
-    return cloudResult;
+    const body = buildReversalRequestBody(
+      amount,
+      ctxOrErr.currency,
+      ctxOrErr.saleId,
+      ctxOrErr.terminalId,
+      originalId,
+      originalTs
+    );
+    return executeSync(ctxOrErr, body, parseReversalResponse);
   }
 }

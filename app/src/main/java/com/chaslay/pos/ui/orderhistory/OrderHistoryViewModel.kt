@@ -61,6 +61,7 @@ class OrderHistoryViewModel @Inject constructor(
     private val heldOrderRepository: HeldOrderRepository,
     private val settingsRepository: com.chaslay.pos.data.repository.SettingsRepository,
     private val printerService: com.chaslay.pos.printer.BluetoothPrinterService,
+    private val adyenTerminalService: com.chaslay.pos.payment.AdyenTerminalService,
     private val tableDao: RestaurantTableDao,
     private val sessionManager: SessionManager
 ) : ViewModel() {
@@ -237,8 +238,67 @@ class OrderHistoryViewModel @Inject constructor(
         itemRefunds: List<Pair<Long, Int>> = emptyList(),
         reason: String? = null
     ) {
-        val orderId = _uiState.value.selectedOrder?.id ?: return
+        val order = _uiState.value.selectedOrder ?: return
+        val orderId = order.id
         viewModelScope.launch {
+            val settings = settingsRepository.getSettings()
+            val refundAmount = when {
+                fullRefund -> (order.total - order.refundAmount.coerceAtLeast(0.0)).coerceAtLeast(0.0)
+                itemRefunds.isNotEmpty() -> {
+                    val items = transactionRepository.getTransaction(orderId)?.second.orEmpty()
+                    var sum = 0.0
+                    for ((itemId, qty) in itemRefunds) {
+                        val item = items.find { it.id == itemId } ?: continue
+                        val left = (item.quantity - item.refundedQuantity).coerceAtLeast(0)
+                        val take = qty.coerceIn(0, left)
+                        if (take <= 0) continue
+                        val unit = if (item.quantity > 0) item.lineTotal / item.quantity else 0.0
+                        sum += unit * take
+                    }
+                    sum
+                }
+                else -> amount
+            }
+
+            if (
+                order.paymentMethod == PaymentMethod.ADYEN_TERMINAL &&
+                settings.adyenTerminalEnabled &&
+                refundAmount > 0.0
+            ) {
+                val (poiId, poiTs) = parsePoiCardReference(order.cardReference)
+                if (poiId.isNullOrBlank() || poiTs.isNullOrBlank()) {
+                    _uiState.value = _uiState.value.copy(
+                        message = "Cannot refund to card: missing Adyen terminal reference on this order."
+                    )
+                    return@launch
+                }
+                when (
+                    val terminalResult = adyenTerminalService.processRefund(
+                        amount = refundAmount,
+                        currencyCode = order.currencyCode,
+                        settings = settings,
+                        originalTransactionId = poiId,
+                        originalTimestamp = poiTs
+                    )
+                ) {
+                    is com.chaslay.pos.payment.PaymentResult.Failure -> {
+                        _uiState.value = _uiState.value.copy(
+                            showRefundDialog = false,
+                            message = terminalResult.message
+                        )
+                        return@launch
+                    }
+                    is com.chaslay.pos.payment.PaymentResult.Cancelled -> {
+                        _uiState.value = _uiState.value.copy(
+                            showRefundDialog = false,
+                            message = "Terminal refund cancelled"
+                        )
+                        return@launch
+                    }
+                    else -> Unit
+                }
+            }
+
             transactionRepository.refundOrder(
                 transactionId = orderId,
                 amount = amount,
@@ -255,6 +315,12 @@ class OrderHistoryViewModel @Inject constructor(
             )
             refresh()
         }
+    }
+
+    private fun parsePoiCardReference(ref: String?): Pair<String?, String?> {
+        if (ref.isNullOrBlank()) return null to null
+        val parts = ref.split("|", limit = 2)
+        return if (parts.size == 2) parts[0].trim() to parts[1].trim() else ref.trim() to null
     }
 
     fun requestDeleteOrder(order: TransactionEntity) {

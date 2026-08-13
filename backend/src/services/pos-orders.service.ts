@@ -10,6 +10,10 @@ import { roundMoney2 } from "@/lib/money";
 import { zurichDayBounds } from "@/lib/vacation";
 import { resolveOrderItemName } from "@/lib/order-item-name";
 import { GiftCardService } from "@/services/gift-card.service";
+import { AdyenTerminalPoiService } from "@/services/adyen-terminal-poi.service";
+import { AdyenService } from "@/services/adyen.service";
+
+const TERMINAL_REFUND_METHODS = new Set(["terminal", "card", "adyen_terminal", "adyen-terminal"]);
 
 const COMPLETED_STATUSES = new Set(["completed", "partially_refunded"]);
 const BLOCKED_CANCEL_STATUSES = new Set([
@@ -304,6 +308,72 @@ export class PosOrdersService {
     if (refund > remaining + 0.001) throw new Error("Refund exceeds remaining amount");
     if (refund <= 0) throw new Error("Invalid refund amount");
 
+    const paymentMethod = String(order.paymentMethod || "").toLowerCase();
+    const needsTerminalRefund = TERMINAL_REFUND_METHODS.has(paymentMethod);
+    let terminalRefundRef: string | null = null;
+
+    if (needsTerminalRefund) {
+      let poiTxId = String(order.adyenReference || "").trim();
+      let poiTs =
+        order.adyenPoiTransactionTs instanceof Date
+          ? order.adyenPoiTransactionTs.toISOString()
+          : order.adyenPoiTransactionTs
+            ? String(order.adyenPoiTransactionTs)
+            : "";
+
+      if (!poiTxId || !poiTs) {
+        const captureTx = await db.query.paymentTransactions.findFirst({
+          where: and(
+            eq(schema.paymentTransactions.orderId, orderId),
+            eq(schema.paymentTransactions.merchantId, merchantId)
+          ),
+          orderBy: [desc(schema.paymentTransactions.createdAt)],
+        });
+        poiTxId = String(captureTx?.adyenReference || poiTxId).trim();
+        poiTs =
+          captureTx?.adyenPoiTransactionTs instanceof Date
+            ? captureTx.adyenPoiTransactionTs.toISOString()
+            : captureTx?.adyenPoiTransactionTs
+              ? String(captureTx.adyenPoiTransactionTs)
+              : poiTs;
+      }
+
+      if (!poiTxId || !poiTs) {
+        throw new Error(
+          "Cannot refund to card: original Adyen terminal transaction reference is missing on this order."
+        );
+      }
+
+      const terminalResult = await AdyenTerminalPoiService.processTerminalRefund(
+        merchantId,
+        refund,
+        {
+          originalPoiTransactionId: poiTxId,
+          originalPoiTransactionTimestamp: poiTs,
+          currency: "CHF",
+        }
+      );
+      if (terminalResult.status !== "approved") {
+        throw new Error(
+          terminalResult.message || `Adyen terminal refund failed (${terminalResult.status})`
+        );
+      }
+      terminalRefundRef = terminalResult.reference || poiTxId;
+
+      try {
+        await AdyenService.recordPaymentTransaction(
+          merchantId,
+          orderId,
+          -refund,
+          "refund",
+          terminalRefundRef || `refund-${Date.now()}`,
+          "completed"
+        );
+      } catch (logErr) {
+        console.warn("Terminal refund approved but transaction log failed:", logErr);
+      }
+    }
+
     const newRefundTotal = roundMoney2(already + refund);
     const fully = newRefundTotal >= total - 0.001;
 
@@ -360,6 +430,9 @@ export class PosOrdersService {
       refunded: refund,
       refundTotal: newRefundTotal,
       reason: reasonText,
+      terminalRefund: needsTerminalRefund
+        ? { approved: true, reference: terminalRefundRef }
+        : undefined,
     };
   }
 

@@ -28,6 +28,7 @@ import resellerRoutes from "@/routes/reseller.routes";
 import { ensureUploadsRoot } from "@/services/media-upload.service";
 import { MarketingService } from "@/services/marketing.service";
 import { ReservationService } from "@/services/reservation.service";
+import { SubscriptionBillingService } from "@/services/subscription-billing.service";
 
 // Load environment variables
 dotenv.config();
@@ -219,6 +220,16 @@ app.listen(PORT, () => {
       }
     } catch (error) {
       console.error("[report-email] scheduled job failed", error);
+    }
+    try {
+      const result = await SubscriptionBillingService.processRecurringRenewals();
+      if (result.charged > 0 || result.failed > 0) {
+        console.log(
+          `[subscription] recurring renewals: charged=${result.charged} failed=${result.failed}`
+        );
+      }
+    } catch (error) {
+      console.error("[subscription] recurring renewal job failed", error);
     }
   };
   setTimeout(() => void tick(), 45_000);

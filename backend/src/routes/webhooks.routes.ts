@@ -21,6 +21,10 @@ router.post("/adyen/subscription", async (req: Request, res: Response) => {
         const pspReference = n.pspReference || n.PspReference;
         const merchantReference = String(n.merchantReference || n.MerchantReference || "");
         const additionalData = n.additionalData || n.AdditionalData || {};
+        const recurringDetailReference =
+          additionalData["recurring.recurringDetailReference"] ||
+          additionalData.recurringDetailReference ||
+          additionalData["tokenization.storedPaymentMethodId"];
         const paymentId =
           additionalData.paymentId ||
           additionalData.metadata_paymentId ||
@@ -33,6 +37,17 @@ router.post("/adyen/subscription", async (req: Request, res: Response) => {
             sessionId,
             resultCode: "Authorised",
             pspReference,
+            recurringDetailReference,
+          });
+        }
+
+        if (eventCode === "RECURRING_CONTRACT" && success && recurringDetailReference) {
+          await SubscriptionBillingService.markPaidFromWebhook({
+            paymentId,
+            sessionId,
+            resultCode: "Authorised",
+            pspReference,
+            recurringDetailReference,
           });
         }
       }

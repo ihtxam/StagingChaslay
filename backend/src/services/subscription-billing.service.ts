@@ -1,5 +1,5 @@
 import axios from "axios";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, lte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import {
   PlatformSettingsService,
@@ -164,6 +164,9 @@ export class SubscriptionBillingService {
         countryCode: "CH",
         shopperReference: merchantId,
         clientKey: creds.clientKey,
+        storePaymentMethod: true,
+        recurringProcessingModel: "Subscription",
+        shopperInteraction: "Ecommerce",
         metadata: {
           type: "subscription",
           paymentId: payment!.id,
@@ -236,7 +239,11 @@ export class SubscriptionBillingService {
   static async confirmPayment(
     merchantId: string,
     paymentId: string,
-    opts?: { resultCode?: string; pspReference?: string }
+    opts?: {
+      resultCode?: string;
+      pspReference?: string;
+      recurringDetailReference?: string;
+    }
   ) {
     const db = getDb();
     const payment = await db.query.subscriptionPayments.findFirst({
@@ -278,6 +285,8 @@ export class SubscriptionBillingService {
         status: "paid",
         adyenResultCode: resultCode,
         adyenPspReference: opts?.pspReference || payment.adyenPspReference,
+        adyenRecurringDetailReference:
+          opts?.recurringDetailReference || payment.adyenRecurringDetailReference,
         paidAt: new Date(),
         periodStart,
         periodEnd,
@@ -288,14 +297,21 @@ export class SubscriptionBillingService {
 
     const planSlug = payment.plan?.slug;
     if (planSlug) {
+      const merchantPatch: Record<string, unknown> = {
+        subscriptionPlan: planSlug,
+        subscriptionEndsAt: periodEnd,
+        subscriptionBillingCycle: payment.billingCycle,
+        status: "active",
+        updatedAt: new Date(),
+      };
+      const recurringRef =
+        opts?.recurringDetailReference || payment.adyenRecurringDetailReference;
+      if (recurringRef) {
+        merchantPatch.adyenRecurringDetailReference = recurringRef;
+      }
       await db
         .update(schema.merchants)
-        .set({
-          subscriptionPlan: planSlug,
-          subscriptionEndsAt: periodEnd,
-          status: "active",
-          updatedAt: new Date(),
-        })
+        .set(merchantPatch as typeof schema.merchants.$inferInsert)
         .where(eq(schema.merchants.id, merchantId));
     }
 
@@ -308,6 +324,7 @@ export class SubscriptionBillingService {
     paymentId?: string;
     resultCode?: string;
     pspReference?: string;
+    recurringDetailReference?: string;
   }) {
     const db = getDb();
     let payment = null as typeof schema.subscriptionPayments.$inferSelect | null;
@@ -331,7 +348,150 @@ export class SubscriptionBillingService {
       await this.confirmPayment(payment.merchantId, payment.id, {
         resultCode: opts.resultCode,
         pspReference: opts.pspReference,
+        recurringDetailReference: opts.recurringDetailReference,
       })
     ).payment;
+  }
+
+  /**
+   * Charge merchants whose subscription period has ended using stored Adyen token.
+   * Called hourly from backend scheduler.
+   */
+  static async processRecurringRenewals() {
+    const db = getDb();
+    const now = new Date();
+    const dueMerchants = await db.query.merchants.findMany({
+      where: and(
+        eq(schema.merchants.status, "active"),
+        lte(schema.merchants.subscriptionEndsAt, now)
+      ),
+    });
+
+    let charged = 0;
+    let failed = 0;
+
+    for (const merchant of dueMerchants) {
+      const token = String(merchant.adyenRecurringDetailReference || "").trim();
+      const cycle = (merchant.subscriptionBillingCycle === "yearly"
+        ? "yearly"
+        : "monthly") as BillingCycle;
+      if (!token) {
+        await db
+          .update(schema.merchants)
+          .set({ status: "expired", updatedAt: new Date() })
+          .where(eq(schema.merchants.id, merchant.id));
+        failed += 1;
+        continue;
+      }
+
+      const plan =
+        (await SubscriptionPlansService.getBySlug(merchant.subscriptionPlan || "free")) || null;
+      if (!plan || !plan.isActive) {
+        failed += 1;
+        continue;
+      }
+
+      const amount = planAmount(plan, cycle);
+      if (!amount || amount <= 0) {
+        const periodEnd = addMonths(now, cycle === "yearly" ? 12 : 1);
+        await db
+          .update(schema.merchants)
+          .set({ subscriptionEndsAt: periodEnd, updatedAt: new Date() })
+          .where(eq(schema.merchants.id, merchant.id));
+        continue;
+      }
+
+      try {
+        await this.chargeStoredSubscription(merchant.id, plan.id, cycle, token, amount);
+        charged += 1;
+      } catch (err) {
+        console.error(`Recurring subscription charge failed for ${merchant.id}:`, err);
+        await db
+          .update(schema.merchants)
+          .set({ status: "suspended", updatedAt: new Date() })
+          .where(eq(schema.merchants.id, merchant.id));
+        failed += 1;
+      }
+    }
+
+    return { charged, failed, checked: dueMerchants.length };
+  }
+
+  private static async chargeStoredSubscription(
+    merchantId: string,
+    planId: string,
+    cycle: BillingCycle,
+    recurringDetailReference: string,
+    amount: number
+  ) {
+    const db = getDb();
+    const plan = await SubscriptionPlansService.getById(planId);
+    const currency = (plan.currency || "CHF").toUpperCase();
+    const creds = await PlatformSettingsService.resolvePlatformAdyenCredentials();
+    const periodStart = new Date();
+    const periodEnd = addMonths(periodStart, cycle === "yearly" ? 12 : 1);
+
+    const [payment] = await db
+      .insert(schema.subscriptionPayments)
+      .values({
+        merchantId,
+        planId: plan.id,
+        billingCycle: cycle,
+        amount: amount.toFixed(2),
+        currency,
+        status: "pending",
+        isRecurring: true,
+        adyenRecurringDetailReference: recurringDetailReference,
+        periodStart,
+        periodEnd,
+      })
+      .returning();
+
+    const reference = `sub-renew-${merchantId.slice(0, 8)}-${payment!.id.slice(0, 8)}`;
+
+    const response = await axios.post(
+      `${creds.apiBase}/payments`,
+      {
+        amount: { value: Math.round(amount * 100), currency },
+        merchantAccount: creds.merchantAccount,
+        reference,
+        shopperReference: merchantId,
+        shopperInteraction: "ContAuth",
+        recurringProcessingModel: "Subscription",
+        paymentMethod: {
+          type: "scheme",
+          storedPaymentMethodId: recurringDetailReference,
+        },
+        metadata: {
+          type: "subscription_renewal",
+          paymentId: payment!.id,
+          merchantId,
+          planId: plan.id,
+          billingCycle: cycle,
+        },
+      },
+      {
+        headers: {
+          "x-api-key": creds.apiKey,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const resultCode = String(response.data?.resultCode || "");
+    const ok = ["Authorised", "Received"].includes(resultCode);
+    if (!ok) {
+      await db
+        .update(schema.subscriptionPayments)
+        .set({ status: "failed", adyenResultCode: resultCode, updatedAt: new Date() })
+        .where(eq(schema.subscriptionPayments.id, payment!.id));
+      throw new Error(`Recurring charge declined (${resultCode})`);
+    }
+
+    await this.confirmPayment(merchantId, payment!.id, {
+      resultCode,
+      pspReference: response.data?.pspReference,
+      recurringDetailReference,
+    });
   }
 }
