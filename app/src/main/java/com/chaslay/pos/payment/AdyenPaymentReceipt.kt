@@ -22,7 +22,12 @@ data class AdyenTerminalReceipt(
 object AdyenPaymentReceiptParser {
 
     fun parsePaymentReceipts(paymentResponse: JsonObject): Pair<AdyenTerminalReceipt?, AdyenTerminalReceipt?> {
-        val receipts = paymentResponse.getAsJsonArray("PaymentReceipt") ?: return null to null
+        val receiptsElement = paymentResponse.get("PaymentReceipt") ?: return null to null
+        val receipts = when {
+            receiptsElement.isJsonArray -> receiptsElement.asJsonArray
+            receiptsElement.isJsonObject -> JsonArray().also { it.add(receiptsElement) }
+            else -> return null to null
+        }
         var customer: AdyenTerminalReceipt? = null
         var cashier: AdyenTerminalReceipt? = null
         for (element in receipts) {
@@ -125,6 +130,18 @@ object AdyenPaymentReceiptStorage {
 
     fun cashierReceipt(transaction: TransactionEntity): AdyenTerminalReceipt? =
         fromJson(transaction.adyenCashierReceiptJson)
+
+    /** Receipt with at least one line, suitable for thermal append/print. */
+    fun appendable(receipt: AdyenTerminalReceipt?): AdyenTerminalReceipt? =
+        receipt?.takeIf { it.lines.isNotEmpty() }
+
+    fun appendableForTransaction(
+        transaction: TransactionEntity,
+        memoryCustomer: AdyenTerminalReceipt? = null,
+        memoryCashier: AdyenTerminalReceipt? = null
+    ): Pair<AdyenTerminalReceipt?, AdyenTerminalReceipt?> =
+        appendable(memoryCustomer ?: customerReceipt(transaction)) to
+            appendable(memoryCashier ?: cashierReceipt(transaction))
 }
 
 object AdyenPaymentReceiptFormatter {

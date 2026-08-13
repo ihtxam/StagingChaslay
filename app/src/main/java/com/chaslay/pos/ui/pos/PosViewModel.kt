@@ -2497,14 +2497,19 @@ class PosViewModel @Inject constructor(
             if (publicUrl != null) {
                 updateExtras { it.copy(receiptPublicUrl = publicUrl, completedTransaction = transaction) }
             }
-            val customerCopy = _uiExtras.value.adyenCustomerReceipt
-                ?: com.chaslay.pos.payment.AdyenPaymentReceiptStorage.customerReceipt(transaction)
+            val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+                .appendableForTransaction(
+                    transaction,
+                    memoryCustomer = _uiExtras.value.adyenCustomerReceipt,
+                    memoryCashier = _uiExtras.value.adyenCashierReceipt
+                )
             withContext(Dispatchers.IO) {
                 printerService.routeReceipt(
                     settings,
                     transaction,
                     full.second,
                     customerCopy,
+                    cashierCopy,
                     loyaltyPointsEarned = _uiExtras.value.lastLoyaltyPointsEarned,
                     loyaltyPointsBalance = _uiExtras.value.lastLoyaltyPointsBalance
                 )
@@ -3054,8 +3059,10 @@ class PosViewModel @Inject constructor(
             val tx = _uiExtras.value.lastTransaction ?: return@launch
             val full = transactionRepository.getTransaction(tx.id) ?: return@launch
             val settings = settingsRepository.getSettings()
-            val (transaction, _) = publishAndPersistReceipt(full.first, full.second, settings)
-            printerService.routeReceipt(settings, transaction, full.second)
+            val (published, items) = publishAndPersistReceipt(full.first, full.second, settings)
+            val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+                .appendableForTransaction(published)
+            printerService.routeReceipt(settings, published, items, customerCopy, cashierCopy)
                 .onFailure { e -> updateExtras { it.copy(errorMessage = e.message) } }
             dismissReceiptOptions()
         }

@@ -201,6 +201,7 @@ class BluetoothPrinterService @Inject constructor(
         transaction: TransactionEntity,
         items: List<TransactionItemEntity>,
         appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
+        appendAdyenCashierReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
         loyaltyPointsEarned: Int? = null,
         loyaltyPointsBalance: Int? = null
     ): Result<Unit> {
@@ -209,6 +210,7 @@ class BluetoothPrinterService @Inject constructor(
             transaction,
             items,
             appendAdyenCustomerReceipt = appendAdyenCustomerReceipt,
+            appendAdyenCashierReceipt = appendAdyenCashierReceipt,
             loyaltyPointsEarned = loyaltyPointsEarned,
             loyaltyPointsBalance = loyaltyPointsBalance
         )
@@ -442,6 +444,7 @@ class BluetoothPrinterService @Inject constructor(
         transaction: TransactionEntity,
         items: List<TransactionItemEntity>,
         appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
+        appendAdyenCashierReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
         loyaltyPointsEarned: Int? = null,
         loyaltyPointsBalance: Int? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
@@ -453,6 +456,7 @@ class BluetoothPrinterService @Inject constructor(
                 transaction,
                 items,
                 appendAdyenCustomerReceipt,
+                appendAdyenCashierReceipt,
                 loyaltyPointsEarned,
                 loyaltyPointsBalance
             )
@@ -466,6 +470,7 @@ class BluetoothPrinterService @Inject constructor(
                 items,
                 lineWidth,
                 appendAdyenCustomerReceipt,
+                appendAdyenCashierReceipt,
                 loyaltyPointsEarned,
                 loyaltyPointsBalance
             )
@@ -818,6 +823,7 @@ class BluetoothPrinterService @Inject constructor(
         items: List<TransactionItemEntity>,
         lineWidth: Int = LINE_WIDTH_80,
         appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
+        appendAdyenCashierReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
         loyaltyPointsEarned: Int? = null,
         loyaltyPointsBalance: Int? = null
     ): ByteArray {
@@ -953,13 +959,14 @@ class BluetoothPrinterService @Inject constructor(
             sb.appendLine(center("-".repeat(lineWidth.coerceAtMost(32)), lineWidth))
             sb.appendLine(center(labels.scanDigitalReceipt, lineWidth))
         }
-        appendAdyenCustomerReceipt?.let { receipt ->
-            appendAdyenCustomerReceiptBlock(sb, receipt, lineWidth)
-        }
+        com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendable(appendAdyenCustomerReceipt)
+            ?.let { receipt -> appendAdyenReceiptBlock(sb, receipt, lineWidth) }
+        com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendable(appendAdyenCashierReceipt)
+            ?.let { receipt -> appendAdyenReceiptBlock(sb, receipt, lineWidth) }
         return finalizePayload(sb.toString(), settings, lineWidth, qrUrl)
     }
 
-    private fun appendAdyenCustomerReceiptBlock(
+    private fun appendAdyenReceiptBlock(
         sb: StringBuilder,
         receipt: com.chaslay.pos.payment.AdyenTerminalReceipt,
         lineWidth: Int

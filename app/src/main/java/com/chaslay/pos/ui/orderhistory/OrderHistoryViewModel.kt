@@ -423,7 +423,9 @@ class OrderHistoryViewModel @Inject constructor(
             for (split in _uiState.value.splitOrders) {
                 val items = _uiState.value.splitItemsByOrderId[split.id].orEmpty()
                 val published = publishBeforePrint(split, items, settings)
-                printerService.routeReceipt(settings, published, items)
+                val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+                    .appendableForTransaction(published)
+                printerService.routeReceipt(settings, published, items, customerCopy, cashierCopy)
             }
             _uiState.value = _uiState.value.copy(message = "Split receipts printed")
         }
@@ -453,13 +455,13 @@ class OrderHistoryViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
-            val customerCopy = if (includeCustomerCardCopy) {
-                com.chaslay.pos.payment.AdyenPaymentReceiptStorage.customerReceipt(order)
+            val (customerCopy, cashierCopy) = if (includeCustomerCardCopy) {
+                com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendableForTransaction(order)
             } else {
-                null
+                null to null
             }
             val published = publishBeforePrint(order, items, settings)
-            printerService.routeReceipt(settings, published, items, customerCopy)
+            printerService.routeReceipt(settings, published, items, customerCopy, cashierCopy)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(message = "Receipt printed")
                 }
