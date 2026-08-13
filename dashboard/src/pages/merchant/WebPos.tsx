@@ -466,6 +466,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('manupos_webpos_autoprint') !== '0');
   const [lastReceipt, setLastReceipt] = useState<string>('');
   const [lastReceiptUrl, setLastReceiptUrl] = useState<string>('');
+  const [lastReceiptOrderId, setLastReceiptOrderId] = useState<string>('');
   const [lastReceiptOrderNumber, setLastReceiptOrderNumber] = useState<string>('');
   const [lastSplitReceipts, setLastSplitReceipts] = useState<SplitReceiptPart[]>([]);
   const splitReceiptsRef = useRef<SplitReceiptPart[]>([]);
@@ -3407,6 +3408,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         receiptUrl: receiptUrl || undefined,
         receiptText: receiptText || undefined,
         orderNumber: lastReceiptOrderNumber || undefined,
+        orderId: lastReceiptOrderId || undefined,
+        clientId: lastReceiptOrderId || undefined,
         amount: amount ?? undefined,
       });
       toast.success(t('webPosReceiptEmailSent'));
@@ -3871,6 +3874,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const receiptText = generateWebPosReceiptText(receiptPayload, locale);
     setLastReceipt(receiptText);
     setLastReceiptUrl(receiptUrl);
+    setLastReceiptOrderId(receiptRef || clientId);
     setLastReceiptOrderNumber(ticket.orderNumber || ticket.display || '');
 
     const splitPart: SplitReceiptPart = {
@@ -4159,8 +4163,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       );
 
       const result = res.data.result as { status: string; message?: string; reference?: string };
+      const approved = res.data.success === true || result.status === 'approved';
 
-      if (result.status === 'approved') {
+      if (approved) {
         closePaymentModal();
         await finalizeSale('terminal', clientId, whenOverride, extras, true);
         return;

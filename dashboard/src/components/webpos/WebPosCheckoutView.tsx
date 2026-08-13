@@ -92,6 +92,7 @@ export default function WebPosCheckoutView({
   const [seeded, setSeeded] = useState(false);
   /** Previous amount due — used to resize tenders when tip is added/removed. */
   const prevTotalRef = useRef<number | null>(null);
+  const prevDiscountRef = useRef(0);
 
   const total = useMemo(() => roundMoney2(baseTotal + tipAmount), [baseTotal, tipAmount]);
 
@@ -220,6 +221,26 @@ export default function WebPosCheckoutView({
       return prev;
     });
   }, [total, baseTotal, seeded]);
+
+  // When bill discount changes, resize a single auto-covering tender to the new amount due.
+  useEffect(() => {
+    if (!seeded) return;
+    const prevDisc = prevDiscountRef.current;
+    prevDiscountRef.current = billDiscountAmount;
+    if (Math.abs(prevDisc - billDiscountAmount) < 0.001) return;
+
+    setPayments((prev) => {
+      if (prev.length !== 1) return prev;
+      const only = prev[0]!;
+      const paidSum = roundMoney2(prev.reduce((s, p) => s + p.amount, 0));
+      const coveredBefore =
+        Math.abs(paidSum - roundMoney2(total + billDiscountAmount - prevDisc)) < 0.051 ||
+        Math.abs(only.amount - roundMoney2(baseTotal + tipAmount - (billDiscountAmount - prevDisc))) < 0.051 ||
+        Math.abs(only.amount - total) < 0.051;
+      if (!coveredBefore) return prev;
+      return [{ ...only, amount: total }];
+    });
+  }, [billDiscountAmount, total, baseTotal, tipAmount, seeded]);
 
   // Live-update selected payment row from keypad digits
   useEffect(() => {

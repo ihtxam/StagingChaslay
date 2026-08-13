@@ -9,6 +9,7 @@ import {
 import { roundMoney2 } from "@/lib/money";
 import { zurichDayBounds } from "@/lib/vacation";
 import { resolveOrderItemName } from "@/lib/order-item-name";
+import { GiftCardService } from "@/services/gift-card.service";
 
 const COMPLETED_STATUSES = new Set(["completed", "partially_refunded"]);
 const BLOCKED_CANCEL_STATUSES = new Set([
@@ -311,6 +312,35 @@ export class PosOrdersService {
         .update(schema.orderItems)
         .set({ refundedQuantity: u.refundedQuantity })
         .where(eq(schema.orderItems.id, u.id));
+    }
+
+    // Restore gift-card balance when refunding orders paid (partly) with gift cards.
+    const redeemTx = await db.query.giftCardTransactions.findMany({
+      where: and(
+        eq(schema.giftCardTransactions.merchantId, merchantId),
+        eq(schema.giftCardTransactions.orderId, orderId),
+        eq(schema.giftCardTransactions.transactionType, "redeem")
+      ),
+    });
+    if (redeemTx.length) {
+      const orderTotal = total > 0 ? total : 1;
+      const refundRatio = Math.min(1, refund / orderTotal);
+      for (const tx of redeemTx) {
+        const redeemed = Number(tx.amount) || 0;
+        if (redeemed <= 0) continue;
+        const restore = roundMoney2(redeemed * refundRatio);
+        if (restore <= 0) continue;
+        try {
+          await GiftCardService.credit(merchantId, {
+            cardId: tx.cardId,
+            amount: restore,
+            type: "reload",
+            orderId,
+          });
+        } catch (gcErr) {
+          console.warn("Gift card balance restore on refund failed:", gcErr);
+        }
+      }
     }
 
     const [updated] = await db

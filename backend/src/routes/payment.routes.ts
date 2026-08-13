@@ -160,15 +160,20 @@ router.post("/terminal/poi", async (req: Request, res: Response) => {
       currency: currency || "CHF",
     });
 
+    // Order is created after terminal approval (WebPOS finalizeSale). Logging must not fail the payment.
     if (result.status === "approved" && saleRef) {
-      await AdyenService.recordPaymentTransaction(
-        merchantId,
-        String(saleRef),
-        Number(amount),
-        "terminal",
-        result.reference || `terminal-${Date.now()}`,
-        "completed"
-      );
+      try {
+        await AdyenService.recordPaymentTransactionByClientRef(
+          merchantId,
+          String(saleRef),
+          Number(amount),
+          "terminal",
+          result.reference || `terminal-${Date.now()}`,
+          "captured"
+        );
+      } catch (logErr) {
+        console.warn("Terminal payment approved but transaction log failed:", logErr);
+      }
     }
 
     res.json({ success: result.status === "approved", result });

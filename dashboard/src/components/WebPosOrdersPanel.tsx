@@ -137,7 +137,7 @@ export type HeldRow = {
   updatedAt?: string | null;
   createdAt?: string | null;
 };
-type StatusFilter = 'active' | 'completed' | 'all';
+type StatusFilter = 'active' | 'completed' | 'all' | 'held';
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
 type Props = {
   open: boolean;
@@ -471,7 +471,7 @@ export default function WebPosOrdersPanel({
     const activeBucket: PosOrder[] = [];
     const doneBucket: PosOrder[] = [];
 
-    if (statusFilter === 'active' || statusFilter === 'all') {
+    if (statusFilter === 'active' || statusFilter === 'all' || statusFilter === 'held') {
       for (const h of held) {
         // Held tickets are POS-only; hide when filtering Online shop.
         if (channelFilter === 'online') continue;
@@ -494,6 +494,7 @@ export default function WebPosOrdersPanel({
         }
         heldBucket.push(h);
       }
+      if (statusFilter !== 'held') {
       for (const o of orders) {
         if (!isOpenFulfillmentOrder(o)) continue;
         if (!matchesChannelFilter(o, channelFilter)) continue;
@@ -504,6 +505,7 @@ export default function WebPosOrdersPanel({
           if (!hay.includes(q)) continue;
         }
         activeBucket.push(o);
+      }
       }
     }
     if (statusFilter === 'completed' || statusFilter === 'all') {
@@ -823,6 +825,7 @@ export default function WebPosOrdersPanel({
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           >
             <option value="active">{t('webPosActive')}</option>
+            <option value="held">{t('webPosOnHold')}</option>
             <option value="completed">{t('webPosCompletedOrders')}</option>
             <option value="all">{t('webPosAllOrders')}</option>
           </select>

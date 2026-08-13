@@ -4,9 +4,9 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
-/** Staff PINs are 4–8 digits; auto-submit after a brief pause once length ≥ 4. */
+/** Staff PINs are 4 digits (matches Android POS login). */
 const PIN_MIN_LENGTH = 4;
-const PIN_MAX_LENGTH = 8;
+const PIN_MAX_LENGTH = 4;
 /** Pause so a longer PIN can be typed before verify runs (no OK button in gate mode). */
 const PIN_AUTO_DELAY_MS = 420;
 

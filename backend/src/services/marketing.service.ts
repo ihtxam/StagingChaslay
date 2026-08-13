@@ -355,10 +355,31 @@ export class MarketingService {
     if (!merchant) throw new Error("Merchant not found");
 
     const audience = await this.listAudience(merchantId);
-    let recipients = audience;
+    let recipients: typeof audience = [];
     if (campaign.audience === "selected") {
-      const set = new Set((campaign.selectedEmails || []).map((e) => e.toLowerCase()));
-      recipients = audience.filter((a) => set.has(a.email));
+      const selected = Array.from(
+        new Set(
+          (campaign.selectedEmails || [])
+            .map((e) => String(e || "").trim().toLowerCase())
+            .filter((e) => e.includes("@"))
+        )
+      );
+      const audienceByEmail = new Map(audience.map((a) => [a.email.toLowerCase(), a]));
+      recipients = selected.map((email) => {
+        const hit = audienceByEmail.get(email);
+        if (hit) return hit;
+        return {
+          id: null,
+          email,
+          name: email,
+          phone: null,
+          marketingOptIn: true,
+          lastOrderAt: null,
+          totalSpent: null,
+        };
+      });
+    } else {
+      recipients = audience;
     }
     if (!recipients.length) throw new Error("No recipients selected");
 

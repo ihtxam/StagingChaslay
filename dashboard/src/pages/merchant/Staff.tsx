@@ -145,7 +145,7 @@ export default function StaffPage() {
         return;
       }
     }
-    if (editForm.pin && (editForm.pin.length < 4 || editForm.pin.length > 8)) {
+    if (editForm.pin && editForm.pin.length !== 4) {
       toast.error(t('staffPinInvalid'));
       return;
     }
@@ -246,10 +246,16 @@ export default function StaffPage() {
                 <input
                   className="input mt-1"
                   inputMode="numeric"
-                  pattern="[0-9]{4,8}"
+                  pattern="[0-9]{4}"
+                  maxLength={4}
                   placeholder={t('staffPinPlaceholder')}
                   value={staffForm.pin}
-                  onChange={(e) => setStaffForm({ ...staffForm, pin: e.target.value.replace(/\D/g, '') })}
+                  onChange={(e) =>
+                    setStaffForm({
+                      ...staffForm,
+                      pin: e.target.value.replace(/\D/g, '').slice(0, 4),
+                    })
+                  }
                 />
               </label>
               <label className="flex items-center gap-2 text-sm pt-6">
@@ -412,14 +418,19 @@ export default function StaffPage() {
                 <input
                   className="input mt-1"
                   inputMode="numeric"
-                  pattern="[0-9]{4,8}"
+                  pattern="[0-9]{4}"
+                  maxLength={4}
                   placeholder={
                     editingStaff.pinSet ? t('staffPinKeepPlaceholder') : t('staffPinPlaceholder')
                   }
                   disabled={editForm.clearPin}
                   value={editForm.pin}
                   onChange={(e) =>
-                    setEditForm({ ...editForm, pin: e.target.value.replace(/\D/g, ''), clearPin: false })
+                    setEditForm({
+                      ...editForm,
+                      pin: e.target.value.replace(/\D/g, '').slice(0, 4),
+                      clearPin: false,
+                    })
                   }
                 />
               </label>

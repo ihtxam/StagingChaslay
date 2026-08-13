@@ -207,7 +207,7 @@ export class AdyenService {
     amount: number,
     paymentMethod: string,
     adyenReference: string,
-    status: "pending" | "completed" | "failed"
+    status: "pending" | "captured" | "completed" | "failed"
   ) {
     const db = getDb();
 
@@ -219,9 +219,9 @@ export class AdyenService {
           merchantId,
           amount: amount.toString(),
           paymentMethod,
-          status,
+          status: status === "completed" ? "captured" : status,
           adyenReference,
-          completedAt: new Date(),
+          completedAt: status === "pending" ? null : new Date(),
         })
         .returning();
 
@@ -230,6 +230,42 @@ export class AdyenService {
       console.error("Error recording payment transaction:", error);
       throw error;
     }
+  }
+
+  /** Record payment when only POS clientId is known (order may not exist yet). */
+  static async recordPaymentTransactionByClientRef(
+    merchantId: string,
+    clientRef: string,
+    amount: number,
+    paymentMethod: string,
+    adyenReference: string,
+    status: "pending" | "captured" | "completed" | "failed" = "captured"
+  ) {
+    const db = getDb();
+    const ref = String(clientRef || "").trim();
+    if (!ref) return null;
+
+    const order = await db.query.orders.findFirst({
+      where: and(
+        eq(schema.orders.merchantId, merchantId),
+        eq(schema.orders.clientId, ref)
+      ),
+      columns: { id: true },
+    });
+
+    if (!order) {
+      // WebPOS creates the order after terminal approval — skip until sync completes.
+      return null;
+    }
+
+    return this.recordPaymentTransaction(
+      merchantId,
+      order.id,
+      amount,
+      paymentMethod,
+      adyenReference,
+      status
+    );
   }
 
   /**
