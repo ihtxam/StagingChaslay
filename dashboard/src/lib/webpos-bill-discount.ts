@@ -51,7 +51,8 @@ export function applyBillDiscountToTotals(
   },
   billDiscount: BillDiscount | null | undefined,
   vatIncludedInPrice: boolean,
-  roundingStep: number
+  roundingStep: number,
+  vatAfterDiscount = true
 ): TotalsWithDiscount {
   const disc = resolveBillDiscountAmount(totals, billDiscount, vatIncludedInPrice);
   if (disc <= 0) {
@@ -60,7 +61,11 @@ export function applyBillDiscountToTotals(
   const merchandise = merchandiseBase(totals, vatIncludedInPrice);
   const afterDisc = roundMoney2(merchandise - disc);
   const taxShare =
-    merchandise > 0 ? roundMoney2(totals.tax * (afterDisc / merchandise)) : totals.tax;
+    vatIncludedInPrice || vatAfterDiscount !== false
+      ? merchandise > 0
+        ? roundMoney2(totals.tax * (afterDisc / merchandise))
+        : totals.tax
+      : totals.tax;
   const preRound = vatIncludedInPrice ? afterDisc : roundMoney2(afterDisc + taxShare);
   const rounding = roundingAdjustment(preRound, roundingStep);
   const total = roundToStep(preRound + rounding, roundingStep);

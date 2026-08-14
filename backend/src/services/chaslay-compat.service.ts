@@ -377,6 +377,7 @@ export class ChaslayCompatService {
         tax_dine_in_rate: Number(merchant.taxDineInRate || merchant.vatRate || 0),
         tax_delivery_rate: Number(merchant.taxDeliveryRate || merchant.vatRate || 0),
         tax_included_in_price: merchant.taxIncludedInPrice === true,
+        vat_after_discount: merchant.vatAfterDiscount !== false,
         default_language: merchant.panelLanguage || "en",
         store_hours: merchant.storeHours || {},
         receipt_base_url: receiptPublicBaseUrl(),
@@ -481,6 +482,7 @@ export class ChaslayCompatService {
           merchant.posCheckoutSettings
         ),
         vatIncludedInPrice: merchant.taxIncludedInPrice === true,
+        vatAfterDiscount: merchant.vatAfterDiscount !== false,
       },
       receipt_base_url: receiptPublicBaseUrl(),
       scale: {

@@ -2,6 +2,7 @@ import { getDb, schema } from "@/db";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { roundMoney2, roundTo005 } from "@/lib/money";
+import { adjustTaxForOrderDiscount } from "@/lib/tax-discount";
 import { resolveOrderItemName } from "@/lib/order-item-name";
 
 function withResolvedItemNames<
@@ -78,6 +79,15 @@ export class OrderService {
     const db = getDb();
 
     try {
+      const merchant = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+      });
+      const vatRate = merchant?.vatRate ? parseFloat(merchant.vatRate.toString()) : 0;
+      const taxDiscountOpts = {
+        taxIncludedInPrice: merchant?.taxIncludedInPrice === true,
+        vatAfterDiscount: merchant?.vatAfterDiscount !== false,
+      };
+
       // Calculate totals
       let subtotal = 0;
       let taxAmount = 0;
@@ -95,12 +105,6 @@ export class OrderService {
         subtotal += itemTotal;
 
         if (product.isTaxable) {
-          // Get merchant VAT rate
-          const merchant = await db.query.merchants.findFirst({
-            where: eq(schema.merchants.id, merchantId),
-          });
-
-          const vatRate = merchant?.vatRate ? parseFloat(merchant.vatRate.toString()) : 0;
           taxAmount += roundMoney2((itemTotal * vatRate) / 100);
         }
       }
@@ -108,6 +112,7 @@ export class OrderService {
       subtotal = roundMoney2(subtotal);
       taxAmount = roundMoney2(taxAmount);
       discountAmount = roundMoney2(discountAmount);
+      taxAmount = adjustTaxForOrderDiscount(taxAmount, subtotal, discountAmount, taxDiscountOpts);
       const total = roundTo005(subtotal + taxAmount - discountAmount);
 
       // Create order

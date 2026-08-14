@@ -24,6 +24,7 @@ import {
   type StoreHours,
 } from '@/lib/shop-hours';
 import { roundMoney2, roundTo005, roundingAdjustment } from '@/lib/money';
+import { adjustTaxForOrderDiscount } from '@/lib/tax-discount';
 import { shopDocumentTitle } from '@/lib/brand';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
@@ -371,7 +372,17 @@ export default function CheckoutPage() {
     draft.channel === 'delivery' ? Number(deliveryInfo?.zone?.deliveryFee || 0) : 0
   );
   const tip = roundTo005(Math.max(0, Number(draft.tipAmount) || 0));
-  const tax = roundMoney2(((subtotal + deliveryFee) * taxRate) / 100);
+  const taxOpts = {
+    taxIncludedInPrice: merchant?.taxIncludedInPrice === true,
+    vatAfterDiscount: merchant?.vatAfterDiscount !== false,
+  };
+  const grossTax = roundMoney2(((subtotal + deliveryFee) * taxRate) / 100);
+  const taxAfterOffer = adjustTaxForOrderDiscount(
+    grossTax,
+    subtotal + deliveryFee,
+    offerDiscount,
+    taxOpts
+  );
   const rewardPointsInCart = draft.items
     .filter((i) => i.loyaltyReward)
     .reduce((s, i) => s + (i.rewardPointsCost || 0) * i.quantity, 0);
@@ -380,7 +391,7 @@ export default function CheckoutPage() {
   const balanceAfterRewards = Math.max(0, loyaltyBalance - rewardPointsInCart);
   // Points can cover food + delivery + tax (not tip / card fee)
   const redeemableBase = roundMoney2(
-    Math.max(0, subtotal - offerDiscount) + deliveryFee + tax
+    Math.max(0, subtotal - offerDiscount) + deliveryFee + taxAfterOffer
   );
   const maxCashPoints = Math.min(
     Math.floor(Math.max(0, redeemableBase)) * rate,
@@ -393,7 +404,14 @@ export default function CheckoutPage() {
       )
     : 0;
   const pointsDiscount = Math.floor(pointsToRedeem / rate);
-  const preCardTotal = Math.max(0, redeemableBase - pointsDiscount) + tip;
+  const tax = adjustTaxForOrderDiscount(
+    grossTax,
+    subtotal + deliveryFee,
+    offerDiscount + pointsDiscount,
+    taxOpts
+  );
+  const preCardTotal =
+    Math.max(0, subtotal + deliveryFee + tax - offerDiscount - pointsDiscount) + tip;
   const cardFeeFixed = Number(paymentOptions?.cardFeeFixed || 0) || 0;
   const cardFeePercent = Number(paymentOptions?.cardFeePercent || 0) || 0;
   const remainingAfterPoints = Math.max(0, redeemableBase - pointsDiscount) + tip;

@@ -1236,8 +1236,11 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
         posCheckoutSettings: {
           ...posCheckoutSettings,
           vatIncludedInPrice: merchant.taxIncludedInPrice === true,
+          vatAfterDiscount: merchant.vatAfterDiscount !== false,
         },
         taxIncludedInPrice: merchant.taxIncludedInPrice === true,
+        vatAfterDiscount: merchant.vatAfterDiscount !== false,
+        vatAfterDiscount: merchant.vatAfterDiscount !== false,
         shopLogoUrl: merchant.shopLogoUrl || null,
         panelLanguage: merchant.panelLanguage || "en",
         // Coerce so WebPOS never hides shifts due to unexpected truthy shapes.

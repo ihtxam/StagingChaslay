@@ -10,6 +10,7 @@ import {
   type StoreHours,
 } from "@/lib/geo";
 import { roundMoney2, roundTo005, roundingAdjustment } from "@/lib/money";
+import { adjustTaxForOrderDiscount } from "@/lib/tax-discount";
 import { ShopCustomerService } from "@/services/shop-customer.service";
 import { ShopLoyaltyService } from "@/services/shop-loyalty.service";
 import { AdyenService } from "@/services/adyen.service";
@@ -555,6 +556,8 @@ router.get("/:slug", async (req: Request, res: Response) => {
         taxDineInRate: merchant.taxDineInRate,
         taxDeliveryRate: merchant.taxDeliveryRate,
         vatRate: merchant.vatRate,
+        taxIncludedInPrice: merchant.taxIncludedInPrice === true,
+        vatAfterDiscount: merchant.vatAfterDiscount !== false,
         deliveryMenuMarkup: merchant.deliveryMenuMarkup ?? "0",
         storeHours: hours,
         /** Homepage banner hours (display channel or takeaway fallback) */
@@ -1682,7 +1685,17 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
 
     // Points can cover food + delivery + tax after offer discount (not tip / card fee)
     const feeTaxPreview = roundMoney2((deliveryFee * taxRate) / 100);
-    const taxPreview = roundMoney2(taxAmount + feeTaxPreview);
+    const taxDiscountOpts = {
+      taxIncludedInPrice: merchant.taxIncludedInPrice === true,
+      vatAfterDiscount: merchant.vatAfterDiscount !== false,
+    };
+    let taxPreview = roundMoney2(taxAmount + feeTaxPreview);
+    taxPreview = adjustTaxForOrderDiscount(
+      taxPreview,
+      subtotal + deliveryFee,
+      offerDiscount,
+      taxDiscountOpts
+    );
     const redeemableBase = roundMoney2(
       Math.max(0, subtotal - offerDiscount) + deliveryFee + taxPreview
     );
@@ -1756,12 +1769,27 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
 
     const tip = roundTo005(Math.max(0, Number(tipAmount) || 0));
     const feeTax = roundMoney2((deliveryFee * taxRate) / 100);
-    taxAmount = roundMoney2(taxAmount + feeTax);
+    const grossTaxAmount = roundMoney2(taxAmount + feeTax);
     subtotal = roundMoney2(subtotal);
     deliveryFee = roundMoney2(deliveryFee);
     offerDiscount = roundMoney2(Math.min(offerDiscount, subtotal));
+    const taxAfterOffer = adjustTaxForOrderDiscount(
+      grossTaxAmount,
+      subtotal + deliveryFee,
+      offerDiscount,
+      taxDiscountOpts
+    );
     pointsDiscount = roundMoney2(
-      Math.min(pointsDiscount, Math.max(0, subtotal - offerDiscount) + deliveryFee + taxAmount)
+      Math.min(
+        pointsDiscount,
+        Math.max(0, subtotal - offerDiscount) + deliveryFee + taxAfterOffer
+      )
+    );
+    taxAmount = adjustTaxForOrderDiscount(
+      grossTaxAmount,
+      subtotal + deliveryFee,
+      offerDiscount + pointsDiscount,
+      taxDiscountOpts
     );
     const orderNumber = await generateWebOrderNumber(db, merchant.id);
     // Offer + points discount apply to food (+ delivery/tax for points); tip and card fee remain payable

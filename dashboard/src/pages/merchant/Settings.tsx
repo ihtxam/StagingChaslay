@@ -48,6 +48,7 @@ interface SettingsData {
   taxDineInRate?: string | null;
   taxDeliveryRate?: string | null;
   taxIncludedInPrice?: boolean;
+  vatAfterDiscount?: boolean;
   slug?: string | null;
   subdomain?: string | null;
   customDomain?: string | null;
@@ -730,6 +731,7 @@ export default function Settings() {
         taxDeliveryRate:
           settings.taxDeliveryRate != null ? Number(settings.taxDeliveryRate) : undefined,
         taxIncludedInPrice: !!settings.taxIncludedInPrice,
+        vatAfterDiscount: settings.vatAfterDiscount !== false,
         slug: settings.slug || undefined,
         subdomain: settings.subdomain || undefined,
         customDomain: settings.customDomain?.trim() || null,
@@ -1123,6 +1125,55 @@ export default function Settings() {
                   </label>
                 </div>
               </Section>
+              {!settings.taxIncludedInPrice ? (
+                <Section
+                  icon={Percent}
+                  accent={settingsDash.info}
+                  title={t('vatDiscountOrder')}
+                  description={t('vatDiscountOrderHint')}
+                >
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <label
+                      className={`flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm ${
+                        settings.vatAfterDiscount !== false
+                          ? 'border-[var(--text)] bg-[var(--bg-muted)]'
+                          : 'border-[var(--border)]'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="vatDiscountOrder"
+                        className="mt-0.5"
+                        checked={settings.vatAfterDiscount !== false}
+                        onChange={() => setSettings({ ...settings, vatAfterDiscount: true })}
+                      />
+                      <span>
+                        <span className="font-medium block">{t('vatAfterDiscount')}</span>
+                        <span className="text-xs muted">{t('vatAfterDiscountHint')}</span>
+                      </span>
+                    </label>
+                    <label
+                      className={`flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm ${
+                        settings.vatAfterDiscount === false
+                          ? 'border-[var(--text)] bg-[var(--bg-muted)]'
+                          : 'border-[var(--border)]'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="vatDiscountOrder"
+                        className="mt-0.5"
+                        checked={settings.vatAfterDiscount === false}
+                        onChange={() => setSettings({ ...settings, vatAfterDiscount: false })}
+                      />
+                      <span>
+                        <span className="font-medium block">{t('vatBeforeDiscount')}</span>
+                        <span className="text-xs muted">{t('vatBeforeDiscountHint')}</span>
+                      </span>
+                    </label>
+                  </div>
+                </Section>
+              ) : null}
               <SettingsSaveBar saving={saving} />
             </form>
           )}

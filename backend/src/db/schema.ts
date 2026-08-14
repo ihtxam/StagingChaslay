@@ -119,6 +119,11 @@ export const merchants = pgTable(
     taxDeliveryRate: decimal("tax_delivery_rate", { precision: 5, scale: 2 }).default("0"),
     /** When true, menu prices are gross (TVA included); when false, tax is added on top at checkout. */
     taxIncludedInPrice: boolean("tax_included_in_price").default(false).notNull(),
+    /**
+     * Tax-exclusive only: when true, order discounts reduce the VAT base; when false, VAT stays on
+     * pre-discount net and the discount reduces the payable total (online shop legacy behavior).
+     */
+    vatAfterDiscount: boolean("vat_after_discount").default(true).notNull(),
     // Online shop: path slug + optional DNS subdomain (e.g. demo → demo.domain)
     slug: varchar("slug", { length: 100 }),
     subdomain: varchar("subdomain", { length: 63 }),
