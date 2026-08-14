@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronLeft, Printer, Send, Vault } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ChevronLeft, Printer, Send, Vault } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 type Props = {
@@ -11,6 +11,41 @@ type Props = {
   onBack?: () => void;
   compact?: boolean;
 };
+
+type IconActionProps = {
+  label: string;
+  onClick: () => void;
+  icon: React.ReactNode;
+  compact?: boolean;
+  primary?: boolean;
+};
+
+function IconActionButton({ label, onClick, icon, compact = false, primary = false }: IconActionProps) {
+  const sizeClass = compact
+    ? primary
+      ? 'h-14 w-14'
+      : 'h-12 w-12'
+    : primary
+      ? 'h-16 w-16'
+      : 'h-14 w-14';
+
+  const colorClass = primary
+    ? 'bg-violet-800 text-white hover:bg-violet-900'
+    : 'bg-stone-100 text-stone-700 hover:bg-stone-200';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={`inline-flex shrink-0 items-center justify-center rounded-2xl transition-colors ${sizeClass} ${colorClass}`}
+    >
+      {icon}
+      <span className="sr-only">{label}</span>
+    </button>
+  );
+}
 
 export default function WebPosSuccessView({
   amount,
@@ -28,13 +63,8 @@ export default function WebPosSuccessView({
     .toString()
     .padStart(2, '0');
 
-  const actionBtnClass = compact
-    ? 'inline-flex min-w-[6.5rem] flex-1 items-center justify-center gap-2 rounded-xl bg-stone-100 px-5 py-4 text-sm font-semibold text-stone-700 hover:bg-stone-200'
-    : 'inline-flex min-w-[5.5rem] flex-1 items-center justify-center gap-1.5 rounded-xl bg-stone-100 px-4 py-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-200';
-
-  const continueBtnClass = compact
-    ? 'min-w-[8rem] flex-[1.3] rounded-xl bg-violet-800 px-7 py-4 text-base font-semibold text-white hover:bg-violet-900'
-    : 'min-w-[7rem] flex-[1.3] rounded-xl bg-violet-800 px-6 py-3.5 text-sm font-semibold text-white hover:bg-violet-900';
+  const iconSize = compact ? 20 : 22;
+  const continueIconSize = compact ? 24 : 28;
 
   return (
     <div
@@ -78,37 +108,49 @@ export default function WebPosSuccessView({
       ) : null}
 
       <div
-        className={`flex w-full flex-wrap items-stretch justify-center ${
-          compact ? 'mt-12 max-w-xl gap-3' : 'mt-10 max-w-lg gap-2'
+        className={`flex flex-wrap items-center justify-center ${
+          compact ? 'mt-12 gap-4' : 'mt-14 gap-5'
         }`}
       >
         {onBack ? (
-          <button type="button" onClick={onBack} className={actionBtnClass}>
-            <ChevronLeft size={18} />
-            {t('webPosBack')}
-          </button>
+          <IconActionButton
+            compact={compact}
+            label={t('webPosBack')}
+            onClick={onBack}
+            icon={<ChevronLeft size={iconSize} strokeWidth={2} />}
+          />
         ) : null}
         {onPrint ? (
-          <button type="button" onClick={onPrint} className={actionBtnClass}>
-            <Printer size={18} />
-            {t('webPosPrint')}
-          </button>
+          <IconActionButton
+            compact={compact}
+            label={t('webPosPrint')}
+            onClick={onPrint}
+            icon={<Printer size={iconSize} strokeWidth={2} />}
+          />
         ) : null}
         {onOpenDrawer ? (
-          <button type="button" onClick={onOpenDrawer} className={actionBtnClass}>
-            <Vault size={18} />
-            {t('webPosOpenDrawer')}
-          </button>
+          <IconActionButton
+            compact={compact}
+            label={t('webPosOpenDrawer')}
+            onClick={onOpenDrawer}
+            icon={<Vault size={iconSize} strokeWidth={2} />}
+          />
         ) : null}
         {onSendReceipt ? (
-          <button type="button" onClick={onSendReceipt} className={actionBtnClass}>
-            <Send size={18} />
-            {t('webPosSendReceipt')}
-          </button>
+          <IconActionButton
+            compact={compact}
+            label={t('webPosSendReceipt')}
+            onClick={onSendReceipt}
+            icon={<Send size={iconSize} strokeWidth={2} />}
+          />
         ) : null}
-        <button type="button" onClick={onContinue} className={continueBtnClass}>
-          {t('webPosContinue')}
-        </button>
+        <IconActionButton
+          compact={compact}
+          primary
+          label={t('webPosContinue')}
+          onClick={onContinue}
+          icon={<ArrowRight size={continueIconSize} strokeWidth={2.25} />}
+        />
       </div>
     </div>
   );
