@@ -20,7 +20,7 @@ import { normalizeComboSlots } from "@/lib/combo";
 import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACATION_BLOCK_MESSAGE, NOT_ACCEPTING_ORDERS_MESSAGE, NOT_ACCEPTING_RESERVATIONS_MESSAGE } from "@/lib/vacation";
 import { geocodeQuery } from "@/lib/geocode";
 import { OffersService } from "@/services/offers.service";
-import { v4 as uuidv4 } from "uuid";
+import { generateWebOrderNumber } from "@/lib/web-order-number";
 
 const router = Router();
 
@@ -1763,7 +1763,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     pointsDiscount = roundMoney2(
       Math.min(pointsDiscount, Math.max(0, subtotal - offerDiscount) + deliveryFee + taxAmount)
     );
-    const orderNumber = `WEB-${Date.now()}-${uuidv4().substring(0, 6).toUpperCase()}`;
+    const orderNumber = await generateWebOrderNumber(db, merchant.id);
     // Offer + points discount apply to food (+ delivery/tax for points); tip and card fee remain payable
     const preCardTotal =
       Math.max(0, subtotal + deliveryFee + taxAmount - offerDiscount - pointsDiscount) + tip;

@@ -1,6 +1,7 @@
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
 import { parsePaymentBreakdown } from '@/lib/payment-breakdown';
 import { paymentLabel as receiptPaymentLabel, receiptLabels, type ReceiptLang } from '@/lib/receipt-labels';
+import { formatOrderNumberDisplay } from '@/lib/order-number';
 
 export type MerchantOrder = PosOrderForReceipt & {
   status: string;
@@ -165,11 +166,49 @@ export function orderPublicRefs(o: MerchantOrder) {
   return { ticketDisplay, tabNumber };
 }
 
+export const ONLINE_CHANNEL_BADGE =
+  'bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200';
+export const ONLINE_CHANNEL_HEADER = 'bg-violet-600';
+export const ONLINE_CHANNEL_STYLE =
+  'bg-violet-50 text-violet-800 border-violet-200 dark:bg-violet-950/40 dark:text-violet-200 dark:border-violet-900';
+export const ONLINE_CHANNEL_BORDER = 'border-l-violet-500';
+
+export function orderChannelBadgeClass(o: MerchantOrder): string {
+  if (isOnlineShopOrder(o)) return ONLINE_CHANNEL_BADGE;
+  const ch = orderChannel(o);
+  switch (ch) {
+    case 'dine_in':
+      return 'bg-sky-100 text-sky-800';
+    case 'takeaway':
+      return 'bg-amber-100 text-amber-900';
+    case 'delivery':
+      return 'bg-orange-100 text-orange-900';
+    default:
+      return 'bg-stone-100 text-stone-800';
+  }
+}
+
+export function orderChannelHeaderClass(o: MerchantOrder): string {
+  if (isOnlineShopOrder(o)) return ONLINE_CHANNEL_HEADER;
+  const ch = orderChannel(o).toLowerCase();
+  switch (ch) {
+    case 'dine_in':
+      return 'bg-emerald-600';
+    case 'delivery':
+      return 'bg-orange-500';
+    case 'takeaway':
+      return 'bg-sky-600';
+    default:
+      return 'bg-stone-600';
+  }
+}
+
 export function orderSearchHaystack(o: MerchantOrder): string {
   const refs = orderPublicRefs(o);
   const ch = orderChannel(o);
   return [
     o.orderNumber,
+    formatOrderNumberDisplay(o.orderNumber),
     o.clientId,
     o.customerName,
     o.customerPhone,

@@ -15,6 +15,7 @@ import {
   type ShopCheckoutDraft,
 } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
+import { formatOrderNumberDisplay } from '@/lib/order-number';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 
 type LoyaltyReward = {
@@ -661,7 +662,7 @@ export default function AccountPage() {
                     <li key={o.id} className="border border-stone-100 p-3 space-y-2">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-semibold text-sm">#{o.orderNumber}</p>
+                          <p className="font-semibold text-sm">#{formatOrderNumberDisplay(o.orderNumber)}</p>
                           <p className="text-xs text-stone-500">
                             {formatDateTime(o.createdAt)} · CHF{' '}
                             {Number(o.total).toFixed(2)}

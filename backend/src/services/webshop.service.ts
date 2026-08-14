@@ -1,6 +1,6 @@
 import { getDb, schema } from "@/db";
 import { eq, and, desc, asc, gt, or, like, gte, lte } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid";
+import { generateWebOrderNumber } from "@/lib/web-order-number";
 import { MerchantSettingsService, type FulfillmentChannel } from "@/services/merchant-settings.service";
 
 export class WebShopService {
@@ -200,7 +200,7 @@ export class WebShopService {
         customer = newCustomer[0];
       }
 
-      const orderNumber = `WEB-${Date.now()}-${uuidv4().substring(0, 8).toUpperCase()}`;
+      const orderNumber = await generateWebOrderNumber(db, merchantId);
 
       const order = await db
         .insert(schema.orders)

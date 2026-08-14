@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
+import { formatOrderNumberDisplay } from '@/lib/order-number';
 
 export type OnlineOrder = {
   id: string;
@@ -157,15 +158,17 @@ export default function WebPosOnlineOrdersPanel({
               <div
                 key={o.id}
                 className={`space-y-2 rounded-xl border p-3 ${
-                  isNew(o.status) ? 'border-amber-400 bg-amber-50/80' : 'border-stone-200 bg-white'
+                  isNew(o.status)
+                    ? 'border-violet-400 bg-violet-50/80'
+                    : 'border-violet-200 bg-white'
                 }`}
               >
                 <div className="flex justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-stone-900">
-                      {o.orderNumber || o.id.slice(0, 8)}
+                      {formatOrderNumberDisplay(o.orderNumber) || o.id.slice(0, 8)}
                       {isNew(o.status) ? (
-                        <span className="ml-2 rounded-full bg-amber-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                        <span className="ml-2 rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
                           {t('webPosNewBadge')}
                         </span>
                       ) : null}

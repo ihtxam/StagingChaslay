@@ -6,6 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import { roundMoney2 } from '@/lib/money';
+import { formatOrderNumberDisplay } from '@/lib/order-number';
 
 type OrderItem = {
   id: string;
@@ -305,9 +306,9 @@ export default function OrderConfirmationPage() {
             </p>
             <h1
               className="min-w-0 text-base sm:text-lg font-bold leading-snug break-all"
-              title={order.orderNumber}
+              title={formatOrderNumberDisplay(order.orderNumber)}
             >
-              #{order.orderNumber}
+              #{formatOrderNumberDisplay(order.orderNumber)}
             </h1>
           </div>
         </div>

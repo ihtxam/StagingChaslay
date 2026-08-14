@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../db';
 import { merchants, orders, orderItems, deliveryZones, merchantSettings } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
+import { generateWebOrderNumber } from '../lib/web-order-number';
 
 const router = Router();
 
@@ -265,7 +266,7 @@ router.post('/:merchantSlug/orders', async (req, res) => {
     const total = taxableAmount + tax;
 
     // Create order
-    const orderNumber = `WEB-${Date.now()}`;
+    const orderNumber = await generateWebOrderNumber(db, merchant.id);
     const newOrder = await db
       .insert(orders)
       .values({
