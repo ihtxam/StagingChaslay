@@ -3219,6 +3219,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const addGiftCardLine = (meta: GiftCardCartMeta, lineName: string) => {
+    const doAdd = () => {
     const amount = roundMoney2(meta.amount);
     const line: CartLine = {
       lineId: `gc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -3247,6 +3248,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPosTab('register');
     setPosView('register');
     toast.success(t('giftCardAddedToCart'));
+    };
+    if (meta.op === 'sell') {
+      ensureShift(doAdd);
+      return;
+    }
+    doAdd();
   };
 
   const pushCustomAmountLine = (amount: number) => {
@@ -5631,7 +5638,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     toast.error(t('webPosOfflineGiftCardBlocked'));
                     return;
                   }
-                  setGiftCardOpsOpen(true);
+                  ensureShift(() => setGiftCardOpsOpen(true));
                 }}
                 onReloadGiftCard={() => {
                   if (offlineNow) {

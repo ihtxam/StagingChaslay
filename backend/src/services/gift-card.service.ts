@@ -1,4 +1,5 @@
 import { getDb, schema } from "@/db";
+import { and, desc, eq, or } from "drizzle-orm";
 import {
   buildGiftCardRedeemQrPayload,
   buildGiftCardRedeemUrl,
@@ -34,6 +35,19 @@ function assertActive(card: { status: string; expiresAt?: Date | null }) {
     throw new Error("Card is expired");
   }
   if (card.status !== "active") throw new Error("Card is not active");
+}
+
+async function assertOpenShiftForSell(merchantId: string) {
+  const db = getDb();
+  const merchant = await db.query.merchants.findFirst({
+    where: eq(schema.merchants.id, merchantId),
+  });
+  if (!merchant?.shiftsEnabled) return;
+  const { PosShiftService } = await import("@/services/pos-shift.service");
+  const open = await PosShiftService.getOpenShift(merchantId);
+  if (!open) {
+    throw new Error("Start a cash shift before selling gift cards");
+  }
 }
 
 export class GiftCardService {
@@ -305,6 +319,9 @@ export class GiftCardService {
     const db = getDb();
     const settings = await this.getSettings(merchantId);
     if (!settings.enabled) throw new Error("Gift cards are disabled");
+    if (opts.type === "sell") {
+      await assertOpenShiftForSell(merchantId);
+    }
     if (opts.type === "reload" && !settings.reloadEnabled) {
       throw new Error("Card reload is disabled");
     }

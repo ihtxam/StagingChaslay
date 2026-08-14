@@ -474,6 +474,7 @@ export class ChaslayCompatService {
         courses_enabled: !!merchant.coursesEnabled,
         floor_plan_enabled: !!merchant.floorPlanEnabled,
         pax_ordering_enabled: !!merchant.paxOrderingEnabled,
+        shifts_enabled: !!merchant.shiftsEnabled,
       },
       checkout: {
         ...(await import("@/lib/pos-checkout-settings")).normalizePosCheckoutSettings(

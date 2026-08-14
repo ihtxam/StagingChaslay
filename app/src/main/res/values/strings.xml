@@ -679,6 +679,7 @@
     <string name="membership_gift_balance">Gift balance: %1$s %2$s</string>
     <string name="membership_card_number">Card: %1$s</string>
     <string name="gift_card_sell">Sell gift card</string>
+    <string name="gift_card_sell_requires_shift">Start a cash shift before selling gift cards.</string>
     <string name="gift_card_reload">Reload gift card</string>
     <string name="gift_card_sell_hint">Scan or enter RFID/code, choose amount, then add to cart.</string>
     <string name="gift_card_reload_hint">Scan card to reload, choose amount, then add to cart.</string>

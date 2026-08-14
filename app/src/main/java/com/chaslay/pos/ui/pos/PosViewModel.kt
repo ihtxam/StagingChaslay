@@ -177,6 +177,7 @@ data class PosUiState(
     val attachedMembership: AttachedMembership? = null,
     val showMembershipDialog: Boolean = false,
     val giftCardsEnabled: Boolean = false,
+    val shiftsEnabled: Boolean = false,
     val membershipBusy: Boolean = false,
     val membershipLookupError: String? = null,
     val lastLoyaltyPointsEarned: Int? = null,
@@ -221,6 +222,7 @@ class PosViewModel @Inject constructor(
     private val floorSyncRepository: FloorSyncRepository,
     private val floorSyncEvents: FloorSyncEvents,
     private val giftCardRepository: com.chaslay.pos.data.repository.GiftCardRepository,
+    private val posShiftRepository: com.chaslay.pos.data.repository.PosShiftRepository,
     private val syncApi: com.chaslay.pos.data.remote.SyncApi,
     private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences,
     @ApplicationContext private val appContext: android.content.Context
@@ -2028,6 +2030,12 @@ class PosViewModel @Inject constructor(
             if (merged != current) {
                 settingsRepository.saveSettings(merged)
             }
+            updateExtras {
+                it.copy(
+                    giftCardsEnabled = merged.giftCardsEnabled,
+                    shiftsEnabled = cfg.features?.shiftsEnabled == true
+                )
+            }
             refreshGiftCardFeature()
         }
     }
@@ -2039,9 +2047,33 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    fun showGiftCardSellDialog() = openGiftCardOpsDialog(GiftCardOp.SELL)
+    fun showGiftCardSellDialog() {
+        viewModelScope.launch {
+            if (!ensureOpenShiftForGiftCardSell()) return@launch
+            openGiftCardOpsDialog(GiftCardOp.SELL)
+        }
+    }
 
     fun showGiftCardReloadDialog() = openGiftCardOpsDialog(GiftCardOp.RELOAD)
+
+    private suspend fun ensureOpenShiftForGiftCardSell(): Boolean {
+        if (!_uiExtras.value.shiftsEnabled) return true
+        val open = posShiftRepository.hasOpenShift().getOrElse { error ->
+            showError(
+                appContext.getString(R.string.gift_card_sell),
+                error.message ?: appContext.getString(R.string.gift_card_sell_requires_shift)
+            )
+            return false
+        }
+        if (!open) {
+            showError(
+                appContext.getString(R.string.gift_card_sell),
+                appContext.getString(R.string.gift_card_sell_requires_shift)
+            )
+            return false
+        }
+        return true
+    }
 
     private fun openGiftCardOpsDialog(mode: GiftCardOp) {
         refreshGiftCardFeature()
@@ -2120,6 +2152,31 @@ class PosViewModel @Inject constructor(
         deliveryMethod: String? = null
     ) {
         val mode = _uiExtras.value.giftCardOpsMode ?: return
+        viewModelScope.launch {
+            if (mode == GiftCardOp.SELL && !ensureOpenShiftForGiftCardSell()) return@launch
+            addGiftCardLineToCartInternal(
+                mode,
+                amount,
+                cardNumber,
+                cardId,
+                holderName,
+                mediaType,
+                ecardEmail,
+                deliveryMethod
+            )
+        }
+    }
+
+    private fun addGiftCardLineToCartInternal(
+        mode: GiftCardOp,
+        amount: Double,
+        cardNumber: String,
+        cardId: String?,
+        holderName: String?,
+        mediaType: String = "physical",
+        ecardEmail: String? = null,
+        deliveryMethod: String? = null
+    ) {
         val settings = _uiExtras.value.giftCardSettings
         val min = settings?.minAmount ?: 5.0
         val max = settings?.maxAmount ?: 500.0
@@ -3730,6 +3787,7 @@ class PosViewModel @Inject constructor(
         val attachedMembership: AttachedMembership? = null,
         val showMembershipDialog: Boolean = false,
         val giftCardsEnabled: Boolean = false,
+    val shiftsEnabled: Boolean = false,
         val membershipBusy: Boolean = false,
         val membershipLookupError: String? = null,
         val lastLoyaltyPointsEarned: Int? = null,

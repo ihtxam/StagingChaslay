@@ -154,7 +154,8 @@ data class SyncPaymentMethodsDto(
 data class SyncFeaturesDto(
     @SerializedName("courses_enabled") val coursesEnabled: Boolean = false,
     @SerializedName("floor_plan_enabled") val floorPlanEnabled: Boolean = false,
-    @SerializedName("pax_ordering_enabled") val paxOrderingEnabled: Boolean = false
+    @SerializedName("pax_ordering_enabled") val paxOrderingEnabled: Boolean = false,
+    @SerializedName("shifts_enabled") val shiftsEnabled: Boolean = false
 )
 
 data class SyncCheckoutDiscountPresetDto(
