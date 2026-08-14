@@ -49,12 +49,20 @@ export function parseGiftCardCode(raw: string): string {
   return extractGiftCardCode(raw);
 }
 
-/** Compact payload for thermal QR / Code128 — redeem code only, e.g. EC9E1E09C. */
+/** Compact payload (legacy QR) — redeem code only, e.g. EC9E1E09C. */
 export function buildGiftCardRedeemQrPayload(code: string): string {
   const parsed = extractGiftCardCode(code);
   const m = parsed.match(/^EC[-' ]?([0-9A-F]{6,12})$/i);
   if (m) return `EC${m[1].toUpperCase()}`;
   return parsed.replace(/[\s:_\-]+/g, "").toUpperCase() || String(code || "").trim();
+}
+
+/** Human-readable + Code128 payload — dashed redeem code, e.g. EC-9E1E09C. */
+export function buildGiftCardBarcodePayload(code: string): string {
+  const parsed = extractGiftCardCode(code);
+  const m = parsed.match(/^EC[-' ]?([0-9A-F]{6,12})$/i);
+  if (m) return `EC-${m[1].toUpperCase()}`;
+  return parsed.trim() || String(code || "").trim();
 }
 
 /** Lookup keys for e-card rows (accepts compact, dashed, and legacy formats). */

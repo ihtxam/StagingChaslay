@@ -88,12 +88,20 @@ export function parseGiftCardCode(raw: string): string {
   return extractGiftCardCode(raw);
 }
 
-/** Thermal QR / Code128 payload — compact redeem code only, e.g. EC9E1E09C. */
+/** Compact payload (legacy QR) — redeem code only, e.g. EC9E1E09C. */
 export function buildGiftCardRedeemQrPayload(code: string): string {
   const parsed = extractGiftCardCode(code);
   const m = parsed.match(/^EC[-' ]?([0-9A-F]{6,12})$/i);
   if (m) return `EC${m[1].toUpperCase()}`;
   return parsed.replace(/[\s:_\-]+/g, '').toUpperCase() || String(code || '').trim();
+}
+
+/** Human-readable + Code128 payload — dashed redeem code, e.g. EC-9E1E09C. */
+export function buildGiftCardBarcodePayload(code: string): string {
+  const parsed = extractGiftCardCode(code);
+  const m = parsed.match(/^EC[-' ]?([0-9A-F]{6,12})$/i);
+  if (m) return `EC-${m[1].toUpperCase()}`;
+  return parsed.trim() || String(code || '').trim();
 }
 
 /** Return the first ref that exists on the public receipt API (backend UUID preferred). */
@@ -160,19 +168,23 @@ export function escposQrCode(data: string, moduleSize = 4): Uint8Array {
   return out;
 }
 
-/** ESC/POS Code128 barcode (GS k 73) — ideal for USB wedge scanners. */
+/** ESC/POS Code128 barcode (GS k 73) — subset B, no HRI (label printed separately). */
 export function escposCode128(data: string, height = 80, width = 2): Uint8Array {
+  const raw = String(data || '').trim();
+  if (!raw) return new Uint8Array(0);
+  // {B selects Code128 subset B; prefix is consumed by the printer, not scanned.
+  const encoded = raw.startsWith('{') ? raw : `{B${raw}`;
   const encoder = new TextEncoder();
-  const payload = encoder.encode(String(data || '').trim());
+  const payload = encoder.encode(encoded);
   if (!payload.length || payload.length > 255) return new Uint8Array(0);
   const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
   const heightCmd = new Uint8Array([0x1d, 0x68, Math.max(1, Math.min(255, height))]);
   const widthCmd = new Uint8Array([0x1d, 0x77, Math.max(1, Math.min(6, width))]);
-  const hriBelow = new Uint8Array([0x1d, 0x48, 2]);
+  const hriOff = new Uint8Array([0x1d, 0x48, 0]);
   const printHeader = new Uint8Array([0x1d, 0x6b, 73, payload.length]);
   const lf = new Uint8Array([0x0a]);
-  return concatBytes(alignCenter, heightCmd, widthCmd, hriBelow, printHeader, payload, lf, alignLeft);
+  return concatBytes(alignCenter, heightCmd, widthCmd, hriOff, printHeader, payload, lf, alignLeft);
 }
 
 export function concatBytes(...parts: Uint8Array[]): Uint8Array {

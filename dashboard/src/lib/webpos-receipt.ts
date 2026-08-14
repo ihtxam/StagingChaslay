@@ -1,7 +1,7 @@
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY, formatTimeHHMM, ymdZurich } from '@/lib/date-format';
 import { roundMoney2 } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
-import { buildReceiptUrl, buildGiftCardRedeemQrPayload, concatBytes, escposQrCode, escposCode128 } from '@/lib/qr';
+import { buildReceiptUrl, buildGiftCardBarcodePayload, concatBytes, escposCode128, escposQrCode } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
 import { resolveOrderItemName } from '@/lib/order-item-name';
@@ -204,8 +204,16 @@ export type GiftCardSaleReceipt = {
   businessName: string;
   address?: string;
   phone?: string;
+  vatNumber?: string;
+  /** Dashed display + barcode payload, e.g. EC-9E1E09C */
   code: string;
   balance: number;
+  subtotal?: number;
+  taxAmount?: number;
+  taxRate?: number;
+  total?: number;
+  vatIncludedInPrice?: boolean;
+  showVat?: boolean;
   recipientEmail?: string | null;
   holderName?: string | null;
   language?: ReceiptLang | string;
@@ -214,17 +222,67 @@ export type GiftCardSaleReceipt = {
   footer?: string;
 };
 
-/** Thermal receipt for a newly sold e-gift card (includes QR with redeem code). */
+/** VAT breakdown for a gift-card sale amount. */
+export function computeGiftCardSaleVat(
+  balance: number,
+  taxRate: number,
+  vatIncludedInPrice: boolean
+): { subtotal: number; taxAmount: number; total: number } {
+  const gross = roundMoney2(balance);
+  const rate = Number(taxRate) || 0;
+  if (rate <= 0) {
+    return { subtotal: gross, taxAmount: 0, total: gross };
+  }
+  if (vatIncludedInPrice) {
+    const subtotal = roundMoney2(gross / (1 + rate / 100));
+    const taxAmount = roundMoney2(gross - subtotal);
+    return { subtotal, taxAmount, total: gross };
+  }
+  const subtotal = gross;
+  const taxAmount = roundMoney2(subtotal * (rate / 100));
+  return { subtotal, taxAmount, total: roundMoney2(subtotal + taxAmount) };
+}
+
+function formatGiftCardVatSection(
+  tx: GiftCardSaleReceipt,
+  L: ReturnType<typeof receiptLabels>,
+  width: number
+): string | null {
+  const rate = Number(tx.taxRate) || 0;
+  const taxAmount = roundMoney2(tx.taxAmount || 0);
+  if (tx.showVat === false || rate <= 0 || taxAmount <= 0) return null;
+  const net = roundMoney2(tx.subtotal ?? tx.balance);
+  const tva = taxAmount;
+  const brut = roundMoney2(tx.total ?? tx.balance);
+  const pseudo: WebPosReceipt = {
+    businessName: tx.businessName,
+    id: '',
+    completedAt: Date.now(),
+    paymentMethod: 'cash',
+    items: [],
+    subtotal: net,
+    discount: 0,
+    taxAmount: tva,
+    taxRate: rate,
+    rounding: 0,
+    total: brut,
+    vatIncludedInPrice: tx.vatIncludedInPrice !== false,
+    showVat: true,
+  };
+  return formatVatSection(pseudo, L, width);
+}
+
+/** Thermal receipt for a newly sold e-gift card (Code128 barcode + code text). */
 export function generateGiftCardSaleReceiptText(
   tx: GiftCardSaleReceipt,
   panelLang?: string
 ): string {
   const width = lineWidthForPaper(tx.paperWidthMm);
-  const code = String(tx.code || '').trim();
   const lang = resolveLang({ language: tx.language } as WebPosReceipt, panelLang);
   const L = receiptLabels(lang);
   const sep = '='.repeat(width);
   const thin = '-'.repeat(width);
+  const total = roundMoney2(tx.total ?? tx.balance);
 
   let r = '';
   r += sep + '\n';
@@ -234,6 +292,7 @@ export function generateGiftCardSaleReceiptText(
     r += (tx.businessName || APP_NAME).toUpperCase().slice(0, width) + '\n';
     if (tx.address) r += tx.address.slice(0, width) + '\n';
     if (tx.phone) r += `Tel: ${tx.phone}`.slice(0, width) + '\n';
+    if (tx.vatNumber) r += `VAT: ${tx.vatNumber}`.slice(0, width) + '\n';
   }
   r += sep + '\n';
   r += centerLine(L.giftCardTitle, width) + '\n';
@@ -245,9 +304,14 @@ export function generateGiftCardSaleReceiptText(
     r += `Email: ${tx.recipientEmail.trim().slice(0, width - 7)}\n`;
   }
   r += padLine(`${L.giftCardBalance}:`, `CHF ${Number(tx.balance || 0).toFixed(2)}`, width) + '\n';
-  r += thin + '\n';
-  r += `${L.giftCardCode}:\n`;
-  r += centerLine(code.slice(0, width), width) + '\n';
+  if (Math.abs(total - Number(tx.balance || 0)) > 0.001) {
+    r += padLine(`${L.total}:`, `CHF ${total.toFixed(2)}`, width) + '\n';
+  }
+  const vatSection = formatGiftCardVatSection(tx, L, width);
+  if (vatSection) {
+    r += thin + '\n';
+    r += vatSection + '\n';
+  }
   r += thin + '\n';
   r += centerLine(L.giftCardScanRedeem, width) + '\n';
   r += sep + '\n';
@@ -255,19 +319,25 @@ export function generateGiftCardSaleReceiptText(
   return r;
 }
 
-/** QR / barcode data for gift-card sale thermal print — compact redeem code only. */
-export function giftCardSaleReceiptQrPayload(code: string): string {
-  return buildGiftCardRedeemQrPayload(code);
+/** Code128 payload — dashed redeem code only, e.g. EC-9E1E09C. */
+export function giftCardSaleBarcodePayload(code: string): string {
+  return buildGiftCardBarcodePayload(code);
 }
 
-/** ESC/POS bytes for e-gift sale receipt (QR + Code128, always scannable). */
+/** @deprecated use giftCardSaleBarcodePayload */
+export function giftCardSaleReceiptQrPayload(code: string): string {
+  return giftCardSaleBarcodePayload(code);
+}
+
+/** ESC/POS bytes for e-gift sale receipt (Code128 only, code printed below). */
 export function giftCardSaleReceiptEscPos(
   text: string,
   code: string,
   logoBytes?: Uint8Array | null
 ): Uint8Array {
-  const payload = giftCardSaleReceiptQrPayload(code);
-  return textToEscPos(text, payload, logoBytes, payload);
+  const payload = giftCardSaleBarcodePayload(code);
+  const label = buildGiftCardBarcodePayload(code);
+  return textToEscPos(text, undefined, logoBytes, payload, label);
 }
 
 /** Prefer merchant print settings; kitchen defaults to full 80mm width. */
@@ -1392,7 +1462,8 @@ export function textToEscPos(
   text: string,
   qrData?: string,
   logoBytes?: Uint8Array | null,
-  barcodeData?: string
+  barcodeData?: string,
+  barcodeLabel?: string
 ): Uint8Array {
   const body = escposCp850Encode(text);
   const init = new Uint8Array([0x1b, 0x40]);
@@ -1410,6 +1481,9 @@ export function textToEscPos(
   }
   if (barcodeData) {
     parts.push(escposCode128(barcodeData, 72, 2));
+    if (barcodeLabel?.trim()) {
+      parts.push(alignCenter, escposCp850Encode(barcodeLabel.trim() + '\n'), alignLeft);
+    }
   }
   parts.push(feed, cut);
   return concatBytes(...parts);

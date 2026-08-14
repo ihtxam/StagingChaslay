@@ -482,6 +482,15 @@ class BluetoothPrinterService @Inject constructor(
         val sym = settings.currencySymbol
         val sep = "=".repeat(lineWidth)
         val thin = "-".repeat(lineWidth)
+        val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
+        val displayCode = com.chaslay.pos.domain.model.GiftCardCode.barcodePayload(code)
+        val taxRate = when (settings.defaultServiceType) {
+            com.chaslay.pos.domain.model.ServiceType.DINE_IN -> settings.dineInVatRate
+            else -> settings.takeawayVatRate
+        }
+        val vatRow = giftCardVatRow(balance, taxRate, settings.vatIncludedInPrice)
+        val total = vatRow?.brut ?: balance
+
         val sb = StringBuilder()
         sb.appendLine(sep)
         appendCenteredLines(sb, settings.businessName, lineWidth, bold = false)
@@ -494,40 +503,87 @@ class BluetoothPrinterService @Inject constructor(
         recipientEmail?.takeIf { it.isNotBlank() }?.let {
             sb.appendLine("Email: ${it.take(lineWidth - 7)}")
         }
-        sb.appendLine("Balance: $sym ${String.format(Locale.US, "%.2f", balance)}")
+        sb.appendLine(
+            leftRight("Balance", "$sym ${String.format(Locale.US, "%.2f", balance)}", lineWidth)
+        )
+        if (kotlin.math.abs(total - balance) >= 0.01) {
+            sb.appendLine(
+                leftRight(labels.total, "$sym ${String.format(Locale.US, "%.2f", total)}", lineWidth)
+            )
+        }
+        if (settings.receiptShowVatTable && vatRow != null && vatRow.tva >= 0.01) {
+            sb.appendLine(thin)
+            if (settings.vatIncludedInPrice) {
+                sb.appendLine(labels.vatIncludedNote)
+                appendVatTable(sb, listOf(vatRow), labels, lineWidth)
+            } else {
+                appendCompactVatLines(sb, listOf(vatRow), labels, lineWidth)
+            }
+        }
         sb.appendLine(thin)
-        sb.appendLine("Code:")
-        sb.appendLine(center(code.take(lineWidth), lineWidth))
-        sb.appendLine(thin)
-        sb.appendLine(center("Scan QR or barcode to redeem", lineWidth))
+        sb.appendLine(center("Scan barcode to redeem", lineWidth))
         sb.appendLine(sep)
         appendFooter(sb, settings.receiptFooter, lineWidth)
-        val qrPayload = com.chaslay.pos.domain.model.GiftCardCode.qrPayload(code)
-        return finalizeGiftCardPayload(sb.toString(), settings, lineWidth, qrPayload)
+        val barcodePayload = displayCode
+        return finalizeGiftCardPayload(sb.toString(), settings, lineWidth, barcodePayload, displayCode)
+    }
+
+    private fun giftCardVatRow(
+        balance: Double,
+        rate: Double,
+        vatIncluded: Boolean
+    ): com.chaslay.pos.domain.model.VatBreakdownRow? {
+        if (rate <= 0.0) return null
+        return if (vatIncluded) {
+            val brut = balance
+            val net = brut / (1.0 + rate / 100.0)
+            val tva = brut - net
+            com.chaslay.pos.domain.model.VatBreakdownRow(
+                label = "${ReceiptVatCalculator.formatRate(rate)}%",
+                rate = rate,
+                net = net,
+                tva = tva,
+                brut = brut
+            )
+        } else {
+            val net = balance
+            val tva = net * rate / 100.0
+            com.chaslay.pos.domain.model.VatBreakdownRow(
+                label = "${ReceiptVatCalculator.formatRate(rate)}%",
+                rate = rate,
+                net = net,
+                tva = tva,
+                brut = net + tva
+            )
+        }
     }
 
     private fun finalizeGiftCardPayload(
         text: String,
         settings: BusinessSettingsEntity,
         lineWidth: Int,
-        redeemPayload: String
+        barcodePayload: String,
+        displayCode: String
     ): ByteArray {
         val body = EscPosEncoder.encode(text)
-        val qrBytes = receiptQrRaster(redeemPayload, lineWidth)
-        val barcodeBytes = escPosCode128(redeemPayload)
-        val scannable = qrBytes + byteArrayOf(0x0A) + barcodeBytes
+        val barcodeBytes = escPosCode128(barcodePayload)
+        val labelBytes = EscPosEncoder.encode(escAlignCenter() + displayCode.take(lineWidth) + "\n" + escAlignLeft())
+        val scannable = barcodeBytes + labelBytes
         return buildPrintPayload(body, settings, lineWidth, scannable, cutFeedLines = 2)
     }
 
-    /** ESC/POS Code128 (GS k 73) for USB wedge scanners. */
+    /** ESC/POS Code128 (GS k 73) — subset B, HRI off (label printed separately). */
     private fun escPosCode128(data: String, height: Int = 72, width: Int = 2): ByteArray {
-        val payload = data.trim().toByteArray(Charsets.US_ASCII)
+        val raw = data.trim()
+        if (raw.isEmpty()) return byteArrayOf()
+        val encoded = if (raw.startsWith("{")) raw else "{B$raw"
+        val payload = encoded.toByteArray(Charsets.US_ASCII)
         if (payload.isEmpty() || payload.size > 255) return byteArrayOf()
         return byteArrayOf(
             0x1B, 0x61, 0x01,
             0x1D, 0x68, height.coerceIn(1, 255).toByte(),
             0x1D, 0x77, width.coerceIn(1, 6).toByte(),
-            0x1D, 0x48, 2,
+            0x1D, 0x48, 0,
             0x1D, 0x6B, 73, payload.size.toByte()
         ) + payload + byteArrayOf(0x0A, 0x1B, 0x61, 0x00)
     }

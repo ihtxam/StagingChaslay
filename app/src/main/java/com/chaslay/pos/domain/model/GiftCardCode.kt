@@ -33,11 +33,19 @@ object GiftCardCode {
     /** Normalize noisy wedge scans (alias for parse). */
     fun normalizeScannedPayload(raw: String): String = parse(raw)
 
-    /** Compact thermal QR / Code128 payload, e.g. EC9E1E09C. */
+    /** Compact thermal QR payload, e.g. EC9E1E09C. */
     fun qrPayload(code: String): String {
         val parsed = parse(code).ifBlank { code.trim() }
         val m = Regex("""^EC[-' ]?([0-9A-F]{6,12})$""", RegexOption.IGNORE_CASE).find(parsed)
         if (m != null) return "EC${m.groupValues[1].uppercase()}"
         return parsed.replace(Regex("""[\s:_\-]+"""), "").uppercase()
+    }
+
+    /** Dashed Code128 payload + display label, e.g. EC-9E1E09C. */
+    fun barcodePayload(code: String): String {
+        val parsed = parse(code).ifBlank { code.trim() }
+        val m = Regex("""^EC[-' ]?([0-9A-F]{6,12})$""", RegexOption.IGNORE_CASE).find(parsed)
+        if (m != null) return "EC-${m.groupValues[1].uppercase()}"
+        return parsed
     }
 }

@@ -16,7 +16,8 @@ import {
   resolveKitchenPaperWidthMm,
   generateWebPosReceiptText,
   generateGiftCardSaleReceiptText,
-  giftCardSaleReceiptQrPayload,
+  giftCardSaleReceiptEscPos,
+  computeGiftCardSaleVat,
   logoUrlToEscPos,
   encodeOrderMetaNotes,
   nextWebPosTicketNumber,
@@ -3367,13 +3368,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     holderName?: string | null;
   }) => {
     const lang = resolveReceiptLanguage(printSettings, paymentConfig?.panelLanguage || locale);
+    const showVat = printSettings?.receiptShowVatTable !== false;
+    const vat = computeGiftCardSaleVat(opts.balance, taxRate, vatIncludedInPrice);
     const text = generateGiftCardSaleReceiptText(
       {
         businessName: merchant?.name || APP_NAME,
         address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
         phone: merchant?.phone || undefined,
+        vatNumber: merchant?.vatNumber || undefined,
         code: opts.code,
         balance: opts.balance,
+        subtotal: vat.subtotal,
+        taxAmount: vat.taxAmount,
+        taxRate,
+        total: vat.total,
+        vatIncludedInPrice,
+        showVat,
         recipientEmail: opts.recipientEmail,
         holderName: opts.holderName,
         language: lang,
@@ -3383,14 +3393,48 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       },
       locale
     );
-    const scannable = giftCardSaleReceiptQrPayload(opts.code);
-    await printEscPosToTargets(text, {
-      qrUrl: scannable,
-      barcodeData: scannable,
-      forceScannable: true,
-      role: 'receipt',
-      quiet: true,
-    });
+    const paper = printSettings?.paperWidthMm || 80;
+    const logoUrl =
+      printSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl;
+    let logo: Uint8Array | null = null;
+    if (logoUrl) {
+      const cacheKey = `${String(logoUrl)}|${paper}`;
+      if (logoEscPosCacheRef.current?.key === cacheKey) {
+        logo = logoEscPosCacheRef.current.bytes;
+      } else {
+        logo = await logoUrlToEscPos(String(logoUrl), paper === 58 ? 240 : 384);
+        logoEscPosCacheRef.current = { key: cacheKey, bytes: logo };
+      }
+    }
+    const escpos = giftCardSaleReceiptEscPos(text, opts.code, logo);
+    const dataBase64 = uint8ToBase64(escpos);
+    const targets = printersForRole(printSettings, 'receipt');
+    const names =
+      targets.length > 0
+        ? targets.map((x) => x.name)
+        : [printerName || ''];
+    const named = names.map((n) => (n || '').trim()).filter(Boolean);
+    let printedOk = 0;
+    let queuedOk = 0;
+    for (const label of named) {
+      if (label && isUnsuitableRawPrinter(label)) {
+        throw new Error(unsuitableRawPrinterMessage(label) || t('webPosUnsuitablePrinter'));
+      }
+      try {
+        const mode = await printViaAgentOrQueue({
+          printerName: label || undefined,
+          dataBase64,
+          text,
+        });
+        if (mode === 'queued') queuedOk += 1;
+        else printedOk += 1;
+      } catch (e: any) {
+        throw e;
+      }
+    }
+    if (!printedOk && !queuedOk) {
+      throw new Error(t('webPosPrintFailed'));
+    }
   };
 
   const fulfillEcardDeliveries = async (
