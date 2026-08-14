@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
@@ -219,6 +220,12 @@ import {
   type AttachedMembership,
 } from '@/lib/loyalty-math';
 import type { AppliedPayment } from '@/components/webpos/WebPosCheckoutView';
+import {
+  collectPaymentAction,
+  customerFromOrder,
+  orderItemsToCartLines,
+} from '@/lib/order-to-cart';
+import type { MerchantOrder } from '@/lib/order-management';
 
 type SplitReceiptPart = {
   id: string;
@@ -227,6 +234,14 @@ type SplitReceiptPart = {
   url?: string;
   amount: number;
   orderNumber?: string;
+};
+
+type CollectOrderRef = {
+  id: string;
+  orderNumber: string;
+  status: string;
+  total: number;
+  returnView: 'orders' | 'register';
 };
 import type {
   BillDiscount,
@@ -398,6 +413,7 @@ function mergeBillDiscounts(
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const { t, locale } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
   const authUser = useAuthStore((s) => s.user);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
@@ -547,6 +563,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [ordersRefreshToken, setOrdersRefreshToken] = useState(0);
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
   const [ordersChannelPref, setOrdersChannelPref] = useState<'online' | null>(null);
+  const [collectOrderRef, setCollectOrderRef] = useState<CollectOrderRef | null>(null);
   const [onlineOrdersOpen, setOnlineOrdersOpen] = useState(false);
   const [onlineOrders, setOnlineOrders] = useState<OnlineOrder[]>([]);
   const knownOnlineIdsRef = useRef<Set<string> | null>(null);
@@ -3563,6 +3580,142 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
+  const clearCollectCheckout = () => {
+    setCollectOrderRef(null);
+    setCart([]);
+    clearCartTicket();
+    setSelectedCustomer(null);
+    setBillDiscount({ percent: 0, amount: 0 });
+    setFulfillmentWhen(null);
+    setOrderSent(false);
+    setCoursesBulkSent(false);
+    setChannel(null);
+    setOrderNote('');
+    setTableId(null);
+    setTableLabel(null);
+    setTabNumber(null);
+    terminalPaymentRef.current = null;
+    setCheckoutExtras(null);
+  };
+
+  const openOrderCollectCheckout = (
+    order: MerchantOrder,
+    returnView: 'orders' | 'register' = 'orders'
+  ) => {
+    const lines = orderItemsToCartLines(order.items || []);
+    if (!lines.length) {
+      toast.error(t('webPosNoItems'));
+      return;
+    }
+    const ch = (order.channel || order.fulfillmentChannel || 'takeaway') as Channel;
+    setCart(lines);
+    setBillDiscount({ percent: 0, amount: Number(order.discountAmount || 0) });
+    setChannel(ch);
+    setOrderNote('');
+    setTableId(null);
+    setTableLabel(order.tableLabel || null);
+    setTabNumber(order.tabNumber || null);
+    setTicketDisplay(order.ticketDisplay || order.orderNumber);
+    setTicketOrderNumber(order.orderNumber);
+    setOrderSent(true);
+    setCoursesBulkSent(true);
+    setSplitQueue([]);
+    setSplitIndex(0);
+    splitMasterIdRef.current = null;
+    clearAttachedMembership();
+    setPayWithPoints(false);
+    setSelectedCustomer(customerFromOrder(order));
+    if (order.scheduledFor) {
+      setFulfillmentWhen({
+        mode: 'later',
+        scheduledFor: String(order.scheduledFor),
+        label: String(order.scheduledFor),
+      });
+    } else {
+      setFulfillmentWhen(null);
+    }
+    setCollectOrderRef({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      total: Number(order.total),
+      returnView,
+    });
+    setHighlightOrderId(null);
+    setOrdersChannelPref(null);
+    setPosTab('register');
+    setPosView('checkout');
+  };
+
+  const collectUrlHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || pinGateRequired) return;
+    const collectId = searchParams.get('collect');
+    if (!collectId || collectUrlHandledRef.current === collectId) return;
+    collectUrlHandledRef.current = collectId;
+    void (async () => {
+      try {
+        const res = await api.get(`/merchant/orders/${collectId}`);
+        const order = (res.data?.order || res.data) as MerchantOrder;
+        if (!order?.id) throw new Error('Order not found');
+        openOrderCollectCheckout(order, 'register');
+        setSearchParams({}, { replace: true });
+      } catch (e: any) {
+        toast.error(e.response?.data?.error || e.message || t('webPosOrdersLoadFailed'));
+        setSearchParams({}, { replace: true });
+      }
+    })();
+  }, [loading, pinGateRequired, searchParams, setSearchParams, t]);
+
+  const finalizeCollectPayment = async (
+    payments: AppliedPayment[],
+    changeDue: number,
+    tipAmount = 0
+  ) => {
+    const ctx = collectOrderRef;
+    if (!ctx) return;
+    const tip = roundMoney2(Math.max(0, tipAmount));
+    const due = roundMoney2(ctx.total + tip);
+    const primary =
+      payments.find((p) => p.method === 'terminal') ||
+      payments.find((p) => p.method === 'card') ||
+      payments.find((p) => p.method === 'gift_card') ||
+      payments[0];
+    if (!primary && due > 0.001) return;
+    let payMethod = primary?.method === 'gift_card' ? 'card' : primary?.method || 'cash';
+    if (payMethod === 'pay_later') payMethod = 'cash';
+    if (!['cash', 'card', 'terminal'].includes(payMethod)) payMethod = 'cash';
+    const action = collectPaymentAction(ctx.status);
+    setBusy(true);
+    try {
+      const res = await api.post(`/merchant/orders/${ctx.id}/action`, {
+        action,
+        paymentMethod: payMethod,
+      });
+      toast.success(t('webPosPaymentCollected'));
+      const updated = res.data?.order as PosOrderForReceipt | undefined;
+      if (updated) {
+        try {
+          await printPosOrderReceipt(updated);
+        } catch {
+          /* print is best-effort */
+        }
+      }
+      setSuccessInfo({
+        amount: ctx.total,
+        changeDue: changeDue > 0 ? changeDue : null,
+      });
+      clearCollectCheckout();
+      setOrdersRefreshToken((n) => n + 1);
+      setPosView('success');
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
+      setPosView('checkout');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const completeMultiTenderCheckout = async (
     payments: AppliedPayment[],
     changeDue: number,
@@ -3573,6 +3726,40 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setPosView('register');
       setPosTab('register');
       setCheckoutOpen(false);
+      return;
+    }
+    if (collectOrderRef) {
+      const tip = roundMoney2(Math.max(0, tipAmount));
+      const due = roundMoney2(collectOrderRef.total + tip);
+      const collectPrimary =
+        payments.find((p) => p.method === 'terminal') ||
+        payments.find((p) => p.method === 'card') ||
+        payments.find((p) => p.method === 'gift_card') ||
+        payments[0];
+      if (!collectPrimary && due > 0.001) return;
+      if (collectPrimary?.method === 'terminal') {
+        if (payments.length > 1) {
+          toast.error(t('webPosTerminalSinglePayment'));
+          return;
+        }
+        if (!guardOfflineCheckout('terminal')) return;
+        const extras: CheckoutResult = {
+          method: 'terminal',
+          discountPercent: 0,
+          discountAmount: 0,
+          tipAmount: tip,
+          roundingAmount: 0,
+          total: due,
+          amountTendered: due,
+          changeDue: null,
+        };
+        setCheckoutExtras(extras);
+        await runTerminalPayment(undefined, extras);
+        return;
+      }
+      const collectMethod = (collectPrimary?.method || 'cash') as PosPaymentMethod;
+      if (!guardOfflineCheckout(collectMethod)) return;
+      await finalizeCollectPayment(payments, changeDue, tipAmount);
       return;
     }
     const tip = roundMoney2(Math.max(0, tipAmount));
@@ -4700,7 +4887,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setBusy(true);
 
     try {
-      const terminalAmount = roundMoney2(extras?.total ?? activeSale.totals.total);
+      const terminalAmount = roundMoney2(
+        extras?.total ??
+          (collectOrderRef ? collectOrderRef.total : activeSale.totals.total)
+      );
       const res = await api.post(
         '/payment/terminal/poi',
         {
@@ -4732,6 +4922,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           cashierReceipt: normalizeAdyenTerminalReceipt(result.cashierReceipt),
         };
         closePaymentModal();
+        if (collectOrderRef) {
+          await finalizeCollectPayment(
+            [{ id: clientId, method: 'terminal', amount: terminalAmount }],
+            0,
+            extras?.tipAmount || 0
+          );
+          return;
+        }
         await finalizeSale('terminal', clientId, whenOverride, extras, true);
         return;
       }
@@ -5074,6 +5272,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       selectedCustomer.phone ||
       null
     : null;
+  const checkoutDueTotal = collectOrderRef?.total ?? activeSale.totals.total;
 
   const onlinePendingCount = onlineOrders.filter(
     (o) => o.status === 'pending' || o.status === 'pending_approval'
@@ -5298,61 +5497,79 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       <div className="flex min-h-0 flex-1 flex-col">
         {posView === 'checkout' ? (
           <WebPosCheckoutView
-            total={activeSale.totals.total}
-            splitLabel={activeSale.label}
-            splitGuestCount={splitQueue.length || undefined}
+            total={checkoutDueTotal}
+            splitLabel={collectOrderRef ? collectOrderRef.orderNumber : activeSale.label}
+            splitGuestCount={collectOrderRef ? undefined : splitQueue.length || undefined}
             settings={checkoutSettings}
             methods={{
               cash: enabledMethods.cash,
               card: enabledMethods.card,
               terminal: enabledMethods.terminal,
-              giftCard: enabledMethods.giftCard,
+              giftCard: collectOrderRef ? false : enabledMethods.giftCard,
               payLater:
-                (channel === 'takeaway' || channel === 'delivery') && canPay && !offlineNow,
+                !collectOrderRef &&
+                (channel === 'takeaway' || channel === 'delivery') &&
+                canPay &&
+                !offlineNow,
             }}
             busy={busy || paymentModalOpen}
             customerLabel={customerLabel}
             membershipPointsBalance={
-              attachedMembership?.membershipEnabled
-                ? attachedMembership.pointsBalance
-                : null
+              collectOrderRef
+                ? null
+                : attachedMembership?.membershipEnabled
+                  ? attachedMembership.pointsBalance
+                  : null
             }
-            canPayWithPoints={membershipCheckout.canPayWithPoints}
+            canPayWithPoints={!collectOrderRef && membershipCheckout.canPayWithPoints}
             payWithPoints={payWithPoints}
             onTogglePayWithPoints={setPayWithPoints}
             pointsRedeemed={membershipCheckout.pointsRedeemed}
             pointsDiscount={membershipCheckout.pointsDiscount}
-            onCustomer={() => setCustomerOpen(true)}
+            onCustomer={collectOrderRef ? undefined : () => setCustomerOpen(true)}
             onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
             onSplit={
-              checkoutSettings.splitBillsEnabled && !splitQueue.length
+              !collectOrderRef && checkoutSettings.splitBillsEnabled && !splitQueue.length
                 ? () => {
                     setSplitOpen(true);
                   }
                 : undefined
             }
-            onGiftCardRequest={(due) => {
-              setGiftCardPayDue(due);
-              setGiftCardPayOpen(true);
-            }}
+            onGiftCardRequest={
+              collectOrderRef
+                ? undefined
+                : (due) => {
+                    setGiftCardPayDue(due);
+                    setGiftCardPayOpen(true);
+                  }
+            }
             injectPayment={giftPayInject}
             onInjectPaymentConsumed={() => setGiftPayInject(null)}
             onComplete={(payments, changeDue, tipAmount) =>
               void completeMultiTenderCheckout(payments, changeDue, tipAmount)
             }
             onBack={() => {
-              setPosView('register');
-              setPosTab('register');
+              const returnView = collectOrderRef?.returnView;
+              clearCollectCheckout();
+              if (returnView === 'orders') {
+                setPosTab('orders');
+                setPosView('orders');
+              } else {
+                setPosView('register');
+                setPosTab('register');
+              }
             }}
             onBillDiscount={
-              checkoutSettings.discountsEnabled ? () => setBillDiscountOpen(true) : undefined
+              !collectOrderRef && checkoutSettings.discountsEnabled
+                ? () => setBillDiscountOpen(true)
+                : undefined
             }
             onClearBillDiscount={
-              checkoutSettings.discountsEnabled
+              !collectOrderRef && checkoutSettings.discountsEnabled
                 ? () => setBillDiscount({ percent: 0, amount: 0 })
                 : undefined
             }
-            canApplyBillDiscount={canApplyDiscounts}
+            canApplyBillDiscount={!collectOrderRef && canApplyDiscounts}
             billDiscountLabel={billDiscountLabel}
             billDiscountAmount={payableFullTotals.discount || 0}
           />
@@ -5477,6 +5694,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 forcePrint: true,
               });
             }}
+            onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
           />
         ) : (
           <div

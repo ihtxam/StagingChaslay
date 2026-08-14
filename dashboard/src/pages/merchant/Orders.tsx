@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Ban,
@@ -26,11 +27,14 @@ import {
   orderSourceLabel,
   isProgrammedOrder,
   orderChannel,
+  ONLINE_CHANNEL_BORDER,
+  ONLINE_CHANNEL_STYLE,
   orderPublicRefs,
   orderSearchHaystack,
   todayIso,
   type MerchantOrder,
 } from '@/lib/order-management';
+import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { printMerchantOrderReceipt, printRefundReceipt } from '@/lib/print-order-receipt';
 import { hasTerminalPortion, parsePaymentBreakdown } from '@/lib/payment-breakdown';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
@@ -106,6 +110,7 @@ function matchesChannelFilter(o: MerchantOrder, filter: ChannelFilter) {
 
 export default function Orders() {
   const { t, formatDateTime, locale } = useI18n();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<BoardTab>('new');
@@ -484,6 +489,15 @@ export default function Orders() {
     setPaymentMethodDraft(m === 'card' ? 'card' : m === 'terminal' ? 'terminal' : 'cash');
   };
 
+  const startCollectPayment = (order: MerchantOrder) => {
+    if (isOnlineShopOrder(order)) {
+      navigate(`/merchant/pos?collect=${order.id}`);
+      return;
+    }
+    setCollectFor(order);
+    setPaymentMethodDraft('cash');
+  };
+
   const actionsFor = (order: MerchantOrder) => {
     const s = order.status;
     const ch = orderChannel(order);
@@ -762,6 +776,9 @@ export default function Orders() {
         <span className="inline-flex items-center gap-1">
           <span className="h-2 w-2 rounded-full bg-emerald-500" /> {t('delivery')}
         </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-violet-500" /> {t('webPosOnlineOrders')}
+        </span>
       </div>
 
       <div className="grid gap-2.5 sm:grid-cols-2">
@@ -773,16 +790,17 @@ export default function Orders() {
         {list.map((order) => {
           const ch = orderChannel(order);
           const refs = orderPublicRefs(order);
+          const online = isOnlineShopOrder(order);
           const title =
             refs.ticketDisplay ||
             (refs.tabNumber ? `#${refs.tabNumber}` : null) ||
-            order.orderNumber ||
+            formatOrderNumberDisplay(order.orderNumber) ||
             order.id.slice(0, 8);
           return (
             <article
               key={order.id}
               className={`cursor-pointer overflow-hidden rounded-xl border border-[var(--border)] border-l-[3px] bg-[var(--bg-elevated)] p-3.5 shadow-sm transition hover:shadow-md ${
-                CHANNEL_BORDER[ch] || 'border-l-slate-400'
+                online ? ONLINE_CHANNEL_BORDER : CHANNEL_BORDER[ch] || 'border-l-slate-400'
               }`}
               onClick={() => void openDetail(order)}
               onKeyDown={(e) => {
@@ -807,10 +825,15 @@ export default function Orders() {
                 </div>
                 <span
                   className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${
-                    CHANNEL_STYLE[ch] || 'bg-[var(--bg-muted)]'
+                    online
+                      ? ONLINE_CHANNEL_STYLE
+                      : CHANNEL_STYLE[ch] || 'bg-[var(--bg-muted)]'
                   }`}
                 >
-                  {channelLabel(ch)}
+                  {online
+                    ? orderSourceLabel((order as { orderSource?: string | null }).orderSource) ||
+                      t('ordersOnlineShop')
+                    : channelLabel(ch)}
                 </span>
               </div>
 
@@ -862,7 +885,7 @@ export default function Orders() {
             <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3.5">
               <div className="min-w-0">
                 <h2 className="truncate text-base font-extrabold">
-                  {selected.orderNumber || selected.id.slice(0, 8)}
+                  {formatOrderNumberDisplay(selected.orderNumber) || selected.id.slice(0, 8)}
                 </h2>
                 <p className="text-xs text-[var(--text-muted)]">{statusLabel(selected.status, t)}</p>
               </div>
@@ -1006,10 +1029,7 @@ export default function Orders() {
                   {canCollectPayment(selected) ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        setCollectFor(selected);
-                        setPaymentMethodDraft('cash');
-                      }}
+                      onClick={() => startCollectPayment(selected)}
                       className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-800"
                     >
                       {t('webPosTakePayment')} · CHF {Number(selected.total).toFixed(2)}

@@ -27,7 +27,8 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
-import { formatOrderPaymentDisplay } from '@/lib/order-management';
+import { formatOrderPaymentDisplay, isOnlineShopOrder, orderChannelBadgeClass, orderChannelHeaderClass } from '@/lib/order-management';
+import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { hasTerminalPortion, parsePaymentBreakdown } from '@/lib/payment-breakdown';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
@@ -128,6 +129,7 @@ export type PosOrder = PosOrderForReceipt & {
   masterOrderId?: string | null;
   /** pos | web_shop */
   orderType?: string | null;
+  orderSource?: string | null;
 };
 export type HeldRow = {
   id: string;
@@ -164,6 +166,8 @@ type Props = {
   highlightOrderId?: string | null;
   /** Prefer opening on Online / Active when jumping from the bell panel */
   initialChannelFilter?: ChannelFilter | null;
+  /** Open WebPOS checkout for unpaid orders instead of the quick collect modal */
+  onCollectPaymentCheckout?: (order: PosOrder) => void;
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal'] as const;
@@ -260,16 +264,19 @@ function canRefundOrder(o: PosOrder): boolean {
 }
 
 function channelBadgeClass(ch?: string | null) {
-  switch (ch) {
-    case 'dine_in':
-      return 'bg-sky-100 text-sky-800';
-    case 'takeaway':
-      return 'bg-amber-100 text-amber-900';
-    case 'delivery':
-      return 'bg-orange-100 text-orange-900';
-    default:
-      return 'bg-violet-100 text-violet-800';
-  }
+  return orderChannelBadgeClass({ channel: ch, orderType: 'pos' } as PosOrder);
+}
+
+function channelHeaderClass(ch?: string | null): string {
+  return orderChannelHeaderClass({ channel: ch, orderType: 'pos' } as PosOrder);
+}
+
+function orderBadgeClass(o: PosOrder) {
+  return orderChannelBadgeClass(o);
+}
+
+function orderHeaderClass(o: PosOrder) {
+  return orderChannelHeaderClass(o);
 }
 
 function isPlatformChannel(ch?: string | null) {
@@ -322,20 +329,8 @@ function formatOrderAge(fromMs: number, nowMs: number): string {
   return `${Math.floor(sec / 3600)}h`;
 }
 
-function channelHeaderClass(ch?: string | null): string {
-  switch ((ch || '').toLowerCase()) {
-    case 'dine_in':
-      return 'bg-emerald-600';
-    case 'delivery':
-      return 'bg-orange-500';
-    case 'takeaway':
-      return 'bg-sky-600';
-    default:
-      return 'bg-violet-600';
-  }
-}
-
-function ChannelGlyph({ ch }: { ch?: string | null }) {
+function ChannelGlyph({ ch, order }: { ch?: string | null; order?: PosOrder }) {
+  if (order && isOnlineShopOrder(order)) return <Store size={14} />;
   const c = (ch || '').toLowerCase();
   if (c === 'dine_in') return <UtensilsCrossed size={14} />;
   if (c === 'delivery') return <Truck size={14} />;
@@ -357,6 +352,7 @@ export default function WebPosOrdersPanel({
   terminalEnabled = false,
   highlightOrderId = null,
   initialChannelFilter = null,
+  onCollectPaymentCheckout,
 }: Props) {
   const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -429,7 +425,8 @@ export default function WebPosOrdersPanel({
     return map[key] || status;
   };
 
-  const channelLabel = (ch?: string | null) => {
+  const channelLabel = (ch?: string | null, order?: PosOrder) => {
+    if (order && isOnlineShopOrder(order)) return t('webPosOnlineOrders');
     if (!ch) return '·';
     if (ch === 'dine_in') return t('dineIn');
     if (ch === 'takeaway') return t('takeaway');
@@ -531,7 +528,7 @@ export default function WebPosOrdersPanel({
         if (q) {
           const refs = orderPublicRefs(o);
           const hay =
-            `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${o.orderType || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
+            `${formatOrderNumberDisplay(o.orderNumber)} ${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${o.orderType || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
           if (!hay.includes(q)) continue;
         }
         activeBucket.push(o);
@@ -546,7 +543,7 @@ export default function WebPosOrdersPanel({
         if (q) {
           const refs = orderPublicRefs(o);
           const hay =
-            `${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${o.orderType || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
+            `${formatOrderNumberDisplay(o.orderNumber)} ${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${o.orderType || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
           if (!hay.includes(q)) continue;
         }
         doneBucket.push(o);
@@ -731,6 +728,16 @@ export default function WebPosOrdersPanel({
           : 'cash'
     );
     setRefundFor(null);
+  };
+
+  const startCollectPayment = (order: PosOrder) => {
+    setPaymentEditFor(null);
+    if (onCollectPaymentCheckout) {
+      onCollectPaymentCheckout(order);
+      return;
+    }
+    setPaymentMethodDraft('cash');
+    setCollectFor(order);
   };
 
   const closeMenus = () => {
@@ -1076,7 +1083,7 @@ export default function WebPosOrdersPanel({
                     o.tableLabel ||
                     (refs.tabNumber ? `#${refs.tabNumber}` : null) ||
                     refs.ticketDisplay ||
-                    o.orderNumber;
+                    formatOrderNumberDisplay(o.orderNumber);
                   const age = formatOrderAge(orderTimeMs(o) || nowMs, nowMs);
                   const itemCount = Array.isArray(o.items) ? o.items.length : 0;
                   return (
@@ -1087,11 +1094,11 @@ export default function WebPosOrdersPanel({
                       className="flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border border-stone-200 bg-stone-900 text-left text-white shadow-sm transition hover:ring-2 hover:ring-teal-400"
                     >
                       <div
-                        className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${channelHeaderClass(o.channel)}`}
+                        className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${orderHeaderClass(o)}`}
                       >
                         <span className="inline-flex min-w-0 items-center gap-1">
-                          <ChannelGlyph ch={o.channel} />
-                          <span className="truncate">{channelLabel(o.channel)}</span>
+                          <ChannelGlyph ch={o.channel} order={o} />
+                          <span className="truncate">{channelLabel(o.channel, o)}</span>
                         </span>
                         <span className="shrink-0 tabular-nums">{idLabel}</span>
                       </div>
@@ -1237,7 +1244,7 @@ export default function WebPosOrdersPanel({
                               <p className="truncate text-sm font-semibold">
                                 {titleParts.length
                                   ? titleParts.join(' · ')
-                                  : o.orderNumber}
+                                  : formatOrderNumberDisplay(o.orderNumber)}
                               </p>
                               <p className="mt-0.5 text-xs text-stone-500">
                                 {formatDateTime(o.completedAt || o.createdAt)}
@@ -1249,9 +1256,9 @@ export default function WebPosOrdersPanel({
                           </div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             <span
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${channelBadgeClass(o.channel)}`}
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderBadgeClass(o)}`}
                             >
-                              {channelLabel(o.channel)}
+                              {channelLabel(o.channel, o)}
                             </span>
                             {refs.ticketDisplay ? (
                               <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold text-teal-900">
@@ -1285,7 +1292,7 @@ export default function WebPosOrdersPanel({
                               {statusLabel(o.status)}
                             </span>
                           </div>
-                          <p className="mt-0.5 text-[11px] text-stone-400">{o.orderNumber}</p>
+                          <p className="mt-0.5 text-[11px] text-stone-400">{formatOrderNumberDisplay(o.orderNumber)}</p>
                         </div>
                         {isCompletedSale ? (
                           <span
@@ -1438,7 +1445,7 @@ export default function WebPosOrdersPanel({
                       selectedOrder.tableLabel
                         ? `${t('table')} ${selectedOrder.tableLabel}`
                         : null,
-                      channelLabel(selectedOrder.channel),
+                      channelLabel(selectedOrder.channel, selectedOrder),
                       statusLabel(selectedOrder.status),
                     ].filter(Boolean);
                     return (
@@ -1499,7 +1506,7 @@ export default function WebPosOrdersPanel({
                       {refs.ticketDisplay ||
                         (refs.tabNumber
                           ? `${t('webPosTab')} ${refs.tabNumber}`
-                          : selectedOrder.orderNumber)}
+                          : formatOrderNumberDisplay(selectedOrder.orderNumber))}
                     </p>
                     <p className="text-xs text-stone-500">
                       {statusLabel(selectedOrder.status)}
@@ -1507,7 +1514,7 @@ export default function WebPosOrdersPanel({
                         ? ` · ${t('webPosTab')} ${refs.tabNumber}`
                         : ''}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-stone-400">{selectedOrder.orderNumber}</p>
+                    <p className="mt-0.5 text-[11px] text-stone-400">{formatOrderNumberDisplay(selectedOrder.orderNumber)}</p>
                   </div>
                       </>
                     );
@@ -1556,11 +1563,7 @@ export default function WebPosOrdersPanel({
                     <button
                       type="button"
                       className="w-full rounded-xl bg-emerald-700 py-3.5 text-sm font-bold text-white hover:bg-emerald-800"
-                      onClick={() => {
-                        setPaymentEditFor(null);
-                        setPaymentMethodDraft('cash');
-                        setCollectFor(selectedOrder);
-                      }}
+                      onClick={() => startCollectPayment(selectedOrder)}
                     >
                       {t('webPosTakePayment')} · {money(selectedOrder.total)}
                     </button>
