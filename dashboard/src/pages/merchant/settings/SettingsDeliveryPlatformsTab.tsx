@@ -51,7 +51,7 @@ function apiBase(): string {
 }
 
 function hasJustEatProductionCreds(form: PlatformForm): boolean {
-  return !!(form.apiKeySet || form.apiKey.trim()) && !!(form.apiSecretSet || form.apiSecret.trim());
+  return !!(form.apiKeySet || form.apiKey.trim()) && !!(form.webhookSecretSet || form.webhookSecret.trim());
 }
 
 function hasUberProductionCreds(form: PlatformForm): boolean {
@@ -211,19 +211,29 @@ export default function SettingsDeliveryPlatformsTab() {
           title={t('deliveryPlatformAutoAccept')}
           hint={t('deliveryPlatformAutoAcceptHint')}
         />
-        <SettingsField label={t('deliveryPlatformStoreId')}>
-          <input
-            className="input"
-            value={form.storeId}
-            onChange={(e) => setForm({ ...form, storeId: e.target.value })}
-            placeholder={variant === 'justeat' ? 'JE-STORE-123' : 'UE-STORE-456'}
-          />
-        </SettingsField>
         {variant === 'justeat' ? (
           <>
+            <p className="text-xs muted -mt-1 mb-2">
+              {t('deliveryPlatformJustEatJetConnectHint')}
+            </p>
             <SettingsField
-              label={t('deliveryPlatformApiKey')}
-              hint={form.apiKeySet ? t('deliveryPlatformSecretKeepBlank') : undefined}
+              label={t('deliveryPlatformStoreId')}
+              hint={t('deliveryPlatformJustEatStoreIdHint')}
+            >
+              <input
+                className="input"
+                value={form.storeId}
+                onChange={(e) => setForm({ ...form, storeId: e.target.value })}
+                placeholder="99999"
+              />
+            </SettingsField>
+            <SettingsField
+              label={t('deliveryPlatformJustEatApiKey')}
+              hint={
+                form.apiKeySet
+                  ? t('deliveryPlatformSecretKeepBlank')
+                  : t('deliveryPlatformJustEatApiKeyHint')
+              }
             >
               <input
                 className="input"
@@ -235,8 +245,12 @@ export default function SettingsDeliveryPlatformsTab() {
               />
             </SettingsField>
             <SettingsField
-              label={t('deliveryPlatformApiSecret')}
-              hint={form.apiSecretSet ? t('deliveryPlatformSecretKeepBlank') : undefined}
+              label={t('deliveryPlatformJustEatWebhookAuthKey')}
+              hint={
+                form.apiSecretSet
+                  ? t('deliveryPlatformSecretKeepBlank')
+                  : t('deliveryPlatformJustEatWebhookAuthKeyHint')
+              }
             >
               <input
                 className="input"
@@ -247,9 +261,34 @@ export default function SettingsDeliveryPlatformsTab() {
                 placeholder={form.apiSecretSet ? '••••••••' : ''}
               />
             </SettingsField>
+            <SettingsField
+              label={t('deliveryPlatformJustEatWebhookHmacSecret')}
+              hint={
+                form.webhookSecretSet
+                  ? t('deliveryPlatformSecretKeepBlank')
+                  : t('deliveryPlatformJustEatWebhookHmacHint')
+              }
+            >
+              <input
+                className="input"
+                type="password"
+                autoComplete="off"
+                value={form.webhookSecret}
+                onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
+                placeholder={form.webhookSecretSet ? '••••••••' : ''}
+              />
+            </SettingsField>
           </>
         ) : (
           <>
+            <SettingsField label={t('deliveryPlatformStoreId')}>
+              <input
+                className="input"
+                value={form.storeId}
+                onChange={(e) => setForm({ ...form, storeId: e.target.value })}
+                placeholder="UE-STORE-456"
+              />
+            </SettingsField>
             <SettingsField label={t('deliveryPlatformClientId')}>
               <input
                 className="input"
@@ -272,24 +311,33 @@ export default function SettingsDeliveryPlatformsTab() {
             </SettingsField>
           </>
         )}
+        {variant === 'ubereats' ? (
+          <SettingsField
+            label={t('deliveryPlatformWebhookSecret')}
+            hint={
+              form.webhookSecretSet
+                ? t('deliveryPlatformSecretKeepBlank')
+                : t('deliveryPlatformWebhookSecretHint')
+            }
+          >
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              value={form.webhookSecret}
+              onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
+              placeholder={form.webhookSecretSet ? '••••••••' : ''}
+            />
+          </SettingsField>
+        ) : null}
         <SettingsField
-          label={t('deliveryPlatformWebhookSecret')}
+          label={t('deliveryPlatformWebhookUrl')}
           hint={
-            form.webhookSecretSet
-              ? t('deliveryPlatformSecretKeepBlank')
-              : t('deliveryPlatformWebhookSecretHint')
+            variant === 'justeat'
+              ? t('deliveryPlatformJustEatWebhookUrlHint')
+              : t('deliveryPlatformWebhookUrlHint')
           }
         >
-          <input
-            className="input"
-            type="password"
-            autoComplete="off"
-            value={form.webhookSecret}
-            onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
-            placeholder={form.webhookSecretSet ? '••••••••' : ''}
-          />
-        </SettingsField>
-        <SettingsField label={t('deliveryPlatformWebhookUrl')} hint={t('deliveryPlatformWebhookUrlHint')}>
           <div className="flex gap-2">
             <input className="input flex-1" readOnly value={webhookUrl} />
             <button type="button" className="btn-secondary shrink-0" onClick={() => void copy(webhookUrl)}>

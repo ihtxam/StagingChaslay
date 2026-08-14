@@ -24,20 +24,48 @@ function pickNum(...vals: unknown[]): number {
 
 function formatAddress(addr: unknown): string | null {
   const a = asObj(addr);
+  const lineItems = Array.isArray(a.Lines)
+    ? a.Lines
+    : Array.isArray(a.lines)
+      ? a.lines
+      : [];
   const parts = [
+    ...lineItems.map((l) => String(l ?? "").trim()).filter(Boolean),
     a.line1,
     a.line2,
     a.street,
     a.streetAddress,
     a.postcode,
+    a.PostalCode,
     a.postalCode,
     a.zip,
     a.city,
+    a.City,
     a.town,
   ]
     .map((p) => String(p ?? "").trim())
     .filter(Boolean);
   return parts.length ? parts.join(", ") : null;
+}
+
+function formatCustomerNotes(notes: unknown): string | null {
+  if (Array.isArray(notes)) {
+    const parts = notes
+      .map((row) => {
+        const n = asObj(row);
+        const key = pickStr(n.Key, n.key);
+        const value = pickStr(n.Value, n.value);
+        if (key && value) return `${key}: ${value}`;
+        return value || key;
+      })
+      .filter(Boolean);
+    return parts.length ? parts.join("; ") : null;
+  }
+  const o = asObj(notes);
+  const parts = Object.entries(o)
+    .map(([k, v]) => (v != null && String(v).trim() ? `${k}: ${String(v).trim()}` : k))
+    .filter(Boolean);
+  return parts.length ? parts.join("; ") : null;
 }
 
 function mapLineItems(raw: unknown): ExternalOrderPayload["items"] {
@@ -68,11 +96,113 @@ function mapLineItems(raw: unknown): ExternalOrderPayload["items"] {
     .filter((i) => i.name);
 }
 
+/** Flatten JET Connect `order-ready-for-preparation` nested Items tree. */
+function flattenJetConnectItems(raw: unknown[]): ExternalOrderPayload["items"] {
+  const lines: ExternalOrderPayload["items"] = [];
+
+  const walk = (items: unknown[]) => {
+    for (const row of items) {
+      const r = asObj(row);
+      const nested = Array.isArray(r.Items) ? r.Items : [];
+      const name = pickStr(r.Name, r.name, "Item");
+      const synonym = pickStr(r.Synonym, r.synonym);
+      const displayName = synonym ? `${name} (${synonym})` : name;
+      const quantity = pickNum(r.Quantity, r.quantity, 1) || 1;
+      const unitPrice = pickNum(r.UnitPrice, r.unitPrice);
+      const totalPrice = pickNum(r.TotalPrice, r.totalPrice);
+      const sku = pickStr(r.Reference, r.reference, r.plu) || null;
+
+      if (nested.length > 0 && (totalPrice > 0 || unitPrice > 0)) {
+        lines.push({
+          sku,
+          name: displayName,
+          quantity,
+          unitPrice: unitPrice > 0 ? unitPrice : totalPrice / quantity,
+          comboSelections: nested.map((sub) => {
+            const s = asObj(sub);
+            return {
+              slotName: pickStr(s.Name, s.name, "Option"),
+              productName: pickStr(s.Synonym, s.synonym, s.Name, s.name, "Item"),
+            };
+          }),
+        });
+      } else if (nested.length > 0) {
+        walk(nested);
+      } else {
+        lines.push({
+          sku,
+          name: displayName,
+          quantity,
+          unitPrice:
+            unitPrice > 0 ? unitPrice : totalPrice > 0 ? totalPrice / quantity : 0,
+        });
+      }
+    }
+  };
+
+  walk(raw);
+  return lines.filter((i) => i.name);
+}
+
+export function isJetConnectOrderPayload(body: unknown): boolean {
+  const root = asObj(body);
+  return !!pickStr(root.OrderId, root.orderId) && (!!root.Fulfilment || !!root.Restaurant);
+}
+
 /**
- * Map Just Eat / Takeaway.com Partner API webhook bodies to our normalized ingest shape.
- * Supports Flyt-style nested payloads and simplified test payloads.
+ * Map JET Connect `order-ready-for-preparation` webhook bodies.
+ * @see https://uk.api.just-eat.io/docs/jetconnect/index.html
+ */
+export function mapJetConnectWebhookBody(body: unknown): unknown {
+  const root = asObj(body);
+  const externalOrderId = pickStr(root.OrderId, root.orderId);
+  if (!externalOrderId) return body;
+
+  const fulfilment = asObj(root.Fulfilment || root.fulfilment);
+  const customer = asObj(root.Customer || root.customer);
+  const restaurant = asObj(root.Restaurant || root.restaurant);
+  const priceBreakdown = asObj(root.PriceBreakdown || root.priceBreakdown);
+  const fees = asObj(priceBreakdown.Fees || priceBreakdown.fees);
+
+  const method = pickStr(fulfilment.Method, fulfilment.method).toLowerCase();
+  const items = flattenJetConnectItems(Array.isArray(root.Items) ? root.Items : []);
+
+  return {
+    externalOrderId,
+    fulfillmentChannel:
+      method === "collection" || method.includes("pickup") ? "takeaway" : "delivery",
+    customerName: pickStr(customer.Name, customer.name, root.customerName),
+    customerPhone: pickStr(fulfilment.PhoneNumber, fulfilment.phoneNumber),
+    shippingAddress: formatAddress(fulfilment.Address || fulfilment.address),
+    notes: formatCustomerNotes(root.CustomerNotes || root.customerNotes),
+    items,
+    subtotal: pickNum(priceBreakdown.Items, priceBreakdown.items, root.subtotal),
+    taxAmount: pickNum(priceBreakdown.Taxes, priceBreakdown.taxes),
+    deliveryFee: pickNum(fees.Delivery, fees.delivery),
+    tipAmount: pickNum(priceBreakdown.Tips, priceBreakdown.tips),
+    total: pickNum(root.TotalPrice, root.totalPrice, root.total),
+    scheduledFor:
+      pickStr(
+        fulfilment.CustomerDueDate,
+        fulfilment.customerDueDate,
+        fulfilment.PrepareFor,
+        fulfilment.prepareFor,
+        root.PlacedDate,
+        root.placedDate
+      ) || null,
+    _jetConnectRestaurantId: pickStr(restaurant.Id, restaurant.id, restaurant.Reference),
+    _jetConnectIsTest: root.IsTest === true || root.isTest === true,
+  };
+}
+
+/**
+ * Map Just Eat webhook bodies (JET Connect + legacy Flyt-style) to normalized ingest shape.
  */
 export function mapJustEatWebhookBody(body: unknown): unknown {
+  if (isJetConnectOrderPayload(body)) {
+    return mapJetConnectWebhookBody(body);
+  }
+
   const root = asObj(body);
   const data = asObj(root.data || root.order || root.Order || root);
   const customer = asObj(data.customer || data.Customer || data.deliveryInfo);

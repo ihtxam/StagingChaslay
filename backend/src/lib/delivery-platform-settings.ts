@@ -139,7 +139,8 @@ export function applyProductionCredentialDefaults(
   return {
     justEat: {
       ...je,
-      testMode: je.apiKey && je.apiSecret ? false : je.testMode,
+      // JET Connect: REST API key + webhook HMAC secret = live mode
+      testMode: je.apiKey && je.webhookSecret ? false : je.testMode,
     },
     uberEats: {
       ...ue,

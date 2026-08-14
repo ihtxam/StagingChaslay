@@ -68,6 +68,34 @@ function verifyWebhookSecret(
   return timingSafeEqual(a, b);
 }
 
+/** JET Connect: X-JET-Connect-Hash = HMAC-SHA256(raw body, webhook HMAC secret) as lowercase hex. */
+function verifyJetConnectHash(
+  rawBody: string,
+  hash: string | undefined,
+  secret: string | undefined
+): boolean {
+  if (!secret || !hash) return false;
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
+  const provided = hash.trim().toLowerCase();
+  try {
+    const a = Buffer.from(expected, "hex");
+    const b = Buffer.from(provided, "hex");
+    if (a.length === b.length) return timingSafeEqual(a, b);
+  } catch {
+    /* fall through to string compare */
+  }
+  return expected.toLowerCase() === provided;
+}
+
+function verifyWebhookAuthorization(
+  provided: string | undefined,
+  expected: string | undefined
+): boolean {
+  if (!expected) return true;
+  if (!provided) return false;
+  return provided.trim() === expected.trim();
+}
+
 function verifyHmacSignature(
   rawBody: string,
   signature: string | undefined,
@@ -170,7 +198,11 @@ export class DeliveryPlatformService {
       headerOne(opts.headers, "x-just-eat-signature") ||
       headerOne(opts.headers, "x-flyt-signature") ||
       headerOne(opts.headers, "x-jet-signature");
+    const jetConnectHash = headerOne(opts.headers, "x-jet-connect-hash");
+    const authorization = headerOne(opts.headers, "authorization");
 
+    const isJustEat = platformSlug.includes("just");
+    const hmacSecret = cfg.webhookSecret || (!isJustEat ? cfg.apiSecret : undefined);
     const signingSecret =
       cfg.webhookSecret ||
       (platformSlug.includes("uber") ? cfg.clientSecret : cfg.apiSecret) ||
@@ -178,12 +210,61 @@ export class DeliveryPlatformService {
 
     const secretOk = verifyWebhookSecret(webhookSecret, signingSecret, !!cfg.testMode);
     const hmacOk = verifyHmacSignature(opts.rawBody, signature, signingSecret);
+    const jetHashOk = isJustEat
+      ? verifyJetConnectHash(opts.rawBody, jetConnectHash, cfg.webhookSecret || undefined)
+      : false;
+    const jetAuthOk = isJustEat
+      ? verifyWebhookAuthorization(authorization, cfg.apiSecret || undefined)
+      : true;
 
-    if (!cfg.testMode && !secretOk && !hmacOk) {
+    if (!cfg.testMode && isJustEat) {
+      const verified =
+        jetHashOk ||
+        (cfg.apiSecret ? jetAuthOk && !!authorization : false) ||
+        secretOk ||
+        hmacOk;
+      if (!verified) {
+        throw new Error("Invalid webhook signature");
+      }
+    } else if (!cfg.testMode && !secretOk && !hmacOk) {
       throw new Error("Invalid webhook signature");
     }
 
     return { source, cfg };
+  }
+
+  static jetConnectApiBase(testMode: boolean): string {
+    if (testMode && process.env.JET_CONNECT_SANDBOX_API_BASE) {
+      return process.env.JET_CONNECT_SANDBOX_API_BASE.replace(/\/$/, "");
+    }
+    return (process.env.JET_CONNECT_API_BASE || "https://uk-partnerapi.just-eat.io").replace(
+      /\/$/,
+      ""
+    );
+  }
+
+  /** JET Connect async webhooks expect a callback POST after processing. */
+  static async sendJetConnectAsyncCallback(
+    callbackUrl: string,
+    success: boolean,
+    message: string
+  ): Promise<void> {
+    try {
+      const res = await fetch(callbackUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: success ? "Success" : "Failure",
+          message,
+          data: {},
+        }),
+      });
+      if (!res.ok) {
+        console.warn(`Jet Connect callback ${callbackUrl}: HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.warn("Jet Connect async callback failed:", err);
+    }
   }
 
   /** Resolve Uber notification-only webhooks via Eats API when credentials are configured. */
@@ -271,19 +352,15 @@ export class DeliveryPlatformService {
         return;
       }
 
-      if (source === "justeat" && cfg.apiKey && cfg.apiSecret) {
-        const storeId = cfg.storeId || "";
-        const url = storeId
-          ? `https://api.flytplatform.com/order/${storeId}/${externalId}/accept`
-          : `https://api.flytplatform.com/order/${externalId}/accept`;
-        const res = await fetch(url, {
-          method: "POST",
+      if (source === "justeat" && cfg.apiKey) {
+        const base = DeliveryPlatformService.jetConnectApiBase(!!cfg.testMode);
+        const res = await fetch(`${base}/orders/${externalId}/accept`, {
+          method: "PUT",
           headers: {
-            Authorization: `Bearer ${cfg.apiKey}`,
+            Authorization: `JE-API-KEY ${cfg.apiKey}`,
             "Content-Type": "application/json",
-            "X-Flyt-Api-Key": cfg.apiKey,
           },
-          body: JSON.stringify({ acceptedAt: new Date().toISOString() }),
+          body: JSON.stringify({}),
         });
         if (!res.ok) {
           console.warn(`Just Eat accept ${externalId}: HTTP ${res.status}`);

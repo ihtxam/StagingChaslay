@@ -8,11 +8,12 @@ Connect aggregator orders into Chaslay POS alongside your own online shop. Order
 |------|--------|
 | Settings → **Delivery platforms** tab | Credentials, test/production mode, webhook URLs |
 | DB | `merchants.delivery_platform_settings`, `orders.order_source`, `orders.external_order_id` |
-| Production webhooks | `POST /api/webhooks/just-eat/:merchantId`, `POST /api/webhooks/uber-eats/:merchantId` |
-| Signature verification | HMAC (`X-Signature`, `X-Uber-Signature`, `X-Flyt-Signature`, …) or shared secret header |
-| Payload mapping | Just Eat Flyt-style + Uber `orders.notification` (with API enrichment when creds set) |
+| Production webhooks | `POST /api/webhooks/just-eat/:merchantId/...`, `POST /api/webhooks/uber-eats/:merchantId` |
+| Just Eat (JET Connect) | `order-ready-for-preparation-sync`, `-async`, `acceptance-requested` |
+| Signature verification | Just Eat: `X-JET-Connect-Hash` + optional `Authorization`; Uber: `X-Uber-Signature` |
+| Payload mapping | JET Connect `order-ready-for-preparation` + Uber `orders.notification` (API enrichment) |
 | Test ingest | `POST /api/webhooks/delivery-platforms/:platform/:merchantId/test` (**test mode only**) |
-| Accept callback | When you **Accept** in Orders/WebPOS, Chaslay calls partner accept API (best-effort) |
+| Accept callback | Accept in Orders/WebPOS → partner accept API (best-effort) |
 | Order channel enum | `online_shop`, `justeat`, `ubereats` |
 | Auto-print | Backend enqueues `auto_print_order` → WebPOS main till + Print Agent |
 
@@ -26,33 +27,103 @@ Hetzner deploy runs this automatically via `scripts/deploy-hetzner.sh`.
 
 ---
 
+## Do this RIGHT NOW
+
+### Uber Eats (you have test credentials today)
+
+1. Open **Settings → Delivery platforms → Uber Eats**
+2. **Enable integration** → ON  
+3. Paste your **test** credentials:
+   - **Store / restaurant ID** — Uber Eats store UUID  
+   - **Client ID** — OAuth client ID from Uber Developer Dashboard  
+   - **Client secret** — OAuth client secret  
+   - **Webhook secret** — from Uber webhook configuration (used for `X-Uber-Signature`)
+4. Leave **Test mode** ON while using sandbox credentials (turns off automatically when production client ID + secret are saved).
+5. **Save**, then copy the **Webhook URL** shown on the tab:
+   ```
+   https://api.chaslay.com/api/webhooks/uber-eats/{MERCHANT_UUID}
+   ```
+6. In [Uber Developer Dashboard](https://developer.uber.com/) → your Eats app → **Webhooks**, register that URL and subscribe to **`orders.notification`**.
+7. Place a **test order** on your linked Uber Eats sandbox store. It should appear in **Orders** / **WebPOS** within seconds and auto-print if kitchen printing is enabled.
+
+### Just Eat — JET Connect (no partner form wait)
+
+Just Eat pointed you to the self-service docs: **[JET Connect API](https://uk.api.just-eat.io/docs/jetconnect/index.html)**
+
+1. Sign in to the **JET Connect / Just Eat developer portal** (credentials from your onboarding email).
+2. Note these values from the portal:
+   - **Restaurant ID** (`Restaurant.Id` in order payloads)
+   - **API key** — partner REST key (`JE-API-KEY` for outbound calls like accept)
+   - **Webhook Authorization key** (optional) — exact `Authorization` header value on inbound webhooks
+   - **Webhook HMAC secret** — used to compute `X-JET-Connect-Hash`
+3. In **Settings → Delivery platforms → Just Eat**:
+   - **Enable integration** → ON  
+   - **Restaurant ID** → paste store id  
+   - **JET Connect API key** → REST API key  
+   - **Webhook Authorization key** → optional inbound auth key  
+   - **Webhook HMAC secret** → HMAC secret (**required** for live signed webhooks)
+4. **Save**, copy the **webhook base URL**:
+   ```
+   https://api.chaslay.com/api/webhooks/just-eat/{MERCHANT_UUID}
+   ```
+5. In JET Connect portal → **Webhook subscription**, register that **base URL** (no path suffix). Just Eat POSTs to:
+   - `{base}/order-ready-for-preparation-sync` (sync — return HTTP 200)
+   - `{base}/order-ready-for-preparation-async` (async — return HTTP 202 + callback)
+6. Subscribe at minimum to **`order-ready-for-preparation-sync`** (or async if your contract requires it).
+7. Send a **sandbox test order** (`IsTest: true` in payload) or use Chaslay test mode + `/test` endpoint below.
+
+**Chaslay field mapping (Just Eat)**
+
+| Chaslay Settings field | JET Connect portal / docs |
+|------------------------|---------------------------|
+| Store / restaurant ID | `Restaurant.Id` |
+| JET Connect API key | Partner REST API key (`JE-API-KEY`) |
+| Webhook Authorization key | Webhook `Authorization` header value (optional) |
+| Webhook HMAC secret | Webhook signing secret → `X-JET-Connect-Hash` |
+
+---
+
 ## Partner API approval — what it is
 
-**Partner API approval** means Just Eat / Uber Eats has approved your restaurant (and your integration app) to receive **live** orders via their official APIs — not sandbox/test traffic.
+**Partner API approval** means Just Eat / Uber Eats has approved your restaurant (and integration app) to receive **live** orders via their official APIs — not sandbox/test traffic.
 
-Until approval:
+Until live approval:
 
 - Use **Test mode** in Chaslay and the `/test` webhook endpoint, **or**
-- Ask your account manager for a **sandbox store** if the partner offers one.
+- Use partner **sandbox / test stores** (Uber test creds; Just Eat orders with `IsTest: true`).
 
-After approval:
+After live approval:
 
-- Save **production credentials** in Settings (test mode turns off automatically).
-- Register the **production webhook URLs** below in the partner portal.
-- Set the **webhook signing secret** (or use platform HMAC with API secret).
+- Save **production credentials** in Settings (test mode turns off automatically when required fields are saved).
+- Register the **production webhook URLs** in the partner portal.
+- Configure **webhook signing secrets**.
 
 Your own **online shop** (`order_source: online_shop`) is unchanged and does not require partner approval.
 
 ---
 
-## Step-by-step: Just Eat (Takeaway.com / Flyt Partner API)
+## Step-by-step: Just Eat (JET Connect)
 
-### 1. Register & get approved
+Docs: [https://uk.api.just-eat.io/docs/jetconnect/index.html](https://uk.api.just-eat.io/docs/jetconnect/index.html)
 
-1. Create a developer account: [Just Eat Takeaway.com Partner API](https://developers.just-eat.com/)
-2. Apply for **Partner API** access for your restaurant brand / store(s).
-3. Complete restaurant onboarding with Just Eat (menu, opening hours, go-live date).
-4. When approved, note your **Store / restaurant ID**, **API key**, and **API secret**.
+### 1. Get credentials from JET Connect portal
+
+No separate “assistance form” wait — onboarding credentials and webhook setup are in the JET Connect docs / developer portal.
+
+Collect:
+
+- Restaurant ID  
+- API key (REST / `JE-API-KEY`)  
+- Webhook HMAC secret  
+- Webhook Authorization key (if configured on Just Eat side)
+
+**Sandbox vs production**
+
+| | Sandbox / test | Production |
+|---|----------------|------------|
+| API base | `https://uk-partnerapi.just-eat.io` (override via `JET_CONNECT_SANDBOX_API_BASE`) | `https://uk-partnerapi.just-eat.io` |
+| Orders | Payloads with `IsTest: true` | Live customer orders |
+| Chaslay | Test mode ON, or live creds + signed webhooks | Test mode OFF when API key + webhook HMAC secret saved |
 
 ### 2. Configure Chaslay
 
@@ -61,14 +132,14 @@ Your own **online shop** (`order_source: online_shop`) is unchanged and does not
 | Field | What to enter |
 |-------|----------------|
 | Enable integration | On |
-| Store / restaurant ID | Partner portal store ID |
-| API key | Production API key |
-| API secret | Production API secret |
-| Webhook secret | Shared secret for signature verification (from JE webhook setup, or choose your own) |
-| Auto-accept orders | Optional — skip manual approval in Chaslay |
-| Test mode | Off automatically when API key + secret are saved |
+| Store / restaurant ID | JET Connect `Restaurant.Id` |
+| JET Connect API key | Partner REST API key |
+| Webhook Authorization key | Optional inbound `Authorization` header value |
+| Webhook HMAC secret | Webhook signing secret (**required for live**) |
+| Auto-accept orders | Optional — skip manual approval; Chaslay calls `PUT /orders/{id}/accept` |
+| Test mode | Off automatically when API key + webhook HMAC secret are saved |
 
-### 3. Register webhook URL
+### 3. Register webhook base URL
 
 Copy from Settings (replace `{MERCHANT_UUID}` with your merchant id):
 
@@ -76,16 +147,38 @@ Copy from Settings (replace `{MERCHANT_UUID}` with your merchant id):
 https://api.chaslay.com/api/webhooks/just-eat/{MERCHANT_UUID}
 ```
 
-In the Just Eat / Flyt partner portal, subscribe to **new order** events (e.g. order created / order placed — exact name depends on your JE contract).
+In JET Connect, subscribe to order webhooks. Just Eat appends paths, e.g.:
 
-**Headers Chaslay accepts**
+| Event | Method + path | Chaslay response |
+|-------|---------------|------------------|
+| Order ready (sync) | `POST …/order-ready-for-preparation-sync` | HTTP 200 |
+| Order ready (async) | `POST …/order-ready-for-preparation-async?callback=…` | HTTP 202 + success/failure callback |
+| Acceptance requested | `POST …/acceptance-requested` | HTTP 200 |
 
-- `X-Webhook-Secret: <your webhook secret>` **or**
-- HMAC signature headers: `X-Flyt-Signature`, `X-JET-Signature`, `X-Signature` (SHA-256 HMAC of raw body)
+**Webhook security (JET Connect)**
 
-### 4. Menu mapping
+- `X-JET-Connect-Hash: <hex>` — HMAC-SHA256 of the **raw JSON body** using your webhook HMAC secret  
+- `Authorization: <webhook auth key>` — optional exact-match header if configured in portal
 
-Map partner item SKUs / PLUs to **Products → SKU** in Chaslay. Unmapped items still appear on tickets by name.
+Legacy Flyt-style headers (`X-Flyt-Signature`, `X-JET-Signature`, `X-Webhook-Secret`) are still accepted when test mode is on.
+
+### 4. Order payload (what Chaslay maps)
+
+Primary webhook: **`order-ready-for-preparation`** with fields such as:
+
+- `OrderId` → external order id  
+- `Restaurant.Id` → store id  
+- `Fulfilment.Method` → `Delivery` / `Collection`  
+- `Items[]` (nested, with `Reference` PLU/SKU)  
+- `PriceBreakdown`, `TotalPrice`, `Customer`, `CustomerNotes`
+
+Map partner item `Reference` values to **Products → SKU** in Chaslay. Unmapped items still print by name.
+
+### 5. Accept flow
+
+When staff tap **Accept** on a Just Eat order in Chaslay:
+
+- **Just Eat:** `PUT https://uk-partnerapi.just-eat.io/orders/{OrderId}/accept` with `Authorization: JE-API-KEY {apiKey}`
 
 ---
 
@@ -95,9 +188,9 @@ Map partner item SKUs / PLUs to **Products → SKU** in Chaslay. Unmapped items 
 
 1. Sign in to [Uber Developer Dashboard](https://developer.uber.com/)
 2. Create an **Eats API** application (restaurant integration).
-3. Request **production** access — Uber reviews your use case and links your store(s).
+3. Request **production** access when ready — Uber reviews your use case and links your store(s).
 4. In **Uber Eats Manager**, authorize the app for your location(s).
-5. Note **Client ID**, **Client secret**, and **Store ID**.
+5. Note **Client ID**, **Client secret**, **Store ID**, and **Webhook secret**.
 
 ### 2. Configure Chaslay
 
@@ -127,20 +220,18 @@ Subscribe to **`orders.notification`** (and related order release events per you
 
 ### 4. Accept flow
 
-When staff tap **Accept** on a Just Eat / Uber Eats order in Chaslay:
+When staff tap **Accept** on an Uber Eats order:
 
 - **Uber:** `POST /v1/eats/orders/{id}/accept_pos_order`
-- **Just Eat:** Flyt accept endpoint (store-scoped when `storeId` is set)
-
-Failures are logged; the order still moves forward in Chaslay.
 
 ---
 
 ## Webhook URL format (all merchants)
 
-| Platform | URL |
-|----------|-----|
-| Just Eat | `https://api.chaslay.com/api/webhooks/just-eat/{MERCHANT_UUID}` |
+| Platform | Base URL |
+|----------|----------|
+| Just Eat (JET Connect) | `https://api.chaslay.com/api/webhooks/just-eat/{MERCHANT_UUID}` |
+| Just Eat events (appended by JE) | `…/order-ready-for-preparation-sync`, `…/order-ready-for-preparation-async`, `…/acceptance-requested` |
 | Uber Eats | `https://api.chaslay.com/api/webhooks/uber-eats/{MERCHANT_UUID}` |
 | Test (sandbox) | `https://api.chaslay.com/api/webhooks/delivery-platforms/just-eat\|uber-eats/{MERCHANT_UUID}/test` |
 
@@ -156,10 +247,15 @@ psql "$DATABASE_URL" -f backend/sql/ensure-delivery-platforms.sql
 
 # 2. Enable platform in Settings (test mode ON, enabled ON)
 
-# 3. Send test webhook
+# 3a. Generic test ingest
 curl -X POST "http://localhost:3000/api/webhooks/delivery-platforms/just-eat/<MERCHANT_UUID>/test" \
   -H "Content-Type: application/json" \
   -d '{"externalOrderId":"TEST-001","items":[{"name":"Fries","quantity":1,"unitPrice":6.5}],"total":6.5}'
+
+# 3b. JET Connect-shaped test payload
+curl -X POST "http://localhost:3000/api/webhooks/delivery-platforms/just-eat/<MERCHANT_UUID>/test" \
+  -H "Content-Type: application/json" \
+  -d '{"OrderId":"TEST-JET-001","IsTest":true,"Fulfilment":{"Method":"Delivery","PhoneNumber":"+441234567890","Address":{"Lines":["1 Test St"],"PostalCode":"SW1A 1AA","City":"London"}},"Customer":{"Name":"Test Guest"},"Items":[{"Name":"Burger","Quantity":1,"Reference":"SKU-1","UnitPrice":9.5,"TotalPrice":9.5,"Items":[]}],"PriceBreakdown":{"Items":9.5,"Taxes":0,"Fees":{"Delivery":1},"Tips":0},"TotalPrice":10.5,"Restaurant":{"Id":"99999"}}'
 ```
 
 Order appears in **Orders** and **WebPOS** online panel. With Print Agent on the main till, kitchen/receipt jobs print within ~2.5s.
@@ -169,7 +265,7 @@ Order appears in **Orders** and **WebPOS** online panel. With Print Agent on the
 ## Architecture
 
 ```
-Partner webhook → map payload (JE / Uber) → DeliveryPlatformService.ingestOrder()
+Partner webhook → map payload (JET Connect / Uber) → DeliveryPlatformService.ingestOrder()
   → orders (orderType=web_shop, orderSource=justeat|ubereats)
   → chaslay_floor_print_jobs (kind=auto_print_order)
   → WebPOS poll → external-order-auto-print.ts → Print Agent
@@ -182,9 +278,13 @@ Online shop orders continue via `POST /api/shop/...` with `order_source: online_
 
 ---
 
-## Reservations (related POS alerts)
+## Environment variables (optional)
 
-New or confirmed reservations enqueue `auto_print_reservation` print jobs and WebPOS polls `/merchant/reservations` every 8s for a **10-second** sound + banner alert.
+| Variable | Purpose |
+|----------|---------|
+| `JET_CONNECT_API_BASE` | Override Just Eat partner API base (default `https://uk-partnerapi.just-eat.io`) |
+| `JET_CONNECT_SANDBOX_API_BASE` | Sandbox partner API base when test mode is on |
+| `DELIVERY_PLATFORMS_ALLOW_TEST_WEBHOOKS` | Set `false` to require signatures even in test mode |
 
 ---
 
@@ -195,11 +295,9 @@ New or confirmed reservations enqueue `auto_print_reservation` print jobs and We
 - `backend/src/lib/delivery-platform-webhook-mappers.ts`
 - `backend/src/services/delivery-platform.service.ts`
 - `backend/src/routes/delivery-platform.routes.ts`
-- `backend/src/services/reservation.service.ts` (reservation POS alerts)
 - `dashboard/src/pages/merchant/settings/SettingsDeliveryPlatformsTab.tsx`
 - `dashboard/src/lib/external-order-auto-print.ts`
-- `dashboard/src/lib/webpos-print-relay.ts`
-- `dashboard/src/pages/merchant/WebPos.tsx`
+- `docs/DELIVERY-PLATFORMS.md`
 
 ---
 
@@ -208,5 +306,5 @@ New or confirmed reservations enqueue `auto_print_reservation` print jobs and We
 - Encrypt `delivery_platform_settings` at rest
 - Rate limiting on webhook routes
 - Dead-letter queue for failed ingests
-- Full menu sync / 86 (out of stock) APIs
+- Full JET Connect menu sync / item availability APIs
 - Channel badges in Orders UI

@@ -856,6 +856,19 @@ const en: Dict = {
   deliveryPlatformWebhookUrl: 'Webhook URL',
   deliveryPlatformWebhookUrlHint: 'Register this URL in the partner portal for new-order events.',
   deliveryPlatformJustEat: 'Just Eat',
+  deliveryPlatformJustEatJetConnectHint:
+    'JET Connect (uk.api.just-eat.io). Register the webhook base URL below in the JET Connect portal — Just Eat POSTs to /order-ready-for-preparation-sync (or -async).',
+  deliveryPlatformJustEatStoreIdHint: 'Restaurant.Id from JET Connect (numeric id in order payloads).',
+  deliveryPlatformJustEatApiKey: 'JET Connect API key',
+  deliveryPlatformJustEatApiKeyHint: 'Partner REST API key — used for JE-API-KEY outbound calls (e.g. accept order).',
+  deliveryPlatformJustEatWebhookAuthKey: 'Webhook Authorization key',
+  deliveryPlatformJustEatWebhookAuthKeyHint:
+    'Optional. Exact value Just Eat sends in the Authorization header on webhooks.',
+  deliveryPlatformJustEatWebhookHmacSecret: 'Webhook HMAC secret',
+  deliveryPlatformJustEatWebhookHmacHint:
+    'Verifies X-JET-Connect-Hash (HMAC-SHA256 of raw body). Required for live webhooks.',
+  deliveryPlatformJustEatWebhookUrlHint:
+    'Register this base URL in JET Connect. Events append paths such as /order-ready-for-preparation-sync.',
   deliveryPlatformUberEats: 'Uber Eats',
   deliveryPlatformChannelsTitle: 'Ordering channels',
   deliveryPlatformChannelsHint: 'Three inbound channels share the same kitchen workflow:',
@@ -2661,6 +2674,19 @@ const fr: Dict = {
   deliveryPlatformWebhookUrl: 'URL webhook',
   deliveryPlatformWebhookUrlHint: 'À enregistrer dans le portail partenaire.',
   deliveryPlatformJustEat: 'Just Eat',
+  deliveryPlatformJustEatJetConnectHint:
+    'JET Connect (uk.api.just-eat.io). Register the webhook base URL below in the JET Connect portal — Just Eat POSTs to /order-ready-for-preparation-sync (or -async).',
+  deliveryPlatformJustEatStoreIdHint: 'Restaurant.Id from JET Connect (numeric id in order payloads).',
+  deliveryPlatformJustEatApiKey: 'JET Connect API key',
+  deliveryPlatformJustEatApiKeyHint: 'Partner REST API key — used for JE-API-KEY outbound calls (e.g. accept order).',
+  deliveryPlatformJustEatWebhookAuthKey: 'Webhook Authorization key',
+  deliveryPlatformJustEatWebhookAuthKeyHint:
+    'Optional. Exact value Just Eat sends in the Authorization header on webhooks.',
+  deliveryPlatformJustEatWebhookHmacSecret: 'Webhook HMAC secret',
+  deliveryPlatformJustEatWebhookHmacHint:
+    'Verifies X-JET-Connect-Hash (HMAC-SHA256 of raw body). Required for live webhooks.',
+  deliveryPlatformJustEatWebhookUrlHint:
+    'Register this base URL in JET Connect. Events append paths such as /order-ready-for-preparation-sync.',
   deliveryPlatformUberEats: 'Uber Eats',
   deliveryPlatformChannelsTitle: 'Canaux de commande',
   deliveryPlatformChannelsHint: 'Trois canaux partagent le même flux cuisine :',
@@ -4468,6 +4494,19 @@ const de: Dict = {
   deliveryPlatformWebhookUrl: 'Webhook-URL',
   deliveryPlatformWebhookUrlHint: 'Im Partner-Portal für neue Bestellungen registrieren.',
   deliveryPlatformJustEat: 'Just Eat',
+  deliveryPlatformJustEatJetConnectHint:
+    'JET Connect (uk.api.just-eat.io). Register the webhook base URL below in the JET Connect portal — Just Eat POSTs to /order-ready-for-preparation-sync (or -async).',
+  deliveryPlatformJustEatStoreIdHint: 'Restaurant.Id from JET Connect (numeric id in order payloads).',
+  deliveryPlatformJustEatApiKey: 'JET Connect API key',
+  deliveryPlatformJustEatApiKeyHint: 'Partner REST API key — used for JE-API-KEY outbound calls (e.g. accept order).',
+  deliveryPlatformJustEatWebhookAuthKey: 'Webhook Authorization key',
+  deliveryPlatformJustEatWebhookAuthKeyHint:
+    'Optional. Exact value Just Eat sends in the Authorization header on webhooks.',
+  deliveryPlatformJustEatWebhookHmacSecret: 'Webhook HMAC secret',
+  deliveryPlatformJustEatWebhookHmacHint:
+    'Verifies X-JET-Connect-Hash (HMAC-SHA256 of raw body). Required for live webhooks.',
+  deliveryPlatformJustEatWebhookUrlHint:
+    'Register this base URL in JET Connect. Events append paths such as /order-ready-for-preparation-sync.',
   deliveryPlatformUberEats: 'Uber Eats',
   deliveryPlatformChannelsTitle: 'Bestellkanäle',
   deliveryPlatformChannelsHint: 'Drei Kanäle nutzen denselben Küchen-Workflow:',

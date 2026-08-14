@@ -75,7 +75,17 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "10mb" }));
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req, _res, buf) => {
+      const url = req.originalUrl || req.url || "";
+      if (/\/api\/webhooks\/(just-eat|uber-eats)/.test(url)) {
+        (req as Request & { rawBody?: string }).rawBody = buf.toString("utf8");
+      }
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 
 app.use((req: Request, _res: Response, next: NextFunction) => {
