@@ -27,6 +27,7 @@ type MerchantPrintCtx = {
   phone?: string | null;
   vatNumber?: string | null;
   taxIncludedInPrice?: boolean;
+  vatAfterDiscount?: boolean;
   vatRate?: string | null;
   shopLogoUrl?: string | null;
 };
@@ -97,6 +98,7 @@ export async function printMerchantOrderReceipt(
     vatNumber: opts.merchant.vatNumber || undefined,
     taxRate,
     vatIncludedInPrice: opts.merchant.taxIncludedInPrice === true,
+    vatAfterDiscount: opts.merchant.vatAfterDiscount !== false,
     printSettings: opts.printSettings,
     panelLang: opts.locale,
     splitLabel: opts.splitLabel,

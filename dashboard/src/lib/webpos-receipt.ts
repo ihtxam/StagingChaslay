@@ -18,6 +18,7 @@ import {
   resolveOrderAdyenReceipts,
   type AdyenTerminalReceipt,
 } from '@/lib/adyen-receipt';
+import { adjustReceiptVatForDiscount } from '@/lib/tax-discount';
 
 /** Where the kitchen ticket was printed from */
 export type KitchenOrderSource = 'WEBPOS' | 'ONLINE' | 'POSAPP' | 'WAITERAPP';
@@ -177,6 +178,8 @@ export type WebPosReceipt = {
   tableLabel?: string | null;
   guestCount?: number | null;
   vatIncludedInPrice?: boolean;
+  /** When true (default), receipt VAT table uses post-remise base. */
+  vatAfterDiscount?: boolean;
   splitLabel?: string | null;
   notes?: string;
   receiptUrl?: string;
@@ -491,8 +494,12 @@ export function resolveOrderReceiptVat(tx: WebPosReceipt): {
   taxRate: number;
 } {
   const rate = Number(tx.taxRate) || 0;
-  let net = roundMoney2(tx.subtotal);
-  let tax = roundMoney2(tx.taxAmount);
+  const adjusted = adjustReceiptVatForDiscount(tx.subtotal, tx.taxAmount, tx.discount || 0, {
+    vatIncludedInPrice: tx.vatIncludedInPrice,
+    vatAfterDiscount: tx.vatAfterDiscount,
+  });
+  let net = adjusted.subtotal;
+  let tax = adjusted.taxAmount;
   if (rate <= 0) return { subtotal: net, taxAmount: tax, taxRate: rate };
 
   const vatIncluded = tx.vatIncludedInPrice !== false;
@@ -1686,6 +1693,7 @@ export function posOrderToWebPosReceipt(
     vatNumber?: string;
     taxRate?: number;
     vatIncludedInPrice?: boolean;
+    vatAfterDiscount?: boolean;
     printSettings?: PosPrintSettingsClient | null;
     panelLang?: string;
     splitLabel?: string | null;
@@ -1754,6 +1762,7 @@ export function posOrderToWebPosReceipt(
     tipAmount: Number(order.tipAmount ?? 0),
     total: Number(order.total),
     vatIncludedInPrice: ctx.vatIncludedInPrice === true,
+    vatAfterDiscount: ctx.vatAfterDiscount !== false,
     splitLabel,
     receiptUrl: order.id || order.clientId ? buildReceiptUrl(String(order.id || order.clientId)) : undefined,
     includeQr: ctx.printSettings?.receiptShowQrCode !== false,
