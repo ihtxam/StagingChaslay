@@ -1,12 +1,18 @@
 import crypto from "crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import {
+  buildGiftCardRedeemQrPayload,
+  buildGiftCardRedeemUrl,
+  parseGiftCardCode,
+} from "@/lib/gift-card-code";
 import {
   normalizeGiftCardSettings,
   validateGiftAmount,
   type GiftCardSettings,
 } from "@/lib/gift-card-settings";
 import { CustomerService } from "@/services/customer.service";
+import { EmailService } from "@/services/email.service";
 
 function money(n: number | string | null | undefined): number {
   const v = Number(n || 0);
@@ -119,52 +125,71 @@ export class GiftCardService {
     mediaType?: "physical" | "e_card"
   ) {
     const db = getDb();
-    const trimmed = String(code || "").trim();
+    const parsed = parseGiftCardCode(code);
+    const trimmed = parsed || String(code || "").trim();
     if (!trimmed) throw new Error("Card number is required");
     const normalized = normalizeRfidUid(trimmed);
-    const candidates = [...new Set([trimmed, normalized, trimmed.toUpperCase(), trimmed.toLowerCase()])].filter(
-      Boolean
-    );
+    const candidates = [
+      ...new Set([
+        trimmed,
+        normalized,
+        trimmed.toUpperCase(),
+        trimmed.toLowerCase(),
+        buildGiftCardRedeemQrPayload(trimmed),
+      ]),
+    ].filter(Boolean);
 
     let card = null as Awaited<ReturnType<typeof db.query.giftCards.findFirst>>;
-    for (const candidate of candidates) {
-      card = await db.query.giftCards.findFirst({
-        where: and(
-          eq(schema.giftCards.merchantId, merchantId),
-          eq(schema.giftCards.cardNumber, candidate)
-        ),
-        with: { customer: true },
-      });
-      if (card) break;
-    }
 
-    // Case-insensitive / separator-insensitive match for older rows
-    if (!card && normalized) {
-      const rows = await db
-        .select()
-        .from(schema.giftCards)
-        .where(eq(schema.giftCards.merchantId, merchantId))
-        .limit(500);
-      const match = rows.find((r) => normalizeRfidUid(r.cardNumber) === normalized);
-      if (match) {
+    const tryPhysical = !mediaType || mediaType === "physical";
+    const tryEcard = !mediaType || mediaType === "e_card";
+
+    if (tryPhysical) {
+      for (const candidate of candidates) {
         card = await db.query.giftCards.findFirst({
           where: and(
             eq(schema.giftCards.merchantId, merchantId),
-            eq(schema.giftCards.id, match.id)
+            eq(schema.giftCards.cardNumber, candidate)
           ),
           with: { customer: true },
         });
+        if (card) break;
+      }
+
+      // Case-insensitive / separator-insensitive match for older rows
+      if (!card && normalized) {
+        const rows = await db
+          .select()
+          .from(schema.giftCards)
+          .where(eq(schema.giftCards.merchantId, merchantId))
+          .limit(500);
+        const match = rows.find((r) => normalizeRfidUid(r.cardNumber) === normalized);
+        if (match) {
+          card = await db.query.giftCards.findFirst({
+            where: and(
+              eq(schema.giftCards.merchantId, merchantId),
+              eq(schema.giftCards.id, match.id)
+            ),
+            with: { customer: true },
+          });
+        }
       }
     }
 
-    if (!card && (!mediaType || mediaType === "e_card")) {
-      card = await db.query.giftCards.findFirst({
-        where: and(
-          eq(schema.giftCards.merchantId, merchantId),
-          eq(schema.giftCards.ecardCode, trimmed)
-        ),
-        with: { customer: true },
-      });
+    if (!card && tryEcard) {
+      for (const candidate of candidates) {
+        card = await db.query.giftCards.findFirst({
+          where: and(
+            eq(schema.giftCards.merchantId, merchantId),
+            or(
+              eq(schema.giftCards.ecardCode, candidate),
+              eq(schema.giftCards.cardNumber, candidate)
+            )
+          ),
+          with: { customer: true },
+        });
+        if (card) break;
+      }
     }
 
     if (!card) throw new Error("Card not found");
@@ -197,7 +222,6 @@ export class GiftCardService {
       cardNumber = normalizeRfidUid(cardNumber);
       if (!cardNumber) throw new Error("RFID card number is required");
     } else {
-      // Phase-2 stub: generate e-card code; email delivery not implemented
       ecardCode = `EC-${crypto.randomBytes(6).toString("hex").toUpperCase()}`;
       if (!cardNumber) cardNumber = ecardCode;
     }
@@ -267,6 +291,8 @@ export class GiftCardService {
       cardId?: string;
       cardNumber?: string;
       cardMediaType?: "physical" | "e_card";
+      ecardEmail?: string;
+      holderName?: string;
       amount: number;
       type: "sell" | "reload";
       orderId?: string;
@@ -298,11 +324,18 @@ export class GiftCardService {
     }
 
     if (!card) {
-      if (opts.type === "sell" && opts.createIfMissing !== false && opts.cardNumber) {
+      const mediaType = opts.cardMediaType === "e_card" ? "e_card" : "physical";
+      const canCreate =
+        opts.type === "sell" &&
+        opts.createIfMissing !== false &&
+        (opts.cardNumber || mediaType === "e_card");
+      if (canCreate) {
         const created = await this.createCard(merchantId, {
           cardNumber: opts.cardNumber,
-          cardMediaType: opts.cardMediaType || "physical",
+          cardMediaType: mediaType,
           initialBalance: 0,
+          ecardEmail: opts.ecardEmail,
+          holderName: opts.holderName,
         });
         card = await this.getById(merchantId, created.id);
       } else {
@@ -648,6 +681,63 @@ export class GiftCardService {
       .returning();
     if (!rows[0]) throw new Error("Card not found");
     return rows[0];
+  }
+
+  /** Email e-gift card receipt with redeem code + balance to recipient. */
+  static async sendEcardReceiptEmail(
+    merchantId: string,
+    opts: {
+      to: string;
+      code: string;
+      balance: number;
+      holderName?: string;
+      orderId?: string;
+    }
+  ) {
+    const to = String(opts.to || "").trim();
+    if (!to.includes("@")) throw new Error("Valid recipient email is required");
+
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { name: true },
+    });
+    const shopName = merchant?.name || "Shop";
+    const code = buildGiftCardRedeemQrPayload(opts.code);
+    if (!code) throw new Error("Gift card code is required");
+    const balance = money(opts.balance);
+    const redeemUrl = buildGiftCardRedeemUrl(code);
+    const holder = opts.holderName?.trim();
+
+    const subject = `${shopName} · Gift card CHF ${balance.toFixed(2)}`;
+    const html = `
+      <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;color:#1c1917;">
+        <h2 style="margin:0 0 8px;">${shopName}</h2>
+        <p style="margin:0 0 16px;color:#57534e;">You received a digital gift card${holder ? ` for ${holder.replace(/</g, "&lt;")}` : ""}.</p>
+        <p style="font-size:28px;font-weight:700;margin:8px 0;color:#0f766e;">CHF ${balance.toFixed(2)}</p>
+        <p style="margin:16px 0 8px;font-weight:600;">Your gift card code</p>
+        <p style="font-family:ui-monospace,monospace;font-size:20px;letter-spacing:1px;background:#f5f5f4;padding:12px 16px;border-radius:8px;">${code.replace(/</g, "&lt;")}</p>
+        <p style="margin:16px 0 8px;color:#57534e;">Present this code or QR at checkout to redeem.</p>
+        <p><a href="${redeemUrl}" style="display:inline-block;padding:10px 16px;background:#0f766e;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">View gift card</a></p>
+        <p style="color:#666;font-size:12px;word-break:break-all;">${redeemUrl}</p>
+      </div>
+    `;
+    const text =
+      `${shopName}\nDigital gift card: CHF ${balance.toFixed(2)}\n` +
+      (holder ? `For: ${holder}\n` : "") +
+      `Code: ${code}\n` +
+      `Redeem at checkout by scanning or entering the code.\n` +
+      `${redeemUrl}\n`;
+
+    await EmailService.send({
+      to,
+      subject,
+      html,
+      text,
+      merchantId,
+    });
+
+    return { sent: true, to, code };
   }
 
   static async getTransactions(

@@ -291,6 +291,13 @@ if [[ -f "$REPO_DIR/backend/sql/ensure-adyen-features.sql" ]]; then
     < "$REPO_DIR/backend/sql/ensure-adyen-features.sql" || true
 fi
 
+if [[ -f "$REPO_DIR/backend/sql/ensure-gift-cards-ecard.sql" ]]; then
+  echo "=== Apply e-gift card SQL patches ==="
+  docker compose --env-file .env.production exec -T db \
+    psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
+    < "$REPO_DIR/backend/sql/ensure-gift-cards-ecard.sql" || true
+fi
+
 if [[ -f "$REPO_DIR/backend/sql/ensure-refunds.sql" ]]; then
   echo "=== Apply refund / payment breakdown SQL patches ==="
   docker compose --env-file .env.production exec -T db \

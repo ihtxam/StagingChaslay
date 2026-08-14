@@ -14,6 +14,8 @@ import {
   generateKitchenMessageTicketText,
   resolveKitchenPaperWidthMm,
   generateWebPosReceiptText,
+  generateGiftCardSaleReceiptText,
+  giftCardSaleReceiptQrPayload,
   logoUrlToEscPos,
   encodeOrderMetaNotes,
   nextWebPosTicketNumber,
@@ -179,7 +181,7 @@ import {
   WebPosCloseShiftModal,
   WebPosShiftClosedModal,
 } from '@/components/webpos/WebPosShiftModals';
-import { generateEodReportText, generateWebPosReceiptText, posOrderToWebPosReceipt } from '@/lib/webpos-receipt';
+import { generateEodReportText } from '@/lib/webpos-receipt';
 import { printRefundReceipt } from '@/lib/print-order-receipt';
 import WebPosCartPanel from '@/components/webpos/WebPosCartPanel';
 import WebPosProductArea, {
@@ -3235,6 +3237,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         cardId: meta.cardId,
         mediaType: meta.mediaType,
         amount,
+        ecardEmail: meta.ecardEmail,
+        holderName: meta.holderName,
+        deliveryMethod: meta.deliveryMethod,
       },
     };
     setCart((prev) => [...prev, line]);
@@ -3278,8 +3283,96 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     ensureShift(() => setCustomAmountOpen(true));
   };
 
-  const creditGiftCardLines = async (saleLines: CartLine[], orderId?: string | null) => {
+  const printGiftCardSaleReceipt = async (opts: {
+    code: string;
+    balance: number;
+    recipientEmail?: string | null;
+    holderName?: string | null;
+  }) => {
+    const lang = resolveReceiptLanguage(printSettings, paymentConfig?.panelLanguage || locale);
+    const text = generateGiftCardSaleReceiptText(
+      {
+        businessName: merchant?.name || APP_NAME,
+        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+        phone: merchant?.phone || undefined,
+        code: opts.code,
+        balance: opts.balance,
+        recipientEmail: opts.recipientEmail,
+        holderName: opts.holderName,
+        language: lang,
+        paperWidthMm: printSettings?.paperWidthMm || 80,
+        header: printSettings?.receiptHeader,
+        footer: printSettings?.receiptFooter,
+      },
+      locale
+    );
+    const qr = giftCardSaleReceiptQrPayload(opts.code);
+    await printEscPosToTargets(text, {
+      qrUrl: qr,
+      role: 'receipt',
+      quiet: true,
+    });
+  };
+
+  const fulfillEcardDeliveries = async (
+    saleLines: CartLine[],
+    orderId?: string | null
+  ) => {
     for (const line of saleLines) {
+      const gc = line.giftCard;
+      if (!gc || gc.op !== 'sell' || gc.mediaType !== 'e_card') continue;
+      const delivery = gc.deliveryMethod || 'print';
+      try {
+        const creditRes = await api.post('/gift-cards/credit', {
+          type: gc.op,
+          cardId: gc.cardId,
+          cardNumber: gc.cardNumber || undefined,
+          cardMediaType: 'e_card',
+          ecardEmail: gc.ecardEmail,
+          holderName: gc.holderName,
+          amount: gc.amount,
+          orderId: orderId || undefined,
+          createIfMissing: true,
+        });
+        const card = creditRes.data?.card;
+        const code = String(card?.ecardCode || card?.cardNumber || '').trim();
+        if (!code) continue;
+        const balance = Number(card?.balance ?? gc.amount);
+        if (delivery === 'print' || delivery === 'both') {
+          void printGiftCardSaleReceipt({
+            code,
+            balance,
+            recipientEmail: gc.ecardEmail,
+            holderName: gc.holderName,
+          }).catch((e: any) => toast.error(e?.message || t('webPosPrintFailed')));
+        }
+        if ((delivery === 'email' || delivery === 'both') && gc.ecardEmail) {
+          await api.post('/gift-cards/send-ecard-email', {
+            to: gc.ecardEmail,
+            code,
+            balance,
+            holderName: gc.holderName,
+            orderId: orderId || undefined,
+          });
+          toast.success(t('giftCardEcardEmailSent'));
+        }
+      } catch (e: any) {
+        toast.error(e.response?.data?.error || t('giftCardCreditFailed'));
+      }
+    }
+  };
+
+  const creditGiftCardLines = async (saleLines: CartLine[], orderId?: string | null) => {
+    const ecardLines = saleLines.filter(
+      (l) => l.giftCard?.op === 'sell' && l.giftCard.mediaType === 'e_card'
+    );
+    const otherLines = saleLines.filter(
+      (l) => l.giftCard && !(l.giftCard.op === 'sell' && l.giftCard.mediaType === 'e_card')
+    );
+    if (ecardLines.length) {
+      await fulfillEcardDeliveries(ecardLines, orderId);
+    }
+    for (const line of otherLines) {
       if (!line.giftCard) continue;
       try {
         await api.post('/gift-cards/credit', {

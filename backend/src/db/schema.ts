@@ -1496,7 +1496,7 @@ export const giftCards = pgTable(
       .references(() => merchants.id, { onDelete: "cascade" }),
     /** RFID UID for physical cards, or generated code for e-cards */
     cardNumber: varchar("card_number", { length: 255 }).notNull(),
-    /** physical | e_card (e_card = phase-2 stub) */
+    /** physical | e_card */
     cardMediaType: varchar("card_media_type", { length: 20 }).default("physical").notNull(),
     /** Stored-value / gift balance in CHF */
     balance: decimal("balance", { precision: 10, scale: 2 }).default("0").notNull(),

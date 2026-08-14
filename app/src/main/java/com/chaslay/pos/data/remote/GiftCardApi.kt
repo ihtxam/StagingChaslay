@@ -23,7 +23,7 @@ interface GiftCardApi {
     suspend fun lookup(
         @Header("Authorization") auth: String,
         @Path("code") code: String,
-        @Query("mediaType") mediaType: String = "physical"
+        @Query("mediaType") mediaType: String? = null
     ): GiftCardLookupResponse
 
     @POST("api/gift-cards/{cardId}/points/earn")
@@ -51,4 +51,10 @@ interface GiftCardApi {
         @Header("Authorization") auth: String,
         @Body body: GiftCardRedeemRequest
     ): GiftCardRedeemResponse
+
+    @POST("api/gift-cards/send-ecard-email")
+    suspend fun sendEcardEmail(
+        @Header("Authorization") auth: String,
+        @Body body: com.chaslay.pos.data.remote.dto.GiftCardSendEcardEmailRequest
+    ): com.chaslay.pos.data.remote.dto.GiftCardSendEcardEmailResponse
 }

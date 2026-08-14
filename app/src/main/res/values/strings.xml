@@ -687,6 +687,15 @@
     <string name="gift_card_holder_optional">Holder name (optional)</string>
     <string name="gift_card_custom_amount">Custom</string>
     <string name="gift_card_add_to_cart">Add to cart</string>
+    <string name="gift_card_physical">Physical card</string>
+    <string name="gift_card_ecard">E-gift card</string>
+    <string name="gift_card_sell_choose_media">Physical card or e-gift card?</string>
+    <string name="gift_card_ecard_sell_hint">A unique code is generated when paid. Print QR and/or email the recipient.</string>
+    <string name="gift_card_ecard_delivery">Delivery</string>
+    <string name="gift_card_ecard_delivery_print">Print QR</string>
+    <string name="gift_card_ecard_delivery_email">Email</string>
+    <string name="gift_card_ecard_delivery_both">Both</string>
+    <string name="gift_card_ecard_recipient_email">Recipient email</string>
     <string name="checkout_gift_card_balance">Gift card balance</string>
     <string name="checkout_pay_with_gift_card">Pay with gift card (%1$s available)</string>
     <string name="checkout_gift_card_applied">Gift card applied: %1$s</string>

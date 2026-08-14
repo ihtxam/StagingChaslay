@@ -1,10 +1,11 @@
-import { Gift, QrCode, CreditCard, X } from 'lucide-react';
+import { Gift, QrCode, CreditCard, X, Mail, Printer } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import RfidScanInput from '@/components/RfidScanInput';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
+import { parseGiftCardCode } from '@/lib/qr';
 
 function normalizeRfidUid(raw: string): string {
   return String(raw || '')
@@ -28,6 +29,9 @@ export type GiftCardCartMeta = {
   cardId?: string;
   mediaType: 'physical' | 'e_card';
   amount: number;
+  ecardEmail?: string;
+  holderName?: string;
+  deliveryMethod?: 'print' | 'email' | 'both';
 };
 
 export type GiftCardPayResult = {
@@ -41,6 +45,7 @@ export type GiftCardPayResult = {
 
 type Mode = 'menu' | 'sell' | 'reload' | 'balance' | 'pay';
 type MediaPick = 'choose' | 'physical' | 'e_card';
+type EcardDelivery = 'print' | 'email' | 'both';
 
 type Props = {
   open: boolean;
@@ -95,6 +100,8 @@ export default function WebPosGiftCardModal({
   const [busy, setBusy] = useState(false);
   const [custom, setCustom] = useState(false);
   const [lookupError, setLookupError] = useState('');
+  const [ecardEmail, setEcardEmail] = useState('');
+  const [deliveryMethod, setDeliveryMethod] = useState<EcardDelivery>('print');
   const lastTriedRef = useRef('');
   const attachRef = useRef(onAttachCustomer);
   attachRef.current = onAttachCustomer;
@@ -103,7 +110,8 @@ export default function WebPosGiftCardModal({
     async (raw: string, mediaType: 'physical' | 'e_card', opts?: { silent?: boolean }) => {
       const trimmed = raw.trim();
       if (!trimmed) return;
-      const normalized = mediaType === 'physical' ? normalizeRfidUid(trimmed) : trimmed;
+      const normalized =
+        mediaType === 'physical' ? normalizeRfidUid(trimmed) : parseGiftCardCode(trimmed);
       const lookupKey = `${mediaType}:${normalized || trimmed}`;
       setBusy(true);
       setLookupError('');
@@ -168,6 +176,8 @@ export default function WebPosGiftCardModal({
     setCustom(false);
     setBusy(false);
     setLookupError('');
+    setEcardEmail('');
+    setDeliveryMethod('print');
     lastTriedRef.current = '';
   }, [open, mode]);
 
@@ -210,9 +220,17 @@ export default function WebPosGiftCardModal({
       return;
     }
     const cardNumber = (card?.cardNumber || code).trim();
-    if (!cardNumber) {
+    const isEcard = media === 'e_card';
+    if (!isEcard && !cardNumber) {
       toast.error(t('giftCardTapRequired'));
       return;
+    }
+    if (isEcard && step === 'sell') {
+      const email = ecardEmail.trim();
+      if ((deliveryMethod === 'email' || deliveryMethod === 'both') && !email.includes('@')) {
+        toast.error(t('giftCardEcardEmailRequired'));
+        return;
+      }
     }
     if (step === 'reload') {
       if (!card) {
@@ -241,12 +259,14 @@ export default function WebPosGiftCardModal({
       onAddToCart(
         {
           op: 'sell',
-          cardNumber,
+          cardNumber: isEcard ? cardNumber : cardNumber,
           cardId: card?.id,
-          mediaType: media === 'e_card' ? 'e_card' : 'physical',
+          mediaType: isEcard ? 'e_card' : 'physical',
           amount: n,
+          ecardEmail: isEcard ? ecardEmail.trim() || undefined : undefined,
+          deliveryMethod: isEcard ? deliveryMethod : undefined,
         },
-        `${t('giftCard')} CHF ${n.toFixed(2)}`
+        `${isEcard ? t('giftCardEcard') : t('giftCard')} CHF ${n.toFixed(2)}`
       );
     }
     onClose();
@@ -294,7 +314,7 @@ export default function WebPosGiftCardModal({
                 className="rounded-xl border border-stone-200 px-4 py-3 text-left font-semibold hover:bg-teal-50"
                 onClick={() => {
                   setStep('sell');
-                  setMedia('physical');
+                  setMedia('choose');
                 }}
               >
                 {t('giftCardSell')}
@@ -343,9 +363,74 @@ export default function WebPosGiftCardModal({
             </div>
           )}
 
+          {step === 'sell' && media === 'choose' && (
+            <div className="grid gap-2">
+              <p className="text-sm text-stone-600">{t('giftCardSellChooseMedia')}</p>
+              <button
+                type="button"
+                className="flex items-center gap-3 rounded-xl border border-stone-200 px-4 py-3 font-semibold hover:bg-teal-50"
+                onClick={() => setMedia('physical')}
+              >
+                <CreditCard size={20} /> {t('giftCardPhysical')}
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-3 rounded-xl border border-stone-200 px-4 py-3 font-semibold hover:bg-teal-50"
+                onClick={() => setMedia('e_card')}
+              >
+                <QrCode size={20} /> {t('giftCardEcard')}
+              </button>
+            </div>
+          )}
+
           {step !== 'menu' && media !== 'choose' && (
             <>
               <div>
+                {media === 'e_card' && step === 'sell' ? (
+                  <>
+                    <p className="mb-3 text-sm text-stone-600">{t('giftCardEcardSellHint')}</p>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500">
+                      {t('giftCardEcardDelivery')}
+                    </label>
+                    <div className="mb-3 grid grid-cols-3 gap-2">
+                      {(
+                        [
+                          ['print', Printer, t('giftCardEcardDeliveryPrint')],
+                          ['email', Mail, t('giftCardEcardDeliveryEmail')],
+                          ['both', Gift, t('giftCardEcardDeliveryBoth')],
+                        ] as const
+                      ).map(([key, Icon, label]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold ${
+                            deliveryMethod === key
+                              ? 'border-teal-500 bg-teal-50 text-teal-800'
+                              : 'border-stone-200 hover:bg-stone-50'
+                          }`}
+                          onClick={() => setDeliveryMethod(key)}
+                        >
+                          <Icon size={18} />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {(deliveryMethod === 'email' || deliveryMethod === 'both') && (
+                      <label className="block text-sm">
+                        <span className="text-stone-600">{t('giftCardEcardRecipientEmail')}</span>
+                        <input
+                          className="input mt-1 w-full"
+                          type="email"
+                          autoFocus
+                          value={ecardEmail}
+                          placeholder="name@example.com"
+                          onChange={(e) => setEcardEmail(e.target.value)}
+                        />
+                      </label>
+                    )}
+                  </>
+                ) : (
+                  <>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500">
                   {media === 'e_card' ? t('giftCardScanOrPasteCode') : t('tapCard')}
                 </label>
@@ -393,6 +478,8 @@ export default function WebPosGiftCardModal({
                 >
                   {t('giftCardLookup')}
                 </button>
+                  </>
+                )}
                 {lookupError ? (
                   <p className="mt-2 text-sm font-medium text-red-600">{lookupError}</p>
                 ) : null}
@@ -416,7 +503,7 @@ export default function WebPosGiftCardModal({
                 </button>
               )}
 
-              {(step === 'sell' || step === 'reload') && (code || card) && (
+              {(step === 'sell' || step === 'reload') && (media === 'e_card' && step === 'sell' || code || card) && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-2">
                     {presets.map((p) => (
@@ -508,8 +595,11 @@ export default function WebPosGiftCardModal({
                 </div>
               )}
 
-              {step === 'sell' && !card && code && (
+              {step === 'sell' && !card && code && media !== 'e_card' && (
                 <p className="text-xs text-stone-500">{t('giftCardNewCardHint')}</p>
+              )}
+              {step === 'sell' && media === 'e_card' && (
+                <p className="text-xs text-stone-500">{t('giftCardEcardNewHint')}</p>
               )}
             </>
           )}

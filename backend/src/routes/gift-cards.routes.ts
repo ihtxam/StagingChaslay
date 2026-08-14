@@ -104,8 +104,13 @@ router.post("/", async (req: Request, res: Response) => {
 router.get("/lookup/:code", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
+    const mediaTypeRaw = req.query.mediaType;
     const mediaType =
-      req.query.mediaType === "e_card" ? "e_card" : ("physical" as const);
+      mediaTypeRaw === "e_card"
+        ? ("e_card" as const)
+        : mediaTypeRaw === "physical"
+          ? ("physical" as const)
+          : undefined;
     const card = await GiftCardService.lookup(
       merchantId,
       req.params.code,
@@ -131,6 +136,8 @@ router.post("/credit", async (req: Request, res: Response) => {
       cardId: req.body.cardId,
       cardNumber: req.body.cardNumber || req.body.rfidCode,
       cardMediaType: req.body.cardMediaType,
+      ecardEmail: req.body.ecardEmail || req.body.recipientEmail,
+      holderName: req.body.holderName || req.body.name,
       amount: Number(req.body.amount),
       type,
       orderId: req.body.orderId,
@@ -163,6 +170,28 @@ router.post("/redeem", async (req: Request, res: Response) => {
   } catch (error) {
     res.status(400).json({
       error: error instanceof Error ? error.message : "Failed to redeem",
+    });
+  }
+});
+
+/**
+ * POST /api/gift-cards/send-ecard-email
+ * Email e-gift card receipt (code + balance) to recipient after sale.
+ */
+router.post("/send-ecard-email", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const result = await GiftCardService.sendEcardReceiptEmail(merchantId, {
+      to: req.body.to || req.body.email || req.body.ecardEmail,
+      code: req.body.code || req.body.ecardCode || req.body.cardNumber,
+      balance: Number(req.body.balance),
+      holderName: req.body.holderName || req.body.name,
+      orderId: req.body.orderId,
+    });
+    res.json({ success: true, ...result, message: "Gift card email sent" });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to send gift card email",
     });
   }
 });

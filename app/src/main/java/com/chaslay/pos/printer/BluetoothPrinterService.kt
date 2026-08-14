@@ -436,6 +436,76 @@ class BluetoothPrinterService @Inject constructor(
         if (printedAny) last else Result.success(Unit)
     }
 
+    suspend fun routeGiftCardSaleReceipt(
+        settings: BusinessSettingsEntity,
+        code: String,
+        balance: Double,
+        recipientEmail: String? = null,
+        holderName: String? = null
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val receiptPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
+            .filter { it.isEnabled && it.printOrderReceipts && it.address.isNotBlank() }
+        if (receiptPrinters.isEmpty()) {
+            return@withContext printGiftCardSaleReceipt(settings, code, balance, recipientEmail, holderName)
+        }
+        var last: Result<Unit> = Result.success(Unit)
+        for (printer in receiptPrinters) {
+            val lineWidth = lineWidthFor(printer.paperWidthMm)
+            val payload = buildGiftCardSaleReceipt(settings, code, balance, recipientEmail, holderName, lineWidth)
+            last = sendBytes(printer.address, settings, payload, "Gift card ${printer.name}")
+        }
+        last
+    }
+
+    private suspend fun printGiftCardSaleReceipt(
+        settings: BusinessSettingsEntity,
+        code: String,
+        balance: Double,
+        recipientEmail: String?,
+        holderName: String?
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val lineWidth = lineWidthFor(settings.receiptPaperWidthMm)
+        val payload = buildGiftCardSaleReceipt(settings, code, balance, recipientEmail, holderName, lineWidth)
+        val address = settings.receiptPrinterAddress?.trim().orEmpty()
+        if (address.isBlank()) return@withContext Result.failure(IllegalStateException("No receipt printer configured"))
+        sendBytes(address, settings, payload, "Gift card receipt")
+    }
+
+    private fun buildGiftCardSaleReceipt(
+        settings: BusinessSettingsEntity,
+        code: String,
+        balance: Double,
+        recipientEmail: String?,
+        holderName: String?,
+        lineWidth: Int
+    ): ByteArray {
+        val sym = settings.currencySymbol
+        val sep = "=".repeat(lineWidth)
+        val thin = "-".repeat(lineWidth)
+        val sb = StringBuilder()
+        sb.appendLine(sep)
+        appendCenteredLines(sb, settings.businessName, lineWidth, bold = false)
+        sb.appendLine(sep)
+        sb.appendLine(center("GIFT CARD", lineWidth))
+        sb.appendLine(thin)
+        holderName?.takeIf { it.isNotBlank() }?.let {
+            sb.appendLine("Holder: ${it.take(lineWidth - 8)}")
+        }
+        recipientEmail?.takeIf { it.isNotBlank() }?.let {
+            sb.appendLine("Email: ${it.take(lineWidth - 7)}")
+        }
+        sb.appendLine("Balance: $sym ${String.format(Locale.US, "%.2f", balance)}")
+        sb.appendLine(thin)
+        sb.appendLine("Code:")
+        sb.appendLine(center(code.take(lineWidth), lineWidth))
+        sb.appendLine(thin)
+        sb.appendLine(center("Scan QR to redeem at checkout", lineWidth))
+        sb.appendLine(sep)
+        appendFooter(sb, settings.receiptFooter, lineWidth)
+        val qrPayload = com.chaslay.pos.domain.model.GiftCardCode.qrPayload(code)
+        return finalizePayload(sb.toString(), settings, lineWidth, qrPayload)
+    }
+
     /**
      * Routes a customer receipt to every saved printer set to print order receipts. Falls back to
      * the legacy single receipt-printer behaviour when none are configured.

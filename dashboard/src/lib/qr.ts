@@ -43,6 +43,29 @@ export function buildReceiptUrl(saleId: string, origin?: string): string {
   return `${receiptPublicBase(origin)}/${encodeURIComponent(saleId)}`;
 }
 
+/** Parse scanned gift-card code or /gift/{code} URL payload. */
+export function parseGiftCardCode(raw: string): string {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return '';
+  try {
+    if (/^https?:\/\//i.test(trimmed)) {
+      const url = new URL(trimmed);
+      const m = url.pathname.match(/\/gift\/([^/]+)/i);
+      if (m?.[1]) return decodeURIComponent(m[1]).trim();
+    }
+  } catch {
+    /* not a URL */
+  }
+  const inline = trimmed.match(/\/gift\/([^/?#\s]+)/i);
+  if (inline?.[1]) return decodeURIComponent(inline[1]).trim();
+  return trimmed;
+}
+
+/** QR payload for thermal printers — plain redeem code. */
+export function buildGiftCardRedeemQrPayload(code: string): string {
+  return parseGiftCardCode(code) || String(code || '').trim();
+}
+
 /** Return the first ref that exists on the public receipt API (backend UUID preferred). */
 export async function resolvePublishedReceiptRef(
   backendOrderId: string | null | undefined,

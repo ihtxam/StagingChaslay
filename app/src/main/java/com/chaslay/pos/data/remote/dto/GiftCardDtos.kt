@@ -11,6 +11,8 @@ data class GiftCardLookupResponse(
 data class GiftCardDto(
     val id: String,
     @SerializedName("cardNumber") val cardNumber: String? = null,
+    @SerializedName("cardMediaType") val cardMediaType: String? = null,
+    @SerializedName("ecardCode") val ecardCode: String? = null,
     val balance: String? = null,
     val status: String? = null,
     @SerializedName("membershipEnabled") val membershipEnabled: Boolean = false,
@@ -67,7 +69,24 @@ data class GiftCardCreditRequest(
     @SerializedName("cardMediaType") val cardMediaType: String = "physical",
     val amount: Double,
     @SerializedName("orderId") val orderId: String? = null,
-    @SerializedName("createIfMissing") val createIfMissing: Boolean = true
+    @SerializedName("createIfMissing") val createIfMissing: Boolean = true,
+    @SerializedName("ecardEmail") val ecardEmail: String? = null,
+    @SerializedName("holderName") val holderName: String? = null
+)
+
+data class GiftCardSendEcardEmailRequest(
+    val to: String,
+    val code: String,
+    val balance: Double,
+    @SerializedName("holderName") val holderName: String? = null,
+    @SerializedName("orderId") val orderId: String? = null
+)
+
+data class GiftCardSendEcardEmailResponse(
+    val success: Boolean = false,
+    val sent: Boolean = false,
+    val message: String? = null,
+    val error: String? = null
 )
 
 data class GiftCardCreditResponse(

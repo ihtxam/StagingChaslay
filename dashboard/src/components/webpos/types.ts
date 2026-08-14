@@ -20,6 +20,11 @@ export type GiftCardLineMeta = {
   cardId?: string;
   mediaType: 'physical' | 'e_card';
   amount: number;
+  /** Recipient email for e-gift delivery (required when deliveryMethod is email). */
+  ecardEmail?: string;
+  holderName?: string;
+  /** print | email | both — e-gift only */
+  deliveryMethod?: 'print' | 'email' | 'both';
 };
 
 export type CartLine = {

@@ -2088,7 +2088,7 @@ class PosViewModel @Inject constructor(
         if (code.isEmpty()) return
         viewModelScope.launch {
             updateExtras { it.copy(giftCardOpsBusy = true, giftCardOpsError = null) }
-            giftCardRepository.lookupPhysical(code)
+            giftCardRepository.lookupCode(code, mediaType = null)
                 .onSuccess { card ->
                     updateExtras {
                         it.copy(
@@ -2114,7 +2114,10 @@ class PosViewModel @Inject constructor(
         amount: Double,
         cardNumber: String,
         cardId: String?,
-        holderName: String?
+        holderName: String?,
+        mediaType: String = "physical",
+        ecardEmail: String? = null,
+        deliveryMethod: String? = null
     ) {
         val mode = _uiExtras.value.giftCardOpsMode ?: return
         val settings = _uiExtras.value.giftCardSettings
@@ -2128,8 +2131,13 @@ class PosViewModel @Inject constructor(
             updateExtras { it.copy(giftCardOpsError = "Look up the card before reloading") }
             return
         }
-        val normalizedNumber = LoyaltyMath.normalizeRfidUid(cardNumber).ifBlank { cardNumber.trim() }
-        if (normalizedNumber.isBlank()) {
+        val isEcard = mediaType == "e_card"
+        val normalizedNumber = if (isEcard) {
+            cardNumber.trim()
+        } else {
+            LoyaltyMath.normalizeRfidUid(cardNumber).ifBlank { cardNumber.trim() }
+        }
+        if (!isEcard && normalizedNumber.isBlank()) {
             updateExtras { it.copy(giftCardOpsError = "Card number is required") }
             return
         }
@@ -2137,12 +2145,16 @@ class PosViewModel @Inject constructor(
             op = mode,
             cardNumber = normalizedNumber,
             cardId = cardId,
+            mediaType = mediaType,
             amount = com.chaslay.pos.domain.model.roundMoney(amount),
-            holderName = holderName
+            holderName = holderName,
+            ecardEmail = ecardEmail,
+            deliveryMethod = deliveryMethod
         )
-        val lineName = when (mode) {
-            GiftCardOp.SELL -> "Gift card (new)"
-            GiftCardOp.RELOAD -> "Gift card reload"
+        val lineName = when {
+            isEcard && mode == GiftCardOp.SELL -> "E-gift card"
+            mode == GiftCardOp.SELL -> "Gift card (new)"
+            else -> "Gift card reload"
         }
         val productId = when (mode) {
             GiftCardOp.SELL -> GiftCardProducts.SELL_PRODUCT_ID
@@ -2165,6 +2177,7 @@ class PosViewModel @Inject constructor(
     }
 
     private suspend fun creditGiftCardLinesAfterSale(items: List<CartItem>, orderId: String) {
+        val settings = settingsRepository.getSettings()
         items.filter { it.giftCard != null }.forEach { item ->
             val meta = item.giftCard ?: return@forEach
             giftCardRepository.creditCard(
@@ -2173,8 +2186,41 @@ class PosViewModel @Inject constructor(
                 amount = meta.amount,
                 cardId = meta.cardId,
                 orderId = orderId,
-                mediaType = meta.mediaType
-            ).onFailure { e ->
+                mediaType = meta.mediaType,
+                ecardEmail = meta.ecardEmail,
+                holderName = meta.holderName
+            ).onSuccess { card ->
+                if (meta.op == GiftCardOp.SELL && meta.mediaType == "e_card") {
+                    val code = card.ecardCode?.takeIf { it.isNotBlank() } ?: card.cardNumber.orEmpty()
+                    val delivery = meta.deliveryMethod ?: "print"
+                    if (delivery == "print" || delivery == "both") {
+                        runCatching {
+                            printerService.routeGiftCardSaleReceipt(
+                                settings = settings,
+                                code = code,
+                                balance = meta.amount,
+                                recipientEmail = meta.ecardEmail,
+                                holderName = meta.holderName
+                            )
+                        }.onFailure { e ->
+                            Log.w("POS", "Gift card receipt print failed", e)
+                        }
+                    }
+                    val email = meta.ecardEmail?.trim().orEmpty()
+                    if ((delivery == "email" || delivery == "both") && email.contains("@")) {
+                        giftCardRepository.sendEcardEmail(
+                            to = email,
+                            code = code,
+                            balance = meta.amount,
+                            holderName = meta.holderName,
+                            orderId = orderId
+                        ).onFailure { e ->
+                            Log.w("POS", "Gift card email failed", e)
+                            updateExtras { it.copy(snackbarMessage = e.message ?: "Gift card email failed") }
+                        }
+                    }
+                }
+            }.onFailure { e ->
                 Log.w("POS", "Gift card credit failed for ${meta.cardNumber}", e)
                 updateExtras { it.copy(snackbarMessage = e.message ?: "Gift card credit failed") }
             }
@@ -2192,7 +2238,7 @@ class PosViewModel @Inject constructor(
         if (code.isEmpty()) return
         viewModelScope.launch {
             updateExtras { it.copy(membershipBusy = true, membershipLookupError = null) }
-            giftCardRepository.lookupPhysical(code)
+            giftCardRepository.lookupCode(code, mediaType = null)
                 .onSuccess { card -> attachMembershipCard(giftCardRepository.toAttachedMembership(card)) }
                 .onFailure { e ->
                     updateExtras {

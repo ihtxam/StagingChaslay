@@ -1,7 +1,7 @@
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY, formatTimeHHMM, ymdZurich } from '@/lib/date-format';
 import { roundMoney2 } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
-import { buildReceiptUrl, concatBytes, escposQrCode } from '@/lib/qr';
+import { buildReceiptUrl, buildGiftCardRedeemQrPayload, concatBytes, escposQrCode } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
 import { resolveOrderItemName } from '@/lib/order-item-name';
@@ -189,6 +189,66 @@ export type WebPosReceipt = {
   /** Provisional / preview receipt — no payment block. */
   isProvisional?: boolean;
 };
+
+export type GiftCardSaleReceipt = {
+  businessName: string;
+  address?: string;
+  phone?: string;
+  code: string;
+  balance: number;
+  recipientEmail?: string | null;
+  holderName?: string | null;
+  language?: ReceiptLang | string;
+  paperWidthMm?: 58 | 80;
+  header?: string;
+  footer?: string;
+};
+
+/** Thermal receipt for a newly sold e-gift card (includes QR with redeem code). */
+export function generateGiftCardSaleReceiptText(
+  tx: GiftCardSaleReceipt,
+  panelLang?: string
+): string {
+  const width = lineWidthForPaper(tx.paperWidthMm);
+  const code = String(tx.code || '').trim();
+  const lang = resolveLang({ language: tx.language } as WebPosReceipt, panelLang);
+  const L = receiptLabels(lang);
+  const sep = '='.repeat(width);
+  const thin = '-'.repeat(width);
+
+  let r = '';
+  r += sep + '\n';
+  if (tx.header?.trim()) {
+    for (const line of tx.header.trim().split(/\r?\n/)) r += line.slice(0, width) + '\n';
+  } else {
+    r += (tx.businessName || APP_NAME).toUpperCase().slice(0, width) + '\n';
+    if (tx.address) r += tx.address.slice(0, width) + '\n';
+    if (tx.phone) r += `Tel: ${tx.phone}`.slice(0, width) + '\n';
+  }
+  r += sep + '\n';
+  r += centerLine(L.giftCardTitle, width) + '\n';
+  r += thin + '\n';
+  if (tx.holderName?.trim()) {
+    r += `${L.customer}: ${tx.holderName.trim().slice(0, width - 12)}\n`;
+  }
+  if (tx.recipientEmail?.trim()) {
+    r += `Email: ${tx.recipientEmail.trim().slice(0, width - 7)}\n`;
+  }
+  r += padLine(`${L.giftCardBalance}:`, `CHF ${Number(tx.balance || 0).toFixed(2)}`, width) + '\n';
+  r += thin + '\n';
+  r += `${L.giftCardCode}:\n`;
+  r += centerLine(code.slice(0, width), width) + '\n';
+  r += thin + '\n';
+  r += centerLine(L.giftCardScanRedeem, width) + '\n';
+  r += sep + '\n';
+  r += (tx.footer || L.thankYou).trim() + '\n\n\n';
+  return r;
+}
+
+/** QR data for gift-card sale thermal print. */
+export function giftCardSaleReceiptQrPayload(code: string): string {
+  return buildGiftCardRedeemQrPayload(code);
+}
 
 /** Prefer merchant print settings; kitchen defaults to full 80mm width. */
 export function resolveKitchenPaperWidthMm(

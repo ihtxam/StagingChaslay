@@ -69,6 +69,10 @@ export type ReceiptLabels = {
   cashVariance: string;
   floatCarriesForward: string;
   floatCarriesForwardNote: string;
+  giftCardTitle: string;
+  giftCardCode: string;
+  giftCardBalance: string;
+  giftCardScanRedeem: string;
 };
 
 const EN: ReceiptLabels = {
@@ -139,6 +143,10 @@ const EN: ReceiptLabels = {
   floatCarriesForward: 'Carries forward as base',
   floatCarriesForwardNote:
     'Opening float stays in the drawer as the next shift starting till.',
+  giftCardTitle: 'GIFT CARD',
+  giftCardCode: 'Code',
+  giftCardBalance: 'Balance',
+  giftCardScanRedeem: 'Scan QR to redeem at checkout',
 };
 
 const FR: ReceiptLabels = {
@@ -209,6 +217,10 @@ const FR: ReceiptLabels = {
   floatCarriesForward: 'Se reporte (fond suivant)',
   floatCarriesForwardNote:
     'Le fond de base reste en caisse et se reporte comme prochain fond d\'ouverture.',
+  giftCardTitle: 'CARTE CADEAU',
+  giftCardCode: 'Code',
+  giftCardBalance: 'Solde',
+  giftCardScanRedeem: 'Scannez le QR pour payer en caisse',
 };
 
 const DE: ReceiptLabels = {
@@ -279,6 +291,10 @@ const DE: ReceiptLabels = {
   floatCarriesForward: 'Bleibt als Wechselgeld',
   floatCarriesForwardNote:
     'Der Anfangsbestand bleibt in der Kasse und ist der Startbestand der naechsten Schicht.',
+  giftCardTitle: 'GESCHENKKARTE',
+  giftCardCode: 'Code',
+  giftCardBalance: 'Guthaben',
+  giftCardScanRedeem: 'QR scannen zum Einloesen an der Kasse',
 };
 
 export function receiptLabels(lang: string | null | undefined): ReceiptLabels {

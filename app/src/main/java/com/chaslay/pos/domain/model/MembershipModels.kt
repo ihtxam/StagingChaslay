@@ -23,7 +23,10 @@ data class GiftCardLineMeta(
     val cardId: String? = null,
     val mediaType: String = "physical",
     val amount: Double,
-    val holderName: String? = null
+    val holderName: String? = null,
+    val ecardEmail: String? = null,
+    /** print | email | both — e-gift sell only */
+    val deliveryMethod: String? = null
 )
 
 object GiftCardProducts {
