@@ -61,6 +61,9 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
     createdAt?: string;
     orderNumber?: string;
     customerName?: string | null;
+    customerPhone?: string | null;
+    shippingAddress?: string | null;
+    scheduledFor?: string | null;
     fulfillmentChannel?: string | null;
     channel?: string | null;
   };
@@ -99,6 +102,9 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
         orderNumber: order.orderNumber || orderId.slice(0, 8),
         orderSource: orderSourceLabel(source),
         userName: order.customerName || '-',
+        customerPhone: order.customerPhone || null,
+        shippingAddress: order.shippingAddress || null,
+        scheduledFor: order.scheduledFor || null,
         channel: order.fulfillmentChannel || order.channel || 'delivery',
         orderedAt: order.createdAt ? Date.parse(order.createdAt) : Date.now(),
         items: receiptItems,

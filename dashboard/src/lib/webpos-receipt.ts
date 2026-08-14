@@ -601,6 +601,10 @@ export type KitchenTicketOpts = {
   orderedAt?: number;
   /** Pickup / delivery scheduled time (ISO, datetime-local, or epoch). Null/omit = ASAP */
   scheduledFor?: string | number | null;
+  /** Delivery address (online shop / delivery orders) */
+  shippingAddress?: string | null;
+  /** Customer phone for delivery tickets */
+  customerPhone?: string | null;
   /** Staff or customer name at footer */
   userName?: string | null;
   /** Origin of the order / print */
@@ -805,6 +809,19 @@ function buildKitchenTicketLines(
     headerWidth
   )) {
     lines.push({ kind: 'header', text: w });
+  }
+  if (opts.shippingAddress?.trim()) {
+    for (const w of wrapKitchenWords(
+      `${L.deliveryAddress}: ${opts.shippingAddress.trim()}`,
+      headerWidth
+    )) {
+      lines.push({ kind: 'header', text: w });
+    }
+  }
+  if (opts.customerPhone?.trim()) {
+    for (const w of wrapKitchenWords(`Tel: ${opts.customerPhone.trim()}`, footWidth)) {
+      lines.push({ kind: 'normal', text: w });
+    }
   }
   lines.push({ kind: 'normal', text: thin });
 
