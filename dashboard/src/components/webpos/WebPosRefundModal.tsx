@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Delete, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
@@ -130,8 +131,15 @@ export default function WebPosRefundModal({
     [items]
   );
 
+  const wasOpenRef = useRef(false);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
     setRefundKind('referenced');
     setMode('full');
     setReasonId(options[0]?.id || '');
@@ -143,7 +151,7 @@ export default function WebPosRefundModal({
     setSelectedQty(init);
   }, [open, options, refundableItems]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
   const selectedItems = refundableItems
     .map((it) => ({
@@ -178,8 +186,8 @@ export default function WebPosRefundModal({
     setCustomReason((prev) => (prev + ch).slice(0, 120));
   };
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 p-3 sm:items-center">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 p-3 sm:items-center">
       <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
         <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
           <div>
@@ -467,6 +475,7 @@ export default function WebPosRefundModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -822,6 +822,18 @@ export default function WebPosOrdersPanel({
     );
   };
 
+  const refundModalItems = useMemo(
+    () =>
+      (refundFor?.items || []).map((it) => ({
+        id: String((it as { id?: string }).id || ''),
+        name: it.name,
+        quantity: Number(it.quantity) || 0,
+        totalPrice: Number(it.totalPrice) || 0,
+        refundedQuantity: Number((it as { refundedQuantity?: number }).refundedQuantity || 0),
+      })),
+    [refundFor]
+  );
+
   if (!open) return null;
 
   const channelFilters: Array<{ id: ChannelFilter; label: string }> = [
@@ -1643,13 +1655,7 @@ export default function WebPosOrdersPanel({
         orderNumber={refundFor?.orderNumber || ''}
         total={refundFor?.total || 0}
         alreadyRefunded={refundFor?.refundAmount || 0}
-        items={(refundFor?.items || []).map((it) => ({
-          id: String((it as { id?: string }).id || ''),
-          name: it.name,
-          quantity: Number(it.quantity) || 0,
-          totalPrice: Number(it.totalPrice) || 0,
-          refundedQuantity: Number((it as { refundedQuantity?: number }).refundedQuantity || 0),
-        }))}
+        items={refundModalItems}
         reasons={refundReasons}
         busy={refundBusy}
         hasTerminalPortion={hasTerminalPortion(

@@ -574,6 +574,18 @@ export default function Orders() {
     dateFrom !== todayIso() ||
     dateTo !== todayIso();
 
+  const refundModalItems = useMemo(
+    () =>
+      (refundFor?.items || []).map((it) => ({
+        id: String(it.id || ''),
+        name: orderItemName(it),
+        quantity: Number(it.quantity) || 0,
+        totalPrice: Number(it.totalPrice) || 0,
+        refundedQuantity: Number(it.refundedQuantity || 0),
+      })),
+    [refundFor]
+  );
+
   if (loading && orders.length === 0) {
     return <div className="text-center py-10 muted text-sm">{t('ordersLoading')}</div>;
   }
@@ -1109,13 +1121,7 @@ export default function Orders() {
         orderNumber={refundFor?.orderNumber || ''}
         total={refundFor?.total || 0}
         alreadyRefunded={refundFor?.refundAmount || 0}
-        items={(refundFor?.items || []).map((it) => ({
-          id: String(it.id || ''),
-          name: orderItemName(it),
-          quantity: Number(it.quantity) || 0,
-          totalPrice: Number(it.totalPrice) || 0,
-          refundedQuantity: Number(it.refundedQuantity || 0),
-        }))}
+        items={refundModalItems}
         reasons={refundReasons}
         busy={refundBusy}
         hasTerminalPortion={hasTerminalPortion(
