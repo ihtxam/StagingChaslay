@@ -188,7 +188,14 @@ fun FloorPlanCanvas(
         // Guard against zero-size layout (parent Column without weight).
         if (canvasW.value < 8f || canvasH.value < 8f) return@BoxWithConstraints
 
-        elements.forEach { element ->
+        val selectedElement = elements.find { it.id == selectedElementId }
+        val backgroundElements = if (selectedElement != null) {
+            elements.filter { it.id != selectedElementId }
+        } else {
+            elements
+        }
+
+        backgroundElements.forEach { element ->
             DraggablePlanItem(
                 planX = element.planX,
                 planY = element.planY,
@@ -198,6 +205,7 @@ fun FloorPlanCanvas(
                 canvasW = canvasW.value,
                 canvasH = canvasH.value,
                 editable = editable && onElementMoved != null,
+                isSelected = element.isSelected,
                 onMoved = { x, y -> onElementMoved?.invoke(element.id, x, y) },
                 onClick = { onElementClick?.invoke(element.id) }
             ) {
@@ -230,6 +238,25 @@ fun FloorPlanCanvas(
                 )
             }
         }
+
+        selectedElement?.let { element ->
+            DraggablePlanItem(
+                planX = element.planX,
+                planY = element.planY,
+                planWidth = element.planWidth,
+                planHeight = element.planHeight,
+                rotation = element.rotation,
+                canvasW = canvasW.value,
+                canvasH = canvasH.value,
+                editable = editable && onElementMoved != null,
+                isSelected = true,
+                onMoved = { x, y -> onElementMoved?.invoke(element.id, x, y) },
+                onClick = { onElementClick?.invoke(element.id) },
+                modifier = Modifier.zIndex(1f)
+            ) {
+                FloorPlanElementChip(element = element)
+            }
+        }
     }
 }
 
@@ -247,6 +274,7 @@ private fun DraggablePlanItem(
     onResized: ((Float, Float, Float, Float) -> Unit)? = null,
     onMoved: (Float, Float) -> Unit,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
     var previewRect by remember(planX, planY, planWidth, planHeight) { mutableStateOf<PlanRect?>(null) }
@@ -263,7 +291,7 @@ private fun DraggablePlanItem(
     var dragOffsetY by remember(displayX, displayY) { mutableFloatStateOf(0f) }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .offset {
                 IntOffset(
                     (baseX + dragOffsetX).roundToInt(),

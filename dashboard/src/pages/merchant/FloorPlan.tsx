@@ -160,7 +160,12 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
   const [saving, setSaving] = useState(false);
   const [newPlanName, setNewPlanName] = useState('');
   const [covers, setCovers] = useState<{ coversServed: number; dineInOrders: number; averagePartySize: number } | null>(null);
-  const [drag, setDrag] = useState<{ localId: string; offsetX: number; offsetY: number } | null>(null);
+  const [drag, setDrag] = useState<{
+    kind: 'table' | 'element';
+    localId: string;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
   const [resize, setResize] = useState<{
     localId: string;
     handle: ResizeHandle;
@@ -338,8 +343,15 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
 
   const onCanvasBackgroundPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    if (target.closest('[data-floor-table]') || target.closest('[data-resize-handle]')) return;
+    if (
+      target.closest('[data-floor-table]') ||
+      target.closest('[data-floor-element]') ||
+      target.closest('[data-resize-handle]')
+    ) {
+      return;
+    }
     setSelectedId(null);
+    setSelectedElementId(null);
   };
 
   const onTablePointerDown = (e: PointerEvent<HTMLDivElement>, localId: string) => {
@@ -352,9 +364,28 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     setDrag({
+      kind: 'table',
       localId,
       offsetX: e.clientX - rect.left - table.posX,
       offsetY: e.clientY - rect.top - table.posY,
+    });
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  const onElementPointerDown = (e: PointerEvent<HTMLDivElement>, localId: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const element = elements.find((el) => el.localId === localId);
+    if (!element) return;
+    setSelectedElementId(localId);
+    setSelectedId(null);
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setDrag({
+      kind: 'element',
+      localId,
+      offsetX: e.clientX - rect.left - element.posX,
+      offsetY: e.clientY - rect.top - element.posY,
     });
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
   };
@@ -411,13 +442,32 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
     }
 
     if (!drag) return;
+
+    if (drag.kind === 'element') {
+      const element = elements.find((el) => el.localId === drag.localId);
+      if (!element) return;
+      const x = Math.max(
+        0,
+        Math.min(activePlan.canvasWidth - element.width, e.clientX - rect.left - drag.offsetX)
+      );
+      const y = Math.max(
+        0,
+        Math.min(activePlan.canvasHeight - element.height, e.clientY - rect.top - drag.offsetY)
+      );
+      setElements((prev) =>
+        prev.map((el) => (el.localId === drag.localId ? { ...el, posX: x, posY: y } : el))
+      );
+      return;
+    }
+
+    const table = tables.find((t) => t.localId === drag.localId);
     const x = Math.max(
       0,
-      Math.min(activePlan.canvasWidth - (tables.find((t) => t.localId === drag.localId)?.width || 40), e.clientX - rect.left - drag.offsetX)
+      Math.min(activePlan.canvasWidth - (table?.width || 40), e.clientX - rect.left - drag.offsetX)
     );
     const y = Math.max(
       0,
-      Math.min(activePlan.canvasHeight - (tables.find((t) => t.localId === drag.localId)?.height || 40), e.clientY - rect.top - drag.offsetY)
+      Math.min(activePlan.canvasHeight - (table?.height || 40), e.clientY - rect.top - drag.offsetY)
     );
     setTables((prev) =>
       prev.map((t) => (t.localId === drag.localId ? { ...t, posX: x, posY: y } : t))
@@ -615,29 +665,44 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                   className="relative bg-slate-50/40"
                   style={{ width: activePlan.canvasWidth, height: activePlan.canvasHeight }}
                 >
-                  {elements.map((el) => (
-                    <div
-                      key={el.localId}
-                      className={`absolute select-none border ${
-                        selectedElementId === el.localId
-                          ? 'border-indigo-600 ring-2 ring-indigo-200'
-                          : 'border-transparent'
-                      }`}
-                      style={{
-                        left: el.posX,
-                        top: el.posY,
-                        width: el.width,
-                        height: el.height,
-                        backgroundColor: el.elementType === 'DOOR' ? '#8D6E63' : '#4A4A4A',
-                        transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-                      }}
-                      onPointerDown={(e) => {
-                        e.stopPropagation();
-                        setSelectedElementId(el.localId);
-                        setSelectedId(null);
-                      }}
-                    />
-                  ))}
+                  {elements
+                    .filter((el) => el.localId !== selectedElementId)
+                    .map((el) => {
+                    const hitPad = Math.max(0, (24 - el.height) / 2);
+                    return (
+                      <div
+                        key={el.localId}
+                        data-floor-element
+                        onPointerDown={(e) => onElementPointerDown(e, el.localId)}
+                        className={`absolute cursor-grab active:cursor-grabbing select-none ${
+                          selectedElementId === el.localId
+                            ? 'ring-2 ring-indigo-200'
+                            : ''
+                        }`}
+                        style={{
+                          left: el.posX,
+                          top: el.posY - hitPad,
+                          width: el.width,
+                          height: el.height + hitPad * 2,
+                          touchAction: 'none',
+                          transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                        }}
+                      >
+                        <div
+                          className={`h-full w-full border ${
+                            selectedElementId === el.localId
+                              ? 'border-indigo-600'
+                              : 'border-transparent'
+                          }`}
+                          style={{
+                            height: el.height,
+                            marginTop: hitPad,
+                            backgroundColor: el.elementType === 'DOOR' ? '#8D6E63' : '#4A4A4A',
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                   {tables.map((table) => (
                     <div
                       key={table.localId}
@@ -676,6 +741,37 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                         ))}
                     </div>
                   ))}
+                  {selectedElementId &&
+                    elements
+                      .filter((el) => el.localId === selectedElementId)
+                      .map((el) => {
+                        const hitPad = Math.max(0, (24 - el.height) / 2);
+                        return (
+                          <div
+                            key={el.localId}
+                            data-floor-element
+                            onPointerDown={(e) => onElementPointerDown(e, el.localId)}
+                            className="absolute z-10 cursor-grab active:cursor-grabbing select-none ring-2 ring-indigo-200"
+                            style={{
+                              left: el.posX,
+                              top: el.posY - hitPad,
+                              width: el.width,
+                              height: el.height + hitPad * 2,
+                              touchAction: 'none',
+                              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                            }}
+                          >
+                            <div
+                              className="h-full w-full border border-indigo-600"
+                              style={{
+                                height: el.height,
+                                marginTop: hitPad,
+                                backgroundColor: el.elementType === 'DOOR' ? '#8D6E63' : '#4A4A4A',
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
                 </div>
               </div>
             )}
