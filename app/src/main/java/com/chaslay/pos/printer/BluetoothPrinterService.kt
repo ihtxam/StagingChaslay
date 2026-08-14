@@ -499,11 +499,37 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine("Code:")
         sb.appendLine(center(code.take(lineWidth), lineWidth))
         sb.appendLine(thin)
-        sb.appendLine(center("Scan QR to redeem at checkout", lineWidth))
+        sb.appendLine(center("Scan QR or barcode to redeem", lineWidth))
         sb.appendLine(sep)
         appendFooter(sb, settings.receiptFooter, lineWidth)
         val qrPayload = com.chaslay.pos.domain.model.GiftCardCode.qrPayload(code)
-        return finalizePayload(sb.toString(), settings, lineWidth, qrPayload)
+        return finalizeGiftCardPayload(sb.toString(), settings, lineWidth, qrPayload)
+    }
+
+    private fun finalizeGiftCardPayload(
+        text: String,
+        settings: BusinessSettingsEntity,
+        lineWidth: Int,
+        redeemPayload: String
+    ): ByteArray {
+        val body = EscPosEncoder.encode(text)
+        val qrBytes = receiptQrRaster(redeemPayload, lineWidth)
+        val barcodeBytes = escPosCode128(redeemPayload)
+        val scannable = qrBytes + byteArrayOf(0x0A) + barcodeBytes
+        return buildPrintPayload(body, settings, lineWidth, scannable, cutFeedLines = 2)
+    }
+
+    /** ESC/POS Code128 (GS k 73) for USB wedge scanners. */
+    private fun escPosCode128(data: String, height: Int = 72, width: Int = 2): ByteArray {
+        val payload = data.trim().toByteArray(Charsets.US_ASCII)
+        if (payload.isEmpty() || payload.size > 255) return byteArrayOf()
+        return byteArrayOf(
+            0x1B, 0x61, 0x01,
+            0x1D, 0x68, height.coerceIn(1, 255).toByte(),
+            0x1D, 0x77, width.coerceIn(1, 6).toByte(),
+            0x1D, 0x48, 2,
+            0x1D, 0x6B, 73, payload.size.toByte()
+        ) + payload + byteArrayOf(0x0A, 0x1B, 0x61, 0x00)
     }
 
     /**

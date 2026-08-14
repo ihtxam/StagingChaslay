@@ -62,7 +62,7 @@ import {
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
 } from '@/lib/webpos-print-relay';
-import { buildReceiptUrl, resolvePublishedReceiptRef } from '@/lib/qr';
+import { buildReceiptUrl, resolvePublishedReceiptRef, normalizeScannedPayload } from '@/lib/qr';
 import {
   lineSignature,
   type ShopComboSelection,
@@ -3306,9 +3306,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       },
       locale
     );
-    const qr = giftCardSaleReceiptQrPayload(opts.code);
+    const scannable = giftCardSaleReceiptQrPayload(opts.code);
     await printEscPosToTargets(text, {
-      qrUrl: qr,
+      qrUrl: scannable,
+      barcodeData: scannable,
+      forceScannable: true,
       role: 'receipt',
       quiet: true,
     });
@@ -3442,12 +3444,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const lookupMembershipCard = async (rawCode: string) => {
     const code = rawCode.trim();
     if (!code || membershipBusy) return;
-    const normalized = normalizeRfidUid(code) || code;
+    const ecParsed = normalizeScannedPayload(code);
+    const normalized = ecParsed || normalizeRfidUid(code) || code;
+    const mediaType = /^EC/i.test(normalized) ? 'e_card' : 'physical';
     setMembershipBusy(true);
     try {
       const res = await api.get(
         `/gift-cards/lookup/${encodeURIComponent(normalized)}`,
-        { params: { mediaType: 'physical' } }
+        { params: { mediaType } }
       );
       const c = res.data?.card;
       if (!c?.id) throw new Error(t('webPosMembershipLookupFailed'));
@@ -3645,6 +3649,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     text: string,
     opts: {
       qrUrl?: string;
+      barcodeData?: string;
+      /** Gift-card receipts always print QR/barcode even when receipt QR is disabled. */
+      forceScannable?: boolean;
       role: 'receipt' | 'kitchen' | 'eod';
       paperWidthMm?: 58 | 80;
       /** Skip success toast (caller already confirmed to the cashier). */
@@ -3682,8 +3689,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
     const qr =
-      opts.role === 'receipt' && printSettings?.receiptShowQrCode !== false ? opts.qrUrl : undefined;
-    const escpos = textToEscPos(text, qr, logo);
+      opts.forceScannable ||
+      (opts.role === 'receipt' && printSettings?.receiptShowQrCode !== false)
+        ? opts.qrUrl
+        : undefined;
+    const barcode = opts.barcodeData || (opts.forceScannable ? opts.qrUrl : undefined);
+    const escpos = textToEscPos(text, qr, logo, barcode);
     const dataBase64 = uint8ToBase64(escpos);
 
     let printedOk = 0;

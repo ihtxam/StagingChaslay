@@ -146,7 +146,7 @@ const EN: ReceiptLabels = {
   giftCardTitle: 'GIFT CARD',
   giftCardCode: 'Code',
   giftCardBalance: 'Balance',
-  giftCardScanRedeem: 'Scan QR to redeem at checkout',
+  giftCardScanRedeem: 'Scan QR or barcode to redeem',
 };
 
 const FR: ReceiptLabels = {
@@ -220,7 +220,7 @@ const FR: ReceiptLabels = {
   giftCardTitle: 'CARTE CADEAU',
   giftCardCode: 'Code',
   giftCardBalance: 'Solde',
-  giftCardScanRedeem: 'Scannez le QR pour payer en caisse',
+  giftCardScanRedeem: 'Scannez le QR ou code-barres pour payer',
 };
 
 const DE: ReceiptLabels = {
@@ -294,7 +294,7 @@ const DE: ReceiptLabels = {
   giftCardTitle: 'GESCHENKKARTE',
   giftCardCode: 'Code',
   giftCardBalance: 'Guthaben',
-  giftCardScanRedeem: 'QR scannen zum Einloesen an der Kasse',
+  giftCardScanRedeem: 'QR oder Barcode an der Kasse scannen',
 };
 
 export function receiptLabels(lang: string | null | undefined): ReceiptLabels {

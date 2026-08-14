@@ -4,6 +4,9 @@
 
 import { publicApi } from '@/lib/api';
 
+/** EC-XXXXXXXX redeem codes (6–12 hex digits after prefix). */
+const ECARD_BODY_RE = /EC[-' ]?([0-9A-F]{6,12})/i;
+
 /** Normalize legacy domain typos and receipt path variants. */
 export function normalizeReceiptDomain(raw: string): string {
   let base = String(raw || '')
@@ -43,27 +46,54 @@ export function buildReceiptUrl(saleId: string, origin?: string): string {
   return `${receiptPublicBase(origin)}/${encodeURIComponent(saleId)}`;
 }
 
-/** Parse scanned gift-card code or /gift/{code} URL payload. */
-export function parseGiftCardCode(raw: string): string {
+/**
+ * Extract an e-gift EC-… code from noisy scanner wedge input (URLs, receipt text, UUID fragments).
+ */
+export function extractGiftCardCode(raw: string): string {
   const trimmed = String(raw || '').trim();
   if (!trimmed) return '';
   try {
     if (/^https?:\/\//i.test(trimmed)) {
       const url = new URL(trimmed);
       const m = url.pathname.match(/\/gift\/([^/]+)/i);
-      if (m?.[1]) return decodeURIComponent(m[1]).trim();
+      if (m?.[1]) {
+        const fromUrl = decodeURIComponent(m[1]).trim();
+        const ec = fromUrl.match(ECARD_BODY_RE);
+        if (ec) return `EC-${ec[1].toUpperCase()}`;
+        return fromUrl;
+      }
     }
   } catch {
     /* not a URL */
   }
   const inline = trimmed.match(/\/gift\/([^/?#\s]+)/i);
-  if (inline?.[1]) return decodeURIComponent(inline[1]).trim();
+  if (inline?.[1]) {
+    const decoded = decodeURIComponent(inline[1]).trim();
+    const ec = decoded.match(ECARD_BODY_RE);
+    if (ec) return `EC-${ec[1].toUpperCase()}`;
+    return decoded;
+  }
+  const ec = trimmed.match(ECARD_BODY_RE);
+  if (ec) return `EC-${ec[1].toUpperCase()}`;
   return trimmed;
 }
 
-/** QR payload for thermal printers — plain redeem code. */
+/** POS scan wedge normalizer — extracts EC code from messy input. */
+export function normalizeScannedPayload(raw: string): string {
+  return extractGiftCardCode(raw);
+}
+
+/** @deprecated use extractGiftCardCode */
+export function parseGiftCardCode(raw: string): string {
+  return extractGiftCardCode(raw);
+}
+
+/** Thermal QR / Code128 payload — compact redeem code only, e.g. EC9E1E09C. */
 export function buildGiftCardRedeemQrPayload(code: string): string {
-  return parseGiftCardCode(code) || String(code || '').trim();
+  const parsed = extractGiftCardCode(code);
+  const m = parsed.match(/^EC[-' ]?([0-9A-F]{6,12})$/i);
+  if (m) return `EC${m[1].toUpperCase()}`;
+  return parsed.replace(/[\s:_\-]+/g, '').toUpperCase() || String(code || '').trim();
 }
 
 /** Return the first ref that exists on the public receipt API (backend UUID preferred). */
@@ -128,6 +158,21 @@ export function escposQrCode(data: string, moduleSize = 4): Uint8Array {
   o += payload.length;
   out.set(print, o);
   return out;
+}
+
+/** ESC/POS Code128 barcode (GS k 73) — ideal for USB wedge scanners. */
+export function escposCode128(data: string, height = 80, width = 2): Uint8Array {
+  const encoder = new TextEncoder();
+  const payload = encoder.encode(String(data || '').trim());
+  if (!payload.length || payload.length > 255) return new Uint8Array(0);
+  const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
+  const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
+  const heightCmd = new Uint8Array([0x1d, 0x68, Math.max(1, Math.min(255, height))]);
+  const widthCmd = new Uint8Array([0x1d, 0x77, Math.max(1, Math.min(6, width))]);
+  const hriBelow = new Uint8Array([0x1d, 0x48, 2]);
+  const printHeader = new Uint8Array([0x1d, 0x6b, 73, payload.length]);
+  const lf = new Uint8Array([0x0a]);
+  return concatBytes(alignCenter, heightCmd, widthCmd, hriBelow, printHeader, payload, lf, alignLeft);
 }
 
 export function concatBytes(...parts: Uint8Array[]): Uint8Array {

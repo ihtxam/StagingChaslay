@@ -1,10 +1,10 @@
-import crypto from "crypto";
-import { and, desc, eq, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import {
   buildGiftCardRedeemQrPayload,
   buildGiftCardRedeemUrl,
-  parseGiftCardCode,
+  ecardLookupCandidates,
+  generateEcardCode,
+  normalizeScannedPayload,
 } from "@/lib/gift-card-code";
 import {
   normalizeGiftCardSettings,
@@ -125,10 +125,11 @@ export class GiftCardService {
     mediaType?: "physical" | "e_card"
   ) {
     const db = getDb();
-    const parsed = parseGiftCardCode(code);
+    const parsed = normalizeScannedPayload(code);
     const trimmed = parsed || String(code || "").trim();
     if (!trimmed) throw new Error("Card number is required");
     const normalized = normalizeRfidUid(trimmed);
+    const ecardKeys = ecardLookupCandidates(code);
     const candidates = [
       ...new Set([
         trimmed,
@@ -136,6 +137,8 @@ export class GiftCardService {
         trimmed.toUpperCase(),
         trimmed.toLowerCase(),
         buildGiftCardRedeemQrPayload(trimmed),
+        ...ecardKeys,
+        ...ecardKeys.map((k) => normalizeRfidUid(k)).filter(Boolean),
       ]),
     ].filter(Boolean);
 
@@ -222,7 +225,7 @@ export class GiftCardService {
       cardNumber = normalizeRfidUid(cardNumber);
       if (!cardNumber) throw new Error("RFID card number is required");
     } else {
-      ecardCode = `EC-${crypto.randomBytes(6).toString("hex").toUpperCase()}`;
+      ecardCode = generateEcardCode();
       if (!cardNumber) cardNumber = ecardCode;
     }
 

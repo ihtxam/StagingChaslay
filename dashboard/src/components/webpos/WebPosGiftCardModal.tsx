@@ -5,7 +5,7 @@ import api from '@/lib/api';
 import RfidScanInput from '@/components/RfidScanInput';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
-import { parseGiftCardCode } from '@/lib/qr';
+import { normalizeScannedPayload } from '@/lib/qr';
 
 function normalizeRfidUid(raw: string): string {
   return String(raw || '')
@@ -111,7 +111,9 @@ export default function WebPosGiftCardModal({
       const trimmed = raw.trim();
       if (!trimmed) return;
       const normalized =
-        mediaType === 'physical' ? normalizeRfidUid(trimmed) : parseGiftCardCode(trimmed);
+        mediaType === 'physical'
+          ? normalizeRfidUid(trimmed)
+          : normalizeScannedPayload(trimmed);
       const lookupKey = `${mediaType}:${normalized || trimmed}`;
       setBusy(true);
       setLookupError('');
@@ -435,15 +437,23 @@ export default function WebPosGiftCardModal({
                   {media === 'e_card' ? t('giftCardScanOrPasteCode') : t('tapCard')}
                 </label>
                 {media === 'e_card' ? (
-                  <input
-                    className="input w-full"
-                    autoFocus
+                  <RfidScanInput
                     value={code}
-                    placeholder={t('giftCardEcardPlaceholder')}
-                    onChange={(e) => setCode(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void lookup(code, 'e_card');
+                    onChange={(v) => {
+                      lastTriedRef.current = '';
+                      setLookupError('');
+                      setCode(v);
                     }}
+                    onScanComplete={(scanned) => {
+                      lastTriedRef.current = '';
+                      setLookupError('');
+                      const parsed = normalizeScannedPayload(scanned);
+                      setCode(parsed || scanned);
+                      void lookup(parsed || scanned, 'e_card', { silent: false });
+                    }}
+                    placeholder={t('giftCardEcardPlaceholder')}
+                    autoFocus
+                    className="input w-full"
                   />
                 ) : (
                   <RfidScanInput
