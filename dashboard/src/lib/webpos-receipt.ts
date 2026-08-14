@@ -1590,7 +1590,7 @@ export function posOrderToWebPosReceipt(
     shippingAddress: order.shippingAddress,
     tableLabel: order.tableLabel,
     guestCount: order.guestCount,
-    items: order.items.map((i) => ({
+    items: (order.items || []).map((i) => ({
       name: resolveOrderItemName(i.name),
       quantity: i.quantity,
       unitPrice: Number(i.unitPrice ?? (i.quantity ? i.totalPrice / i.quantity : i.totalPrice)),

@@ -3693,12 +3693,53 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         paymentMethod: payMethod,
       });
       toast.success(t('webPosPaymentCollected'));
-      const updated = res.data?.order as PosOrderForReceipt | undefined;
-      if (updated) {
+      let orderForReceipt: PosOrderForReceipt | null = null;
+      try {
+        const fresh = await api.get(`/merchant/orders/${ctx.id}`);
+        orderForReceipt = (fresh.data?.order || fresh.data) as PosOrderForReceipt;
+      } catch {
+        orderForReceipt = (res.data?.order as PosOrderForReceipt) || null;
+      }
+      if (orderForReceipt?.id) {
         try {
-          await printPosOrderReceipt(updated);
+          const receiptPayload = posOrderToWebPosReceipt(orderForReceipt, {
+            businessName: merchant?.name || APP_NAME,
+            address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+            phone: merchant?.phone || undefined,
+            vatNumber: merchant?.vatNumber || undefined,
+            taxRate,
+            vatIncludedInPrice,
+            printSettings,
+            panelLang: locale,
+          });
+          const receiptText = generateWebPosReceiptText(receiptPayload, locale);
+          const orderId = String(orderForReceipt.id || orderForReceipt.clientId || ctx.id);
+          const orderNumber =
+            orderForReceipt.orderNumber ||
+            orderForReceipt.ticketDisplay ||
+            ctx.orderNumber ||
+            '';
+          setLastReceipt(receiptText);
+          setLastReceiptUrl(receiptPayload.receiptUrl);
+          setLastReceiptOrderId(orderId);
+          setLastReceiptOrderNumber(orderNumber);
+          const part: SplitReceiptPart = {
+            id: orderId,
+            label: t('webPosPrintReceipt'),
+            text: receiptText,
+            url: receiptPayload.receiptUrl,
+            amount: ctx.total,
+            orderNumber,
+          };
+          splitReceiptsRef.current = [part];
+          setLastSplitReceipts([part]);
+          try {
+            await printReceipt(receiptText, receiptPayload.receiptUrl);
+          } catch {
+            /* print is best-effort — manual reprint uses staged lastReceipt */
+          }
         } catch {
-          /* print is best-effort */
+          /* receipt build is best-effort */
         }
       }
       setSuccessInfo({
