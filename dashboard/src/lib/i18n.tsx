@@ -873,6 +873,8 @@ const en: Dict = {
   webPosRefundReferenced: 'Refund payment (referenced)',
   webPosRefundGoodwill: 'Goodwill compensation (open amount)',
   webPosRefundGoodwillHint: 'Compensate the customer for service issues — not limited to the original payment.',
+  webPosRefundTerminalNote: 'Card portion will be reversed on the Adyen terminal automatically.',
+  webPosMixedPayment: 'Mixed payment',
   webPosGoodwillAmount: 'Compensation amount',
   webPosGoodwillMethod: 'Payout method',
   webPosGoodwillCash: 'Cash',
@@ -2633,6 +2635,8 @@ const fr: Dict = {
   webPosRefundGoodwill: 'Geste commercial (montant libre)',
   webPosRefundGoodwillHint:
     'Compenser le client (qualité, service…) — sans limite au montant du paiement d’origine.',
+  webPosRefundTerminalNote: 'La part carte sera remboursée automatiquement sur le terminal Adyen.',
+  webPosMixedPayment: 'Paiement mixte',
   webPosGoodwillAmount: 'Montant de compensation',
   webPosGoodwillMethod: 'Mode de remboursement',
   webPosGoodwillCash: 'Espèces',
@@ -4394,6 +4398,8 @@ const de: Dict = {
   webPosRefundGoodwill: 'Kulanz (freier Betrag)',
   webPosRefundGoodwillHint:
     'Kunden entschädigen (Service, Qualität…) — nicht auf den ursprünglichen Zahlungsbetrag begrenzt.',
+  webPosRefundTerminalNote: 'Der Kartenteil wird automatisch am Adyen-Terminal erstattet.',
+  webPosMixedPayment: 'Gemischte Zahlung',
   webPosGoodwillAmount: 'Kulanzbetrag',
   webPosGoodwillMethod: 'Auszahlungsart',
   webPosGoodwillCash: 'Bar',

@@ -1,8 +1,11 @@
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
+import { parsePaymentBreakdown } from '@/lib/payment-breakdown';
+import { paymentLabel as receiptPaymentLabel, receiptLabels, type ReceiptLang } from '@/lib/receipt-labels';
 
 export type MerchantOrder = PosOrderForReceipt & {
   status: string;
   paymentStatus?: string | null;
+  paymentBreakdown?: Array<{ method: string; amount: number }> | null;
   refundAmount: number;
   cancelReason?: string | null;
   refundReason?: string | null;
@@ -82,6 +85,7 @@ export function canRefundOrder(o: MerchantOrder): boolean {
     o.status === 'completed' ||
     o.status === 'partially_refunded' ||
     o.paymentStatus === 'completed' ||
+    o.paymentStatus === 'paid' ||
     o.paymentStatus === 'partially_refunded'
   );
 }
@@ -156,4 +160,57 @@ export function daysAgoIso(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days);
   return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
+}
+
+/** Human-readable payment line(s) for order history / detail. */
+export function formatOrderPaymentDisplay(
+  order: {
+    paymentMethod?: string | null;
+    paymentBreakdown?: unknown;
+    total?: number;
+  },
+  t: (k: string) => string,
+  locale = 'en'
+): string {
+  const lang = (locale === 'fr' ? 'fr' : locale === 'de' ? 'de' : 'en') as ReceiptLang;
+  const L = receiptLabels(lang);
+  const tenders = parsePaymentBreakdown(
+    order.paymentBreakdown,
+    order.paymentMethod,
+    Number(order.total || 0)
+  );
+  if (tenders.length <= 1) {
+    const method = tenders[0]?.method || order.paymentMethod || 'cash';
+    return paymentLabelUi(method, t);
+  }
+  return tenders
+    .map((p) => `${paymentLabelUi(p.method, t)} CHF ${Number(p.amount).toFixed(2)}`)
+    .join(' + ');
+}
+
+export function orderPaymentLines(order: {
+  paymentMethod?: string | null;
+  paymentBreakdown?: unknown;
+  total?: number;
+}): Array<{ method: string; amount: number }> {
+  const tenders = parsePaymentBreakdown(
+    order.paymentBreakdown,
+    order.paymentMethod,
+    Number(order.total || 0)
+  );
+  if (tenders.length) return tenders;
+  const total = Number(order.total || 0);
+  const method = String(order.paymentMethod || 'cash');
+  return total > 0 ? [{ method, amount: total }] : [{ method, amount: 0 }];
+}
+
+function paymentLabelUi(method: string, t: (k: string) => string): string {
+  const m = String(method || '').toLowerCase().replace(/-/g, '_');
+  if (m === 'cash') return t('webPosCash');
+  if (m === 'card') return t('webPosCard');
+  if (m === 'terminal') return t('webPosTerminal');
+  if (m === 'gift_card') return t('giftCard');
+  if (m === 'mixed') return t('webPosMixedPayment');
+  if (m === 'pay_later') return t('webPosPayLater');
+  return receiptPaymentLabel(receiptLabels('en'), method);
 }

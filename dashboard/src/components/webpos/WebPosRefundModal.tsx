@@ -26,6 +26,10 @@ type Props = {
   items: RefundOrderItem[];
   reasons?: RefundReasonOption[];
   busy?: boolean;
+  /** Order includes an Adyen terminal portion (card reversal on refund). */
+  hasTerminalPortion?: boolean;
+  /** Merchant has terminal enabled (goodwill terminal payout). */
+  terminalEnabled?: boolean;
   onClose: () => void;
   onConfirm: (payload: {
     refundKind: 'referenced' | 'goodwill';
@@ -90,6 +94,8 @@ export default function WebPosRefundModal({
   items,
   reasons: apiReasons,
   busy,
+  hasTerminalPortion = false,
+  terminalEnabled = false,
   onClose,
   onConfirm,
 }: Props) {
@@ -198,7 +204,7 @@ export default function WebPosRefundModal({
               }`}
               onClick={() => setRefundKind('referenced')}
             >
-              {t('webPosRefundReferenced')}
+              {t('webPosRefund')}
             </button>
             <button
               type="button"
@@ -212,6 +218,10 @@ export default function WebPosRefundModal({
               {t('webPosRefundGoodwill')}
             </button>
           </div>
+
+          {refundKind === 'referenced' && hasTerminalPortion ? (
+            <p className="text-xs text-violet-700">{t('webPosRefundTerminalNote')}</p>
+          ) : null}
 
           {refundKind === 'goodwill' ? (
             <p className="text-xs text-stone-500">{t('webPosRefundGoodwillHint')}</p>
@@ -253,6 +263,7 @@ export default function WebPosRefundModal({
                       ? 'bg-stone-800 text-white'
                       : 'bg-white ring-1 ring-stone-200'
                   }`}
+                  disabled={!terminalEnabled}
                   onClick={() => setGoodwillMethod('terminal')}
                 >
                   {t('webPosGoodwillTerminal')}

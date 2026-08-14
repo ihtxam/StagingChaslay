@@ -300,7 +300,8 @@ export function paymentLabel(labels: ReceiptLabels, method?: string | null): str
   if (m === 'card') return labels.card;
   if (m === 'terminal') return labels.terminal;
   if (m === 'pay_later') return labels.payLater;
-  if (m === 'gift_card') return 'Gift card';
+  if (m === 'gift_card' || m === 'gift-card') return 'Gift card';
+  if (m === 'mixed') return 'Mixed';
   return String(method || '').toUpperCase();
 }
 

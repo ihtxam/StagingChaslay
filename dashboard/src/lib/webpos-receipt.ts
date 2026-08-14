@@ -12,6 +12,7 @@ import {
   receiptLabels,
   type ReceiptLang,
 } from '@/lib/receipt-labels';
+import { parsePaymentBreakdown } from '@/lib/payment-breakdown';
 import {
   appendAdyenReceiptBlock,
   resolveOrderAdyenReceipts,
@@ -443,6 +444,75 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
     r = appendAdyenReceiptBlock(r, tx.adyenCustomerReceipt, width);
   }
   r += '\n\n';
+  return r;
+}
+
+export type RefundReceiptPrint = {
+  businessName: string;
+  address?: string;
+  phone?: string;
+  orderNumber?: string | null;
+  orderDisplay?: string | null;
+  refundedAt: number;
+  refundAmount: number;
+  refundTotal: number;
+  reason: string;
+  allocation?: {
+    giftCard?: number;
+    cash?: number;
+    terminal?: number;
+    other?: number;
+  };
+  language?: ReceiptLang | string;
+  paperWidthMm?: 58 | 80;
+  header?: string;
+  footer?: string;
+  staffName?: string | null;
+};
+
+/** Proof-of-refund thermal receipt for the customer after a refund. */
+export function generateRefundReceiptText(tx: RefundReceiptPrint, panelLang?: string): string {
+  const width = lineWidthForPaper(tx.paperWidthMm);
+  const code = String(tx.language || panelLang || 'en').toLowerCase().slice(0, 2);
+  const lang: ReceiptLang = code === 'fr' || code === 'de' ? code : 'en';
+  const L = receiptLabels(lang);
+  const sep = '='.repeat(width);
+  const thin = '-'.repeat(width);
+
+  let r = '';
+  r += sep + '\n';
+  r += centerLine('REFUND', width) + '\n';
+  r += centerLine((tx.businessName || APP_NAME).toUpperCase().slice(0, width), width) + '\n';
+  if (tx.address) r += tx.address.slice(0, width) + '\n';
+  r += sep + '\n';
+  const ref = (tx.orderDisplay || tx.orderNumber || '').trim();
+  if (ref) r += padLine('Order:', ref.slice(0, width - 8), width) + '\n';
+  r += padLine('Date:', formatDateTimeDDMMYYYY(tx.refundedAt).slice(0, width - 8), width) + '\n';
+  r += thin + '\n';
+  r += padLine('Refunded:', `CHF ${Number(tx.refundAmount || 0).toFixed(2)}`, width) + '\n';
+  if (tx.refundTotal > tx.refundAmount + 0.001) {
+    r += padLine('Total refunded:', `CHF ${Number(tx.refundTotal || 0).toFixed(2)}`, width) + '\n';
+  }
+  const alloc = tx.allocation;
+  if (alloc && (alloc.giftCard || alloc.cash || alloc.terminal || alloc.other)) {
+    r += thin + '\n';
+    if ((alloc.giftCard || 0) > 0.001) {
+      r += padLine('  Gift card:', `CHF ${Number(alloc.giftCard).toFixed(2)}`, width) + '\n';
+    }
+    if ((alloc.cash || 0) > 0.001) {
+      r += padLine('  Cash:', `CHF ${Number(alloc.cash).toFixed(2)}`, width) + '\n';
+    }
+    if ((alloc.terminal || 0) > 0.001) {
+      r += padLine('  Terminal:', `CHF ${Number(alloc.terminal).toFixed(2)}`, width) + '\n';
+    }
+  }
+  r += thin + '\n';
+  r += `${L.note} ${tx.reason.slice(0, width)}\n`;
+  if (tx.staffName?.trim()) {
+    r += padLine(L.staff, tx.staffName.trim().slice(0, width - 8), width) + '\n';
+  }
+  r += sep + '\n';
+  r += (tx.footer || L.thankYou).trim() + '\n\n\n';
   return r;
 }
 
@@ -1358,6 +1428,8 @@ export type PosOrderForReceipt = {
   adyenCustomerReceiptJson?: string | null;
   /** Persisted Adyen Terminal API CashierReceipt JSON (order history reprint). */
   adyenCashierReceiptJson?: string | null;
+  /** Split tenders when order was paid with multiple methods. */
+  paymentBreakdown?: Array<{ method: string; amount: number }> | null;
   items: Array<{
     id?: string;
     name?: string | null;
@@ -1367,6 +1439,7 @@ export type PosOrderForReceipt = {
     refundedQuantity?: number;
   }>;
   refundReason?: string | null;
+  paymentBreakdown?: Array<{ method: string; amount: number }> | null;
 };
 
 export function posOrderToWebPosReceipt(
@@ -1400,6 +1473,15 @@ export function posOrderToWebPosReceipt(
   const meta = parseOrderMetaNotes(order.notes);
   const ticketDisplay = order.ticketDisplay || meta.ticketDisplay || null;
   const adyen = resolveOrderAdyenReceipts(order);
+  const paymentLines = (() => {
+    const tenders = parsePaymentBreakdown(
+      order.paymentBreakdown,
+      order.paymentMethod,
+      Number(order.total)
+    );
+    if (tenders.length) return tenders;
+    return undefined;
+  })();
   return {
     businessName: ctx.businessName,
     address: ctx.address,
@@ -1411,6 +1493,7 @@ export function posOrderToWebPosReceipt(
     completedAt,
     channel: order.channel || undefined,
     paymentMethod: order.paymentMethod || 'cash',
+    paymentLines,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     shippingAddress: order.shippingAddress,

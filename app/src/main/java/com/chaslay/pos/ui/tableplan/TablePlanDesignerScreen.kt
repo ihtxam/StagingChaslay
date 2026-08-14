@@ -174,6 +174,9 @@ fun TablePlanDesignerContent(
             OutlinedButton(onClick = { viewModel.addElement(FloorPlanElementType.WALL) }) {
                 Text(stringResource(R.string.add_wall), fontSize = 12.sp)
             }
+            OutlinedButton(onClick = { viewModel.addElement(FloorPlanElementType.DOOR) }) {
+                Text(stringResource(R.string.add_door), fontSize = 12.sp)
+            }
             OutlinedButton(onClick = { viewModel.addElement(FloorPlanElementType.BAR) }) {
                 Text(stringResource(R.string.add_bar), fontSize = 12.sp)
             }

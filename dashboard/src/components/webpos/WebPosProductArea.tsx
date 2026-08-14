@@ -15,7 +15,6 @@ import { useI18n } from '@/lib/i18n';
 import { categoryColor, categoryColorMap } from './categoryColors';
 import {
   POS_GIFT_CARDS_CATEGORY,
-  POS_MOST_SOLD_CATEGORY,
   type PosCategoryId,
   type PosPaymentMethod,
   type Category,
@@ -157,16 +156,14 @@ export default function WebPosProductArea({
         <div className="webpos-cat-scroll flex flex-wrap gap-1.5">
           <button
             type="button"
-            onClick={() => onCategoryChange(POS_MOST_SOLD_CATEGORY)}
+            onClick={() => onCategoryChange('all')}
             className={`webpos-category-chip ${
-              categoryId === POS_MOST_SOLD_CATEGORY
-                ? 'ring-2 ring-[var(--webpos-accent-ring)] ring-offset-1'
-                : ''
+              categoryId === 'all' ? 'ring-2 ring-[var(--webpos-accent-ring)] ring-offset-1' : ''
             }`}
-            style={{ backgroundColor: '#E67E22' }}
-            title={t('webPosMostSold')}
+            style={{ backgroundColor: '#e7e5e4' }}
+            title={t('webPosAllCategories')}
           >
-            <span className="min-w-0 w-full truncate">{t('webPosMostSold')}</span>
+            <span className="min-w-0 w-full truncate">{t('webPosAllCategories')}</span>
           </button>
           {giftCardsEnabled ? (
             <button
@@ -183,17 +180,6 @@ export default function WebPosProductArea({
               <span className="min-w-0 truncate">{t('webPosGiftCardsCategory')}</span>
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={() => onCategoryChange('all')}
-            className={`webpos-category-chip ${
-              categoryId === 'all' ? 'ring-2 ring-[var(--webpos-accent-ring)] ring-offset-1' : ''
-            }`}
-            style={{ backgroundColor: '#e7e5e4' }}
-            title={t('webPosAllCategories')}
-          >
-            <span className="min-w-0 w-full truncate">{t('webPosAllCategories')}</span>
-          </button>
           {categories.map((c, i) => {
             const color = categoryColor(c.id, i, c.color);
             const active = categoryId === c.id;
@@ -265,6 +251,7 @@ export default function WebPosProductArea({
               const isCombo = productHasCombo(p);
               const hasMods = !isCombo && productHasMods(p);
               const isWeighed = !!p.soldByWeight || p.productType === 'weighed';
+              const imageSrc = p.image || p.imageUrl || null;
               return (
                 <button
                   key={p.id}
@@ -272,10 +259,10 @@ export default function WebPosProductArea({
                   onClick={() => onProductClick(p)}
                   className="webpos-product-card group"
                 >
-                  {showProductImages && p.image ? (
+                  {showProductImages && imageSrc ? (
                     <div className="mx-auto mt-1 h-12 w-12 overflow-hidden rounded-md bg-stone-100">
                       <img
-                        src={p.image}
+                        src={imageSrc}
                         alt=""
                         className="h-full w-full object-cover"
                         loading="lazy"

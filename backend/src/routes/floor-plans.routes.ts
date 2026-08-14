@@ -107,9 +107,27 @@ router.put("/:planId/tables", async (req: Request, res: Response) => {
             sortOrder: z.number().int().optional(),
           })
         ),
+        elements: z
+          .array(
+            z.object({
+              id: z.string().min(1).max(64),
+              elementType: z.enum(["WALL", "DOOR", "BAR", "OBSTACLE"]),
+              posX: z.number(),
+              posY: z.number(),
+              width: z.number().positive(),
+              height: z.number().positive(),
+              rotation: z.number().optional(),
+            })
+          )
+          .optional(),
       })
       .parse(req.body || {});
-    const plan = await FloorPlanService.saveTables(req.merchantId!, req.params.planId, body.tables);
+    const plan = await FloorPlanService.saveTables(
+      req.merchantId!,
+      req.params.planId,
+      body.tables,
+      body.elements || []
+    );
     res.json({ success: true, plan });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to save tables" });

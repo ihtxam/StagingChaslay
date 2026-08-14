@@ -486,6 +486,7 @@
     <string name="payment_cash">Accept Cash</string>
     <string name="payment_express">Express checkout</string>
     <string name="payment_gift_cards">Gift cards</string>
+    <string name="all_categories">All</string>
     <string name="most_sold_category">+ Most Sold</string>
     <string name="gift_cards_category">Gift Cards</string>
     <string name="open_checkout">Open checkout</string>
@@ -653,6 +654,7 @@
     <string name="guest_count_label">Covers / guests</string>
     <string name="covers_served">Guests served (covers)</string>
     <string name="add_wall">Add wall</string>
+    <string name="add_door">Add door</string>
     <string name="add_bar">Add bar</string>
     <string name="add_obstacle">Add obstacle</string>
     <string name="edit_floor_element">Edit floor element</string>

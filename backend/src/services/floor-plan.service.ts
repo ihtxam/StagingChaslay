@@ -18,6 +18,16 @@ export type DiningTableInput = {
   sortOrder?: number;
 };
 
+export type FloorPlanElementInput = {
+  id: string;
+  elementType: "WALL" | "DOOR" | "BAR" | "OBSTACLE";
+  posX: number;
+  posY: number;
+  width: number;
+  height: number;
+  rotation?: number;
+};
+
 export class FloorPlanService {
   static async list(merchantId: string) {
     const db = getDb();
@@ -89,7 +99,12 @@ export class FloorPlanService {
   }
 
   /** Replace all tables on a plan (designer save). */
-  static async saveTables(merchantId: string, planId: string, tables: DiningTableInput[]) {
+  static async saveTables(
+    merchantId: string,
+    planId: string,
+    tables: DiningTableInput[],
+    elements: FloorPlanElementInput[] = []
+  ) {
     const db = getDb();
     const plan = await db.query.floorPlans.findFirst({
       where: and(eq(schema.floorPlans.id, planId), eq(schema.floorPlans.merchantId, merchantId)),
@@ -121,9 +136,24 @@ export class FloorPlanService {
       await db.insert(schema.diningTables).values(rows);
     }
 
+    const elementRows = (elements || [])
+      .map((el) => ({
+        id: String(el.id || "").trim(),
+        elementType: String(el.elementType || "WALL").toUpperCase(),
+        posX: Number(el.posX) || 0,
+        posY: Number(el.posY) || 0,
+        width: Math.max(20, Number(el.width) || 80),
+        height: Math.max(8, Number(el.height) || 24),
+        rotation: Number(el.rotation) || 0,
+      }))
+      .filter((el) => el.id);
+
     await db
       .update(schema.floorPlans)
-      .set({ updatedAt: new Date() })
+      .set({
+        elementsJson: elementRows.length ? elementRows : null,
+        updatedAt: new Date(),
+      })
       .where(eq(schema.floorPlans.id, planId));
 
     return this.getPlan(merchantId, planId);
@@ -239,6 +269,7 @@ export class FloorPlanService {
         currentOrderId: t.currentOrderId,
         sortOrder: t.sortOrder,
       })),
+      elements: (p.elementsJson || []) as FloorPlanElementInput[],
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
     };

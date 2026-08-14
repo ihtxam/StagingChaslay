@@ -513,6 +513,7 @@ data class OngoingOrderCard(
 
 enum class FloorPlanElementType(val apiValue: String) {
     WALL("WALL"),
+    DOOR("DOOR"),
     BAR("BAR"),
     OBSTACLE("OBSTACLE");
 

@@ -2107,6 +2107,7 @@ class TableOrderRepository @Inject constructor(
         val existing = floorPlanElementDao.getByFloor(floorId).size
         val (w, h) = when (elementType.uppercase()) {
             "BAR" -> 0.35f to 0.08f
+            "DOOR" -> 0.12f to 0.04f
             "OBSTACLE" -> 0.12f to 0.12f
             else -> 0.4f to 0.03f
         }

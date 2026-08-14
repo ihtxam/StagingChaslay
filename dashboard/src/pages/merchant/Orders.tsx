@@ -20,6 +20,7 @@ import {
   canCollectPayment,
   canEditPayment,
   canRefundOrder,
+  formatOrderPaymentDisplay,
   isAwaitingApproval,
   isOnlineShopOrder,
   isProgrammedOrder,
@@ -29,7 +30,8 @@ import {
   todayIso,
   type MerchantOrder,
 } from '@/lib/order-management';
-import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
+import { printMerchantOrderReceipt, printRefundReceipt } from '@/lib/print-order-receipt';
+import { hasTerminalPortion, parsePaymentBreakdown } from '@/lib/payment-breakdown';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import {
   settingsDash,
@@ -88,6 +90,8 @@ function paymentLabel(method: string | null | undefined, t: (k: string) => strin
   if (m === 'cash') return t('webPosCash');
   if (m === 'card') return t('webPosCard');
   if (m === 'terminal') return t('webPosTerminal');
+  if (m === 'gift_card') return t('giftCard');
+  if (m === 'mixed') return t('webPosMixedPayment');
   if (m === 'express') return t('webPosExpress');
   if (m === 'pay_later' || m === 'pay-later') return t('webPosPayLater');
   return method || '—';
@@ -363,12 +367,32 @@ export default function Orders() {
         });
         toast.success(t('webPosGoodwillSubmitted'));
       } else {
-        await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
+        const res = await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
           reason: payload.reason,
           fullTicket: payload.mode === 'full',
           items: payload.mode === 'items' ? payload.items : undefined,
         });
         toast.success(t('webPosOrderRefunded'));
+        if (merchant && res.data) {
+          try {
+            await printRefundReceipt(
+              {
+                businessName: merchant.name || '',
+                orderNumber: refundFor.orderNumber,
+                orderDisplay: orderPublicRefs(refundFor).ticketDisplay,
+                refundedAt: Date.now(),
+                refundAmount: Number(res.data.refunded || 0),
+                refundTotal: Number(res.data.refundTotal || 0),
+                reason: payload.reason,
+                allocation: res.data.allocation,
+              },
+              { merchant, printSettings, locale }
+            );
+            toast.success(t('webPosSentDefaultPrinter'));
+          } catch {
+            /* print best-effort */
+          }
+        }
       }
       setRefundFor(null);
       await load();
@@ -779,7 +803,7 @@ export default function Orders() {
                   {statusLabel(order.status, t)}
                 </span>
                 <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5">
-                  {paymentLabel(order.paymentMethod, t)}
+                  {formatOrderPaymentDisplay(order, t, locale)}
                 </span>
                 {order.staffName ? (
                   <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5 truncate max-w-[8rem]">
@@ -845,7 +869,7 @@ export default function Orders() {
                 ) : null}
                 <p>
                   <span className="text-[var(--text-muted)]">{t('ordersPayment')}:</span>{' '}
-                  {paymentLabel(selected.paymentMethod, t)} / {selected.paymentStatus || '—'}
+                  {formatOrderPaymentDisplay(selected, t, locale)} / {selected.paymentStatus || '—'}
                 </p>
                 {selected.staffName ? (
                   <p>
@@ -1094,6 +1118,14 @@ export default function Orders() {
         }))}
         reasons={refundReasons}
         busy={refundBusy}
+        hasTerminalPortion={hasTerminalPortion(
+          parsePaymentBreakdown(
+            refundFor?.paymentBreakdown,
+            refundFor?.paymentMethod,
+            refundFor?.total
+          )
+        )}
+        terminalEnabled={!!printSettings}
         onClose={() => setRefundFor(null)}
         onConfirm={(payload) => void doRefund(payload)}
       />

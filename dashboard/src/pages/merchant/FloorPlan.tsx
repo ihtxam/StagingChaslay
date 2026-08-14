@@ -5,6 +5,17 @@ import { useI18n } from '@/lib/i18n';
 
 type TableShape = 'rect' | 'round';
 type TableStatus = 'available' | 'occupied' | 'reserved' | 'dirty';
+type ElementType = 'WALL' | 'DOOR';
+
+interface DesignerElement {
+  localId: string;
+  elementType: ElementType;
+  posX: number;
+  posY: number;
+  width: number;
+  height: number;
+  rotation: number;
+}
 
 interface DesignerTable {
   localId: string;
@@ -27,6 +38,15 @@ interface FloorPlanData {
   canvasHeight: number;
   isActive: boolean;
   tables: Array<Omit<DesignerTable, 'localId'> & { id: string }>;
+  elements?: Array<{
+    id: string;
+    elementType: ElementType;
+    posX: number;
+    posY: number;
+    width: number;
+    height: number;
+    rotation?: number;
+  }>;
 }
 
 function uid() {
@@ -91,6 +111,20 @@ function applyTableResize(
   };
 }
 
+function toDesignerElements(
+  elements: FloorPlanData['elements'] = []
+): DesignerElement[] {
+  return elements.map((el) => ({
+    localId: el.id || uid(),
+    elementType: el.elementType === 'DOOR' ? 'DOOR' : 'WALL',
+    posX: el.posX ?? 20,
+    posY: el.posY ?? 20,
+    width: el.width || 120,
+    height: el.height || 16,
+    rotation: el.rotation || 0,
+  }));
+}
+
 function toDesigner(tables: FloorPlanData['tables'] = []): DesignerTable[] {
   return tables.map((t) => ({
     localId: t.id || uid(),
@@ -119,7 +153,9 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
   const [plans, setPlans] = useState<FloorPlanData[]>([]);
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [tables, setTables] = useState<DesignerTable[]>([]);
+  const [elements, setElements] = useState<DesignerElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newPlanName, setNewPlanName] = useState('');
@@ -165,9 +201,11 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
         setActivePlanId(id);
         const plan = list.find((p) => p.id === id)!;
         setTables(toDesigner(plan.tables));
+        setElements(toDesignerElements(plan.elements));
       } else {
         setActivePlanId(null);
         setTables([]);
+        setElements([]);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to load floor plans');
@@ -186,7 +224,9 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
     if (!plan) return;
     setActivePlanId(planId);
     setTables(toDesigner(plan.tables));
+    setElements(toDesignerElements(plan.elements));
     setSelectedId(null);
+    setSelectedElementId(null);
   };
 
   const createPlan = async (e: FormEvent) => {
@@ -233,6 +273,28 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
     setSelectedId(null);
   };
 
+  const addElement = (elementType: ElementType) => {
+    const n = elements.length + 1;
+    const next: DesignerElement = {
+      localId: uid(),
+      elementType,
+      posX: 24 + (n % 4) * 40,
+      posY: 24 + Math.floor(n / 4) * 40,
+      width: elementType === 'DOOR' ? 48 : 160,
+      height: elementType === 'DOOR' ? 12 : 10,
+      rotation: 0,
+    };
+    setElements((prev) => [...prev, next]);
+    setSelectedElementId(next.localId);
+    setSelectedId(null);
+  };
+
+  const removeSelectedElement = () => {
+    if (!selectedElementId) return;
+    setElements((prev) => prev.filter((el) => el.localId !== selectedElementId));
+    setSelectedElementId(null);
+  };
+
   const saveTables = async () => {
     if (!activePlanId) return;
     setSaving(true);
@@ -250,11 +312,21 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
           status: t.status,
           sortOrder: idx,
         })),
+        elements: elements.map((el) => ({
+          id: el.localId,
+          elementType: el.elementType,
+          posX: Math.round(el.posX),
+          posY: Math.round(el.posY),
+          width: Math.round(el.width),
+          height: Math.round(el.height),
+          rotation: el.rotation,
+        })),
       });
       const plan = res.data.plan as FloorPlanData;
       setPlans((prev) => prev.map((p) => (p.id === plan.id ? plan : p)));
       setTables(toDesigner(plan.tables));
-      toast.success('Tables saved');
+      setElements(toDesignerElements(plan.elements));
+      toast.success('Floor plan saved');
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to save tables');
     } finally {
@@ -505,6 +577,17 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                 <button type="button" className="btn-secondary" onClick={addTable} disabled={!activePlan}>
                   + Table
                 </button>
+                <button type="button" className="btn-secondary" onClick={() => addElement('WALL')} disabled={!activePlan}>
+                  + Wall
+                </button>
+                <button type="button" className="btn-secondary" onClick={() => addElement('DOOR')} disabled={!activePlan}>
+                  + Door
+                </button>
+                {selectedElementId ? (
+                  <button type="button" className="btn-secondary text-red-600" onClick={removeSelectedElement}>
+                    {t('delete')} element
+                  </button>
+                ) : null}
                 <button type="button" className="btn-primary whitespace-nowrap" onClick={saveTables} disabled={!activePlan || saving}>
                   {saving ? 'Saving...' : t('save')}
                 </button>
@@ -532,6 +615,29 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                   className="relative bg-slate-50/40"
                   style={{ width: activePlan.canvasWidth, height: activePlan.canvasHeight }}
                 >
+                  {elements.map((el) => (
+                    <div
+                      key={el.localId}
+                      className={`absolute select-none border ${
+                        selectedElementId === el.localId
+                          ? 'border-indigo-600 ring-2 ring-indigo-200'
+                          : 'border-transparent'
+                      }`}
+                      style={{
+                        left: el.posX,
+                        top: el.posY,
+                        width: el.width,
+                        height: el.height,
+                        backgroundColor: el.elementType === 'DOOR' ? '#8D6E63' : '#4A4A4A',
+                        transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                      }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        setSelectedElementId(el.localId);
+                        setSelectedId(null);
+                      }}
+                    />
+                  ))}
                   {tables.map((table) => (
                     <div
                       key={table.localId}

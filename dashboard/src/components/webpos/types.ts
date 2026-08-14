@@ -53,6 +53,8 @@ export type Product = {
   name: string;
   price: number | string;
   categoryId?: string | null;
+  image?: string | null;
+  imageUrl?: string | null;
   isTaxable?: boolean;
   isOpenPrice?: boolean;
   soldByWeight?: boolean;

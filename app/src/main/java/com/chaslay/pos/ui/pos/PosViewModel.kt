@@ -241,15 +241,8 @@ class PosViewModel @Inject constructor(
 
     private val productsFlow = _selectedCategoryId.flatMapLatest { categoryId ->
         when {
-            PosVirtualCategories.isMostSold(categoryId) -> combine(
-                productRepository.observeAllProducts(),
-                _bestsellerIds
-            ) { allProducts, bestsellerIds ->
-                val order = bestsellerIds.withIndex().associate { it.value to it.index }
-                allProducts
-                    .filter { it.id in order.keys }
-                    .sortedBy { order[it.id] ?: Int.MAX_VALUE }
-            }
+            PosVirtualCategories.isAllCategories(categoryId) ->
+                productRepository.observeAllProducts()
             PosVirtualCategories.isGiftCards(categoryId) -> kotlinx.coroutines.flow.flowOf(emptyList())
             else -> productRepository.observeProducts(categoryId)
         }
@@ -284,7 +277,7 @@ class PosViewModel @Inject constructor(
             displayCategories = displayCategories,
             products = displayProducts,
             selectedCategoryId = bundle.categoryId,
-            isMostSoldCategory = PosVirtualCategories.isMostSold(bundle.categoryId),
+            isMostSoldCategory = false,
             isGiftCardCategory = PosVirtualCategories.isGiftCards(bundle.categoryId),
             cart = bundle.cart,
             settings = bundle.settings,
@@ -410,7 +403,7 @@ class PosViewModel @Inject constructor(
         viewModelScope.launch {
             productRepository.observeCategories().collect {
                 if (_selectedCategoryId.value == null) {
-                    _selectedCategoryId.value = PosVirtualCategories.MOST_SOLD_ID
+                    _selectedCategoryId.value = PosVirtualCategories.ALL_CATEGORIES_ID
                 }
             }
         }
@@ -1969,7 +1962,7 @@ class PosViewModel @Inject constructor(
             updateExtras { it.copy(giftCardsEnabled = localEnabled && cloudEnabled) }
             if (!localEnabled || !cloudEnabled) {
                 if (_selectedCategoryId.value == PosVirtualCategories.GIFT_CARDS_ID) {
-                    _selectedCategoryId.value = PosVirtualCategories.MOST_SOLD_ID
+                    _selectedCategoryId.value = PosVirtualCategories.ALL_CATEGORIES_ID
                 }
             }
         }
@@ -1987,10 +1980,10 @@ class PosViewModel @Inject constructor(
     ): List<CategoryEntity> {
         val virtual = mutableListOf(
             CategoryEntity(
-                id = PosVirtualCategories.MOST_SOLD_ID,
-                name = appContext.getString(R.string.most_sold_category),
-                colorHex = "#E67E22",
-                sortOrder = -1000
+                id = PosVirtualCategories.ALL_CATEGORIES_ID,
+                name = appContext.getString(R.string.all_categories),
+                colorHex = "#E7E5E4",
+                sortOrder = -1001
             )
         )
         if (giftCardsEnabled) {
@@ -3738,7 +3731,7 @@ class PosViewModel @Inject constructor(
         categoryId: Long?,
         extras: PosDialogState
     ): List<ProductEntity> {
-        val useBestseller = PosVirtualCategories.isMostSold(categoryId) || extras.productGridSortBestseller
+        val useBestseller = extras.productGridSortBestseller
         if (useBestseller && _bestsellerIds.value.isNotEmpty()) {
             val order = _bestsellerIds.value.withIndex().associate { it.value to it.index }
             return products.sortedBy { order[it.id] ?: Int.MAX_VALUE }

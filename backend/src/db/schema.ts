@@ -877,6 +877,10 @@ export const orders = pgTable(
     refundReason: text("refund_reason"),
     /** Cumulative goodwill / unreferenced compensation (not tied to original payment cap). */
     goodwillAmount: decimal("goodwill_amount", { precision: 10, scale: 2 }).default("0"),
+    /** Split tenders: [{ method, amount }] for mixed payments (gift + cash, etc.). */
+    paymentBreakdown: json("payment_breakdown").$type<
+      Array<{ method: string; amount: number }> | null
+    >(),
   },
   (table) => ({
     merchantIdIdx: index("orders_merchant_id_idx").on(table.merchantId),
@@ -975,6 +979,18 @@ export const floorPlans = pgTable(
     canvasHeight: integer("canvas_height").default(700).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
     isActive: boolean("is_active").default(true).notNull(),
+    /** Walls, doors, bar counters — [{ id, elementType, posX, posY, width, height, rotation }] */
+    elementsJson: json("elements_json").$type<
+      Array<{
+        id: string;
+        elementType: string;
+        posX: number;
+        posY: number;
+        width: number;
+        height: number;
+        rotation?: number;
+      }> | null
+    >(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

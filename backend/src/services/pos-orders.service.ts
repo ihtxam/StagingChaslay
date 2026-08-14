@@ -9,11 +9,14 @@ import {
 import { roundMoney2 } from "@/lib/money";
 import { zurichDayBounds } from "@/lib/vacation";
 import { resolveOrderItemName } from "@/lib/order-item-name";
+import {
+  parsePaymentBreakdown,
+  refundDeltaGiftFirst,
+} from "@/lib/payment-breakdown";
 import { GiftCardService } from "@/services/gift-card.service";
 import { AdyenTerminalPoiService } from "@/services/adyen-terminal-poi.service";
 import { AdyenService } from "@/services/adyen.service";
 
-const TERMINAL_REFUND_METHODS = new Set(["terminal", "card", "adyen_terminal", "adyen-terminal"]);
 
 const COMPLETED_STATUSES = new Set(["completed", "partially_refunded"]);
 const BLOCKED_CANCEL_STATUSES = new Set([
@@ -127,6 +130,7 @@ export class PosOrdersService {
       status: o.status,
       channel: o.fulfillmentChannel,
       paymentMethod: o.paymentMethod,
+      paymentBreakdown: o.paymentBreakdown ?? null,
       paymentStatus: o.paymentStatus,
       subtotal: Number(o.subtotal),
       taxAmount: Number(o.taxAmount),
@@ -311,11 +315,16 @@ export class PosOrdersService {
     if (refund > remaining + 0.001) throw new Error("Refund exceeds remaining amount");
     if (refund <= 0) throw new Error("Invalid refund amount");
 
-    const paymentMethod = String(order.paymentMethod || "").toLowerCase();
-    const needsTerminalRefund = TERMINAL_REFUND_METHODS.has(paymentMethod);
-    let terminalRefundRef: string | null = null;
+    const tenders = parsePaymentBreakdown(
+      order.paymentBreakdown,
+      order.paymentMethod,
+      total
+    );
+    const refundDelta = refundDeltaGiftFirst(already, refund, tenders);
+    const terminalRefundAmount = refundDelta.terminal;
 
-    if (needsTerminalRefund) {
+    let terminalRefundRef: string | null = null;
+    if (terminalRefundAmount > 0.001) {
       let poiTxId = String(order.adyenReference || "").trim();
       let poiTs =
         order.adyenPoiTransactionTs instanceof Date
@@ -349,7 +358,7 @@ export class PosOrdersService {
 
       const terminalResult = await AdyenTerminalPoiService.processTerminalRefund(
         merchantId,
-        refund,
+        terminalRefundAmount,
         {
           originalPoiTransactionId: poiTxId,
           originalPoiTransactionTimestamp: poiTs,
@@ -367,7 +376,7 @@ export class PosOrdersService {
         await AdyenService.recordPaymentTransaction(
           merchantId,
           orderId,
-          -refund,
+          -terminalRefundAmount,
           "refund",
           terminalRefundRef || `refund-${Date.now()}`,
           "completed"
@@ -387,30 +396,33 @@ export class PosOrdersService {
         .where(eq(schema.orderItems.id, u.id));
     }
 
-    // Restore gift-card balance when refunding orders paid (partly) with gift cards.
-    const redeemTx = await db.query.giftCardTransactions.findMany({
-      where: and(
-        eq(schema.giftCardTransactions.merchantId, merchantId),
-        eq(schema.giftCardTransactions.orderId, orderId),
-        eq(schema.giftCardTransactions.transactionType, "redeem")
-      ),
-    });
-    if (redeemTx.length) {
-      const orderTotal = total > 0 ? total : 1;
-      const refundRatio = Math.min(1, refund / orderTotal);
-      for (const tx of redeemTx) {
-        const redeemed = Number(tx.amount) || 0;
-        if (redeemed <= 0) continue;
-        const restore = roundMoney2(redeemed * refundRatio);
-        if (restore <= 0) continue;
-        try {
-          await GiftCardService.refundToCard(merchantId, {
-            cardId: tx.cardId,
-            amount: restore,
-            orderId,
-          });
-        } catch (gcErr) {
-          console.warn("Gift card balance restore on refund failed:", gcErr);
+    const giftRestore = refundDelta.giftCard;
+    if (giftRestore > 0.001) {
+      const redeemTx = await db.query.giftCardTransactions.findMany({
+        where: and(
+          eq(schema.giftCardTransactions.merchantId, merchantId),
+          eq(schema.giftCardTransactions.orderId, orderId),
+          eq(schema.giftCardTransactions.transactionType, "redeem")
+        ),
+      });
+      if (redeemTx.length) {
+        let left = giftRestore;
+        for (const tx of redeemTx) {
+          if (left <= 0.001) break;
+          const redeemed = Number(tx.amount) || 0;
+          if (redeemed <= 0) continue;
+          const restore = roundMoney2(Math.min(left, redeemed));
+          if (restore <= 0) continue;
+          try {
+            await GiftCardService.refundToCard(merchantId, {
+              cardId: tx.cardId,
+              amount: restore,
+              orderId,
+            });
+            left = roundMoney2(left - restore);
+          } catch (gcErr) {
+            console.warn("Gift card balance restore on refund failed:", gcErr);
+          }
         }
       }
     }
@@ -432,9 +444,16 @@ export class PosOrdersService {
       refunded: refund,
       refundTotal: newRefundTotal,
       reason: reasonText,
-      terminalRefund: needsTerminalRefund
-        ? { approved: true, reference: terminalRefundRef }
-        : undefined,
+      allocation: {
+        giftCard: refundDelta.giftCard,
+        cash: refundDelta.cash,
+        terminal: refundDelta.terminal,
+        other: refundDelta.other,
+      },
+      terminalRefund:
+        terminalRefundAmount > 0.001
+          ? { approved: true, reference: terminalRefundRef, amount: terminalRefundAmount }
+          : undefined,
     };
   }
 

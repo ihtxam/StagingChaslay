@@ -179,7 +179,8 @@ import {
   WebPosCloseShiftModal,
   WebPosShiftClosedModal,
 } from '@/components/webpos/WebPosShiftModals';
-import { generateEodReportText } from '@/lib/webpos-receipt';
+import { generateEodReportText, generateWebPosReceiptText, posOrderToWebPosReceipt } from '@/lib/webpos-receipt';
+import { printRefundReceipt } from '@/lib/print-order-receipt';
 import WebPosCartPanel from '@/components/webpos/WebPosCartPanel';
 import WebPosProductArea, {
   type ProductGridSort,
@@ -409,7 +410,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [bestsellerIds, setBestsellerIds] = useState<string[]>([]);
-  const [categoryId, setCategoryId] = useState<PosCategoryId>(POS_MOST_SOLD_CATEGORY);
+  const [categoryId, setCategoryId] = useState<PosCategoryId>('all');
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartLine[]>(() => bootActive?.cart || []);
   const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? 'takeaway');
@@ -1046,23 +1047,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const q = search.trim().toLowerCase();
     const bestsellerOrder = new Map(bestsellerIds.map((id, i) => [id, i]));
     const filtered = products.filter((p) => {
-      if (categoryId === POS_MOST_SOLD_CATEGORY) {
-        if (!bestsellerOrder.has(p.id)) return false;
-      } else if (categoryId === POS_GIFT_CARDS_CATEGORY) {
+      if (categoryId === POS_GIFT_CARDS_CATEGORY) {
         return false;
       } else if (categoryId !== 'all' && p.categoryId !== categoryId) return false;
       if (q && !p.name.toLowerCase().includes(q)) return false;
       return true;
     });
-    const useBestsellerSort =
-      categoryId === POS_MOST_SOLD_CATEGORY || gridSort === 'bestseller';
+    const useBestsellerSort = gridSort === 'bestseller';
     if (useBestsellerSort && bestsellerIds.length) {
       return filtered.sort(
         (a, b) => (bestsellerOrder.get(a.id) ?? 999) - (bestsellerOrder.get(b.id) ?? 999)
       );
     }
     if (gridSort === 'alpha') {
-      return filtered.sort((a, b) => a.name.localeCompare(b.name));
+      return filtered.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     }
     return filtered;
   }, [products, categoryId, search, bestsellerIds, gridSort]);
@@ -1281,6 +1279,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const prods = prodRes.data.products || prodRes.data || [];
       const mappedProducts = prods.map((p: any) => ({
         ...p,
+        image: p.image || p.imageUrl || null,
         name: repairCatalogText(p.name),
         price: Number(p.price),
         sku: p.sku ?? null,
@@ -3725,6 +3724,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     await printReceipt(receiptText, receiptPayload.receiptUrl);
   };
 
+  const printPosRefundReceipt = async (payload: {
+    order: PosOrderForReceipt;
+    refunded: number;
+    refundTotal: number;
+    reason: string;
+    allocation?: { giftCard?: number; cash?: number; terminal?: number; other?: number };
+  }) => {
+    await printRefundReceipt(
+      {
+        businessName: merchant?.name || APP_NAME,
+        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+        phone: merchant?.phone || undefined,
+        orderNumber: payload.order.orderNumber,
+        orderDisplay: payload.order.ticketDisplay,
+        refundedAt: Date.now(),
+        refundAmount: payload.refunded,
+        refundTotal: payload.refundTotal,
+        reason: payload.reason,
+        allocation: payload.allocation,
+        staffName: payload.order.staffName,
+      },
+      { merchant: merchant || {}, printSettings, locale, fallbackPrinterName: printerName }
+    );
+  };
+
   const printKitchenForCart = async (
     lines: CartLine[],
     saleChannel: Channel,
@@ -3892,10 +3916,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       extras?.total != null
         ? roundMoney2(extras.total)
         : roundTo005(merchandiseGross - discountAmount + tipAmount);
+    const tenders = (extras?.tenders || [])
+      .map((p) => ({ method: p.method, amount: roundMoney2(p.amount) }))
+      .filter((p) => p.amount > 0);
+    const resolvedMethod =
+      tenders.length > 1 ? 'mixed' : tenders.length === 1 ? tenders[0]!.method : method;
     return {
       clientId,
       orderNumber,
-      paymentMethod: method,
+      paymentMethod: resolvedMethod,
+      paymentBreakdown: tenders.length ? tenders : undefined,
       paymentStatus: payLater ? 'awaiting_payment' : 'completed',
       status: payLater ? (scheduledFor ? 'accepted' : 'preparing') : 'completed',
       subtotal: saleTotals.subtotal,
@@ -5246,6 +5276,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 toast.error(e.message || t('webPosPrintFailed'));
               }
             }}
+            onPrintRefund={async (payload) => {
+              try {
+                await printPosRefundReceipt(payload);
+                toast.success(t('webPosSentDefaultPrinter'));
+              } catch (e: any) {
+                toast.error(e.message || t('webPosPrintFailed'));
+              }
+            }}
+            terminalEnabled={enabledMethods.terminal}
             onVoidHeldKitchen={async (held, reason) => {
               const data = held.cartJson as
                 | { cart?: CartLine[]; ticketDisplay?: string | null }

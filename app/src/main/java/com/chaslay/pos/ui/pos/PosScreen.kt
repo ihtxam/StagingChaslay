@@ -2531,6 +2531,7 @@ private fun VectronProductGrid(
                     background = bg,
                     currencySymbol = currencySymbol,
                     highlighted = product.id == highlightedProductId,
+                    showImage = showProductImages,
                     onClick = { onProductClick(product.id) }
                 )
             }
@@ -2668,6 +2669,7 @@ private fun VectronProductButton(
     background: Color,
     currencySymbol: String,
     highlighted: Boolean = false,
+    showImage: Boolean = false,
     onClick: () -> Unit
 ) {
     Box(
@@ -2689,6 +2691,17 @@ private fun VectronProductButton(
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (showImage && !product.imageUri.isNullOrBlank()) {
+                coil.compose.AsyncImage(
+                    model = product.imageUri,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+            }
             Text(
                 product.name,
                 color = Color.White,

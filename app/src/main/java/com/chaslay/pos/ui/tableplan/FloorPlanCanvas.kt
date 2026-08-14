@@ -406,6 +406,7 @@ private fun FloorPlanElementChip(element: FloorPlanElementDisplay) {
     val type = FloorPlanElementType.fromApi(element.elementType)
     val bg = when (type) {
         FloorPlanElementType.WALL -> Color(0xFF4A4A4A)
+        FloorPlanElementType.DOOR -> Color(0xFF8D6E63)
         FloorPlanElementType.BAR -> Color(0xFF6D4C41)
         FloorPlanElementType.OBSTACLE -> Color(0xFF9E9E9E)
     }
@@ -424,6 +425,7 @@ private fun FloorPlanElementChip(element: FloorPlanElementDisplay) {
         Text(
             text = element.label ?: when (type) {
                 FloorPlanElementType.WALL -> "Wall"
+                FloorPlanElementType.DOOR -> "Door"
                 FloorPlanElementType.BAR -> "Bar"
                 FloorPlanElementType.OBSTACLE -> "Obstacle"
             },

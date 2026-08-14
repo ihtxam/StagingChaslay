@@ -27,6 +27,8 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
+import { formatOrderPaymentDisplay } from '@/lib/order-management';
+import { hasTerminalPortion, parsePaymentBreakdown } from '@/lib/payment-breakdown';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
   type RefundReasonOption,
@@ -146,6 +148,14 @@ type Props = {
   onClose: () => void;
   onResumeHeld: (held: HeldRow) => void;
   onPrintOrder?: (order: PosOrderForReceipt, splitLabel?: string | null) => Promise<void>;
+  onPrintRefund?: (payload: {
+    order: PosOrder;
+    refunded: number;
+    refundTotal: number;
+    reason: string;
+    allocation?: { giftCard?: number; cash?: number; terminal?: number; other?: number };
+  }) => Promise<void>;
+  terminalEnabled?: boolean;
   /** Print kitchen void ticket when cancelling a sent-to-kitchen held order */
   onVoidHeldKitchen?: (held: HeldRow, reason: string) => Promise<void>;
   refreshToken?: number;
@@ -227,6 +237,7 @@ function canRefundOrder(o: PosOrder): boolean {
     o.status === 'completed' ||
     o.status === 'partially_refunded' ||
     o.paymentStatus === 'completed' ||
+    o.paymentStatus === 'paid' ||
     o.paymentStatus === 'partially_refunded'
   );
 }
@@ -321,14 +332,16 @@ export default function WebPosOrdersPanel({
   onClose,
   onResumeHeld,
   onPrintOrder,
+  onPrintRefund,
   onVoidHeldKitchen,
   refreshToken = 0,
   canCancel = true,
   canRefund = true,
+  terminalEnabled = false,
   highlightOrderId = null,
   initialChannelFilter = null,
 }: Props) {
-  const { t, formatDateTime } = useI18n();
+  const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>(
     () => initialChannelFilter || 'all'
@@ -603,12 +616,25 @@ export default function WebPosOrdersPanel({
         });
         toast.success(t('webPosGoodwillSubmitted'));
       } else {
-        await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
+        const res = await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
           reason: payload.reason,
           fullTicket: payload.mode === 'full',
           items: payload.mode === 'items' ? payload.items : undefined,
         });
         toast.success(t('webPosOrderRefunded'));
+        if (onPrintRefund && res.data) {
+          try {
+            await onPrintRefund({
+              order: refundFor,
+              refunded: Number(res.data.refunded || 0),
+              refundTotal: Number(res.data.refundTotal || 0),
+              reason: payload.reason,
+              allocation: res.data.allocation,
+            });
+          } catch {
+            /* print is best-effort */
+          }
+        }
       }
       setRefundFor(null);
       setSelectedOrder(null);
@@ -1474,7 +1500,9 @@ export default function WebPosOrdersPanel({
                   {selectedOrder.paymentMethod ? (
                     <p className="mt-2 text-sm text-stone-600">
                       {t('webPosPaymentMethod')}:{' '}
-                      <span className="font-semibold">{paymentLabel(selectedOrder.paymentMethod)}</span>
+                      <span className="font-semibold">
+                        {formatOrderPaymentDisplay(selectedOrder, t, locale)}
+                      </span>
                       {canCollectPayment(selectedOrder) ? (
                         <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
                           {t('webPosAwaitingPayment')}
@@ -1624,6 +1652,14 @@ export default function WebPosOrdersPanel({
         }))}
         reasons={refundReasons}
         busy={refundBusy}
+        hasTerminalPortion={hasTerminalPortion(
+          parsePaymentBreakdown(
+            refundFor?.paymentBreakdown,
+            refundFor?.paymentMethod,
+            refundFor?.total
+          )
+        )}
+        terminalEnabled={terminalEnabled}
         onClose={() => setRefundFor(null)}
         onConfirm={(payload) => void doRefund(payload)}
       />

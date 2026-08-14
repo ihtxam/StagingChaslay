@@ -5,6 +5,7 @@ import { FloorPlanService } from "@/services/floor-plan.service";
 import { roundMoney2, roundTo005 } from "@/lib/money";
 import { resolvePosCancelReason } from "@/lib/pos-print-settings";
 import { isUsableProductName, resolveOrderItemName } from "@/lib/order-item-name";
+import { resolveSalePaymentMethod } from "@/lib/payment-breakdown";
 
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
@@ -107,6 +108,8 @@ export interface SyncSalePayload {
   adyenPoiTransactionTimestamp?: string | null;
   adyenCustomerReceiptJson?: string | null;
   adyenCashierReceiptJson?: string | null;
+  /** Split tenders for mixed payments */
+  paymentBreakdown?: Array<{ method: string; amount: number }> | null;
   items: SyncSaleItem[];
 }
 
@@ -462,7 +465,10 @@ export class SyncService {
         staffName: sale.staffName ? String(sale.staffName).trim().slice(0, 255) : null,
         staffId: asUuidOrNull(sale.staffId),
         total: total.toFixed(2),
-        paymentMethod: isCancelled ? sale.paymentMethod || null : sale.paymentMethod,
+        paymentBreakdown: sale.paymentBreakdown?.length ? sale.paymentBreakdown : null,
+        paymentMethod: isCancelled
+          ? sale.paymentMethod || null
+          : resolveSalePaymentMethod(sale.paymentBreakdown || [], sale.paymentMethod),
         paymentStatus: payStatus,
         adyenReference: sale.adyenReference ? String(sale.adyenReference).trim() : null,
         adyenPoiTransactionTs: (() => {
