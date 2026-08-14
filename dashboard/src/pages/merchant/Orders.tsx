@@ -490,12 +490,7 @@ export default function Orders() {
   };
 
   const startCollectPayment = (order: MerchantOrder) => {
-    if (isOnlineShopOrder(order)) {
-      navigate(`/merchant/pos?collect=${order.id}`);
-      return;
-    }
-    setCollectFor(order);
-    setPaymentMethodDraft('cash');
+    navigate(`/merchant/pos?collect=${order.id}`);
   };
 
   const actionsFor = (order: MerchantOrder) => {
@@ -880,8 +875,14 @@ export default function Orders() {
       </div>
 
       {selected ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
-          <div className="flex h-full w-full max-w-md flex-col bg-[var(--bg-elevated)] shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/40"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="flex h-full w-full max-w-md flex-col bg-[var(--bg-elevated)] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3.5">
               <div className="min-w-0">
                 <h2 className="truncate text-base font-extrabold">

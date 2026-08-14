@@ -43,6 +43,14 @@ export function nextWebPosTicketNumber(_merchantId?: string | null): {
 /** Machine markers stored in order.notes so UI/receipts can recover tab + ticket. */
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
+const GIFT_CARD_REMAINING_NOTE_RE = /Gift card remaining:\s*([\d.]+)/i;
+
+export function parseGiftCardRemainingFromNotes(notes?: string | null): number | null {
+  const match = String(notes || '').match(GIFT_CARD_REMAINING_NOTE_RE);
+  if (!match?.[1]) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? roundMoney2(value) : null;
+}
 
 export function encodeOrderMetaNotes(opts: {
   existing?: string | null;
@@ -186,6 +194,8 @@ export type WebPosReceipt = {
   adyenCashierReceipt?: AdyenTerminalReceipt | null;
   /** When false, skip Adyen customer receipt block on thermal (digital-only mode). */
   printAdyenReceiptOnTicket?: boolean;
+  /** Remaining stored-value balance after gift card redemption on this sale. */
+  giftCardRemainingBalance?: number | null;
   /** Provisional / preview receipt — no payment block. */
   isProvisional?: boolean;
 };
@@ -381,6 +391,14 @@ function shortenOrderRef(orderNumber: string, maxLen = 16): string {
   return `…${orderNumber.slice(-(maxLen - 1))}`;
 }
 
+function hasGiftCardPayment(tx: WebPosReceipt): boolean {
+  const method = String(tx.paymentMethod || '').toLowerCase().replace(/-/g, '_');
+  if (method === 'gift_card' || method === 'mixed') return true;
+  return (tx.paymentLines || []).some(
+    (p) => String(p.method || '').toLowerCase().replace(/-/g, '_') === 'gift_card'
+  );
+}
+
 export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string): string {
   const width = lineWidthForPaper(tx.paperWidthMm);
   const lang = resolveLang(tx, panelLang);
@@ -492,6 +510,18 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
     if (tx.changeDue != null && tx.changeDue > 0) {
       r +=
         padLine(`${L.change}:`, `CHF ${roundMoney2(tx.changeDue).toFixed(2)}`, width) + '\n';
+    }
+    if (
+      hasGiftCardPayment(tx) &&
+      tx.giftCardRemainingBalance != null &&
+      Number.isFinite(tx.giftCardRemainingBalance)
+    ) {
+      r +=
+        padLine(
+          `${L.giftCardRemainingBalance}:`,
+          `CHF ${roundMoney2(tx.giftCardRemainingBalance).toFixed(2)}`,
+          width
+        ) + '\n';
     }
   }
   // VAT calculations below payment section
@@ -1521,6 +1551,8 @@ export type PosOrderForReceipt = {
   adyenCashierReceiptJson?: string | null;
   /** Split tenders when order was paid with multiple methods. */
   paymentBreakdown?: Array<{ method: string; amount: number }> | null;
+  /** Remaining gift card balance after redemption (from notes or redeem tx). */
+  giftCardRemainingBalance?: number | null;
   items: Array<{
     id?: string;
     name?: string | null;
@@ -1530,7 +1562,6 @@ export type PosOrderForReceipt = {
     refundedQuantity?: number;
   }>;
   refundReason?: string | null;
-  paymentBreakdown?: Array<{ method: string; amount: number }> | null;
 };
 
 export function posOrderToWebPosReceipt(
@@ -1573,6 +1604,10 @@ export function posOrderToWebPosReceipt(
     if (tenders.length) return tenders;
     return undefined;
   })();
+  const giftCardRemainingBalance =
+    order.giftCardRemainingBalance != null
+      ? roundMoney2(Number(order.giftCardRemainingBalance))
+      : parseGiftCardRemainingFromNotes(order.notes);
   return {
     businessName: ctx.businessName,
     address: ctx.address,
@@ -1617,6 +1652,7 @@ export function posOrderToWebPosReceipt(
     showStaff: ctx.printSettings?.receiptShowStaffLine !== false,
     adyenCustomerReceipt: adyen.customer,
     printAdyenReceiptOnTicket: shouldPrintAdyenReceiptOnTicket(ctx.printSettings),
+    giftCardRemainingBalance,
   };
 }
 

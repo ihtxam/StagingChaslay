@@ -291,6 +291,7 @@ export default function WebPosGiftCardModal({
       mediaType: media === 'e_card' ? 'e_card' : 'physical',
       amount: n,
       balanceBefore: card.balance,
+      balanceAfter: roundMoney2(Math.max(0, card.balance - n)),
     });
     onClose();
   };

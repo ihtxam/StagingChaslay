@@ -878,6 +878,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   /** Menu prices include VAT (gross); prices are not tax-exclusive. */
   const vatIncludedInPrice = merchant?.taxIncludedInPrice === true;
+  /** Tax-exclusive: VAT on discounted net (default) vs pre-discount net. */
+  const vatAfterDiscount = merchant?.vatAfterDiscount !== false;
 
   const checkoutSettings = useMemo(
     () => normalizePosCheckoutSettings(paymentConfig?.posCheckoutSettings),
@@ -978,8 +980,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
 
   const payableFullTotals = useMemo(
-    () => applyBillDiscountToTotals(fullTotals, billDiscount, vatIncludedInPrice, roundingStep),
-    [fullTotals, billDiscount, vatIncludedInPrice, roundingStep]
+    () => applyBillDiscountToTotals(fullTotals, billDiscount, vatIncludedInPrice, roundingStep, vatAfterDiscount),
+    [fullTotals, billDiscount, vatIncludedInPrice, roundingStep, vatAfterDiscount]
   );
 
   const activeSale = useMemo(() => {
@@ -3470,21 +3472,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const redeemGiftCardPayments = async (
     payments: AppliedPayment[],
     orderId?: string | null
-  ) => {
+  ): Promise<number | null> => {
+    let remaining: number | null = null;
     for (const p of payments) {
       if (p.method !== 'gift_card' || !p.giftCardId) continue;
       try {
-        await api.post('/gift-cards/redeem', {
+        const res = await api.post('/gift-cards/redeem', {
           cardId: p.giftCardId,
           amount: p.amount,
           orderId: orderId || undefined,
           allowPartial: true,
         });
+        const balanceAfter = roundMoney2(Number(res.data?.remainingBalance));
+        if (Number.isFinite(balanceAfter)) {
+          p.giftCardRemainingBalance = balanceAfter;
+          remaining =
+            remaining == null ? balanceAfter : Math.min(remaining, balanceAfter);
+        }
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('giftCardRedeemFailed'));
         throw e;
       }
     }
+    return remaining;
   };
 
   const clearAttachedMembership = () => {
@@ -3700,47 +3710,91 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       } catch {
         orderForReceipt = (res.data?.order as PosOrderForReceipt) || null;
       }
-      if (orderForReceipt?.id) {
-        try {
-          const receiptPayload = posOrderToWebPosReceipt(orderForReceipt, {
-            businessName: merchant?.name || APP_NAME,
-            address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
-            phone: merchant?.phone || undefined,
-            vatNumber: merchant?.vatNumber || undefined,
-            taxRate,
-            vatIncludedInPrice,
-            printSettings,
-            panelLang: locale,
-          });
-          const receiptText = generateWebPosReceiptText(receiptPayload, locale);
-          const orderId = String(orderForReceipt.id || orderForReceipt.clientId || ctx.id);
-          const orderNumber =
-            orderForReceipt.orderNumber ||
-            orderForReceipt.ticketDisplay ||
-            ctx.orderNumber ||
-            '';
-          setLastReceipt(receiptText);
-          setLastReceiptUrl(receiptPayload.receiptUrl);
-          setLastReceiptOrderId(orderId);
-          setLastReceiptOrderNumber(orderNumber);
-          const part: SplitReceiptPart = {
-            id: orderId,
-            label: t('webPosPrintReceipt'),
-            text: receiptText,
-            url: receiptPayload.receiptUrl,
-            amount: ctx.total,
-            orderNumber,
-          };
-          splitReceiptsRef.current = [part];
-          setLastSplitReceipts([part]);
-          try {
-            await printReceipt(receiptText, receiptPayload.receiptUrl);
-          } catch {
-            /* print is best-effort — manual reprint uses staged lastReceipt */
-          }
-        } catch {
-          /* receipt build is best-effort */
+      if (!orderForReceipt?.id) {
+        orderForReceipt = {
+          id: ctx.id,
+          orderNumber: ctx.orderNumber,
+          total: ctx.total,
+          createdAt: new Date().toISOString(),
+          paymentMethod: payMethod,
+          items: [],
+        };
+      }
+      if (!orderForReceipt.items?.length && cart.length) {
+        orderForReceipt = {
+          ...orderForReceipt,
+          items: cart.map((l) => {
+            const detail = lineExtrasLabel(l);
+            return {
+              name: detail ? `${l.name} (${detail})` : l.name,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              totalPrice: l.lineTotal,
+              weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
+            };
+          }),
+        };
+      }
+      try {
+        const receiptPayload = posOrderToWebPosReceipt(orderForReceipt, {
+          businessName: merchant?.name || APP_NAME,
+          address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+          phone: merchant?.phone || undefined,
+          vatNumber: merchant?.vatNumber || undefined,
+          taxRate,
+          vatIncludedInPrice,
+          printSettings,
+          panelLang: locale,
+        });
+        const payLines = payments
+          .filter((p) => roundMoney2(p.amount) > 0)
+          .map((p) => ({ method: p.method, amount: roundMoney2(p.amount) }));
+        if (payLines.length) {
+          receiptPayload.paymentLines = payLines;
+          receiptPayload.paymentMethod =
+            payLines.length > 1 ? 'mixed' : payLines[0]!.method;
+        } else {
+          receiptPayload.paymentMethod = payMethod;
         }
+        const tendered = roundMoney2(payments.reduce((s, p) => s + p.amount, 0));
+        if (tendered > 0) receiptPayload.amountTendered = tendered;
+        if (changeDue > 0) receiptPayload.changeDue = roundMoney2(changeDue);
+        if (tip > 0) receiptPayload.tipAmount = tip;
+        const gcRemaining = payments
+          .filter((p) => p.method === 'gift_card' && p.giftCardRemainingBalance != null)
+          .map((p) => roundMoney2(Number(p.giftCardRemainingBalance)))
+          .filter((v) => Number.isFinite(v));
+        if (gcRemaining.length) {
+          receiptPayload.giftCardRemainingBalance = Math.min(...gcRemaining);
+        }
+        const receiptText = generateWebPosReceiptText(receiptPayload, locale);
+        const orderId = String(orderForReceipt.id || orderForReceipt.clientId || ctx.id);
+        const orderNumber =
+          orderForReceipt.orderNumber ||
+          orderForReceipt.ticketDisplay ||
+          ctx.orderNumber ||
+          '';
+        setLastReceipt(receiptText);
+        setLastReceiptUrl(receiptPayload.receiptUrl);
+        setLastReceiptOrderId(orderId);
+        setLastReceiptOrderNumber(orderNumber);
+        const part: SplitReceiptPart = {
+          id: orderId,
+          label: t('webPosPrintReceipt'),
+          text: receiptText,
+          url: receiptPayload.receiptUrl,
+          amount: ctx.total,
+          orderNumber,
+        };
+        splitReceiptsRef.current = [part];
+        setLastSplitReceipts([part]);
+        try {
+          await printReceipt(receiptText, receiptPayload.receiptUrl);
+        } catch {
+          /* print is best-effort — manual reprint uses staged lastReceipt */
+        }
+      } catch {
+        /* receipt build is best-effort */
       }
       setSuccessInfo({
         amount: ctx.total,
@@ -4529,9 +4583,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         })();
 
     // Credit gift-card sell/reload lines after successful online persistence only
+    let giftCardRemainingBalance: number | null = null;
     if (!queuedOffline) {
       if (opts?.payments?.length) {
-        await redeemGiftCardPayments(opts.payments, backendOrderId);
+        giftCardRemainingBalance = await redeemGiftCardPayments(opts.payments, backendOrderId);
       }
       await creditGiftCardLines(saleLines, backendOrderId);
       if (
@@ -4571,6 +4626,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       void flushOfflineOutbox();
     }
 
+    if (!giftCardRemainingBalance && opts?.payments?.length) {
+      const fromPayments = opts.payments
+        .filter((p) => p.method === 'gift_card' && p.giftCardRemainingBalance != null)
+        .map((p) => roundMoney2(Number(p.giftCardRemainingBalance)))
+        .filter((v) => Number.isFinite(v));
+      if (fromPayments.length) {
+        giftCardRemainingBalance = Math.min(...fromPayments);
+      }
+    }
     const receiptRef = queuedOffline
       ? null
       : await resolvePublishedReceiptRef(backendOrderId, clientId);
@@ -4645,6 +4709,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       showStaff: printSettings?.receiptShowStaffLine !== false,
       adyenCustomerReceipt: normalizeAdyenTerminalReceipt(terminalCapture?.customerReceipt),
       printAdyenReceiptOnTicket: printSettings?.adyenReceiptDigitalOnly !== true,
+      giftCardRemainingBalance,
     };
     const receiptText = generateWebPosReceiptText(receiptPayload, locale);
     setLastReceipt(receiptText);
@@ -6500,6 +6565,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             amount: result.amount,
             giftCardId: result.cardId,
             giftCardNumber: result.cardNumber,
+            giftCardRemainingBalance: result.balanceAfter,
           });
         }}
         onAttachCustomer={(c) => {

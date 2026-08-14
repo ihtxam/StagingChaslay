@@ -2938,6 +2938,7 @@ class PosViewModel @Inject constructor(
             }
 
             var redeemedGiftCardAmount = 0.0
+            var giftCardRemainingBalance: Double? = null
             if (giftCardRedeem > 0.001) {
                 val membership = _uiExtras.value.attachedMembership
                 if (membership == null) {
@@ -2966,6 +2967,7 @@ class PosViewModel @Inject constructor(
                     return@launch
                 }
                 redeemedGiftCardAmount = redeemResult.getOrThrow().amountRedeemed
+                giftCardRemainingBalance = redeemResult.getOrThrow().remainingBalance
                 val updatedMembership = giftCardRepository.toAttachedMembership(redeemResult.getOrThrow().card)
                 updateExtras { it.copy(attachedMembership = updatedMembership) }
             }
@@ -3035,7 +3037,8 @@ class PosViewModel @Inject constructor(
                         adyenCashierReceiptJson = com.chaslay.pos.payment.AdyenPaymentReceiptStorage.toJson(
                             paymentResult.adyenCashierReceipt
                         ),
-                        giftCardPaymentAmount = redeemedGiftCardAmount.takeIf { it > 0.0 }
+                        giftCardPaymentAmount = redeemedGiftCardAmount.takeIf { it > 0.0 },
+                        giftCardRemainingBalance = giftCardRemainingBalance
                     )
                     val receiptItems = transactionRepository.getTransaction(transaction.id)?.second.orEmpty()
                     val (publishedTx, publicReceiptUrl) = publishAndPersistReceipt(

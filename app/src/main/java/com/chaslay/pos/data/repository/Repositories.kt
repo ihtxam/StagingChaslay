@@ -556,7 +556,8 @@ class TransactionRepository @Inject constructor(
         receiptUrl: String? = null,
         adyenCustomerReceiptJson: String? = null,
         adyenCashierReceiptJson: String? = null,
-        giftCardPaymentAmount: Double? = null
+        giftCardPaymentAmount: Double? = null,
+        giftCardRemainingBalance: Double? = null
     ): TransactionEntity {
         val settings = settingsDao.get() ?: BusinessSettingsEntity()
         val resolvedTransactionId = transactionId ?: UUID.randomUUID().toString()
@@ -604,7 +605,7 @@ class TransactionRepository @Inject constructor(
             paymentMethod = paymentMethod,
             paymentStatus = PaymentStatus.COMPLETED,
             currencyCode = settings.defaultCurrency,
-            notes = buildOrderNotes(cart, giftCardPaymentAmount),
+            notes = buildOrderNotes(cart, giftCardPaymentAmount, giftCardRemainingBalance),
             receiptUrl = resolvedReceiptUrl,
             cardReference = cardReference,
             tableId = cart.tableId,
@@ -2446,11 +2447,18 @@ class HeldOrderRepository @Inject constructor(
     )
 }
 
-private fun buildOrderNotes(cart: CartSummary, giftCardPaymentAmount: Double? = null): String? {
+private fun buildOrderNotes(
+    cart: CartSummary,
+    giftCardPaymentAmount: Double? = null,
+    giftCardRemainingBalance: Double? = null
+): String? {
     val lines = mutableListOf<String>()
     cart.cartNotes?.trim()?.takeIf { it.isNotBlank() }?.let { lines.add(it) }
     giftCardPaymentAmount?.takeIf { it > 0.0 }?.let { amount ->
         lines.add(String.format(Locale.US, "Gift card payment: %.2f", amount))
+    }
+    giftCardRemainingBalance?.takeIf { it >= 0.0 }?.let { balance ->
+        lines.add(String.format(Locale.US, "Gift card remaining: %.2f", balance))
     }
     when (cart.fulfillmentType) {
         FulfillmentType.PICKUP -> {

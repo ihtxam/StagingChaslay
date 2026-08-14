@@ -1021,6 +1021,16 @@ class BluetoothPrinterService @Inject constructor(
             )
         }
 
+        parseGiftCardRemainingAmount(transaction.notes)?.let { remaining ->
+            sb.appendLine(
+                leftRight(
+                    "Gift card remaining",
+                    formatMoney(remaining, settings.currencySymbol),
+                    lineWidth
+                )
+            )
+        }
+
         sb.appendLine(leftRight(labels.payment, labels.paymentMethod(transaction.paymentMethod), lineWidth))
         sb.appendLine(leftRight(labels.paid, twoDp(transaction.total), lineWidth))
         transaction.cardReference?.takeIf { it.isNotBlank() }?.let { ref ->
@@ -1052,7 +1062,7 @@ class BluetoothPrinterService @Inject constructor(
             orderType = orderType
         )
         transaction.notes?.lines()
-            ?.filter { it.isNotBlank() && !it.startsWith("Gift card payment:") }
+            ?.filter { it.isNotBlank() && !it.startsWith("Gift card payment:") && !it.startsWith("Gift card remaining:") }
             ?.forEach { line ->
             sb.appendLine(line)
         }
@@ -1306,6 +1316,15 @@ class BluetoothPrinterService @Inject constructor(
             ?.trim()
             ?.toDoubleOrNull()
             ?.takeIf { it > 0.0 }
+
+    private fun parseGiftCardRemainingAmount(notes: String?): Double? =
+        notes?.lineSequence()
+            ?.map { it.trim() }
+            ?.firstOrNull { it.startsWith("Gift card remaining:", ignoreCase = true) }
+            ?.substringAfter(":", "")
+            ?.trim()
+            ?.toDoubleOrNull()
+            ?.takeIf { it >= 0.0 }
 
     private fun appendReceiptTotal(
         sb: StringBuilder,

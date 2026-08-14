@@ -25,6 +25,8 @@ export type AppliedPayment = {
   amount: number;
   giftCardId?: string;
   giftCardNumber?: string;
+  /** Stored-value balance remaining after this redemption. */
+  giftCardRemainingBalance?: number;
 };
 
 type Props = {

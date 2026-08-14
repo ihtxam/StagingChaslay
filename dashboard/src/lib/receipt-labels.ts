@@ -72,6 +72,7 @@ export type ReceiptLabels = {
   giftCardTitle: string;
   giftCardCode: string;
   giftCardBalance: string;
+  giftCardRemainingBalance: string;
   giftCardScanRedeem: string;
 };
 
@@ -146,6 +147,7 @@ const EN: ReceiptLabels = {
   giftCardTitle: 'GIFT CARD',
   giftCardCode: 'Code',
   giftCardBalance: 'Balance',
+  giftCardRemainingBalance: 'Gift card remaining',
   giftCardScanRedeem: 'Scan QR or barcode to redeem',
 };
 
@@ -220,6 +222,7 @@ const FR: ReceiptLabels = {
   giftCardTitle: 'CARTE CADEAU',
   giftCardCode: 'Code',
   giftCardBalance: 'Solde',
+  giftCardRemainingBalance: 'Solde carte cadeau',
   giftCardScanRedeem: 'Scannez le QR ou code-barres pour payer',
 };
 
@@ -294,6 +297,7 @@ const DE: ReceiptLabels = {
   giftCardTitle: 'GESCHENKKARTE',
   giftCardCode: 'Code',
   giftCardBalance: 'Guthaben',
+  giftCardRemainingBalance: 'Guthaben Geschenkkarte',
   giftCardScanRedeem: 'QR oder Barcode an der Kasse scannen',
 };
 

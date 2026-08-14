@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { and, desc, eq, or } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import {
   buildGiftCardRedeemQrPayload,
   buildGiftCardRedeemUrl,

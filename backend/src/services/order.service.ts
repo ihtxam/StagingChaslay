@@ -29,6 +29,39 @@ function withResolvedItemNames<
   };
 }
 
+async function withGiftCardRemainingBalance<
+  T extends { id: string; notes?: string | null },
+>(order: T): Promise<T & { giftCardRemainingBalance?: number | null }> {
+  const db = getDb();
+  const redeemTx = await db.query.giftCardTransactions.findFirst({
+    where: and(
+      eq(schema.giftCardTransactions.orderId, order.id),
+      eq(schema.giftCardTransactions.transactionType, "redeem")
+    ),
+    orderBy: [desc(schema.giftCardTransactions.createdAt)],
+    columns: { balanceAfter: true },
+  });
+  const fromTx =
+    redeemTx?.balanceAfter != null ? Number(redeemTx.balanceAfter) : null;
+  const fromNotes = String(order.notes || "").match(
+    /Gift card remaining:\s*([\d.]+)/i
+  )?.[1];
+  const parsedNotes =
+    fromNotes != null && Number.isFinite(Number(fromNotes))
+      ? Number(fromNotes)
+      : null;
+  const giftCardRemainingBalance =
+    fromTx != null && Number.isFinite(fromTx)
+      ? fromTx
+      : parsedNotes != null
+        ? parsedNotes
+        : null;
+  return {
+    ...order,
+    giftCardRemainingBalance,
+  };
+}
+
 export class OrderService {
   /**
    * Create order
@@ -210,7 +243,8 @@ export class OrderService {
         throw new Error("Order not found");
       }
 
-      return withResolvedItemNames(order);
+      const resolved = withResolvedItemNames(order);
+      return await withGiftCardRemainingBalance(resolved);
     } catch (error) {
       console.error("Error getting order:", error);
       throw error;
