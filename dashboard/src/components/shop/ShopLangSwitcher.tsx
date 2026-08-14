@@ -4,7 +4,14 @@ import { useI18n, type Locale } from '@/lib/i18n';
 
 const LOCALES: Locale[] = ['en', 'fr', 'de'];
 
-export default function ShopLangSwitcher({ className = '' }: { className?: string }) {
+export default function ShopLangSwitcher({
+  className = '',
+  menuPlacement = 'bottom',
+}: {
+  className?: string;
+  /** Use `top` when the switcher sits near the bottom of the viewport (CMS homepage bar). */
+  menuPlacement?: 'top' | 'bottom';
+}) {
   const { locale, setLocale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -43,7 +50,9 @@ export default function ShopLangSwitcher({ className = '' }: { className?: strin
       {open ? (
         <ul
           role="listbox"
-          className="absolute right-0 top-full z-40 mt-1 min-w-full overflow-hidden border border-stone-200 bg-white shadow-sm"
+          className={`absolute right-0 z-40 min-w-full overflow-hidden border border-stone-200 bg-white shadow-sm ${
+            menuPlacement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'
+          }`}
         >
           {LOCALES.map((code) => (
             <li key={code} role="option" aria-selected={locale === code}>

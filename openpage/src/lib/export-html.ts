@@ -151,19 +151,21 @@ function renderNavbar(block: BlockConfig): string {
     ? `<img src="${escapeHtml(logoImage)}" alt="${logo}" class="h-8 w-auto object-contain" />`
     : `<div class="w-8 h-8 rounded-lg bg-green/10 flex items-center justify-center"><div class="w-4 h-4 rounded-full bg-green"></div></div>`
 
-  return `  <nav class="px-6 md:px-10 py-4 flex items-center justify-between">
-    <div class="flex items-center gap-2">
+  return `  <nav class="bg-bg-0">
+    <div class="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-4 md:px-6 lg:px-8">
+    <div class="flex min-w-0 items-center gap-2">
       ${logoHtml}
-      <span class="font-semibold text-[15px] text-text-0 tracking-tight">${logo}</span>
+      <span class="truncate font-semibold text-[15px] text-text-0 tracking-tight">${logo}</span>
     </div>
-    <div class="hidden lg:flex items-center gap-6">
+    <div class="hidden lg:flex items-center gap-6 shrink-0">
 ${navLinks}
     </div>
-    <div class="flex items-center gap-3">
-      ${renderLink(ctaText, ctaUrl, 'px-4 py-2 rounded-lg bg-green text-black text-[13px] font-semibold hover:bg-green-dim transition-colors inline-block')}
-      <button class="lg:hidden w-9 h-9 rounded-lg border border-border-default flex items-center justify-center text-text-2 hover:text-text-0 hover:bg-bg-3 transition-colors">
+    <div class="flex shrink-0 items-center gap-2 md:gap-3">
+      ${renderLink(ctaText, ctaUrl, 'whitespace-nowrap px-3 md:px-4 py-2 rounded-lg bg-green text-black text-[12px] md:text-[13px] font-semibold hover:bg-green-dim transition-colors inline-block')}
+      <button class="lg:hidden w-9 h-9 shrink-0 rounded-lg border border-border-default flex items-center justify-center text-text-2 hover:text-text-0 hover:bg-bg-3 transition-colors">
         ${SVG_MENU}
       </button>
+    </div>
     </div>
   </nav>`
 }
@@ -1304,7 +1306,8 @@ ${ogDescriptionMeta}${ogImageMeta}${faviconLink}
     .gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}
     .px-6{padding-left:1.5rem;padding-right:1.5rem}.py-3{padding-top:.75rem;padding-bottom:.75rem}.py-16{padding-top:4rem;padding-bottom:4rem}.py-20{padding-top:5rem;padding-bottom:5rem}
     .text-center{text-align:center}.font-semibold{font-weight:600}.font-bold{font-weight:700}.rounded-lg{border-radius:.5rem}.rounded-xl{border-radius:.75rem}
-    .max-w-3xl{max-width:48rem}.max-w-xl{max-width:36rem}.mx-auto{margin-left:auto;margin-right:auto}
+    .max-w-3xl{max-width:48rem}.max-w-7xl{max-width:80rem}.max-w-xl{max-width:36rem}.mx-auto{margin-left:auto;margin-right:auto}
+    .min-w-0{min-width:0}.shrink-0{flex-shrink:0}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.whitespace-nowrap{white-space:nowrap}
     .text-4xl{font-size:2.25rem;line-height:1.1}.text-2xl{font-size:1.5rem}.text-sm{font-size:.875rem}
     @media (min-width:768px){.md\\:px-10{padding-left:2.5rem;padding-right:2.5rem}.md\\:text-5xl{font-size:3rem;line-height:1.1}.md\\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}}
     @media (min-width:1024px){.lg\\:flex{display:flex}.lg\\:hidden{display:none}}

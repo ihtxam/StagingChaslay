@@ -118,7 +118,8 @@ a{color:inherit}
 .py-16{padding-top:4rem;padding-bottom:4rem}.py-20{padding-top:5rem;padding-bottom:5rem}
 .text-center{text-align:center}.font-semibold{font-weight:600}.font-bold{font-weight:700}
 .rounded-lg{border-radius:.5rem}.rounded-xl{border-radius:.75rem}.rounded-full{border-radius:9999px}
-.max-w-3xl{max-width:48rem}.max-w-xl{max-width:36rem}.mx-auto{margin-left:auto;margin-right:auto}
+.max-w-3xl{max-width:48rem}.max-w-7xl{max-width:80rem}.max-w-xl{max-width:36rem}.mx-auto{margin-left:auto;margin-right:auto}
+.min-w-0{min-width:0}.shrink-0{flex-shrink:0}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.whitespace-nowrap{white-space:nowrap}
 .text-4xl{font-size:2.25rem;line-height:1.1}.text-2xl{font-size:1.5rem}.text-sm{font-size:.875rem}
 .w-full{width:100%}.relative{position:relative}.absolute{position:absolute}.inset-0{inset:0}
 .overflow-hidden{overflow:hidden}
@@ -156,6 +157,7 @@ export function rewriteOpenPageHtml(html: string, basePath: string): string {
 <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
 <link rel="dns-prefetch" href="https://cdn.tailwindcss.com" />
 <style id="op-cdn-fallback">${OPENPAGE_CDN_FALLBACK_CSS}</style>
+<style id="op-shop-chrome-pad">body{padding-bottom:max(5.5rem,env(safe-area-inset-bottom))}</style>
 <script>
 (function(){
   // If Tailwind Play CDN never boots, keep semantic theme colors via fallback CSS above.

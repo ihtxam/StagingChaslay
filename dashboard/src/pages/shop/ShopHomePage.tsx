@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
-import { useI18n } from '@/lib/i18n';
+import { shopLangStorageKey, useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import { CalendarDays, ShoppingBag } from 'lucide-react';
@@ -51,7 +51,7 @@ export default function ShopHomePage() {
         const lang = page.merchant?.language;
         if (lang === 'en' || lang === 'fr' || lang === 'de') {
           try {
-            const stored = localStorage.getItem('manupos_shop_lang');
+            const stored = localStorage.getItem(shopLangStorageKey(shopKey));
             if (stored !== 'en' && stored !== 'fr' && stored !== 'de') setLocale(lang);
           } catch {
             setLocale(lang);
@@ -124,39 +124,12 @@ export default function ShopHomePage() {
   }
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-black">
+    <div className="fixed inset-0 overflow-hidden bg-stone-950">
       <ShopVacationPopup shopKey={shopKey} />
-
-      {/* Shop controls only — not a second site header */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-2 p-3 sm:p-4">
-        <p className="pointer-events-auto max-w-[40%] truncate rounded-full bg-black/55 px-3 py-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur-md">
-          {merchant.name}
-        </p>
-        <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1.5">
-          <div className="rounded-full bg-white/95 p-0.5 shadow-lg backdrop-blur">
-            <ShopLangSwitcher />
-          </div>
-          {showReservationsNav ? (
-            <Link
-              to={`${base}/reservations`}
-              className="inline-flex items-center gap-1 rounded-full bg-white/95 px-3 py-2 text-xs font-semibold text-stone-900 shadow-lg backdrop-blur"
-            >
-              <CalendarDays size={14} />
-              {t('shopReservations')}
-            </Link>
-          ) : null}
-          <Link
-            to={`${base}/menu`}
-            className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-2 text-xs font-bold text-emerald-950 shadow-lg"
-          >
-            <ShoppingBag size={14} />
-            {t('shopOrderNow')}
-          </Link>
-        </div>
-      </div>
 
       {useIframe ? (
         <iframe
+          key={locale}
           title={seoTitle || merchant.name || 'Homepage'}
           srcDoc={html}
           className="absolute inset-0 h-full w-full border-0"
@@ -164,10 +137,34 @@ export default function ShopHomePage() {
         />
       ) : (
         <div
+          key={locale}
           className="absolute inset-0 overflow-auto"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       )}
+
+      {/* Shop controls — bottom bar avoids overlapping the designed navbar */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end">
+        <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-stone-950/85 p-1.5 shadow-2xl backdrop-blur-md">
+          <ShopLangSwitcher menuPlacement="top" />
+          {showReservationsNav ? (
+            <Link
+              to={`${base}/reservations`}
+              className="inline-flex items-center gap-1 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-stone-900"
+            >
+              <CalendarDays size={14} />
+              {t('shopReservations')}
+            </Link>
+          ) : null}
+          <Link
+            to={`${base}/menu`}
+            className="inline-flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-bold text-emerald-950"
+          >
+            <ShoppingBag size={14} />
+            {t('shopOrderNow')}
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
