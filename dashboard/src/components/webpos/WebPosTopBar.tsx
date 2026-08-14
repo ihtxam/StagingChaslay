@@ -80,6 +80,7 @@ type Props = {
   onSearchChange: (q: string) => void;
   showSearch: boolean;
   onlinePendingCount: number;
+  reservationPendingCount?: number;
   staffName?: string | null;
   canDrawer: boolean;
   /** Show Menus / Esc exit to backend panel (requires ACCESS_PANEL). */
@@ -129,6 +130,7 @@ export default function WebPosTopBar({
   onSearchChange,
   showSearch,
   onlinePendingCount,
+  reservationPendingCount = 0,
   staffName,
   canDrawer,
   canShowPanel = true,
@@ -190,6 +192,7 @@ export default function WebPosTopBar({
           {tabs.map((tab) => {
             const active = !inCheckout && activeTab === tab.id;
             const Icon = tab.Icon;
+            const tabBadge = tab.id === 'bookings' ? reservationPendingCount : 0;
             return (
               <button
                 key={tab.id}
@@ -199,7 +202,7 @@ export default function WebPosTopBar({
                 title={tab.label}
                 aria-label={tab.label}
                 aria-current={active ? 'page' : undefined}
-                className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition disabled:opacity-50 lg:h-auto lg:w-auto lg:items-end lg:rounded-none lg:px-3 lg:pb-2 lg:pt-1 lg:text-sm lg:font-semibold lg:ring-0 ${
+                className={`relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition disabled:opacity-50 lg:h-auto lg:w-auto lg:items-end lg:rounded-none lg:px-3 lg:pb-2 lg:pt-1 lg:text-sm lg:font-semibold lg:ring-0 ${
                   active
                     ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)] lg:border-b-2 lg:border-[var(--webpos-accent)] lg:bg-transparent lg:ring-0'
                     : 'text-stone-500 hover:bg-stone-50 hover:text-stone-800 lg:border-b-2 lg:border-transparent lg:hover:bg-transparent'
@@ -207,6 +210,11 @@ export default function WebPosTopBar({
               >
                 <Icon size={20} className="lg:hidden" aria-hidden />
                 <span className="hidden lg:inline">{tab.label}</span>
+                {tabBadge > 0 ? (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white lg:-right-1 lg:top-0">
+                    {tabBadge > 99 ? '99+' : tabBadge}
+                  </span>
+                ) : null}
               </button>
             );
           })}

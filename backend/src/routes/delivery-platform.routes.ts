@@ -1,6 +1,10 @@
 import { Router, Request, Response } from "express";
 import { DeliveryPlatformService } from "@/services/delivery-platform.service";
 import { orderSourceFromPlatform } from "@/lib/delivery-platform-settings";
+import {
+  mapJustEatWebhookBody,
+  mapUberEatsWebhookBody,
+} from "@/lib/delivery-platform-webhook-mappers";
 
 const router = Router();
 
@@ -18,14 +22,27 @@ async function handlePlatformWebhook(platform: string, req: Request, res: Respon
           ? req.body.toString("utf8")
           : JSON.stringify(req.body || {});
 
-    const { source } = await DeliveryPlatformService.verifyWebhook({
+    await DeliveryPlatformService.verifyWebhook({
       platform,
       merchantId,
       headers: req.headers as Record<string, string | string[] | undefined>,
       rawBody,
     });
 
-    const payload = DeliveryPlatformService.normalizeWebhookPayload(req.body);
+    const slug = String(platform).toLowerCase();
+    let mapped: unknown = req.body;
+    if (slug.includes("just")) mapped = mapJustEatWebhookBody(req.body);
+    if (slug.includes("uber")) mapped = mapUberEatsWebhookBody(req.body);
+    if (slug.includes("uber")) {
+      mapped = await DeliveryPlatformService.enrichUberWebhookBody(merchantId, mapped);
+    }
+
+    const source = orderSourceFromPlatform(platform);
+    if (!source || source === "online_shop") {
+      return res.status(400).json({ error: "Unknown delivery platform" });
+    }
+
+    const payload = DeliveryPlatformService.normalizeWebhookPayload(mapped);
     const result = await DeliveryPlatformService.ingestOrder(merchantId, source, payload);
 
     res.status(result.created ? 201 : 200).json({
@@ -67,6 +84,16 @@ router.post("/delivery-platforms/:platform/:merchantId/test", async (req: Reques
     }
     if (!cfg.testMode && process.env.NODE_ENV === "production") {
       return res.status(403).json({ error: "Test endpoint requires test mode enabled" });
+    }
+    if (!cfg.testMode) {
+      const hasProd =
+        (source === "justeat" && cfg.apiKey && cfg.apiSecret) ||
+        (source === "ubereats" && cfg.clientId && cfg.clientSecret);
+      if (hasProd) {
+        return res.status(403).json({
+          error: "Test endpoint disabled when production credentials are configured",
+        });
+      }
     }
 
     const payload = DeliveryPlatformService.normalizeWebhookPayload(req.body);

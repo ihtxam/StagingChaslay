@@ -60,3 +60,23 @@ export function stopOrderAlertLoop(): void {
 export function isOrderAlertLooping(): boolean {
   return loopTimer != null;
 }
+
+let durationTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Ring for a fixed duration (default 10s), then stop automatically. */
+export function startOrderAlertForDuration(totalMs = 10000, intervalMs = 2500): void {
+  stopOrderAlertLoop();
+  startOrderAlertLoop(intervalMs);
+  durationTimer = setTimeout(() => {
+    stopOrderAlertLoop();
+    durationTimer = null;
+  }, totalMs);
+}
+
+export function stopOrderAlertForDuration(): void {
+  if (durationTimer) {
+    clearTimeout(durationTimer);
+    durationTimer = null;
+  }
+  stopOrderAlertLoop();
+}

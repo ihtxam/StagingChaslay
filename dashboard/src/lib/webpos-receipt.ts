@@ -1602,3 +1602,66 @@ export function posOrderToWebPosReceipt(
     printAdyenReceiptOnTicket: shouldPrintAdyenReceiptOnTicket(ctx.printSettings),
   };
 }
+
+export type ReservationTicketOpts = {
+  code: string;
+  guestName: string;
+  guestPhone?: string | null;
+  partySize: number;
+  reservedAt: string | number | Date;
+  status?: string | null;
+  tableLabel?: string | null;
+  notes?: string | null;
+  language?: string;
+  paperWidthMm?: 58 | 80;
+  businessName?: string;
+};
+
+/** Reservation alert ticket for kitchen/host stand. */
+export function generateReservationTicketEscPos(opts: ReservationTicketOpts): Uint8Array {
+  const width = lineWidthForPaper(opts.paperWidthMm ?? 80);
+  const lang = (opts.language || 'en').slice(0, 2) as ReceiptLang;
+  const L = receiptLabels(lang);
+  const when =
+    opts.reservedAt instanceof Date
+      ? formatDateTimeDDMMYYYY(opts.reservedAt)
+      : formatDateTimeDDMMYYYY(new Date(opts.reservedAt));
+  const sep = '-'.repeat(width);
+  const lines: string[] = [
+    'RESERVATION',
+    sep,
+    centerLine(opts.businessName || APP_NAME, width),
+    centerLine(opts.code, width),
+    sep,
+    padLine('Guest', String(opts.guestName || '-').slice(0, width - 8), width),
+    padLine('Phone', String(opts.guestPhone || '-').slice(0, width - 8), width),
+    padLine('Party', String(opts.partySize), width),
+    padLine('When', when.slice(0, width - 6), width),
+  ];
+  if (opts.tableLabel) {
+    lines.push(padLine('Table', String(opts.tableLabel).slice(0, width - 7), width));
+  }
+  if (opts.status) {
+    lines.push(padLine('Status', String(opts.status).slice(0, width - 8), width));
+  }
+  if (opts.notes?.trim()) {
+    lines.push(sep, `Note: ${opts.notes.trim().slice(0, width - 6)}`);
+  }
+  lines.push(sep, L.thankYou, '', '');
+
+  const parts: Uint8Array[] = [
+    new Uint8Array([0x1b, 0x40]),
+    ESC_CODEPAGE_CP850,
+    escAlign(1),
+    escKitchenSize(2),
+    escBold(true),
+    escposCp850Encode(lines[0]),
+    new Uint8Array([0x0a]),
+    escAlign(0),
+    escKitchenSize(1),
+    escBold(false),
+    escposCp850Encode(lines.slice(1).join('\n')),
+    new Uint8Array([0x0a, 0x0a, 0x0a]),
+  ];
+  return concatBytes(...parts);
+}

@@ -2,6 +2,7 @@ import api from '@/lib/api';
 import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
 import {
   generateKitchenTicketEscPos,
+  generateReservationTicketEscPos,
   printersForRole,
   resolveReceiptLanguage,
   uint8ToBase64,
@@ -121,6 +122,56 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
       printSettings,
       locale,
       fallbackPrinterName: localStorage.getItem('manupos_webpos_printer') || '',
+    });
+  }
+}
+
+export type AutoPrintReservationPayload = {
+  kind: 'auto_print_reservation';
+  reservationId: string;
+};
+
+export async function processAutoPrintReservationJob(
+  payload: AutoPrintReservationPayload
+): Promise<void> {
+  const reservationId = String(payload.reservationId || '').trim();
+  if (!reservationId) throw new Error('Missing reservationId');
+
+  const [reservationRes, settingsRes] = await Promise.all([
+    api.get(`/merchant/reservations/${reservationId}`),
+    api.get('/merchant/settings'),
+  ]);
+
+  const reservation = reservationRes.data?.reservation || reservationRes.data;
+  const settings = settingsRes.data?.settings || {};
+  const printSettings = (settings.posPrintSettings || null) as PosPrintSettingsClient | null;
+  const locale = String(settings.panelLanguage || 'en');
+  const lang = resolveReceiptLanguage(printSettings, locale);
+
+  const kitchenPrinters = printersForRole(printSettings, 'kitchen');
+  const targets =
+    kitchenPrinters.length > 0
+      ? kitchenPrinters
+      : [{ name: localStorage.getItem('manupos_webpos_printer') || '', paperWidthMm: 80 }];
+
+  for (const printer of targets) {
+    const paper = (printer.paperWidthMm === 58 ? 58 : 80) as 58 | 80;
+    const escpos = generateReservationTicketEscPos({
+      code: reservation.code,
+      guestName: reservation.guestName,
+      guestPhone: reservation.guestPhone,
+      partySize: Number(reservation.partySize) || 1,
+      reservedAt: reservation.reservedAt,
+      status: reservation.status,
+      tableLabel: reservation.tableLabel,
+      notes: reservation.notes,
+      language: lang,
+      paperWidthMm: paper,
+      businessName: settings.name,
+    });
+    await printViaAgentOrQueue({
+      printerName: printer.name || undefined,
+      dataBase64: uint8ToBase64(escpos),
     });
   }
 }

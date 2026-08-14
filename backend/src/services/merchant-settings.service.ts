@@ -20,6 +20,7 @@ import {
 import {
   getDeliveryPlatformPublic,
   mergeDeliveryPlatformSettings,
+  applyProductionCredentialDefaults,
   type DeliveryPlatformSettings,
 } from "@/lib/delivery-platform-settings";
 
@@ -409,10 +410,11 @@ export class MerchantSettingsService {
         where: eq(schema.merchants.id, merchantId),
         columns: { deliveryPlatformSettings: true },
       });
-      patch.deliveryPlatformSettings = mergeDeliveryPlatformSettings(
+      patch.deliveryPlatformSettings = applyProductionCredentialDefaults(
+        mergeDeliveryPlatformSettings(
         current?.deliveryPlatformSettings,
         updates.deliveryPlatformSettings
-      );
+      ));
     }
 
     // Auto-create slug when enabling shop without one

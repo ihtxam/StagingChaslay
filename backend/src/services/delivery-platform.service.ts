@@ -6,12 +6,18 @@ import { roundMoney2 } from "@/lib/money";
 import {
   getDeliveryPlatformPublic,
   mergeDeliveryPlatformSettings,
+  applyProductionCredentialDefaults,
   normalizeDeliveryPlatformSettings,
   orderSourceFromPlatform,
   platformKeyFromSource,
   type DeliveryPlatformSettings,
   type OrderSource,
 } from "@/lib/delivery-platform-settings";
+import {
+  mapJustEatWebhookBody,
+  mapUberEatsWebhookBody,
+  isUberNotificationOnly,
+} from "@/lib/delivery-platform-webhook-mappers";
 import { normalizePosPrintSettings } from "@/lib/pos-print-settings";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { ChaslayFloorService } from "@/services/chaslay-floor.service";
@@ -69,12 +75,24 @@ function verifyHmacSignature(
 ): boolean {
   if (!secret || !signature) return false;
   const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-  const provided = signature.replace(/^sha256=/i, "").trim();
+  const provided = signature.replace(/^sha256=/i, "").trim().toLowerCase();
   try {
-    return timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
+    const a = Buffer.from(expected, "hex");
+    const b = Buffer.from(provided, "hex");
+    if (a.length === b.length) return timingSafeEqual(a, b);
   } catch {
-    return expected === provided;
+    /* fall through to string compare */
   }
+  return expected.toLowerCase() === provided;
+}
+
+function headerOne(
+  headers: Record<string, string | string[] | undefined>,
+  name: string
+): string {
+  const v = headers[name.toLowerCase()] ?? headers[name];
+  if (Array.isArray(v)) return String(v[0] || "");
+  return String(v || "");
 }
 
 function lineSubtotal(line: ExternalOrderLine): number {
@@ -99,11 +117,12 @@ export class DeliveryPlatformService {
     });
     if (!current) throw new Error("Merchant not found");
     const merged = mergeDeliveryPlatformSettings(current.deliveryPlatformSettings, updates);
+    const withProd = applyProductionCredentialDefaults(merged);
     await db
       .update(schema.merchants)
-      .set({ deliveryPlatformSettings: merged })
+      .set({ deliveryPlatformSettings: withProd })
       .where(eq(schema.merchants.id, merchantId));
-    return merged;
+    return withProd;
   }
 
   static async getPlatformConfig(merchantId: string, platform: string) {
@@ -141,27 +160,138 @@ export class DeliveryPlatformService {
       throw new Error("Delivery platform integration is disabled");
     }
 
-    const webhookSecret = String(
-      opts.headers["x-webhook-secret"] ||
-        opts.headers["x-chaslay-webhook-secret"] ||
-        ""
-    );
-    const signature = String(
-      opts.headers["x-signature"] ||
-        opts.headers["x-hub-signature-256"] ||
-        opts.headers["x-just-eat-signature"] ||
-        opts.headers["x-uber-signature"] ||
-        ""
-    );
+    const platformSlug = String(opts.platform).toLowerCase();
+    const webhookSecret = headerOne(opts.headers, "x-webhook-secret") ||
+      headerOne(opts.headers, "x-chaslay-webhook-secret");
+    const signature =
+      headerOne(opts.headers, "x-uber-signature") ||
+      headerOne(opts.headers, "x-signature") ||
+      headerOne(opts.headers, "x-hub-signature-256") ||
+      headerOne(opts.headers, "x-just-eat-signature") ||
+      headerOne(opts.headers, "x-flyt-signature") ||
+      headerOne(opts.headers, "x-jet-signature");
 
-    const secretOk = verifyWebhookSecret(webhookSecret, cfg.webhookSecret || undefined, !!cfg.testMode);
-    const hmacOk = verifyHmacSignature(opts.rawBody, signature, cfg.webhookSecret || undefined);
+    const signingSecret =
+      cfg.webhookSecret ||
+      (platformSlug.includes("uber") ? cfg.clientSecret : cfg.apiSecret) ||
+      undefined;
 
-    if (!secretOk && !hmacOk && !cfg.testMode) {
+    const secretOk = verifyWebhookSecret(webhookSecret, signingSecret, !!cfg.testMode);
+    const hmacOk = verifyHmacSignature(opts.rawBody, signature, signingSecret);
+
+    if (!cfg.testMode && !secretOk && !hmacOk) {
       throw new Error("Invalid webhook signature");
     }
 
     return { source, cfg };
+  }
+
+  /** Resolve Uber notification-only webhooks via Eats API when credentials are configured. */
+  static async enrichUberWebhookBody(
+    merchantId: string,
+    mapped: unknown
+  ): Promise<unknown> {
+    const o = (mapped && typeof mapped === "object" ? mapped : {}) as Record<string, unknown>;
+    if (!isUberNotificationOnly(mapped)) return mapped;
+
+    const externalOrderId = String(o.externalOrderId || "").trim();
+    if (!externalOrderId) return mapped;
+
+    try {
+      const { cfg } = await DeliveryPlatformService.getPlatformConfig(merchantId, "uber-eats");
+      if (!cfg.clientId || !cfg.clientSecret) return mapped;
+      const token = await DeliveryPlatformService.fetchUberAccessToken(
+        cfg.clientId,
+        cfg.clientSecret
+      );
+      const res = await fetch(`https://api.uber.com/v1/eats/orders/${externalOrderId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        console.warn(`Uber order fetch ${externalOrderId}: HTTP ${res.status}`);
+        return mapped;
+      }
+      const order = await res.json();
+      return mapUberEatsWebhookBody({ order, externalOrderId });
+    } catch (err) {
+      console.warn("Uber order enrichment failed:", err);
+      return mapped;
+    }
+  }
+
+  static async fetchUberAccessToken(clientId: string, clientSecret: string): Promise<string> {
+    const res = await fetch("https://login.uber.com/oauth/v2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: "client_credentials",
+        scope: "eats.order",
+      }),
+    });
+    if (!res.ok) throw new Error(`Uber OAuth failed: HTTP ${res.status}`);
+    const data = (await res.json()) as { access_token?: string };
+    if (!data.access_token) throw new Error("Uber OAuth missing access_token");
+    return data.access_token;
+  }
+
+  /** Notify partner that Chaslay accepted the order (best-effort skeleton). */
+  static async notifyPartnerOrderAccepted(
+    merchantId: string,
+    order: { id: string; orderSource?: string | null; externalOrderId?: string | null }
+  ): Promise<void> {
+    const source = order.orderSource;
+    const externalId = order.externalOrderId?.trim();
+    if (!source || !externalId || source === "online_shop") return;
+
+    const platform = source === "justeat" ? "just-eat" : source === "ubereats" ? "uber-eats" : null;
+    if (!platform) return;
+
+    const { cfg } = await DeliveryPlatformService.getPlatformConfig(merchantId, platform);
+    if (cfg.testMode) return;
+
+    try {
+      if (source === "ubereats" && cfg.clientId && cfg.clientSecret) {
+        const token = await DeliveryPlatformService.fetchUberAccessToken(
+          cfg.clientId,
+          cfg.clientSecret
+        );
+        const res = await fetch(`https://api.uber.com/v1/eats/orders/${externalId}/accept_pos_order`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ reason: "accepted" }),
+        });
+        if (!res.ok) {
+          console.warn(`Uber accept ${externalId}: HTTP ${res.status}`);
+        }
+        return;
+      }
+
+      if (source === "justeat" && cfg.apiKey && cfg.apiSecret) {
+        const storeId = cfg.storeId || "";
+        const url = storeId
+          ? `https://api.flytplatform.com/order/${storeId}/${externalId}/accept`
+          : `https://api.flytplatform.com/order/${externalId}/accept`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${cfg.apiKey}`,
+            "Content-Type": "application/json",
+            "X-Flyt-Api-Key": cfg.apiKey,
+          },
+          body: JSON.stringify({ acceptedAt: new Date().toISOString() }),
+        });
+        if (!res.ok) {
+          console.warn(`Just Eat accept ${externalId}: HTTP ${res.status}`);
+        }
+      }
+    } catch (err) {
+      console.warn("Partner accept callback failed:", err);
+    }
   }
 
   static normalizeWebhookPayload(body: unknown): ExternalOrderPayload {

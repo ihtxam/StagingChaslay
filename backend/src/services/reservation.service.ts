@@ -11,6 +11,7 @@ import {
 } from "@/lib/geo";
 import { EmailService } from "@/services/email.service";
 import { FloorPlanService } from "@/services/floor-plan.service";
+import { ChaslayFloorService } from "@/services/chaslay-floor.service";
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
 
 const DAY_KEYS: DayKey[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -567,7 +568,27 @@ export class ReservationService {
       await this.sendAdminNotifyEmail(merchant, row, status === "confirmed" ? "confirmed" : "received");
     }
 
+    if (status === "pending" || status === "confirmed") {
+      await ReservationService.enqueuePosAlert(merchantId, row.id);
+    }
+
     return row;
+  }
+
+  /** WebPOS auto-print + alert via floor print job queue. */
+  static async enqueuePosAlert(merchantId: string, reservationId: string) {
+    try {
+      await ChaslayFloorService.createPrintJob(merchantId, {
+        jobType: "ESCPOS",
+        payload: {
+          kind: "auto_print_reservation",
+          reservationId,
+        },
+        sourceDeviceId: "reservation",
+      });
+    } catch (err) {
+      console.warn("Reservation POS alert enqueue failed:", err);
+    }
   }
 
   static async list(
@@ -780,6 +801,10 @@ export class ReservationService {
       await this.sendLifecycleEmail(merchant, updated, emailKind);
     } else if (emailKind) {
       await this.sendAdminNotifyEmail(merchant, updated, emailKind);
+    }
+
+    if (action === "accept" && updated.status === "confirmed") {
+      await ReservationService.enqueuePosAlert(merchantId, updated.id);
     }
 
     return updated;

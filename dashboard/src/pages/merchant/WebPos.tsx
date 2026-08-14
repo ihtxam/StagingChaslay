@@ -247,6 +247,7 @@ import {
 import {
   playOrderAlertOnce,
   startOrderAlertLoop,
+  startOrderAlertForDuration,
   stopOrderAlertLoop,
 } from '@/lib/order-alert';
 import {
@@ -549,7 +550,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [onlineOrdersOpen, setOnlineOrdersOpen] = useState(false);
   const [onlineOrders, setOnlineOrders] = useState<OnlineOrder[]>([]);
   const knownOnlineIdsRef = useRef<Set<string> | null>(null);
+  const knownReservationIdsRef = useRef<Set<string> | null>(null);
   const onlinePanelOpenRef = useRef(false);
+  const [reservationPendingCount, setReservationPendingCount] = useState(0);
+  const [reservationAlertUntil, setReservationAlertUntil] = useState(0);
   const splitMasterIdRef = useRef<string | null>(null);
   const [fulfillmentWhen, setFulfillmentWhen] = useState<FulfillmentWhen | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<WebPosCustomer | null>(() => {
@@ -1465,6 +1469,47 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   }, [t]);
 
+  const pollReservations = useCallback(async () => {
+    try {
+      const from = new Date(Date.now() - 3600_000);
+      const to = new Date(Date.now() + 48 * 3600_000);
+      const res = await api.get('/merchant/reservations', {
+        params: { from: from.toISOString(), to: to.toISOString(), status: 'all' },
+      });
+      const rows = (res.data.reservations || []) as Array<{
+        id: string;
+        status: string;
+      }>;
+      const actionable = rows.filter((r) => r.status === 'pending' || r.status === 'confirmed');
+      setReservationPendingCount(rows.filter((r) => r.status === 'pending').length);
+
+      const alertIds = actionable.map((r) => r.id);
+      if (knownReservationIdsRef.current == null) {
+        knownReservationIdsRef.current = new Set(alertIds);
+        return;
+      }
+
+      const fresh = alertIds.filter((id) => !knownReservationIdsRef.current!.has(id));
+      for (const id of alertIds) knownReservationIdsRef.current.add(id);
+
+      if (fresh.length > 0) {
+        playOrderAlertOnce();
+        startOrderAlertForDuration(10000, 2500);
+        setReservationAlertUntil(Date.now() + 10000);
+        toast(t('webPosNewReservationAlert'), { icon: '📅', duration: 10000 });
+      }
+    } catch {
+      /* ignore poll errors */
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (reservationAlertUntil <= Date.now()) return;
+    const ms = reservationAlertUntil - Date.now();
+    const id = window.setTimeout(() => setReservationAlertUntil(0), ms);
+    return () => window.clearTimeout(id);
+  }, [reservationAlertUntil]);
+
   useEffect(() => {
     onlinePanelOpenRef.current = onlineOrdersOpen;
     if (onlineOrdersOpen) stopOrderAlertLoop();
@@ -1478,6 +1523,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       stopOrderAlertLoop();
     };
   }, [pollOnlineOrders]);
+
+  useEffect(() => {
+    void pollReservations();
+    const id = setInterval(() => void pollReservations(), 8000);
+    return () => clearInterval(id);
+  }, [pollReservations]);
 
   // Browsers block audio until a user gesture - unlock AudioContext on first tap
   useEffect(() => {
@@ -5058,6 +5109,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       data-text-size={posTextSize}
       data-narrow={isNarrowViewport ? '1' : '0'}
     >
+      {reservationAlertUntil > Date.now() ? (
+        <div
+          className="shrink-0 border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-sm font-semibold text-amber-950 animate-pulse"
+          role="status"
+        >
+          {t('webPosNewReservationAlert')}
+        </div>
+      ) : null}
       <WebPosTopBar
         activeTab={posTab}
         posView={posView}
@@ -5068,6 +5127,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onSearchChange={setSearch}
         showSearch={posView === 'register'}
         onlinePendingCount={onlinePendingCount}
+        reservationPendingCount={reservationPendingCount}
         staffName={webposStaff?.name}
         canDrawer={canDrawer}
         canShowPanel={canOpenPanel}
@@ -5149,6 +5209,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             showEodButton={showEodButton}
             onEodReport={openEodPrint}
             onlinePendingCount={onlinePendingCount}
+            reservationPendingCount={reservationPendingCount}
             onOnlineOrders={() => {
               setSettingsOpen(false);
               setOnlineOrdersOpen(true);

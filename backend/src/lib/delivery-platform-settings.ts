@@ -130,6 +130,24 @@ export function mergeDeliveryPlatformSettings(
   };
 }
 
+/** Production API credentials present → live webhooks (test mode off). */
+export function applyProductionCredentialDefaults(
+  settings: DeliveryPlatformSettings
+): DeliveryPlatformSettings {
+  const je = settings.justEat || {};
+  const ue = settings.uberEats || {};
+  return {
+    justEat: {
+      ...je,
+      testMode: je.apiKey && je.apiSecret ? false : je.testMode,
+    },
+    uberEats: {
+      ...ue,
+      testMode: ue.clientId && ue.clientSecret ? false : ue.testMode,
+    },
+  };
+}
+
 export function orderSourceFromPlatform(platform: string): OrderSource | null {
   const p = String(platform || "")
     .trim()

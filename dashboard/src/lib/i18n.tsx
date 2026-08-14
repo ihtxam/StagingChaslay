@@ -839,6 +839,10 @@ const en: Dict = {
   deliveryPlatformEnableHint: 'Accept incoming orders from this platform via webhook.',
   deliveryPlatformTestMode: 'Test mode',
   deliveryPlatformTestModeHint: 'Allow sandbox webhooks without live API approval.',
+  deliveryPlatformTestModeDisabledProd:
+    'Production API credentials are saved — test mode is turned off on save.',
+  deliveryPlatformProdCredsNotice:
+    'Production credentials detected. Saving will disable test mode and require signed webhooks.',
   deliveryPlatformAutoAccept: 'Auto-accept orders',
   deliveryPlatformAutoAcceptHint: 'Skip manual approval and send straight to kitchen.',
   deliveryPlatformStoreId: 'Store / restaurant ID',
@@ -1216,6 +1220,7 @@ const en: Dict = {
   webPosMarkReady: 'Mark ready',
   webPosCompleteOrder: 'Complete',
   webPosNewOrderAlert: 'New online order',
+  webPosNewReservationAlert: 'New reservation',
   updated: 'Updated',
   actionFailed: 'Action failed',
   settingsFor: 'Business profile for',
@@ -2639,6 +2644,10 @@ const fr: Dict = {
   deliveryPlatformEnableHint: 'Recevoir les commandes via webhook.',
   deliveryPlatformTestMode: 'Mode test',
   deliveryPlatformTestModeHint: 'Webhooks sandbox sans approbation API live.',
+  deliveryPlatformTestModeDisabledProd:
+    'Identifiants API production enregistrés — le mode test est désactivé à l’enregistrement.',
+  deliveryPlatformProdCredsNotice:
+    'Identifiants production détectés. L’enregistrement désactive le mode test et exige des webhooks signés.',
   deliveryPlatformAutoAccept: 'Accepter automatiquement',
   deliveryPlatformAutoAcceptHint: 'Envoyer directement en cuisine.',
   deliveryPlatformStoreId: 'ID restaurant / magasin',
@@ -3015,6 +3024,7 @@ const fr: Dict = {
   webPosMarkReady: 'Prêt',
   webPosCompleteOrder: 'Terminer',
   webPosNewOrderAlert: 'Nouvelle commande en ligne',
+  webPosNewReservationAlert: 'Nouvelle réservation',
   updated: 'Mis à jour',
   actionFailed: 'Action échouée',
   settingsFor: 'Profil pour',
@@ -4441,6 +4451,10 @@ const de: Dict = {
   deliveryPlatformEnableHint: 'Eingehende Bestellungen per Webhook.',
   deliveryPlatformTestMode: 'Testmodus',
   deliveryPlatformTestModeHint: 'Sandbox-Webhooks ohne Live-API-Freigabe.',
+  deliveryPlatformTestModeDisabledProd:
+    'Produktions-API-Zugangsdaten gespeichert — Testmodus wird beim Speichern deaktiviert.',
+  deliveryPlatformProdCredsNotice:
+    'Produktionszugangsdaten erkannt. Beim Speichern wird der Testmodus deaktiviert; signierte Webhooks sind erforderlich.',
   deliveryPlatformAutoAccept: 'Automatisch annehmen',
   deliveryPlatformAutoAcceptHint: 'Direkt in die Küche, ohne Freigabe.',
   deliveryPlatformStoreId: 'Store- / Restaurant-ID',
@@ -4817,6 +4831,7 @@ const de: Dict = {
   webPosMarkReady: 'Bereit',
   webPosCompleteOrder: 'Abschliessen',
   webPosNewOrderAlert: 'Neue Online-Bestellung',
+  webPosNewReservationAlert: 'Neue Reservierung',
   updated: 'Aktualisiert',
   actionFailed: 'Aktion fehlgeschlagen',
   settingsFor: 'Profil für',

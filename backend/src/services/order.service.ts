@@ -306,7 +306,14 @@ export class OrderService {
         if (!awaitingApproval) throw new Error("Order is not awaiting approval");
         // ASAP → kitchen starts immediately; scheduled → accepted until prep time
         const asap = !order.scheduledFor;
-        return set({ status: asap ? "preparing" : "accepted" });
+        const updated = await set({ status: asap ? "preparing" : "accepted" });
+        if (order.orderSource === "justeat" || order.orderSource === "ubereats") {
+          const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
+          void DeliveryPlatformService.notifyPartnerOrderAccepted(merchantId, updated).catch((err) =>
+            console.warn("Partner accept callback:", err)
+          );
+        }
+        return updated;
       }
       case "start_preparing": {
         if (status !== "accepted" && !awaitingApproval) {

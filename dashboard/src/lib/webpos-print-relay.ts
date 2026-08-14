@@ -2,7 +2,9 @@ import api from '@/lib/api';
 import { isPrintAgentAvailable, printViaAgent } from '@/lib/print-agent';
 import {
   processAutoPrintOrderJob,
+  processAutoPrintReservationJob,
   type AutoPrintOrderPayload,
+  type AutoPrintReservationPayload,
 } from '@/lib/external-order-auto-print';
 
 const DEVICE_KEY = 'manupos_webpos_device_id';
@@ -113,7 +115,19 @@ export async function processPendingEscPosPrintJobs(): Promise<number> {
       const jobs = (res.data?.jobs || []) as PendingJob[];
       let done = 0;
       for (const job of jobs) {
-        const p = (job.payload || {}) as Partial<EscPosPrintJobPayload & AutoPrintOrderPayload>;
+        const p = (job.payload || {}) as Partial<
+          EscPosPrintJobPayload & AutoPrintOrderPayload & AutoPrintReservationPayload
+        >;
+        if (p.kind === 'auto_print_reservation' && p.reservationId) {
+          try {
+            await processAutoPrintReservationJob(p as AutoPrintReservationPayload);
+            await ackPrintJob(job.id, 'DONE');
+            done += 1;
+          } catch {
+            await ackPrintJob(job.id, 'FAILED').catch(() => {});
+          }
+          continue;
+        }
         if (p.kind === 'auto_print_order' && p.orderId) {
           try {
             await processAutoPrintOrderJob(p as AutoPrintOrderPayload);
