@@ -23,6 +23,7 @@ import {
   formatOrderPaymentDisplay,
   isAwaitingApproval,
   isOnlineShopOrder,
+  orderSourceLabel,
   isProgrammedOrder,
   orderChannel,
   orderPublicRefs,
@@ -797,8 +798,11 @@ export default function Orders() {
                 <div className="min-w-0">
                   <h3 className="truncate text-sm font-extrabold">{title}</h3>
                   <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                    {isOnlineShopOrder(order) ? t('ordersOnlineShop') : t('ordersPos')} ·{' '}
-                    {formatDateTime(order.createdAt)}
+                    {isOnlineShopOrder(order)
+                      ? orderSourceLabel((order as { orderSource?: string | null }).orderSource) ||
+                        t('ordersOnlineShop')
+                      : t('ordersPos')}{' '}
+                    · {formatDateTime(order.createdAt)}
                   </p>
                 </div>
                 <span

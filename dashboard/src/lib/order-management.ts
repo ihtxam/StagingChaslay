@@ -39,16 +39,30 @@ export function orderChannel(o: MerchantOrder): string {
 
 export function isOnlineShopOrder(o: MerchantOrder): boolean {
   const t = (o.orderType || '').toLowerCase();
+  const src = String((o as { orderSource?: string | null }).orderSource || '').toLowerCase();
   const ch = orderChannel(o).toLowerCase();
   return (
     t === 'web_shop' ||
     t === 'online' ||
+    src === 'online_shop' ||
+    src === 'justeat' ||
+    src === 'ubereats' ||
     ch.includes('uber') ||
+    ch.includes('justeat') ||
+    ch.includes('just-eat') ||
     ch.includes('doordash') ||
     ch.includes('deliveroo') ||
     ch === 'web_shop' ||
     ch === 'online'
   );
+}
+
+export function orderSourceLabel(source?: string | null): string {
+  const s = String(source || '').toLowerCase();
+  if (s === 'justeat') return 'Just Eat';
+  if (s === 'ubereats') return 'Uber Eats';
+  if (s === 'online_shop') return 'Online shop';
+  return 'Online';
 }
 
 export function isProgrammedOrder(o: MerchantOrder): boolean {

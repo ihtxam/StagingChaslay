@@ -17,6 +17,11 @@ import {
   normalizePosCheckoutSettings,
   type PosCheckoutSettings,
 } from "@/lib/pos-checkout-settings";
+import {
+  getDeliveryPlatformPublic,
+  mergeDeliveryPlatformSettings,
+  type DeliveryPlatformSettings,
+} from "@/lib/delivery-platform-settings";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -143,6 +148,7 @@ export class MerchantSettingsService {
       shopLanguage: merchant.shopLanguage || merchant.panelLanguage || "en",
       posPrintSettings: normalizePosPrintSettings(merchant.posPrintSettings),
       posCheckoutSettings: normalizePosCheckoutSettings(merchant.posCheckoutSettings),
+      deliveryPlatformSettings: getDeliveryPlatformPublic(merchant.deliveryPlatformSettings),
       status: merchant.status,
       subscriptionPlan: merchant.subscriptionPlan,
       editionId: (merchant as { editionId?: string | null }).editionId || null,
@@ -222,6 +228,7 @@ export class MerchantSettingsService {
       shopLanguage?: string;
       posPrintSettings?: PosPrintSettings | null;
       posCheckoutSettings?: PosCheckoutSettings | Partial<PosCheckoutSettings> | null;
+      deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
     }
   ) {
     const db = getDb();
@@ -396,6 +403,16 @@ export class MerchantSettingsService {
     }
     if (updates.posCheckoutSettings !== undefined) {
       patch.posCheckoutSettings = normalizePosCheckoutSettings(updates.posCheckoutSettings);
+    }
+    if (updates.deliveryPlatformSettings !== undefined) {
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: { deliveryPlatformSettings: true },
+      });
+      patch.deliveryPlatformSettings = mergeDeliveryPlatformSettings(
+        current?.deliveryPlatformSettings,
+        updates.deliveryPlatformSettings
+      );
     }
 
     // Auto-create slug when enabling shop without one

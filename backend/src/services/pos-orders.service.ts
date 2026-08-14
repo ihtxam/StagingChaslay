@@ -127,6 +127,8 @@ export class PosOrdersService {
       orderNumber: o.orderNumber,
       clientId: o.clientId,
       orderType: o.orderType,
+      orderSource: o.orderSource,
+      externalOrderId: o.externalOrderId,
       status: o.status,
       channel: o.fulfillmentChannel,
       paymentMethod: o.paymentMethod,

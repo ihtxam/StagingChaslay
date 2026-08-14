@@ -1806,6 +1806,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         orderNumber,
         customerId,
         orderType: "web_shop",
+        orderSource: "online_shop",
         fulfillmentChannel: channel,
         status: "pending_approval",
         subtotal: subtotal.toFixed(2),

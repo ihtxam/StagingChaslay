@@ -1,5 +1,9 @@
 import api from '@/lib/api';
 import { isPrintAgentAvailable, printViaAgent } from '@/lib/print-agent';
+import {
+  processAutoPrintOrderJob,
+  type AutoPrintOrderPayload,
+} from '@/lib/external-order-auto-print';
 
 const DEVICE_KEY = 'manupos_webpos_device_id';
 
@@ -109,7 +113,17 @@ export async function processPendingEscPosPrintJobs(): Promise<number> {
       const jobs = (res.data?.jobs || []) as PendingJob[];
       let done = 0;
       for (const job of jobs) {
-        const p = (job.payload || {}) as Partial<EscPosPrintJobPayload>;
+        const p = (job.payload || {}) as Partial<EscPosPrintJobPayload & AutoPrintOrderPayload>;
+        if (p.kind === 'auto_print_order' && p.orderId) {
+          try {
+            await processAutoPrintOrderJob(p as AutoPrintOrderPayload);
+            await ackPrintJob(job.id, 'DONE');
+            done += 1;
+          } catch {
+            await ackPrintJob(job.id, 'FAILED').catch(() => {});
+          }
+          continue;
+        }
         if (p.kind !== 'escpos' || !p.dataBase64) {
           await ackPrintJob(job.id, 'FAILED').catch(() => {});
           continue;

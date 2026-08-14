@@ -276,6 +276,11 @@ export const merchants = pgTable(
      * tips, discount presets, rounding, quick-cash denominations, split bills.
      */
     posCheckoutSettings: json("pos_checkout_settings").$type<Record<string, unknown> | null>(),
+    /**
+     * Just Eat / Uber Eats credentials + toggles:
+     * { justEat: { enabled, testMode, storeId, apiKey, webhookSecret, autoAccept }, uberEats: { ... } }
+     */
+    deliveryPlatformSettings: json("delivery_platform_settings").$type<Record<string, unknown> | null>(),
     status: varchar("status", { length: 50 }).default("active").notNull(), // active, suspended, trial, expired
     subscriptionPlan: varchar("subscription_plan", { length: 50 }).default("free"), // free, starter, professional, enterprise
     trialEndsAt: timestamp("trial_ends_at"),
@@ -801,6 +806,10 @@ export const orders = pgTable(
     orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
     customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
     orderType: varchar("order_type", { length: 50 }).notNull(), // pos, web_shop
+    /** online_shop | justeat | ubereats — ordering channel (POS filter / labels) */
+    orderSource: varchar("order_source", { length: 50 }),
+    /** Aggregator external id for dedupe + status sync */
+    externalOrderId: varchar("external_order_id", { length: 255 }),
     // takeaway | dine_in | delivery — drives channel tax rate
     fulfillmentChannel: varchar("fulfillment_channel", { length: 50 }).default("takeaway"),
     // web_shop lifecycle: pending_approval → accepted|preparing → ready → out_for_delivery? → completed | cancelled
@@ -890,6 +899,12 @@ export const orders = pgTable(
     clientIdIdx: index("orders_client_id_idx").on(table.clientId),
     tableIdIdx: index("orders_table_id_idx").on(table.tableId),
     masterOrderIdIdx: index("orders_master_order_id_idx").on(table.masterOrderId),
+    orderSourceIdx: index("orders_merchant_order_source_idx").on(table.merchantId, table.orderSource),
+    externalOrderIdx: index("orders_merchant_external_order_idx").on(
+      table.merchantId,
+      table.orderSource,
+      table.externalOrderId
+    ),
   })
 );
 

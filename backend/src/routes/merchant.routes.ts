@@ -1395,10 +1395,15 @@ router.put("/settings", async (req: Request, res: Response) => {
     const needsShiftMigrate =
       /shifts_enabled|pos_color_theme|pos_shifts/i.test(raw) &&
       /does not exist|column|relation/i.test(raw);
+    const needsDeliveryMigrate =
+      /delivery_platform_settings/i.test(raw) &&
+      /does not exist|column|relation/i.test(raw);
     res.status(400).json({
       error: needsShiftMigrate
         ? "Database is missing cash-shift columns. Run backend/sql/ensure-shifts.sql (or drizzle-kit push), then retry."
-        : raw,
+        : needsDeliveryMigrate
+          ? "Database is missing delivery_platform_settings. Run backend/sql/ensure-delivery-platforms.sql"
+          : raw,
     });
   }
 });

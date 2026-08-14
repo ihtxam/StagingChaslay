@@ -16,6 +16,7 @@ import {
   Save,
   Search,
   SlidersHorizontal,
+  Truck,
   UtensilsCrossed,
 } from 'lucide-react';
 import api from '@/lib/api';
@@ -32,6 +33,7 @@ import FloorPlan from './FloorPlan';
 import SettingsBusinessTab from './settings/SettingsBusinessTab';
 import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
+import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
 
 interface SettingsData {
   name: string;
@@ -191,6 +193,7 @@ type TabId =
   | 'taxes'
   | 'tables'
   | 'shop'
+  | 'delivery'
   | 'hours'
   | 'reservations'
   | 'pos'
@@ -373,6 +376,7 @@ export default function Settings() {
       if (q === 'taxes') return 'taxes';
       if (q === 'pos' || q === 'operations') return 'pos';
       if (q === 'shop') return 'shop';
+      if (q === 'delivery') return 'delivery';
       if (q === 'hours') return 'hours';
       if (q === 'reservations') return 'reservations';
       if (q === 'business') return 'business';
@@ -389,6 +393,7 @@ export default function Settings() {
         { id: 'taxes' as const, label: t('settingsTaxes'), icon: Percent },
         { id: 'tables' as const, label: t('settingsTables'), icon: UtensilsCrossed },
         { id: 'shop' as const, label: t('shop'), icon: Globe2 },
+        { id: 'delivery' as const, label: t('settingsDeliveryPlatforms'), icon: Truck },
         { id: 'hours' as const, label: t('settingsHours'), icon: Clock },
         { id: 'reservations' as const, label: t('settingsReservations'), icon: CalendarClock },
         { id: 'pos' as const, label: t('settingsPos'), icon: Monitor },
@@ -556,6 +561,20 @@ export default function Settings() {
         id: 'shop-online',
         tab: 'shop',
         keywords: ['shop', 'online', 'domain', 'subdomain', t('shop')],
+      },
+      {
+        id: 'delivery-platforms',
+        tab: 'delivery',
+        keywords: [
+          'just eat',
+          'uber eats',
+          'delivery',
+          'aggregator',
+          'webhook',
+          t('settingsDeliveryPlatforms'),
+          t('deliveryPlatformJustEat'),
+          t('deliveryPlatformUberEats'),
+        ],
       },
       {
         id: 'hours-schedule',
@@ -1241,6 +1260,8 @@ export default function Settings() {
               <SettingsSaveBar saving={saving} />
             </form>
           )}
+
+          {tab === 'delivery' && <SettingsDeliveryPlatformsTab />}
 
           {tab === 'hours' && <SettingsHoursTab />}
 
