@@ -66,7 +66,7 @@ export interface ShopCheckoutDraft {
   notes: string;
   tipAmount: number;
   scheduledFor: string; // '' = ASAP, else datetime-local value
-  paymentMethod: 'cash' | 'card';
+  paymentMethod: 'cash' | 'card' | 'pay_later';
   authMode: 'guest' | 'login' | 'register';
   /** Cash redeem at checkout (points) */
   pointsToRedeem?: number;
@@ -154,7 +154,7 @@ export function emptyDraft(channel: ShopChannel = 'takeaway'): ShopCheckoutDraft
     notes: '',
     tipAmount: 0,
     scheduledFor: '',
-    paymentMethod: 'cash',
+    paymentMethod: channel === 'delivery' ? 'cash' : 'pay_later',
     authMode: 'guest',
     pointsToRedeem: 0,
   };

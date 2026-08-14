@@ -65,18 +65,22 @@ export function orderSourceLabel(source?: string | null): string {
   return 'Online';
 }
 
+/** Unpaid web shop or POS order — pay on pickup / collect at counter. */
+export function isAwaitingPaymentOrder(o: MerchantOrder): boolean {
+  const status = (o.status || '').toLowerCase();
+  const pay = (o.paymentStatus || '').toLowerCase();
+  const method = (o.paymentMethod || '').toLowerCase();
+  if (['cancelled', 'refunded', 'completed'].includes(status)) return false;
+  if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
+  if (pay === 'awaiting_payment') return true;
+  if (method === 'pay_later' || method === 'pay-later') return true;
+  if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) return true;
+  return false;
+}
+
 export function isProgrammedOrder(o: MerchantOrder): boolean {
-  const unpaid =
-    o.paymentStatus === 'awaiting_payment' ||
-    o.paymentMethod === 'pay_later' ||
-    o.paymentMethod === 'pay-later';
-  return (
-    o.orderType === 'pos' &&
-    unpaid &&
-    o.status !== 'completed' &&
-    o.status !== 'cancelled' &&
-    o.status !== 'refunded'
-  );
+  if (!isAwaitingPaymentOrder(o)) return false;
+  return o.orderType === 'pos' || isOnlineShopOrder(o);
 }
 
 export function isAwaitingApproval(status: string): boolean {
@@ -126,10 +130,27 @@ export function canCollectPayment(o: MerchantOrder): boolean {
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
   if (Number(o.total || 0) <= 0.001) return false;
   if (pay === 'awaiting_payment') return true;
+  if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) {
+    return [
+      'pending',
+      'pending_approval',
+      'preparing',
+      'accepted',
+      'ready',
+      'out_for_delivery',
+      'confirmed',
+    ].includes(status);
+  }
   if (method === 'pay_later' || method === 'pay-later') {
-    return ['preparing', 'accepted', 'ready', 'out_for_delivery', 'pending', 'confirmed'].includes(
-      status
-    );
+    return [
+      'pending',
+      'pending_approval',
+      'preparing',
+      'accepted',
+      'ready',
+      'out_for_delivery',
+      'confirmed',
+    ].includes(status);
   }
   return false;
 }

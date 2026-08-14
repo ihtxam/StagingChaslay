@@ -156,6 +156,7 @@ export class PosOrdersService {
       customerName: o.customerName,
       customerPhone: o.customerPhone,
       shippingAddress: o.shippingAddress,
+      scheduledFor: o.scheduledFor,
       createdAt: o.createdAt,
       completedAt: o.completedAt,
       adyenReference: o.adyenReference ?? null,

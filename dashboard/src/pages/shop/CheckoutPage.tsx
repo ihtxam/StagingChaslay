@@ -1347,15 +1347,21 @@ export default function CheckoutPage() {
                                 <button
                                   type="button"
                                   className={`px-3 py-1.5 text-sm border ${
-                                    draft.paymentMethod === 'cash'
+                                    draft.paymentMethod === 'cash' ||
+                                    draft.paymentMethod === 'pay_later'
                                       ? 'border-stone-900 bg-white font-semibold'
                                       : 'border-stone-300 bg-white'
                                   }`}
-                                  onClick={() => patch({ paymentMethod: 'cash' })}
+                                  onClick={() =>
+                                    patch({
+                                      paymentMethod:
+                                        draft.channel === 'delivery' ? 'cash' : 'pay_later',
+                                    })
+                                  }
                                 >
                                   {draft.channel === 'delivery'
                                     ? t('shopCashOnDelivery')
-                                    : t('shopCashOnPickup')}
+                                    : t('shopPayLater')}
                                 </button>
                                 <button
                                   type="button"
@@ -1383,7 +1389,9 @@ export default function CheckoutPage() {
 
                 <label
                   className={`flex items-start gap-3 border p-4 cursor-pointer ${
-                    !payWithPoints && draft.paymentMethod === 'cash'
+                    !payWithPoints &&
+                    (draft.paymentMethod === 'pay_later' ||
+                      (draft.paymentMethod === 'cash' && draft.channel !== 'delivery'))
                       ? 'border-stone-900 bg-stone-50'
                       : 'border-stone-200'
                   }`}
@@ -1391,17 +1399,26 @@ export default function CheckoutPage() {
                   <input
                     type="radio"
                     name="payPrimary"
-                    checked={!payWithPoints && draft.paymentMethod === 'cash'}
+                    checked={
+                      !payWithPoints &&
+                      (draft.paymentMethod === 'pay_later' ||
+                        (draft.paymentMethod === 'cash' && draft.channel !== 'delivery'))
+                    }
                     onChange={() => {
                       setPayWithPoints(false);
-                      patch({ paymentMethod: 'cash', pointsToRedeem: 0 });
+                      patch({
+                        paymentMethod: draft.channel === 'delivery' ? 'cash' : 'pay_later',
+                        pointsToRedeem: 0,
+                      });
                     }}
                   />
                   <div>
                     <div className="font-semibold">
-                      {draft.channel === 'delivery' ? t('shopCashOnDelivery') : t('shopCashOnPickup')}
+                      {draft.channel === 'delivery' ? t('shopCashOnDelivery') : t('shopPayLater')}
                     </div>
-                    <p className="text-sm text-stone-500">{t('shopCashPayHint')}</p>
+                    <p className="text-sm text-stone-500">
+                      {draft.channel === 'delivery' ? t('shopCashPayHint') : t('shopPayLaterHint')}
+                    </p>
                   </div>
                 </label>
                 <label
@@ -1518,9 +1535,11 @@ export default function CheckoutPage() {
                             <span className="text-stone-500 text-xs">
                               {draft.paymentMethod === 'card'
                                 ? t('shopCardAdyen')
-                                : draft.channel === 'delivery'
-                                  ? t('shopCashOnDelivery')
-                                  : t('shopCashOnPickup')}
+                                : draft.paymentMethod === 'pay_later'
+                                  ? t('shopPayLater')
+                                  : draft.channel === 'delivery'
+                                    ? t('shopCashOnDelivery')
+                                    : t('shopPayLater')}
                               {' · '}CHF {total.toFixed(2)}
                             </span>
                           </>
@@ -1528,10 +1547,12 @@ export default function CheckoutPage() {
                       </>
                     ) : draft.paymentMethod === 'card' ? (
                       t('shopCardAdyen')
+                    ) : draft.paymentMethod === 'pay_later' ? (
+                      t('shopPayLater')
                     ) : draft.channel === 'delivery' ? (
                       t('shopCashOnDelivery')
                     ) : (
-                      t('shopCashOnPickup')
+                      t('shopPayLater')
                     )}
                   </dd>
                 </div>

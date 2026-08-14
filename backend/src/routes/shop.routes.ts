@@ -1342,6 +1342,7 @@ router.get("/:slug/payment-options", async (req: Request, res: Response) => {
       success: true,
       options: {
         cash: true,
+        payLater: true,
         card: true,
         cardReady,
         currency: "CHF",
@@ -1407,7 +1408,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       lat?: number;
       lng?: number;
       zipCode?: string;
-      paymentMethod?: "cash" | "card";
+      paymentMethod?: "cash" | "card" | "pay_later";
       tipAmount?: number;
       scheduledFor?: string | null;
       guestCheckout?: boolean;
@@ -1436,7 +1437,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Name and phone are required" });
     }
 
-    const payMethod = paymentMethod === "card" ? "card" : "cash";
+    const rawPay = String(paymentMethod || "cash").toLowerCase().replace(/-/g, "_");
+    const payMethod =
+      rawPay === "card" ? "card" : rawPay === "pay_later" ? "pay_later" : "cash";
     const channel: FulfillmentChannel =
       fulfillmentChannel === "dine_in" || fulfillmentChannel === "takeaway" || fulfillmentChannel === "delivery"
         ? fulfillmentChannel
@@ -1792,7 +1795,8 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
             ? `Pickup: ${merchant.address || merchant.name}${merchant.city ? `, ${merchant.city}` : ""}`
             : null;
 
-    const paymentStatus = payMethod === "card" ? "awaiting_payment" : "cash";
+    const paymentStatus =
+      payMethod === "card" || payMethod === "pay_later" ? "awaiting_payment" : "cash";
 
     // Prefer logged-in customer for loyalty redemptions
     if ((totalPointsRedeemed > 0 || requestedCashPoints > 0) && authCustomer.customerId) {
@@ -1905,9 +1909,16 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     }
 
     let finalOrder = order;
-    // Earn immediately on cash; card earns on confirm-payment
+    // Earn immediately on cash; card earns on confirm-payment; pay_later earns on collect
     if (payMethod === "cash" && customerId && loyaltyProgram.enabled) {
       finalOrder = (await earnLoyaltyForOrder(merchant, order)) as typeof order;
+    }
+
+    try {
+      const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
+      await DeliveryPlatformService.enqueueAutoPrint(merchant.id, finalOrder.id, "online_shop");
+    } catch (printErr) {
+      console.warn("Web shop auto-print enqueue failed:", printErr);
     }
 
     let paymentSession: unknown = null;

@@ -221,10 +221,27 @@ function canCollectPayment(o: PosOrder): boolean {
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
   if (Number(o.total || 0) <= 0.001) return false;
   if (pay === 'awaiting_payment') return true;
+  if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) {
+    return [
+      'pending',
+      'pending_approval',
+      'preparing',
+      'accepted',
+      'ready',
+      'out_for_delivery',
+      'confirmed',
+    ].includes(status);
+  }
   if (method === 'pay_later' || method === 'pay-later') {
-    return ['preparing', 'accepted', 'ready', 'out_for_delivery', 'pending', 'confirmed'].includes(
-      status
-    );
+    return [
+      'pending',
+      'pending_approval',
+      'preparing',
+      'accepted',
+      'ready',
+      'out_for_delivery',
+      'confirmed',
+    ].includes(status);
   }
   return false;
 }

@@ -41,6 +41,13 @@ function isNew(status: string) {
   return status === 'pending' || status === 'pending_approval';
 }
 
+function isUnpaid(o: OnlineOrder) {
+  const pay = (o.paymentStatus || '').toLowerCase();
+  const method = (o.paymentMethod || '').toLowerCase();
+  if (pay === 'completed' || pay === 'paid') return false;
+  return pay === 'awaiting_payment' || method === 'pay_later' || pay === 'cash';
+}
+
 export default function WebPosOnlineOrdersPanel({
   open,
   onClose,
@@ -162,6 +169,11 @@ export default function WebPosOnlineOrdersPanel({
                           {t('webPosNewBadge')}
                         </span>
                       ) : null}
+                      {isUnpaid(o) ? (
+                        <span className="ml-2 rounded-full bg-violet-700 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                          {t('webPosPayLater')}
+                        </span>
+                      ) : null}
                     </p>
                     <p className="text-[11px] text-stone-500">
                       {channelLabel(o.fulfillmentChannel)} · {money(o.total)} ·{' '}
@@ -174,6 +186,11 @@ export default function WebPosOnlineOrdersPanel({
                         {[o.customerName, o.customerPhone].filter(Boolean).join(' · ')}
                       </p>
                     )}
+                    {o.shippingAddress ? (
+                      <p className="mt-0.5 text-[11px] text-stone-600 line-clamp-2">
+                        {o.shippingAddress}
+                      </p>
+                    ) : null}
                   </div>
                   <span className="shrink-0 text-[11px] tabular-nums text-stone-500">
                     {new Date(o.createdAt).toLocaleTimeString([], {
