@@ -143,6 +143,9 @@
     <string name="telephone">Téléphone</string>
     <string name="default_currency">Devise par défaut</string>
     <string name="tap_to_pay_enabled">Activer Tap-to-Pay</string>
+    <string name="tap_to_pay_help">Adyen Tap to Pay sur ce téléphone (NFC). Connectez-vous en ligne (Paramètres → En ligne) et configurez Adyen dans le tableau de bord marchand.</string>
+    <string name="tap_to_pay_sign_in_required">Connectez-vous en ligne (Paramètres → En ligne) pour utiliser Tap to Pay.</string>
+    <string name="tap_to_pay_nfc_required">Cet appareil ne prend pas en charge Tap to Pay (NFC requis).</string>
     <string name="adyen_terminal">Adyen Terminal</string>
     <string name="test_print">Test d\'impression</string>
     <string name="discover_printers">Découvrir les imprimantes</string>

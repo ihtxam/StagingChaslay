@@ -1,2 +1,8 @@
 # Copy to local.properties (gitignored) if Android Studio cannot find the SDK.
 sdk.dir=C\:\\Users\\Hussain\\AppData\\Local\\Android\\Sdk
+
+# Adyen Tap to Pay (In-Person Payments SDK) — keys from Adyen Customer Area.
+# Test repo: pos-mobile-test.cdn.adyen.com | Live repo: pos-mobile.cdn.adyen.com
+# adyenSdkApiKey=your-test-pos-mobile-api-key
+# adyenSdkApiKeyLive=your-live-pos-mobile-api-key
+# adyenEnv=test

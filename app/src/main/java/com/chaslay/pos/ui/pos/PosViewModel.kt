@@ -56,6 +56,7 @@ import com.chaslay.pos.domain.model.resolveVatRate
 import com.chaslay.pos.payment.CashPaymentService
 import com.chaslay.pos.payment.PaymentOrchestrator
 import com.chaslay.pos.payment.PaymentResult
+import com.chaslay.pos.payment.TapToPayService
 import com.chaslay.pos.printer.BluetoothPrinterService
 import com.chaslay.pos.sync.FloorSyncRepository
 import com.chaslay.pos.sync.FloorSyncEvents
@@ -214,6 +215,7 @@ class PosViewModel @Inject constructor(
     private val customerRepository: com.chaslay.pos.data.repository.CustomerRepository,
     private val sessionManager: SessionManager,
     private val paymentOrchestrator: PaymentOrchestrator,
+    private val tapToPayService: TapToPayService,
     private val cashPaymentService: CashPaymentService,
     private val printerService: BluetoothPrinterService,
     private val receiptRepository: com.chaslay.pos.data.repository.ReceiptRepository,
@@ -2992,7 +2994,38 @@ class PosViewModel @Inject constructor(
                     }
                 }
                 method == PaymentMethod.CARD -> {
-                    paymentOrchestrator.processCardPayment(activity, roundedTotal, settings.defaultCurrency, settings)
+                    if (settings.tapToPayEnabled) {
+                        when {
+                            syncPreferences.getDashboardToken().isNullOrBlank() -> {
+                                PaymentResult.Failure(
+                                    appContext.getString(R.string.tap_to_pay_sign_in_required)
+                                )
+                            }
+                            !tapToPayService.isSupported() -> {
+                                PaymentResult.Failure(
+                                    appContext.getString(R.string.tap_to_pay_nfc_required)
+                                )
+                            }
+                            else -> {
+                                updateExtras {
+                                    it.copy(tapToPayMessage = appContext.getString(R.string.tap_to_pay))
+                                }
+                                paymentOrchestrator.processCardPayment(
+                                    activity,
+                                    roundedTotal,
+                                    settings.defaultCurrency,
+                                    settings
+                                )
+                            }
+                        }
+                    } else {
+                        paymentOrchestrator.processCardPayment(
+                            activity,
+                            roundedTotal,
+                            settings.defaultCurrency,
+                            settings
+                        )
+                    }
                 }
                 else -> PaymentResult.Failure("Unsupported payment method")
             }
@@ -3167,19 +3200,21 @@ class PosViewModel @Inject constructor(
                             lastAddedItemId = null,
                             keypadBuffer = "",
                             kitchenSentToPrinter = false,
-                            showSplitBillScreen = false
+                            showSplitBillScreen = false,
+                            tapToPayMessage = null
                         )
                     }
                 }
                 is PaymentResult.Failure -> updateExtras {
                     it.copy(
                         isProcessingPayment = false,
+                        tapToPayMessage = null,
                         errorMessage = paymentResult.message,
                         errorTitle = "Payment failed"
                     )
                 }
                 PaymentResult.Cancelled -> updateExtras {
-                    it.copy(isProcessingPayment = false)
+                    it.copy(isProcessingPayment = false, tapToPayMessage = null)
                 }
             }
         }

@@ -18,3 +18,5 @@
 -dontwarn javax.xml.stream.**
 -keep class org.dhatim.fastexcel.** { *; }
 -keep class fi.iki.elonen.** { *; }
+-keep class com.adyen.ipp.** { *; }
+-dontwarn com.adyen.ipp.**

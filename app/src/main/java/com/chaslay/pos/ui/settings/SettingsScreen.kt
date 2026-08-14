@@ -500,6 +500,13 @@ fun SettingsScreen(
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingSwitch(stringResource(R.string.tap_to_pay_enabled), state.tapToPayEnabled, viewModel::updateTapToPay)
+        if (state.tapToPayEnabled) {
+            Text(
+                stringResource(R.string.tap_to_pay_help),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+        }
         SettingSwitch(stringResource(R.string.adyen_terminal), state.adyenTerminalEnabled, viewModel::updateAdyenEnabled)
         if (state.adyenTerminalEnabled) {
             Text(

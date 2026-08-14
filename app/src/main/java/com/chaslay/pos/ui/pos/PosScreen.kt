@@ -838,6 +838,7 @@ fun PosScreen(
             activeSplitCheck = state.cart.activeSplitCheck,
             currencySymbol = state.currencySymbol,
             method = state.pendingPaymentMethod,
+            tapToPayEnabled = state.settings.tapToPayEnabled,
             isProcessing = state.isProcessingPayment,
             message = state.tapToPayMessage,
             onConfirm = { viewModel.confirmPayment(activity) },
@@ -3250,6 +3251,7 @@ private fun PaymentSummaryDialog(
     activeSplitCheck: Int,
     currencySymbol: String,
     method: com.chaslay.pos.domain.model.PaymentMethod?,
+    tapToPayEnabled: Boolean,
     isProcessing: Boolean,
     message: String?,
     onConfirm: () -> Unit,
@@ -3278,8 +3280,13 @@ private fun PaymentSummaryDialog(
                 SummaryRow(stringResource(R.string.total), formatMoney(cart.total, currencySymbol), bold = true)
                 method?.let {
                     Text(
-                        text = if (it == com.chaslay.pos.domain.model.PaymentMethod.CASH)
-                            stringResource(R.string.cash) else stringResource(R.string.card)
+                        text = when {
+                            it == com.chaslay.pos.domain.model.PaymentMethod.CASH ->
+                                stringResource(R.string.cash)
+                            tapToPayEnabled ->
+                                stringResource(R.string.tap_to_pay)
+                            else -> stringResource(R.string.card)
+                        }
                     )
                 }
                 message?.let { Text(it) }

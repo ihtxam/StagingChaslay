@@ -37,8 +37,12 @@ class PaymentOrchestrator @Inject constructor(
         settings: BusinessSettingsEntity
     ): PaymentResult {
         return when {
-            settings.tapToPayEnabled && activity != null -> {
-                tapToPayService.processPayment(activity, amount, currencyCode)
+            settings.tapToPayEnabled -> {
+                if (activity == null) {
+                    PaymentResult.Failure("Tap to Pay requires an active checkout screen.")
+                } else {
+                    tapToPayService.processPayment(activity, amount, currencyCode)
+                }
             }
             settings.cardEnabled -> {
                 PaymentResult.Success(

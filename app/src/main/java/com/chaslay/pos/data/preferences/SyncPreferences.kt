@@ -140,6 +140,9 @@ class SyncPreferences @Inject constructor(
             if (token.isNullOrBlank()) prefs.remove(dashboardTokenKey)
             else prefs[dashboardTokenKey] = token
         }
+        if (token.isNullOrBlank()) {
+            com.chaslay.pos.payment.taptopay.TapToPayConfig.clear()
+        }
     }
 
     suspend fun getDashboardUserJson(): String? =
