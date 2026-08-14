@@ -2,6 +2,7 @@ package com.chaslay.pos.printer
 
 import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.FulfillmentType
+import com.chaslay.pos.domain.model.GiftCardProducts
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.VatBreakdownRow
@@ -21,29 +22,65 @@ data class ReceiptPrintContext(
 )
 
 object ReceiptVatCalculator {
-    fun vatRowsFromCartItems(items: List<CartItem>, discountFactor: Double = 1.0): List<VatBreakdownRow> =
-        items.filter { it.taxRate > 0.0 }
-            .groupBy { it.taxRate }
-            .map { (rate, groupItems) ->
-                val brut = groupItems.sumOf { it.lineTotal } * discountFactor
-                val net = brut / (1.0 + rate / 100.0)
-                val tva = brut - net
+    fun isGiftCardProductId(productId: Long?): Boolean =
+        productId == GiftCardProducts.SELL_PRODUCT_ID ||
+            productId == GiftCardProducts.RELOAD_PRODUCT_ID
+
+    /** VAT row for a gift-card sell/reload amount on order receipts (not barcode sale). */
+    fun vatRowForGiftCardAmount(
+        amount: Double,
+        rate: Double,
+        vatIncluded: Boolean
+    ): VatBreakdownRow? {
+        if (amount <= 0.0 || rate <= 0.0) return null
+        return if (vatIncluded) {
+            val brut = amount
+            val net = brut / (1.0 + rate / 100.0)
+            val tva = brut - net
+            VatBreakdownRow(
+                label = "${formatRate(rate)}%",
+                rate = rate,
+                net = net,
+                tva = tva,
+                brut = brut
+            )
+        } else {
+            val net = amount
+            val tva = net * rate / 100.0
+            VatBreakdownRow(
+                label = "${formatRate(rate)}%",
+                rate = rate,
+                net = net,
+                tva = tva,
+                brut = net + tva
+            )
+        }
+    }
+
+    fun mergeVatRowsByRate(rows: List<VatBreakdownRow>): List<VatBreakdownRow> =
+        rows.groupBy { it.rate }
+            .map { (rate, group) ->
                 VatBreakdownRow(
                     label = "${formatRate(rate)}%",
                     rate = rate,
-                    net = net,
-                    tva = tva,
-                    brut = brut
+                    net = group.sumOf { it.net },
+                    tva = group.sumOf { it.tva },
+                    brut = group.sumOf { it.brut }
                 )
             }
             .sortedByDescending { it.rate }
 
-    /** VAT breakdown from saved transaction lines (applies order-level discount proportionally). */
-    fun vatRowsFromTransactionItems(
-        items: List<com.chaslay.pos.data.local.entity.TransactionItemEntity>,
-        discountFactor: Double = 1.0
-    ): List<VatBreakdownRow> =
-        items.filter { it.taxRate > 0.0 }
+    fun vatRowsFromCartItems(items: List<CartItem>, discountFactor: Double = 1.0): List<VatBreakdownRow> =
+        vatRowsFromCartItems(items, discountFactor, giftCardRate = 0.0, vatIncludedInPrice = true)
+
+    /** Merchandise VAT plus gift-card sell/reload lines (taxRate 0 in cart, VAT on receipt). */
+    fun vatRowsFromCartItems(
+        items: List<CartItem>,
+        discountFactor: Double,
+        giftCardRate: Double,
+        vatIncludedInPrice: Boolean
+    ): List<VatBreakdownRow> {
+        val productRows = items.filter { !it.isGiftCardLine && it.taxRate > 0.0 }
             .groupBy { it.taxRate }
             .map { (rate, groupItems) ->
                 val brut = groupItems.sumOf { it.lineTotal } * discountFactor
@@ -57,7 +94,43 @@ object ReceiptVatCalculator {
                     brut = brut
                 )
             }
-            .sortedByDescending { it.rate }
+        val giftAmount = items.filter { it.isGiftCardLine }.sumOf { it.lineTotal } * discountFactor
+        val giftRow = vatRowForGiftCardAmount(giftAmount, giftCardRate, vatIncludedInPrice)
+        return mergeVatRowsByRate(productRows + listOfNotNull(giftRow))
+    }
+
+    fun vatRowsFromTransactionItems(
+        items: List<com.chaslay.pos.data.local.entity.TransactionItemEntity>,
+        discountFactor: Double = 1.0
+    ): List<VatBreakdownRow> =
+        vatRowsFromTransactionItems(items, discountFactor, giftCardRate = 0.0, vatIncludedInPrice = true)
+
+    /** Merchandise VAT plus persisted gift-card sell/reload lines. */
+    fun vatRowsFromTransactionItems(
+        items: List<com.chaslay.pos.data.local.entity.TransactionItemEntity>,
+        discountFactor: Double,
+        giftCardRate: Double,
+        vatIncludedInPrice: Boolean
+    ): List<VatBreakdownRow> {
+        val productRows = items.filter { !isGiftCardProductId(it.productId) && it.taxRate > 0.0 }
+            .groupBy { it.taxRate }
+            .map { (rate, groupItems) ->
+                val brut = groupItems.sumOf { it.lineTotal } * discountFactor
+                val net = brut / (1.0 + rate / 100.0)
+                val tva = brut - net
+                VatBreakdownRow(
+                    label = "${formatRate(rate)}%",
+                    rate = rate,
+                    net = net,
+                    tva = tva,
+                    brut = brut
+                )
+            }
+        val giftAmount = items.filter { isGiftCardProductId(it.productId) }
+            .sumOf { it.lineTotal } * discountFactor
+        val giftRow = vatRowForGiftCardAmount(giftAmount, giftCardRate, vatIncludedInPrice)
+        return mergeVatRowsByRate(productRows + listOfNotNull(giftRow))
+    }
 
     fun modifierSummaryFromNotes(notes: String?): String? {
         if (notes.isNullOrBlank()) return null

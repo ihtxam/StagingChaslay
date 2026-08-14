@@ -484,11 +484,12 @@ class BluetoothPrinterService @Inject constructor(
         val thin = "-".repeat(lineWidth)
         val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
         val displayCode = com.chaslay.pos.domain.model.GiftCardCode.barcodePayload(code)
-        val taxRate = when (settings.defaultServiceType) {
-            com.chaslay.pos.domain.model.ServiceType.DINE_IN -> settings.dineInVatRate
-            else -> settings.takeawayVatRate
-        }
-        val vatRow = giftCardVatRow(balance, taxRate, settings.vatIncludedInPrice)
+        val taxRate = giftCardVatRate(settings, settings.defaultServiceType)
+        val vatRow = ReceiptVatCalculator.vatRowForGiftCardAmount(
+            balance,
+            taxRate,
+            settings.vatIncludedInPrice
+        )
         val total = vatRow?.brut ?: balance
 
         val sb = StringBuilder()
@@ -528,34 +529,12 @@ class BluetoothPrinterService @Inject constructor(
         return finalizeGiftCardPayload(sb.toString(), settings, lineWidth, barcodePayload, displayCode)
     }
 
-    private fun giftCardVatRow(
-        balance: Double,
-        rate: Double,
-        vatIncluded: Boolean
-    ): com.chaslay.pos.domain.model.VatBreakdownRow? {
-        if (rate <= 0.0) return null
-        return if (vatIncluded) {
-            val brut = balance
-            val net = brut / (1.0 + rate / 100.0)
-            val tva = brut - net
-            com.chaslay.pos.domain.model.VatBreakdownRow(
-                label = "${ReceiptVatCalculator.formatRate(rate)}%",
-                rate = rate,
-                net = net,
-                tva = tva,
-                brut = brut
-            )
-        } else {
-            val net = balance
-            val tva = net * rate / 100.0
-            com.chaslay.pos.domain.model.VatBreakdownRow(
-                label = "${ReceiptVatCalculator.formatRate(rate)}%",
-                rate = rate,
-                net = net,
-                tva = tva,
-                brut = net + tva
-            )
-        }
+    private fun giftCardVatRate(
+        settings: BusinessSettingsEntity,
+        serviceType: com.chaslay.pos.domain.model.ServiceType?
+    ): Double = when (serviceType) {
+        com.chaslay.pos.domain.model.ServiceType.DINE_IN -> settings.dineInVatRate
+        else -> settings.takeawayVatRate
     }
 
     private fun finalizeGiftCardPayload(
@@ -871,7 +850,13 @@ class BluetoothPrinterService @Inject constructor(
             subtotal,
             discountAmount
         )
-        val vatRows = ReceiptVatCalculator.vatRowsFromCartItems(cart.items, discountFactor)
+        val giftCardRate = giftCardVatRate(settings, cart.serviceType)
+        val vatRows = ReceiptVatCalculator.vatRowsFromCartItems(
+            cart.items,
+            discountFactor,
+            giftCardRate,
+            cart.vatIncludedInPrice
+        )
 
         if (context.isProvisional) {
             appendCenteredLines(sb, "PROVISIONAL", lineWidth, bold = true)
@@ -1003,7 +988,13 @@ class BluetoothPrinterService @Inject constructor(
             itemBrut,
             orderDiscount
         )
-        val vatRows = ReceiptVatCalculator.vatRowsFromTransactionItems(items, discountFactor)
+        val giftCardRate = giftCardVatRate(settings, transaction.serviceType)
+        val vatRows = ReceiptVatCalculator.vatRowsFromTransactionItems(
+            items,
+            discountFactor,
+            giftCardRate,
+            settings.vatIncludedInPrice
+        )
 
         appendReceiptStoreBlock(sb, settings, lineWidth)
         sb.appendLine(center(sepEq, lineWidth))

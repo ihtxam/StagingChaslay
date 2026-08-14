@@ -469,6 +469,44 @@ function hasGiftCardPayment(tx: WebPosReceipt): boolean {
   );
 }
 
+/** Gift-card sell/reload cart lines on order receipts (not the barcode sale ticket). */
+function isGiftCardMerchandiseItem(item: WebPosReceiptItem): boolean {
+  const pid = String(item.productId || '');
+  if (pid.startsWith('__gift_card_')) return true;
+  const name = String(item.name || '').toLowerCase();
+  return (
+    name.includes('gift card') ||
+    name.includes('e-gift') ||
+    name.includes('carte cadeau')
+  );
+}
+
+/**
+ * Order/payment receipt VAT — merchandise tax plus gift-card sell/reload lines
+ * (those lines are non-taxable in cart totals but still carry VAT on the receipt).
+ */
+export function resolveOrderReceiptVat(tx: WebPosReceipt): {
+  subtotal: number;
+  taxAmount: number;
+  taxRate: number;
+} {
+  const rate = Number(tx.taxRate) || 0;
+  let net = roundMoney2(tx.subtotal);
+  let tax = roundMoney2(tx.taxAmount);
+  if (rate <= 0) return { subtotal: net, taxAmount: tax, taxRate: rate };
+
+  const vatIncluded = tx.vatIncludedInPrice !== false;
+  for (const item of tx.items) {
+    if (!isGiftCardMerchandiseItem(item)) continue;
+    const amount = roundMoney2(item.lineTotal);
+    if (amount <= 0) continue;
+    const row = computeGiftCardSaleVat(amount, rate, vatIncluded);
+    net = roundMoney2(net + row.subtotal);
+    tax = roundMoney2(tax + row.taxAmount);
+  }
+  return { subtotal: net, taxAmount: tax, taxRate: rate };
+}
+
 export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string): string {
   const width = lineWidthForPaper(tx.paperWidthMm);
   const lang = resolveLang(tx, panelLang);
@@ -594,8 +632,9 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
         ) + '\n';
     }
   }
-  // VAT calculations below payment section
-  const vatSection = formatVatSection(tx, L, width);
+  // VAT calculations below payment section (includes gift-card sell/reload lines)
+  const vatTotals = resolveOrderReceiptVat(tx);
+  const vatSection = formatVatSection({ ...tx, ...vatTotals }, L, width);
   if (vatSection) {
     r += vatSection + '\n';
   }
@@ -1704,6 +1743,7 @@ export function posOrderToWebPosReceipt(
       quantity: i.quantity,
       unitPrice: Number(i.unitPrice ?? (i.quantity ? i.totalPrice / i.quantity : i.totalPrice)),
       lineTotal: Number(i.totalPrice),
+      productId: (i as { productId?: string | null }).productId ?? null,
       weightKg: (i as { weightKg?: number | null }).weightKg ?? null,
     })),
     subtotal,
