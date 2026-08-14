@@ -11,7 +11,7 @@ function NavbarDefault({ props }: { props: NavbarProps }) {
   const { logo, links = [], ctaText } = props
 
   return (
-    <nav className="px-6 @md:px-10 py-4 flex items-center justify-between">
+    <nav className="px-6 @md:px-10 py-4 flex items-center justify-between bg-bg-0">
       {/* Logo */}
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg bg-green/10 flex items-center justify-center">
@@ -52,7 +52,7 @@ function NavbarCentered({ props }: { props: NavbarProps }) {
   const rightLinks = links.slice(mid)
 
   return (
-    <nav className="px-6 @md:px-10 py-4 flex items-center justify-between">
+    <nav className="px-6 @md:px-10 py-4 flex items-center justify-between bg-bg-0">
       {/* Left links */}
       <div className="hidden @2xl:flex items-center gap-6 flex-1">
         {leftLinks.map((link, i) => (

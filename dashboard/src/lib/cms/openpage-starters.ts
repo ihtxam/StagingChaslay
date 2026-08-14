@@ -34,14 +34,22 @@ const AMBER_THEME = {
   bg1: '#1e1816',
   bg2: '#26201c',
   bg3: '#302925',
-  accent: '#e8a838',
-  accentDim: '#cc8f20',
+  bg4: '#3d3530',
+  bg5: '#504640',
   text0: '#faf6f0',
   text1: '#d4c8b8',
   text2: '#a89a88',
-  border: '#352e28',
+  text3: '#7d7062',
+  accent: '#e8a838',
+  accentDim: '#cc8f20',
+  borderDefault: '#352e28',
+  borderSubtle: '#28211b',
+  borderHover: '#443c35',
   fontSans: 'Outfit',
   fontDisplay: 'Outfit',
+  fontMono: 'JetBrains Mono',
+  radius: 6,
+  radiusLg: 10,
 };
 
 function foodTruckBlocks(name: string): Block[] {
@@ -299,7 +307,7 @@ export function renderSelfContainedStarterHtml(
       --muted: ${t.text2};
       --accent: ${t.accent};
       --accent-dim: ${t.accentDim};
-      --border: ${t.border};
+      --border: ${t.borderDefault};
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }

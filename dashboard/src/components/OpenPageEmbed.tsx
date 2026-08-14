@@ -11,6 +11,8 @@ type Props = {
   title?: string;
   config?: OpenPageSiteConfig | null;
   className?: string;
+  /** Match dashboard editor shell to the page theme. */
+  shellBg?: string;
   /** Called when the OpenPage editor posts a Save. */
   onSaved: (payload: { config: OpenPageSiteConfig; html: string }) => void;
 };
@@ -24,6 +26,7 @@ export default function OpenPageEmbed({
   title,
   config,
   className,
+  shellBg = '#171210',
   onSaved,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -110,13 +113,14 @@ export default function OpenPageEmbed({
 
   return (
     <div
-      className={
-        className ||
-        'relative h-full min-h-[640px] w-full overflow-hidden rounded-lg border border-[var(--border)] bg-stone-950'
-      }
+      className={className || 'relative h-full min-h-[640px] w-full overflow-hidden rounded-lg border border-[var(--border)]'}
+      style={{ backgroundColor: shellBg }}
     >
       {!ready ? (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-stone-950 px-4 text-center text-sm text-stone-300">
+        <div
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-4 text-center text-sm"
+          style={{ backgroundColor: shellBg, color: 'rgba(255,255,255,0.72)' }}
+        >
           <p>{error || 'Loading OpenPage…'}</p>
           {error ? (
             <a className="text-xs underline text-stone-200" href={OPENPAGE_SRC} target="_blank" rel="noreferrer">

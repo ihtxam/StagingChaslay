@@ -8,12 +8,17 @@ import type { BlockConfig } from './types'
 
 interface Props {
   block: BlockConfig
+  blockIndex?: number
   isSelected: boolean
   onSelect: () => void
   children: ReactNode
 }
 
-export function BlockWrapper({ block, isSelected, onSelect, children }: Props) {
+function isChromeBlock(type: BlockConfig['type']): boolean {
+  return type === 'navbar' || type === 'footer' || type === 'banner'
+}
+
+export function BlockWrapper({ block, blockIndex = 0, isSelected, onSelect, children }: Props) {
   const blocks = useConfigStore((s) => {
     const pages = s.config.pages
     if (!pages || pages.length === 0) return s.config.blocks
@@ -26,9 +31,10 @@ export function BlockWrapper({ block, isSelected, onSelect, children }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const { ref: revealRef, isRevealed } = useScrollReveal(!previewMode)
 
-  const index = blocks.findIndex((b) => b.id === block.id)
+  const index = blockIndex >= 0 ? blockIndex : blocks.findIndex((b) => b.id === block.id)
   const isFirst = index === 0
   const isLast = index === blocks.length - 1
+  const chrome = isChromeBlock(block.type)
 
   useEffect(() => {
     if (isSelected && scrollRef.current) {
@@ -57,11 +63,15 @@ export function BlockWrapper({ block, isSelected, onSelect, children }: Props) {
         e.stopPropagation()
         onSelect()
       }}
-      className={`scroll-revealed relative cursor-pointer border-b border-border-subtle group transition-[opacity,transform] duration-500 ${
+      className={`scroll-revealed relative cursor-pointer group transition-[opacity,transform] duration-500 ${
+        chrome ? '' : 'border-b border-border-subtle'
+      } ${
         isRevealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
       } ${
         isSelected
-          ? 'bg-green-glow2 outline outline-2 outline-green -outline-offset-2 rounded animate-select-pulse'
+          ? chrome
+            ? 'outline outline-2 outline-green -outline-offset-1'
+            : 'bg-green-glow2 outline outline-2 outline-green -outline-offset-2 rounded animate-select-pulse'
           : 'hover:bg-green-glow2'
       }`}
       role="button"

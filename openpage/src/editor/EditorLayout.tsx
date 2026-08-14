@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { FolderOpen, Layers, Briefcase, UtensilsCrossed, Building2, BookOpen } from 'lucide-react'
@@ -24,6 +24,7 @@ import {
   type EmbedParentMessage,
 } from '@/lib/embed-bridge'
 import { foodTruckStarter } from '@/lib/food-truck-starter'
+import { resolveTheme, themeToCSS } from '@/lib/theme-presets'
 import type { SiteConfig } from '@/blocks/types'
 
 const templateIcons: Record<string, typeof Briefcase> = {
@@ -235,7 +236,12 @@ export function EditorLayout() {
   useEmbedHostBridge()
   const previewMode = useEditorStore((s) => s.previewMode)
   const activeProjectId = useEditorStore((s) => s.activeProjectId)
+  const configTheme = useConfigStore((s) => s.config.theme)
   const embed = isEmbedMode()
+  const embedThemeVars = useMemo(
+    () => (embed ? themeToCSS(resolveTheme(configTheme)) : null),
+    [embed, configTheme],
+  )
 
   if (!activeProjectId && !embed) {
     return <EditorEmptyState />
@@ -245,7 +251,10 @@ export function EditorLayout() {
     <div className="h-full flex flex-col relative">
       <div className="flex-1 flex overflow-hidden">
         {!previewMode && <LeftSidebar />}
-        <div className="flex-1 flex flex-col min-w-0 relative">
+        <div
+          className="flex-1 flex flex-col min-w-0 relative"
+          style={embedThemeVars ? (embedThemeVars as React.CSSProperties) : undefined}
+        >
           <CanvasToolbar />
           <div className="flex-1 flex flex-col overflow-hidden relative">
             <Canvas />

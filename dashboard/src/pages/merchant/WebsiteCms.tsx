@@ -47,6 +47,11 @@ function asOpenPage(blocks: unknown, title = 'Homepage'): OpenPageBlocks {
   return emptyOpenPageBlocks(title);
 }
 
+function themeStr(theme: Record<string, unknown> | null | undefined, key: string, fallback: string): string {
+  const v = theme?.[key];
+  return typeof v === 'string' ? v : fallback;
+}
+
 export default function WebsiteCms() {
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -220,23 +225,43 @@ export default function WebsiteCms() {
   }
 
   if (editing) {
+    const pageTheme = resolveOpenPageConfig(draft, editLocale).theme;
+    const shellBg = themeStr(pageTheme, 'bg0', '#171210');
+    const shellPanel = themeStr(pageTheme, 'bg1', '#1e1816');
+    const shellBorder = themeStr(pageTheme, 'borderDefault', '#352e28');
+    const shellText = themeStr(pageTheme, 'text0', '#faf6f0');
+    const shellMuted = themeStr(pageTheme, 'text2', '#a89a88');
+    const shellAccent = themeStr(pageTheme, 'accent', '#e8a838');
+
     return createPortal(
-      <div className="fixed inset-0 z-[200] flex flex-col bg-stone-950 text-white">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-800 bg-stone-950 px-3 py-2.5">
+      <div
+        className="fixed inset-0 z-[200] flex flex-col"
+        style={{ backgroundColor: shellBg, color: shellText }}
+      >
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
+          style={{ backgroundColor: shellPanel, borderBottom: `1px solid ${shellBorder}` }}
+        >
           <div className="flex min-w-0 flex-wrap items-center gap-3">
             <button
               type="button"
-              className="shrink-0 text-sm text-stone-300 hover:text-white hover:underline"
+              className="shrink-0 text-sm hover:underline"
+              style={{ color: shellMuted }}
               onClick={() => setEditing(null)}
             >
               ← {t('cmsBackToPages')}
             </button>
             <input
-              className="input max-w-[220px] border-stone-700 bg-stone-900 text-sm text-white"
+              className="input max-w-[220px] text-sm"
+              style={{
+                borderColor: shellBorder,
+                backgroundColor: shellBg,
+                color: shellText,
+              }}
               value={editing.title}
               onChange={(e) => setEditing({ ...editing, title: e.target.value })}
             />
-            <label className="flex shrink-0 items-center gap-1.5 text-xs text-stone-300">
+            <label className="flex shrink-0 items-center gap-1.5 text-xs" style={{ color: shellMuted }}>
               <input
                 type="checkbox"
                 checked={!!editing.isHomepage}
@@ -244,8 +269,13 @@ export default function WebsiteCms() {
               />
               {t('cmsIsHomepage')}
             </label>
-            <span className="shrink-0 text-xs text-stone-500">{editing.status}</span>
-            <div className="inline-flex overflow-hidden rounded-lg border border-stone-700">
+            <span className="shrink-0 text-xs" style={{ color: shellMuted }}>
+              {editing.status}
+            </span>
+            <div
+              className="inline-flex overflow-hidden rounded-lg"
+              style={{ border: `1px solid ${shellBorder}` }}
+            >
               {CMS_LOCALES.map((loc) => {
                 const has = !!draft.locales?.[loc]?.html || (loc === (draft.defaultLocale || 'en') && !!draft.html);
                 return (
@@ -253,11 +283,12 @@ export default function WebsiteCms() {
                     key={loc}
                     type="button"
                     onClick={() => switchEditLocale(loc)}
-                    className={`px-2.5 py-1 text-[11px] font-bold uppercase ${
+                    className="px-2.5 py-1 text-[11px] font-bold uppercase"
+                    style={
                       editLocale === loc
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-stone-900 text-stone-400 hover:text-white'
-                    }`}
+                        ? { backgroundColor: shellAccent, color: '#171210' }
+                        : { backgroundColor: shellBg, color: shellMuted }
+                    }
                     title={has ? t('cmsLocaleReady') : t('cmsLocaleMissing')}
                   >
                     {loc}
@@ -269,7 +300,8 @@ export default function WebsiteCms() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <a
-              className="text-xs text-stone-400 underline hover:text-white"
+              className="text-xs underline"
+              style={{ color: shellMuted }}
               href="/openpage/?embed=1#/editor"
               target="_blank"
               rel="noreferrer"
@@ -294,16 +326,24 @@ export default function WebsiteCms() {
             </button>
           </div>
         </div>
-        <p className="border-b border-amber-900/50 bg-amber-950/40 px-3 py-1.5 text-[11px] text-amber-100">
+        <p
+          className="px-3 py-1.5 text-[11px]"
+          style={{
+            borderBottom: `1px solid ${shellBorder}`,
+            backgroundColor: `${shellAccent}22`,
+            color: shellText,
+          }}
+        >
           {t('cmsBuilderSaveHint')} {t('cmsLocaleHint').replace('{lang}', editLocale.toUpperCase())}
         </p>
-        <div className="relative min-h-0 flex-1 overflow-hidden bg-stone-950">
+        <div className="relative min-h-0 flex-1 overflow-hidden" style={{ backgroundColor: shellBg }}>
           <OpenPageEmbed
             key={`${editing.id}-${editLocale}`}
             mode="page"
             title={editing.title}
             config={resolveOpenPageConfig(draft, editLocale)}
-            className="relative h-full min-h-0 w-full rounded-none border-0 bg-stone-950"
+            className="relative h-full min-h-0 w-full rounded-none border-0"
+            shellBg={shellBg}
             onSaved={(payload) => void onBuilderSaved(payload)}
           />
         </div>

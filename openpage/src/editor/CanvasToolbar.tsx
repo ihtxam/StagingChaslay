@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Monitor,
@@ -21,6 +21,7 @@ import { useProjectsStore } from '@/store/projectsStore'
 import type { PageConfig } from '@/blocks/types'
 import { exportToHTML, downloadHTML } from '@/lib/export-html'
 import { exportConfigHtml, isEmbedMode, postToParent } from '@/lib/embed-bridge'
+import { resolveTheme, themeToCSS } from '@/lib/theme-presets'
 
 const viewports: { value: Viewport; icon: typeof Monitor; label: string }[] = [
   { value: 'desktop', icon: Monitor, label: 'Desktop' },
@@ -181,6 +182,15 @@ export function CanvasToolbar() {
   const projectName = activeProject?.name || configName
 
   const embed = isEmbedMode()
+  const themeVars = useMemo(() => themeToCSS(resolveTheme(config.theme)), [config.theme])
+  const toolbarStyle = embed
+    ? ({
+        ...themeVars,
+        backgroundColor: 'var(--color-bg-1)',
+        borderColor: 'var(--color-border-default)',
+        color: 'var(--color-text-0)',
+      } as React.CSSProperties)
+    : undefined
 
   async function handleExport() {
     setExporting(true)
@@ -203,7 +213,10 @@ export function CanvasToolbar() {
   }
 
   return (
-    <div className="h-10 bg-bg-1 border-b border-border-default flex items-center px-3 gap-1">
+    <div
+      className={`h-10 border-b flex items-center px-3 gap-1 shrink-0 ${embed ? '' : 'bg-bg-1 border-border-default'}`}
+      style={toolbarStyle}
+    >
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-xs text-text-3 shrink-0">
         {!embed ? (
