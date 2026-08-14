@@ -79,3 +79,15 @@ object ReceiptVatCalculator {
     fun formatRate(rate: Double): String =
         if (rate % 1.0 == 0.0) rate.toInt().toString() else String.format("%.1f", rate)
 }
+
+/** Scale receipt VAT rows when discounts reduce the tax base (gross always; net when vatAfterDiscount). */
+fun receiptDiscountFactor(
+    vatIncludedInPrice: Boolean,
+    vatAfterDiscount: Boolean,
+    merchandiseBase: Double,
+    discountAmount: Double
+): Double {
+    if (discountAmount <= 0.0 || merchandiseBase <= 0.0) return 1.0
+    if (!vatIncludedInPrice && !vatAfterDiscount) return 1.0
+    return ((merchandiseBase - discountAmount) / merchandiseBase).coerceIn(0.0, 1.0)
+}

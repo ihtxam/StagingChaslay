@@ -174,6 +174,7 @@ class MenuSyncRepository @Inject constructor(
             takeawayVatRate = dto.taxTakeawayRate?.takeIf { it > 0.0 } ?: current.takeawayVatRate,
             dineInVatRate = dto.taxDineInRate?.takeIf { it > 0.0 } ?: current.dineInVatRate,
             vatIncludedInPrice = dto.taxIncludedInPrice ?: current.vatIncludedInPrice,
+            vatAfterDiscount = dto.vatAfterDiscount ?: current.vatAfterDiscount,
             defaultLanguage = dto.defaultLanguage?.takeIf { it.isNotBlank() } ?: current.defaultLanguage,
             receiptBaseUrl = dto.receiptBaseUrl?.takeIf { it.isNotBlank() }?.let { ReceiptPublicUrls.normalizeBase(it) }
                 ?: current.receiptBaseUrl,

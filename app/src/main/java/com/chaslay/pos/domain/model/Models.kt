@@ -185,6 +185,29 @@ fun computeLineTotal(lineSubtotal: Double, taxRate: Double, vatIncludedInPrice: 
     }
 }
 
+/**
+ * When an order-level discount applies, adjust VAT:
+ * - Gross prices: tax scales with discounted merchandise (Swiss-compliant default).
+ * - Net prices + [vatAfterDiscount]: tax scales with discounted net base.
+ * - Net prices + before-discount: tax stays on pre-discount base.
+ */
+fun adjustTaxForOrderDiscount(
+    taxAmount: Double,
+    taxableBase: Double,
+    discount: Double,
+    vatIncludedInPrice: Boolean,
+    vatAfterDiscount: Boolean = true
+): Double {
+    val tax = roundMoney(taxAmount)
+    val base = roundMoney(taxableBase)
+    val disc = roundMoney(discount.coerceAtLeast(0.0))
+    if (tax <= 0.0 || base <= 0.0 || disc <= 0.0) return tax
+    if (!vatIncludedInPrice && !vatAfterDiscount) return tax
+    val afterDisc = roundMoney((base - disc.coerceAtMost(base)).coerceAtLeast(0.0))
+    if (afterDisc >= base) return tax
+    return roundMoney(tax * (afterDisc / base))
+}
+
 data class CartItem(
     val id: String,
     val productId: Long,
@@ -280,7 +303,9 @@ data class CartSummary(
     val splitCount: Int = 1,
     val splitByItems: Boolean = false,
     val activeSplitCheck: Int = 1,
-    val vatIncludedInPrice: Boolean = false
+    val vatIncludedInPrice: Boolean = false,
+    /** Net prices: when true (default), order discounts reduce the VAT base (Swiss law). */
+    val vatAfterDiscount: Boolean = true
 ) {
     val visibleItems: List<CartItem>
         get() = if (splitByItems && splitCount > 1) {
@@ -293,7 +318,8 @@ data class CartSummary(
                 items = visibleItems,
                 discountPercent = discountPercent,
                 discountAmount = discountAmount,
-                vatIncludedInPrice = vatIncludedInPrice
+                vatIncludedInPrice = vatIncludedInPrice,
+                vatAfterDiscount = vatAfterDiscount
             ).total
             splitCount > 1 -> total / splitCount
             else -> total
@@ -303,33 +329,54 @@ data class CartSummary(
     /** Uses weight-aware catalog amounts so grams are never treated as unit counts. */
     val subtotal: Double get() = items.sumOf { it.catalogLineSubtotal }
     val itemDiscountTotal: Double get() = items.sumOf { it.lineDiscount }
-    val taxTotal: Double get() = items.sumOf { it.lineTax }
+    val netSubtotal: Double get() = roundMoney((subtotal - itemDiscountTotal).coerceAtLeast(0.0))
+    private val rawTaxTotal: Double get() = items.sumOf { it.lineTax }
     val discountValue: Double
         get() = when {
             discountPercent > 0 -> subtotal * (discountPercent / 100.0)
             discountAmount > 0 -> discountAmount.coerceAtMost(subtotal)
             else -> 0.0
         }
+    private val merchandiseBase: Double
+        get() = if (vatIncludedInPrice) {
+            roundMoney(netSubtotal + rawTaxTotal)
+        } else {
+            netSubtotal
+        }
+    val taxTotal: Double
+        get() = adjustTaxForOrderDiscount(
+            rawTaxTotal,
+            merchandiseBase,
+            discountValue,
+            vatIncludedInPrice,
+            vatAfterDiscount
+        )
     val total: Double
         get() = if (vatIncludedInPrice) {
-            (subtotal - itemDiscountTotal - discountValue).coerceAtLeast(0.0)
+            roundMoney((merchandiseBase - discountValue).coerceAtLeast(0.0))
         } else {
-            (subtotal + taxTotal - itemDiscountTotal - discountValue).coerceAtLeast(0.0)
+            roundMoney((netSubtotal + taxTotal - discountValue).coerceAtLeast(0.0))
         }
     val isEmpty: Boolean get() = items.isEmpty()
 
     /** Amount due for products before tip and cash rounding. */
     fun merchandiseTotal(checkoutDiscountPercent: Double = 0.0): Double {
-        val netSubtotal = subtotal - itemDiscountTotal
         val discount = if (checkoutDiscountPercent > 0) {
-            netSubtotal * (checkoutDiscountPercent / 100.0)
+            roundMoney(netSubtotal * (checkoutDiscountPercent / 100.0))
         } else {
             discountValue
         }
+        val tax = adjustTaxForOrderDiscount(
+            rawTaxTotal,
+            merchandiseBase,
+            discount,
+            vatIncludedInPrice,
+            vatAfterDiscount
+        )
         return if (vatIncludedInPrice) {
-            roundMoney((netSubtotal - discount).coerceAtLeast(0.0))
+            roundMoney((merchandiseBase - discount).coerceAtLeast(0.0))
         } else {
-            roundMoney((netSubtotal + taxTotal - discount).coerceAtLeast(0.0))
+            roundMoney((netSubtotal + tax - discount).coerceAtLeast(0.0))
         }
     }
 }

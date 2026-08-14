@@ -865,9 +865,12 @@ class BluetoothPrinterService @Inject constructor(
         val dateTimeFmt = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
         val sepEq = "=".repeat(lineWidth.coerceAtMost(32))
         val subtotal = cart.subtotal - cart.itemDiscountTotal
-        val discountFactor = if (subtotal > 0.0) {
-            ((subtotal - discountAmount) / subtotal).coerceIn(0.0, 1.0)
-        } else 1.0
+        val discountFactor = receiptDiscountFactor(
+            settings.vatIncludedInPrice,
+            settings.vatAfterDiscount,
+            subtotal,
+            discountAmount
+        )
         val vatRows = ReceiptVatCalculator.vatRowsFromCartItems(cart.items, discountFactor)
 
         if (context.isProvisional) {
@@ -994,9 +997,12 @@ class BluetoothPrinterService @Inject constructor(
         val sepEq = "=".repeat(lineWidth.coerceAtMost(32))
         val itemBrut = items.sumOf { it.lineTotal }
         val orderDiscount = resolveReceiptDiscount(transaction)
-        val discountFactor = if (itemBrut > 0.0) {
-            ((itemBrut - orderDiscount) / itemBrut).coerceIn(0.0, 1.0)
-        } else 1.0
+        val discountFactor = receiptDiscountFactor(
+            settings.vatIncludedInPrice,
+            settings.vatAfterDiscount,
+            itemBrut,
+            orderDiscount
+        )
         val vatRows = ReceiptVatCalculator.vatRowsFromTransactionItems(items, discountFactor)
 
         appendReceiptStoreBlock(sb, settings, lineWidth)

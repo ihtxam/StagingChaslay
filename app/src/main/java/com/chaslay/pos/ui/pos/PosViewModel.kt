@@ -392,6 +392,7 @@ class PosViewModel @Inject constructor(
                     scaleService.disconnect()
                 }
                 cartManager.setVatIncludedInPrice(settings.vatIncludedInPrice)
+                cartManager.setVatAfterDiscount(settings.vatAfterDiscount)
             }
         }
         viewModelScope.launch {
@@ -549,7 +550,8 @@ class PosViewModel @Inject constructor(
             discountPercent = order.discountPercent,
             discountAmount = order.discountAmount,
             guestCount = order.guestCount,
-            vatIncludedInPrice = cachedSettings.vatIncludedInPrice
+            vatIncludedInPrice = cachedSettings.vatIncludedInPrice,
+            vatAfterDiscount = cachedSettings.vatAfterDiscount
         )
         if (pendingCart != null) {
             pendingCart.items.forEach { cartManager.addItem(it) }
@@ -3624,7 +3626,8 @@ class PosViewModel @Inject constructor(
             courseCount = cart.courseCount,
             activeCourse = cart.activeCourse,
             guestCount = order.guestCount,
-            vatIncludedInPrice = cachedSettings.vatIncludedInPrice
+            vatIncludedInPrice = cachedSettings.vatIncludedInPrice,
+            vatAfterDiscount = cachedSettings.vatAfterDiscount
         )
     }
 

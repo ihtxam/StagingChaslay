@@ -45,6 +45,7 @@ data class SyncBusinessDto(
     @SerializedName("tax_dine_in_rate") val taxDineInRate: Double? = null,
     @SerializedName("tax_delivery_rate") val taxDeliveryRate: Double? = null,
     @SerializedName("tax_included_in_price") val taxIncludedInPrice: Boolean? = null,
+    @SerializedName("vat_after_discount") val vatAfterDiscount: Boolean? = null,
     @SerializedName("default_language") val defaultLanguage: String? = null,
     @SerializedName("store_hours") val storeHours: Map<String, Map<String, List<SyncStoreHoursSlotDto>>>? = null,
     @SerializedName("receipt_base_url") val receiptBaseUrl: String? = null
@@ -176,6 +177,8 @@ data class SyncCheckoutDto(
     val splitBillsEnabled: Boolean = true,
     val maxSplitParts: Int = 8,
     val vatIncludedInPrice: Boolean = false,
+    /** Net prices: order discounts reduce VAT base when true (default, Swiss law). */
+    val vatAfterDiscount: Boolean = true,
     /** Restaurant only: hide table picker / Tables tab when false (fast-food mode). */
     val tablesEnabled: Boolean = true
 )

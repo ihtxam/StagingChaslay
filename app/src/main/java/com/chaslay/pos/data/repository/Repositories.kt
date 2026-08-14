@@ -1428,6 +1428,10 @@ class CartManager @Inject constructor() {
         }
     }
 
+    fun setVatAfterDiscount(afterDiscount: Boolean) {
+        _cart.update { it.copy(vatAfterDiscount = afterDiscount) }
+    }
+
     fun loadTableOrder(
         tableId: Long,
         tableName: String,
@@ -1439,9 +1443,11 @@ class CartManager @Inject constructor() {
         courseCount: Int = 1,
         activeCourse: Int = 1,
         guestCount: Int? = null,
-        vatIncludedInPrice: Boolean? = null
+        vatIncludedInPrice: Boolean? = null,
+        vatAfterDiscount: Boolean? = null
     ) {
         val included = vatIncludedInPrice ?: _cart.value.vatIncludedInPrice
+        val afterDiscount = vatAfterDiscount ?: _cart.value.vatAfterDiscount
         val maxCourse = items.maxOfOrNull { it.courseNumber } ?: 1
         _cart.value = CartSummary(
             items = items.map { it.copy(vatIncludedInPrice = included) },
@@ -1454,7 +1460,8 @@ class CartManager @Inject constructor() {
             guestCount = guestCount,
             activeCourse = activeCourse,
             courseCount = maxOf(courseCount, maxCourse),
-            vatIncludedInPrice = included
+            vatIncludedInPrice = included,
+            vatAfterDiscount = afterDiscount
         )
     }
 
@@ -2151,6 +2158,7 @@ class TableOrderRepository @Inject constructor(
         val table = tableDao.getById(order.tableId) ?: return false
         val items = orderItemDao.getByOrder(orderId).map { it.toCartItem() }
         val vatIncluded = settingsDao.get()?.vatIncludedInPrice ?: false
+        val vatAfterDiscount = settingsDao.get()?.vatAfterDiscount ?: true
         cartManager.loadTableOrder(
             tableId = table.id,
             tableName = table.name,
@@ -2160,7 +2168,8 @@ class TableOrderRepository @Inject constructor(
             discountPercent = order.discountPercent,
             discountAmount = order.discountAmount,
             guestCount = order.guestCount,
-            vatIncludedInPrice = vatIncluded
+            vatIncludedInPrice = vatIncluded,
+            vatAfterDiscount = vatAfterDiscount
         )
         if (order.status == TableOrderStatus.HELD) {
             orderDao.updateStatus(orderId, TableOrderStatus.OPEN)

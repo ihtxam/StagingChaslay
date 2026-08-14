@@ -259,6 +259,8 @@ data class BusinessSettingsEntity(
     val takeawayVatRate: Double = 2.6,
     /** When true, catalog prices already include VAT; tax is extracted from the price. */
     val vatIncludedInPrice: Boolean = false,
+    /** Net prices: when true (default), order discounts reduce the VAT base (Swiss law). */
+    val vatAfterDiscount: Boolean = true,
     val defaultServiceType: ServiceType = ServiceType.TAKEAWAY,
     val posMode: PosMode = PosMode.RESTAURANT,
     /** Synced from merchant panel — show Tables tab / table picker in restaurant mode. */

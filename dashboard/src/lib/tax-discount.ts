@@ -2,7 +2,7 @@ import { roundMoney2 } from '@/lib/money';
 
 /**
  * When prices are tax-exclusive and an order-level discount applies, adjust VAT:
- * - vatAfterDiscount true: tax scales with discounted net base (WebPOS default today).
+ * - vatAfterDiscount true (default): tax scales with discounted net base — Swiss-compliant.
  * - vatAfterDiscount false: tax stays on pre-discount base; discount reduces total only.
  */
 export function adjustTaxForOrderDiscount(

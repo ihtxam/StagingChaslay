@@ -177,6 +177,7 @@ class TerminalSyncRepository @Inject constructor(
                 splitBillsEnabled = checkout.splitBillsEnabled,
                 maxSplitParts = checkout.maxSplitParts.coerceIn(2, 20),
                 vatIncludedInPrice = checkout.vatIncludedInPrice,
+                vatAfterDiscount = checkout.vatAfterDiscount,
                 tablesEnabled = checkout.tablesEnabled
             )
         }
