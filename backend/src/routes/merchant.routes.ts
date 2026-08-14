@@ -1131,15 +1131,16 @@ router.get("/settings", async (req: Request, res: Response) => {
       settings,
     });
   } catch (error) {
-    console.error("Error getting settings:", error);
     const raw = error instanceof Error ? error.message : "Failed to get settings";
-    const needsShiftMigrate =
-      /shifts_enabled|pos_color_theme|pos_shifts/i.test(raw) &&
-      /does not exist|column|relation/i.test(raw);
+    const { formatDbMigrateError, migrateLogTag } = await import("@/lib/db-schema-errors");
+    const tag = migrateLogTag(raw);
+    if (tag) {
+      console.error(`[settings] schema missing (${tag}):`, raw);
+    } else {
+      console.error("Error getting settings:", error);
+    }
     res.status(500).json({
-      error: needsShiftMigrate
-        ? "Database is missing cash-shift columns. Run backend/sql/ensure-shifts.sql (or drizzle-kit push)."
-        : raw,
+      error: formatDbMigrateError(raw, "Failed to get settings"),
     });
   }
 });
@@ -1392,20 +1393,16 @@ router.put("/settings", async (req: Request, res: Response) => {
       merchant,
     });
   } catch (error) {
-    console.error("Error updating settings:", error);
     const raw = error instanceof Error ? error.message : "Failed to update settings";
-    const needsShiftMigrate =
-      /shifts_enabled|pos_color_theme|pos_shifts/i.test(raw) &&
-      /does not exist|column|relation/i.test(raw);
-    const needsDeliveryMigrate =
-      /delivery_platform_settings/i.test(raw) &&
-      /does not exist|column|relation/i.test(raw);
+    const { formatDbMigrateError, migrateLogTag } = await import("@/lib/db-schema-errors");
+    const tag = migrateLogTag(raw);
+    if (tag) {
+      console.error(`[settings] schema missing on save (${tag}):`, raw);
+    } else {
+      console.error("Error updating settings:", error);
+    }
     res.status(400).json({
-      error: needsShiftMigrate
-        ? "Database is missing cash-shift columns. Run backend/sql/ensure-shifts.sql (or drizzle-kit push), then retry."
-        : needsDeliveryMigrate
-          ? "Database is missing delivery_platform_settings. Run backend/sql/ensure-delivery-platforms.sql"
-          : raw,
+      error: formatDbMigrateError(raw, "Failed to update settings"),
     });
   }
 });

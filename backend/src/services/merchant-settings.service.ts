@@ -23,6 +23,7 @@ import {
   applyProductionCredentialDefaults,
   type DeliveryPlatformSettings,
 } from "@/lib/delivery-platform-settings";
+import { patchMerchantSchemaFromError } from "@/lib/ensure-merchant-schema";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -65,6 +66,18 @@ function normalizeChannelSelectMode(raw?: string | null): ChannelSelectMode {
 
 export class MerchantSettingsService {
   static async getMerchantSettings(merchantId: string) {
+    try {
+      return await this.buildMerchantSettings(merchantId);
+    } catch (error) {
+      const patched = await patchMerchantSchemaFromError(error);
+      if (patched) {
+        return await this.buildMerchantSettings(merchantId);
+      }
+      throw error;
+    }
+  }
+
+  private static async buildMerchantSettings(merchantId: string) {
     const db = getDb();
 
     const merchant = await db.query.merchants.findFirst({

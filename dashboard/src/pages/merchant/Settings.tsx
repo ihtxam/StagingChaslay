@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import type { LucideIcon } from 'lucide-react';
@@ -360,6 +360,7 @@ export default function Settings() {
   const [terminalId, setTerminalId] = useState('');
   const [terminalName, setTerminalName] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savingAdyen, setSavingAdyen] = useState(false);
   const [savingFee, setSavingFee] = useState(false);
@@ -669,14 +670,21 @@ export default function Settings() {
     return () => window.clearTimeout(timer);
   }, [loading, tab]);
 
-  useEffect(() => {
-    const load = async () => {
+  const loadSettings = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const [settingsRes, terminalsRes] = await Promise.all([
           api.get('/merchant/settings'),
           api.get('/terminals').catch(() => ({ data: { adyen: {}, terminals: [] } })),
         ]);
-        const s = settingsRes.data.settings;
+        const s = settingsRes.data?.settings;
+        if (!s) {
+          throw new Error('Settings response missing data');
+        }
         setSettings(s);
         setCardFeeFixed(String(s?.onlineCardFeeFixed ?? '0'));
         setCardFeePercent(String(s?.onlineCardFeePercent ?? '0'));
@@ -702,15 +710,31 @@ export default function Settings() {
         } else if (stored && ['en', 'fr', 'de'].includes(stored)) {
           setSettings((prev) => (prev ? { ...prev, panelLanguage: stored } : prev));
         }
-      } catch (error: any) {
-        toast.error(error.response?.data?.error || 'Failed to load settings');
-      } finally {
-        setLoading(false);
+        setLoadError(null);
+        return;
+      } catch (error: unknown) {
+        lastError = error;
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        const retryable =
+          attempt === 0 && (status == null || status >= 500 || status === 429 || status === 408);
+        if (retryable) {
+          await new Promise((resolve) => window.setTimeout(resolve, 600));
+          continue;
+        }
+        break;
       }
-    };
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    }
+
+    const err = lastError as { response?: { data?: { error?: string } }; message?: string };
+    const msg = err.response?.data?.error || err.message || t('settingsLoadFailed');
+    setSettings(null);
+    setLoadError(msg);
+    toast.error(msg);
+  }, [setLocale, t]);
+
+  useEffect(() => {
+    void loadSettings().finally(() => setLoading(false));
+  }, [loadSettings]);
 
   const onSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -954,7 +978,24 @@ export default function Settings() {
     return <div className="text-center py-12 muted text-sm">{t('loading')}</div>;
   }
   if (!settings) {
-    return <div className="card">{t('settingsLoadError')}</div>;
+    return (
+      <div className="card space-y-3 text-center py-8">
+        <p>{t('settingsLoadFailed')}</p>
+        {loadError && loadError !== t('settingsLoadFailed') ? (
+          <p className="text-sm muted">{loadError}</p>
+        ) : null}
+        <button
+          type="button"
+          className="btn-primary mx-auto"
+          onClick={() => {
+            setLoading(true);
+            void loadSettings().finally(() => setLoading(false));
+          }}
+        >
+          {t('settingsLoadRetry')}
+        </button>
+      </div>
+    );
   }
 
   return (
