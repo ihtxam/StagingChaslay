@@ -248,6 +248,7 @@ export default function Products() {
   const [form, setForm] = useState<FormState>(emptyForm());
   const [allModifierGroups, setAllModifierGroups] = useState<ModifierGroupSummary[]>([]);
   const [modifierPickerOpen, setModifierPickerOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [reordering, setReordering] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const imageFileRef = useRef<HTMLInputElement>(null);
@@ -459,6 +460,7 @@ export default function Products() {
     setEditingId(null);
     setForm(emptyForm());
     setModifierPickerOpen(false);
+    setMoreOpen(false);
   };
 
   const linkedModifierGroups = useMemo(
@@ -1049,62 +1051,6 @@ export default function Products() {
                     <option value="weighed">{t('weighingProduct')}</option>
                   </select>
                 </Field>
-                {form.soldByWeight && !form.isCombo ? (
-                  <Field label={t('webPosWeightUnit')}>
-                    <select
-                      className="field-input"
-                      value={form.weightUnit}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          weightUnit: e.target.value as FormState['weightUnit'],
-                        })
-                      }
-                    >
-                      <option value="kg">kg</option>
-                      <option value="g">g</option>
-                      <option value="lb">lb</option>
-                    </select>
-                    <p className="mt-1 text-xs muted">{t('webPosWeighedPriceHint')}</p>
-                  </Field>
-                ) : null}
-                <Field label={t('productCode')}>
-                  <input
-                    className="field-input"
-                    placeholder={t('skuPlaceholder')}
-                    value={form.sku}
-                    maxLength={SKU_MAX_LEN}
-                    onChange={(e) =>
-                      setForm({ ...form, sku: e.target.value.slice(0, SKU_MAX_LEN) })
-                    }
-                  />
-                  <p className="mt-1 text-xs muted">
-                    {t('maxCharacters').replace('{n}', String(SKU_MAX_LEN))}
-                  </p>
-                </Field>
-                <Field label={t('barcode')}>
-                  <input
-                    className="field-input"
-                    placeholder={t('barcodePlaceholder')}
-                    value={form.barcode}
-                    maxLength={SKU_MAX_LEN}
-                    onChange={(e) =>
-                      setForm({ ...form, barcode: e.target.value.slice(0, SKU_MAX_LEN) })
-                    }
-                  />
-                </Field>
-                <Field label={t('stock')}>
-                  <input
-                    className="field-input"
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={form.stock}
-                    onChange={(e) =>
-                      setForm({ ...form, stock: clampNonNegativeInt(e.target.value, MAX_STOCK_DIGITS) })
-                    }
-                  />
-                </Field>
               </div>
 
               <Field label={t('description')}>
@@ -1162,58 +1108,6 @@ export default function Products() {
                 </div>
                 <p className="mt-1 text-xs muted">{t('photoHint')}</p>
               </Field>
-
-              <Field label={t('freeWithPoints')}>
-                <input
-                  className="field-input"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder={t('freeWithPointsPlaceholder')}
-                  value={form.loyaltyRewardPoints}
-                  onChange={(e) => {
-                    // text + sanitize: avoids HTML number inputs silently blocking submit when > max
-                    setForm({ ...form, loyaltyRewardPoints: sanitizeFreePointsInput(e.target.value) });
-                  }}
-                />
-                <p className="mt-1 text-xs text-slate-500">
-                  {t('freeWithPointsHint').replace('{max}', MAX_POINTS.toLocaleString('en-US'))}
-                </p>
-                {form.loyaltyRewardPoints &&
-                parseFreePoints(form.loyaltyRewardPoints) === 'out_of_range' ? (
-                  <p className="mt-1 text-xs font-medium text-rose-600">
-                    {t('freeWithPointsRangeError').replace(
-                      '{max}',
-                      MAX_POINTS.toLocaleString('en-US')
-                    )}
-                  </p>
-                ) : null}
-              </Field>
-
-              <div>
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide muted">
-                  {t('buttonColor')}
-                </p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {BUTTON_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setForm({ ...form, buttonColor: color })}
-                      className={`h-6 w-6 rounded-full border ${
-                        form.buttonColor === color ? 'border-[var(--text)] ring-1 ring-[var(--text)]' : 'border-[var(--border)]'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={color}
-                    />
-                  ))}
-                  <input
-                    className="field-input w-24"
-                    value={form.buttonColor}
-                    onChange={(e) => setForm({ ...form, buttonColor: e.target.value })}
-                  />
-                </div>
-              </div>
 
               {form.isCombo && (
                 <div className="rounded-md border border-[var(--border)] p-3 space-y-3">
@@ -1516,54 +1410,183 @@ export default function Products() {
               </div>
               )}
 
-              <div className="rounded-md border border-[var(--border)] p-3 space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-semibold">
-                      {form.isCombo ? t('comboExtrasOptional') : t('modifiersAddons')}
-                    </h3>
-                    <p className="text-[11px] muted mt-0.5">
-                      {form.isCombo ? t('comboExtrasHint') : t('modifiersHint')}
-                    </p>
+              <button
+                type="button"
+                onClick={() => setMoreOpen((open) => !open)}
+                className="flex w-full items-center justify-between gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-2.5 text-left transition hover:opacity-90"
+                aria-expanded={moreOpen}
+              >
+                <span>
+                  <span className="block text-sm font-semibold">{t('productMoreSection')}</span>
+                  {!moreOpen ? (
+                    <span className="mt-0.5 block text-[11px] muted">{t('productMoreSectionHint')}</span>
+                  ) : null}
+                </span>
+                {moreOpen ? <ChevronUp size={18} className="shrink-0 muted" /> : <ChevronDown size={18} className="shrink-0 muted" />}
+              </button>
+
+              {moreOpen && (
+                <div className="space-y-3 rounded-md border border-[var(--border)] p-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Field label={t('productCode')}>
+                      <input
+                        className="field-input"
+                        placeholder={t('skuPlaceholder')}
+                        value={form.sku}
+                        maxLength={SKU_MAX_LEN}
+                        onChange={(e) =>
+                          setForm({ ...form, sku: e.target.value.slice(0, SKU_MAX_LEN) })
+                        }
+                      />
+                      <p className="mt-1 text-xs muted">
+                        {t('maxCharacters').replace('{n}', String(SKU_MAX_LEN))}
+                      </p>
+                    </Field>
+                    <Field label={t('barcode')}>
+                      <input
+                        className="field-input"
+                        placeholder={t('barcodePlaceholder')}
+                        value={form.barcode}
+                        maxLength={SKU_MAX_LEN}
+                        onChange={(e) =>
+                          setForm({ ...form, barcode: e.target.value.slice(0, SKU_MAX_LEN) })
+                        }
+                      />
+                    </Field>
+                    <Field label={t('stock')}>
+                      <input
+                        className="field-input"
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={form.stock}
+                        onChange={(e) =>
+                          setForm({ ...form, stock: clampNonNegativeInt(e.target.value, MAX_STOCK_DIGITS) })
+                        }
+                      />
+                    </Field>
+                    {form.soldByWeight && !form.isCombo ? (
+                      <Field label={t('webPosWeightUnit')}>
+                        <select
+                          className="field-input"
+                          value={form.weightUnit}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              weightUnit: e.target.value as FormState['weightUnit'],
+                            })
+                          }
+                        >
+                          <option value="kg">kg</option>
+                          <option value="g">g</option>
+                          <option value="lb">lb</option>
+                        </select>
+                        <p className="mt-1 text-xs muted">{t('webPosWeighedPriceHint')}</p>
+                      </Field>
+                    ) : null}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setModifierPickerOpen(true)}
-                    className="btn-primary !py-1 !text-xs"
-                  >
-                    <Plus size={14} /> {t('addShort')}
-                  </button>
-                </div>
-                <div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
-                  {linkedModifierGroups.length === 0 && (
-                    <p className="px-3 py-4 text-center text-xs muted">
-                      {t('noModifiersLinked')}
+
+                  <Field label={t('freeWithPoints')}>
+                    <input
+                      className="field-input"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder={t('freeWithPointsPlaceholder')}
+                      value={form.loyaltyRewardPoints}
+                      onChange={(e) => {
+                        setForm({ ...form, loyaltyRewardPoints: sanitizeFreePointsInput(e.target.value) });
+                      }}
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      {t('freeWithPointsHint').replace('{max}', MAX_POINTS.toLocaleString('en-US'))}
                     </p>
-                  )}
-                  {linkedModifierGroups.map((g) => (
-                    <div key={g.id} className="flex items-center justify-between px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{g.title}</p>
-                        <p className="text-[11px] muted truncate">
-                          {(g.options || []).map((o) => o.name).join(' · ') || t('noOptions')}
+                    {form.loyaltyRewardPoints &&
+                    parseFreePoints(form.loyaltyRewardPoints) === 'out_of_range' ? (
+                      <p className="mt-1 text-xs font-medium text-rose-600">
+                        {t('freeWithPointsRangeError').replace(
+                          '{max}',
+                          MAX_POINTS.toLocaleString('en-US')
+                        )}
+                      </p>
+                    ) : null}
+                  </Field>
+
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide muted">
+                      {t('buttonColor')}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {BUTTON_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setForm({ ...form, buttonColor: color })}
+                          className={`h-6 w-6 rounded-full border ${
+                            form.buttonColor === color ? 'border-[var(--text)] ring-1 ring-[var(--text)]' : 'border-[var(--border)]'
+                          }`}
+                          style={{ backgroundColor: color }}
+                          title={color}
+                        />
+                      ))}
+                      <input
+                        className="field-input w-24"
+                        value={form.buttonColor}
+                        onChange={(e) => setForm({ ...form, buttonColor: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-semibold">
+                          {form.isCombo ? t('comboExtrasOptional') : t('modifiersAddons')}
+                        </h3>
+                        <p className="text-[11px] muted mt-0.5">
+                          {form.isCombo ? t('comboExtrasHint') : t('modifiersHint')}
                         </p>
                       </div>
                       <button
                         type="button"
-                        className="rounded-md p-1.5 text-[var(--danger)] hover:bg-[var(--bg-muted)]"
-                        onClick={() =>
-                          setForm({
-                            ...form,
-                            modifierGroupIds: form.modifierGroupIds.filter((id) => id !== g.id),
-                          })
-                        }
+                        onClick={() => setModifierPickerOpen(true)}
+                        className="btn-primary !py-1 !text-xs"
                       >
-                        <Trash2 size={14} />
+                        <Plus size={14} /> {t('addShort')}
                       </button>
                     </div>
-                  ))}
+                    <div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
+                      {linkedModifierGroups.length === 0 && (
+                        <p className="px-3 py-4 text-center text-xs muted">
+                          {t('noModifiersLinked')}
+                        </p>
+                      )}
+                      {linkedModifierGroups.map((g) => (
+                        <div key={g.id} className="flex items-center justify-between px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{g.title}</p>
+                            <p className="text-[11px] muted truncate">
+                              {(g.options || []).map((o) => o.name).join(' · ') || t('noOptions')}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="rounded-md p-1.5 text-[var(--danger)] hover:bg-[var(--bg-muted)]"
+                            onClick={() =>
+                              setForm({
+                                ...form,
+                                modifierGroupIds: form.modifierGroupIds.filter((id) => id !== g.id),
+                              })
+                            }
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex gap-2 pt-1 sticky bottom-0 bg-[var(--bg-elevated)] pb-1">
                 <button
