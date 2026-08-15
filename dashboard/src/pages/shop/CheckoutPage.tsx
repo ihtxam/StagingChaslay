@@ -24,6 +24,7 @@ import {
   type StoreHours,
 } from '@/lib/shop-hours';
 import { roundMoney2, roundTo005, roundingAdjustment } from '@/lib/money';
+import { formatShopChannelEta } from '@/lib/shop-eta';
 import { adjustTaxForOrderDiscount } from '@/lib/tax-discount';
 import { shopDocumentTitle } from '@/lib/brand';
 import { isLocale, useI18n } from '@/lib/i18n';
@@ -312,7 +313,10 @@ export default function CheckoutPage() {
 
   const leadMinutes = useMemo(() => {
     const eta = Number(merchant?.channels?.[draft.channel]?.etaMinutes);
-    return Number.isFinite(eta) && eta > 0 ? Math.max(15, eta) : 30;
+    const minDelay = Number(merchant?.minPreOrderDelayMinutes);
+    const base = Number.isFinite(eta) && eta > 0 ? eta : 30;
+    const delay = Number.isFinite(minDelay) && minDelay > 0 ? minDelay : 0;
+    return Math.max(15, base, delay);
   }, [merchant, draft.channel]);
 
   const shopLocale = locale === 'fr' ? 'fr-CH' : locale === 'de' ? 'de-CH' : 'en-CH';
@@ -910,7 +914,7 @@ export default function CheckoutPage() {
                               on ? 'text-white/70' : 'text-stone-500'
                             }`}
                           >
-                            {meta?.etaMinutes || 30}-{(meta?.etaMinutes || 30) + 10} {t('shopMins')}
+                            {formatShopChannelEta(meta?.etaMinutes || 30, c.id, t('shopMins'))}
                             {meta && !meta.open ? ` · ${t('shopClosed')}` : ''}
                           </span>
                         </button>
@@ -922,8 +926,11 @@ export default function CheckoutPage() {
                 <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
                   <p className="text-sm font-semibold">{channelLabel}</p>
                   <p className="text-[11px] text-stone-500 mt-0.5">
-                    {merchant?.channels?.[draft.channel]?.etaMinutes || 30}-
-                    {(merchant?.channels?.[draft.channel]?.etaMinutes || 30) + 10} {t('shopMins')}
+                    {formatShopChannelEta(
+                      merchant?.channels?.[draft.channel]?.etaMinutes || 30,
+                      draft.channel,
+                      t('shopMins')
+                    )}
                     {merchant?.channels?.[draft.channel] && !merchant.channels[draft.channel].open
                       ? ` · ${t('shopClosed')}`
                       : ''}

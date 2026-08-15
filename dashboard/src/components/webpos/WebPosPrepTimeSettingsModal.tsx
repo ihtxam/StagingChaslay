@@ -4,6 +4,7 @@ import { Clock, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { PREP_TIME_PRESETS } from '@/lib/shop-eta';
 
 type PrepSettings = {
   pickupEtaMinutes: number;
@@ -16,6 +17,61 @@ type Props = {
   onClose: () => void;
   onSaved?: (settings: PrepSettings) => void;
 };
+
+function PrepMinutesField({
+  label,
+  hint,
+  value,
+  onChange,
+  min = 5,
+  max = 240,
+  minutesLabel,
+}: {
+  label: string;
+  hint?: string;
+  value: number;
+  onChange: (next: number) => void;
+  min?: number;
+  max?: number;
+  minutesLabel: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-semibold text-stone-800">{label}</label>
+      <div className="flex flex-wrap gap-2">
+        {PREP_TIME_PRESETS.map((preset) => {
+          const active = value === preset;
+          return (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => onChange(preset)}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold tabular-nums transition ${
+                active
+                  ? 'border-violet-600 bg-violet-600 text-white shadow-sm'
+                  : 'border-stone-200 bg-white text-stone-700 hover:border-violet-300 hover:bg-violet-50'
+              }`}
+            >
+              {preset} {minutesLabel}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          type="number"
+          min={min}
+          max={max}
+          className="input w-24"
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value) || 0)}
+        />
+        <span className="text-sm text-stone-600">{minutesLabel}</span>
+      </div>
+      {hint ? <p className="mt-1 text-xs text-stone-500">{hint}</p> : null}
+    </div>
+  );
+}
 
 export default function WebPosPrepTimeSettingsModal({ open, onClose, onSaved }: Props) {
   const { t } = useI18n();
@@ -90,65 +146,29 @@ export default function WebPosPrepTimeSettingsModal({ open, onClose, onSaved }: 
           <p className="mt-6 text-sm text-stone-500">{t('loading')}</p>
         ) : (
           <div className="mt-5 space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-stone-800">
-                {t('orderCenterPrepTakeaway')}
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={5}
-                  max={240}
-                  className="input w-24"
-                  value={form.pickupEtaMinutes}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, pickupEtaMinutes: Number(e.target.value) || 0 }))
-                  }
-                />
-                <span className="text-sm text-stone-600">{t('minutes')}</span>
-              </div>
-              <p className="mt-1 text-xs text-stone-500">{t('orderCenterPrepTakeawayHint')}</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-stone-800">
-                {t('orderCenterPrepDelivery')}
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={5}
-                  max={240}
-                  className="input w-24"
-                  value={form.deliveryEtaMinutes}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, deliveryEtaMinutes: Number(e.target.value) || 0 }))
-                  }
-                />
-                <span className="text-sm text-stone-600">{t('minutes')}</span>
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-stone-800">
-                {t('orderCenterMinPreOrder')}
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  max={240}
-                  className="input w-24"
-                  value={form.minPreOrderDelayMinutes}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      minPreOrderDelayMinutes: Number(e.target.value) || 0,
-                    }))
-                  }
-                />
-                <span className="text-sm text-stone-600">{t('minutes')}</span>
-              </div>
-              <p className="mt-1 text-xs text-stone-500">{t('orderCenterMinPreOrderHint')}</p>
-            </div>
+            <PrepMinutesField
+              label={t('orderCenterPrepTakeaway')}
+              hint={t('orderCenterPrepTakeawayHint')}
+              value={form.pickupEtaMinutes}
+              onChange={(pickupEtaMinutes) => setForm((f) => ({ ...f, pickupEtaMinutes }))}
+              minutesLabel={t('minutes')}
+            />
+            <PrepMinutesField
+              label={t('orderCenterPrepDelivery')}
+              value={form.deliveryEtaMinutes}
+              onChange={(deliveryEtaMinutes) => setForm((f) => ({ ...f, deliveryEtaMinutes }))}
+              minutesLabel={t('minutes')}
+            />
+            <PrepMinutesField
+              label={t('orderCenterMinPreOrder')}
+              hint={t('orderCenterMinPreOrderHint')}
+              value={form.minPreOrderDelayMinutes}
+              onChange={(minPreOrderDelayMinutes) =>
+                setForm((f) => ({ ...f, minPreOrderDelayMinutes }))
+              }
+              min={0}
+              minutesLabel={t('minutes')}
+            />
           </div>
         )}
 

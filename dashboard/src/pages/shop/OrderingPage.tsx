@@ -20,6 +20,7 @@ import {
   type ShopSelectedExtra,
 } from '@/lib/shop-cart';
 import { roundMoney2, roundTo005, roundingAdjustment } from '@/lib/money';
+import { formatShopChannelEta } from '@/lib/shop-eta';
 import { shopDocumentTitle } from '@/lib/brand';
 import ShopProductModifiersModal, {
   productHasModifiers,
@@ -959,8 +960,8 @@ export default function OrderingPage() {
       <div className="px-5 py-4 border-b border-stone-200">
         <h2 className="text-xl font-bold tracking-tight">{t('shopBasket')}</h2>
         <p className="text-sm text-stone-500 mt-1">
-          {channelButtons.find((c) => c.id === channel)?.label} · {channelMeta?.etaMinutes || 30}-
-          {(channelMeta?.etaMinutes || 30) + 10} min
+          {channelButtons.find((c) => c.id === channel)?.label} ·{' '}
+          {formatShopChannelEta(channelMeta?.etaMinutes || 30, channel, t('shopMins'))}
         </p>
       </div>
 
@@ -1440,7 +1441,7 @@ export default function OrderingPage() {
             <span className="truncate font-medium">{merchant?.name}</span>
             <span className="text-stone-300">|</span>
             <span className="tabular-nums whitespace-nowrap">
-              {etaMin}-{etaMin + 10} {t('shopMins')}
+              {formatShopChannelEta(etaMin, channel, t('shopMins'))}
             </span>
             {channelButtons.length > 1 ? <ChevronDown className="h-3.5 w-3.5 text-stone-400 shrink-0" /> : null}
           </button>
@@ -1462,7 +1463,7 @@ export default function OrderingPage() {
                   >
                     <span className="block text-xs sm:text-sm font-semibold truncate">{c.label}</span>
                     <span className="block text-[10px] sm:text-[11px] font-normal opacity-70 truncate">
-                      {meta.etaMinutes} {t('shopMins')}
+                      {formatShopChannelEta(meta.etaMinutes, c.id, t('shopMins'))}
                     </span>
                   </button>
                 );
@@ -1799,6 +1800,7 @@ export default function OrderingPage() {
         subtotal={cartTotal}
         merchantLat={merchant?.latitude}
         merchantLng={merchant?.longitude}
+        minPreOrderDelayMinutes={Number(merchant?.minPreOrderDelayMinutes) || undefined}
         onSelect={(id) => {
           patch({ channel: id });
           setError(null);

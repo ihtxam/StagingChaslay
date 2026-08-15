@@ -50,6 +50,8 @@ type Props = {
   merchantLng?: number | null;
   /** Address-only mode (checkout) — hides channel toggle & schedule */
   addressOnly?: boolean;
+  /** Earliest schedulable slot offset from merchant settings */
+  minPreOrderDelayMinutes?: number;
 };
 
 function buildFullAddress(street: string, houseNumber: string, floor: string) {
@@ -104,6 +106,7 @@ export default function ShopChannelPrompt({
   merchantLat,
   merchantLng,
   addressOnly = false,
+  minPreOrderDelayMinutes,
 }: Props) {
   const { t, locale } = useI18n();
   const [dayOffset, setDayOffset] = useState(0);
@@ -138,12 +141,12 @@ export default function ShopChannelPrompt({
     return buildScheduleDays({
       storeHours: storeHours || null,
       channel: selected,
-      leadMinutes: Math.max(15, eta),
+      leadMinutes: Math.max(15, eta, minPreOrderDelayMinutes ?? 0),
       intervalMinutes: 15,
       horizonDays: 3,
       locale: shopLocale,
     });
-  }, [withSchedule, addressOnly, storeHours, selected, eta, shopLocale]);
+  }, [withSchedule, addressOnly, storeHours, selected, eta, shopLocale, minPreOrderDelayMinutes]);
 
   useEffect(() => {
     if (!open) return;

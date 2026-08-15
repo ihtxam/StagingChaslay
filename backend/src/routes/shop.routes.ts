@@ -579,6 +579,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
           return v === "sticky_right" ? "sticky_right" : "hidden_slide";
         })(),
         scheduledOrdersEnabled: merchant.scheduledOrdersEnabled !== false,
+        minPreOrderDelayMinutes: merchant.minPreOrderDelayMinutes ?? 30,
         payment: {
           cash: true,
           card: true,
