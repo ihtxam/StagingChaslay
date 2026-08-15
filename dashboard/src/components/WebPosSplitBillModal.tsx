@@ -60,13 +60,15 @@ export default function WebPosSplitBillModal({
   /** For 3+ parts: which secondary ticket (index 1..n-1) is shown in the right column. */
   const [activePartIdx, setActivePartIdx] = useState(1);
 
+  // Reset only when the modal opens — not when `lines` gets a new array reference on parent re-render.
   useEffect(() => {
     if (!open) return;
     setMode('equal');
     setParts(2);
     setQtyMatrix(initQtyMatrix(lines, 2));
     setActivePartIdx(1);
-  }, [open, lines]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lines intentionally read at open time only
+  }, [open]);
 
   useEffect(() => {
     setQtyMatrix((prev) => {
