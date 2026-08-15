@@ -571,6 +571,12 @@ router.get("/:slug", async (req: Request, res: Response) => {
         })(),
         menuShowProductImages: merchant.menuShowProductImages !== false,
         menuShowCategoryBanners: merchant.menuShowCategoryBanners !== false,
+        cartLayout: (() => {
+          const v = String(merchant.cartLayout || "")
+            .trim()
+            .toLowerCase();
+          return v === "sticky_right" ? "sticky_right" : "hidden_slide";
+        })(),
         scheduledOrdersEnabled: merchant.scheduledOrdersEnabled !== false,
         payment: {
           cash: true,

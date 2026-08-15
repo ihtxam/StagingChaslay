@@ -156,6 +156,11 @@ export const merchants = pgTable(
     /** Show category banner images on the public menu */
     menuShowCategoryBanners: boolean("menu_show_category_banners").default(true).notNull(),
     /**
+     * Online shop cart layout:
+     * hidden_slide (default) | sticky_right
+     */
+    cartLayout: varchar("cart_layout", { length: 20 }).default("hidden_slide").notNull(),
+    /**
      * Allow customers to schedule / program orders for later.
      * When false, orders can only be placed during opening hours (ASAP only).
      */

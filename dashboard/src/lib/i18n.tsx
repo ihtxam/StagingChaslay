@@ -1791,6 +1791,11 @@ const en: Dict = {
   panelLanguageHint: 'Language of the merchant dashboard.',
   shopLanguage: 'Shop & homepage language',
   shopLanguageHint: 'Default language visitors see on the online shop and homepage (they can still switch).',
+  shopCartLayout: 'Cart layout',
+  shopCartLayoutHint:
+    'Hidden slide-in cart (Deliverect-style) or always-visible sticky sidebar on desktop.',
+  shopCartLayoutHiddenSlide: 'Hidden — slides in when items are added',
+  shopCartLayoutStickyRight: 'Sticky sidebar (always visible on desktop)',
   languageSaved: 'Language saved',
   acceptingMenuTitle: 'Accepting now',
   acceptingMenuHint: 'Pause online orders or reservations. The website stays open with a “please call us” message.',
@@ -3640,6 +3645,11 @@ const fr: Dict = {
   shopLanguage: 'Langue boutique & page d’accueil',
   shopLanguageHint:
     'Langue par défaut vue par les visiteurs sur la boutique et la page d’accueil (ils peuvent encore changer).',
+  shopCartLayout: 'Disposition du panier',
+  shopCartLayoutHint:
+    'Panier coulissant (style Deliverect) ou barre latérale fixe toujours visible sur ordinateur.',
+  shopCartLayoutHiddenSlide: 'Masqué — s’ouvre à l’ajout d’articles',
+  shopCartLayoutStickyRight: 'Barre latérale fixe (toujours visible sur ordinateur)',
   languageSaved: 'Langue enregistrée',
   acceptingMenuTitle: 'Acceptation en cours',
   acceptingMenuHint:
@@ -5491,6 +5501,11 @@ const de: Dict = {
   shopLanguage: 'Shop- & Startseiten-Sprache',
   shopLanguageHint:
     'Standardsprache für Besucher im Online-Shop und auf der Startseite (Wechsel weiterhin möglich).',
+  shopCartLayout: 'Warenkorb-Layout',
+  shopCartLayoutHint:
+    'Ausblendbarer Slide-in-Warenkorb (Deliverect-Stil) oder dauerhaft sichtbare Seitenleiste am Desktop.',
+  shopCartLayoutHiddenSlide: 'Ausgeblendet — öffnet sich beim Hinzufügen',
+  shopCartLayoutStickyRight: 'Fixe Seitenleiste (am Desktop immer sichtbar)',
   languageSaved: 'Sprache gespeichert',
   acceptingMenuTitle: 'Aktuell geöffnet',
   acceptingMenuHint:

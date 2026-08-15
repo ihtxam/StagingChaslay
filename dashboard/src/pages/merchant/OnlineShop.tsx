@@ -218,6 +218,7 @@ export default function OnlineShop() {
         channelSelectMode: settings.channelSelectMode || 'checkout',
         menuShowProductImages: settings.menuShowProductImages !== false,
         menuShowCategoryBanners: settings.menuShowCategoryBanners !== false,
+        cartLayout: settings.cartLayout || 'hidden_slide',
         scheduledOrdersEnabled: settings.scheduledOrdersEnabled !== false,
         latitude: settings.latitude,
         longitude: settings.longitude,
@@ -529,6 +530,19 @@ export default function OnlineShop() {
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="rounded-lg border border-stone-200 bg-white p-3 space-y-2">
+            <label className="block text-sm font-medium">{t('shopCartLayout')}</label>
+            <p className="text-xs text-stone-500 leading-snug">{t('shopCartLayoutHint')}</p>
+            <select
+              className="input max-w-md"
+              value={settings.cartLayout || 'hidden_slide'}
+              onChange={(e) => setSettings({ ...settings, cartLayout: e.target.value })}
+            >
+              <option value="hidden_slide">{t('shopCartLayoutHiddenSlide')}</option>
+              <option value="sticky_right">{t('shopCartLayoutStickyRight')}</option>
+            </select>
           </div>
 
           <div className="rounded-lg border border-stone-200 bg-white p-3 space-y-2">

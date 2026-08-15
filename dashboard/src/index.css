@@ -583,3 +583,30 @@ button {
     overscroll-behavior-y: auto;
   }
 }
+
+@keyframes shop-cart-bump {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+}
+
+.shop-cart-bump {
+  animation: shop-cart-bump 0.35s ease-out;
+}
+
+@keyframes shop-slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.shop-slide-in-right {
+  animation: shop-slide-in-right 0.28s ease-out;
+}

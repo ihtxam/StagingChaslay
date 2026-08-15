@@ -55,6 +55,7 @@ function slugFromName(name: string): string {
 
 export type FulfillmentChannel = "takeaway" | "dine_in" | "delivery";
 export type ChannelSelectMode = "checkout" | "popup_start" | "menu";
+export type ShopCartLayout = "hidden_slide" | "sticky_right";
 
 function normalizeChannelSelectMode(raw?: string | null): ChannelSelectMode {
   const v = String(raw || "")
@@ -62,6 +63,14 @@ function normalizeChannelSelectMode(raw?: string | null): ChannelSelectMode {
     .toLowerCase();
   if (v === "popup_start" || v === "menu" || v === "checkout") return v;
   return "checkout";
+}
+
+function normalizeCartLayout(raw?: string | null): ShopCartLayout {
+  const v = String(raw || "")
+    .trim()
+    .toLowerCase();
+  if (v === "sticky_right") return "sticky_right";
+  return "hidden_slide";
 }
 
 export class MerchantSettingsService {
@@ -124,6 +133,7 @@ export class MerchantSettingsService {
       channelSelectMode: normalizeChannelSelectMode(merchant.channelSelectMode),
       menuShowProductImages: merchant.menuShowProductImages !== false,
       menuShowCategoryBanners: merchant.menuShowCategoryBanners !== false,
+      cartLayout: normalizeCartLayout(merchant.cartLayout),
       scheduledOrdersEnabled: merchant.scheduledOrdersEnabled !== false,
       floorPlanEnabled: merchant.floorPlanEnabled,
       paxOrderingEnabled: merchant.paxOrderingEnabled,
@@ -209,6 +219,7 @@ export class MerchantSettingsService {
       channelSelectMode?: ChannelSelectMode | string;
       menuShowProductImages?: boolean;
       menuShowCategoryBanners?: boolean;
+      cartLayout?: ShopCartLayout | string;
       scheduledOrdersEnabled?: boolean;
       floorPlanEnabled?: boolean;
       paxOrderingEnabled?: boolean;
@@ -284,6 +295,9 @@ export class MerchantSettingsService {
     }
     if (updates.menuShowCategoryBanners !== undefined) {
       patch.menuShowCategoryBanners = !!updates.menuShowCategoryBanners;
+    }
+    if (updates.cartLayout !== undefined) {
+      patch.cartLayout = normalizeCartLayout(updates.cartLayout);
     }
     if (updates.scheduledOrdersEnabled !== undefined) {
       patch.scheduledOrdersEnabled = !!updates.scheduledOrdersEnabled;

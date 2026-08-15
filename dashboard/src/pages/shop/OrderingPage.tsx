@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -31,7 +31,7 @@ import ShopComboWizard, {
   type ComboSlot,
   type ShopComboProduct,
 } from '@/components/shop/ShopComboWizard';
-import { CalendarDays, ChevronDown, Info, LayoutGrid, Plus, Rows3, ShoppingBag, User } from 'lucide-react';
+import { CalendarDays, ChevronDown, Info, Plus, ShoppingBag, User } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import ZipCityFields from '@/components/shop/ZipCityFields';
@@ -98,7 +98,9 @@ export default function OrderingPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mobileBasket, setMobileBasket] = useState(false);
+  const [cartSlideOpen, setCartSlideOpen] = useState(false);
+  const [cartBump, setCartBump] = useState(false);
+  const prevItemCountRef = useRef(0);
   const [checkingDelivery, setCheckingDelivery] = useState(false);
   const [deliveryInfo, setDeliveryInfo] = useState<any>(null);
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
@@ -131,13 +133,6 @@ export default function OrderingPage() {
   const [loyaltyRewards, setLoyaltyRewards] = useState<LoyaltyReward[]>([]);
   const [loyaltyProgress, setLoyaltyProgress] = useState(0);
   const [nextRewardPts, setNextRewardPts] = useState<number | null>(null);
-  const [gridCols, setGridCols] = useState<1 | 2>(() => {
-    try {
-      return localStorage.getItem('manupos_shop_grid') === '1' ? 1 : 2;
-    } catch {
-      return 2;
-    }
-  });
   const [channelPromptOpen, setChannelPromptOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<any[]>([]);
@@ -367,6 +362,22 @@ export default function OrderingPage() {
   const total = roundTo005(rawTotal);
   const channelMeta = channels[channel];
   const itemCount = cart.reduce((s, i) => s + i.quantity, 0);
+  const cartLayout = merchant?.cartLayout === 'sticky_right' ? 'sticky_right' : 'hidden_slide';
+  const stickyCart = cartLayout === 'sticky_right';
+
+  useEffect(() => {
+    const prev = prevItemCountRef.current;
+    if (itemCount > prev) {
+      setCartBump(true);
+      const timer = window.setTimeout(() => setCartBump(false), 400);
+      if (!stickyCart && itemCount > 0) {
+        setCartSlideOpen(true);
+      }
+      prevItemCountRef.current = itemCount;
+      return () => window.clearTimeout(timer);
+    }
+    prevItemCountRef.current = itemCount;
+  }, [itemCount, stickyCart]);
 
   const directionsUrl =
     merchant?.latitude && merchant?.longitude
@@ -556,7 +567,7 @@ export default function OrderingPage() {
       setOfferConfigMeta(null);
       setPendingCombo(null);
       setPendingProduct(null);
-      setMobileBasket(true);
+      setCartSlideOpen(true);
       return;
     }
     const [next, ...rest] = queue;
@@ -784,15 +795,6 @@ export default function OrderingPage() {
   const channelLabel =
     channelButtons.find((c) => c.id === channel)?.label || t('shopPickup');
   const etaMin = channelMeta?.etaMinutes || 30;
-
-  const setGrid = (cols: 1 | 2) => {
-    setGridCols(cols);
-    try {
-      localStorage.setItem('manupos_shop_grid', String(cols));
-    } catch {
-      /* ignore */
-    }
-  };
 
   const openChannelPrompt = () => {
     if (channelButtons.length <= 1) return;
@@ -1150,14 +1152,20 @@ export default function OrderingPage() {
             </Link>
             <button
               type="button"
-              className="relative inline-flex h-9 w-9 items-center justify-center text-stone-700 hover:bg-stone-100 lg:hidden"
-              onClick={() => setMobileBasket(true)}
+              className={`relative inline-flex h-9 w-9 items-center justify-center text-stone-700 hover:bg-stone-100 rounded-full ${
+                stickyCart ? 'lg:hidden' : ''
+              }`}
+              onClick={() => setCartSlideOpen(true)}
               aria-label={`${t('shopBasketCount')} (${itemCount})`}
               title={`${t('shopBasketCount')} (${itemCount})`}
             >
               <ShoppingBag className="h-5 w-5" strokeWidth={1.75} />
               {itemCount > 0 ? (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center bg-stone-900 px-1 text-[10px] font-bold text-white">
+                <span
+                  className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-stone-900 px-1 text-[10px] font-bold text-white ${
+                    cartBump ? 'shop-cart-bump' : ''
+                  }`}
+                >
                   {itemCount > 99 ? '99+' : itemCount}
                 </span>
               ) : null}
@@ -1278,7 +1286,11 @@ export default function OrderingPage() {
         </div>
       </section>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+      <div
+        className={`max-w-7xl mx-auto px-4 py-6 ${
+          stickyCart ? 'grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start' : ''
+        }`}
+      >
         <div>
           {shopOffers.length > 0 ? (
             <div className="mb-5 space-y-2">
@@ -1371,64 +1383,38 @@ export default function OrderingPage() {
           )}
 
           <div className="sticky top-16 z-20 -mx-4 px-4 py-2.5 bg-[#f6f5f2]/90 backdrop-blur border-b border-stone-200/70 mb-4">
-            <div className="flex items-center gap-2">
-              <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5">
+            <div className="flex min-w-0 gap-1.5 overflow-x-auto pb-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategory('all');
+                  setAllCategoriesOpen(true);
+                }}
+                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
+                  selectedCategory === 'all'
+                    ? 'bg-amber-700 text-white'
+                    : 'bg-white text-stone-700 border border-stone-200'
+                }`}
+              >
+                {t('shopAllCategories')}
+              </button>
+              {menu.map((cat) => (
                 <button
+                  key={cat.id}
                   type="button"
                   onClick={() => {
-                    setSelectedCategory('all');
+                    setSelectedCategory(cat.id);
                     setAllCategoriesOpen(true);
                   }}
                   className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                    selectedCategory === 'all'
+                    selectedCategory === cat.id
                       ? 'bg-amber-700 text-white'
                       : 'bg-white text-stone-700 border border-stone-200'
                   }`}
                 >
-                  {t('shopAllCategories')}
+                  {cat.name}
                 </button>
-                {menu.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedCategory(cat.id);
-                      setAllCategoriesOpen(true);
-                    }}
-                    className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                      selectedCategory === cat.id
-                        ? 'bg-amber-700 text-white'
-                        : 'bg-white text-stone-700 border border-stone-200'
-                    }`}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
-              </div>
-              <div className="flex shrink-0 items-center rounded-full border border-stone-200 bg-white p-0.5">
-                <button
-                  type="button"
-                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${
-                    gridCols === 1 ? 'bg-stone-900 text-white' : 'text-stone-500'
-                  }`}
-                  aria-label={t('shopOneColumn')}
-                  title={t('shopOneColumn')}
-                  onClick={() => setGrid(1)}
-                >
-                  <Rows3 className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${
-                    gridCols === 2 ? 'bg-stone-900 text-white' : 'text-stone-500'
-                  }`}
-                  aria-label={t('shopTwoColumn')}
-                  title={t('shopTwoColumn')}
-                  onClick={() => setGrid(2)}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </button>
-              </div>
+              ))}
             </div>
           </div>
 
@@ -1459,21 +1445,19 @@ export default function OrderingPage() {
                           className="w-full aspect-[21/9] object-cover rounded-md bg-stone-100"
                         />
                       ) : null}
-                      {gridCols === 2 ? (
-                        <div className="grid grid-cols-2 gap-3">
-                          {items.map((product) => {
-                            const catalog = catalogUnitPrice(product.price);
-                            const pctMatch = matchingPercentOffer(
-                              shopOffers,
-                              { id: product.id, categoryId: product.categoryId ?? cat.id },
-                              channel
-                            );
-                            const sale = pctMatch ? applyPercent(catalog, pctMatch.percent) : null;
-                            return (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                        {items.map((product) => {
+                          const catalog = catalogUnitPrice(product.price);
+                          const pctMatch = matchingPercentOffer(
+                            shopOffers,
+                            { id: product.id, categoryId: product.categoryId ?? cat.id },
+                            channel
+                          );
+                          const sale = pctMatch ? applyPercent(catalog, pctMatch.percent) : null;
+                          return (
                             <ProductCard
                               key={product.id}
                               product={product}
-                              layout="grid"
                               showImage={showProductImages}
                               price={catalog}
                               salePrice={sale}
@@ -1499,53 +1483,9 @@ export default function OrderingPage() {
                               onAddFree={() => addConfiguredItem(product, [], 0, [], true)}
                               t={t}
                             />
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-stone-100">
-                          {items.map((product) => {
-                            const catalog = catalogUnitPrice(product.price);
-                            const pctMatch = matchingPercentOffer(
-                              shopOffers,
-                              { id: product.id, categoryId: product.categoryId ?? cat.id },
-                              channel
-                            );
-                            const sale = pctMatch ? applyPercent(catalog, pctMatch.percent) : null;
-                            return (
-                            <ProductCard
-                              key={product.id}
-                              product={product}
-                              layout="list"
-                              showImage={showProductImages}
-                              price={catalog}
-                              salePrice={sale}
-                              offerBadge={
-                                pctMatch
-                                  ? pctMatch.offer.badgeLabel || `${pctMatch.percent}% off`
-                                  : null
-                              }
-                              onAdd={() => handleProductClick(product)}
-                              rewardPts={
-                                product.loyaltyRewardPoints != null &&
-                                Number(product.loyaltyRewardPoints) >= 1
-                                  ? Number(product.loyaltyRewardPoints)
-                                  : null
-                              }
-                              unlocked={
-                                !!(
-                                  product.loyaltyRewardPoints != null &&
-                                  customer &&
-                                  loyaltyBalance >= Number(product.loyaltyRewardPoints)
-                                )
-                              }
-                              onAddFree={() => addConfiguredItem(product, [], 0, [], true)}
-                              t={t}
-                            />
-                            );
-                          })}
-                        </div>
-                      )}
+                          );
+                        })}
+                      </div>
                       {items.length === 0 ? (
                         <p className="text-sm text-stone-500 py-6 text-center">{t('shopNoProducts')}</p>
                       ) : null}
@@ -1560,20 +1500,29 @@ export default function OrderingPage() {
           </div>
         </div>
 
-        <div className="hidden lg:block sticky top-20 self-start max-h-[calc(100dvh-6rem)]">
-          <div className="max-h-[calc(100dvh-6rem)] overflow-y-auto overscroll-y-contain">{Basket}</div>
-        </div>
+        {stickyCart ? (
+          <div className="hidden lg:block sticky top-20 self-start max-h-[calc(100dvh-6rem)]">
+            <div className="max-h-[calc(100dvh-6rem)] overflow-y-auto overscroll-y-contain">{Basket}</div>
+          </div>
+        ) : null}
       </div>
 
-      {mobileBasket && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-black/40" onClick={() => setMobileBasket(false)}>
+      {cartSlideOpen && (
+        <div
+          className={`fixed inset-0 z-50 bg-black/40 ${stickyCart ? 'lg:hidden' : ''}`}
+          onClick={() => setCartSlideOpen(false)}
+        >
           <div
-            className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-white"
+            className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-white shop-slide-in-right shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="h-full flex flex-col">
-              <div className="flex justify-end p-3">
-                <button type="button" className="text-sm font-semibold" onClick={() => setMobileBasket(false)}>
+              <div className="flex justify-end p-3 border-b border-stone-100">
+                <button
+                  type="button"
+                  className="text-sm font-semibold"
+                  onClick={() => setCartSlideOpen(false)}
+                >
                   {t('shopClose')}
                 </button>
               </div>
@@ -1710,7 +1659,6 @@ export default function OrderingPage() {
 
 function ProductCard({
   product,
-  layout,
   showImage,
   price,
   salePrice,
@@ -1722,7 +1670,6 @@ function ProductCard({
   t,
 }: {
   product: Product;
-  layout: 'grid' | 'list';
   showImage: boolean;
   price: number;
   salePrice?: number | null;
@@ -1736,109 +1683,58 @@ function ProductCard({
   const priceNode =
     salePrice != null && salePrice < price ? (
       <span className="tabular-nums">
-        <span className="line-through text-stone-400 mr-1.5">CHF {price.toFixed(2)}</span>
+        <span className="line-through text-stone-400 mr-1">CHF {price.toFixed(2)}</span>
         <span className="text-amber-800 font-semibold">CHF {salePrice.toFixed(2)}</span>
-        {offerBadge ? (
-          <span className="ml-1.5 text-[10px] font-bold uppercase text-amber-700">
-            {offerBadge.toLowerCase() === 'free' ? t('shopFree') : offerBadge}
-          </span>
-        ) : null}
       </span>
     ) : (
       <span className="tabular-nums">CHF {price.toFixed(2)}</span>
     );
 
-  if (layout === 'list') {
-    return (
-      <div className="relative flex gap-3 py-3 px-1">
-        {showImage ? (
-          <button type="button" onClick={onAdd} className="shrink-0">
-            {product.image ? (
-              <img
-                src={product.image}
-                alt=""
-                className="h-20 w-20 rounded-lg object-cover bg-stone-100"
-              />
-            ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-stone-100 text-xl text-stone-300">
-                {(product.name || '?').slice(0, 1).toUpperCase()}
-              </div>
-            )}
-          </button>
-        ) : null}
-        <button type="button" onClick={onAdd} className="min-w-0 flex-1 text-left pr-10">
-          <p className="font-semibold text-stone-900 text-sm leading-snug">{product.name}</p>
-          {product.description ? (
-            <p className="mt-0.5 text-xs text-stone-500 line-clamp-2">{product.description}</p>
-          ) : null}
-          <p className="mt-1 text-sm font-medium">{priceNode}</p>
-          {rewardPts != null ? (
-            <p className="text-[11px] text-amber-800">{t('shopPtsBadge').replace('{n}', String(rewardPts))}</p>
-          ) : null}
-        </button>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="absolute bottom-3 right-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm"
-          aria-label={`${t('shopAdd')} ${product.name}`}
-        >
-          <Plus className="h-5 w-5" strokeWidth={2.5} />
-        </button>
-        {unlocked ? (
-          <button
-            type="button"
-            onClick={onAddFree}
-            className="absolute top-2 right-1 rounded-full bg-teal-800 px-2 py-0.5 text-[10px] font-bold text-white"
-          >
-            {t('shopFree')}
-          </button>
-        ) : null}
-      </div>
-    );
-  }
-
   return (
-    <article className="group flex flex-col">
-      <div className="relative aspect-square overflow-hidden bg-stone-100 rounded-md">
+    <article className="group flex flex-col rounded-md border border-stone-100 bg-white p-1.5 hover:border-stone-200">
+      <div className="relative mb-1.5 aspect-[4/3] overflow-hidden rounded bg-stone-100">
         {showImage && product.image ? (
           <img
             src={product.image}
             alt=""
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-stone-300 text-3xl font-light">
+          <div className="flex h-full w-full items-center justify-center text-lg font-light text-stone-300">
             {(product.name || '?').slice(0, 1).toUpperCase()}
           </div>
         )}
         {offerBadge ? (
-          <span className="absolute left-2 top-2 rounded-full bg-amber-700 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+          <span className="absolute left-1 top-1 rounded-full bg-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
             {offerBadge.toLowerCase() === 'free' ? t('shopFree') : offerBadge}
           </span>
         ) : null}
         <button
           type="button"
           onClick={onAdd}
-          className="absolute bottom-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white shadow-md active:scale-95"
+          className="absolute bottom-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm active:scale-95"
           aria-label={`${t('shopAdd')} ${product.name}`}
         >
-          <Plus className="h-5 w-5" strokeWidth={2.5} />
+          <Plus className="h-4 w-4" strokeWidth={2.5} />
         </button>
         {unlocked ? (
           <button
             type="button"
             onClick={onAddFree}
-            className="absolute left-2 top-2 rounded-full bg-teal-800 px-2 py-1 text-[10px] font-bold uppercase text-white"
+            className="absolute left-1 bottom-1 rounded-full bg-teal-800 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white"
           >
             {t('shopFree')}
           </button>
         ) : null}
       </div>
-      <button type="button" onClick={onAdd} className="mt-2 text-left">
-        <p className="font-semibold text-stone-900 text-sm leading-snug line-clamp-2 uppercase tracking-wide">
+      <button type="button" onClick={onAdd} className="min-w-0 flex-1 px-0.5 text-left">
+        <p className="text-[11px] font-semibold leading-tight text-stone-900 line-clamp-2">
           {product.name}
         </p>
-        <p className="mt-0.5 text-sm text-stone-700">{priceNode}</p>
+        <p className="mt-0.5 text-[11px] font-medium text-stone-700">{priceNode}</p>
+        {rewardPts != null ? (
+          <p className="text-[10px] text-amber-800">{t('shopPtsBadge').replace('{n}', String(rewardPts))}</p>
+        ) : null}
       </button>
     </article>
   );

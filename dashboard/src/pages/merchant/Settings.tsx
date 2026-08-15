@@ -85,6 +85,7 @@ interface SettingsData {
   shopSubdomainUrl?: string | null;
   panelLanguage?: string | null;
   shopLanguage?: string | null;
+  cartLayout?: 'hidden_slide' | 'sticky_right' | string | null;
   subscriptionPlan?: string | null;
   status?: string | null;
   onlineCardFeeFixed?: string | null;
@@ -763,6 +764,7 @@ export default function Settings() {
         shopEnabled: !!settings.shopEnabled,
         acceptingOrders: settings.acceptingOrders !== false,
         acceptingReservations: settings.acceptingReservations !== false,
+        cartLayout: settings.cartLayout || 'hidden_slide',
         floorPlanEnabled: !!settings.floorPlanEnabled,
         paxOrderingEnabled: !!settings.paxOrderingEnabled,
         coursesEnabled: !!settings.coursesEnabled,
@@ -1350,6 +1352,22 @@ export default function Settings() {
                   </div>
                   <p className="text-xs muted">{t('shopHoursNavPos')}</p>
                 </div>
+
+                <Field label={t('shopCartLayout')} hint={t('shopCartLayoutHint')}>
+                  <select
+                    className="input max-w-md"
+                    value={settings.cartLayout || 'hidden_slide'}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        cartLayout: e.target.value as 'hidden_slide' | 'sticky_right',
+                      })
+                    }
+                  >
+                    <option value="hidden_slide">{t('shopCartLayoutHiddenSlide')}</option>
+                    <option value="sticky_right">{t('shopCartLayoutStickyRight')}</option>
+                  </select>
+                </Field>
               </Section>
               <SettingsSaveBar saving={saving} />
             </form>
