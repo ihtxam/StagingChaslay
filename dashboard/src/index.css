@@ -610,3 +610,27 @@ button {
 .shop-slide-in-right {
   animation: shop-slide-in-right 0.28s ease-out;
 }
+
+/* Shop menu: category pills + cart — one bar pinned below the site header */
+.shop-sticky-category-bar {
+  --shop-category-bar-height: 3rem;
+  position: sticky;
+  top: 3.5rem; /* header h-14 */
+  z-index: 25;
+  background-color: #f6f5f2;
+  border-bottom: 1px solid rgb(231 229 228 / 0.95);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+
+.shop-sticky-category-bar .shop-category-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.shop-sticky-category-bar .shop-category-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.shop-sticky-cart-panel {
+  top: calc(3.5rem + var(--shop-category-bar-height, 3rem));
+}

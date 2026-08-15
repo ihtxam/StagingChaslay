@@ -1322,7 +1322,6 @@ export default function OrderingPage() {
             >
               <User className="h-5 w-5" strokeWidth={1.75} />
             </Link>
-            <CartIconButton className={stickyCart ? 'lg:hidden' : 'hidden'} />
           </div>
         </div>
       </header>
@@ -1435,6 +1434,47 @@ export default function OrderingPage() {
         </div>
       </section>
 
+      <div className="shop-sticky-category-bar">
+        <div className="max-w-7xl mx-auto px-4 py-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="shop-category-scroll flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategory('all');
+                  setAllCategoriesOpen(true);
+                }}
+                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
+                  selectedCategory === 'all'
+                    ? 'bg-amber-700 text-white'
+                    : 'bg-white text-stone-700 border border-stone-200'
+                }`}
+              >
+                {t('shopAllCategories')}
+              </button>
+              {menu.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(cat.id);
+                    setAllCategoriesOpen(true);
+                  }}
+                  className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
+                    selectedCategory === cat.id
+                      ? 'bg-amber-700 text-white'
+                      : 'bg-white text-stone-700 border border-stone-200'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+            <CartIconButton className={stickyCart ? 'lg:hidden' : ''} />
+          </div>
+        </div>
+      </div>
+
       <div
         className={`max-w-7xl mx-auto px-4 py-6 ${
           stickyCart ? 'grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start' : ''
@@ -1531,45 +1571,6 @@ export default function OrderingPage() {
             </div>
           )}
 
-          <div className="sticky top-14 z-20 -mx-4 px-4 py-2 bg-[#f6f5f2]/95 backdrop-blur border-b border-stone-200/80 mb-4">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedCategory('all');
-                    setAllCategoriesOpen(true);
-                  }}
-                  className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                    selectedCategory === 'all'
-                      ? 'bg-amber-700 text-white'
-                      : 'bg-white text-stone-700 border border-stone-200'
-                  }`}
-                >
-                  {t('shopAllCategories')}
-                </button>
-                {menu.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedCategory(cat.id);
-                      setAllCategoriesOpen(true);
-                    }}
-                    className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                      selectedCategory === cat.id
-                        ? 'bg-amber-700 text-white'
-                        : 'bg-white text-stone-700 border border-stone-200'
-                    }`}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
-              </div>
-              <CartIconButton className={stickyCart ? 'lg:hidden' : ''} />
-            </div>
-          </div>
-
           <div className="space-y-2">
             {categoriesToRender.map((cat) => {
               const open = allCategoriesOpen;
@@ -1653,8 +1654,8 @@ export default function OrderingPage() {
         </div>
 
         {stickyCart ? (
-          <div className="hidden lg:block sticky top-20 self-start max-h-[calc(100dvh-6rem)]">
-            <div className="max-h-[calc(100dvh-6rem)] overflow-y-auto overscroll-y-contain">{Basket}</div>
+          <div className="shop-sticky-cart-panel hidden lg:block sticky self-start max-h-[calc(100dvh-6.5rem)]">
+            <div className="max-h-[calc(100dvh-6.5rem)] overflow-y-auto overscroll-y-contain">{Basket}</div>
           </div>
         ) : null}
       </div>
