@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import {
-  Clock,
-  Minus,
-  Plus,
-  Printer,
-  Settings2,
-} from 'lucide-react';
+import { Clock, Minus, Plus, Printer, Settings2 } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
@@ -23,12 +17,12 @@ import {
   orderStatusLabel,
   type MerchantOrder,
 } from '@/lib/order-management';
+import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import WebPosRejectOrderModal from '@/components/webpos/WebPosRejectOrderModal';
 import WebPosPrepTimeSettingsModal from '@/components/webpos/WebPosPrepTimeSettingsModal';
-import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 
-type CenterTab = 'active' | 'completed' | 'archives';
-type OriginFilter = 'all' | 'shop' | 'justeat' | 'ubereats';
+type OnlineStatusTab = 'active' | 'completed' | 'archives';
+type PlatformFilter = 'all' | 'shop' | 'justeat' | 'ubereats';
 
 type CenterOrder = OnlineOrder & {
   orderSource?: string | null;
@@ -51,6 +45,7 @@ type Props = {
   onOrderActioned?: (orderId: string) => void;
   onCollectPayment?: (order: CenterOrder) => void;
   highlightOrderId?: string | null;
+  search?: string;
 };
 
 function isActiveStatus(status: string) {
@@ -71,25 +66,21 @@ function categoryTags(order: CenterOrder): string[] {
   return [...tags].slice(0, 4);
 }
 
-export default function WebPosOrderCenterTab({
+export default function WebPosOnlineOrdersView({
   orders,
   onRefresh,
   onOrderActioned,
   onCollectPayment,
   highlightOrderId,
+  search = '',
 }: Props) {
   const { t, formatDateTime, formatTime } = useI18n();
-  const [tab, setTab] = useState<CenterTab>('active');
-  const [origin, setOrigin] = useState<OriginFilter>('all');
+  const [tab, setTab] = useState<OnlineStatusTab>('active');
+  const [platform, setPlatform] = useState<PlatformFilter>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectOrder, setRejectOrder] = useState<CenterOrder | null>(null);
   const [prepOpen, setPrepOpen] = useState(false);
   const [printedToast, setPrintedToast] = useState<string | null>(null);
-
-  const onlineOrders = useMemo(
-    () => orders.filter((o) => o.orderType === 'web_shop'),
-    [orders]
-  );
 
   useEffect(() => {
     if (highlightOrderId) {
@@ -148,7 +139,23 @@ export default function WebPosOrderCenterTab({
   );
 
   const filtered = useMemo(() => {
-    let list = onlineOrders;
+    let list = orders;
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter((o) => {
+        const hay = [
+          formatOrderNumberDisplay(o.orderNumber),
+          o.orderNumber,
+          o.customerName,
+          o.customerPhone,
+          o.shippingAddress,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return hay.includes(q);
+      });
+    }
     if (tab === 'active') {
       list = list.filter((o) => isActiveStatus(o.status));
     } else if (tab === 'completed') {
@@ -156,13 +163,13 @@ export default function WebPosOrderCenterTab({
     } else {
       list = list.filter((o) => isArchiveStatus(o.status));
     }
-    if (origin !== 'all') {
-      list = list.filter((o) => orderPlatformKey(o as MerchantOrder) === origin);
+    if (platform !== 'all') {
+      list = list.filter((o) => orderPlatformKey(o as MerchantOrder) === platform);
     }
     return [...list].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [onlineOrders, tab, origin]);
+  }, [orders, tab, platform, search]);
 
   const money = (n: string | number) => `CHF ${Number(n || 0).toFixed(2)}`;
 
@@ -243,16 +250,13 @@ export default function WebPosOrderCenterTab({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-stone-100">
-      <div className="shrink-0 border-b border-stone-200 bg-white px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-bold text-stone-900">{t('webPosTabOrderCenter')}</h1>
-            <p className="text-xs text-stone-500">{t('orderCenterSubtitle')}</p>
-          </div>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 border-b border-stone-100 bg-stone-50 px-2 py-2 sm:px-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-stone-500">{t('orderCenterSubtitle')}</p>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
             onClick={() => setPrepOpen(true)}
           >
             <Settings2 size={14} />
@@ -260,7 +264,7 @@ export default function WebPosOrderCenterTab({
           </button>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           {(
             [
               ['active', t('orderCenterTabActive')],
@@ -275,7 +279,7 @@ export default function WebPosOrderCenterTab({
               className={`rounded-full px-4 py-1.5 text-sm font-semibold ${
                 tab === id
                   ? 'bg-stone-900 text-white'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  : 'bg-white text-stone-600 ring-1 ring-stone-200 hover:bg-stone-100'
               }`}
             >
               {label}
@@ -295,9 +299,11 @@ export default function WebPosOrderCenterTab({
             <button
               key={id}
               type="button"
-              onClick={() => setOrigin(id)}
+              onClick={() => setPlatform(id)}
               className={`rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${
-                origin === id ? 'bg-violet-100 text-violet-900' : 'text-stone-500 hover:bg-stone-50'
+                platform === id
+                  ? 'bg-violet-100 text-violet-900'
+                  : 'bg-white text-stone-500 ring-1 ring-stone-200 hover:bg-stone-50'
               }`}
             >
               {label}

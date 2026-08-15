@@ -44,6 +44,8 @@ import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
   type RefundReasonOption,
 } from '@/components/webpos/WebPosRefundModal';
+import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
+import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 
 function toMs(raw: string | number | Date | null | undefined): number {
   if (raw == null || raw === '') return 0;
@@ -180,6 +182,11 @@ type Props = {
   onCollectPaymentCheckout?: (order: PosOrder) => void;
   /** Order handled (accept/reject/complete) — clear bell badge for this ticket */
   onOrderActioned?: (orderId: string) => void;
+  /** Rich online order rows from /merchant/orders poll (Order Center view) */
+  onlineOrders?: OnlineOrder[];
+  onRefreshOnline?: () => void;
+  /** Notify parent when channel filter changes (e.g. stop bell loop on online view) */
+  onChannelFilterChange?: (filter: ChannelFilter) => void;
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal'] as const;
@@ -346,6 +353,9 @@ export default function WebPosOrdersPanel({
   initialChannelFilter = null,
   onCollectPaymentCheckout,
   onOrderActioned,
+  onlineOrders = [],
+  onRefreshOnline,
+  onChannelFilterChange,
 }: Props) {
   const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -445,6 +455,10 @@ export default function WebPosOrdersPanel({
     setStatusFilter('active');
     setPage(0);
   }, [open, initialChannelFilter, refreshToken]);
+
+  useEffect(() => {
+    onChannelFilterChange?.(channelFilter);
+  }, [channelFilter, onChannelFilterChange]);
 
   useEffect(() => {
     if (!open || !highlightOrderId || orders.length === 0) return;
@@ -896,6 +910,8 @@ export default function WebPosOrdersPanel({
 
   if (!open) return null;
 
+  const isOnlineMode = channelFilter === 'online';
+
   const channelFilters: Array<{ id: ChannelFilter; label: string }> = [
     { id: 'all', label: t('webPosAllOrders') },
     { id: 'dine_in', label: t('dineIn') },
@@ -932,16 +948,18 @@ export default function WebPosOrdersPanel({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <select
-            className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          >
-            <option value="active">{t('webPosActive')}</option>
-            <option value="held">{t('webPosOnHold')}</option>
-            <option value="completed">{t('webPosCompletedOrders')}</option>
-            <option value="all">{t('webPosAllOrders')}</option>
-          </select>
+          {!isOnlineMode ? (
+            <select
+              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            >
+              <option value="active">{t('webPosActive')}</option>
+              <option value="held">{t('webPosOnHold')}</option>
+              <option value="completed">{t('webPosCompletedOrders')}</option>
+              <option value="all">{t('webPosAllOrders')}</option>
+            </select>
+          ) : null}
           <div className="flex flex-wrap gap-1">
             {channelFilters.map((f) => (
               <button
@@ -961,42 +979,46 @@ export default function WebPosOrdersPanel({
               </button>
             ))}
           </div>
-          <div className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
-            <button
-              type="button"
-              title={t('webPosOrdersViewList')}
-              aria-label={t('webPosOrdersViewList')}
-              aria-pressed={ordersView === 'list'}
-              onClick={() => {
-                setOrdersView('list');
-                setPage(0);
-              }}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
-                ordersView === 'list' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'
-              }`}
-            >
-              <List size={16} />
-            </button>
-            <button
-              type="button"
-              title={t('webPosOrdersViewGrid')}
-              aria-label={t('webPosOrdersViewGrid')}
-              aria-pressed={ordersView === 'grid'}
-              onClick={() => {
-                setOrdersView('grid');
-                setPage(0);
-                setSelectedHeld(null);
-                setSelectedOrder(null);
-                closeMenus();
-              }}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
-                ordersView === 'grid' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'
-              }`}
-            >
-              <LayoutGrid size={16} />
-            </button>
-          </div>
+          {!isOnlineMode ? (
+            <div className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+              <button
+                type="button"
+                title={t('webPosOrdersViewList')}
+                aria-label={t('webPosOrdersViewList')}
+                aria-pressed={ordersView === 'list'}
+                onClick={() => {
+                  setOrdersView('list');
+                  setPage(0);
+                }}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+                  ordersView === 'list' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                <List size={16} />
+              </button>
+              <button
+                type="button"
+                title={t('webPosOrdersViewGrid')}
+                aria-label={t('webPosOrdersViewGrid')}
+                aria-pressed={ordersView === 'grid'}
+                onClick={() => {
+                  setOrdersView('grid');
+                  setPage(0);
+                  setSelectedHeld(null);
+                  setSelectedOrder(null);
+                  closeMenus();
+                }}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+                  ordersView === 'grid' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                <LayoutGrid size={16} />
+              </button>
+            </div>
+          ) : null}
           <div className="ml-auto flex items-center gap-1 text-xs text-stone-500">
+            {!isOnlineMode ? (
+              <>
             <span className="tabular-nums">
               {rangeStart}-{rangeEnd} / {listItems.length}
             </span>
@@ -1016,10 +1038,15 @@ export default function WebPosOrdersPanel({
             >
               <ChevronRight size={16} />
             </button>
+              </>
+            ) : null}
             <button
               type="button"
               className="rounded p-1.5 hover:bg-stone-100"
-              onClick={() => void load()}
+              onClick={() => {
+                void load();
+                if (isOnlineMode && onRefreshOnline) void onRefreshOnline();
+              }}
               disabled={loading}
               aria-label={t('webPosRefreshOrders')}
             >
@@ -1033,6 +1060,26 @@ export default function WebPosOrdersPanel({
           </div>
         </div>
         <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+          {isOnlineMode ? (
+            <WebPosOnlineOrdersView
+              orders={onlineOrders}
+              search={search}
+              highlightOrderId={highlightOrderId}
+              onRefresh={() => {
+                void load();
+                onRefreshOnline?.();
+              }}
+              onOrderActioned={onOrderActioned}
+              onCollectPayment={(order) => {
+                onOrderActioned?.(order.id);
+                if (onCollectPaymentCheckout) {
+                  onCollectPaymentCheckout(order as PosOrder);
+                  return;
+                }
+                startCollectPayment(order as PosOrder);
+              }}
+            />
+          ) : (
           <div
             className={
               ordersView === 'grid'
@@ -1397,7 +1444,9 @@ export default function WebPosOrdersPanel({
               </ul>
             )}
           </div>
+          )}
           {/* Detail panel — full-screen overlay on phone; side column from lg up */}
+          {!isOnlineMode ? (
           <aside
             className={
               selectedHeld || selectedOrder
@@ -1680,8 +1729,9 @@ export default function WebPosOrdersPanel({
               </div>
             )}
           </aside>
+          ) : null}
         </div>
-        {collectFor ? (
+        {!isOnlineMode && collectFor ? (
           <div className="border-t border-stone-200 bg-white p-4 space-y-3">
             <p className="text-sm font-medium">
               {t('webPosTakePayment')} · {money(collectFor.total)}
@@ -1722,7 +1772,7 @@ export default function WebPosOrdersPanel({
               </button>
             </div>
           </div>
-        ) : paymentEditFor ? (
+        ) : !isOnlineMode && paymentEditFor ? (
           <div className="border-t border-stone-200 bg-white p-4 space-y-3">
             <p className="text-sm font-medium">
               {t('webPosEditPayment')} · {paymentEditFor.orderNumber}

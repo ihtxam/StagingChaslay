@@ -2,7 +2,6 @@ import {
   Bell,
   BookOpen,
   ClipboardList,
-  Globe,
   LayoutGrid,
   Maximize2,
   Menu,
@@ -181,7 +180,6 @@ export default function WebPosTopBar({
       ? [{ id: 'tables' as const, label: t('webPosTabTables'), Icon: LayoutGrid }]
       : []),
     { id: 'register', label: t('webPosTabRegister'), Icon: Pencil },
-    { id: 'order_center', label: t('webPosTabOrderCenter'), Icon: Globe },
     { id: 'orders', label: t('webPosTabOrders'), Icon: ClipboardList },
     ...(!hideBookingsTab
       ? [{ id: 'bookings' as const, label: t('webPosTabBookings'), Icon: BookOpen }]
@@ -202,7 +200,7 @@ export default function WebPosTopBar({
             const tabBadge =
               tab.id === 'bookings'
                 ? reservationPendingCount
-                : tab.id === 'order_center'
+                : tab.id === 'orders'
                   ? onlinePendingCount
                   : 0;
             return (

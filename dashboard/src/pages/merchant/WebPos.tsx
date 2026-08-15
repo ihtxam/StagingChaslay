@@ -94,7 +94,6 @@ import WebPosOnlineOrdersPanel, {
   type OnlineOrder,
 } from '@/components/WebPosOnlineOrdersPanel';
 import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
-import WebPosOrderCenterTab from '@/components/webpos/WebPosOrderCenterTab';
 import WebPosRejectOrderModal from '@/components/webpos/WebPosRejectOrderModal';
 import WebPosTopBar, {
   WebPosSettingsDropdown,
@@ -571,7 +570,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
   const [ordersChannelPref, setOrdersChannelPref] = useState<'online' | null>(null);
   const [collectOrderRef, setCollectOrderRef] = useState<CollectOrderRef | null>(null);
-  const [onlineOrdersOpen, setOnlineOrdersOpen] = useState(false);
   const [onlineOrders, setOnlineOrders] = useState<OnlineOrder[]>([]);
   const knownOnlineIdsRef = useRef<Set<string> | null>(null);
   const unactionedOrderIdsRef = useRef<Set<string>>(new Set());
@@ -1570,6 +1568,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setNewOrderAlertQueue((prev) => prev.filter((o) => o.id !== orderId));
   }, []);
 
+  const openOnlineOrdersInTab = useCallback((orderId?: string | null) => {
+    setOrdersChannelPref('online');
+    setHighlightOrderId(orderId ?? null);
+    setPosTab('orders');
+    setPosView('orders');
+    stopOrderAlertLoop();
+  }, []);
+
   const acceptFromNewOrderAlert = useCallback(
     async (order: OnlineOrder) => {
       setAlertActionBusy(true);
@@ -1579,9 +1585,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         dismissNewOrderAlert(order.id);
         toast.success(t('updated'));
         void pollOnlineOrders();
-        setPosTab('order_center');
-        setPosView('order_center');
-        setHighlightOrderId(order.id);
+        openOnlineOrdersInTab(order.id);
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('actionFailed'));
         if (unactionedOrderIdsRef.current.size > 0) startOrderAlertLoop(5000);
@@ -1589,7 +1593,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setAlertActionBusy(false);
       }
     },
-    [dismissNewOrderAlert, markOnlineOrderActioned, pollOnlineOrders, t]
+    [dismissNewOrderAlert, markOnlineOrderActioned, openOnlineOrdersInTab, pollOnlineOrders, t]
   );
 
   const rejectFromNewOrderAlert = useCallback((order: OnlineOrder) => {
@@ -1662,9 +1666,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [reservationAlertUntil]);
 
   useEffect(() => {
-    onlinePanelOpenRef.current = onlineOrdersOpen;
-    if (onlineOrdersOpen) stopOrderAlertLoop();
-  }, [onlineOrdersOpen]);
+    const viewing = posView === 'orders' && ordersChannelPref === 'online';
+    onlinePanelOpenRef.current = viewing;
+    if (viewing) stopOrderAlertLoop();
+  }, [posView, ordersChannelPref]);
 
   useEffect(() => {
     void pollOnlineOrders();
@@ -3480,7 +3485,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         courseNumber,
       },
     ]);
-    setSelectedLineId(lineId);
+    setSelectedLineId(null);
+    setKeypadBuffer('');
     setPosTab('register');
     setPosView('register');
   };
@@ -5649,7 +5655,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       : null;
 
   const onPosTabChange = (tab: PosTab) => {
-    if (tab === 'tables' || tab === 'orders' || tab === 'order_center' || tab === 'bookings') {
+    if (tab === 'tables' || tab === 'orders' || tab === 'bookings') {
       saveOpenCartDraft();
     }
     setMobileCartOpen(false);
@@ -5701,10 +5707,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onToggleSettings={() => setSettingsOpen((v) => !v)}
         onCloseSettings={() => setSettingsOpen(false)}
         settingsRef={settingsRef}
-        onOnlineOrders={() => {
-          setOnlineOrdersOpen(true);
-          stopOrderAlertLoop();
-        }}
+        onOnlineOrders={() => openOnlineOrdersInTab()}
         onSwitchUser={openSwitchUserPin}
         onOpenDrawer={() => void openCashDrawer()}
         onShowPanel={showPanelMenus}
@@ -5778,8 +5781,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             reservationPendingCount={reservationPendingCount}
             onOnlineOrders={() => {
               setSettingsOpen(false);
-              setOnlineOrdersOpen(true);
-              stopOrderAlertLoop();
+              openOnlineOrdersInTab();
             }}
             onSwitchUser={() => {
               setSettingsOpen(false);
@@ -5996,17 +5998,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           />
         ) : posView === 'bookings' ? (
           <WebPosBookingsView />
-        ) : posView === 'order_center' ? (
-          <WebPosOrderCenterTab
-            orders={onlineOrders}
-            highlightOrderId={highlightOrderId}
-            onRefresh={() => void pollOnlineOrders()}
-            onOrderActioned={markOnlineOrderActioned}
-            onCollectPayment={(order) => {
-              markOnlineOrderActioned(order.id);
-              openOrderCollectCheckout(order as MerchantOrder, 'register');
-            }}
-          />
         ) : posView === 'orders' ? (
           <WebPosOrdersPanel
             embedded
@@ -6098,6 +6089,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }}
             onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
             onOrderActioned={markOnlineOrderActioned}
+            onlineOrders={onlineOrders}
+            onRefreshOnline={() => void pollOnlineOrders()}
+            onChannelFilterChange={(filter) => {
+              if (filter === 'online') {
+                setOrdersChannelPref('online');
+              } else if (ordersChannelPref === 'online') {
+                setOrdersChannelPref(null);
+              }
+            }}
           />
         ) : (
           <div
@@ -6712,20 +6712,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         busy={alertActionBusy}
         onClose={() => setAlertRejectOrder(null)}
         onConfirm={confirmRejectFromAlert}
-      />
-
-      <WebPosOnlineOrdersPanel
-        open={onlineOrdersOpen}
-        onClose={() => setOnlineOrdersOpen(false)}
-        orders={onlineOrders}
-        onRefresh={() => void pollOnlineOrders()}
-        onOrderActioned={markOnlineOrderActioned}
-        onCollectPayment={(order) => {
-          setOnlineOrdersOpen(false);
-          stopOrderAlertLoop();
-          markOnlineOrderActioned(order.id);
-          openOrderCollectCheckout(order as MerchantOrder, 'register');
-        }}
       />
 
       {(channel === 'takeaway' || channel === 'delivery') && (

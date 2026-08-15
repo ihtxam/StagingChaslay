@@ -1221,7 +1221,7 @@ const en: Dict = {
   ordersActionDeliveredCollect: 'Delivered + collect',
   ordersActionCompleteHandover: 'Complete handover',
   ordersManageHint:
-    'Order history (read-only). Manage live web orders in WebPOS → Online orders.',
+    'Order history (read-only). Manage live web orders in WebPOS → Orders → Online orders.',
   ordersHistoryHint: 'Read-only archive — accept and prepare orders in WebPOS.',
   ordersFilterTitle: 'Filters',
   ordersFilterHint: 'Date range, status, channel, payment method, staff, or search.',
@@ -3150,7 +3150,7 @@ const fr: Dict = {
   ordersActionDeliveredCollect: 'Livrée + encaisser',
   ordersActionCompleteHandover: 'Remise terminée',
   ordersManageHint:
-    'Historique des commandes (lecture seule). Gérez les commandes web en direct dans WebPOS → Commandes en ligne.',
+    'Historique des commandes (lecture seule). Gérez les commandes web en direct dans WebPOS → Commandes → Commandes en ligne.',
   ordersHistoryHint: 'Archive en lecture seule — validez et préparez les commandes dans WebPOS.',
   ordersFilterTitle: 'Filtres',
   ordersFilterHint: 'Période, statut, canal, paiement, personnel ou recherche.',
@@ -5083,7 +5083,7 @@ const de: Dict = {
   ordersActionDeliveredCollect: 'Geliefert + kassieren',
   ordersActionCompleteHandover: 'Übergabe abschliessen',
   ordersManageHint:
-    'Bestellhistorie (nur Lesen). Live-Web-Bestellungen in WebPOS → Online-Bestellungen verwalten.',
+    'Bestellhistorie (nur Lesen). Live-Web-Bestellungen in WebPOS → Bestellungen → Online-Bestellungen verwalten.',
   ordersHistoryHint: 'Nur-Lese-Archiv — Bestellungen in WebPOS annehmen und zubereiten.',
   ordersFilterTitle: 'Filter',
   ordersFilterHint: 'Zeitraum, Status, Kanal, Zahlungsart, Personal oder Suche.',
