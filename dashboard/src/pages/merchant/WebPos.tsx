@@ -990,8 +990,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!part) {
       return { lines: cart, totals: payableFullTotals, label: null as string | null };
     }
-    if (part.lineIds.length > 0) {
-      const lines = cart.filter((l) => part.lineIds.includes(l.lineId));
+    const resolveSplitLines = () => {
+      if (part.lineQtys && Object.keys(part.lineQtys).length > 0) {
+        return cart.flatMap((l) => {
+          const qty = part.lineQtys![l.lineId] ?? 0;
+          if (qty <= 0) return [];
+          const unit = l.quantity > 0 ? l.lineTotal / l.quantity : l.unitPrice;
+          if (qty >= l.quantity) return [l];
+          return [
+            {
+              ...l,
+              quantity: qty,
+              lineTotal: roundMoney2(unit * qty),
+            },
+          ];
+        });
+      }
+      if (part.lineIds.length > 0) {
+        return cart.filter((l) => part.lineIds.includes(l.lineId));
+      }
+      return [];
+    };
+    if (part.lineIds.length > 0 || (part.lineQtys && Object.keys(part.lineQtys).length > 0)) {
+      const lines = resolveSplitLines();
       const t = computeMerchandiseTotals(lines, taxRate, vatIncludedInPrice, roundingStep);
       const payableShare =
         payableFullTotals.total > 0 && fullTotals.total > 0
@@ -5428,6 +5449,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     : null;
   const checkoutDueTotal = collectOrderRef?.total ?? activeSale.totals.total;
 
+  const checkoutSplitTickets = useMemo(() => {
+    if (!splitQueue.length) return undefined;
+    return splitQueue.map((part, index) => {
+      const resolveLines = () => {
+        if (part.lineQtys && Object.keys(part.lineQtys).length > 0) {
+          return cart.flatMap((l) => {
+            const qty = part.lineQtys![l.lineId] ?? 0;
+            if (qty <= 0) return [];
+            return [{ name: l.name, quantity: qty }];
+          });
+        }
+        if (part.lineIds.length > 0) {
+          return cart
+            .filter((l) => part.lineIds.includes(l.lineId))
+            .map((l) => ({ name: l.name, quantity: l.quantity }));
+        }
+        return [];
+      };
+      return {
+        index,
+        label: part.label,
+        amount: part.amount,
+        lines: resolveLines(),
+        paid: index < splitIndex,
+      };
+    });
+  }, [splitQueue, splitIndex, cart]);
+
   const onlinePendingCount = onlineOrders.filter(
     (o) => o.status === 'pending' || o.status === 'pending_approval'
   ).length;
@@ -5651,9 +5700,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       <div className="flex min-h-0 flex-1 flex-col">
         {posView === 'checkout' ? (
           <WebPosCheckoutView
+            key={
+              collectOrderRef
+                ? `collect-${collectOrderRef.id}`
+                : splitQueue.length
+                  ? `split-${splitIndex}-${splitQueue.length}`
+                  : 'register-checkout'
+            }
             total={checkoutDueTotal}
             splitLabel={collectOrderRef ? collectOrderRef.orderNumber : activeSale.label}
             splitGuestCount={collectOrderRef ? undefined : splitQueue.length || undefined}
+            splitTickets={checkoutSplitTickets}
+            splitActiveIndex={splitIndex}
+            onSplitTicketChange={(index) => {
+              if (index >= splitIndex) setSplitIndex(index);
+            }}
             settings={checkoutSettings}
             methods={{
               cash: enabledMethods.cash,
@@ -5703,15 +5764,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               void completeMultiTenderCheckout(payments, changeDue, tipAmount)
             }
             onBack={() => {
-              const returnView = collectOrderRef?.returnView;
-              clearCollectCheckout();
-              if (returnView === 'orders') {
-                setPosTab('orders');
-                setPosView('orders');
-              } else {
-                setPosView('register');
-                setPosTab('register');
+              if (collectOrderRef) {
+                const returnView = collectOrderRef.returnView;
+                clearCollectCheckout();
+                if (returnView === 'orders') {
+                  setPosTab('orders');
+                  setPosView('orders');
+                } else {
+                  setPosView('register');
+                  setPosTab('register');
+                }
+                return;
               }
+              setSplitQueue([]);
+              setSplitIndex(0);
+              splitMasterIdRef.current = null;
+              setPosView('register');
+              setPosTab('register');
             }}
             onBillDiscount={
               !collectOrderRef && checkoutSettings.discountsEnabled

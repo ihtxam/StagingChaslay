@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, ChevronLeft, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2, splitEqual005 } from '@/lib/money';
 
@@ -15,6 +15,8 @@ export type SplitPart = {
   label: string;
   amount: number;
   lineIds: string[];
+  /** Per-line quantity assigned to this part (supports partial splits). */
+  lineQtys?: Record<string, number>;
 };
 
 type Props = {
@@ -25,6 +27,21 @@ type Props = {
   onClose: () => void;
   onConfirm: (parts: SplitPart[]) => void;
 };
+
+function lineUnitPrice(line: SplitCartLine) {
+  const qty = line.quantity || 1;
+  return roundMoney2(line.lineTotal / qty);
+}
+
+function initQtyMatrix(lineList: SplitCartLine[], partCount: number): Record<string, number[]> {
+  const out: Record<string, number[]> = {};
+  for (const line of lineList) {
+    const row = Array.from({ length: partCount }, () => 0);
+    row[0] = line.quantity;
+    out[line.id] = row;
+  }
+  return out;
+}
 
 export default function WebPosSplitBillModal({
   open,
@@ -37,7 +54,36 @@ export default function WebPosSplitBillModal({
   const { t } = useI18n();
   const [mode, setMode] = useState<'equal' | 'items'>('equal');
   const [parts, setParts] = useState(2);
-  const [assignments, setAssignments] = useState<Record<string, number>>({});
+  const [qtyMatrix, setQtyMatrix] = useState<Record<string, number[]>>(() =>
+    initQtyMatrix(lines, 2)
+  );
+  /** For 3+ parts: which secondary ticket (index 1..n-1) is shown in the right column. */
+  const [activePartIdx, setActivePartIdx] = useState(1);
+
+  useEffect(() => {
+    if (!open) return;
+    setMode('equal');
+    setParts(2);
+    setQtyMatrix(initQtyMatrix(lines, 2));
+    setActivePartIdx(1);
+  }, [open, lines]);
+
+  useEffect(() => {
+    setQtyMatrix((prev) => {
+      const next = initQtyMatrix(lines, parts);
+      for (const line of lines) {
+        const old = prev[line.id];
+        if (!old) continue;
+        const merged = Array.from({ length: parts }, (_, i) => old[i] ?? 0);
+        const assigned = merged.reduce((s, q) => s + q, 0);
+        if (assigned === line.quantity) {
+          next[line.id] = merged;
+        }
+      }
+      return next;
+    });
+    setActivePartIdx((i) => Math.min(Math.max(1, i), Math.max(1, parts - 1)));
+  }, [parts, lines]);
 
   const equalParts = useMemo(() => {
     const amounts = splitEqual005(total, parts);
@@ -50,33 +96,152 @@ export default function WebPosSplitBillModal({
   }, [total, parts, t]);
 
   const itemParts = useMemo(() => {
-    const n = Math.max(2, Math.min(maxParts, parts));
-    const buckets: SplitPart[] = Array.from({ length: n }, (_, i) => ({
-      id: `it-${i + 1}`,
-      label: `${t('webPosSplitPart')} ${i + 1}`,
-      amount: 0,
-      lineIds: [] as string[],
-    }));
-    for (const line of lines) {
-      const idx = Math.min(n - 1, Math.max(0, assignments[line.id] ?? 0));
-      buckets[idx]!.lineIds.push(line.id);
-      buckets[idx]!.amount = roundMoney2(buckets[idx]!.amount + line.lineTotal);
-    }
-    return buckets.filter((b) => b.amount > 0 || b.lineIds.length > 0);
-  }, [lines, parts, assignments, maxParts, t]);
+    return Array.from({ length: parts }, (_, i) => {
+      const lineQtys: Record<string, number> = {};
+      let amount = 0;
+      for (const line of lines) {
+        const qty = qtyMatrix[line.id]?.[i] ?? 0;
+        if (qty <= 0) continue;
+        lineQtys[line.id] = qty;
+        amount = roundMoney2(amount + lineUnitPrice(line) * qty);
+      }
+      return {
+        id: `it-${i + 1}`,
+        label: `${t('webPosSplitPart')} ${i + 1}`,
+        amount,
+        lineIds: Object.keys(lineQtys),
+        lineQtys,
+      };
+    }).filter((b) => b.amount > 0.001);
+  }, [lines, parts, qtyMatrix, t]);
+
+  const moveQty = (lineId: string, fromIdx: number, toIdx: number, qty = 1) => {
+    setQtyMatrix((prev) => {
+      const row = [...(prev[lineId] || [])];
+      if (row.length < parts) {
+        while (row.length < parts) row.push(0);
+      }
+      const move = Math.min(qty, row[fromIdx] ?? 0);
+      if (move <= 0) return prev;
+      row[fromIdx] = (row[fromIdx] ?? 0) - move;
+      row[toIdx] = (row[toIdx] ?? 0) + move;
+      return { ...prev, [lineId]: row };
+    });
+  };
+
+  const partLines = (partIdx: number) =>
+    lines
+      .map((line) => ({
+        line,
+        qty: qtyMatrix[line.id]?.[partIdx] ?? 0,
+      }))
+      .filter((x) => x.qty > 0);
+
+  const partAmount = (partIdx: number) =>
+    roundMoney2(
+      partLines(partIdx).reduce((s, { line, qty }) => s + lineUnitPrice(line) * qty, 0)
+    );
+
+  const canConfirmItems =
+    itemParts.length >= 2 && itemParts.every((p) => p.amount > 0.001);
 
   if (!open) return null;
 
+  const rightPartIdx = parts === 2 ? 1 : activePartIdx;
+  const leftPartIdx = 0;
+
+  const renderColumn = (partIdx: number, side: 'left' | 'right') => {
+    const rows = partLines(partIdx);
+    const label =
+      parts === 2
+        ? side === 'left'
+          ? `${t('webPosSplitPart')} 1`
+          : `${t('webPosSplitPart')} 2`
+        : `${t('webPosSplitPart')} ${partIdx + 1}`;
+
+    return (
+      <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-[var(--border)] bg-white">
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
+          <span className="text-sm font-semibold">{label}</span>
+          <span className="text-sm font-bold tabular-nums">CHF {partAmount(partIdx).toFixed(2)}</span>
+        </div>
+        <ul className="min-h-[8rem] flex-1 space-y-1 overflow-y-auto p-2">
+          {rows.length === 0 ? (
+            <li className="py-6 text-center text-xs text-stone-400">{t('webPosSplitEmptyTicket')}</li>
+          ) : (
+            rows.map(({ line, qty }) => (
+              <li
+                key={line.id}
+                className="flex items-center gap-2 rounded-lg border border-stone-100 bg-stone-50 px-2 py-2 text-sm"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">
+                    {qty}x {line.name}
+                  </p>
+                  <p className="text-xs text-stone-500">
+                    CHF {roundMoney2(lineUnitPrice(line) * qty).toFixed(2)}
+                  </p>
+                </div>
+                {side === 'left' && qty > 0 ? (
+                  <div className="flex shrink-0 items-center gap-1">
+                    {line.quantity > 1 ? (
+                      <select
+                        className="input w-14 px-1 py-1 text-xs"
+                        defaultValue="1"
+                        id={`split-qty-${line.id}-${partIdx}`}
+                        aria-label={t('webPosSplitMoveQty')}
+                      >
+                        {Array.from({ length: qty }, (_, i) => i + 1).map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-0.5 rounded-lg border border-teal-600 bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-100"
+                      title={t('webPosSplitMoveToTicket')}
+                      onClick={() => {
+                        const sel = document.getElementById(
+                          `split-qty-${line.id}-${partIdx}`
+                        ) as HTMLSelectElement | null;
+                        const moveQtyN = sel ? Number(sel.value) || 1 : 1;
+                        moveQty(line.id, leftPartIdx, rightPartIdx, moveQtyN);
+                      }}
+                    >
+                      <ArrowRight size={14} />
+                    </button>
+                  </div>
+                ) : null}
+                {side === 'right' && qty > 0 ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-0.5 rounded-lg border border-stone-200 px-2 py-1 text-xs font-semibold text-stone-600 hover:bg-stone-100"
+                    title={t('webPosSplitMoveBack')}
+                    onClick={() => moveQty(line.id, partIdx, leftPartIdx, qty)}
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                ) : null}
+              </li>
+            ))
+          )}
+        </ul>
+      </div>
+    );
+  };
+
   return (
-    <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center bg-black/45 p-3">
-      <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border)] shadow-xl">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+    <div className="fixed inset-0 z-[75] flex items-end justify-center bg-black/45 p-3 sm:items-center">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
           <h2 className="font-semibold">{t('webPosSplitBill')}</h2>
           <button type="button" className="p-2" onClick={onClose} aria-label={t('close')}>
             <X size={18} />
           </button>
         </div>
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4">
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -98,7 +263,7 @@ export default function WebPosSplitBillModal({
             </button>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm muted">{t('webPosSplitParts')}</span>
             {Array.from({ length: Math.min(maxParts, 8) }, (_, i) => i + 2).map((n) => (
               <button
@@ -127,37 +292,31 @@ export default function WebPosSplitBillModal({
               ))}
             </ul>
           ) : (
-            <div className="space-y-2">
-              {lines.map((line) => (
-                <div
-                  key={line.id}
-                  className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate font-medium">
-                      {line.quantity}x {line.name}
-                    </p>
-                    <p className="muted">CHF {line.lineTotal.toFixed(2)}</p>
-                  </div>
-                  <select
-                    className="input w-auto"
-                    value={assignments[line.id] ?? 0}
-                    onChange={(e) =>
-                      setAssignments((prev) => ({
-                        ...prev,
-                        [line.id]: Number(e.target.value),
-                      }))
-                    }
-                  >
-                    {Array.from({ length: parts }, (_, i) => (
-                      <option key={i} value={i}>
-                        {t('webPosSplitPart')} {i + 1}
-                      </option>
-                    ))}
-                  </select>
+            <div className="space-y-3">
+              {parts > 2 ? (
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: parts - 1 }, (_, i) => i + 1).map((idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className={`rounded-lg border px-3 py-1.5 text-sm font-semibold ${
+                        activePartIdx === idx
+                          ? 'border-teal-600 bg-teal-50'
+                          : 'border-[var(--border)]'
+                      }`}
+                      onClick={() => setActivePartIdx(idx)}
+                    >
+                      {t('webPosSplitPart')} {idx + 1} · CHF {partAmount(idx).toFixed(2)}
+                    </button>
+                  ))}
                 </div>
-              ))}
-              <ul className="space-y-1 text-sm pt-2">
+              ) : null}
+              <p className="text-xs text-stone-500">{t('webPosSplitTwoColumnHint')}</p>
+              <div className="grid min-h-[14rem] grid-cols-1 gap-3 sm:grid-cols-2">
+                {renderColumn(leftPartIdx, 'left')}
+                {renderColumn(rightPartIdx, 'right')}
+              </div>
+              <ul className="space-y-1 border-t border-[var(--border)] pt-2 text-sm">
                 {itemParts.map((p) => (
                   <li key={p.id} className="flex justify-between font-semibold">
                     <span>{p.label}</span>
@@ -170,7 +329,8 @@ export default function WebPosSplitBillModal({
 
           <button
             type="button"
-            className="btn-primary w-full py-3"
+            className="btn-primary w-full py-3 disabled:opacity-40"
+            disabled={mode === 'items' && !canConfirmItems}
             onClick={() => onConfirm(mode === 'equal' ? equalParts : itemParts)}
           >
             {t('webPosStartSplitPay')}

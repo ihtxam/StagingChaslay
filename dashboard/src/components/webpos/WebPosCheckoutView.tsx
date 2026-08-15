@@ -33,6 +33,16 @@ type Props = {
   total: number;
   splitLabel?: string | null;
   splitGuestCount?: number;
+  /** Multi-ticket split: switch between parts before paying each. */
+  splitTickets?: Array<{
+    index: number;
+    label: string;
+    amount: number;
+    lines: Array<{ name: string; quantity: number }>;
+    paid?: boolean;
+  }>;
+  splitActiveIndex?: number;
+  onSplitTicketChange?: (index: number) => void;
   settings: PosCheckoutSettings;
   methods: {
     cash: boolean;
@@ -72,6 +82,9 @@ export default function WebPosCheckoutView({
   total: baseTotal,
   splitLabel,
   splitGuestCount,
+  splitTickets,
+  splitActiveIndex = 0,
+  onSplitTicketChange,
   settings,
   methods,
   busy,
@@ -267,6 +280,17 @@ export default function WebPosCheckoutView({
     );
   }, [bufferAmount, selectedPaymentId]);
 
+  /** Sole tender + typed amount (no row selected): keep paid/remaining in sync with keypad. */
+  useEffect(() => {
+    if (selectedPaymentId != null || bufferAmount == null) return;
+    setPayments((prev) => {
+      if (prev.length !== 1) return prev;
+      const row = prev[0]!;
+      if (Math.abs(row.amount - bufferAmount) < 0.001) return prev;
+      return [{ ...row, amount: bufferAmount }];
+    });
+  }, [bufferAmount, selectedPaymentId]);
+
   const payButtons: Array<{
     id: PosPaymentMethod;
     label: string;
@@ -450,15 +474,50 @@ export default function WebPosCheckoutView({
     });
   };
 
+  const pendingBufferTender =
+    !selectedPaymentId && bufferAmount != null && bufferAmount > 0 ? bufferAmount : 0;
+  const pendingMultiTender =
+    pendingBufferTender > 0 && payments.length > 1 ? pendingBufferTender : 0;
+  const effectivePaid = roundMoney2(paid + pendingMultiTender);
+
+  const resolvePaymentsForComplete = (): AppliedPayment[] => {
+    if (pendingBufferTender <= 0) return payments;
+    if (payments.length === 0) {
+      const method: PosPaymentMethod =
+        activeMethod ||
+        (methods.cash
+          ? 'cash'
+          : methods.card
+            ? 'card'
+            : methods.terminal
+              ? 'terminal'
+              : 'cash');
+      return [{ id: newPayId(), method, amount: pendingBufferTender }];
+    }
+    if (payments.length === 1) {
+      return [{ ...payments[0]!, amount: pendingBufferTender }];
+    }
+    const method: PosPaymentMethod =
+      activeMethod ||
+      payments[payments.length - 1]?.method ||
+      (methods.cash ? 'cash' : 'card');
+    return [...payments, { id: newPayId(), method, amount: pendingBufferTender }];
+  };
+
   // Block Confirm on empty/zero carts (e.g. after pay-later cleared the cart but left checkout open).
   const canComplete =
     total <= 0.001
       ? !busy
-      : total > 0.001 && payments.length > 0 && paid + 0.001 >= total;
+      : total > 0.001 &&
+        (payments.length > 0 || pendingBufferTender > 0) &&
+        effectivePaid + 0.001 >= total;
 
   const complete = () => {
     if (!canComplete || busy) return;
-    onComplete(payments, changeDue, tipAmount);
+    const resolved = resolvePaymentsForComplete();
+    const resolvedPaid = roundMoney2(resolved.reduce((s, p) => s + p.amount, 0));
+    const resolvedChange = roundMoney2(Math.max(0, resolvedPaid - total));
+    onComplete(resolved, resolvedChange, tipAmount);
   };
 
   const liveEntryLabel =
@@ -601,19 +660,15 @@ export default function WebPosCheckoutView({
           <span className="hidden sm:inline">{t('back')}</span>
         </button>
       ) : null}
-      {canComplete ? (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={complete}
-          className="webpos-accent-btn min-h-12 flex-1 rounded-xl px-4 py-3.5 text-sm font-bold disabled:opacity-40"
-        >
-          {t('webPosConfirmPay')}
-          {changeDue > 0 ? ` - ${t('webPosChangeDue')} CHF ${changeDue.toFixed(2)}` : ''}
-        </button>
-      ) : (
-        <div className="min-h-12 flex-1" aria-hidden />
-      )}
+      <button
+        type="button"
+        disabled={busy || !canComplete}
+        onClick={complete}
+        className="webpos-accent-btn min-h-12 flex-1 rounded-xl px-4 py-3.5 text-sm font-bold disabled:opacity-40"
+      >
+        {t('webPosConfirmPay')}
+        {changeDue > 0 ? ` - ${t('webPosChangeDue')} CHF ${changeDue.toFixed(2)}` : ''}
+      </button>
     </div>
   );
 
@@ -843,6 +898,56 @@ export default function WebPosCheckoutView({
                 <p className="mt-1 text-sm font-medium text-[var(--webpos-accent-text)]">
                   {splitLabel}
                 </p>
+              ) : null}
+
+              {splitTickets && splitTickets.length > 1 ? (
+                <div className="mt-4 w-full max-w-md space-y-2 text-left">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-stone-400">
+                    {t('webPosSplitBill')}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {splitTickets.map((ticket) => {
+                      const active = ticket.index === splitActiveIndex;
+                      return (
+                        <button
+                          key={ticket.index}
+                          type="button"
+                          disabled={busy || ticket.paid}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSplitTicketChange?.(ticket.index);
+                          }}
+                          className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-colors disabled:opacity-50 ${
+                            ticket.paid
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                              : active
+                                ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
+                                : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                          }`}
+                        >
+                          <span className="block">{ticket.label}</span>
+                          <span className="block tabular-nums">CHF {ticket.amount.toFixed(2)}</span>
+                          {ticket.paid ? (
+                            <span className="mt-0.5 block text-[10px] font-bold uppercase text-emerald-700">
+                              {t('webPosSplitPaid')}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {splitTickets[splitActiveIndex]?.lines.length ? (
+                    <ul className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
+                      {splitTickets[splitActiveIndex]!.lines.map((line, i) => (
+                        <li key={`${line.name}-${i}`} className="flex justify-between gap-2 py-0.5">
+                          <span className="min-w-0 truncate">
+                            {line.quantity}x {line.name}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
               ) : null}
 
               <div className="mt-3 w-full max-w-md space-y-2 text-left lg:mt-8">
