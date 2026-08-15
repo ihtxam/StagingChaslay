@@ -79,6 +79,14 @@ export default function Vouchers() {
     [t]
   );
 
+  const discountValueInputProps = useMemo(
+    () =>
+      form.discountType === 'percent'
+        ? { min: 0, max: 100, step: 1 }
+        : { min: 0.01, step: 0.01 },
+    [form.discountType]
+  );
+
   const resetForm = () => {
     setEditingId(null);
     setForm(emptyForm());
@@ -250,8 +258,7 @@ export default function Vouchers() {
             <span className="muted block mb-1 text-sm">{t('voucherDiscountValue')}</span>
             <input
               type="number"
-              min={0.01}
-              step={form.discountType === 'percent' ? 1 : 0.05}
+              {...discountValueInputProps}
               className="w-full border px-3 py-2 rounded"
               value={form.discountValue}
               onChange={(e) => setForm((f) => ({ ...f, discountValue: e.target.value }))}
