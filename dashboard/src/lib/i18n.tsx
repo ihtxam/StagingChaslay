@@ -3409,7 +3409,7 @@ const fr: Dict = {
   webPosNoProducts: 'Aucun produit trouvé',
   webPosNoProductsMatch: 'Aucun produit correspondant',
   webPosMenus: 'Menus',
-  webPosDashboard: 'Tableau de bord',
+  webPosDashboard: 'Dashboard',
   webPosCartOrdering: 'En commande',
   webPosCartOrdered: 'Commandé',
   webPosCartOrderingEmpty: 'Ajoutez des articles, puis envoyez en cuisine',
