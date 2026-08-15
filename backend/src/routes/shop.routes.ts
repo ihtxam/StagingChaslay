@@ -1890,6 +1890,14 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     const paymentStatus =
       payMethod === "card" || payMethod === "pay_later" ? "awaiting_payment" : "cash";
 
+    const prepMinutes =
+      channel === "delivery"
+        ? Number(merchant.deliveryEtaMinutes ?? 45)
+        : Number(merchant.pickupEtaMinutes ?? 25);
+    const estimatedReadyAt = scheduledFor
+      ? new Date(scheduledFor)
+      : new Date(Date.now() + prepMinutes * 60 * 1000);
+
     // Prefer logged-in customer for loyalty redemptions
     if ((totalPointsRedeemed > 0 || requestedCashPoints > 0) && authCustomer.customerId) {
       customerId = authCustomer.customerId;
@@ -1921,6 +1929,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         shippingAddress: addressText,
         deliveryZoneId,
         scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+        estimatedReadyAt,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         customerEmail: emailNorm || null,
@@ -2119,6 +2128,7 @@ router.get("/:slug/orders/:orderId", async (req: Request, res: Response) => {
         pointsRedeemed: order.pointsRedeemed,
         total: order.total,
         scheduledFor: order.scheduledFor,
+        estimatedReadyAt: order.estimatedReadyAt,
         shippingAddress: order.shippingAddress,
         customerName: order.customerName,
         customerPhone: order.customerPhone,

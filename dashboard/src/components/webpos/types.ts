@@ -6,7 +6,7 @@ export const POS_GIFT_CARDS_CATEGORY = '__gift_cards__';
 
 export type PosCategoryId = string | 'all' | typeof POS_MOST_SOLD_CATEGORY | typeof POS_GIFT_CARDS_CATEGORY;
 
-export type PosTab = 'tables' | 'register' | 'orders' | 'bookings';
+export type PosTab = 'tables' | 'register' | 'order_center' | 'orders' | 'bookings';
 
 export type PosView = PosTab | 'checkout' | 'success';
 

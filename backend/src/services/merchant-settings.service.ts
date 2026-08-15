@@ -147,6 +147,7 @@ export class MerchantSettingsService {
       longitude: merchant.longitude,
       pickupEtaMinutes: merchant.pickupEtaMinutes,
       deliveryEtaMinutes: merchant.deliveryEtaMinutes,
+      minPreOrderDelayMinutes: merchant.minPreOrderDelayMinutes ?? 30,
       deliveryMenuMarkup: merchant.deliveryMenuMarkup ?? "0",
       vacationSettings: normalizeVacationSettings(merchant.vacationSettings),
       emailSmtpSettings: MarketingService.getSmtpPublic(merchant.emailSmtpSettings),
@@ -233,6 +234,7 @@ export class MerchantSettingsService {
       longitude?: number | string | null;
       pickupEtaMinutes?: number;
       deliveryEtaMinutes?: number;
+      minPreOrderDelayMinutes?: number;
       deliveryMenuMarkup?: number;
       vacationSettings?: VacationSettings | null;
       emailSmtpSettings?: MerchantSmtpSettings | null;
@@ -323,6 +325,9 @@ export class MerchantSettingsService {
     }
     if (updates.pickupEtaMinutes !== undefined) patch.pickupEtaMinutes = updates.pickupEtaMinutes;
     if (updates.deliveryEtaMinutes !== undefined) patch.deliveryEtaMinutes = updates.deliveryEtaMinutes;
+    if (updates.minPreOrderDelayMinutes !== undefined) {
+      patch.minPreOrderDelayMinutes = Math.max(0, Math.min(240, Number(updates.minPreOrderDelayMinutes) || 0));
+    }
     if (updates.deliveryMenuMarkup !== undefined) {
       const n = Number(updates.deliveryMenuMarkup);
       if (!Number.isFinite(n) || n < 0) throw new Error("deliveryMenuMarkup must be >= 0");

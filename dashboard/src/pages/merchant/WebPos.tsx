@@ -94,6 +94,8 @@ import WebPosOnlineOrdersPanel, {
   type OnlineOrder,
 } from '@/components/WebPosOnlineOrdersPanel';
 import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
+import WebPosOrderCenterTab from '@/components/webpos/WebPosOrderCenterTab';
+import WebPosRejectOrderModal from '@/components/webpos/WebPosRejectOrderModal';
 import WebPosTopBar, {
   WebPosSettingsDropdown,
   WEBPOS_COLOR_THEMES,
@@ -575,6 +577,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const unactionedOrderIdsRef = useRef<Set<string>>(new Set());
   const [unactionedOrderCount, setUnactionedOrderCount] = useState(0);
   const [newOrderAlertQueue, setNewOrderAlertQueue] = useState<OnlineOrder[]>([]);
+  const [alertRejectOrder, setAlertRejectOrder] = useState<OnlineOrder | null>(null);
+  const [alertActionBusy, setAlertActionBusy] = useState(false);
   const knownReservationIdsRef = useRef<Set<string> | null>(null);
   const onlinePanelOpenRef = useRef(false);
   const [reservationPendingCount, setReservationPendingCount] = useState(0);
@@ -1553,30 +1557,59 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   }, []);
 
-  const openOnlineOrderFromAlert = useCallback((order: OnlineOrder) => {
-    stopOrderAlertLoop();
-    setOnlineOrdersOpen(false);
-    setOrdersChannelPref('online');
-    setHighlightOrderId(order.id);
-    setOrdersRefreshToken((n) => n + 1);
-    setPosTab('orders');
-    setPosView('orders');
+  const dismissNewOrderAlert = useCallback((orderId: string) => {
+    setNewOrderAlertQueue((prev) => prev.filter((o) => o.id !== orderId));
   }, []);
 
-  const dismissNewOrderAlert = useCallback(() => {
-    setNewOrderAlertQueue((prev) => prev.slice(1));
-    stopOrderAlertLoop();
-  }, []);
-
-  const openFromNewOrderAlert = useCallback(() => {
-    setNewOrderAlertQueue((prev) => {
-      const [head, ...rest] = prev;
-      if (head) {
-        openOnlineOrderFromAlert(head);
+  const acceptFromNewOrderAlert = useCallback(
+    async (order: OnlineOrder) => {
+      setAlertActionBusy(true);
+      try {
+        await api.post(`/merchant/orders/${order.id}/action`, { action: 'accept' });
+        markOnlineOrderActioned(order.id);
+        dismissNewOrderAlert(order.id);
+        toast.success(t('updated'));
+        void pollOnlineOrders();
+        setPosTab('order_center');
+        setPosView('order_center');
+        setHighlightOrderId(order.id);
+      } catch (e: any) {
+        toast.error(e.response?.data?.error || t('actionFailed'));
+        if (unactionedOrderIdsRef.current.size > 0) startOrderAlertLoop(5000);
+      } finally {
+        setAlertActionBusy(false);
       }
-      return rest;
-    });
-  }, [openOnlineOrderFromAlert]);
+    },
+    [dismissNewOrderAlert, markOnlineOrderActioned, pollOnlineOrders, t]
+  );
+
+  const rejectFromNewOrderAlert = useCallback((order: OnlineOrder) => {
+    setAlertRejectOrder(order);
+  }, []);
+
+  const confirmRejectFromAlert = useCallback(
+    async (reason: string) => {
+      if (!alertRejectOrder) return;
+      setAlertActionBusy(true);
+      try {
+        await api.post(`/merchant/orders/${alertRejectOrder.id}/action`, {
+          action: 'reject',
+          rejectReason: reason,
+        });
+        markOnlineOrderActioned(alertRejectOrder.id);
+        dismissNewOrderAlert(alertRejectOrder.id);
+        setAlertRejectOrder(null);
+        toast.success(t('updated'));
+        void pollOnlineOrders();
+      } catch (e: any) {
+        toast.error(e.response?.data?.error || t('actionFailed'));
+        if (unactionedOrderIdsRef.current.size > 0) startOrderAlertLoop(5000);
+      } finally {
+        setAlertActionBusy(false);
+      }
+    },
+    [alertRejectOrder, dismissNewOrderAlert, markOnlineOrderActioned, pollOnlineOrders, t]
+  );
 
   const pollReservations = useCallback(async () => {
     try {
@@ -5605,7 +5638,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       : null;
 
   const onPosTabChange = (tab: PosTab) => {
-    if (tab === 'tables' || tab === 'orders' || tab === 'bookings') {
+    if (tab === 'tables' || tab === 'orders' || tab === 'order_center' || tab === 'bookings') {
       saveOpenCartDraft();
     }
     setMobileCartOpen(false);
@@ -5951,6 +5984,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           />
         ) : posView === 'bookings' ? (
           <WebPosBookingsView />
+        ) : posView === 'order_center' ? (
+          <WebPosOrderCenterTab
+            orders={onlineOrders}
+            highlightOrderId={highlightOrderId}
+            onRefresh={() => void pollOnlineOrders()}
+            onOrderActioned={markOnlineOrderActioned}
+            onCollectPayment={(order) => {
+              markOnlineOrderActioned(order.id);
+              openOrderCollectCheckout(order as MerchantOrder, 'register');
+            }}
+          />
         ) : posView === 'orders' ? (
           <WebPosOrdersPanel
             embedded
@@ -6641,8 +6685,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       <WebPosNewOrderAlertModal
         order={currentNewOrderAlert}
         queueCount={newOrderAlertQueue.length}
-        onOk={dismissNewOrderAlert}
-        onOpen={openFromNewOrderAlert}
+        busy={alertActionBusy}
+        onAccept={acceptFromNewOrderAlert}
+        onReject={rejectFromNewOrderAlert}
+      />
+
+      <WebPosRejectOrderModal
+        open={!!alertRejectOrder}
+        orderLabel={
+          alertRejectOrder
+            ? alertRejectOrder.orderNumber || alertRejectOrder.id.slice(0, 8)
+            : undefined
+        }
+        busy={alertActionBusy}
+        onClose={() => setAlertRejectOrder(null)}
+        onConfirm={confirmRejectFromAlert}
       />
 
       <WebPosOnlineOrdersPanel

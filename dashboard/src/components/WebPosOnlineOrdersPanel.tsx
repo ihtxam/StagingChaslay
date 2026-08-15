@@ -16,6 +16,7 @@ export type OnlineOrder = {
   id: string;
   orderNumber?: string;
   orderType?: string;
+  orderSource?: string | null;
   fulfillmentChannel?: string | null;
   status: string;
   total: string | number;
@@ -23,8 +24,11 @@ export type OnlineOrder = {
   paymentStatus?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
+  customerEmail?: string | null;
   shippingAddress?: string | null;
   scheduledFor?: string | null;
+  estimatedReadyAt?: string | null;
+  printCount?: number | null;
   notes?: string | null;
   createdAt: string;
   items?: Array<{

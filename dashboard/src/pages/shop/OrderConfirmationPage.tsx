@@ -38,6 +38,7 @@ type OrderView = {
   customerEmail: string | null;
   shippingAddress: string | null;
   scheduledFor: string | null;
+  estimatedReadyAt?: string | null;
   notes: string | null;
   subtotal: string;
   taxAmount: string;
@@ -110,9 +111,26 @@ export default function OrderConfirmationPage() {
 
   useEffect(() => {
     void load();
-    const t = window.setInterval(() => void load(), 15000);
-    return () => window.clearInterval(t);
+    const poll = window.setInterval(() => void load(), 15000);
+    return () => window.clearInterval(poll);
   }, [load]);
+
+  const [countdownSec, setCountdownSec] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!order?.estimatedReadyAt) {
+      setCountdownSec(null);
+      return;
+    }
+    const tick = () => {
+      const target = Date.parse(order.estimatedReadyAt!);
+      const diff = Math.max(0, Math.round((target - Date.now()) / 1000));
+      setCountdownSec(diff);
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [order?.estimatedReadyAt]);
 
   useEffect(() => {
     if (order?.store?.name) {
@@ -337,6 +355,30 @@ export default function OrderConfirmationPage() {
               {formatDateTime(order.scheduledFor)}
             </p>
           )}
+          {order.estimatedReadyAt &&
+          !['completed', 'cancelled', 'refunded'].includes(order.status) ? (
+            <div className="flex items-center gap-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div
+                className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-emerald-500 bg-white text-sm font-bold text-emerald-800"
+                aria-hidden
+              >
+                {countdownSec != null && countdownSec > 0
+                  ? `${Math.floor(countdownSec / 60)}:${String(countdownSec % 60).padStart(2, '0')}`
+                  : '✓'}
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                  {t('shopOrderEtaLabel')}
+                </p>
+                <p className="text-sm font-bold text-stone-900">
+                  {countdownSec != null && countdownSec > 0
+                    ? `${t('shopOrderEtaCountdown')} ${Math.ceil(countdownSec / 60)} ${t('minutes')}`
+                    : t('shopOrderEtaReady')}
+                </p>
+                <p className="text-xs text-stone-600">{formatDateTime(order.estimatedReadyAt)}</p>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         {needsPayment && (

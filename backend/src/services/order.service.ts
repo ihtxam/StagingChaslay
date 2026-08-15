@@ -1,9 +1,56 @@
 import { getDb, schema } from "@/db";
-import { eq, and, desc, gte, lte } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { roundMoney2, roundTo005 } from "@/lib/money";
 import { adjustTaxForOrderDiscount } from "@/lib/tax-discount";
 import { resolveOrderItemName } from "@/lib/order-item-name";
+import { resolvePosCancelReason } from "@/lib/pos-print-settings";
+
+function computeEstimatedReadyAt(
+  order: { fulfillmentChannel?: string | null; scheduledFor?: Date | null },
+  merchant: { pickupEtaMinutes?: number | null; deliveryEtaMinutes?: number | null }
+): Date {
+  if (order.scheduledFor) {
+    return new Date(order.scheduledFor);
+  }
+  const channel = order.fulfillmentChannel || "takeaway";
+  const prepMinutes =
+    channel === "delivery"
+      ? Number(merchant.deliveryEtaMinutes ?? 45)
+      : Number(merchant.pickupEtaMinutes ?? 25);
+  return new Date(Date.now() + prepMinutes * 60 * 1000);
+}
+
+async function sendOrderRejectedEmail(
+  merchantId: string,
+  order: {
+    customerEmail?: string | null;
+    customerName?: string | null;
+    orderNumber?: string | null;
+    cancelReason?: string | null;
+  },
+  merchantName: string
+) {
+  const email = String(order.customerEmail || "").trim();
+  if (!email) return;
+  try {
+    const { EmailService } = await import("@/services/email.service");
+    const reason = String(order.cancelReason || "").trim();
+    await EmailService.send({
+      merchantId,
+      to: email,
+      subject: `Order ${order.orderNumber || ""} — update from ${merchantName}`,
+      html: `<p>Hello${order.customerName ? ` ${order.customerName}` : ""},</p>
+<p>We regret to inform you that your order <strong>${order.orderNumber || ""}</strong> could not be accepted.</p>
+${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
+<p>Please contact us if you have questions.</p>
+<p>— ${merchantName}</p>`,
+      text: `Your order ${order.orderNumber || ""} could not be accepted.${reason ? ` Reason: ${reason}` : ""} — ${merchantName}`,
+    });
+  } catch (err) {
+    console.warn("Order rejection email failed:", err);
+  }
+}
 
 function withResolvedItemNames<
   T extends {
@@ -311,13 +358,27 @@ export class OrderService {
     merchantId: string,
     orderId: string,
     action: string,
-    opts?: { paymentMethod?: string | null }
+    opts?: {
+      paymentMethod?: string | null;
+      rejectReason?: string | null;
+      estimatedReadyAt?: string | Date | null;
+      etaAdjustMinutes?: number | null;
+    }
   ) {
     const db = getDb();
     const order = await db.query.orders.findFirst({
       where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
     });
     if (!order) throw new Error("Order not found");
+
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: {
+        name: true,
+        pickupEtaMinutes: true,
+        deliveryEtaMinutes: true,
+      },
+    });
 
     const status = order.status || "pending";
     const channel = order.fulfillmentChannel || "takeaway";
@@ -343,10 +404,14 @@ export class OrderService {
     switch (action) {
       case "accept": {
         if (!awaitingApproval) throw new Error("Order is not awaiting approval");
-        const updated = await set({ status: "accepted" });
+        const estimatedReadyAt = computeEstimatedReadyAt(order, merchant || {});
+        const accepted = await set({
+          status: "accepted",
+          estimatedReadyAt,
+        });
         if (order.orderSource === "justeat" || order.orderSource === "ubereats") {
           const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
-          void DeliveryPlatformService.notifyPartnerOrderAccepted(merchantId, updated).catch((err) =>
+          void DeliveryPlatformService.notifyPartnerOrderAccepted(merchantId, accepted).catch((err) =>
             console.warn("Partner accept callback:", err)
           );
         }
@@ -360,10 +425,14 @@ export class OrderService {
             printKitchen: true,
             printReceipt: true,
           });
+          await db
+            .update(schema.orders)
+            .set({ printCount: sql`COALESCE(${schema.orders.printCount}, 0) + 1` })
+            .where(eq(schema.orders.id, orderId));
         } catch (printErr) {
           console.warn("Accept auto-print enqueue failed:", printErr);
         }
-        return updated;
+        return set({ status: "preparing" });
       }
       case "start_preparing": {
         if (status !== "accepted" && !awaitingApproval) {
@@ -437,7 +506,32 @@ export class OrderService {
       case "reject":
       case "cancel": {
         if (status === "completed") throw new Error("Cannot cancel a completed order");
-        return set({ status: "cancelled" });
+        const reasonText = resolvePosCancelReason(String(opts?.rejectReason || ""));
+        const updated = await set({
+          status: "cancelled",
+          cancelReason: reasonText || null,
+          cancelledAt: new Date(),
+        });
+        if (action === "reject") {
+          void sendOrderRejectedEmail(
+            merchantId,
+            { ...order, cancelReason: reasonText },
+            merchant?.name || "Store"
+          );
+        }
+        return updated;
+      }
+      case "adjust_eta": {
+        let next: Date;
+        if (opts?.estimatedReadyAt) {
+          next = new Date(opts.estimatedReadyAt);
+        } else {
+          const adjust = Number(opts?.etaAdjustMinutes || 0);
+          const base = order.estimatedReadyAt ? new Date(order.estimatedReadyAt) : new Date();
+          next = new Date(base.getTime() + adjust * 60 * 1000);
+        }
+        if (Number.isNaN(next.getTime())) throw new Error("Invalid ETA");
+        return set({ estimatedReadyAt: next });
       }
       default:
         throw new Error(`Unknown action: ${action}`);

@@ -224,6 +224,7 @@ export default function OnlineShop() {
         longitude: settings.longitude,
         pickupEtaMinutes: Number(settings.pickupEtaMinutes || 25),
         deliveryEtaMinutes: Number(settings.deliveryEtaMinutes || 45),
+        minPreOrderDelayMinutes: Number(settings.minPreOrderDelayMinutes ?? 30),
         deliveryMenuMarkup: Number(settings.deliveryMenuMarkup || 0),
         shopLogoUrl: settings.shopLogoUrl,
         shopBannerUrl: settings.shopBannerUrl,
@@ -600,6 +601,18 @@ export default function OnlineShop() {
                 type="number"
                 value={settings.deliveryEtaMinutes ?? 45}
                 onChange={(e) => setSettings({ ...settings, deliveryEtaMinutes: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Min pre-order delay (min)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                value={settings.minPreOrderDelayMinutes ?? 30}
+                onChange={(e) =>
+                  setSettings({ ...settings, minPreOrderDelayMinutes: e.target.value })
+                }
               />
             </div>
             <div className="md:col-span-2">

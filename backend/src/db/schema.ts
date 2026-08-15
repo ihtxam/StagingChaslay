@@ -174,6 +174,8 @@ export const merchants = pgTable(
     longitude: decimal("longitude", { precision: 10, scale: 7 }),
     pickupEtaMinutes: integer("pickup_eta_minutes").default(25),
     deliveryEtaMinutes: integer("delivery_eta_minutes").default(45),
+    /** Minimum lead time (minutes) before a customer can schedule a pre-order */
+    minPreOrderDelayMinutes: integer("min_pre_order_delay_minutes").default(30),
     /**
      * Fixed CHF amount added to each menu item base price for delivery orders
      * (e.g. 2 → delivery item prices = takeaway + 2.00).
@@ -888,6 +890,10 @@ export const orders = pgTable(
     syncedAt: timestamp("synced_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     completedAt: timestamp("completed_at"),
+    /** Merchant-estimated ready / pickup time (live-adjustable from Order Center) */
+    estimatedReadyAt: timestamp("estimated_ready_at"),
+    /** Kitchen + receipt auto-print jobs completed for this order */
+    printCount: integer("print_count").default(0),
     cancelReason: text("cancel_reason"),
     cancelledAt: timestamp("cancelled_at"),
     refundAmount: decimal("refund_amount", { precision: 10, scale: 2 }).default("0"),

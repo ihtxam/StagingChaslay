@@ -66,6 +66,51 @@ export function orderSourceLabel(source?: string | null): string {
   return 'Online';
 }
 
+/** Commande-style platform badge colors */
+export function orderPlatformKey(o: MerchantOrder): 'shop' | 'justeat' | 'ubereats' | 'other' {
+  const src = String((o as { orderSource?: string | null }).orderSource || '').toLowerCase();
+  if (src === 'justeat') return 'justeat';
+  if (src === 'ubereats') return 'ubereats';
+  if (src === 'online_shop' || isOnlineShopOrder(o)) return 'shop';
+  return 'other';
+}
+
+export function orderPlatformLabel(o: MerchantOrder, t: (k: string) => string): string {
+  const key = orderPlatformKey(o);
+  if (key === 'justeat') return t('orderPlatformJustEat');
+  if (key === 'ubereats') return t('orderPlatformUberEats');
+  if (key === 'shop') return t('orderPlatformShop');
+  return t('orderPlatformOnline');
+}
+
+export function orderPlatformBadgeClass(o: MerchantOrder): string {
+  const key = orderPlatformKey(o);
+  switch (key) {
+    case 'justeat':
+      return 'bg-orange-500 text-white';
+    case 'ubereats':
+      return 'bg-emerald-600 text-white';
+    case 'shop':
+      return 'bg-violet-600 text-white';
+    default:
+      return 'bg-stone-600 text-white';
+  }
+}
+
+export function orderPlatformBorderClass(o: MerchantOrder): string {
+  const key = orderPlatformKey(o);
+  switch (key) {
+    case 'justeat':
+      return 'border-l-orange-500';
+    case 'ubereats':
+      return 'border-l-emerald-500';
+    case 'shop':
+      return 'border-l-violet-600';
+    default:
+      return 'border-l-stone-400';
+  }
+}
+
 /** Unpaid web shop or POS order — pay on pickup / collect at counter. */
 export function isAwaitingPaymentOrder(o: MerchantOrder): boolean {
   const status = (o.status || '').toLowerCase();
