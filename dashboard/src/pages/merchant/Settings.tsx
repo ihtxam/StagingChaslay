@@ -13,6 +13,7 @@ import {
   Monitor,
   Percent,
   Printer,
+  RefreshCw,
   Save,
   Search,
   SlidersHorizontal,
@@ -21,6 +22,12 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { dashboardVersionLabel } from '@/lib/app-version';
+import {
+  isPrintAgentAvailable,
+  isUnsuitableRawPrinter,
+  listAgentPrinters,
+  type AgentPrinter,
+} from '@/lib/print-agent';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { compressImageIfNeeded } from '@/lib/compress-image';
 import {
@@ -368,6 +375,9 @@ export default function Settings() {
   const [savingFee, setSavingFee] = useState(false);
   const [savingWebposPay, setSavingWebposPay] = useState(false);
   const [savingReceipt, setSavingReceipt] = useState(false);
+  const [printAgentOk, setPrintAgentOk] = useState(false);
+  const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
+  const [refreshingPrinters, setRefreshingPrinters] = useState(false);
   const [savingTerminal, setSavingTerminal] = useState(false);
   const vacationImageInputRef = useRef<HTMLInputElement>(null);
   const [settingsQuery, setSettingsQuery] = useState('');
@@ -737,6 +747,30 @@ export default function Settings() {
   useEffect(() => {
     void loadSettings().finally(() => setLoading(false));
   }, [loadSettings]);
+
+  const refreshPrintAgentPrinters = useCallback(async () => {
+    setRefreshingPrinters(true);
+    try {
+      const ok = await isPrintAgentAvailable();
+      setPrintAgentOk(ok);
+      if (!ok) {
+        setAgentPrinters([]);
+        return;
+      }
+      const list = await listAgentPrinters();
+      setAgentPrinters(list);
+    } catch {
+      setPrintAgentOk(false);
+      setAgentPrinters([]);
+    } finally {
+      setRefreshingPrinters(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab !== 'receipt') return;
+    void refreshPrintAgentPrinters();
+  }, [tab, refreshPrintAgentPrinters]);
 
   const onSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -2981,26 +3015,85 @@ export default function Settings() {
               </Section>
 
               <Section icon={Printer} accent={settingsDash.success} title={t('printerProfiles')} description={t('printerProfilesHint')}>
-                {(settings.posPrintSettings?.printers || []).map((p, idx) => (
+                <div className="flex flex-wrap items-center gap-3 mb-3">
+                  <button
+                    type="button"
+                    className="btn-secondary inline-flex items-center gap-2 text-sm"
+                    onClick={() => void refreshPrintAgentPrinters()}
+                    disabled={refreshingPrinters}
+                  >
+                    <RefreshCw size={14} className={refreshingPrinters ? 'animate-spin' : ''} />
+                    {t('webPosRefreshPrinters')}
+                  </button>
+                  <p
+                    className={`text-sm m-0 ${
+                      printAgentOk ? 'text-emerald-700' : 'text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {printAgentOk ? t('webPosAgentOnline') : t('webPosAgentOffline')}
+                  </p>
+                </div>
+                {(settings.posPrintSettings?.printers || []).map((p, idx) => {
+                  const printerNames = new Set(agentPrinters.map((ap) => ap.name));
+                  const savedNameMissing =
+                    !!p.name.trim() && printAgentOk && agentPrinters.length > 0 && !printerNames.has(p.name);
+                  const useDropdown = printAgentOk && agentPrinters.length > 0;
+                  return (
                   <div
                     key={p.id}
                     className="rounded-xl border border-[var(--border)] p-3 space-y-2"
                   >
-                    <Field label={t('printerName')}>
-                      <input
-                        className="input"
-                        value={p.name}
-                        onChange={(e) => {
-                          const printers = [...(settings.posPrintSettings?.printers || [])];
-                          printers[idx] = { ...p, name: e.target.value };
-                          setSettings({
-                            ...settings,
-                            posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                          });
-                        }}
-                        placeholder="Windows printer name"
-                      />
+                    <Field
+                      label={t('printerName')}
+                      hint={useDropdown ? undefined : t('settingsPrinterManualEntry')}
+                    >
+                      {useDropdown ? (
+                        <select
+                          className="input"
+                          value={p.name}
+                          onChange={(e) => {
+                            const printers = [...(settings.posPrintSettings?.printers || [])];
+                            printers[idx] = { ...p, name: e.target.value };
+                            setSettings({
+                              ...settings,
+                              posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                            });
+                          }}
+                        >
+                          <option value="">{t('webPosDefaultPrinter')}</option>
+                          {savedNameMissing ? (
+                            <option value={p.name}>{p.name}</option>
+                          ) : null}
+                          {agentPrinters.map((ap) => {
+                            const bad = isUnsuitableRawPrinter(ap.name);
+                            return (
+                              <option key={ap.name} value={ap.name}>
+                                {ap.name}
+                                {ap.isDefault ? t('webPosDefaultSuffix') : ''}
+                                {bad ? t('webPosPrinterNotThermal') : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <input
+                          className="input"
+                          value={p.name}
+                          onChange={(e) => {
+                            const printers = [...(settings.posPrintSettings?.printers || [])];
+                            printers[idx] = { ...p, name: e.target.value };
+                            setSettings({
+                              ...settings,
+                              posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                            });
+                          }}
+                          placeholder={t('printerName')}
+                        />
+                      )}
                     </Field>
+                    {p.name && isUnsuitableRawPrinter(p.name) ? (
+                      <p className="text-xs leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
+                    ) : null}
                     <div className="flex flex-wrap gap-3 text-sm">
                       {(
                         [
@@ -3042,7 +3135,8 @@ export default function Settings() {
                       {t('delete')}
                     </button>
                   </div>
-                ))}
+                  );
+                })}
                 <button
                   type="button"
                   className="btn-secondary"

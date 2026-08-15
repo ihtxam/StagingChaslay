@@ -982,6 +982,8 @@ const en: Dict = {
   printerProfiles: 'Printer profiles',
   printerProfilesHint: 'Map Windows printer names (print-agent) to receipt, kitchen, or end-of-day roles.',
   printerName: 'Windows printer name',
+  settingsPrinterManualEntry:
+    'Print agent offline — type the exact Windows printer name. Install and start the agent on this PC, then click Refresh printers.',
   printRoleReceipts: 'Receipts',
   printRoleKitchen: 'Kitchen',
   printRoleEod: 'End of day',
@@ -2909,6 +2911,8 @@ const fr: Dict = {
   printerProfiles: 'Profils imprimantes',
   printerProfilesHint: 'Associez les noms Windows (print-agent) aux rôles reçu, cuisine ou fin de journée.',
   printerName: 'Nom imprimante Windows',
+  settingsPrinterManualEntry:
+    'Agent d’impression hors ligne — saisissez le nom Windows exact. Installez et démarrez l’agent sur ce PC, puis Actualiser les imprimantes.',
   printRoleReceipts: 'Reçus',
   printRoleKitchen: 'Cuisine',
   printRoleEod: 'Fin de journée',
@@ -4838,6 +4842,8 @@ const de: Dict = {
   printerProfiles: 'Druckerprofile',
   printerProfilesHint: 'Windows-Druckernamen (Print-Agent) Rollen zuweisen: Beleg, Küche, Tagesabschluss.',
   printerName: 'Windows-Druckername',
+  settingsPrinterManualEntry:
+    'Druckagent offline — exakten Windows-Druckernamen eingeben. Agent auf diesem PC installieren und starten, dann Drucker aktualisieren.',
   printRoleReceipts: 'Belege',
   printRoleKitchen: 'Küche',
   printRoleEod: 'Tagesabschluss',
