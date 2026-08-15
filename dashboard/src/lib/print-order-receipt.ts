@@ -6,6 +6,7 @@ import {
   unsuitableRawPrinterMessage,
 } from '@/lib/print-agent';
 import {
+  deliveryDirectionsUrlForReceipt,
   generateRefundReceiptText,
   generateWebPosReceiptText,
   logoUrlToEscPos,
@@ -38,6 +39,7 @@ async function printReceiptText(
     printSettings?: PosPrintSettingsClient | null;
     fallbackPrinterName?: string | null;
     qrUrl?: string;
+    deliveryQrUrl?: string;
     logoUrl?: string | null;
   }
 ): Promise<void> {
@@ -60,7 +62,7 @@ async function printReceiptText(
   const logo = opts.logoUrl
     ? await logoUrlToEscPos(String(opts.logoUrl), paper === 58 ? 240 : 384)
     : null;
-  const escpos = textToEscPos(text, opts.qrUrl, logo);
+  const escpos = textToEscPos(text, opts.qrUrl, logo, undefined, undefined, opts.deliveryQrUrl);
   const dataBase64 = uint8ToBase64(escpos);
   for (const name of names) {
     const label = (name || '').trim();
@@ -109,6 +111,7 @@ export async function printMerchantOrderReceipt(
     fallbackPrinterName: opts.fallbackPrinterName,
     qrUrl:
       opts.printSettings?.receiptShowQrCode !== false ? receiptPayload.receiptUrl : undefined,
+    deliveryQrUrl: deliveryDirectionsUrlForReceipt(receiptPayload),
     logoUrl: opts.printSettings?.receiptLogoUrl || opts.merchant.shopLogoUrl || null,
   });
 }

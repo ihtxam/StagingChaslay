@@ -152,6 +152,7 @@ interface SettingsData {
     receiptShowVatTable?: boolean;
     receiptShowStaffLine?: boolean;
     receiptShowQrCode?: boolean;
+    receiptDeliveryDirectionsQr?: boolean;
     adyenReceiptDigitalOnly?: boolean;
     paperWidthMm?: 58 | 80;
     receiptLanguage?: 'en' | 'fr' | 'de' | 'panel';
@@ -920,6 +921,7 @@ export default function Settings() {
           receiptShowVatTable: ps.receiptShowVatTable !== false,
           receiptShowStaffLine: ps.receiptShowStaffLine !== false,
           receiptShowQrCode: ps.receiptShowQrCode !== false,
+          receiptDeliveryDirectionsQr: ps.receiptDeliveryDirectionsQr !== false,
           adyenReceiptDigitalOnly: ps.adyenReceiptDigitalOnly === true,
           paperWidthMm: ps.paperWidthMm === 58 ? 58 : 80,
           receiptLanguage: ps.receiptLanguage || 'panel',
@@ -2884,6 +2886,7 @@ export default function Settings() {
                       ['receiptShowVatTable', t('receiptShowVat')],
                       ['receiptShowStaffLine', t('receiptShowStaff')],
                       ['receiptShowQrCode', t('receiptShowQr')],
+                      ['receiptDeliveryDirectionsQr', t('receiptDeliveryDirectionsQr')],
                       ['autoPrintReceipt', t('autoPrintReceipt')],
                       ['autoPrintKitchen', t('autoPrintKitchen')],
                     ] as const

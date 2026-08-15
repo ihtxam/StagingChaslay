@@ -923,6 +923,7 @@ const en: Dict = {
   receiptShowVat: 'Show VAT line',
   receiptShowStaff: 'Show staff name',
   receiptShowQr: 'Show digital receipt QR',
+  receiptDeliveryDirectionsQr: 'Delivery directions QR on receipt',
   adyenReceiptDigitalOnly: 'Adyen card receipt: digital only (QR)',
   adyenReceiptDigitalOnlyHint:
     'When enabled, the Adyen payment receipt is not printed on paper — customers scan the order QR to view it online.',
@@ -2762,6 +2763,7 @@ const fr: Dict = {
   receiptShowVat: 'Afficher la TVA',
   receiptShowStaff: 'Afficher le personnel',
   receiptShowQr: 'Afficher le QR reçu digital',
+  receiptDeliveryDirectionsQr: 'QR directions livraison sur le reçu',
   adyenReceiptDigitalOnly: 'Reçu carte Adyen : digital uniquement (QR)',
   adyenReceiptDigitalOnlyHint:
     'Le reçu de paiement Adyen n’est pas imprimé — le client scanne le QR de commande pour le consulter en ligne.',
@@ -4603,6 +4605,7 @@ const de: Dict = {
   receiptShowVat: 'MwSt.-Zeile anzeigen',
   receiptShowStaff: 'Personal anzeigen',
   receiptShowQr: 'Digitalen Beleg-QR anzeigen',
+  receiptDeliveryDirectionsQr: 'Liefer-Routen-QR auf Beleg',
   adyenReceiptDigitalOnly: 'Adyen-Kartenbeleg: nur digital (QR)',
   adyenReceiptDigitalOnlyHint:
     'Der Adyen-Zahlungsbeleg wird nicht gedruckt — Kunden scannen den Bestell-QR für die Online-Ansicht.',

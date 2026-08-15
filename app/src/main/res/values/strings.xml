@@ -572,6 +572,7 @@
     <string name="receipt_show_vat">Show VAT breakdown table</string>
     <string name="receipt_show_staff">Show staff line on receipt</string>
     <string name="receipt_show_qr">Print digital receipt QR code</string>
+    <string name="receipt_delivery_directions_qr">Delivery directions QR on receipt</string>
     <string name="kitchen_large_items">Large item text on kitchen ticket</string>
     <string name="kitchen_large_header">Large header on kitchen ticket</string>
     <string name="kitchen_text_size">Kitchen ticket text size</string>

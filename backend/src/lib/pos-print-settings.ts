@@ -28,6 +28,8 @@ export type PosPrintSettings = {
   receiptShowVatTable?: boolean;
   receiptShowStaffLine?: boolean;
   receiptShowQrCode?: boolean;
+  /** When true, delivery order receipts include a Google Maps navigation QR at the bottom. */
+  receiptDeliveryDirectionsQr?: boolean;
   /** When true, Adyen card payment receipt is available via QR only (not printed on thermal). */
   adyenReceiptDigitalOnly?: boolean;
   /** Default paper width when printer profile has none */
@@ -59,6 +61,7 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   receiptShowVatTable: true,
   receiptShowStaffLine: true,
   receiptShowQrCode: true,
+  receiptDeliveryDirectionsQr: true,
   adyenReceiptDigitalOnly: false,
   paperWidthMm: 80,
   receiptLanguage: "panel",
@@ -124,6 +127,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     receiptShowVatTable: src.receiptShowVatTable !== false,
     receiptShowStaffLine: src.receiptShowStaffLine !== false,
     receiptShowQrCode: src.receiptShowQrCode !== false,
+    receiptDeliveryDirectionsQr: src.receiptDeliveryDirectionsQr !== false,
     adyenReceiptDigitalOnly: src.adyenReceiptDigitalOnly === true,
     paperWidthMm: paper,
     receiptLanguage,

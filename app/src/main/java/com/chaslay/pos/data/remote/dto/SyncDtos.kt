@@ -190,7 +190,8 @@ data class SyncScaleDto(
 )
 
 data class SyncPrintDto(
-    @SerializedName("adyen_receipt_digital_only") val adyenReceiptDigitalOnly: Boolean = false
+    @SerializedName("adyen_receipt_digital_only") val adyenReceiptDigitalOnly: Boolean = false,
+    @SerializedName("receipt_delivery_directions_qr") val receiptDeliveryDirectionsQr: Boolean = true
 )
 
 data class PaymentConfigResponse(

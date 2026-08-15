@@ -26,6 +26,8 @@ import {
   textToEscPos,
   uint8ToBase64,
   posOrderToWebPosReceipt,
+  deliveryDirectionsUrlForReceipt,
+  generateEodReportText,
   type PosOrderForReceipt,
   type PosPrintSettingsClient,
   type WebPosReceipt,
@@ -184,7 +186,6 @@ import {
   WebPosCloseShiftModal,
   WebPosShiftClosedModal,
 } from '@/components/webpos/WebPosShiftModals';
-import { generateEodReportText } from '@/lib/webpos-receipt';
 import { printRefundReceipt } from '@/lib/print-order-receipt';
 import WebPosCartPanel from '@/components/webpos/WebPosCartPanel';
 import WebPosProductArea, {
@@ -234,6 +235,7 @@ type SplitReceiptPart = {
   label: string;
   text: string;
   url?: string;
+  deliveryQrUrl?: string;
   amount: number;
   orderNumber?: string;
 };
@@ -550,6 +552,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('manupos_webpos_autoprint') !== '0');
   const [lastReceipt, setLastReceipt] = useState<string>('');
   const [lastReceiptUrl, setLastReceiptUrl] = useState<string>('');
+  const [lastDeliveryQrUrl, setLastDeliveryQrUrl] = useState<string>('');
   const [lastReceiptOrderId, setLastReceiptOrderId] = useState<string>('');
   const [lastReceiptOrderNumber, setLastReceiptOrderNumber] = useState<string>('');
   const [lastSplitReceipts, setLastSplitReceipts] = useState<SplitReceiptPart[]>([]);
@@ -3901,6 +3904,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           receiptPayload.giftCardRemainingBalance = Math.min(...gcRemaining);
         }
         const receiptText = generateWebPosReceiptText(receiptPayload, locale);
+        const deliveryQrUrl = deliveryDirectionsUrlForReceipt(receiptPayload);
         const orderId = String(orderForReceipt.id || orderForReceipt.clientId || ctx.id);
         const orderNumber =
           orderForReceipt.orderNumber ||
@@ -3916,13 +3920,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           label: t('webPosPrintReceipt'),
           text: receiptText,
           url: receiptPayload.receiptUrl,
+          deliveryQrUrl,
           amount: ctx.total,
           orderNumber,
         };
         splitReceiptsRef.current = [part];
         setLastSplitReceipts([part]);
         try {
-          await printReceipt(receiptText, receiptPayload.receiptUrl);
+          await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl);
         } catch {
           /* print is best-effort — manual reprint uses staged lastReceipt */
         }
@@ -4122,6 +4127,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     text: string,
     opts: {
       qrUrl?: string;
+      deliveryQrUrl?: string;
       barcodeData?: string;
       /** Gift-card receipts always print QR/barcode even when receipt QR is disabled. */
       forceScannable?: boolean;
@@ -4167,7 +4173,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ? opts.qrUrl
         : undefined;
     const barcode = opts.barcodeData || (opts.forceScannable ? opts.qrUrl : undefined);
-    const escpos = textToEscPos(text, qr, logo, barcode);
+    const escpos = textToEscPos(text, qr, logo, barcode, undefined, opts.deliveryQrUrl);
     const dataBase64 = uint8ToBase64(escpos);
 
     let printedOk = 0;
@@ -4229,9 +4235,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const printReceipt = async (receiptText: string, receiptUrl?: string) => {
+  const printReceipt = async (receiptText: string, receiptUrl?: string, deliveryQrUrl?: string) => {
     await printEscPosToTargets(receiptText, {
       qrUrl: receiptUrl,
+      deliveryQrUrl,
       role: 'receipt',
       quiet: true,
     });
@@ -4243,7 +4250,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     if (lastReceipt) {
-      void printReceipt(lastReceipt, lastReceiptUrl || undefined).catch((e: any) =>
+      void printReceipt(lastReceipt, lastReceiptUrl || undefined, lastDeliveryQrUrl || undefined).catch((e: any) =>
         toast.error(e.message || t('webPosPrintFailed'))
       );
       return;
@@ -4258,7 +4265,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     try {
-      await printReceipt(part.text, part.url);
+      await printReceipt(part.text, part.url, part.deliveryQrUrl);
     } catch (e: any) {
       toast.error(e.message || t('webPosPrintFailed'));
     }
@@ -4272,7 +4279,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     try {
       const combined = lastSplitReceipts.map((p) => p.text).join('\n\n====================\n\n');
       const firstUrl = lastSplitReceipts[0]?.url;
-      await printReceipt(combined, firstUrl);
+      const firstDeliveryQr = lastSplitReceipts[0]?.deliveryQrUrl;
+      await printReceipt(combined, firstUrl, firstDeliveryQr);
     } catch (e: any) {
       toast.error(e.message || t('webPosPrintFailed'));
     }
@@ -4336,7 +4344,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       splitLabel,
     });
     const receiptText = generateWebPosReceiptText(receiptPayload, locale);
-    await printReceipt(receiptText, receiptPayload.receiptUrl);
+    await printReceipt(
+      receiptText,
+      receiptPayload.receiptUrl,
+      deliveryDirectionsUrlForReceipt(receiptPayload)
+    );
   };
 
   const printPosRefundReceipt = async (payload: {
@@ -4872,6 +4884,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       splitLabel: activeSale.label,
       receiptUrl,
       includeQr: !queuedOffline && printSettings?.receiptShowQrCode !== false,
+      deliveryDirectionsQr: printSettings?.receiptDeliveryDirectionsQr !== false,
       staffName: webposStaff?.name,
       language: lang,
       paperWidthMm,
@@ -4884,8 +4897,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       giftCardRemainingBalance,
     };
     const receiptText = generateWebPosReceiptText(receiptPayload, locale);
+    const deliveryQrUrl = deliveryDirectionsUrlForReceipt(receiptPayload);
     setLastReceipt(receiptText);
     setLastReceiptUrl(receiptUrl);
+    setLastDeliveryQrUrl(deliveryQrUrl || '');
     setLastReceiptOrderId(receiptRef || clientId);
     setLastReceiptOrderNumber(ticket.orderNumber || ticket.display || '');
 
@@ -4898,6 +4913,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           : t('webPosPrintReceipt')),
       text: receiptText,
       url: receiptUrl,
+      deliveryQrUrl,
       amount: sale.total,
       orderNumber: ticket.orderNumber || ticket.display,
     };
@@ -4991,7 +5007,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       printSettings?.autoPrintReceipt !== false;
     if (shouldPrintReceipt && receiptUrl) {
       // Never hold checkout/busy on the print agent.
-      void printReceipt(receiptText, receiptUrl).catch((e: any) => {
+      void printReceipt(receiptText, receiptUrl, deliveryQrUrl).catch((e: any) => {
         toast.error(e?.message || t('webPosPrintFailed'));
       });
     }
@@ -6346,7 +6362,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           if (!part) return;
           setPrintChooserBusy(true);
           try {
-            await printReceipt(part.text, part.url);
+            await printReceipt(part.text, part.url, part.deliveryQrUrl);
             setPrintChooserOpen(false);
           } catch (e: any) {
             toast.error(e.message || t('webPosPrintFailed'));
@@ -6362,7 +6378,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               .map((p) => p.text)
               .join('\n\n====================\n\n');
             const firstUrl = lastSplitReceipts[0]?.url;
-            await printReceipt(combined, firstUrl);
+            const firstDeliveryQr = lastSplitReceipts[0]?.deliveryQrUrl;
+            await printReceipt(combined, firstUrl, firstDeliveryQr);
             setPrintChooserOpen(false);
           } catch (e: any) {
             toast.error(e.message || t('webPosPrintFailed'));

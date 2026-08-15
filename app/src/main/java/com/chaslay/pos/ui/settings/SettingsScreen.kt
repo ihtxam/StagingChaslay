@@ -802,6 +802,13 @@ fun SettingsScreen(
             Text(stringResource(R.string.receipt_show_qr))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = state.receiptDeliveryDirectionsQr,
+                onCheckedChange = viewModel::updateReceiptDeliveryDirectionsQr
+            )
+            Text(stringResource(R.string.receipt_delivery_directions_qr))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = state.adyenReceiptDigitalOnly, onCheckedChange = viewModel::updateAdyenReceiptDigitalOnly)
             Text("Adyen card receipt: digital only (QR)")
         }

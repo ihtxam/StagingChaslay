@@ -33,6 +33,8 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -304,7 +306,7 @@ class BluetoothPrinterService @Inject constructor(
             val sb = StringBuilder()
             appendHeader(sb, settings.receiptHeader.ifBlank { settings.businessName }, lineWidth)
             sb.appendLine(center(title, lineWidth))
-            sb.appendLine(center(sepDash, lineWidth))
+            sb.appendLine(center(sepDash(lineWidth), lineWidth))
             lines.forEach { (label, amount) ->
                 sb.appendLine(label)
                 sb.appendLine(right(formatMoney(amount, settings.currencySymbol), lineWidth))
@@ -683,7 +685,7 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine(escBold(false))
         sb.appendLine(center(settings.businessName, lineWidth))
         sb.appendLine("Table: $tableName  Round: $round")
-        sb.appendLine(center(sepDash, lineWidth))
+        sb.appendLine(center(sepDash(lineWidth), lineWidth))
         items.forEach { item ->
             appendKitchenItemBlock(sb, item, settings, lineWidth)
         }
@@ -707,7 +709,7 @@ class BluetoothPrinterService @Inject constructor(
         val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
         val timeFmt = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
         val sepEq = "=".repeat(lineWidth)
-        val sepDash = "-".repeat(lineWidth)
+        val dash = sepDash(lineWidth)
 
         if (isFollowUp) {
             sb.appendLine(escBold(true))
@@ -717,7 +719,7 @@ class BluetoothPrinterService @Inject constructor(
                 sb.appendLine(center("#$it", lineWidth))
             }
             if (tableName.isNotBlank()) sb.appendLine(center(tableName, lineWidth))
-            sb.appendLine(center(sepDash, lineWidth))
+            sb.appendLine(center(sepDash(lineWidth), lineWidth))
             message.orEmpty().lines().forEach { line ->
                 val trimmed = line.trim()
                 if (trimmed.isNotBlank()) sb.appendLine(trimmed)
@@ -777,7 +779,7 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine(
             "${labels.itemsHeader}${" ".repeat((lineWidth - labels.itemsHeader.length - numsLabel.length).coerceAtLeast(1))}$numsLabel"
         )
-        sb.appendLine(sepDash)
+        sb.appendLine(dash)
 
         meta.fireCourseNumber?.let { course ->
             sb.appendLine(escBold(true))
@@ -798,13 +800,13 @@ class BluetoothPrinterService @Inject constructor(
                 courseItems.forEach { item ->
                     appendKitchenItemBlock(sb, item, settings, lineWidth)
                 }
-                sb.appendLine(sepDash)
+                sb.appendLine(dash)
             }
         }
 
         if (round > 1) sb.appendLine(center("${labels.roundLabel}: $round", lineWidth))
 
-        sb.appendLine(center(sepDash, lineWidth))
+        sb.appendLine(center(sepDash(lineWidth), lineWidth))
         val orderedAt = meta.orderedAtMs ?: System.currentTimeMillis()
         val staff = meta.cashierName?.trim().orEmpty()
         val source = labels.orderSourceLabel(meta.orderSource)
@@ -962,8 +964,9 @@ class BluetoothPrinterService @Inject constructor(
             orderType = orderType
         )
         appendFooter(sb, settings.receiptFooter, lineWidth)
+        val deliveryDirectionsUrl = deliveryDirectionsUrlForCart(settings, cart, context, lineWidth, sb)
         sb.appendLine("\n\n\n")
-        return finalizePayload(sb.toString(), settings, lineWidth)
+        return finalizePayload(sb.toString(), settings, lineWidth, deliveryDirectionsUrl = deliveryDirectionsUrl)
     }
 
     private fun buildEscPosReceipt(
@@ -1124,13 +1127,20 @@ class BluetoothPrinterService @Inject constructor(
             transaction.receiptUrl?.takeIf { it.isNotBlank() }
         } else null
         if (qrUrl != null) {
-            sb.appendLine(center(sepDash, lineWidth))
+            sb.appendLine(center(sepDash(lineWidth), lineWidth))
             sb.appendLine(center(labels.scanDigitalReceipt, lineWidth))
         }
+        val deliveryDirectionsUrl = deliveryDirectionsUrlForTransaction(settings, transaction, lineWidth, sb)
         com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendable(appendAdyenCustomerReceipt)
             ?.takeIf { settings.adyenReceiptDigitalOnly != true }
             ?.let { receipt -> appendAdyenReceiptBlock(sb, receipt, lineWidth) }
-        return finalizePayload(sb.toString(), settings, lineWidth, qrUrl)
+        return finalizePayload(
+            sb.toString(),
+            settings,
+            lineWidth,
+            receiptUrl = qrUrl,
+            deliveryDirectionsUrl = deliveryDirectionsUrl
+        )
     }
 
     private fun appendAdyenReceiptBlock(
@@ -1138,7 +1148,7 @@ class BluetoothPrinterService @Inject constructor(
         receipt: com.chaslay.pos.payment.AdyenTerminalReceipt,
         lineWidth: Int
     ) {
-        sb.appendLine(center(sepDash, lineWidth))
+        sb.appendLine(center(sepDash(lineWidth), lineWidth))
         sb.append(com.chaslay.pos.payment.AdyenPaymentReceiptFormatter.toPlainText(receipt, lineWidth))
     }
 
@@ -1352,7 +1362,7 @@ class BluetoothPrinterService @Inject constructor(
         lineWidth: Int
     ) {
         if ((pointsEarned ?: 0) <= 0 && pointsBalance == null) return
-        sb.appendLine(center(sepDash, lineWidth))
+        sb.appendLine(center(sepDash(lineWidth), lineWidth))
         pointsEarned?.takeIf { it > 0 }?.let {
             sb.appendLine(leftRight("Points earned", "+$it", lineWidth))
         }
@@ -1586,12 +1596,19 @@ class BluetoothPrinterService @Inject constructor(
         text: String,
         settings: BusinessSettingsEntity,
         lineWidth: Int = LINE_WIDTH_80,
-        receiptUrl: String? = null
+        receiptUrl: String? = null,
+        deliveryDirectionsUrl: String? = null
     ): ByteArray {
         val body = EscPosEncoder.encode(text)
-        val showQr = settings.receiptShowQrCode && !receiptUrl.isNullOrBlank()
-        val qrBytes = if (showQr) receiptQrRaster(receiptUrl!!, lineWidth) else byteArrayOf()
-        val cutFeed = if (showQr) 2 else 4
+        val qrParts = mutableListOf<ByteArray>()
+        if (settings.receiptShowQrCode && !receiptUrl.isNullOrBlank()) {
+            qrParts.add(receiptQrRaster(receiptUrl, lineWidth))
+        }
+        if (settings.receiptDeliveryDirectionsQr && !deliveryDirectionsUrl.isNullOrBlank()) {
+            qrParts.add(receiptQrRaster(deliveryDirectionsUrl, lineWidth))
+        }
+        val qrBytes = qrParts.fold(byteArrayOf()) { acc, part -> acc + part }
+        val cutFeed = if (qrBytes.isNotEmpty()) 2 else 4
         return buildPrintPayload(body, settings, lineWidth, qrBytes, cutFeed)
     }
 
@@ -1793,11 +1810,80 @@ class BluetoothPrinterService @Inject constructor(
 
     private fun appendFooter(sb: StringBuilder, footer: String, lineWidth: Int = LINE_WIDTH_80) {
         if (footer.isBlank()) return
-        sb.appendLine(center(sepDash, lineWidth))
+        sb.appendLine(center(sepDash(lineWidth), lineWidth))
         footer.lines().forEach { line ->
             if (line.isNotBlank()) sb.appendLine(center(line.trim(), lineWidth))
         }
     }
+
+    private fun sepDash(lineWidth: Int): String = "-".repeat(lineWidth)
+
+    private fun googleMapsNavigationUrl(address: String): String {
+        val encoded = URLEncoder.encode(address.trim(), StandardCharsets.UTF_8.toString())
+        return "https://www.google.com/maps/dir/?api=1&destination=$encoded"
+    }
+
+    private fun parseDeliveryAddressFromNotes(notes: String?): String? {
+        if (notes.isNullOrBlank() || !notes.contains("--- DELIVERY ---")) return null
+        val address = notes.lines()
+            .firstOrNull { it.trim().startsWith("Address:", ignoreCase = true) }
+            ?.substringAfter(":")
+            ?.trim()
+            .orEmpty()
+        val zip = notes.lines()
+            .firstOrNull { it.trim().startsWith("ZIP:", ignoreCase = true) }
+            ?.substringAfter(":")
+            ?.trim()
+            .orEmpty()
+        return listOfNotNull(address.takeIf { it.isNotBlank() }, zip.takeIf { it.isNotBlank() })
+            .joinToString(", ")
+            .ifBlank { null }
+    }
+
+    private fun deliveryAddressFromCart(
+        cart: CartSummary,
+        context: ReceiptPrintContext
+    ): String? {
+        val isDelivery = context.fulfillmentType == FulfillmentType.DELIVERY ||
+            cart.fulfillmentType == FulfillmentType.DELIVERY
+        if (!isDelivery) return null
+        return listOfNotNull(cart.deliveryAddress, cart.deliveryZip)
+            .filter { it.isNotBlank() }
+            .joinToString(", ")
+            .ifBlank { null }
+    }
+
+    private fun appendDeliveryDirectionsLabel(
+        sb: StringBuilder,
+        settings: BusinessSettingsEntity,
+        address: String?,
+        lineWidth: Int
+    ): String? {
+        if (!settings.receiptDeliveryDirectionsQr || address.isNullOrBlank()) return null
+        sb.appendLine(center(sepDash(lineWidth), lineWidth))
+        sb.appendLine(center("GET DIRECTIONS", lineWidth))
+        return googleMapsNavigationUrl(address)
+    }
+
+    private fun deliveryDirectionsUrlForCart(
+        settings: BusinessSettingsEntity,
+        cart: CartSummary,
+        context: ReceiptPrintContext,
+        lineWidth: Int,
+        sb: StringBuilder
+    ): String? = appendDeliveryDirectionsLabel(sb, settings, deliveryAddressFromCart(cart, context), lineWidth)
+
+    private fun deliveryDirectionsUrlForTransaction(
+        settings: BusinessSettingsEntity,
+        transaction: TransactionEntity,
+        lineWidth: Int,
+        sb: StringBuilder
+    ): String? = appendDeliveryDirectionsLabel(
+        sb,
+        settings,
+        parseDeliveryAddressFromNotes(transaction.notes),
+        lineWidth
+    )
 
     private fun paymentLabel(method: PaymentMethod): String = when (method) {
         PaymentMethod.CASH -> "Cash"

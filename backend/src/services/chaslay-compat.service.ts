@@ -492,6 +492,7 @@ export class ChaslayCompatService {
       },
       print: {
         adyen_receipt_digital_only: posPrintSettings.adyenReceiptDigitalOnly === true,
+        receipt_delivery_directions_qr: posPrintSettings.receiptDeliveryDirectionsQr !== false,
       },
     };
   }

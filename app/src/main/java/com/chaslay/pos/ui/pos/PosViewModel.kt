@@ -2025,7 +2025,10 @@ class PosViewModel @Inject constructor(
                 }
             }
             cfg.print?.let { print ->
-                merged = merged.copy(adyenReceiptDigitalOnly = print.adyenReceiptDigitalOnly)
+                merged = merged.copy(
+                    adyenReceiptDigitalOnly = print.adyenReceiptDigitalOnly,
+                    receiptDeliveryDirectionsQr = print.receiptDeliveryDirectionsQr
+                )
             }
             cfg.checkout?.let { checkout ->
                 merged = merged.copy(tablesEnabled = checkout.tablesEnabled)

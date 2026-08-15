@@ -109,6 +109,7 @@ data class SettingsUiState(
     val receiptShowVatTable: Boolean = true,
     val receiptShowStaffLine: Boolean = true,
     val receiptShowQrCode: Boolean = true,
+    val receiptDeliveryDirectionsQr: Boolean = true,
     val adyenReceiptDigitalOnly: Boolean = false,
     val kitchenLargeItemText: Boolean = true,
     val kitchenLargeHeaderText: Boolean = true,
@@ -238,6 +239,7 @@ class SettingsViewModel @Inject constructor(
                     receiptShowVatTable = settings.receiptShowVatTable,
                     receiptShowStaffLine = settings.receiptShowStaffLine,
                     receiptShowQrCode = settings.receiptShowQrCode,
+                    receiptDeliveryDirectionsQr = settings.receiptDeliveryDirectionsQr,
                     adyenReceiptDigitalOnly = settings.adyenReceiptDigitalOnly,
                     kitchenLargeItemText = settings.kitchenLargeItemText,
                     kitchenLargeHeaderText = settings.kitchenLargeHeaderText,
@@ -684,6 +686,8 @@ class SettingsViewModel @Inject constructor(
     fun updateReceiptShowVatTable(value: Boolean) = _uiState.update { it.copy(receiptShowVatTable = value) }
     fun updateReceiptShowStaffLine(value: Boolean) = _uiState.update { it.copy(receiptShowStaffLine = value) }
     fun updateReceiptShowQrCode(value: Boolean) = _uiState.update { it.copy(receiptShowQrCode = value) }
+    fun updateReceiptDeliveryDirectionsQr(value: Boolean) =
+        _uiState.update { it.copy(receiptDeliveryDirectionsQr = value) }
     fun updateAdyenReceiptDigitalOnly(value: Boolean) = _uiState.update { it.copy(adyenReceiptDigitalOnly = value) }
     fun updateKitchenLargeItems(value: Boolean) = _uiState.update { it.copy(kitchenLargeItemText = value) }
     fun updateKitchenLargeHeader(value: Boolean) = _uiState.update { it.copy(kitchenLargeHeaderText = value) }
@@ -1138,6 +1142,7 @@ class SettingsViewModel @Inject constructor(
             receiptShowVatTable = state.receiptShowVatTable,
             receiptShowStaffLine = state.receiptShowStaffLine,
             receiptShowQrCode = state.receiptShowQrCode,
+            receiptDeliveryDirectionsQr = state.receiptDeliveryDirectionsQr,
             adyenReceiptDigitalOnly = state.adyenReceiptDigitalOnly,
             kitchenLargeItemText = state.kitchenLargeItemText,
             kitchenLargeHeaderText = state.kitchenLargeHeaderText,

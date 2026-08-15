@@ -275,6 +275,8 @@ data class BusinessSettingsEntity(
     val receiptShowVatTable: Boolean = true,
     val receiptShowStaffLine: Boolean = true,
     val receiptShowQrCode: Boolean = true,
+    /** When true, delivery receipts include a Google Maps navigation QR at the bottom. */
+    val receiptDeliveryDirectionsQr: Boolean = true,
     /** When true, Adyen card payment receipt is QR-only (not printed on thermal). */
     val adyenReceiptDigitalOnly: Boolean = false,
     val kitchenLargeItemText: Boolean = true,

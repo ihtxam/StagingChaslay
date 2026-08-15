@@ -112,6 +112,22 @@ export function parseOrderMetaNotes(notes?: string | null): {
   };
 }
 
+export function googleMapsNavigationUrl(address: string): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address.trim())}`;
+}
+
+export function deliveryDirectionsUrlForReceipt(tx: {
+  channel?: string;
+  shippingAddress?: string | null;
+  deliveryDirectionsQr?: boolean;
+}): string | undefined {
+  if (tx.deliveryDirectionsQr === false) return undefined;
+  if (tx.channel !== 'delivery') return undefined;
+  const address = tx.shippingAddress?.trim();
+  if (!address) return undefined;
+  return googleMapsNavigationUrl(address);
+}
+
 export type WebPosReceiptItem = {
   name: string;
   quantity: number;
@@ -134,6 +150,8 @@ export type PosPrintSettingsClient = {
   receiptShowVatTable?: boolean;
   receiptShowStaffLine?: boolean;
   receiptShowQrCode?: boolean;
+  /** When true, delivery order receipts include a Google Maps navigation QR at the bottom. */
+  receiptDeliveryDirectionsQr?: boolean;
   /** When true, Adyen card payment receipt is QR-only (not printed on thermal). */
   adyenReceiptDigitalOnly?: boolean;
   paperWidthMm?: 58 | 80;
@@ -200,6 +218,8 @@ export type WebPosReceipt = {
   notes?: string;
   receiptUrl?: string;
   includeQr?: boolean;
+  /** When false, skip delivery directions QR even for delivery channel. */
+  deliveryDirectionsQr?: boolean;
   staffName?: string | null;
   language?: ReceiptLang | string;
   paperWidthMm?: 58 | 80;
@@ -669,6 +689,12 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (tx.includeQr !== false && (tx.receiptUrl || tx.id)) {
     r += thin + '\n';
     r += L.scanDigitalReceipt + '\n';
+  }
+
+  const deliveryQrUrl = deliveryDirectionsUrlForReceipt(tx);
+  if (deliveryQrUrl) {
+    r += thin + '\n';
+    r += centerLine('GET DIRECTIONS', width) + '\n';
   }
 
   r += formatReceiptMetaFooter(tx, L, locale, width) + '\n';
@@ -1521,13 +1547,14 @@ export function generateEodReportText(report: EodReportPrint): string {
   return r;
 }
 
-/** Minimal ESC/POS: init + optional logo + text + optional QR + optional Code128 + feed + partial cut */
+/** Minimal ESC/POS: init + optional logo + text + optional QR + optional delivery QR + optional Code128 + feed + partial cut */
 export function textToEscPos(
   text: string,
   qrData?: string,
   logoBytes?: Uint8Array | null,
   barcodeData?: string,
-  barcodeLabel?: string
+  barcodeLabel?: string,
+  deliveryQrData?: string
 ): Uint8Array {
   const body = escposCp850Encode(text);
   const init = new Uint8Array([0x1b, 0x40]);
@@ -1542,6 +1569,9 @@ export function textToEscPos(
   parts.push(alignLeft, body);
   if (qrData) {
     parts.push(alignCenter, escposQrCode(qrData, 2), alignLeft);
+  }
+  if (deliveryQrData) {
+    parts.push(alignCenter, escposQrCode(deliveryQrData, 2), alignLeft);
   }
   if (barcodeData) {
     parts.push(escposCode128(barcodeData, 72, 2));
@@ -1789,6 +1819,7 @@ export function posOrderToWebPosReceipt(
     splitLabel,
     receiptUrl: order.id || order.clientId ? buildReceiptUrl(String(order.id || order.clientId)) : undefined,
     includeQr: ctx.printSettings?.receiptShowQrCode !== false,
+    deliveryDirectionsQr: ctx.printSettings?.receiptDeliveryDirectionsQr !== false,
     staffName: order.staffName,
     language: lang,
     paperWidthMm,
