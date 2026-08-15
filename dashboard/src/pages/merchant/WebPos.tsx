@@ -6651,15 +6651,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         orders={onlineOrders}
         onRefresh={() => void pollOnlineOrders()}
         onOrderActioned={markOnlineOrderActioned}
-        onGoToOrders={(orderId) => {
+        onCollectPayment={(order) => {
           setOnlineOrdersOpen(false);
           stopOrderAlertLoop();
-          markOnlineOrderActioned(orderId);
-          setOrdersChannelPref('online');
-          setHighlightOrderId(orderId);
-          setOrdersRefreshToken((n) => n + 1);
-          setPosTab('orders');
-          setPosView('orders');
+          markOnlineOrderActioned(order.id);
+          openOrderCollectCheckout(order as MerchantOrder, 'register');
         }}
       />
 

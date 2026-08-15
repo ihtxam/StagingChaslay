@@ -34,8 +34,8 @@ type Props = {
   onClose: () => void;
   orders: OnlineOrder[];
   onRefresh: () => void;
-  /** After accept / kitchen action — open Orders board on this ticket */
-  onGoToOrders?: (orderId: string) => void;
+  /** Unpaid order marked ready — open POS checkout to collect payment */
+  onCollectPayment?: (order: OnlineOrder) => void;
   /** Order handled (accept/reject/complete) — clear bell badge for this ticket */
   onOrderActioned?: (orderId: string) => void;
 };
@@ -44,11 +44,62 @@ function isNew(status: string) {
   return status === 'pending' || status === 'pending_approval';
 }
 
+function isPaid(o: OnlineOrder) {
+  const pay = (o.paymentStatus || '').toLowerCase();
+  return pay === 'completed' || pay === 'paid';
+}
+
 function isUnpaid(o: OnlineOrder) {
+  if (isPaid(o)) return false;
   const pay = (o.paymentStatus || '').toLowerCase();
   const method = (o.paymentMethod || '').toLowerCase();
-  if (pay === 'completed' || pay === 'paid') return false;
   return pay === 'awaiting_payment' || method === 'pay_later' || pay === 'cash';
+}
+
+type WorkflowStep = 'accept' | 'kitchen' | 'ready' | 'done';
+
+function workflowStep(status: string): WorkflowStep {
+  if (isNew(status)) return 'accept';
+  if (status === 'accepted') return 'kitchen';
+  if (status === 'preparing') return 'ready';
+  return 'done';
+}
+
+function WorkflowIndicator({ status, t }: { status: string; t: (k: string) => string }) {
+  const current = workflowStep(status);
+  const steps: { id: WorkflowStep; label: string }[] = [
+    { id: 'accept', label: t('webPosWorkflowAccept') },
+    { id: 'kitchen', label: t('webPosWorkflowKitchen') },
+    { id: 'ready', label: t('webPosWorkflowReady') },
+    { id: 'done', label: t('webPosWorkflowDone') },
+  ];
+  const order: WorkflowStep[] = ['accept', 'kitchen', 'ready', 'done'];
+  const currentIdx = order.indexOf(current);
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 text-[10px] font-semibold uppercase tracking-wide">
+      {steps.map((step, idx) => {
+        const done = idx < currentIdx;
+        const active = step.id === current;
+        return (
+          <span key={step.id} className="inline-flex items-center gap-1">
+            {idx > 0 ? <span className="text-stone-300">→</span> : null}
+            <span
+              className={`rounded-full px-2 py-0.5 ${
+                active
+                  ? 'bg-violet-600 text-white'
+                  : done
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-stone-100 text-stone-400'
+              }`}
+            >
+              {step.label}
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function WebPosOnlineOrdersPanel({
@@ -56,7 +107,7 @@ export default function WebPosOnlineOrdersPanel({
   onClose,
   orders,
   onRefresh,
-  onGoToOrders,
+  onCollectPayment,
   onOrderActioned,
 }: Props) {
   const { t, formatDateTime } = useI18n();
@@ -67,19 +118,51 @@ export default function WebPosOnlineOrdersPanel({
     if (open) setTab('new');
   }, [open]);
 
-  const run = useCallback(
-    async (id: string, action: string) => {
-      setBusyId(id);
+  const postAction = useCallback(
+    async (id: string, action: string, extra?: Record<string, unknown>) => {
+      const res = await api.post(`/merchant/orders/${id}/action`, { action, ...extra });
+      return (res.data?.order as OnlineOrder | undefined) || null;
+    },
+    []
+  );
+
+  const finalizeWhenReady = useCallback(
+    async (order: OnlineOrder) => {
+      if (isUnpaid(order)) {
+        onOrderActioned?.(order.id);
+        onClose();
+        onCollectPayment?.(order);
+        toast(t('webPosCollectOnReady'));
+        return;
+      }
+      setBusyId(order.id);
       try {
-        await api.post(`/merchant/orders/${id}/action`, { action });
+        await postAction(order.id, 'complete');
+        toast.success(t('webPosOrderCompleted'));
+        onOrderActioned?.(order.id);
+        await onRefresh();
+      } catch (e: any) {
+        toast.error(e.response?.data?.error || t('actionFailed'));
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [onClose, onCollectPayment, onOrderActioned, onRefresh, postAction, t]
+  );
+
+  const run = useCallback(
+    async (order: OnlineOrder, action: string) => {
+      setBusyId(order.id);
+      try {
+        const updated = await postAction(order.id, action);
         toast.success(t('updated'));
-        if (action === 'accept' || action === 'reject' || action === 'complete') {
-          onOrderActioned?.(id);
+        if (action === 'accept' || action === 'reject') {
+          onOrderActioned?.(order.id);
         }
         await onRefresh();
-        if (action === 'accept' || action === 'start_preparing' || action === 'mark_ready') {
-          onClose();
-          onGoToOrders?.(id);
+        if (action === 'mark_ready') {
+          const fresh = updated || { ...order, status: 'ready' };
+          await finalizeWhenReady(fresh);
         }
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('actionFailed'));
@@ -87,7 +170,7 @@ export default function WebPosOnlineOrdersPanel({
         setBusyId(null);
       }
     },
-    [onClose, onGoToOrders, onOrderActioned, onRefresh, t]
+    [finalizeWhenReady, onOrderActioned, onRefresh, postAction, t]
   );
 
   const list = useMemo(() => {
@@ -129,7 +212,10 @@ export default function WebPosOnlineOrdersPanel({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
-          <h2 className="font-semibold text-stone-900">{t('webPosOnlineOrders')}</h2>
+          <div>
+            <h2 className="font-semibold text-stone-900">{t('webPosOnlineOrders')}</h2>
+            <p className="text-[11px] text-stone-500">{t('webPosOnlineWorkflowHint')}</p>
+          </div>
           <button type="button" className="p-2 text-stone-600" onClick={onClose} aria-label={t('close')}>
             <X size={18} />
           </button>
@@ -186,9 +272,7 @@ export default function WebPosOnlineOrdersPanel({
                     </p>
                     <p className="text-[11px] text-stone-500">
                       {channelLabel(o.fulfillmentChannel)} · {money(o.total)} ·{' '}
-                      {o.scheduledFor
-                        ? formatDateTime(o.scheduledFor)
-                        : t('webPosAsap')}
+                      {o.scheduledFor ? formatDateTime(o.scheduledFor) : t('webPosAsap')}
                     </p>
                     {(o.customerName || o.customerPhone) && (
                       <p className="mt-0.5 text-[11px] text-stone-700">
@@ -208,6 +292,9 @@ export default function WebPosOnlineOrdersPanel({
                     })}
                   </span>
                 </div>
+                {!['completed', 'cancelled'].includes(o.status) ? (
+                  <WorkflowIndicator status={o.status} t={t} />
+                ) : null}
                 <ul className="text-xs text-stone-600">
                   {(o.items || []).slice(0, 5).map((i, idx) => (
                     <li key={idx}>
@@ -222,7 +309,7 @@ export default function WebPosOnlineOrdersPanel({
                         type="button"
                         className="btn-primary flex-1 text-xs"
                         disabled={busyId === o.id}
-                        onClick={() => void run(o.id, 'accept')}
+                        onClick={() => void run(o, 'accept')}
                       >
                         {t('webPosAcceptOrder')}
                       </button>
@@ -230,58 +317,51 @@ export default function WebPosOnlineOrdersPanel({
                         type="button"
                         className="btn-secondary text-xs"
                         disabled={busyId === o.id}
-                        onClick={() => void run(o.id, 'reject')}
+                        onClick={() => void run(o, 'reject')}
                       >
                         {t('webPosRejectOrder')}
                       </button>
                     </>
                   ) : null}
-                  {o.status === 'accepted' || o.status === 'preparing' ? (
+                  {o.status === 'accepted' ? (
+                    <button
+                      type="button"
+                      className="btn-primary flex-1 text-xs"
+                      disabled={busyId === o.id}
+                      onClick={() => void run(o, 'start_preparing')}
+                    >
+                      {t('webPosSendToKitchen')}
+                    </button>
+                  ) : null}
+                  {o.status === 'preparing' ? (
+                    <button
+                      type="button"
+                      className="btn-primary flex-1 text-xs"
+                      disabled={busyId === o.id}
+                      onClick={() => void run(o, 'mark_ready')}
+                    >
+                      {t('webPosMarkReady')}
+                    </button>
+                  ) : null}
+                  {o.status === 'ready' && o.fulfillmentChannel === 'delivery' ? (
                     <button
                       type="button"
                       className="btn-secondary text-xs"
                       disabled={busyId === o.id}
-                      onClick={() =>
-                        void run(
-                          o.id,
-                          o.status === 'accepted' ? 'start_preparing' : 'mark_ready'
-                        )
-                      }
+                      onClick={() => void run(o, 'out_for_delivery')}
                     >
-                      {o.status === 'accepted'
-                        ? t('webPosStartKitchen')
-                        : t('webPosMarkReady')}
+                      {t('ordersActionSendDelivery')}
                     </button>
                   ) : null}
-                  {o.status === 'ready' ? (
+                  {(o.status === 'ready' || o.status === 'out_for_delivery') &&
+                  !['completed', 'cancelled'].includes(o.status) ? (
                     <button
                       type="button"
-                      className="btn-primary text-xs"
+                      className="btn-primary flex-1 text-xs"
                       disabled={busyId === o.id}
-                      onClick={() =>
-                        void run(
-                          o.id,
-                          o.paymentStatus === 'awaiting_payment' ||
-                            o.paymentMethod === 'cash'
-                            ? 'complete_and_collect'
-                            : 'complete'
-                        )
-                      }
+                      onClick={() => void finalizeWhenReady(o)}
                     >
-                      {t('webPosCompleteOrder')}
-                    </button>
-                  ) : null}
-                  {!isNew(o.status) && onGoToOrders ? (
-                    <button
-                      type="button"
-                      className="btn-secondary text-xs"
-                      onClick={() => {
-                        onOrderActioned?.(o.id);
-                        onClose();
-                        onGoToOrders(o.id);
-                      }}
-                    >
-                      {t('webPosOrders')}
+                      {isUnpaid(o) ? t('webPosTakePayment') : t('webPosCompleteOrder')}
                     </button>
                   ) : null}
                 </div>

@@ -1,31 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import {
-  Ban,
-  CreditCard,
-  Filter,
-  Printer,
-  RefreshCw,
-  Search,
-  ShoppingBag,
-  Undo2,
-  X,
-} from 'lucide-react';
+import { Filter, Printer, RefreshCw, Search, ShoppingBag, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { playOrderAlertOnce, startOrderAlertLoop, stopOrderAlertLoop } from '@/lib/order-alert';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
-  canCancelOrder,
-  canCollectPayment,
-  canEditPayment,
-  canRefundOrder,
   formatOrderPaymentDisplay,
-  isAwaitingApproval,
   isOnlineShopOrder,
   orderSourceLabel,
-  isProgrammedOrder,
   orderChannel,
   ONLINE_CHANNEL_BORDER,
   ONLINE_CHANNEL_STYLE,
@@ -35,8 +17,7 @@ import {
   type MerchantOrder,
 } from '@/lib/order-management';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import { printMerchantOrderReceipt, printRefundReceipt } from '@/lib/print-order-receipt';
-import { hasTerminalPortion, parsePaymentBreakdown } from '@/lib/payment-breakdown';
+import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import {
   settingsDash,
@@ -44,14 +25,8 @@ import {
   SettingsPageHeader,
   SettingsReportCard,
 } from '@/components/settings/SettingsReportUi';
-import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
-import WebPosRefundModal, {
-  type RefundReasonOption,
-} from '@/components/webpos/WebPosRefundModal';
 
-type BoardTab = 'new' | 'kitchen' | 'ready' | 'programmed' | 'all';
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
-type CancelReason = { id: string; en: string; fr: string; de: string };
 
 const CHANNEL_STYLE: Record<string, string> = {
   takeaway:
@@ -67,8 +42,6 @@ const CHANNEL_BORDER: Record<string, string> = {
   dine_in: 'border-l-sky-500',
   delivery: 'border-l-emerald-500',
 };
-
-const PAYMENT_OPTIONS = ['cash', 'card', 'terminal'] as const;
 
 function orderItemName(item: NonNullable<MerchantOrder['items']>[number]) {
   return resolveOrderItemName(item.productName, item.name, item.product?.name);
@@ -90,18 +63,6 @@ function statusLabel(status: string, t: (k: string) => string) {
   return map[status] || status;
 }
 
-function paymentLabel(method: string | null | undefined, t: (k: string) => string) {
-  const m = (method || '').toLowerCase();
-  if (m === 'cash') return t('webPosCash');
-  if (m === 'card') return t('webPosCard');
-  if (m === 'terminal') return t('webPosTerminal');
-  if (m === 'gift_card') return t('giftCard');
-  if (m === 'mixed') return t('webPosMixedPayment');
-  if (m === 'express') return t('webPosExpress');
-  if (m === 'pay_later' || m === 'pay-later') return t('webPosPayLater');
-  return method || '—';
-}
-
 function matchesChannelFilter(o: MerchantOrder, filter: ChannelFilter) {
   if (filter === 'all') return true;
   if (filter === 'online') return isOnlineShopOrder(o);
@@ -110,13 +71,9 @@ function matchesChannelFilter(o: MerchantOrder, filter: ChannelFilter) {
 
 export default function Orders() {
   const { t, formatDateTime, locale } = useI18n();
-  const navigate = useNavigate();
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<BoardTab>('new');
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [selected, setSelected] = useState<MerchantOrder | null>(null);
-  const knownNewIdsRef = useRef<Set<string> | null>(null);
 
   const [dateFrom, setDateFrom] = useState(todayIso);
   const [dateTo, setDateTo] = useState(todayIso);
@@ -126,8 +83,6 @@ export default function Orders() {
   const [staffFilter, setStaffFilter] = useState('all');
   const [search, setSearch] = useState('');
 
-  const [cancelReasons, setCancelReasons] = useState<CancelReason[]>([]);
-  const [refundReasons, setRefundReasons] = useState<RefundReasonOption[]>([]);
   const [staffList, setStaffList] = useState<Array<{ id: string; name: string }>>([]);
   const [merchant, setMerchant] = useState<{
     name?: string;
@@ -140,14 +95,6 @@ export default function Orders() {
     shopLogoUrl?: string;
   } | null>(null);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
-
-  const [cancelFor, setCancelFor] = useState<MerchantOrder | null>(null);
-  const [refundFor, setRefundFor] = useState<MerchantOrder | null>(null);
-  const [refundBusy, setRefundBusy] = useState(false);
-  const [paymentEditFor, setPaymentEditFor] = useState<MerchantOrder | null>(null);
-  const [paymentMethodDraft, setPaymentMethodDraft] = useState('cash');
-  const [collectFor, setCollectFor] = useState<MerchantOrder | null>(null);
-  const [collectBusy, setCollectBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
 
   const loadMeta = useCallback(async () => {
@@ -188,31 +135,7 @@ export default function Orders() {
       });
       if (statusFilter !== 'all') params.set('status', statusFilter);
       const response = await api.get(`/merchant/pos/orders?${params.toString()}`);
-      const next = (response.data.orders || []) as MerchantOrder[];
-      setOrders(next);
-      setCancelReasons(response.data.cancelReasons || []);
-      setRefundReasons(response.data.refundReasons || []);
-
-      const newIds = next
-        .filter(
-          (o) =>
-            isOnlineShopOrder(o) &&
-            (o.status === 'pending' || o.status === 'pending_approval')
-        )
-        .map((o) => o.id);
-
-      if (knownNewIdsRef.current == null) {
-        knownNewIdsRef.current = new Set(newIds);
-      } else {
-        const fresh = newIds.filter((id) => !knownNewIdsRef.current!.has(id));
-        for (const id of newIds) knownNewIdsRef.current.add(id);
-        if (fresh.length > 0) {
-          playOrderAlertOnce();
-          startOrderAlertLoop(5000);
-          toast(t('webPosNewOrderAlert'), { icon: '🔔', duration: 5000 });
-        }
-        if (newIds.length === 0) stopOrderAlertLoop();
-      }
+      setOrders((response.data.orders || []) as MerchantOrder[]);
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('ordersLoadFailed'));
     } finally {
@@ -226,16 +149,7 @@ export default function Orders() {
 
   useEffect(() => {
     void load();
-    const id = setInterval(() => void load(), 10000);
-    return () => {
-      clearInterval(id);
-      stopOrderAlertLoop();
-    };
   }, [load]);
-
-  useEffect(() => {
-    if (tab === 'new') stopOrderAlertLoop();
-  }, [tab]);
 
   const channelLabel = (channel?: string | null) => {
     if (channel === 'dine_in') return t('dineIn');
@@ -255,81 +169,24 @@ export default function Orders() {
     return [...names].sort((a, b) => a.localeCompare(b));
   }, [orders]);
 
-  const filteredOrders = useMemo(() => {
+  const list = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return orders.filter((o) => {
-      if (paymentFilter !== 'all' && (o.paymentMethod || '').toLowerCase() !== paymentFilter) {
-        return false;
-      }
-      if (!matchesChannelFilter(o, channelFilter)) return false;
-      if (staffFilter !== 'all') {
-        const staffRow = staffList.find((s) => s.id === staffFilter);
-        const target = staffRow?.name || staffFilter;
-        if ((o.staffName || '').trim() !== target) return false;
-      }
-      if (q && !orderSearchHaystack(o).includes(q)) return false;
-      return true;
-    });
-  }, [orders, paymentFilter, channelFilter, staffFilter, staffList, search]);
-
-  const board = useMemo(() => {
-    const byNewest = (a: MerchantOrder, b: MerchantOrder) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    const online = filteredOrders.filter(isOnlineShopOrder);
-    return {
-      new: online.filter((o) => isAwaitingApproval(o.status)).sort(byNewest),
-      kitchen: online
-        .filter((o) => o.status === 'accepted' || o.status === 'preparing')
-        .sort(byNewest),
-      ready: online
-        .filter((o) => o.status === 'ready' || o.status === 'out_for_delivery')
-        .sort(byNewest),
-      programmed: filteredOrders.filter(isProgrammedOrder).sort(byNewest),
-      all: [...filteredOrders].sort(byNewest),
-    };
-  }, [filteredOrders]);
-
-  const list =
-    tab === 'new'
-      ? board.new
-      : tab === 'kitchen'
-        ? board.kitchen
-        : tab === 'ready'
-          ? board.ready
-          : tab === 'programmed'
-            ? board.programmed
-            : board.all;
-
-  const syncSelected = useCallback(
-    (next: MerchantOrder[]) => {
-      if (!selected) return;
-      const fresh = next.find((o) => o.id === selected.id);
-      if (fresh) setSelected(fresh);
-    },
-    [selected]
-  );
-
-  const runAction = async (orderId: string, action: string, extra?: Record<string, unknown>) => {
-    setBusyId(orderId);
-    try {
-      await api.post(`/merchant/orders/${orderId}/action`, { action, ...extra });
-      toast.success(t('updated'));
-      await load();
-      if (selected?.id === orderId) {
-        try {
-          const refreshed = await api.get(`/merchant/orders/${orderId}`);
-          if (refreshed.data?.order) setSelected(refreshed.data.order);
-        } catch {
-          syncSelected(orders);
+    return orders
+      .filter((o) => {
+        if (paymentFilter !== 'all' && (o.paymentMethod || '').toLowerCase() !== paymentFilter) {
+          return false;
         }
-      }
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('actionFailed'));
-      await load();
-    } finally {
-      setBusyId(null);
-    }
-  };
+        if (!matchesChannelFilter(o, channelFilter)) return false;
+        if (staffFilter !== 'all') {
+          const staffRow = staffList.find((s) => s.id === staffFilter);
+          const target = staffRow?.name || staffFilter;
+          if ((o.staffName || '').trim() !== target) return false;
+        }
+        if (q && !orderSearchHaystack(o).includes(q)) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [orders, paymentFilter, channelFilter, staffFilter, staffList, search]);
 
   const openDetail = async (order: MerchantOrder) => {
     try {
@@ -337,128 +194,6 @@ export default function Orders() {
       setSelected((res.data.order as MerchantOrder) || order);
     } catch {
       setSelected(order);
-    }
-  };
-
-  const doCancelOrder = async (reason: string) => {
-    if (!cancelFor) return;
-    try {
-      await api.post(`/merchant/pos/orders/${cancelFor.id}/cancel`, { reason });
-      toast.success(t('webPosOrderCancelled'));
-      setCancelFor(null);
-      if (selected?.id === cancelFor.id) setSelected(null);
-      await load();
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('webPosCancelFailed'));
-    }
-  };
-
-  const doRefund = async (payload: {
-    refundKind: 'referenced' | 'goodwill';
-    mode: 'full' | 'items';
-    reason: string;
-    reasonId: string;
-    items?: Array<{ orderItemId: string; quantity: number }>;
-    goodwillAmount?: number;
-    goodwillMethod?: 'cash' | 'terminal';
-  }) => {
-    if (!refundFor) return;
-    setRefundBusy(true);
-    try {
-      if (payload.refundKind === 'goodwill') {
-        await api.post(`/merchant/pos/orders/${refundFor.id}/goodwill`, {
-          amount: payload.goodwillAmount,
-          reason: payload.reason,
-          method: payload.goodwillMethod || 'cash',
-        });
-        toast.success(t('webPosGoodwillSubmitted'));
-      } else {
-        const res = await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
-          reason: payload.reason,
-          fullTicket: payload.mode === 'full',
-          items: payload.mode === 'items' ? payload.items : undefined,
-        });
-        toast.success(t('webPosOrderRefunded'));
-        if (merchant && res.data) {
-          try {
-            await printRefundReceipt(
-              {
-                businessName: merchant.name || '',
-                orderNumber: refundFor.orderNumber,
-                orderDisplay: orderPublicRefs(refundFor).ticketDisplay,
-                refundedAt: Date.now(),
-                refundAmount: Number(res.data.refunded || 0),
-                refundTotal: Number(res.data.refundTotal || 0),
-                reason: payload.reason,
-                allocation: res.data.allocation,
-              },
-              { merchant, printSettings, locale }
-            );
-            toast.success(t('webPosSentDefaultPrinter'));
-          } catch {
-            /* print best-effort */
-          }
-        }
-      }
-      setRefundFor(null);
-      await load();
-      if (selected?.id === refundFor.id) {
-        try {
-          const refreshed = await api.get(`/merchant/orders/${refundFor.id}`);
-          if (refreshed.data?.order) setSelected(refreshed.data.order);
-          else setSelected(null);
-        } catch {
-          setSelected(null);
-        }
-      }
-    } catch (e: any) {
-      toast.error(
-        e.response?.data?.error ||
-          (payload.refundKind === 'goodwill' ? t('webPosGoodwillFailed') : t('webPosRefundFailed'))
-      );
-    } finally {
-      setRefundBusy(false);
-    }
-  };
-
-  const doUpdatePayment = async () => {
-    if (!paymentEditFor) return;
-    try {
-      await api.patch(`/merchant/pos/orders/${paymentEditFor.id}/payment-method`, {
-        paymentMethod: paymentMethodDraft,
-      });
-      toast.success(t('webPosPaymentUpdated'));
-      setPaymentEditFor(null);
-      await load();
-      if (selected?.id === paymentEditFor.id) {
-        setSelected((prev) =>
-          prev && prev.id === paymentEditFor.id
-            ? { ...prev, paymentMethod: paymentMethodDraft }
-            : prev
-        );
-      }
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('webPosPaymentUpdateFailed'));
-    }
-  };
-
-  const doCollectPayment = async () => {
-    if (!collectFor) return;
-    setCollectBusy(true);
-    try {
-      const res = await api.post(`/merchant/orders/${collectFor.id}/action`, {
-        action: 'complete_and_collect',
-        paymentMethod: paymentMethodDraft,
-      });
-      toast.success(t('webPosPaymentCollected'));
-      setCollectFor(null);
-      const updated = res.data?.order as MerchantOrder | undefined;
-      if (updated) setSelected(updated);
-      await load();
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
-    } finally {
-      setCollectBusy(false);
     }
   };
 
@@ -482,90 +217,6 @@ export default function Orders() {
     }
   };
 
-  const startEditPayment = (order: MerchantOrder) => {
-    setPaymentEditFor(order);
-    setRefundFor(null);
-    const m = (order.paymentMethod || 'cash').toLowerCase();
-    setPaymentMethodDraft(m === 'card' ? 'card' : m === 'terminal' ? 'terminal' : 'cash');
-  };
-
-  const startCollectPayment = (order: MerchantOrder) => {
-    navigate(`/merchant/pos?collect=${order.id}`);
-  };
-
-  const actionsFor = (order: MerchantOrder) => {
-    const s = order.status;
-    const ch = orderChannel(order);
-    const paid = order.paymentStatus === 'completed' || order.paymentStatus === 'paid';
-    const cash =
-      order.paymentMethod === 'cash' ||
-      order.paymentMethod === 'pay_later' ||
-      order.paymentMethod === 'pay-later' ||
-      order.paymentStatus === 'cash' ||
-      order.paymentStatus === 'awaiting_payment';
-    const btns: { action: string; label: string; style: string }[] = [];
-
-    if (isProgrammedOrder(order)) {
-      if (s === 'accepted') {
-        btns.push({ action: 'start_preparing', label: t('webPosStartKitchen'), style: 'bg-slate-900' });
-      }
-      if (s === 'preparing' || s === 'accepted') {
-        btns.push({ action: 'mark_ready', label: t('webPosMarkReady'), style: 'bg-teal-600' });
-      }
-      btns.push({
-        action: 'complete_and_collect',
-        label: t('ordersCollectCash'),
-        style: 'bg-emerald-700',
-      });
-      return btns;
-    }
-
-    if (!isOnlineShopOrder(order)) return btns;
-
-    if (isAwaitingApproval(s)) {
-      btns.push({ action: 'accept', label: t('webPosAcceptOrder'), style: 'bg-emerald-600' });
-      btns.push({ action: 'reject', label: t('webPosRejectOrder'), style: 'bg-red-600' });
-      return btns;
-    }
-    if (s === 'accepted') {
-      btns.push({ action: 'start_preparing', label: t('webPosStartKitchen'), style: 'bg-slate-900' });
-    }
-    if (s === 'preparing' || s === 'accepted') {
-      btns.push({ action: 'mark_ready', label: t('webPosMarkReady'), style: 'bg-teal-600' });
-    }
-    if (s === 'ready' && ch === 'delivery') {
-      btns.push({
-        action: 'out_for_delivery',
-        label: t('ordersActionSendDelivery'),
-        style: 'bg-emerald-600',
-      });
-    }
-    if ((s === 'ready' || s === 'out_for_delivery') && !paid && cash) {
-      if (!(ch === 'delivery' && s === 'ready')) {
-        btns.push({
-          action: 'complete_and_collect',
-          label: t('ordersCollectCash'),
-          style: 'bg-emerald-700',
-        });
-      }
-    }
-    if (s === 'out_for_delivery') {
-      btns.push({
-        action: paid ? 'complete' : 'complete_and_collect',
-        label: paid ? t('ordersActionMarkDelivered') : t('ordersActionDeliveredCollect'),
-        style: 'bg-emerald-700',
-      });
-    }
-    if (s === 'ready' && ch !== 'delivery' && paid) {
-      btns.push({
-        action: 'complete',
-        label: t('ordersActionCompleteHandover'),
-        style: 'bg-emerald-700',
-      });
-    }
-    return btns;
-  };
-
   const clearFilters = () => {
     setDateFrom(todayIso());
     setDateTo(todayIso());
@@ -583,18 +234,6 @@ export default function Orders() {
     search.trim() !== '' ||
     dateFrom !== todayIso() ||
     dateTo !== todayIso();
-
-  const refundModalItems = useMemo(
-    () =>
-      (refundFor?.items || []).map((it) => ({
-        id: String(it.id || ''),
-        name: orderItemName(it),
-        quantity: Number(it.quantity) || 0,
-        totalPrice: Number(it.totalPrice) || 0,
-        refundedQuantity: Number(it.refundedQuantity || 0),
-      })),
-    [refundFor]
-  );
 
   if (loading && orders.length === 0) {
     return <div className="text-center py-10 muted text-sm">{t('ordersLoading')}</div>;
@@ -735,32 +374,6 @@ export default function Orders() {
         </div>
       </SettingsReportCard>
 
-      <div className="flex flex-wrap gap-1.5 table-scroll pb-0.5">
-        {(
-          [
-            ['new', `${t('ordersTabToApprove')} (${board.new.length})`],
-            ['kitchen', `${t('ordersTabKitchen')} (${board.kitchen.length})`],
-            ['ready', `${t('ordersTabReady')} (${board.ready.length})`],
-            ['programmed', `${t('ordersProgrammed')} (${board.programmed.length})`],
-            ['all', `${t('ordersTabAll')} (${board.all.length})`],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${
-              tab === id
-                ? 'border-transparent text-white shadow-sm'
-                : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] hover:bg-[var(--bg-muted)]'
-            }`}
-            style={tab === id ? { backgroundColor: settingsDash.accent } : undefined}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
       <div className="flex flex-wrap gap-2.5 text-[11px] font-medium text-[var(--text-muted)]">
         <span className="inline-flex items-center gap-1">
           <span className="h-2 w-2 rounded-full bg-amber-500" /> {t('takeaway')}
@@ -820,9 +433,7 @@ export default function Orders() {
                 </div>
                 <span
                   className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${
-                    online
-                      ? ONLINE_CHANNEL_STYLE
-                      : CHANNEL_STYLE[ch] || 'bg-[var(--bg-muted)]'
+                    online ? ONLINE_CHANNEL_STYLE : CHANNEL_STYLE[ch] || 'bg-[var(--bg-muted)]'
                   }`}
                 >
                   {online
@@ -855,20 +466,6 @@ export default function Orders() {
                   {order.customerPhone ? ` · ${order.customerPhone}` : ''}
                 </p>
               )}
-
-              <div className="mt-2.5 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
-                {actionsFor(order).map((btn) => (
-                  <button
-                    key={btn.action}
-                    type="button"
-                    disabled={busyId === order.id}
-                    onClick={() => void runAction(order.id, btn.action)}
-                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50 ${btn.style}`}
-                  >
-                    {btn.label}
-                  </button>
-                ))}
-              </div>
             </article>
           );
         })}
@@ -890,7 +487,11 @@ export default function Orders() {
                 </h2>
                 <p className="text-xs text-[var(--text-muted)]">{statusLabel(selected.status, t)}</p>
               </div>
-              <button type="button" className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-muted)]" onClick={() => setSelected(null)}>
+              <button
+                type="button"
+                className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
+                onClick={() => setSelected(null)}
+              >
                 <X size={18} />
               </button>
             </div>
@@ -973,193 +574,21 @@ export default function Orders() {
                 Total CHF {Number(selected.total).toFixed(2)}
               </p>
 
-              {actionsFor(selected).length > 0 ? (
-                <div className="flex flex-wrap gap-1.5 border-t border-[var(--border)] pt-3">
-                  {actionsFor(selected).map((btn) => (
-                    <button
-                      key={btn.action}
-                      type="button"
-                      disabled={busyId === selected.id}
-                      onClick={() => void runAction(selected.id, btn.action)}
-                      className={`rounded-md px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${btn.style}`}
-                    >
-                      {btn.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-
-              <SettingsReportCard
-                icon={ShoppingBag}
-                accent={settingsDash.accent}
-                title={t('ordersActionsTitle')}
-              >
-                <div className="grid gap-2">
-                  <button
-                    type="button"
-                    disabled={printing}
-                    onClick={() => void doPrint(selected)}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
-                  >
-                    <Printer size={16} />
-                    {t('webPosPrintReceipt')}
-                  </button>
-                  {canRefundOrder(selected) ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRefundFor(selected);
-                        setPaymentEditFor(null);
-                      }}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)]"
-                    >
-                      <Undo2 size={16} />
-                      {t('webPosRefund')}
-                    </button>
-                  ) : null}
-                  {canEditPayment(selected) ? (
-                    <button
-                      type="button"
-                      onClick={() => startEditPayment(selected)}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)]"
-                    >
-                      <CreditCard size={16} />
-                      {t('webPosEditPayment')}
-                    </button>
-                  ) : null}
-                  {canCollectPayment(selected) ? (
-                    <button
-                      type="button"
-                      onClick={() => startCollectPayment(selected)}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-800"
-                    >
-                      {t('webPosTakePayment')} · CHF {Number(selected.total).toFixed(2)}
-                    </button>
-                  ) : null}
-                  {canCancelOrder(selected) ? (
-                    <button
-                      type="button"
-                      onClick={() => setCancelFor(selected)}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-100"
-                    >
-                      <Ban size={16} />
-                      {t('webPosCancelOrder')}
-                    </button>
-                  ) : null}
-                </div>
+              <SettingsReportCard icon={ShoppingBag} accent={settingsDash.accent} title={t('ordersActionsTitle')}>
+                <button
+                  type="button"
+                  disabled={printing}
+                  onClick={() => void doPrint(selected)}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                >
+                  <Printer size={16} />
+                  {t('webPosPrintReceipt')}
+                </button>
               </SettingsReportCard>
             </div>
           </div>
         </div>
       ) : null}
-
-      {paymentEditFor ? (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 shadow-xl space-y-3">
-            <p className="text-sm font-semibold">
-              {t('webPosEditPayment')} · {paymentEditFor.orderNumber}
-            </p>
-            <p className="text-xs text-[var(--text-muted)]">{t('webPosEditPaymentHint')}</p>
-            <div className="flex flex-wrap gap-2">
-              {PAYMENT_OPTIONS.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setPaymentMethodDraft(m)}
-                  className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
-                    paymentMethodDraft === m
-                      ? 'bg-[var(--text)] text-[var(--bg-elevated)]'
-                      : 'bg-[var(--bg-muted)] text-[var(--text)] hover:opacity-90'
-                  }`}
-                >
-                  {paymentLabel(m, t)}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <button type="button" className="btn-secondary flex-1" onClick={() => setPaymentEditFor(null)}>
-                {t('cancel')}
-              </button>
-              <button type="button" className="btn-primary flex-1" onClick={() => void doUpdatePayment()}>
-                {t('confirm')}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {collectFor ? (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 shadow-xl space-y-3">
-            <p className="text-sm font-semibold">
-              {t('webPosTakePayment')} · CHF {Number(collectFor.total).toFixed(2)}
-            </p>
-            <p className="text-xs text-[var(--text-muted)]">{t('webPosTakePaymentHint')}</p>
-            <div className="flex flex-wrap gap-2">
-              {PAYMENT_OPTIONS.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setPaymentMethodDraft(m)}
-                  className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
-                    paymentMethodDraft === m
-                      ? 'bg-emerald-700 text-white'
-                      : 'bg-[var(--bg-muted)] text-[var(--text)]'
-                  }`}
-                >
-                  {paymentLabel(m, t)}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="btn-secondary flex-1"
-                disabled={collectBusy}
-                onClick={() => setCollectFor(null)}
-              >
-                {t('cancel')}
-              </button>
-              <button
-                type="button"
-                className="btn-primary flex-1"
-                disabled={collectBusy}
-                onClick={() => void doCollectPayment()}
-              >
-                {collectBusy ? t('saving') : t('webPosConfirmPayment')}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <WebPosCancelModal
-        open={!!cancelFor}
-        scope="order"
-        reasons={cancelReasons}
-        onClose={() => setCancelFor(null)}
-        onConfirm={(reason) => void doCancelOrder(reason)}
-      />
-
-      <WebPosRefundModal
-        open={!!refundFor}
-        orderNumber={refundFor?.orderNumber || ''}
-        total={refundFor?.total || 0}
-        alreadyRefunded={refundFor?.refundAmount || 0}
-        items={refundModalItems}
-        reasons={refundReasons}
-        busy={refundBusy}
-        hasTerminalPortion={hasTerminalPortion(
-          parsePaymentBreakdown(
-            refundFor?.paymentBreakdown,
-            refundFor?.paymentMethod,
-            refundFor?.total
-          )
-        )}
-        terminalEnabled={!!printSettings}
-        onClose={() => setRefundFor(null)}
-        onConfirm={(payload) => void doRefund(payload)}
-      />
     </div>
   );
 }

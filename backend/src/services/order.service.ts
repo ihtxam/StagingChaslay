@@ -299,7 +299,7 @@ export class OrderService {
    * Online / POS lifecycle actions for web_shop (and optionally POS) orders.
    *
    * Flow:
-   *  pending|pending_approval → accept → preparing (ASAP) or accepted (scheduled)
+   *  pending|pending_approval → accept → accepted
    *  accepted → start_preparing → preparing
    *  preparing → mark_ready → ready
    *  ready + delivery → out_for_delivery
@@ -343,9 +343,7 @@ export class OrderService {
     switch (action) {
       case "accept": {
         if (!awaitingApproval) throw new Error("Order is not awaiting approval");
-        // ASAP → kitchen starts immediately; scheduled → accepted until prep time
-        const asap = !order.scheduledFor;
-        const updated = await set({ status: asap ? "preparing" : "accepted" });
+        const updated = await set({ status: "accepted" });
         if (order.orderSource === "justeat" || order.orderSource === "ubereats") {
           const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
           void DeliveryPlatformService.notifyPartnerOrderAccepted(merchantId, updated).catch((err) =>
