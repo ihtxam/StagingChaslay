@@ -2,8 +2,6 @@ package com.chaslay.pos.sync
 
 import com.chaslay.pos.data.local.dao.HeldOrderDao
 import com.chaslay.pos.data.local.dao.HeldOrderItemDao
-import com.chaslay.pos.data.local.entity.HeldOrderEntity
-import com.chaslay.pos.data.local.entity.HeldOrderItemEntity
 import com.chaslay.pos.data.preferences.SyncApiKeyStore
 import com.chaslay.pos.data.preferences.SyncPreferences
 import com.chaslay.pos.data.remote.SyncApi
@@ -26,7 +24,8 @@ class OnlineOrderSyncRepository @Inject constructor(
     private val syncPreferences: SyncPreferences,
     private val syncApiKeyStore: SyncApiKeyStore,
     private val heldOrderDao: HeldOrderDao,
-    private val heldOrderItemDao: HeldOrderItemDao
+    private val heldOrderItemDao: HeldOrderItemDao,
+    private val onlineKitchenPrintHelper: OnlineKitchenPrintHelper
 ) {
     private val gson = Gson()
 
@@ -37,20 +36,23 @@ class OnlineOrderSyncRepository @Inject constructor(
         val since = syncPreferences.getLastOrdersSyncMs()
         val response = syncApi.incomingOrders(since)
         var imported = 0
+        val alerts = mutableListOf<ImportedOnlineOrderAlert>()
         response.orders.forEach { order ->
-            if (importIncomingOrder(order)) {
+            val alert = importIncomingOrder(order)
+            if (alert != null) {
                 imported++
+                alerts.add(alert)
                 runCatching { syncApi.ackOrder(order.id) }
             }
         }
         syncPreferences.setLastOrdersSyncMs(response.serverTime)
-        OnlineOrderSyncResult(imported = imported, serverTime = response.serverTime)
+        OnlineOrderSyncResult(imported = imported, serverTime = response.serverTime, importedAlerts = alerts)
     }
 
-    private suspend fun importIncomingOrder(dto: IncomingOnlineOrderDto): Boolean {
-        if (heldOrderDao.getByOrderNumber(dto.order_number) != null) return false
+    private suspend fun importIncomingOrder(dto: IncomingOnlineOrderDto): ImportedOnlineOrderAlert? {
+        if (heldOrderDao.getByOrderNumber(dto.order_number) != null) return null
         val items = parseItems(dto)
-        if (items.isEmpty()) return false
+        if (items.isEmpty()) return null
 
         val fulfillment = when (dto.fulfillment_type?.uppercase()) {
             "DELIVERY" -> FulfillmentType.DELIVERY
@@ -62,7 +64,7 @@ class OnlineOrderSyncRepository @Inject constructor(
             else -> ServiceType.TAKEAWAY
         }
         val heldId = UUID.randomUUID().toString()
-        val entity = HeldOrderEntity(
+        val entity = com.chaslay.pos.data.local.entity.HeldOrderEntity(
             id = heldId,
             orderNumber = dto.order_number,
             serviceType = serviceType,
@@ -84,7 +86,7 @@ class OnlineOrderSyncRepository @Inject constructor(
         )
         heldOrderDao.upsert(entity)
         val heldItems = items.map { item ->
-            HeldOrderItemEntity(
+            com.chaslay.pos.data.local.entity.HeldOrderItemEntity(
                 id = UUID.randomUUID().toString(),
                 heldOrderId = heldId,
                 productId = 0L,
@@ -97,7 +99,30 @@ class OnlineOrderSyncRepository @Inject constructor(
         }
         heldOrderItemDao.deleteByOrder(heldId)
         heldOrderItemDao.insertAll(heldItems)
-        return true
+
+        onlineKitchenPrintHelper.autoPrintIfEnabled(
+            heldOrderId = heldId,
+            orderSource = dto.source,
+            printKitchen = dto.print_kitchen != false
+        )
+
+        return ImportedOnlineOrderAlert(
+            heldOrderId = heldId,
+            orderNumber = dto.order_number,
+            fulfillmentType = fulfillment,
+            total = dto.total,
+            customerName = dto.customer_name,
+            customerPhone = dto.customer_phone,
+            pickupTimeMs = dto.pickup_time_ms,
+            itemPreview = items.take(4).map {
+                OnlineOrderAlertItemLine(
+                    quantity = it.quantity.coerceAtLeast(1),
+                    productName = it.productName ?: it.name ?: "Item"
+                )
+            },
+            itemCount = items.sumOf { it.quantity.coerceAtLeast(1) },
+            orderSource = dto.source
+        )
     }
 
     private fun parseItems(dto: IncomingOnlineOrderDto): List<OnlineOrderItemDto> {
@@ -114,5 +139,6 @@ class OnlineOrderSyncRepository @Inject constructor(
 data class OnlineOrderSyncResult(
     val imported: Int = 0,
     val serverTime: Long = 0L,
-    val skipped: Boolean = false
+    val skipped: Boolean = false,
+    val importedAlerts: List<ImportedOnlineOrderAlert> = emptyList()
 )

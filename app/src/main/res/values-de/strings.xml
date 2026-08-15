@@ -177,6 +177,13 @@
     <string name="new_online_order_title">Neue Online-Bestellung</string>
     <string name="new_online_orders_title">%1$d neue Online-Bestellungen</string>
     <string name="new_online_order_body">Tippen Sie, um den Pos zu öffnen und die Bestellung anzuzeigen.</string>
+    <string name="new_online_order_alert_title">Neue Online-Bestellung</string>
+    <string name="new_online_order_alert_queue">+%1$d weitere in der Warteschlange</string>
+    <string name="new_online_order_alert_hint">Öffnen, um unter Bestellungen anzuzeigen, oder OK zum Schließen.</string>
+    <string name="new_online_order_alert_ok">OK</string>
+    <string name="new_online_order_alert_open">Öffnen</string>
+    <string name="new_online_order_alert_more_items">+%1$d weitere Artikel</string>
+    <string name="new_online_order_asap">Sofort</string>
     <string name="keypad_mode_qty">Anzahl</string>
     <string name="keypad_mode_percent">%</string>
     <string name="keypad_mode_price">Preis</string>

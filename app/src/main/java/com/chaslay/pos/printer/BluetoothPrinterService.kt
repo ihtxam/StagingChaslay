@@ -466,9 +466,9 @@ class BluetoothPrinterService @Inject constructor(
         recipientEmail: String?,
         holderName: String?
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        val lineWidth = lineWidthFor(settings.receiptPaperWidthMm)
+        val lineWidth = lineWidthFor(80)
         val payload = buildGiftCardSaleReceipt(settings, code, balance, recipientEmail, holderName, lineWidth)
-        val address = settings.receiptPrinterAddress?.trim().orEmpty()
+        val address = settings.printerMacAddress?.trim().orEmpty()
         if (address.isBlank()) return@withContext Result.failure(IllegalStateException("No receipt printer configured"))
         sendBytes(address, settings, payload, "Gift card receipt")
     }
@@ -876,17 +876,24 @@ class BluetoothPrinterService @Inject constructor(
             cart.fulfillmentType == FulfillmentType.DELIVERY
         ) {
             cart.deliveryName?.takeIf { it.isNotBlank() }?.let { name ->
-                sb.appendLine("Customer: $name")
+                sb.appendLine("${labels.deliverTo}: $name")
             }
             cart.deliveryPhone?.takeIf { it.isNotBlank() }?.let { phone ->
-                sb.appendLine("Tel: $phone")
+                sb.appendLine("${labels.tel}: $phone")
             }
             val addr = listOfNotNull(cart.deliveryAddress, cart.deliveryZip)
                 .filter { it.isNotBlank() }
                 .joinToString(", ")
             if (addr.isNotBlank()) {
-                sb.appendLine("Delivery address:")
+                sb.appendLine("${labels.delivery}:")
                 wrapText(addr, lineWidth).forEach { sb.appendLine(it) }
+            }
+        } else {
+            cart.deliveryName?.takeIf { it.isNotBlank() }?.let { name ->
+                sb.appendLine("${labels.deliverTo}: $name")
+            }
+            cart.deliveryPhone?.takeIf { it.isNotBlank() }?.let { phone ->
+                sb.appendLine("${labels.tel}: $phone")
             }
         }
 
@@ -1898,11 +1905,7 @@ class BluetoothPrinterService @Inject constructor(
         if (paperWidthMm >= 80) LINE_WIDTH_80 else LINE_WIDTH_58
 
     /** Prefer widest configured printer (80mm default) for legacy kitchen routing. */
-    private fun defaultKitchenPaperWidthMm(): Int {
-        val printers = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
-            .filter { it.isEnabled && it.address.isNotBlank() }
-        return printers.maxOfOrNull { it.paperWidthMm } ?: 80
-    }
+    private fun defaultKitchenPaperWidthMm(): Int = 80
 
     private fun center(text: String, width: Int = LINE_WIDTH_80): String {
         if (text.length >= width) return text

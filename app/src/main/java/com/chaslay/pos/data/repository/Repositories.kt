@@ -66,6 +66,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -1162,15 +1163,27 @@ class SettingsRepository @Inject constructor(
 }
 
 @Singleton
-class CartManager @Inject constructor() {
+class CartManager @Inject constructor(
+    private val cartPreferences: com.chaslay.pos.data.preferences.CartPreferences
+) {
+    private val persistScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+    )
+
     private val _cart = MutableStateFlow(
-        CartSummary(
+        cartPreferences.load() ?: CartSummary(
             items = emptyList(),
             serviceType = ServiceType.TAKEAWAY,
             fulfillmentType = FulfillmentType.PICKUP
         )
     )
     val cart: Flow<CartSummary> = _cart.asStateFlow()
+
+    init {
+        persistScope.launch {
+            _cart.collect { cart -> cartPreferences.save(cart) }
+        }
+    }
 
     fun snapshot(): CartSummary = _cart.value
 
@@ -1506,6 +1519,7 @@ class CartManager @Inject constructor() {
                 pickupTimeMs = null
             )
         }
+        cartPreferences.clear()
     }
 
     fun setPickupTime(pickupTimeMs: Long?) {
@@ -2397,10 +2411,18 @@ class HeldOrderRepository @Inject constructor(
             cartManager.setVatIncludedInPrice(vatIncluded)
             cartManager.setServiceType(order.serviceType) { it.taxRate }
             when (order.fulfillmentType) {
-                FulfillmentType.PICKUP -> cartManager.setPickupOrder(
-                    orderNumber = order.orderNumber,
-                    pickupTimeMs = order.pickupTimeMs
-                )
+                FulfillmentType.PICKUP -> {
+                    cartManager.setPickupOrder(
+                        orderNumber = order.orderNumber,
+                        pickupTimeMs = order.pickupTimeMs
+                    )
+                    if (!order.deliveryName.isNullOrBlank() || !order.deliveryPhone.isNullOrBlank()) {
+                        cartManager.setCustomerInfo(
+                            name = order.deliveryName.orEmpty(),
+                            phone = order.deliveryPhone
+                        )
+                    }
+                }
                 FulfillmentType.DELIVERY -> cartManager.setDeliveryOrder(
                     name = order.deliveryName.orEmpty(),
                     address = order.deliveryAddress.orEmpty(),

@@ -192,7 +192,11 @@ data class PosUiState(
     val productGridShowImages: Boolean = false,
     val productGridColumns: Int = 5,
     val productGridSortAlpha: Boolean = false,
-    val productGridSortBestseller: Boolean = false
+    val productGridSortBestseller: Boolean = false,
+    val onlineOrderAlert: com.chaslay.pos.sync.ImportedOnlineOrderAlert? = null,
+    val onlineOrderAlertQueueCount: Int = 0,
+    val pendingOnlineOrderCount: Int = 0,
+    val navigateToOrdersTab: Boolean = false
 ) {
     val kitchenMessagePresets: List<KitchenMessagePreset> = listOf(
         KitchenMessagePreset("Bring next dish", "Bring next dish"),
@@ -227,6 +231,8 @@ class PosViewModel @Inject constructor(
     private val posShiftRepository: com.chaslay.pos.data.repository.PosShiftRepository,
     private val syncApi: com.chaslay.pos.data.remote.SyncApi,
     private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences,
+    private val syncService: com.chaslay.pos.sync.SyncService,
+    private val onlineOrderAlertCoordinator: com.chaslay.pos.sync.OnlineOrderAlertCoordinator,
     @ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
@@ -345,7 +351,7 @@ class PosViewModel @Inject constructor(
             showCartCancelSimpleDialog = extras.showCartCancelSimpleDialog,
             cartCancelReasons = extras.cartCancelReasons,
             showAttachCustomerDialog = extras.showAttachCustomerDialog,
-            canCancelCartOrder = !cart.isEmpty || extras.orderCommittedForCancel,
+            canCancelCartOrder = !bundle.cart.isEmpty || extras.orderCommittedForCancel,
             showWeighedProductDialog = extras.showWeighedProductDialog,
             scaleReading = extras.scaleReading,
             showGuestCountDialog = extras.showGuestCountDialog,
@@ -374,7 +380,11 @@ class PosViewModel @Inject constructor(
             productGridShowImages = extras.productGridShowImages,
             productGridColumns = extras.productGridColumns,
             productGridSortAlpha = extras.productGridSortAlpha,
-            productGridSortBestseller = extras.productGridSortBestseller
+            productGridSortBestseller = extras.productGridSortBestseller,
+            onlineOrderAlert = extras.onlineOrderAlert,
+            onlineOrderAlertQueueCount = extras.onlineOrderAlertQueueCount,
+            pendingOnlineOrderCount = extras.pendingOnlineOrderCount,
+            navigateToOrdersTab = extras.navigateToOrdersTab
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PosUiState())
 
@@ -383,6 +393,29 @@ class PosViewModel @Inject constructor(
             refreshGiftCardFeature()
             syncCloudPosSettings()
             refreshBestsellers()
+            runCatching { syncService.syncOnlineOrdersOnly() }
+            refreshOnlineOrderAlertState()
+        }
+        viewModelScope.launch {
+            onlineOrderAlertCoordinator.alertQueue.collect { queue ->
+                updateExtras {
+                    it.copy(
+                        onlineOrderAlert = queue.firstOrNull(),
+                        onlineOrderAlertQueueCount = queue.size
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
+            onlineOrderAlertCoordinator.unactionedCount.collect { count ->
+                updateExtras { it.copy(pendingOnlineOrderCount = count) }
+            }
+        }
+        viewModelScope.launch {
+            while (true) {
+                delay(30_000)
+                runCatching { syncService.syncOnlineOrdersOnly() }
+            }
         }
         viewModelScope.launch {
             settingsRepository.observeSettings().collect { settings ->
@@ -2027,7 +2060,8 @@ class PosViewModel @Inject constructor(
             cfg.print?.let { print ->
                 merged = merged.copy(
                     adyenReceiptDigitalOnly = print.adyenReceiptDigitalOnly,
-                    receiptDeliveryDirectionsQr = print.receiptDeliveryDirectionsQr
+                    receiptDeliveryDirectionsQr = print.receiptDeliveryDirectionsQr,
+                    autoPrintKitchen = print.autoPrintKitchen
                 )
             }
             cfg.checkout?.let { checkout ->
@@ -3236,10 +3270,10 @@ class PosViewModel @Inject constructor(
             val tx = _uiExtras.value.lastTransaction ?: return@launch
             val full = transactionRepository.getTransaction(tx.id) ?: return@launch
             val settings = settingsRepository.getSettings()
-            val (published, items) = publishAndPersistReceipt(full.first, full.second, settings)
+            val (published, _) = publishAndPersistReceipt(full.first, full.second, settings)
             val customerCopy = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
                 .appendableForTransaction(published).first
-            printerService.routeReceipt(settings, published, items, customerCopy, null)
+            printerService.routeReceipt(settings, published, full.second, customerCopy, null)
                 .onFailure { e -> updateExtras { it.copy(errorMessage = e.message) } }
             dismissReceiptOptions()
         }
@@ -3267,6 +3301,20 @@ class PosViewModel @Inject constructor(
 
     fun clearSuccess() = updateExtras { it.copy(successMessage = null) }
     fun clearSnackbar() = updateExtras { it.copy(snackbarMessage = null) }
+
+    fun dismissOnlineOrderAlert() = onlineOrderAlertCoordinator.dismissCurrentAlert()
+
+    fun openOnlineOrderFromAlert() {
+        onlineOrderAlertCoordinator.markCurrentActioned()
+        updateExtras { it.copy(navigateToOrdersTab = true) }
+    }
+
+    fun consumeNavigateToOrdersTab() = updateExtras { it.copy(navigateToOrdersTab = false) }
+
+    private suspend fun refreshOnlineOrderAlertState() {
+        val heldIds = heldOrderRepository.getOngoingHeldOrders().map { it.id }.toSet()
+        onlineOrderAlertCoordinator.pruneMissingHeldOrderIds(heldIds)
+    }
 
     fun showNewOrderDialog() {
         if (cartManager.snapshot().isEmpty) return
@@ -3845,7 +3893,11 @@ class PosViewModel @Inject constructor(
         val productGridShowImages: Boolean = false,
         val productGridColumns: Int = 5,
         val productGridSortAlpha: Boolean = false,
-        val productGridSortBestseller: Boolean = false
+        val productGridSortBestseller: Boolean = false,
+        val onlineOrderAlert: com.chaslay.pos.sync.ImportedOnlineOrderAlert? = null,
+        val onlineOrderAlertQueueCount: Int = 0,
+        val pendingOnlineOrderCount: Int = 0,
+        val navigateToOrdersTab: Boolean = false
     )
 
     fun toggleProductGridShowImages() =

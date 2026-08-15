@@ -251,6 +251,8 @@ data class BusinessSettingsEntity(
     val printerPrintReports: Boolean = true,
     val printerPrintKitchen: Boolean = false,
     val kitchenPrinterPrintKitchen: Boolean = true,
+    /** Synced from merchant panel posPrintSettings.autoPrintKitchen */
+    val autoPrintKitchen: Boolean = true,
     val printerMacAddress: String? = null,
     val printerName: String? = null,
     val kitchenPrinterMacAddress: String? = null,

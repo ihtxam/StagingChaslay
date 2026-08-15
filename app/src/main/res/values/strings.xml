@@ -216,6 +216,13 @@
     <string name="new_online_order_title">New online order</string>
     <string name="new_online_orders_title">%1$d new online orders</string>
     <string name="new_online_order_body">Tap to open the POS and view the order.</string>
+    <string name="new_online_order_alert_title">New online order</string>
+    <string name="new_online_order_alert_queue">+%1$d more in queue</string>
+    <string name="new_online_order_alert_hint">Open to view in Orders, or OK to dismiss this alert.</string>
+    <string name="new_online_order_alert_ok">OK</string>
+    <string name="new_online_order_alert_open">Open</string>
+    <string name="new_online_order_alert_more_items">+%1$d more items</string>
+    <string name="new_online_order_asap">ASAP</string>
     <string name="keypad_mode_qty">Qty</string>
     <string name="keypad_mode_percent">%</string>
     <string name="keypad_mode_price">Price</string>

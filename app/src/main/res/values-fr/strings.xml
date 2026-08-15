@@ -179,6 +179,13 @@
     <string name="new_online_order_title">Commande en ligne</string>
     <string name="new_online_orders_title">%1$d nouvelles commandes EN ligne</string>
     <string name="new_online_order_body">Appuyez sur pour ouvrir le PDV et afficher la commande.</string>
+    <string name="new_online_order_alert_title">Nouvelle commande en ligne</string>
+    <string name="new_online_order_alert_queue">+%1$d autres en attente</string>
+    <string name="new_online_order_alert_hint">Ouvrir pour voir dans Commandes, ou OK pour fermer cette alerte.</string>
+    <string name="new_online_order_alert_ok">OK</string>
+    <string name="new_online_order_alert_open">Ouvrir</string>
+    <string name="new_online_order_alert_more_items">+%1$d articles de plus</string>
+    <string name="new_online_order_asap">Dès que possible</string>
     <string name="keypad_mode_qty">Qté</string>
     <string name="keypad_mode_percent">%</string>
     <string name="keypad_mode_price">Prix</string>

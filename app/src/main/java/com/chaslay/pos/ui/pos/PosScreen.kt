@@ -24,6 +24,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -350,6 +352,23 @@ fun PosScreen(
     ) {
         var mainTab by remember { mutableStateOf(PosMainTab.REGISTER) }
 
+        LaunchedEffect(state.navigateToOrdersTab) {
+            if (state.navigateToOrdersTab) {
+                mainTab = PosMainTab.ORDERS
+                viewModel.consumeNavigateToOrdersTab()
+            }
+        }
+
+        state.onlineOrderAlert?.let { alert ->
+            NewOnlineOrderAlertDialog(
+                alert = alert,
+                queueCount = state.onlineOrderAlertQueueCount,
+                currencySymbol = state.currencySymbol,
+                onOpen = viewModel::openOnlineOrderFromAlert,
+                onOk = viewModel::dismissOnlineOrderAlert
+            )
+        }
+
         LaunchedEffect(isRestaurantMode, tablesEnabled) {
             viewModel.ensureRetailMode()
             if (!isTableServiceEnabled && mainTab == PosMainTab.TABLES) {
@@ -362,6 +381,7 @@ fun PosScreen(
             businessName = state.settings.businessName,
             isTableServiceEnabled = isTableServiceEnabled,
             selectedTab = mainTab,
+            pendingOnlineOrderCount = state.pendingOnlineOrderCount,
             onTabSelected = { tab ->
                 when (tab) {
                     PosMainTab.REGISTER -> {
@@ -860,6 +880,7 @@ private fun OdooPosNavBar(
     businessName: String,
     isTableServiceEnabled: Boolean,
     selectedTab: PosMainTab,
+    pendingOnlineOrderCount: Int = 0,
     onTabSelected: (PosMainTab) -> Unit,
     userAccess: UserAccess,
     onNavigate: (String) -> Unit,
@@ -897,6 +918,7 @@ private fun OdooPosNavBar(
                 label = stringResource(R.string.pos_orders),
                 icon = Icons.Default.ReceiptLong,
                 selected = selectedTab == PosMainTab.ORDERS,
+                badgeCount = pendingOnlineOrderCount,
                 onClick = { onTabSelected(PosMainTab.ORDERS) }
             )
         }
@@ -938,20 +960,40 @@ private fun PosBottomTabChip(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     selected: Boolean,
+    badgeCount: Int = 0,
     onClick: () -> Unit
 ) {
     val bg = if (selected) Color(0xFF714B67) else Color(0xFF455A64).copy(alpha = 0.45f)
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(20.dp))
-        Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+    Box {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(bg)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(20.dp))
+            Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+        }
+        if (badgeCount > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 4.dp, y = (-4).dp)
+                    .size(18.dp)
+                    .background(Color(0xFF7C3AED), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (badgeCount > 9) "9+" else badgeCount.toString(),
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
     }
 }
 

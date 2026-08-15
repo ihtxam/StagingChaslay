@@ -19,6 +19,8 @@ import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.TableOrderStatus
 import com.chaslay.pos.printer.BluetoothPrinterService
 import com.chaslay.pos.printer.KitchenPrintMeta
+import com.chaslay.pos.sync.OnlineKitchenPrintHelper
+import com.chaslay.pos.sync.OnlineOrderAlertCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,7 +47,8 @@ class OngoingOrdersViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val productRepository: ProductRepository,
     private val printerService: BluetoothPrinterService,
-    private val crashLogger: CrashLogger
+    private val crashLogger: CrashLogger,
+    private val onlineOrderAlertCoordinator: OnlineOrderAlertCoordinator
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OngoingOrdersUiState())
@@ -176,7 +179,12 @@ class OngoingOrdersViewModel @Inject constructor(
                 OngoingOrderSource.HELD -> heldOrderRepository.loadHeldOrderToCart(cartManager, card.id)
                 OngoingOrderSource.TABLE -> tableOrderRepository.loadTableOrderToCart(cartManager, card.id)
             }
-            if (loaded) onDone()
+            if (loaded) {
+                if (card.source == OngoingOrderSource.HELD) {
+                    onlineOrderAlertCoordinator.markActioned(card.id)
+                }
+                onDone()
+            }
         }
     }
 
@@ -280,10 +288,7 @@ class OngoingOrdersViewModel @Inject constructor(
                             courseNumber = heldItem.courseNumber
                         )
                     },
-                    meta = KitchenPrintMeta(
-                        orderNumber = order.orderNumber,
-                        fulfillmentType = order.fulfillmentType,
-                        pickupTimeMs = order.pickupTimeMs,
+                    meta = OnlineKitchenPrintHelper.buildKitchenMeta(order, "ONLINE").copy(
                         cashierName = userName
                     )
                 )

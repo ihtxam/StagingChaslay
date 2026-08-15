@@ -118,7 +118,8 @@ data class IncomingOnlineOrderDto(
     val total: Double = 0.0,
     val notes: String? = null,
     val payload: JsonElement? = null,
-    val created_at: String? = null
+    val created_at: String? = null,
+    @SerializedName("print_kitchen") val print_kitchen: Boolean? = null
 )
 
 data class IncomingOrdersResponse(
@@ -191,7 +192,8 @@ data class SyncScaleDto(
 
 data class SyncPrintDto(
     @SerializedName("adyen_receipt_digital_only") val adyenReceiptDigitalOnly: Boolean = false,
-    @SerializedName("receipt_delivery_directions_qr") val receiptDeliveryDirectionsQr: Boolean = true
+    @SerializedName("receipt_delivery_directions_qr") val receiptDeliveryDirectionsQr: Boolean = true,
+    @SerializedName("auto_print_kitchen") val autoPrintKitchen: Boolean = true
 )
 
 data class PaymentConfigResponse(

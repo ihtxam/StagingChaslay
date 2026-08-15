@@ -194,6 +194,14 @@ class TerminalSyncRepository @Inject constructor(
             )
         }
 
+        config.print?.let { print ->
+            merged = merged.copy(
+                adyenReceiptDigitalOnly = print.adyenReceiptDigitalOnly,
+                receiptDeliveryDirectionsQr = print.receiptDeliveryDirectionsQr,
+                autoPrintKitchen = print.autoPrintKitchen
+            )
+        }
+
         return merged
     }
 }

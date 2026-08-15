@@ -14,7 +14,8 @@ class SyncService @Inject constructor(
     private val terminalSyncRepository: TerminalSyncRepository,
     private val staffSyncRepository: StaffSyncRepository,
     private val onlineOrderSyncRepository: OnlineOrderSyncRepository,
-    private val floorPlanSyncRepository: FloorPlanSyncRepository
+    private val floorPlanSyncRepository: FloorPlanSyncRepository,
+    private val onlineOrderAlertCoordinator: OnlineOrderAlertCoordinator
 ) {
     private val mutex = Mutex()
     private var lastFullSyncAt = 0L
@@ -33,7 +34,7 @@ class SyncService @Inject constructor(
         val staff = runCatching { staffSyncRepository.syncStaff() }
             .onFailure { Log.w(TAG, "Staff sync failed", it) }
             .getOrDefault(StaffSyncResult())
-        val orders = runCatching { onlineOrderSyncRepository.syncIncomingOrders() }
+        val orders = runCatching { syncIncomingOrdersWithAlerts() }
             .onFailure { Log.w(TAG, "Online order sync failed", it) }
             .getOrDefault(OnlineOrderSyncResult())
         val floorPlans = runCatching { floorPlanSyncRepository.syncFloorPlans() }
@@ -56,9 +57,17 @@ class SyncService @Inject constructor(
         menuSyncRepository.pushMenuToCloud()
 
     suspend fun syncOnlineOrdersOnly(): OnlineOrderSyncResult =
-        runCatching { onlineOrderSyncRepository.syncIncomingOrders() }
+        runCatching { syncIncomingOrdersWithAlerts() }
             .onFailure { Log.w(TAG, "Online order sync failed", it) }
             .getOrDefault(OnlineOrderSyncResult())
+
+    private suspend fun syncIncomingOrdersWithAlerts(): OnlineOrderSyncResult {
+        val result = onlineOrderSyncRepository.syncIncomingOrders()
+        if (result.importedAlerts.isNotEmpty()) {
+            onlineOrderAlertCoordinator.enqueue(result.importedAlerts)
+        }
+        return result
+    }
 
     suspend fun syncPendingTransactions(): SyncResult {
         val pending = transactionRepository.getPendingSyncTransactions()
