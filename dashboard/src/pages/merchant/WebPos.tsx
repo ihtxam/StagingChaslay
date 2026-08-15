@@ -5381,6 +5381,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [paymentConfig]
   );
 
+  const checkoutSplitTickets = useMemo(() => {
+    if (!splitQueue.length) return undefined;
+    return splitQueue.map((part, index) => {
+      const resolveLines = () => {
+        if (part.lineQtys && Object.keys(part.lineQtys).length > 0) {
+          return cart.flatMap((l) => {
+            const qty = part.lineQtys![l.lineId] ?? 0;
+            if (qty <= 0) return [];
+            return [{ name: l.name, quantity: qty }];
+          });
+        }
+        if (part.lineIds.length > 0) {
+          return cart
+            .filter((l) => part.lineIds.includes(l.lineId))
+            .map((l) => ({ name: l.name, quantity: l.quantity }));
+        }
+        return [];
+      };
+      return {
+        index,
+        label: part.label,
+        amount: part.amount,
+        lines: resolveLines(),
+        paid: index < splitIndex,
+      };
+    });
+  }, [splitQueue, splitIndex, cart]);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
@@ -5448,34 +5476,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       null
     : null;
   const checkoutDueTotal = collectOrderRef?.total ?? activeSale.totals.total;
-
-  const checkoutSplitTickets = useMemo(() => {
-    if (!splitQueue.length) return undefined;
-    return splitQueue.map((part, index) => {
-      const resolveLines = () => {
-        if (part.lineQtys && Object.keys(part.lineQtys).length > 0) {
-          return cart.flatMap((l) => {
-            const qty = part.lineQtys![l.lineId] ?? 0;
-            if (qty <= 0) return [];
-            return [{ name: l.name, quantity: qty }];
-          });
-        }
-        if (part.lineIds.length > 0) {
-          return cart
-            .filter((l) => part.lineIds.includes(l.lineId))
-            .map((l) => ({ name: l.name, quantity: l.quantity }));
-        }
-        return [];
-      };
-      return {
-        index,
-        label: part.label,
-        amount: part.amount,
-        lines: resolveLines(),
-        paid: index < splitIndex,
-      };
-    });
-  }, [splitQueue, splitIndex, cart]);
 
   const onlinePendingCount = onlineOrders.filter(
     (o) => o.status === 'pending' || o.status === 'pending_approval'
