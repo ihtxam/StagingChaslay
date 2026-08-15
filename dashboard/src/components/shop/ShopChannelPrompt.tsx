@@ -61,7 +61,7 @@ export default function ShopChannelPrompt({
       channel: selected,
       leadMinutes: Math.max(15, eta),
       intervalMinutes: 15,
-      horizonDays: 2,
+      horizonDays: 3,
       locale: shopLocale,
     });
   }, [withSchedule, storeHours, selected, eta, shopLocale]);
@@ -118,7 +118,15 @@ export default function ShopChannelPrompt({
           {subtitle ? <p className="mt-1 text-sm text-stone-500 leading-snug">{subtitle}</p> : null}
         </div>
 
-        <div className={`grid gap-2 ${options.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div
+          className={`grid gap-2 ${
+            options.length >= 3
+              ? 'grid-cols-3'
+              : options.length === 2
+                ? 'grid-cols-2'
+                : 'grid-cols-1'
+          }`}
+        >
           {options.map((opt) => {
             const on = selected === opt.id;
             return (
@@ -126,17 +134,21 @@ export default function ShopChannelPrompt({
                 key={opt.id}
                 type="button"
                 onClick={() => onSelect(opt.id)}
-                className={`rounded-xl border px-3 py-3 text-left transition ${
+                className={`rounded-xl border px-2 sm:px-3 py-2.5 sm:py-3 text-center sm:text-left transition min-w-0 ${
                   on
                     ? 'border-amber-700/40 bg-amber-700 text-white'
                     : 'border-stone-200 bg-white text-stone-900 hover:border-stone-400'
                 }`}
               >
-                <span className="block text-sm font-semibold">
+                <span className="block text-xs sm:text-sm font-semibold truncate">
                   {on ? '✓ ' : ''}
                   {opt.label}
                 </span>
-                <span className={`block text-[11px] mt-0.5 ${on ? 'text-white/80' : 'text-stone-500'}`}>
+                <span
+                  className={`block text-[10px] sm:text-[11px] mt-0.5 truncate ${
+                    on ? 'text-white/80' : 'text-stone-500'
+                  }`}
+                >
                   {opt.etaMinutes}-{opt.etaMinutes + 10} {t('shopMins')}
                 </span>
               </button>
@@ -149,7 +161,7 @@ export default function ShopChannelPrompt({
             <p className="text-sm font-semibold text-stone-800">
               {selected === 'delivery' ? t('shopDateTimeDelivery') : t('shopDateTimePickup')}
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {scheduleDays.map((d) => (
                 <button
                   key={d.offset}
@@ -159,17 +171,22 @@ export default function ShopChannelPrompt({
                     setSlotValue(d.slots[0]?.value || null);
                     setShowAllSlots(false);
                   }}
-                  className={`rounded-full px-3 py-1.5 text-sm font-medium border ${
+                  className={`min-w-0 rounded-lg px-1.5 py-2 text-center text-sm font-medium border ${
                     dayOffset === d.offset
                       ? 'bg-amber-700 text-white border-amber-700'
                       : 'bg-white text-stone-700 border-stone-200'
                   }`}
                 >
-                  {d.offset === 0
-                    ? t('shopToday')
-                    : d.offset === 1
-                      ? t('shopTomorrow')
-                      : d.dateLabel}
+                  <span className="block text-xs sm:text-sm font-semibold leading-tight truncate">
+                    {d.offset === 0
+                      ? t('shopToday')
+                      : d.offset === 1
+                        ? t('shopTomorrow')
+                        : d.offset === 2
+                          ? t('shopDayAfterTomorrow')
+                          : d.dateLabel}
+                  </span>
+                  <span className="block text-[10px] opacity-80 truncate">{d.weekday}</span>
                 </button>
               ))}
               {!scheduleDays.length ? (

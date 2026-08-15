@@ -38,6 +38,7 @@ import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
 import ShopChannelPrompt from '@/components/shop/ShopChannelPrompt';
+import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup';
 import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import ShopOfferPicker, {
   type ShopOfferForPicker,
@@ -101,6 +102,14 @@ export default function OrderingPage() {
   const [cartSlideOpen, setCartSlideOpen] = useState(false);
   const [cartBump, setCartBump] = useState(false);
   const prevItemCountRef = useRef(0);
+  const hasAutoOpenedCartRef = useRef(false);
+  const [deliveryAddressOpen, setDeliveryAddressOpen] = useState(false);
+  const [pendingChannelPayload, setPendingChannelPayload] = useState<{
+    channel: ShopChannel;
+    scheduledFor: string | null;
+  } | null>(null);
+  const [channelBeforeDelivery, setChannelBeforeDelivery] = useState<ShopChannel | null>(null);
+  const [promptInitialChannel, setPromptInitialChannel] = useState<ShopChannel>('takeaway');
   const [checkingDelivery, setCheckingDelivery] = useState(false);
   const [deliveryInfo, setDeliveryInfo] = useState<any>(null);
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
@@ -370,11 +379,15 @@ export default function OrderingPage() {
     if (itemCount > prev) {
       setCartBump(true);
       const timer = window.setTimeout(() => setCartBump(false), 400);
-      if (!stickyCart && itemCount > 0) {
+      if (!stickyCart && itemCount > 0 && prev === 0 && !hasAutoOpenedCartRef.current) {
         setCartSlideOpen(true);
+        hasAutoOpenedCartRef.current = true;
       }
       prevItemCountRef.current = itemCount;
       return () => window.clearTimeout(timer);
+    }
+    if (itemCount === 0) {
+      hasAutoOpenedCartRef.current = false;
     }
     prevItemCountRef.current = itemCount;
   }, [itemCount, stickyCart]);
@@ -567,7 +580,6 @@ export default function OrderingPage() {
       setOfferConfigMeta(null);
       setPendingCombo(null);
       setPendingProduct(null);
-      setCartSlideOpen(true);
       return;
     }
     const [next, ...rest] = queue;
@@ -798,13 +810,11 @@ export default function OrderingPage() {
 
   const openChannelPrompt = () => {
     if (channelButtons.length <= 1) return;
+    setPromptInitialChannel(channel);
     setChannelPromptOpen(true);
   };
 
-  const confirmChannelPrompt = (payload: {
-    channel: ShopChannel;
-    scheduledFor: string | null;
-  }) => {
+  const applyChannelSelection = (payload: { channel: ShopChannel; scheduledFor: string | null }) => {
     patch({ channel: payload.channel, scheduledFor: payload.scheduledFor || '' });
     try {
       sessionStorage.setItem(`manupos_channel_prompted_${shopKey}`, '1');
@@ -812,8 +822,56 @@ export default function OrderingPage() {
       /* ignore */
     }
     setChannelPromptOpen(false);
+    setPendingChannelPayload(null);
     setError(null);
   };
+
+  const requestChannelChange = (payload: { channel: ShopChannel; scheduledFor: string | null }) => {
+    if (payload.channel === 'delivery') {
+      setChannelBeforeDelivery(channel);
+      setPendingChannelPayload(payload);
+      setDeliveryAddressOpen(true);
+      return;
+    }
+    applyChannelSelection(payload);
+  };
+
+  const confirmChannelPrompt = (payload: { channel: ShopChannel; scheduledFor: string | null }) => {
+    requestChannelChange(payload);
+  };
+
+  const selectChannel = (next: ShopChannel) => {
+    setError(null);
+    if (next === 'delivery') {
+      setChannelBeforeDelivery(channel);
+      setPendingChannelPayload({ channel: next, scheduledFor: draft.scheduledFor || null });
+      setDeliveryAddressOpen(true);
+      return;
+    }
+    patch({ channel: next });
+    setDeliveryInfo(null);
+  };
+
+  const CartIconButton = ({ className = '' }: { className?: string }) => (
+    <button
+      type="button"
+      className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center text-stone-700 hover:bg-stone-100 rounded-full ${className}`}
+      onClick={() => setCartSlideOpen(true)}
+      aria-label={`${t('shopBasketCount')} (${itemCount})`}
+      title={`${t('shopBasketCount')} (${itemCount})`}
+    >
+      <ShoppingBag className="h-5 w-5" strokeWidth={1.75} />
+      {itemCount > 0 ? (
+        <span
+          className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-stone-900 px-1 text-[10px] font-bold text-white ${
+            cartBump ? 'shop-cart-bump' : ''
+          }`}
+        >
+          {itemCount > 99 ? '99+' : itemCount}
+        </span>
+      ) : null}
+    </button>
+  );
 
   const showProductImages = merchant?.menuShowProductImages !== false;
   const showCategoryBanners = merchant?.menuShowCategoryBanners !== false;
@@ -1150,26 +1208,7 @@ export default function OrderingPage() {
             >
               <User className="h-5 w-5" strokeWidth={1.75} />
             </Link>
-            <button
-              type="button"
-              className={`relative inline-flex h-9 w-9 items-center justify-center text-stone-700 hover:bg-stone-100 rounded-full ${
-                stickyCart ? 'lg:hidden' : ''
-              }`}
-              onClick={() => setCartSlideOpen(true)}
-              aria-label={`${t('shopBasketCount')} (${itemCount})`}
-              title={`${t('shopBasketCount')} (${itemCount})`}
-            >
-              <ShoppingBag className="h-5 w-5" strokeWidth={1.75} />
-              {itemCount > 0 ? (
-                <span
-                  className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-stone-900 px-1 text-[10px] font-bold text-white ${
-                    cartBump ? 'shop-cart-bump' : ''
-                  }`}
-                >
-                  {itemCount > 99 ? '99+' : itemCount}
-                </span>
-              ) : null}
-            </button>
+            <CartIconButton className={stickyCart ? 'lg:hidden' : 'hidden'} />
           </div>
         </div>
       </header>
@@ -1252,26 +1291,22 @@ export default function OrderingPage() {
           </button>
 
           {showMenuChannelButtons ? (
-            <div className="flex flex-wrap gap-2 pt-1">
+            <div className="grid grid-cols-3 gap-2 pt-1">
               {channelButtons.map((c) => {
                 const meta = channels[c.id];
                 return (
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => {
-                      patch({ channel: c.id });
-                      setError(null);
-                      setDeliveryInfo(null);
-                    }}
-                    className={`rounded-full px-3.5 py-1.5 text-sm font-semibold border ${
+                    onClick={() => selectChannel(c.id)}
+                    className={`rounded-xl px-2 py-2.5 text-center border min-w-0 ${
                       channel === c.id
                         ? 'bg-stone-900 text-white border-stone-900'
                         : 'bg-white text-stone-700 border-stone-200'
                     }`}
                   >
-                    {c.label}
-                    <span className="ml-1.5 font-normal opacity-70">
+                    <span className="block text-xs sm:text-sm font-semibold truncate">{c.label}</span>
+                    <span className="block text-[10px] sm:text-[11px] font-normal opacity-70 truncate">
                       {meta.etaMinutes} {t('shopMins')}
                     </span>
                   </button>
@@ -1382,39 +1417,42 @@ export default function OrderingPage() {
             </div>
           )}
 
-          <div className="sticky top-16 z-20 -mx-4 px-4 py-2.5 bg-[#f6f5f2]/90 backdrop-blur border-b border-stone-200/70 mb-4">
-            <div className="flex min-w-0 gap-1.5 overflow-x-auto pb-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCategory('all');
-                  setAllCategoriesOpen(true);
-                }}
-                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                  selectedCategory === 'all'
-                    ? 'bg-amber-700 text-white'
-                    : 'bg-white text-stone-700 border border-stone-200'
-                }`}
-              >
-                {t('shopAllCategories')}
-              </button>
-              {menu.map((cat) => (
+          <div className="sticky top-14 z-20 -mx-4 px-4 py-2 bg-[#f6f5f2]/95 backdrop-blur border-b border-stone-200/80 mb-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5">
                 <button
-                  key={cat.id}
                   type="button"
                   onClick={() => {
-                    setSelectedCategory(cat.id);
+                    setSelectedCategory('all');
                     setAllCategoriesOpen(true);
                   }}
                   className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                    selectedCategory === cat.id
+                    selectedCategory === 'all'
                       ? 'bg-amber-700 text-white'
                       : 'bg-white text-stone-700 border border-stone-200'
                   }`}
                 >
-                  {cat.name}
+                  {t('shopAllCategories')}
                 </button>
-              ))}
+                {menu.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory(cat.id);
+                      setAllCategoriesOpen(true);
+                    }}
+                    className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
+                      selectedCategory === cat.id
+                        ? 'bg-amber-700 text-white'
+                        : 'bg-white text-stone-700 border border-stone-200'
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+              <CartIconButton className={stickyCart ? 'lg:hidden' : ''} />
             </div>
           </div>
 
@@ -1635,16 +1673,55 @@ export default function OrderingPage() {
         selected={channel}
         confirmLabel={t('shopContinue')}
         dismissible={channelSelectMode !== 'popup_start'}
-        withSchedule={channelSelectMode === 'popup_start' && allowScheduledOrders}
+        withSchedule={allowScheduledOrders}
         storeHours={merchant?.storeHours}
         scheduledFor={draft.scheduledFor || null}
         onSelect={(id) => {
           patch({ channel: id });
-          setDeliveryInfo(null);
           setError(null);
         }}
         onConfirm={confirmChannelPrompt}
-        onClose={() => setChannelPromptOpen(false)}
+        onClose={() => {
+          setChannelPromptOpen(false);
+          if (channel === 'delivery' && !deliveryInfo && !deliveryAddressOpen) {
+            patch({ channel: promptInitialChannel });
+          }
+        }}
+      />
+
+      <ShopDeliveryAddressPopup
+        open={deliveryAddressOpen}
+        shopKey={shopKey}
+        address={draft.address}
+        zipCode={draft.zipCode}
+        city={draft.city}
+        subtotal={cartTotal}
+        onClose={() => {
+          setDeliveryAddressOpen(false);
+          setPendingChannelPayload(null);
+          if (channelBeforeDelivery) {
+            patch({ channel: channelBeforeDelivery });
+            setChannelBeforeDelivery(null);
+          }
+        }}
+        onConfirm={(payload) => {
+          patch({
+            address: payload.address,
+            zipCode: payload.zipCode,
+            city: payload.city,
+            lat: payload.lat,
+            lng: payload.lng,
+          });
+          setDeliveryInfo(payload.deliveryInfo);
+          if (pendingChannelPayload) {
+            applyChannelSelection(pendingChannelPayload);
+          } else {
+            patch({ channel: 'delivery' });
+          }
+          setDeliveryAddressOpen(false);
+          setPendingChannelPayload(null);
+          setChannelBeforeDelivery(null);
+        }}
       />
 
       <ShopInfoSheet

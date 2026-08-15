@@ -30,6 +30,7 @@ import { isLocale, useI18n } from '@/lib/i18n';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
+import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup';
 
 type Step = 'details' | 'payment' | 'review';
 type WhenMode = 'asap' | 'later';
@@ -80,6 +81,8 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [saveLabel, setSaveLabel] = useState<(typeof ADDRESS_LABELS)[number]>('home');
   const [savingAddress, setSavingAddress] = useState(false);
+  const [deliveryAddressOpen, setDeliveryAddressOpen] = useState(false);
+  const [channelBeforeDelivery, setChannelBeforeDelivery] = useState<ShopChannel | null>(null);
 
   useEffect(() => {
     if (!shopKey) return;
@@ -320,7 +323,7 @@ export default function CheckoutPage() {
       channel: draft.channel as ShopChannel,
       leadMinutes,
       intervalMinutes: 15,
-      horizonDays: 2,
+      horizonDays: 3,
       locale: shopLocale,
     });
   }, [merchant, draft.channel, leadMinutes, shopLocale]);
@@ -801,6 +804,11 @@ export default function CheckoutPage() {
       String(merchant?.channelSelectMode || '') === 'menu');
 
   const patchChannel = (channel: ShopChannel) => {
+    if (channel === 'delivery') {
+      setChannelBeforeDelivery(draft.channel);
+      setDeliveryAddressOpen(true);
+      return;
+    }
     setDraft((d) => ({ ...d, channel }));
     setDeliveryInfo(null);
     setError(null);
@@ -1883,6 +1891,38 @@ export default function CheckoutPage() {
           </div>
         </aside>
       </div>
+      <ShopDeliveryAddressPopup
+        open={deliveryAddressOpen}
+        shopKey={shopKey}
+        address={draft.address}
+        zipCode={draft.zipCode}
+        city={draft.city}
+        subtotal={subtotal}
+        onClose={() => {
+          setDeliveryAddressOpen(false);
+          if (channelBeforeDelivery) {
+            setDraft((d) => ({ ...d, channel: channelBeforeDelivery! }));
+            setChannelBeforeDelivery(null);
+          }
+        }}
+        onConfirm={(payload) => {
+          setDraft((d) => ({
+            ...d,
+            channel: 'delivery',
+            address: payload.address,
+            zipCode: payload.zipCode,
+            city: payload.city,
+            lat: payload.lat,
+            lng: payload.lng,
+          }));
+          setDeliveryInfo(payload.deliveryInfo);
+          setDeliveryAddressOpen(false);
+          setChannelBeforeDelivery(null);
+          setError(null);
+          setWhenMode('asap');
+          setScheduleDayOffset(0);
+        }}
+      />
     </div>
   );
 }
