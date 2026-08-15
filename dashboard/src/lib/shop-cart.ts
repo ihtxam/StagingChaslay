@@ -54,6 +54,12 @@ export interface ShopCartItem {
   offerName?: string;
 }
 
+export interface ShopVoucherState {
+  voucherCode?: string;
+  voucherDiscount?: number;
+  voucherName?: string;
+}
+
 export interface ShopCheckoutDraft {
   channel: ShopChannel;
   items: ShopCartItem[];
@@ -72,6 +78,10 @@ export interface ShopCheckoutDraft {
   pointsToRedeem?: number;
   lat?: number;
   lng?: number;
+  /** Applied discount voucher */
+  voucherCode?: string;
+  voucherDiscount?: number;
+  voucherName?: string;
 }
 
 const PREFIX = 'manupos_shop_cart_v1:';
@@ -157,6 +167,9 @@ export function emptyDraft(channel: ShopChannel = 'takeaway'): ShopCheckoutDraft
     paymentMethod: channel === 'delivery' ? 'cash' : 'pay_later',
     authMode: 'guest',
     pointsToRedeem: 0,
+    voucherCode: '',
+    voucherDiscount: 0,
+    voucherName: '',
   };
 }
 

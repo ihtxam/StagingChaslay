@@ -1704,6 +1704,69 @@ export const offers = pgTable(
 );
 
 // ============================================================================
+// VOUCHERS (discount codes for online shop)
+// ============================================================================
+
+export type VoucherUsageType = "single_use" | "multi_use" | "customer";
+export type VoucherDiscountType = "percent" | "fixed";
+
+export const vouchers = pgTable(
+  "vouchers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    code: varchar("code", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }),
+    usageType: varchar("usage_type", { length: 20 }).notNull().default("multi_use"),
+    /** Max redemptions (multi_use) or 1 for single_use */
+    maxRedemptions: integer("max_redemptions").default(1).notNull(),
+    /** Required when usageType = customer */
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    discountType: varchar("discount_type", { length: 20 }).notNull().default("percent"),
+    discountValue: decimal("discount_value", { precision: 10, scale: 2 }).notNull(),
+    minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }).default("0").notNull(),
+    validFrom: timestamp("valid_from", { withTimezone: true }),
+    validTo: timestamp("valid_to", { withTimezone: true }),
+    isActive: boolean("is_active").default(true).notNull(),
+    redemptionCount: integer("redemption_count").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantCodeIdx: uniqueIndex("vouchers_merchant_code_idx").on(table.merchantId, table.code),
+    merchantIdx: index("vouchers_merchant_id_idx").on(table.merchantId),
+    activeIdx: index("vouchers_merchant_active_idx").on(table.merchantId, table.isActive),
+    customerIdx: index("vouchers_customer_id_idx").on(table.customerId),
+  })
+);
+
+export const voucherRedemptions = pgTable(
+  "voucher_redemptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    voucherId: uuid("voucher_id")
+      .notNull()
+      .references(() => vouchers.id, { onDelete: "cascade" }),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    code: varchar("code", { length: 64 }).notNull(),
+    discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("voucher_redemptions_merchant_id_idx").on(table.merchantId),
+    voucherIdx: index("voucher_redemptions_voucher_id_idx").on(table.voucherId),
+    orderIdx: index("voucher_redemptions_order_id_idx").on(table.orderId),
+    customerIdx: index("voucher_redemptions_customer_id_idx").on(table.customerId),
+  })
+);
+
+// ============================================================================
 // DAILY REPORTS
 // ============================================================================
 
@@ -1864,6 +1927,30 @@ export const merchantsRelations = relations(merchants, ({ many, one }) => ({
   reservations: many(reservations),
   subscriptionPayments: many(subscriptionPayments),
   cmsPages: many(cmsPages),
+  vouchers: many(vouchers),
+  voucherRedemptions: many(voucherRedemptions),
+}));
+
+export const vouchersRelations = relations(vouchers, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [vouchers.merchantId], references: [merchants.id] }),
+  customer: one(customers, { fields: [vouchers.customerId], references: [customers.id] }),
+  redemptions: many(voucherRedemptions),
+}));
+
+export const voucherRedemptionsRelations = relations(voucherRedemptions, ({ one }) => ({
+  merchant: one(merchants, {
+    fields: [voucherRedemptions.merchantId],
+    references: [merchants.id],
+  }),
+  voucher: one(vouchers, {
+    fields: [voucherRedemptions.voucherId],
+    references: [vouchers.id],
+  }),
+  order: one(orders, { fields: [voucherRedemptions.orderId], references: [orders.id] }),
+  customer: one(customers, {
+    fields: [voucherRedemptions.customerId],
+    references: [customers.id],
+  }),
 }));
 
 export const reservationsRelations = relations(reservations, ({ one }) => ({

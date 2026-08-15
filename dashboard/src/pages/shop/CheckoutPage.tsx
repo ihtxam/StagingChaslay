@@ -31,6 +31,7 @@ import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup';
+import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 
 type Step = 'details' | 'payment' | 'review';
 type WhenMode = 'asap' | 'later';
@@ -371,8 +372,13 @@ export default function CheckoutPage() {
   }, [merchant, channelOpen, whenMode, scheduleDays, scheduleDayOffset, draft.channel]);
 
   const subtotal = roundMoney2(cartSubtotal(draft.items));
+  const voucherDiscount = roundMoney2(Math.max(0, Number(draft.voucherDiscount) || 0));
+  const effectiveDeliveryInfo = useMemo(
+    () => withDeliveryMinOrderStatus(deliveryInfo, subtotal),
+    [deliveryInfo, subtotal]
+  );
   const deliveryFee = roundMoney2(
-    draft.channel === 'delivery' ? Number(deliveryInfo?.zone?.deliveryFee || 0) : 0
+    draft.channel === 'delivery' ? Number(effectiveDeliveryInfo?.zone?.deliveryFee || 0) : 0
   );
   const tip = roundTo005(Math.max(0, Number(draft.tipAmount) || 0));
   const taxOpts = {
@@ -383,7 +389,7 @@ export default function CheckoutPage() {
   const taxAfterOffer = adjustTaxForOrderDiscount(
     grossTax,
     subtotal + deliveryFee,
-    offerDiscount,
+    offerDiscount + voucherDiscount,
     taxOpts
   );
   const rewardPointsInCart = draft.items
@@ -394,7 +400,7 @@ export default function CheckoutPage() {
   const balanceAfterRewards = Math.max(0, loyaltyBalance - rewardPointsInCart);
   // Points can cover food + delivery + tax (not tip / card fee)
   const redeemableBase = roundMoney2(
-    Math.max(0, subtotal - offerDiscount) + deliveryFee + taxAfterOffer
+    Math.max(0, subtotal - offerDiscount - voucherDiscount) + deliveryFee + taxAfterOffer
   );
   const maxCashPoints = Math.min(
     Math.floor(Math.max(0, redeemableBase)) * rate,
@@ -410,11 +416,11 @@ export default function CheckoutPage() {
   const tax = adjustTaxForOrderDiscount(
     grossTax,
     subtotal + deliveryFee,
-    offerDiscount + pointsDiscount,
+    offerDiscount + voucherDiscount + pointsDiscount,
     taxOpts
   );
   const preCardTotal =
-    Math.max(0, subtotal + deliveryFee + tax - offerDiscount - pointsDiscount) + tip;
+    Math.max(0, subtotal + deliveryFee + tax - offerDiscount - voucherDiscount - pointsDiscount) + tip;
   const cardFeeFixed = Number(paymentOptions?.cardFeeFixed || 0) || 0;
   const cardFeePercent = Number(paymentOptions?.cardFeePercent || 0) || 0;
   const remainingAfterPoints = Math.max(0, redeemableBase - pointsDiscount) + tip;
@@ -492,12 +498,13 @@ export default function CheckoutPage() {
         subtotal,
       });
       setDeliveryInfo(res.data);
+      const live = withDeliveryMinOrderStatus(res.data, subtotal);
       if (!res.data.deliverable) {
         setError(res.data.error || t('shopOutsideDelivery'));
         return false;
       }
-      if (!res.data.meetsMinOrder) {
-        setError(res.data.message);
+      if (!live.meetsMinOrder) {
+        setError(live.message || t('shopMinOrderNotMet'));
         return false;
       }
       return true;
@@ -745,6 +752,7 @@ export default function CheckoutPage() {
               ? localDateTimeToIso(draft.scheduledFor)
               : null,
           guestCheckout: draft.authMode === 'guest',
+          voucherCode: draft.voucherCode?.trim() || undefined,
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
@@ -1237,12 +1245,15 @@ export default function CheckoutPage() {
                     >
                       {checkingZone ? t('shopChecking') : t('shopVerifyDeliveryZone')}
                     </button>
-                    {deliveryInfo?.deliverable && (
-                      <p className="text-sm text-teal-800">
-                        {deliveryInfo.zone.name}: {t('shopFee')} CHF{' '}
-                        {Number(deliveryInfo.zone.deliveryFee).toFixed(2)}
-                        {deliveryInfo.zone.minOrderAmount > 0
-                          ? ` · ${t('shopMin')} CHF ${Number(deliveryInfo.zone.minOrderAmount).toFixed(2)}`
+                    {effectiveDeliveryInfo?.deliverable && (
+                      <p className={`text-sm ${effectiveDeliveryInfo.meetsMinOrder ? 'text-teal-800' : 'text-amber-800'}`}>
+                        {effectiveDeliveryInfo.zone.name}: {t('shopFee')} CHF{' '}
+                        {Number(effectiveDeliveryInfo.zone.deliveryFee).toFixed(2)}
+                        {effectiveDeliveryInfo.zone.minOrderAmount > 0
+                          ? ` · ${t('shopMin')} CHF ${Number(effectiveDeliveryInfo.zone.minOrderAmount).toFixed(2)}`
+                          : ''}
+                        {!effectiveDeliveryInfo.meetsMinOrder && effectiveDeliveryInfo.message
+                          ? ` · ${effectiveDeliveryInfo.message}`
                           : ''}
                       </p>
                     )}
@@ -1289,6 +1300,11 @@ export default function CheckoutPage() {
               {offerDiscount > 0 ? (
                 <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 px-3 py-2">
                   {(offerLabels.join(', ') || t('shopOffer')) + `: - CHF ${offerDiscount.toFixed(2)}`}
+                </p>
+              ) : null}
+              {voucherDiscount > 0 && draft.voucherCode ? (
+                <p className="text-sm text-teal-800 bg-teal-50 border border-teal-100 px-3 py-2">
+                  {(draft.voucherName || draft.voucherCode) + `: - CHF ${voucherDiscount.toFixed(2)}`}
                 </p>
               ) : null}
 
@@ -1846,6 +1862,12 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-amber-800">
                 <span>{offerLabels.join(', ') || t('shopOffer')}</span>
                 <span>- CHF {offerDiscount.toFixed(2)}</span>
+              </div>
+            )}
+            {voucherDiscount > 0 && (
+              <div className="flex justify-between text-teal-800">
+                <span>{draft.voucherName || draft.voucherCode || t('shopVoucherDiscount')}</span>
+                <span>- CHF {voucherDiscount.toFixed(2)}</span>
               </div>
             )}
             {pointsDiscount > 0 && (

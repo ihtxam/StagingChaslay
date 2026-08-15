@@ -11,6 +11,7 @@ import Modifiers from './Modifiers';
 import Customers from './Customers';
 import Loyalty from './Loyalty';
 import Offers from './Offers';
+import Vouchers from './Vouchers';
 import Terminals from './Terminals';
 import Settings from './Settings';
 import Billing from './Billing';
@@ -216,6 +217,7 @@ function MerchantShell() {
         { label: t('customers'), path: '/merchant/customers', icon: '👥' },
         { label: t('loyalty'), path: '/merchant/loyalty', icon: '🎁' },
         { label: t('offers'), path: '/merchant/offers', icon: '🏷️' },
+        { label: t('vouchers'), path: '/merchant/vouchers', icon: '🎟️' },
         { label: t('newsletter'), path: '/merchant/newsletter', icon: '✉️' },
       ].filter((item) => allow(item.path)),
     },
@@ -357,6 +359,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/offers" allow={allow}>
                   <Offers />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="vouchers"
+              element={
+                <PanelRouteGuard path="/merchant/vouchers" allow={allow}>
+                  <Vouchers />
                 </PanelRouteGuard>
               }
             />

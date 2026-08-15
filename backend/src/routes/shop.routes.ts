@@ -21,6 +21,7 @@ import { normalizeComboSlots } from "@/lib/combo";
 import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACATION_BLOCK_MESSAGE, NOT_ACCEPTING_ORDERS_MESSAGE, NOT_ACCEPTING_RESERVATIONS_MESSAGE } from "@/lib/vacation";
 import { geocodeQuery } from "@/lib/geocode";
 import { OffersService } from "@/services/offers.service";
+import { VoucherService } from "@/services/voucher.service";
 import { generateWebOrderNumber } from "@/lib/web-order-number";
 
 const router = Router();
@@ -1266,6 +1267,29 @@ router.post("/:slug/reservations", async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/shop/:slug/vouchers/validate
+ * Body: { code, subtotal }
+ */
+router.post("/:slug/vouchers/validate", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    const code = String(req.body?.code || "");
+    const subtotal = Number(req.body?.subtotal || 0);
+    const authCustomer = optionalCustomer(req);
+    const result = await VoucherService.validateForShop(
+      merchant.id,
+      code,
+      subtotal,
+      authCustomer.customerId
+    );
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Invalid voucher" });
+  }
+});
+
+/**
  * POST /api/shop/:slug/offers/preview
  * Estimate promotional discount for the current cart.
  */
@@ -1399,6 +1423,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       scheduledFor,
       guestCheckout = true,
       pointsToRedeem = 0,
+      voucherCode,
     } = req.body as {
       items: Array<{
         productId: string;
@@ -1422,6 +1447,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       scheduledFor?: string | null;
       guestCheckout?: boolean;
       pointsToRedeem?: number;
+      voucherCode?: string;
     };
 
     if (scheduledFor) {
@@ -1667,6 +1693,31 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     );
     let offerDiscount = roundMoney2(offerEval.discount);
 
+    let voucherDiscount = 0;
+    let appliedVoucher: { voucherId: string; code: string; name: string } | null = null;
+    const trimmedVoucher = String(voucherCode || "").trim();
+    if (trimmedVoucher) {
+      try {
+        const voucherBase = roundMoney2(Math.max(0, subtotal - offerDiscount));
+        const validated = await VoucherService.validateForShop(
+          merchant.id,
+          trimmedVoucher,
+          voucherBase,
+          authCustomer.customerId
+        );
+        voucherDiscount = roundMoney2(Math.min(validated.discount, voucherBase));
+        appliedVoucher = {
+          voucherId: validated.voucherId,
+          code: validated.code,
+          name: validated.name,
+        };
+      } catch (error) {
+        return res.status(400).json({
+          error: error instanceof Error ? error.message : "Invalid voucher",
+        });
+      }
+    }
+
     let deliveryFee = 0;
     let deliveryZoneId: string | undefined;
     if (channel === "delivery") {
@@ -1699,11 +1750,11 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     taxPreview = adjustTaxForOrderDiscount(
       taxPreview,
       subtotal + deliveryFee,
-      offerDiscount,
+      offerDiscount + voucherDiscount,
       taxDiscountOpts
     );
     const redeemableBase = roundMoney2(
-      Math.max(0, subtotal - offerDiscount) + deliveryFee + taxPreview
+      Math.max(0, subtotal - offerDiscount - voucherDiscount) + deliveryFee + taxPreview
     );
 
     let pointsDiscount = 0;
@@ -1779,28 +1830,32 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     subtotal = roundMoney2(subtotal);
     deliveryFee = roundMoney2(deliveryFee);
     offerDiscount = roundMoney2(Math.min(offerDiscount, subtotal));
+    voucherDiscount = roundMoney2(
+      Math.min(voucherDiscount, Math.max(0, subtotal - offerDiscount))
+    );
     const taxAfterOffer = adjustTaxForOrderDiscount(
       grossTaxAmount,
       subtotal + deliveryFee,
-      offerDiscount,
+      offerDiscount + voucherDiscount,
       taxDiscountOpts
     );
     pointsDiscount = roundMoney2(
       Math.min(
         pointsDiscount,
-        Math.max(0, subtotal - offerDiscount) + deliveryFee + taxAfterOffer
+        Math.max(0, subtotal - offerDiscount - voucherDiscount) + deliveryFee + taxAfterOffer
       )
     );
     taxAmount = adjustTaxForOrderDiscount(
       grossTaxAmount,
       subtotal + deliveryFee,
-      offerDiscount + pointsDiscount,
+      offerDiscount + voucherDiscount + pointsDiscount,
       taxDiscountOpts
     );
     const orderNumber = await generateWebOrderNumber(db, merchant.id);
-    // Offer + points discount apply to food (+ delivery/tax for points); tip and card fee remain payable
+    // Offer + voucher + points discount apply to food (+ delivery/tax for points); tip and card fee remain payable
     const preCardTotal =
-      Math.max(0, subtotal + deliveryFee + taxAmount - offerDiscount - pointsDiscount) + tip;
+      Math.max(0, subtotal + deliveryFee + taxAmount - offerDiscount - voucherDiscount - pointsDiscount) +
+      tip;
     const cardFeeFixed = Number(merchant.onlineCardFeeFixed || 0) || 0;
     const cardFeePercent = Number(merchant.onlineCardFeePercent || 0) || 0;
     const cardFee =
@@ -1815,6 +1870,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         notes || "",
         offerEval.applied.length
           ? `[Offers: ${offerEval.applied.map((a) => `${a.name} −CHF ${a.discount.toFixed(2)}`).join("; ")}]`
+          : "",
+        appliedVoucher
+          ? `[Voucher ${appliedVoucher.code}: −CHF ${voucherDiscount.toFixed(2)}]`
           : "",
         roundAdj !== 0 ? `[Rounding ${roundAdj > 0 ? "+" : ""}${roundAdj.toFixed(2)}]` : "",
       ]
@@ -1849,7 +1907,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         status: "pending_approval",
         subtotal: subtotal.toFixed(2),
         taxAmount: taxAmount.toFixed(2),
-        discountAmount: roundMoney2(offerDiscount + pointsDiscount).toFixed(2),
+        discountAmount: roundMoney2(offerDiscount + voucherDiscount + pointsDiscount).toFixed(2),
         deliveryFee: deliveryFee.toFixed(2),
         tipAmount: tip.toFixed(2),
         cardFee: cardFee.toFixed(2),
@@ -1892,6 +1950,22 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         selectedExtras: line.selectedExtras,
         comboSelections: line.comboSelections,
       });
+    }
+
+    if (appliedVoucher && voucherDiscount > 0) {
+      try {
+        await VoucherService.redeem(merchant.id, appliedVoucher.voucherId, {
+          orderId: order.id,
+          customerId: customerId || authCustomer.customerId || null,
+          discountAmount: voucherDiscount,
+          code: appliedVoucher.code,
+        });
+      } catch (error) {
+        await db.delete(schema.orders).where(eq(schema.orders.id, order.id));
+        return res.status(400).json({
+          error: error instanceof Error ? error.message : "Voucher could not be applied",
+        });
+      }
     }
 
     // Redeem after insert so events carry orderId; roll back order on failure

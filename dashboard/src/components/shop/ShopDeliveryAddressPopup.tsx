@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import ZipCityFields from '@/components/shop/ZipCityFields';
 import { useI18n } from '@/lib/i18n';
+import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 
 type Props = {
   open: boolean;
@@ -55,6 +56,11 @@ export default function ShopDeliveryAddressPopup({
     setLng(undefined);
   }, [open, initialAddress, initialZip, initialCity]);
 
+  const effectiveDeliveryInfo = useMemo(
+    () => withDeliveryMinOrderStatus(deliveryInfo, subtotal),
+    [deliveryInfo, subtotal]
+  );
+
   if (!open) return null;
 
   const verify = async () => {
@@ -81,12 +87,13 @@ export default function ShopDeliveryAddressPopup({
         subtotal,
       });
       setDeliveryInfo(res.data);
+      const live = withDeliveryMinOrderStatus(res.data, subtotal);
       if (!res.data.deliverable) {
         setError(res.data.error || t('shopOutsideDelivery'));
         return;
       }
-      if (!res.data.meetsMinOrder) {
-        setError(res.data.message || t('shopMinOrderNotMet'));
+      if (!live.meetsMinOrder) {
+        setError(live.message || t('shopMinOrderNotMet'));
       }
     } catch (e: any) {
       setError(e.response?.data?.error || t('shopCouldNotVerifyAddress'));
@@ -101,15 +108,15 @@ export default function ShopDeliveryAddressPopup({
       setError(t('shopEnterDeliveryAddress'));
       return;
     }
-    if (!deliveryInfo?.deliverable) {
+    if (!effectiveDeliveryInfo?.deliverable) {
       setError(t('shopConfirmDeliveryVerifyFirst'));
       return;
     }
-    if (!deliveryInfo.meetsMinOrder) {
-      setError(deliveryInfo.message || t('shopMinOrderNotMet'));
+    if (!effectiveDeliveryInfo.meetsMinOrder) {
+      setError(effectiveDeliveryInfo.message || t('shopMinOrderNotMet'));
       return;
     }
-    onConfirm({ address, zipCode, city, lat, lng, deliveryInfo });
+    onConfirm({ address, zipCode, city, lat, lng, deliveryInfo: effectiveDeliveryInfo });
   };
 
   return (
@@ -176,12 +183,15 @@ export default function ShopDeliveryAddressPopup({
           >
             {checking ? t('shopChecking') : t('shopCheckDeliveryZone')}
           </button>
-          {deliveryInfo?.deliverable && deliveryInfo.meetsMinOrder ? (
-            <p className="text-xs text-teal-800">
-              {deliveryInfo.zone.name}: {t('shopFee')} CHF{' '}
-              {Number(deliveryInfo.zone.deliveryFee).toFixed(2)}
-              {deliveryInfo.zone.minOrderAmount > 0
-                ? ` · ${t('shopMin')} CHF ${Number(deliveryInfo.zone.minOrderAmount).toFixed(2)}`
+          {effectiveDeliveryInfo?.deliverable ? (
+            <p className={`text-xs ${effectiveDeliveryInfo.meetsMinOrder ? 'text-teal-800' : 'text-amber-800'}`}>
+              {effectiveDeliveryInfo.zone.name}: {t('shopFee')} CHF{' '}
+              {Number(effectiveDeliveryInfo.zone.deliveryFee).toFixed(2)}
+              {effectiveDeliveryInfo.zone.minOrderAmount > 0
+                ? ` · ${t('shopMin')} CHF ${Number(effectiveDeliveryInfo.zone.minOrderAmount).toFixed(2)}`
+                : ''}
+              {!effectiveDeliveryInfo.meetsMinOrder && effectiveDeliveryInfo.message
+                ? ` · ${effectiveDeliveryInfo.message}`
                 : ''}
             </p>
           ) : null}
@@ -200,7 +210,7 @@ export default function ShopDeliveryAddressPopup({
             type="button"
             onClick={confirm}
             className="flex-1 rounded-xl bg-amber-700 py-3 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-40"
-            disabled={!deliveryInfo?.deliverable || !deliveryInfo?.meetsMinOrder}
+            disabled={!effectiveDeliveryInfo?.deliverable || !effectiveDeliveryInfo?.meetsMinOrder}
           >
             {t('shopConfirmDelivery')}
           </button>
