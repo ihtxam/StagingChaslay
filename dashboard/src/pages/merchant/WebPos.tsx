@@ -4185,6 +4185,43 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     toast.error(t('webPosPrintFailed'));
   };
 
+  const printSuccessPart = async (partId: string) => {
+    const part = lastSplitReceipts.find((p) => p.id === partId);
+    if (!part) {
+      toast.error(t('webPosPrintFailed'));
+      return;
+    }
+    try {
+      await printReceipt(part.text, part.url);
+    } catch (e: any) {
+      toast.error(e.message || t('webPosPrintFailed'));
+    }
+  };
+
+  const printSuccessAll = async () => {
+    if (!lastSplitReceipts.length) {
+      toast.error(t('webPosPrintFailed'));
+      return;
+    }
+    try {
+      const combined = lastSplitReceipts.map((p) => p.text).join('\n\n====================\n\n');
+      const firstUrl = lastSplitReceipts[0]?.url;
+      await printReceipt(combined, firstUrl);
+    } catch (e: any) {
+      toast.error(e.message || t('webPosPrintFailed'));
+    }
+  };
+
+  const successSplitParts =
+    lastSplitReceipts.length > 1
+      ? lastSplitReceipts.map((p) => ({
+          id: p.id,
+          label: p.label,
+          amount: p.amount,
+          url: p.url,
+        }))
+      : undefined;
+
   const sendReceiptEmail = async (email: string) => {
     setSendReceiptBusy(true);
     try {
@@ -5800,6 +5837,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           <WebPosSuccessView
             amount={successInfo.amount}
             changeDue={successInfo.changeDue}
+            receiptUrl={lastSplitReceipts.length <= 1 ? lastReceiptUrl : undefined}
+            splitParts={successSplitParts}
             onBack={() => {
               setSuccessInfo(null);
               setLastSplitReceipts([]);
@@ -5807,7 +5846,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setPosView('register');
               setPosTab('register');
             }}
-            onPrint={openSuccessPrint}
+            onPrint={lastSplitReceipts.length <= 1 ? openSuccessPrint : undefined}
+            onPrintPart={successSplitParts ? (id) => void printSuccessPart(id) : undefined}
+            onPrintAll={successSplitParts ? () => void printSuccessAll() : undefined}
             onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
             onSendReceipt={() => setSendReceiptOpen(true)}
             onContinue={() => {
@@ -6193,7 +6234,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 compact
                 amount={successInfo.amount}
                 changeDue={successInfo.changeDue}
-                onPrint={openSuccessPrint}
+                receiptUrl={lastSplitReceipts.length <= 1 ? lastReceiptUrl : undefined}
+                splitParts={successSplitParts}
+                onPrint={lastSplitReceipts.length <= 1 ? openSuccessPrint : undefined}
+                onPrintPart={successSplitParts ? (id) => void printSuccessPart(id) : undefined}
+                onPrintAll={successSplitParts ? () => void printSuccessAll() : undefined}
                 onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
                 onSendReceipt={() => setSendReceiptOpen(true)}
                 onContinue={() => {

@@ -1523,7 +1523,7 @@ export function textToEscPos(
   }
   parts.push(alignLeft, body);
   if (qrData) {
-    parts.push(alignCenter, escposQrCode(qrData, 5), alignLeft);
+    parts.push(alignCenter, escposQrCode(qrData, 2), alignLeft);
   }
   if (barcodeData) {
     parts.push(escposCode128(barcodeData, 72, 2));
