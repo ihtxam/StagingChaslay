@@ -27,7 +27,17 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
-import { formatOrderPaymentDisplay, isOnlineShopOrder, orderChannelBadgeClass, orderChannelHeaderClass } from '@/lib/order-management';
+import {
+  canCollectPayment,
+  canShowAwaitingPaymentBadge,
+  formatOrderPaymentDisplay,
+  isAwaitingApproval,
+  isOnlineShopOrder,
+  isPaidOrder,
+  orderChannelBadgeClass,
+  orderChannelHeaderClass,
+  orderStatusLabel,
+} from '@/lib/order-management';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { hasTerminalPortion, parsePaymentBreakdown } from '@/lib/payment-breakdown';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
@@ -168,6 +178,8 @@ type Props = {
   initialChannelFilter?: ChannelFilter | null;
   /** Open WebPOS checkout for unpaid orders instead of the quick collect modal */
   onCollectPaymentCheckout?: (order: PosOrder) => void;
+  /** Order handled (accept/reject/complete) — clear bell badge for this ticket */
+  onOrderActioned?: (orderId: string) => void;
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal'] as const;
@@ -217,37 +229,17 @@ function canEditPayment(o: PosOrder): boolean {
 }
 
 /** Pay-later / awaiting_payment POS orders that still need collection at pickup. */
-function canCollectPayment(o: PosOrder): boolean {
+function isOpenOnlineFulfillment(o: PosOrder): boolean {
+  if (!isOnlineShopOrder(o)) return false;
   const status = (o.status || '').toLowerCase();
+  return !['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status);
+}
+
+function isUnpaidOnline(o: PosOrder): boolean {
+  if (isPaidOrder(o)) return false;
   const pay = (o.paymentStatus || '').toLowerCase();
   const method = (o.paymentMethod || '').toLowerCase();
-  if (['cancelled', 'refunded'].includes(status)) return false;
-  if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
-  if (Number(o.total || 0) <= 0.001) return false;
-  if (pay === 'awaiting_payment') return true;
-  if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) {
-    return [
-      'pending',
-      'pending_approval',
-      'preparing',
-      'accepted',
-      'ready',
-      'out_for_delivery',
-      'confirmed',
-    ].includes(status);
-  }
-  if (method === 'pay_later' || method === 'pay-later') {
-    return [
-      'pending',
-      'pending_approval',
-      'preparing',
-      'accepted',
-      'ready',
-      'out_for_delivery',
-      'confirmed',
-    ].includes(status);
-  }
-  return false;
+  return pay === 'awaiting_payment' || method === 'pay_later' || method === 'pay-later' || pay === 'cash';
 }
 
 function canRefundOrder(o: PosOrder): boolean {
@@ -353,6 +345,7 @@ export default function WebPosOrdersPanel({
   highlightOrderId = null,
   initialChannelFilter = null,
   onCollectPaymentCheckout,
+  onOrderActioned,
 }: Props) {
   const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -375,6 +368,7 @@ export default function WebPosOrdersPanel({
   const [paymentEditFor, setPaymentEditFor] = useState<PosOrder | null>(null);
   const [collectFor, setCollectFor] = useState<PosOrder | null>(null);
   const [collectBusy, setCollectBusy] = useState(false);
+  const [onlineActionBusy, setOnlineActionBusy] = useState<string | null>(null);
   const [paymentMethodDraft, setPaymentMethodDraft] = useState('cash');
   const [page, setPage] = useState(0);
   const [ordersView, setOrdersView] = useState<OrdersViewMode>(() => readOrdersView());
@@ -410,20 +404,7 @@ export default function WebPosOrdersPanel({
     return method || '—';
   };
 
-  const statusLabel = (status: string) => {
-    const key = status?.toLowerCase().replace(/-/g, '_');
-    const map: Record<string, string> = {
-      completed: t('webPosStatusCompleted'),
-      cancelled: t('webPosStatusCancelled'),
-      refunded: t('webPosStatusRefunded'),
-      partially_refunded: t('webPosStatusPartialRefund'),
-      preparing: t('webPosStatusPreparing'),
-      accepted: t('webPosStatusAccepted'),
-      held: t('webPosOngoing'),
-      sent_to_kitchen: t('webPosOngoing'),
-    };
-    return map[key] || status;
-  };
+  const statusLabel = (status: string) => orderStatusLabel(status, t);
 
   const channelLabel = (ch?: string | null, order?: PosOrder) => {
     if (order && isOnlineShopOrder(order)) return t('webPosOnlineOrders');
@@ -694,11 +675,66 @@ export default function WebPosOrdersPanel({
       setCollectFor(null);
       const updated = res.data?.order as PosOrder | undefined;
       setSelectedOrder(updated || null);
+      onOrderActioned?.(collectFor.id);
       void load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
     } finally {
       setCollectBusy(false);
+    }
+  };
+
+  const postOnlineAction = async (id: string, action: string, extra?: Record<string, unknown>) => {
+    const res = await api.post(`/merchant/orders/${id}/action`, { action, ...extra });
+    return (res.data?.order as PosOrder | undefined) || null;
+  };
+
+  const finalizeOnlineWhenReady = async (order: PosOrder) => {
+    if (isUnpaidOnline(order)) {
+      onOrderActioned?.(order.id);
+      if (onCollectPaymentCheckout) {
+        onCollectPaymentCheckout(order);
+        return;
+      }
+      startCollectPayment(order);
+      return;
+    }
+    setOnlineActionBusy(order.id);
+    try {
+      await postOnlineAction(order.id, 'complete');
+      toast.success(t('webPosOrderCompleted'));
+      onOrderActioned?.(order.id);
+      setSelectedOrder(null);
+      void load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('actionFailed'));
+    } finally {
+      setOnlineActionBusy(null);
+    }
+  };
+
+  const runOnlineAction = async (order: PosOrder, action: string) => {
+    setOnlineActionBusy(order.id);
+    try {
+      const updated = await postOnlineAction(order.id, action);
+      toast.success(t('updated'));
+      if (action === 'accept' || action === 'reject') {
+        onOrderActioned?.(order.id);
+      }
+      const fresh = updated || order;
+      setSelectedOrder((prev) =>
+        prev && prev.id === order.id
+          ? ({ ...prev, ...fresh, items: prev.items } as PosOrder)
+          : ({ ...order, ...fresh } as PosOrder)
+      );
+      void load();
+      if (action === 'mark_ready') {
+        await finalizeOnlineWhenReady({ ...order, ...(updated || {}), status: 'ready' });
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('actionFailed'));
+    } finally {
+      setOnlineActionBusy(null);
     }
   };
 
@@ -1109,7 +1145,7 @@ export default function WebPosOrdersPanel({
                           <span className="text-amber-300">{Number(o.total).toFixed(2)}</span>
                         </p>
                         <p className="text-[11px] font-semibold uppercase text-stone-300">
-                          {canCollectPayment(o)
+                          {canShowAwaitingPaymentBadge(o)
                             ? t('webPosAwaitingPayment')
                             : statusLabel(o.status)}
                         </p>
@@ -1539,7 +1575,7 @@ export default function WebPosOrdersPanel({
                       <span className="font-semibold">
                         {formatOrderPaymentDisplay(selectedOrder, t, locale)}
                       </span>
-                      {canCollectPayment(selectedOrder) ? (
+                      {canShowAwaitingPaymentBadge(selectedOrder) ? (
                         <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
                           {t('webPosAwaitingPayment')}
                         </span>
@@ -1558,7 +1594,75 @@ export default function WebPosOrdersPanel({
                     </p>
                   ) : null}
                 </div>
-                {canCollectPayment(selectedOrder) ? (
+                {isOpenOnlineFulfillment(selectedOrder) ? (
+                  <div className="space-y-2 border-t border-stone-200 p-3">
+                    {isAwaitingApproval(selectedOrder.status) ? (
+                      <>
+                        <button
+                          type="button"
+                          className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
+                          disabled={onlineActionBusy === selectedOrder.id}
+                          onClick={() => void runOnlineAction(selectedOrder, 'accept')}
+                        >
+                          {t('webPosAcceptOrder')}
+                        </button>
+                        <button
+                          type="button"
+                          className="w-full rounded-xl border border-rose-200 bg-rose-50 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                          disabled={onlineActionBusy === selectedOrder.id}
+                          onClick={() => void runOnlineAction(selectedOrder, 'reject')}
+                        >
+                          {t('webPosRejectOrder')}
+                        </button>
+                      </>
+                    ) : null}
+                    {selectedOrder.status === 'accepted' ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
+                        disabled={onlineActionBusy === selectedOrder.id}
+                        onClick={() => void runOnlineAction(selectedOrder, 'start_preparing')}
+                      >
+                        {t('webPosSendToKitchen')}
+                      </button>
+                    ) : null}
+                    {selectedOrder.status === 'preparing' ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
+                        disabled={onlineActionBusy === selectedOrder.id}
+                        onClick={() => void runOnlineAction(selectedOrder, 'mark_ready')}
+                      >
+                        {t('webPosMarkReady')}
+                      </button>
+                    ) : null}
+                    {selectedOrder.status === 'ready' &&
+                    (selectedOrder.fulfillmentChannel || selectedOrder.channel) === 'delivery' ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-xl border border-stone-200 bg-white py-3 text-sm font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+                        disabled={onlineActionBusy === selectedOrder.id}
+                        onClick={() => void runOnlineAction(selectedOrder, 'out_for_delivery')}
+                      >
+                        {t('ordersActionSendDelivery')}
+                      </button>
+                    ) : null}
+                    {(selectedOrder.status === 'ready' ||
+                      selectedOrder.status === 'out_for_delivery') &&
+                    !['completed', 'cancelled'].includes(selectedOrder.status) ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-xl bg-emerald-700 py-3.5 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                        disabled={onlineActionBusy === selectedOrder.id}
+                        onClick={() => void finalizeOnlineWhenReady(selectedOrder)}
+                      >
+                        {isUnpaidOnline(selectedOrder)
+                          ? `${t('webPosTakePayment')} · ${money(selectedOrder.total)}`
+                          : t('webPosCompleteOrder')}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : canCollectPayment(selectedOrder) ? (
                   <div className="space-y-2 border-t border-stone-200 p-3">
                     <button
                       type="button"

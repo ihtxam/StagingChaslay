@@ -2022,12 +2022,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       finalOrder = (await earnLoyaltyForOrder(merchant, order)) as typeof order;
     }
 
-    try {
-      const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
-      await DeliveryPlatformService.enqueueAutoPrint(merchant.id, finalOrder.id, "online_shop");
-    } catch (printErr) {
-      console.warn("Web shop auto-print enqueue failed:", printErr);
-    }
+    // Kitchen + receipt print on staff Accept (not at checkout while pending_approval).
 
     let paymentSession: unknown = null;
     if (payMethod === "card") {

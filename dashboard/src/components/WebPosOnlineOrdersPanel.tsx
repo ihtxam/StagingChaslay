@@ -6,6 +6,11 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
+import {
+  isAwaitingApproval,
+  isAwaitingPaymentOrder,
+  orderStatusLabel,
+} from '@/lib/order-management';
 
 export type OnlineOrder = {
   id: string;
@@ -41,19 +46,11 @@ type Props = {
 };
 
 function isNew(status: string) {
-  return status === 'pending' || status === 'pending_approval';
-}
-
-function isPaid(o: OnlineOrder) {
-  const pay = (o.paymentStatus || '').toLowerCase();
-  return pay === 'completed' || pay === 'paid';
+  return isAwaitingApproval(status);
 }
 
 function isUnpaid(o: OnlineOrder) {
-  if (isPaid(o)) return false;
-  const pay = (o.paymentStatus || '').toLowerCase();
-  const method = (o.paymentMethod || '').toLowerCase();
-  return pay === 'awaiting_payment' || method === 'pay_later' || pay === 'cash';
+  return isAwaitingPaymentOrder(o);
 }
 
 type WorkflowStep = 'accept' | 'kitchen' | 'ready' | 'done';
@@ -264,8 +261,8 @@ export default function WebPosOnlineOrdersPanel({
                           {t('webPosNewBadge')}
                         </span>
                       ) : null}
-                      {isUnpaid(o) ? (
-                        <span className="ml-2 rounded-full bg-violet-700 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                      {isUnpaid(o) && !isNew(o.status) && (o.status === 'ready' || o.status === 'out_for_delivery') ? (
+                        <span className="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
                           {t('webPosPayLater')}
                         </span>
                       ) : null}
@@ -273,6 +270,11 @@ export default function WebPosOnlineOrdersPanel({
                     <p className="text-[11px] text-stone-500">
                       {channelLabel(o.fulfillmentChannel)} · {money(o.total)} ·{' '}
                       {o.scheduledFor ? formatDateTime(o.scheduledFor) : t('webPosAsap')}
+                      {!isNew(o.status) ? (
+                        <span className="ml-1 font-semibold text-stone-600">
+                          · {orderStatusLabel(o.status, t)}
+                        </span>
+                      ) : null}
                     </p>
                     {(o.customerName || o.customerPhone) && (
                       <p className="mt-0.5 text-[11px] text-stone-700">

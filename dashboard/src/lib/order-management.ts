@@ -123,6 +123,17 @@ export function canEditPayment(o: MerchantOrder): boolean {
   );
 }
 
+/** Pickup / handoff stage — unpaid orders can be collected at the till. */
+export function isReadyForPaymentCollection(o: MerchantOrder): boolean {
+  const status = (o.status || '').toLowerCase();
+  return status === 'ready' || status === 'out_for_delivery';
+}
+
+export function isPaidOrder(o: MerchantOrder): boolean {
+  const pay = (o.paymentStatus || '').toLowerCase();
+  return pay === 'completed' || pay === 'paid';
+}
+
 export function canCollectPayment(o: MerchantOrder): boolean {
   const status = (o.status || '').toLowerCase();
   const pay = (o.paymentStatus || '').toLowerCase();
@@ -130,30 +141,36 @@ export function canCollectPayment(o: MerchantOrder): boolean {
   if (['cancelled', 'refunded'].includes(status)) return false;
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
   if (Number(o.total || 0) <= 0.001) return false;
+  if (!isReadyForPaymentCollection(o)) return false;
   if (pay === 'awaiting_payment') return true;
-  if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) {
-    return [
-      'pending',
-      'pending_approval',
-      'preparing',
-      'accepted',
-      'ready',
-      'out_for_delivery',
-      'confirmed',
-    ].includes(status);
-  }
-  if (method === 'pay_later' || method === 'pay-later') {
-    return [
-      'pending',
-      'pending_approval',
-      'preparing',
-      'accepted',
-      'ready',
-      'out_for_delivery',
-      'confirmed',
-    ].includes(status);
-  }
+  if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) return true;
+  if (method === 'pay_later' || method === 'pay-later') return true;
   return false;
+}
+
+export function canShowAwaitingPaymentBadge(o: MerchantOrder): boolean {
+  return canCollectPayment(o);
+}
+
+/** Friendly order lifecycle label (FR/EN/DE via i18n keys). */
+export function orderStatusLabel(status: string, t: (k: string) => string): string {
+  const key = status?.toLowerCase().replace(/-/g, '_');
+  const map: Record<string, string> = {
+    pending: t('orderStatusPending'),
+    pending_approval: t('orderStatusPending'),
+    accepted: t('orderStatusAccepted'),
+    preparing: t('orderStatusPreparing'),
+    ready: t('orderStatusReady'),
+    out_for_delivery: t('orderStatusOutForDelivery'),
+    completed: t('webPosStatusCompleted'),
+    cancelled: t('webPosStatusCancelled'),
+    refunded: t('webPosStatusRefunded'),
+    partially_refunded: t('webPosStatusPartialRefund'),
+    held: t('webPosOngoing'),
+    sent_to_kitchen: t('webPosOngoing'),
+    confirmed: t('orderStatusAccepted'),
+  };
+  return map[key] || status;
 }
 
 export function orderPublicRefs(o: MerchantOrder) {

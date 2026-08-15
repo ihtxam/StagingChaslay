@@ -1572,12 +1572,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setNewOrderAlertQueue((prev) => {
       const [head, ...rest] = prev;
       if (head) {
-        markOnlineOrderActioned(head.id);
         openOnlineOrderFromAlert(head);
       }
       return rest;
     });
-  }, [markOnlineOrderActioned, openOnlineOrderFromAlert]);
+  }, [openOnlineOrderFromAlert]);
 
   const pollReservations = useCallback(async () => {
     try {
@@ -6042,6 +6041,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               });
             }}
             onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
+            onOrderActioned={markOnlineOrderActioned}
           />
         ) : (
           <div

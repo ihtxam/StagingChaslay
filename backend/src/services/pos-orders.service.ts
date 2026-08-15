@@ -167,6 +167,7 @@ export class PosOrdersService {
         return {
           id: i.id,
           productId: i.productId,
+          categoryId: i.product?.categoryId || null,
           name,
           productName: name,
           quantity: Number(i.quantity),

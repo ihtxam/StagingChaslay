@@ -350,6 +350,19 @@ export class OrderService {
             console.warn("Partner accept callback:", err)
           );
         }
+        try {
+          const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
+          const source =
+            order.orderSource === "justeat" || order.orderSource === "ubereats"
+              ? order.orderSource
+              : "online_shop";
+          await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
+            printKitchen: true,
+            printReceipt: true,
+          });
+        } catch (printErr) {
+          console.warn("Accept auto-print enqueue failed:", printErr);
+        }
         return updated;
       }
       case "start_preparing": {
@@ -402,14 +415,9 @@ export class OrderService {
         return set({ status: "completed", completedAt: new Date() });
       }
       case "complete_and_collect": {
-        // Convenience for pickup cash / pay-later programmed orders
-        if (
-          status !== "ready" &&
-          status !== "out_for_delivery" &&
-          status !== "preparing" &&
-          status !== "accepted"
-        ) {
-          throw new Error("Order is not ready to complete");
+        // Pay-later / cash on pickup — only after the order is ready for handoff
+        if (status !== "ready" && status !== "out_for_delivery") {
+          throw new Error("Order is not ready to collect payment");
         }
         {
           const methodRaw = String(opts?.paymentMethod || order.paymentMethod || "cash")

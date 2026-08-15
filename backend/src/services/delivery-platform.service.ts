@@ -552,7 +552,8 @@ export class DeliveryPlatformService {
   static async enqueueAutoPrint(
     merchantId: string,
     orderId: string,
-    orderSource: OrderSource
+    orderSource: OrderSource,
+    opts?: { printKitchen?: boolean; printReceipt?: boolean }
   ) {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
@@ -562,10 +563,11 @@ export class DeliveryPlatformService {
     if (!merchant) return;
 
     const printSettings = normalizePosPrintSettings(merchant.posPrintSettings);
-    const printKitchen = printSettings.autoPrintKitchen !== false;
-    // Online / aggregator orders: kitchen ticket only — customer receipt is manual from POS.
-    const printReceipt = false;
-    if (!printKitchen) return;
+    const printKitchen =
+      opts?.printKitchen !== false && printSettings.autoPrintKitchen !== false;
+    const printReceipt =
+      opts?.printReceipt === true && printSettings.autoPrintReceipt !== false;
+    if (!printKitchen && !printReceipt) return;
 
     await ChaslayFloorService.createPrintJob(merchantId, {
       jobType: "ESCPOS",
