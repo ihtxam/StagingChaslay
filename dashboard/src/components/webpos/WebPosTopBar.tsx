@@ -406,11 +406,11 @@ export default function WebPosTopBar({
               <>
                 <button
                   type="button"
-                  className="fixed inset-0 z-[48] cursor-default border-0 bg-black/10 p-0"
-                  aria-label={t('close')}
-                  onClick={onCloseSettings}
+                  tabIndex={-1}
+                  aria-hidden
+                  className="pointer-events-none fixed inset-0 z-[48] cursor-default border-0 bg-black/10 p-0"
                 />
-                <div className="relative z-[50]">{settingsPanel}</div>
+                <div className="pointer-events-auto relative z-[50]">{settingsPanel}</div>
               </>
             ) : null}
           </div>
@@ -527,7 +527,7 @@ export function WebPosSettingsDropdown({
   };
   return (
     <div className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-50 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl">
-      <div className="space-y-3 overflow-y-auto overscroll-contain p-3">
+      <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
       <div className="border-b border-stone-100 pb-3">
         <div className={`grid gap-1.5 ${canShowPanel && onShowPanel ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <button

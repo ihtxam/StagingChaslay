@@ -801,13 +801,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         close();
       }
     };
+    const onScroll = (e: Event) => {
+      const target = e.target;
+      if (target instanceof Node && settingsRef.current?.contains(target)) return;
+      close();
+    };
     document.addEventListener('pointerdown', onDoc, true);
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', close);
     window.addEventListener('orientationchange', close);
     return () => {
       document.removeEventListener('pointerdown', onDoc, true);
-      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', close);
       window.removeEventListener('orientationchange', close);
     };

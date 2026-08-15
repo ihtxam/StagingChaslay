@@ -532,6 +532,12 @@ button {
     margin-top: auto;
   }
 
+  /* Settings hamburger menu — scroll inside zoomed .webpos-shell */
+  .webpos-settings-dropdown-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
   /*
    * Odoo-style mobile register backup (max-width 1023 = below Tailwind lg).
    * JS also gates cart/products via data-narrow on .webpos-shell.
