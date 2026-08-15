@@ -9,6 +9,7 @@ import com.chaslay.pos.data.remote.dto.GiftCardRedeemRequest
 import com.chaslay.pos.data.remote.dto.GiftCardSettingsDto
 import com.chaslay.pos.domain.model.AttachedMembership
 import com.chaslay.pos.domain.model.GiftCardOp
+import com.chaslay.pos.domain.model.LoyaltyMath
 import com.chaslay.pos.data.remote.dto.GiftCardSendEcardEmailRequest
 import com.chaslay.pos.domain.model.GiftCardCode
 import javax.inject.Inject
