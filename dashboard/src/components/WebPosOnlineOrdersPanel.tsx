@@ -36,6 +36,8 @@ type Props = {
   onRefresh: () => void;
   /** After accept / kitchen action — open Orders board on this ticket */
   onGoToOrders?: (orderId: string) => void;
+  /** Order handled (accept/reject/complete) — clear bell badge for this ticket */
+  onOrderActioned?: (orderId: string) => void;
 };
 
 function isNew(status: string) {
@@ -55,6 +57,7 @@ export default function WebPosOnlineOrdersPanel({
   orders,
   onRefresh,
   onGoToOrders,
+  onOrderActioned,
 }: Props) {
   const { t, formatDateTime } = useI18n();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -70,6 +73,9 @@ export default function WebPosOnlineOrdersPanel({
       try {
         await api.post(`/merchant/orders/${id}/action`, { action });
         toast.success(t('updated'));
+        if (action === 'accept' || action === 'reject' || action === 'complete') {
+          onOrderActioned?.(id);
+        }
         await onRefresh();
         if (action === 'accept' || action === 'start_preparing' || action === 'mark_ready') {
           onClose();
@@ -81,7 +87,7 @@ export default function WebPosOnlineOrdersPanel({
         setBusyId(null);
       }
     },
-    [onClose, onGoToOrders, onRefresh, t]
+    [onClose, onGoToOrders, onOrderActioned, onRefresh, t]
   );
 
   const list = useMemo(() => {
@@ -270,6 +276,7 @@ export default function WebPosOnlineOrdersPanel({
                       type="button"
                       className="btn-secondary text-xs"
                       onClick={() => {
+                        onOrderActioned?.(o.id);
                         onClose();
                         onGoToOrders(o.id);
                       }}

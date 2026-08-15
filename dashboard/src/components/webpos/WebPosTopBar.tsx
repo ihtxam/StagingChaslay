@@ -80,6 +80,8 @@ type Props = {
   onSearchChange: (q: string) => void;
   showSearch: boolean;
   onlinePendingCount: number;
+  /** Pulsing ring on bell while unactioned online orders remain */
+  orderAlertRing?: boolean;
   reservationPendingCount?: number;
   staffName?: string | null;
   canDrawer: boolean;
@@ -130,6 +132,7 @@ export default function WebPosTopBar({
   onSearchChange,
   showSearch,
   onlinePendingCount,
+  orderAlertRing = false,
   reservationPendingCount = 0,
   staffName,
   canDrawer,
@@ -305,7 +308,11 @@ export default function WebPosTopBar({
 
           <button
             type="button"
-            className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
+            className={`relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9 ${
+              orderAlertRing
+                ? 'ring-2 ring-red-400 ring-offset-1 animate-pulse'
+                : ''
+            }`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();

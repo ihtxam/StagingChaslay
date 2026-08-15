@@ -91,6 +91,7 @@ import WebPosCustomAmountModal from '@/components/webpos/WebPosCustomAmountModal
 import WebPosOnlineOrdersPanel, {
   type OnlineOrder,
 } from '@/components/WebPosOnlineOrdersPanel';
+import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
 import WebPosTopBar, {
   WebPosSettingsDropdown,
   WEBPOS_COLOR_THEMES,
@@ -568,6 +569,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [onlineOrdersOpen, setOnlineOrdersOpen] = useState(false);
   const [onlineOrders, setOnlineOrders] = useState<OnlineOrder[]>([]);
   const knownOnlineIdsRef = useRef<Set<string> | null>(null);
+  const unactionedOrderIdsRef = useRef<Set<string>>(new Set());
+  const [unactionedOrderCount, setUnactionedOrderCount] = useState(0);
+  const [newOrderAlertQueue, setNewOrderAlertQueue] = useState<OnlineOrder[]>([]);
   const knownReservationIdsRef = useRef<Set<string> | null>(null);
   const onlinePanelOpenRef = useRef(false);
   const [reservationPendingCount, setReservationPendingCount] = useState(0);
@@ -1492,23 +1496,85 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
 
       const fresh = newIds.filter((id) => !knownOnlineIdsRef.current!.has(id));
+      const freshOrders = newOnes.filter((o) => fresh.includes(o.id));
       for (const id of newIds) knownOnlineIdsRef.current.add(id);
 
-      if (fresh.length > 0) {
+      for (const id of [...unactionedOrderIdsRef.current]) {
+        const row = online.find((o) => o.id === id);
+        if (!row || (row.status !== 'pending' && row.status !== 'pending_approval')) {
+          unactionedOrderIdsRef.current.delete(id);
+        }
+      }
+      setNewOrderAlertQueue((prev) =>
+        prev.filter((o) => {
+          const row = online.find((x) => x.id === o.id);
+          return !!row && (row.status === 'pending' || row.status === 'pending_approval');
+        })
+      );
+
+      if (freshOrders.length > 0) {
+        for (const o of freshOrders) {
+          unactionedOrderIdsRef.current.add(o.id);
+        }
+        setUnactionedOrderCount(unactionedOrderIdsRef.current.size);
+        setNewOrderAlertQueue((prev) => {
+          const seen = new Set(prev.map((p) => p.id));
+          const next = [...prev];
+          for (const o of freshOrders) {
+            if (!seen.has(o.id)) next.push(o);
+          }
+          return next;
+        });
         playOrderAlertOnce();
-        toast(t('webPosNewOrderAlert'), { icon: '🔔', duration: 5000 });
         if (!onlinePanelOpenRef.current) {
           startOrderAlertLoop(5000);
         }
+      } else {
+        setUnactionedOrderCount(unactionedOrderIdsRef.current.size);
       }
 
-      if (newIds.length === 0) {
+      if (unactionedOrderIdsRef.current.size === 0) {
         stopOrderAlertLoop();
       }
     } catch {
       /* ignore poll errors */
     }
-  }, [t]);
+  }, []);
+
+  const markOnlineOrderActioned = useCallback((orderId: string) => {
+    unactionedOrderIdsRef.current.delete(orderId);
+    setUnactionedOrderCount(unactionedOrderIdsRef.current.size);
+    setNewOrderAlertQueue((prev) => prev.filter((o) => o.id !== orderId));
+    if (unactionedOrderIdsRef.current.size === 0) {
+      stopOrderAlertLoop();
+    }
+  }, []);
+
+  const openOnlineOrderFromAlert = useCallback((order: OnlineOrder) => {
+    stopOrderAlertLoop();
+    setOnlineOrdersOpen(false);
+    setOrdersChannelPref('online');
+    setHighlightOrderId(order.id);
+    setOrdersRefreshToken((n) => n + 1);
+    setPosTab('orders');
+    setPosView('orders');
+  }, []);
+
+  const dismissNewOrderAlert = useCallback(() => {
+    setNewOrderAlertQueue((prev) => prev.slice(1));
+    stopOrderAlertLoop();
+  }, []);
+
+  const openFromNewOrderAlert = useCallback(() => {
+    setNewOrderAlertQueue((prev) => {
+      const [head, ...rest] = prev;
+      if (head) {
+        markOnlineOrderActioned(head.id);
+        openOnlineOrderFromAlert(head);
+      }
+      return rest;
+    });
+  }, [markOnlineOrderActioned, openOnlineOrderFromAlert]);
 
   const pollReservations = useCallback(async () => {
     try {
@@ -5514,9 +5580,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     : null;
   const checkoutDueTotal = collectOrderRef?.total ?? activeSale.totals.total;
 
-  const onlinePendingCount = onlineOrders.filter(
-    (o) => o.status === 'pending' || o.status === 'pending_approval'
-  ).length;
+  const onlinePendingCount = unactionedOrderCount;
+  const orderAlertRing = unactionedOrderCount > 0;
+  const currentNewOrderAlert = newOrderAlertQueue[0] ?? null;
 
   const tableBadge =
     tableLabel || tabNumber
@@ -5566,6 +5632,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onSearchChange={setSearch}
         showSearch={posView === 'register'}
         onlinePendingCount={onlinePendingCount}
+        orderAlertRing={orderAlertRing}
         reservationPendingCount={reservationPendingCount}
         staffName={webposStaff?.name}
         canDrawer={canDrawer}
@@ -6554,14 +6621,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onClose={closePaymentModal}
       />
 
+      <WebPosNewOrderAlertModal
+        order={currentNewOrderAlert}
+        queueCount={newOrderAlertQueue.length}
+        onOk={dismissNewOrderAlert}
+        onOpen={openFromNewOrderAlert}
+      />
+
       <WebPosOnlineOrdersPanel
         open={onlineOrdersOpen}
         onClose={() => setOnlineOrdersOpen(false)}
         orders={onlineOrders}
         onRefresh={() => void pollOnlineOrders()}
+        onOrderActioned={markOnlineOrderActioned}
         onGoToOrders={(orderId) => {
           setOnlineOrdersOpen(false);
           stopOrderAlertLoop();
+          markOnlineOrderActioned(orderId);
           setOrdersChannelPref('online');
           setHighlightOrderId(orderId);
           setOrdersRefreshToken((n) => n + 1);
