@@ -776,9 +776,7 @@ export default function OrderingPage() {
         subtotal: cartTotal,
       });
       setDeliveryInfo(res.data);
-      const live = withDeliveryMinOrderStatus(res.data, cartTotal);
       if (!res.data.deliverable) setError(res.data.error || t('shopOutsideDelivery'));
-      else if (!live.meetsMinOrder) setError(live.message || t('shopMinOrderNotMet'));
     } catch (e: any) {
       setError(e.response?.data?.error || t('shopCouldNotVerifyAddress'));
       setDeliveryInfo(null);
@@ -1152,10 +1150,13 @@ export default function OrderingPage() {
               {checkingDelivery ? t('shopChecking') : t('shopCheckDeliveryZone')}
             </button>
             {effectiveDeliveryInfo?.deliverable && (
-              <p className="text-xs text-teal-800">
+              <p className={`text-xs ${effectiveDeliveryInfo.meetsMinOrder ? 'text-teal-800' : 'text-amber-800'}`}>
                 {effectiveDeliveryInfo.zone.name}: {t('shopFee')} CHF {Number(effectiveDeliveryInfo.zone.deliveryFee).toFixed(2)}
                 {effectiveDeliveryInfo.zone.minOrderAmount > 0
                   ? ` · ${t('shopMin')} CHF ${Number(effectiveDeliveryInfo.zone.minOrderAmount).toFixed(2)}`
+                  : ''}
+                {!effectiveDeliveryInfo.meetsMinOrder && effectiveDeliveryInfo.message
+                  ? ` · ${effectiveDeliveryInfo.message}`
                   : ''}
               </p>
             )}

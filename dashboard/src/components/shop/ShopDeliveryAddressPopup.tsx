@@ -87,13 +87,8 @@ export default function ShopDeliveryAddressPopup({
         subtotal,
       });
       setDeliveryInfo(res.data);
-      const live = withDeliveryMinOrderStatus(res.data, subtotal);
       if (!res.data.deliverable) {
         setError(res.data.error || t('shopOutsideDelivery'));
-        return;
-      }
-      if (!live.meetsMinOrder) {
-        setError(live.message || t('shopMinOrderNotMet'));
       }
     } catch (e: any) {
       setError(e.response?.data?.error || t('shopCouldNotVerifyAddress'));
@@ -110,10 +105,6 @@ export default function ShopDeliveryAddressPopup({
     }
     if (!effectiveDeliveryInfo?.deliverable) {
       setError(t('shopConfirmDeliveryVerifyFirst'));
-      return;
-    }
-    if (!effectiveDeliveryInfo.meetsMinOrder) {
-      setError(effectiveDeliveryInfo.message || t('shopMinOrderNotMet'));
       return;
     }
     onConfirm({ address, zipCode, city, lat, lng, deliveryInfo: effectiveDeliveryInfo });
@@ -210,7 +201,7 @@ export default function ShopDeliveryAddressPopup({
             type="button"
             onClick={confirm}
             className="flex-1 rounded-xl bg-amber-700 py-3 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-40"
-            disabled={!effectiveDeliveryInfo?.deliverable || !effectiveDeliveryInfo?.meetsMinOrder}
+            disabled={!effectiveDeliveryInfo?.deliverable}
           >
             {t('shopConfirmDelivery')}
           </button>

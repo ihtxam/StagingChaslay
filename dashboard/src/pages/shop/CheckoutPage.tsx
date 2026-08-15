@@ -476,7 +476,7 @@ export default function CheckoutPage() {
     });
   };
 
-  const checkDelivery = async () => {
+  const checkDelivery = async (options?: { requireMinOrder?: boolean }) => {
     if (draft.channel !== 'delivery') return true;
     if (!draft.address.trim()) {
       setError(t('shopEnterDeliveryAddress'));
@@ -503,7 +503,7 @@ export default function CheckoutPage() {
         setError(res.data.error || t('shopOutsideDelivery'));
         return false;
       }
-      if (!live.meetsMinOrder) {
+      if (options?.requireMinOrder && !live.meetsMinOrder) {
         setError(live.message || t('shopMinOrderNotMet'));
         return false;
       }
@@ -690,7 +690,7 @@ export default function CheckoutPage() {
       return;
     }
     if (draft.channel === 'delivery') {
-      const ok = await checkDelivery();
+      const ok = await checkDelivery({ requireMinOrder: true });
       if (!ok) return;
     }
     setStep('payment');
@@ -709,7 +709,7 @@ export default function CheckoutPage() {
     setError(null);
     try {
       if (draft.channel === 'delivery') {
-        const ok = await checkDelivery();
+        const ok = await checkDelivery({ requireMinOrder: true });
         if (!ok) {
           setSubmitting(false);
           return;
