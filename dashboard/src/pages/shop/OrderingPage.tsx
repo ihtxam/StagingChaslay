@@ -37,8 +37,7 @@ import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
-import ShopChannelPrompt from '@/components/shop/ShopChannelPrompt';
-import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup';
+import ShopChannelPrompt, { type ShopFulfillmentConfirmPayload } from '@/components/shop/ShopChannelPrompt';
 import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import ShopOfferPicker, {
   type ShopOfferForPicker,
@@ -104,12 +103,6 @@ export default function OrderingPage() {
   const [cartBump, setCartBump] = useState(false);
   const prevItemCountRef = useRef(0);
   const hasAutoOpenedCartRef = useRef(false);
-  const [deliveryAddressOpen, setDeliveryAddressOpen] = useState(false);
-  const [pendingChannelPayload, setPendingChannelPayload] = useState<{
-    channel: ShopChannel;
-    scheduledFor: string | null;
-  } | null>(null);
-  const [channelBeforeDelivery, setChannelBeforeDelivery] = useState<ShopChannel | null>(null);
   const [promptInitialChannel, setPromptInitialChannel] = useState<ShopChannel>('takeaway');
   const [checkingDelivery, setCheckingDelivery] = useState(false);
   const [deliveryInfo, setDeliveryInfo] = useState<any>(null);
@@ -229,6 +222,10 @@ export default function OrderingPage() {
         const preferred: ShopChannel[] = ['takeaway', 'delivery', 'dine_in'];
         const first = preferred.find((c) => channels[c]?.enabled);
         const mode = String(data.channelSelectMode || 'checkout');
+        const resolvedChannel =
+          stored?.channel && channels[stored.channel]?.enabled
+            ? stored.channel
+            : first || 'takeaway';
         setDraft((d) => {
           const next = {
             ...d,
@@ -243,7 +240,10 @@ export default function OrderingPage() {
         if (mode === 'popup_start' && enabledCount > 1) {
           try {
             const key = `manupos_channel_prompted_${shopKey}`;
-            if (!sessionStorage.getItem(key)) setChannelPromptOpen(true);
+            if (!sessionStorage.getItem(key)) {
+              setPromptInitialChannel(resolvedChannel);
+              setChannelPromptOpen(true);
+            }
           } catch {
             setChannelPromptOpen(true);
           }
@@ -875,48 +875,48 @@ export default function OrderingPage() {
     channelButtons.find((c) => c.id === channel)?.label || t('shopPickup');
   const etaMin = channelMeta?.etaMinutes || 30;
 
-  const openChannelPrompt = () => {
+  const openChannelPrompt = (prefill?: ShopChannel) => {
     if (channelButtons.length <= 1) return;
     setPromptInitialChannel(channel);
+    if (prefill && channels[prefill]?.enabled && prefill !== channel) {
+      patch({ channel: prefill });
+    }
     setChannelPromptOpen(true);
   };
 
-  const applyChannelSelection = (payload: { channel: ShopChannel; scheduledFor: string | null }) => {
-    patch({ channel: payload.channel, scheduledFor: payload.scheduledFor || '' });
+  const applyChannelSelection = (payload: ShopFulfillmentConfirmPayload) => {
+    const next: Partial<ShopCheckoutDraft> = {
+      channel: payload.channel,
+      scheduledFor: payload.scheduledFor || '',
+    };
+    if (payload.channel === 'delivery') {
+      if (payload.address) next.address = payload.address;
+      if (payload.zipCode != null) next.zipCode = payload.zipCode;
+      if (payload.city != null) next.city = payload.city;
+      if (payload.lat != null) next.lat = payload.lat;
+      if (payload.lng != null) next.lng = payload.lng;
+      if (payload.deliveryInfo) setDeliveryInfo(payload.deliveryInfo);
+    } else {
+      setDeliveryInfo(null);
+    }
+    patch(next);
     try {
       sessionStorage.setItem(`manupos_channel_prompted_${shopKey}`, '1');
     } catch {
       /* ignore */
     }
     setChannelPromptOpen(false);
-    setPendingChannelPayload(null);
     setError(null);
   };
 
-  const requestChannelChange = (payload: { channel: ShopChannel; scheduledFor: string | null }) => {
-    if (payload.channel === 'delivery') {
-      setChannelBeforeDelivery(channel);
-      setPendingChannelPayload(payload);
-      setDeliveryAddressOpen(true);
-      return;
-    }
+  const confirmChannelPrompt = (payload: ShopFulfillmentConfirmPayload) => {
     applyChannelSelection(payload);
-  };
-
-  const confirmChannelPrompt = (payload: { channel: ShopChannel; scheduledFor: string | null }) => {
-    requestChannelChange(payload);
   };
 
   const selectChannel = (next: ShopChannel) => {
     setError(null);
-    if (next === 'delivery') {
-      setChannelBeforeDelivery(channel);
-      setPendingChannelPayload({ channel: next, scheduledFor: draft.scheduledFor || null });
-      setDeliveryAddressOpen(true);
-      return;
-    }
-    patch({ channel: next });
-    setDeliveryInfo(null);
+    if (next === channel) return;
+    openChannelPrompt(next);
   };
 
   const CartIconButton = ({ className = '' }: { className?: string }) => (
@@ -1792,6 +1792,13 @@ export default function OrderingPage() {
         withSchedule={allowScheduledOrders}
         storeHours={merchant?.storeHours}
         scheduledFor={draft.scheduledFor || null}
+        shopKey={shopKey}
+        address={draft.address}
+        zipCode={draft.zipCode}
+        city={draft.city}
+        subtotal={cartTotal}
+        merchantLat={merchant?.latitude}
+        merchantLng={merchant?.longitude}
         onSelect={(id) => {
           patch({ channel: id });
           setError(null);
@@ -1799,44 +1806,7 @@ export default function OrderingPage() {
         onConfirm={confirmChannelPrompt}
         onClose={() => {
           setChannelPromptOpen(false);
-          if (channel === 'delivery' && !deliveryInfo && !deliveryAddressOpen) {
-            patch({ channel: promptInitialChannel });
-          }
-        }}
-      />
-
-      <ShopDeliveryAddressPopup
-        open={deliveryAddressOpen}
-        shopKey={shopKey}
-        address={draft.address}
-        zipCode={draft.zipCode}
-        city={draft.city}
-        subtotal={cartTotal}
-        onClose={() => {
-          setDeliveryAddressOpen(false);
-          setPendingChannelPayload(null);
-          if (channelBeforeDelivery) {
-            patch({ channel: channelBeforeDelivery });
-            setChannelBeforeDelivery(null);
-          }
-        }}
-        onConfirm={(payload) => {
-          patch({
-            address: payload.address,
-            zipCode: payload.zipCode,
-            city: payload.city,
-            lat: payload.lat,
-            lng: payload.lng,
-          });
-          setDeliveryInfo(payload.deliveryInfo);
-          if (pendingChannelPayload) {
-            applyChannelSelection(pendingChannelPayload);
-          } else {
-            patch({ channel: 'delivery' });
-          }
-          setDeliveryAddressOpen(false);
-          setPendingChannelPayload(null);
-          setChannelBeforeDelivery(null);
+          patch({ channel: promptInitialChannel });
         }}
       />
 

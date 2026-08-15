@@ -1920,6 +1920,8 @@ export default function CheckoutPage() {
         zipCode={draft.zipCode}
         city={draft.city}
         subtotal={subtotal}
+        merchantLat={merchant?.latitude}
+        merchantLng={merchant?.longitude}
         onClose={() => {
           setDeliveryAddressOpen(false);
           if (channelBeforeDelivery) {
