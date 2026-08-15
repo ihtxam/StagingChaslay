@@ -563,8 +563,9 @@ export class DeliveryPlatformService {
 
     const printSettings = normalizePosPrintSettings(merchant.posPrintSettings);
     const printKitchen = printSettings.autoPrintKitchen !== false;
-    const printReceipt = printSettings.autoPrintReceipt !== false;
-    if (!printKitchen && !printReceipt) return;
+    // Online / aggregator orders: kitchen ticket only — customer receipt is manual from POS.
+    const printReceipt = false;
+    if (!printKitchen) return;
 
     await ChaslayFloorService.createPrintJob(merchantId, {
       jobType: "ESCPOS",

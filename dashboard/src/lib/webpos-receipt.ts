@@ -23,6 +23,20 @@ import { adjustReceiptVatForDiscount } from '@/lib/tax-discount';
 /** Where the kitchen ticket was printed from */
 export type KitchenOrderSource = 'WEBPOS' | 'ONLINE' | 'POSAPP' | 'WAITERAPP';
 
+/** Web shop or delivery-aggregator order (not in-store POS). */
+export function isExternalOnlineOrder(
+  order: { orderSource?: string | null; orderType?: string | null }
+): boolean {
+  const src = String(order.orderSource || '').toLowerCase();
+  const t = String(order.orderType || '').toLowerCase();
+  return (
+    t === 'web_shop' ||
+    src === 'online_shop' ||
+    src === 'justeat' ||
+    src === 'ubereats'
+  );
+}
+
 /**
  * Arbitrary kitchen / takeaway shout number + receipt record id.
  * Numbers are random (not sequential) so deleted orders cannot be inferred from gaps.
@@ -163,10 +177,12 @@ export type WebPosReceipt = {
   paymentLines?: Array<{ method: string; amount: number }>;
   amountTendered?: number | null;
   changeDue?: number | null;
-  /** Delivery customer (printed on delivery receipts) */
+  /** Delivery / online customer (printed on delivery & online receipts) */
   customerName?: string | null;
   customerPhone?: string | null;
   shippingAddress?: string | null;
+  orderSource?: string | null;
+  orderType?: string | null;
   items: WebPosReceiptItem[];
   subtotal: number;
   discount: number;
@@ -541,17 +557,19 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
     if (tx.guestCount) r += ` · ${tx.guestCount} ${L.pax}`;
     r += '\n';
   }
-  if (tx.channel === 'delivery') {
+  const isDelivery = tx.channel === 'delivery';
+  const isOnline = isExternalOnlineOrder(tx);
+  if (isDelivery || isOnline) {
     if (tx.customerName?.trim()) r += `${L.customer}: ${tx.customerName.trim()}\n`;
     if (tx.customerPhone?.trim()) r += `Tel: ${tx.customerPhone.trim()}\n`;
-    if (tx.shippingAddress?.trim()) {
-      r += `${L.deliveryAddress}:\n`;
-      for (const line of tx.shippingAddress.trim().split(/\r?\n/)) {
-        const chunk = line.trim();
-        if (!chunk) continue;
-        for (let i = 0; i < chunk.length; i += width) {
-          r += chunk.slice(i, i + width) + '\n';
-        }
+  }
+  if (isDelivery && tx.shippingAddress?.trim()) {
+    r += `${L.deliveryAddress}:\n`;
+    for (const line of tx.shippingAddress.trim().split(/\r?\n/)) {
+      const chunk = line.trim();
+      if (!chunk) continue;
+      for (let i = 0; i < chunk.length; i += width) {
+        r += chunk.slice(i, i + width) + '\n';
       }
     }
   }
@@ -956,7 +974,7 @@ function buildKitchenTicketLines(
   )) {
     lines.push({ kind: 'header', text: w });
   }
-  if (opts.shippingAddress?.trim()) {
+  if (opts.channel === 'delivery' && opts.shippingAddress?.trim()) {
     for (const w of wrapKitchenWords(
       `${L.deliveryAddress}: ${opts.shippingAddress.trim()}`,
       headerWidth
@@ -1662,6 +1680,9 @@ export type PosOrderForReceipt = {
   customerName?: string | null;
   customerPhone?: string | null;
   shippingAddress?: string | null;
+  orderSource?: string | null;
+  orderType?: string | null;
+  fulfillmentChannel?: string | null;
   completedAt?: string | null;
   createdAt: string;
   splitCheckNumber?: number | null;
@@ -1738,12 +1759,14 @@ export function posOrderToWebPosReceipt(
     orderDisplay: ticketDisplay,
     orderNumber: order.orderNumber,
     completedAt,
-    channel: order.channel || undefined,
+    channel: order.channel || order.fulfillmentChannel || undefined,
     paymentMethod: order.paymentMethod || 'cash',
     paymentLines,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     shippingAddress: order.shippingAddress,
+    orderSource: order.orderSource,
+    orderType: order.orderType,
     tableLabel: order.tableLabel,
     guestCount: order.guestCount,
     items: (order.items || []).map((i) => ({

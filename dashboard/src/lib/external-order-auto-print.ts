@@ -39,6 +39,11 @@ function orderSourceLabel(source?: string | null): string {
   return 'ONLINE';
 }
 
+function isExternalOnlineSource(source?: string | null): boolean {
+  const s = String(source || '').toLowerCase();
+  return s === 'online_shop' || s === 'justeat' || s === 'ubereats';
+}
+
 export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): Promise<void> {
   const orderId = String(payload.orderId || '').trim();
   if (!orderId) throw new Error('Missing orderId');
@@ -103,9 +108,12 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
         orderSource: orderSourceLabel(source),
         userName: order.customerName || '-',
         customerPhone: order.customerPhone || null,
-        shippingAddress: order.shippingAddress || null,
+        shippingAddress:
+          (order.fulfillmentChannel || order.channel) === 'delivery'
+            ? order.shippingAddress || null
+            : null,
         scheduledFor: order.scheduledFor || null,
-        channel: order.fulfillmentChannel || order.channel || 'delivery',
+        channel: order.fulfillmentChannel || order.channel || 'takeaway',
         orderedAt: order.createdAt ? Date.parse(order.createdAt) : Date.now(),
         items: receiptItems,
         language: lang,
@@ -122,7 +130,11 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
     }
   }
 
-  if (payload.printReceipt !== false && printSettings?.autoPrintReceipt !== false) {
+  if (
+    !isExternalOnlineSource(source) &&
+    payload.printReceipt !== false &&
+    printSettings?.autoPrintReceipt !== false
+  ) {
     await printMerchantOrderReceipt(order, {
       merchant,
       printSettings,
