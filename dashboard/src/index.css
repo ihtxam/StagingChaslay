@@ -574,13 +574,27 @@ button {
   }
 
   /* Online shop: allow normal page scroll (panel-shell sets overflow:hidden globally). */
+  html.shop-shell {
+    --shop-header-height: 3.5rem; /* header h-14 */
+    --shop-category-bar-height: 3rem;
+  }
+
   html.shop-shell,
   html.shop-shell body {
     height: auto;
     min-height: 100%;
-    overflow-x: hidden;
+    max-height: none;
+    /* clip — not hidden — avoids extra scroll-container pairing that breaks sticky */
+    overflow-x: clip;
     overflow-y: auto;
     overscroll-behavior-y: auto;
+  }
+
+  html.shop-shell #root {
+    height: auto;
+    min-height: 100%;
+    max-height: none;
+    overflow: visible;
   }
 }
 
@@ -613,9 +627,9 @@ button {
 
 /* Shop menu: category pills + cart — one bar pinned below the site header */
 .shop-sticky-category-bar {
-  --shop-category-bar-height: 3rem;
+  position: -webkit-sticky;
   position: sticky;
-  top: 3.5rem; /* header h-14 */
+  top: var(--shop-header-height, 3.5rem);
   z-index: 25;
   background-color: #f6f5f2;
   border-bottom: 1px solid rgb(231 229 228 / 0.95);
@@ -632,5 +646,7 @@ button {
 }
 
 .shop-sticky-cart-panel {
-  top: calc(3.5rem + var(--shop-category-bar-height, 3rem));
+  position: -webkit-sticky;
+  position: sticky;
+  top: calc(var(--shop-header-height, 3.5rem) + var(--shop-category-bar-height, 3rem));
 }
