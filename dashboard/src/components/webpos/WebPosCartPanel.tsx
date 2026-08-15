@@ -215,6 +215,27 @@ export default function WebPosCartPanel({
   const [cartTab, setCartTab] = useState<CartListTab>('ordering');
   const sideBorder = dockSide === 'right' ? 'border-l' : 'border-r';
 
+  useEffect(() => {
+    if (!moreOpen) return;
+    const close = () => setMoreOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('orientationchange', close);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('orientationchange', close);
+    };
+  }, [moreOpen]);
+
   const orderedLines = useMemo(() => cart.filter((l) => !!l.sentToKitchen), [cart]);
   const orderingLines = useMemo(() => cart.filter((l) => !l.sentToKitchen), [cart]);
   const showOrderTabs = kitchenEnabled && orderedLines.length > 0;
@@ -342,13 +363,13 @@ export default function WebPosCartPanel({
           <>
             <button
               type="button"
-              className="fixed inset-0 z-10 cursor-default"
+              className="fixed inset-0 z-[35] cursor-default border-0 bg-black/10 p-0"
               aria-label={t('close')}
               onClick={() => setMoreOpen(false)}
             />
             <div
               role="menu"
-              className="absolute right-2 left-2 top-full z-20 mt-1 rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
+              className="absolute right-2 left-2 top-full z-[40] mt-1 rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
             >
               <button
                 type="button"

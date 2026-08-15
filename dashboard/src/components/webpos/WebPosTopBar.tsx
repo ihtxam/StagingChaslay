@@ -91,6 +91,7 @@ type Props = {
   appMode: boolean;
   settingsOpen: boolean;
   onToggleSettings: () => void;
+  onCloseSettings: () => void;
   settingsPanel: React.ReactNode;
   settingsRef: React.RefObject<HTMLDivElement | null>;
   onOnlineOrders: () => void;
@@ -141,6 +142,7 @@ export default function WebPosTopBar({
   appMode,
   settingsOpen,
   onToggleSettings,
+  onCloseSettings,
   settingsPanel,
   settingsRef,
   onOnlineOrders,
@@ -187,7 +189,7 @@ export default function WebPosTopBar({
   ];
 
   return (
-    <header className="relative z-20 shrink-0 border-b border-stone-200 bg-white">
+    <header className="relative z-30 shrink-0 overflow-visible border-b border-stone-200 bg-white">
       <div className="flex items-center gap-1.5 px-2 py-1.5 sm:gap-2 sm:px-4 sm:py-2">
         {/* Mobile: icon nav (Odoo-style). Desktop: text tabs. */}
         <nav
@@ -262,7 +264,10 @@ export default function WebPosTopBar({
                 className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 sm:hidden"
                 aria-label={t('webPosSearchProducts')}
                 aria-expanded={mobileSearchOpen}
-                onClick={() => setMobileSearchOpen((v) => !v)}
+                onClick={() => {
+                  if (!mobileSearchOpen && settingsOpen) onCloseSettings();
+                  setMobileSearchOpen((v) => !v);
+                }}
               >
                 {mobileSearchOpen ? <X size={18} /> : <Search size={18} />}
               </button>
@@ -389,14 +394,27 @@ export default function WebPosTopBar({
           <div className="relative" ref={settingsRef}>
             <button
               type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
+              className="relative z-[52] inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
               aria-expanded={settingsOpen}
               aria-label={t('webPosMoreShort')}
-              onClick={onToggleSettings}
+              onClick={() => {
+                setMobileSearchOpen(false);
+                onToggleSettings();
+              }}
             >
               <Menu size={18} />
             </button>
-            {settingsOpen ? settingsPanel : null}
+            {settingsOpen ? (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-[48] cursor-default border-0 bg-black/10 p-0"
+                  aria-label={t('close')}
+                  onClick={onCloseSettings}
+                />
+                <div className="relative z-[50]">{settingsPanel}</div>
+              </>
+            ) : null}
           </div>
         </div>
       </div>
@@ -510,7 +528,7 @@ export function WebPosSettingsDropdown({
     if (next) onTextSizeChange(next);
   };
   return (
-    <div className="absolute right-0 top-[calc(100%+6px)] z-50 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl">
+    <div className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-50 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl">
       <div className="space-y-3 overflow-y-auto overscroll-contain p-3">
       <div className="border-b border-stone-100 pb-3">
         <div className={`grid gap-1.5 ${canShowPanel && onShowPanel ? 'grid-cols-2' : 'grid-cols-1'}`}>

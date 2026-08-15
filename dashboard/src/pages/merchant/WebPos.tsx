@@ -797,13 +797,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     if (!settingsOpen) return;
-    const onDoc = (e: MouseEvent) => {
+    const close = () => setSettingsOpen(false);
+    const onDoc = (e: PointerEvent) => {
       if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
-        setSettingsOpen(false);
+        close();
       }
     };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('pointerdown', onDoc, true);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('orientationchange', close);
+    return () => {
+      document.removeEventListener('pointerdown', onDoc, true);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('orientationchange', close);
+    };
   }, [settingsOpen]);
 
   const showPanelMenus = useCallback(() => {
@@ -5349,6 +5358,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const changePosTextSize = (size: WebPosTextSize) => {
     setPosTextSize(size);
+    setSettingsOpen(false);
     try {
       localStorage.setItem(WEBPOS_TEXT_SIZE_KEY, size);
     } catch {
@@ -5358,6 +5368,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const changePosAppearance = (appearance: WebPosAppearance) => {
     setPosAppearance(appearance);
+    setSettingsOpen(false);
     try {
       localStorage.setItem(WEBPOS_APPEARANCE_KEY, appearance);
     } catch {
@@ -5688,6 +5699,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         appMode={appMode}
         settingsOpen={settingsOpen}
         onToggleSettings={() => setSettingsOpen((v) => !v)}
+        onCloseSettings={() => setSettingsOpen(false)}
         settingsRef={settingsRef}
         onOnlineOrders={() => {
           setOnlineOrdersOpen(true);

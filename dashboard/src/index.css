@@ -491,11 +491,11 @@ button {
   }
 
   .webpos-keypad-key {
-    @apply rounded-lg bg-white py-3 text-lg font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-50 disabled:opacity-40;
+    @apply min-h-[3rem] rounded-lg bg-white py-3.5 text-xl font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-50 disabled:opacity-40;
   }
 
   .webpos-keypad-key--compact {
-    @apply rounded-md py-1.5 text-sm;
+    @apply min-h-[2.5rem] rounded-md py-2 text-base;
   }
 
   .webpos-mobile-pay-cart {

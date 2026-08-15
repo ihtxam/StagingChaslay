@@ -62,9 +62,7 @@ export default function WebPosCustomAmountModal({ open, onClose, onConfirm }: Pr
             showModeButtons={false}
             showQuickAdd={false}
             showSignToggle={false}
-            compact
-            applyLabel={t('webPosAddToCart')}
-            applyDisabled={amount <= 0}
+            hideApply
           />
           <div className="grid grid-cols-2 gap-2">
             <button
