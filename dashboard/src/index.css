@@ -462,24 +462,24 @@ button {
   }
 
   /*
-   * Category chips — fixed sizes by viewport:
-   *   small  (< md / 768px):  115×48
-   *   medium (≥ md / 768px):  174×64
-   *   large  (≥ xl / 1280px): 198×64
+   * Category chips — fixed sizes by viewport (~20% smaller than prior):
+   *   small  (< md / 768px):  92×40
+   *   medium (≥ md / 768px):  139×52
+   *   large  (≥ xl / 1280px): 158×52
    */
   .webpos-category-chip {
     box-sizing: border-box;
     display: inline-flex;
-    width: 115px;
-    height: 48px;
+    width: 92px;
+    height: 40px;
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
     overflow: hidden;
     border-radius: 0.5rem;
-    padding: 0 0.5rem;
+    padding: 0 0.375rem;
     text-align: center;
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     font-weight: 700;
     line-height: 1.15;
     color: #292524; /* stone-800 */
@@ -493,16 +493,16 @@ button {
   }
   @media (min-width: 768px) {
     .webpos-category-chip {
-      width: 174px;
-      height: 64px;
-      font-size: 0.8125rem;
+      width: 139px;
+      height: 52px;
+      font-size: 0.75rem;
     }
   }
   @media (min-width: 1280px) {
     .webpos-category-chip {
-      width: 198px;
-      height: 64px;
-      font-size: 0.875rem;
+      width: 158px;
+      height: 52px;
+      font-size: 0.8125rem;
     }
   }
 
