@@ -1196,12 +1196,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   shiftsEnabledRef.current = shiftsEnabled;
   const shiftMigrateToastRef = useRef(false);
 
-  const refreshCurrentShift = useCallback(async (enabled?: boolean) => {
+  type ShiftSnapshot = {
+    shift: { id: string; openingCash: number; openedAt: string } | null;
+    live: {
+      cashSales: number;
+      cardSales: number;
+      terminalSales: number;
+      totalSales: number;
+      orderCount: number;
+      expectedCash: number;
+    } | null;
+  };
+
+  const refreshCurrentShift = useCallback(async (enabled?: boolean): Promise<ShiftSnapshot | null> => {
     const on = enabled ?? shiftsEnabledRef.current;
     if (!on) {
       setOpenShift(null);
       setShiftLive(null);
-      return;
+      return { shift: null, live: null };
     }
     try {
       const res = await api.get('/merchant/pos/shifts/current');
@@ -1210,25 +1222,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         openingCash: number;
         openedAt: string;
       } | null;
-      const live = res.data.live as {
-        cashSales: number;
-        cardSales: number;
-        terminalSales: number;
-        totalSales: number;
-        orderCount: number;
-        expectedCash: number;
-      } | null;
+      const live = res.data.live as ShiftSnapshot['live'];
       if (shift) {
-        setOpenShift({
+        const parsed = {
           id: shift.id,
           openingCash: Number(shift.openingCash) || 0,
           openedAt: String(shift.openedAt),
-        });
+        };
+        setOpenShift(parsed);
         setShiftLive(live);
-      } else {
-        setOpenShift(null);
-        setShiftLive(null);
+        return { shift: parsed, live };
       }
+      setOpenShift(null);
+      setShiftLive(null);
+      return { shift: null, live: null };
     } catch (e: any) {
       const msg = String(e?.response?.data?.error || e?.message || '');
       // Surface missing DB migration once so shift UI is not silently dead.
@@ -1242,6 +1249,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           `${t('webPosShiftStartFailed')}: DB migrate required (backend/sql/ensure-shifts.sql)`
         );
       }
+      return null;
     }
   }, [t]);
 
@@ -1484,6 +1492,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!shiftsEnabled || !offlineSync.online) return;
+    void refreshCurrentShift(true);
+  }, [shiftsEnabled, offlineSync.online, refreshCurrentShift]);
+
+  useEffect(() => {
+    if (!shiftsEnabled) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && offlineSync.online) {
+        void refreshCurrentShift(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [shiftsEnabled, offlineSync.online, refreshCurrentShift]);
 
   /** Main till hub: Print Agent online → pull waiter/mobile ESC/POS jobs and print locally. */
   useEffect(() => {
@@ -1754,16 +1778,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [autoPrint]);
 
   const ensureShift = useCallback(
-    (action: () => void) => {
+    async (action: () => void) => {
       // Offline: shift open/close needs the API — do not block cash/card sales.
-      if (!shiftsEnabled || openShift || !offlineSync.online) {
+      if (!shiftsEnabled || !offlineSync.online) {
+        action();
+        return;
+      }
+      if (openShift) {
+        action();
+        return;
+      }
+      // UI may be stale after relaunch — confirm with server before prompting.
+      const current = await refreshCurrentShift(true);
+      if (current?.shift) {
         action();
         return;
       }
       pendingAfterShift.current = action;
       setStartShiftOpen(true);
     },
-    [shiftsEnabled, openShift, offlineSync.online]
+    [shiftsEnabled, openShift, offlineSync.online, refreshCurrentShift]
   );
 
   /** Same product + options + course → one line with qty. Skip open-price / gift / already-sent. */
@@ -1865,7 +1899,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     selectedExtras: ShopSelectedExtra[] = [],
     comboSelections: ShopComboSelection[] = []
   ) => {
-    ensureShift(() => pushConfiguredProduct(p, unitPrice, selectedExtras, comboSelections));
+    void ensureShift(() => pushConfiguredProduct(p, unitPrice, selectedExtras, comboSelections));
   };
 
   const isWeighedProduct = (p: Product) =>
@@ -1899,7 +1933,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const onProductClick = (p: Product) => {
-    ensureShift(() => {
+    void ensureShift(() => {
       if (p.isOpenPrice || p.productType === 'open_price') {
         setPendingOpenPrice(p);
         return;
@@ -1984,7 +2018,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       pendingAfterShift.current = null;
       if (pending) pending();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('webPosShiftStartFailed'));
+      const msg = String(e.response?.data?.error || e.message || '');
+      const alreadyOpen =
+        e.response?.status === 409 || /already open/i.test(msg);
+      if (alreadyOpen) {
+        const resShift = e.response?.data?.shift as
+          | { id: string; openingCash: number; openedAt: string }
+          | undefined;
+        if (resShift?.id) {
+          const parsed = {
+            id: resShift.id,
+            openingCash: Number(resShift.openingCash) || 0,
+            openedAt: String(resShift.openedAt),
+          };
+          setOpenShift(parsed);
+          setShiftLive(e.response?.data?.live ?? null);
+        } else {
+          await refreshCurrentShift(true);
+        }
+        setStartShiftOpen(false);
+        const pending = pendingAfterShift.current;
+        pendingAfterShift.current = null;
+        if (pending) pending();
+        return;
+      }
+      toast.error(msg || t('webPosShiftStartFailed'));
     } finally {
       setShiftBusy(false);
     }
@@ -3501,7 +3559,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     toast.success(t('giftCardAddedToCart'));
     };
     if (meta.op === 'sell') {
-      ensureShift(doAdd);
+      void ensureShift(doAdd);
       return;
     }
     doAdd();
@@ -3535,11 +3593,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const addCustomAmountLine = (amount: number) => {
-    ensureShift(() => pushCustomAmountLine(amount));
+    void ensureShift(() => pushCustomAmountLine(amount));
   };
 
   const openCustomAmountModal = () => {
-    ensureShift(() => setCustomAmountOpen(true));
+    void ensureShift(() => setCustomAmountOpen(true));
   };
 
   const printGiftCardSaleReceipt = async (opts: {
@@ -5889,7 +5947,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           <button
             type="button"
             className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700"
-            onClick={() => setStartShiftOpen(true)}
+            onClick={() => {
+              void (async () => {
+                const current = await refreshCurrentShift(true);
+                if (!current?.shift) setStartShiftOpen(true);
+              })();
+            }}
           >
             {t('webPosShiftStart')}
           </button>
@@ -6393,7 +6456,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     toast.error(t('webPosOfflineGiftCardBlocked'));
                     return;
                   }
-                  ensureShift(() => setGiftCardOpsOpen(true));
+                  void ensureShift(() => setGiftCardOpsOpen(true));
                 }}
                 onReloadGiftCard={() => {
                   if (offlineNow) {
@@ -6706,7 +6769,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             toast.error(t('webPosEnterWeight'));
             return;
           }
-          ensureShift(() => pushWeighedProduct(pendingWeighed, weightKg));
+          void ensureShift(() => pushWeighedProduct(pendingWeighed, weightKg));
           setPendingWeighed(null);
         }}
       />

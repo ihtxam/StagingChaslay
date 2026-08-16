@@ -43,7 +43,6 @@ export function SortableRow({ id, children, className, disabled, as = 'div' }: S
     opacity: isDragging ? 0.9 : undefined,
     zIndex: isDragging ? 10 : undefined,
     position: 'relative',
-    touchAction: 'none',
   };
 
   const content = children({ attributes, listeners, isDragging });

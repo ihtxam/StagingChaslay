@@ -1337,9 +1337,9 @@ router.get("/pos/shifts/current", async (req: Request, res: Response) => {
  * Body: { openingCash, staffId?, staffName? }
  */
 router.post("/pos/shifts/start", async (req: Request, res: Response) => {
+  const merchantId = req.merchantId;
+  if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
   try {
-    const merchantId = req.merchantId;
-    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
     const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
     if (!(await WebPosEntitlementService.guard(merchantId, res))) return;
     const { PosShiftService } = await import("@/services/pos-shift.service");
@@ -1354,7 +1354,13 @@ router.post("/pos/shifts/start", async (req: Request, res: Response) => {
     res.json({ success: true, shift });
   } catch (error) {
     console.error("Error starting shift:", error);
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to start shift" });
+    const msg = error instanceof Error ? error.message : "Failed to start shift";
+    if (/already open/i.test(msg)) {
+      const { PosShiftService } = await import("@/services/pos-shift.service");
+      const data = await PosShiftService.getCurrent(merchantId);
+      return res.status(409).json({ error: msg, success: false, ...data });
+    }
+    res.status(400).json({ error: msg });
   }
 });
 

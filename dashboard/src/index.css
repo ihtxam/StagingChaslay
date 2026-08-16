@@ -445,6 +445,18 @@ button {
     transform: translateZ(0);
   }
 
+  @media (pointer: coarse) {
+    .webpos-product-card {
+      min-height: 4.25rem;
+    }
+    .webpos-product-card .min-h-\[4rem\] {
+      min-height: 3rem;
+    }
+    .webpos-product-card .min-h-\[5\.5rem\] {
+      min-height: 4.25rem;
+    }
+  }
+
   .webpos-category-tile {
     @apply flex min-h-[4.5rem] items-center justify-center rounded-xl px-3 py-4 text-center text-sm font-bold leading-snug text-stone-800 shadow-sm transition active:scale-[0.98];
   }
@@ -495,6 +507,7 @@ button {
   }
 
   .webpos-product-card {
+    touch-action: pan-y;
     @apply relative flex flex-col overflow-hidden rounded-lg border border-stone-200 bg-white text-left shadow-sm transition hover:shadow-md active:scale-[0.98];
   }
 

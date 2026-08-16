@@ -1437,6 +1437,9 @@ export default function Products() {
                         onChange={(e) =>
                           setForm({ ...form, sku: e.target.value.slice(0, SKU_MAX_LEN) })
                         }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.preventDefault();
+                        }}
                       />
                       <p className="mt-1 text-xs muted">
                         {t('maxCharacters').replace('{n}', String(SKU_MAX_LEN))}
@@ -1451,6 +1454,9 @@ export default function Products() {
                         onChange={(e) =>
                           setForm({ ...form, barcode: e.target.value.slice(0, SKU_MAX_LEN) })
                         }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.preventDefault();
+                        }}
                       />
                     </Field>
                     <Field label={t('stock')}>
