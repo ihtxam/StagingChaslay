@@ -248,7 +248,7 @@ class MenuSyncRepository @Inject constructor(
             remoteId = dto.id,
             name = TextEncoding.repairCatalogText(dto.name),
             sku = dto.sku ?: existing?.sku,
-            barcode = existing?.barcode,
+            barcode = dto.barcode?.takeIf { it.isNotBlank() } ?: existing?.barcode,
             categoryId = categoryId ?: existing?.categoryId,
             taxRate = dto.tax_rate ?: existing?.taxRate ?: 0.0,
             price = dto.price,

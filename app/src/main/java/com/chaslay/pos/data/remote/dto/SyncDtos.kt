@@ -22,6 +22,7 @@ data class SyncProductDto(
     val price: Double = 0.0,
     val tax_rate: Double? = null,
     val sku: String? = null,
+    val barcode: String? = null,
     val image_url: String? = null,
     val sort_order: Int? = null,
     val in_stock: Boolean? = null,

@@ -707,6 +707,7 @@ export class ChaslayCompatService {
       price: parseFloat(String(p.price)),
       tax_rate: parseFloat(String(p.isTaxable ? 8.1 : 0)),
       sku: p.sku,
+      barcode: p.barcode,
       image_url: p.imageUrl,
       sort_order: p.sortOrder ?? 0,
       in_stock: p.isActive !== false,
