@@ -20,6 +20,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
+import { isStandalonePwa } from '@/lib/pwa';
 import { isUnsuitableRawPrinter } from '@/lib/print-agent';
 import type { PosTab, PosView } from './types';
 
@@ -89,19 +90,57 @@ export async function toggleWebPosFullscreen(opts?: { forceEnterApp?: boolean })
   }
 }
 
-/** Enter POS chrome + browser fullscreen when preference allows (kiosk / tablet). */
+let pwaFullscreenGestureBound = false;
+
+function bindPwaFullscreenOnFirstGesture() {
+  if (pwaFullscreenGestureBound || document.fullscreenElement) return;
+  pwaFullscreenGestureBound = true;
+
+  const cleanup = () => {
+    document.removeEventListener('pointerdown', onGesture, true);
+    document.removeEventListener('keydown', onGesture, true);
+    pwaFullscreenGestureBound = false;
+  };
+
+  const onGesture = () => {
+    if (document.fullscreenElement) {
+      cleanup();
+      return;
+    }
+    void toggleWebPosFullscreen({ forceEnterApp: true }).finally(() => {
+      if (document.fullscreenElement) cleanup();
+    });
+  };
+
+  document.addEventListener('pointerdown', onGesture, { capture: true });
+  document.addEventListener('keydown', onGesture, { capture: true });
+}
+
+async function requestDocumentFullscreen(): Promise<boolean> {
+  if (document.fullscreenElement) return true;
+  const el = document.documentElement;
+  if (!el.requestFullscreen) return false;
+  try {
+    await el.requestFullscreen();
+    return !!document.fullscreenElement;
+  } catch {
+    return false;
+  }
+}
+
+/** Enter POS chrome + browser fullscreen when preference allows (kiosk / tablet / PWA). */
 export async function enterWebPosFullscreenOnLoad() {
   window.dispatchEvent(new CustomEvent('webpos:enter-app'));
-  if (!readWebPosFullscreenPreference()) return;
+  const isPwa = isStandalonePwa();
+  if (!isPwa && !readWebPosFullscreenPreference()) return;
   if (document.fullscreenElement) return;
-  try {
-    const el = document.documentElement;
-    if (el.requestFullscreen) {
-      await el.requestFullscreen();
-    }
-  } catch {
-    /* blocked without gesture — manual Fullscreen button still works */
+
+  const entered = await requestDocumentFullscreen();
+  if (entered) {
+    persistFullscreenPreference(true);
+    return;
   }
+  if (isPwa) bindPwaFullscreenOnFirstGesture();
 }
 
 type Props = {
@@ -500,6 +539,16 @@ export function WebPosSettingsDropdown({
     <div className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-50 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl">
       <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
       <div className="space-y-1.5 border-b border-stone-100 pb-3">
+        {canShowPanel && onShowPanel ? (
+          <button
+            type="button"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={onShowPanel}
+          >
+            <PanelLeft size={16} />
+            {t('webPosDashboard')}
+          </button>
+        ) : null}
         <div className="grid grid-cols-2 gap-1.5">
           <button
             type="button"
@@ -524,16 +573,6 @@ export function WebPosSettingsDropdown({
             {!appMode || !fullscreenActive ? t('webPosEnterFullscreen') : t('webPosExitFullscreen')}
           </button>
         </div>
-        {canShowPanel && onShowPanel ? (
-          <button
-            type="button"
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
-            onClick={onShowPanel}
-          >
-            <PanelLeft size={16} />
-            {t('webPosDashboard')}
-          </button>
-        ) : null}
       </div>
 
       {(onAppearanceChange || onTextSizeChange) && (
