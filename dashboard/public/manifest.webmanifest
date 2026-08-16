@@ -2,7 +2,7 @@
   "id": "/merchant/pos",
   "name": "ChaslayReborn",
   "short_name": "ChaslayReborn",
-  "description": "ChaslayReborn merchant POS - installable Windows app",
+  "description": "ChaslayReborn — installable Windows app",
   "start_url": "/merchant/pos",
   "scope": "/",
   "display": "fullscreen",

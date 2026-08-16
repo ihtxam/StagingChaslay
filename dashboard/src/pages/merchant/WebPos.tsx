@@ -966,14 +966,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const requireTableForDineIn = checkoutSettings.requireTableForDineIn !== false;
   const counterDineInEnabled = !requireTableForDineIn;
   const showChannelTabs = isRetail
-    ? retailTakeawayEnabled || retailDeliveryEnabled || retailDineInEnabled
+    ? retailDineInEnabled || retailDeliveryEnabled
     : editionAllows('channel_takeaway') ||
       editionAllows('channel_delivery') ||
       counterDineInEnabled;
   const channelTabOptions: Array<'takeaway' | 'delivery' | 'dine_in'> = isRetail
     ? [
         ...(retailDineInEnabled ? (['dine_in'] as const) : []),
-        ...(retailTakeawayEnabled ? (['takeaway'] as const) : []),
         ...(retailDeliveryEnabled ? (['delivery'] as const) : []),
       ]
     : [
@@ -3456,6 +3455,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const selectFulfillmentChannel = (ch: 'takeaway' | 'delivery' | 'dine_in') => {
+    if (ch === 'dine_in' && channel === 'dine_in') {
+      leaveTableForChannel();
+      if (!tableId) clearCartTicket();
+      setChannel('takeaway');
+      setFulfillmentWhen(asapFulfillment());
+      return;
+    }
     leaveTableForChannel();
     if (channel === 'dine_in' && ch !== 'dine_in' && !tableId) {
       clearCartTicket();

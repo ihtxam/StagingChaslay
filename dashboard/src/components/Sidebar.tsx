@@ -27,7 +27,7 @@ interface SidebarProps {
   menuItems: SidebarNavEntry[];
   /** Distinguishes open-state persistence per panel (e.g. merchant / superadmin). */
   panelKey?: string;
-  /** Optional prominent action shown under panel branding (e.g. WebPOS). */
+  /** Optional prominent action shown under panel branding (e.g. POS). */
   quickAction?: {
     label: string;
     path: string;

@@ -264,7 +264,7 @@ function MerchantShell() {
           panelKey="merchant"
           quickAction={
             showWebPosQuickAction
-              ? { label: t('webPos'), path: '/merchant/pos' }
+              ? { label: t('sidebarPos'), path: '/merchant/pos' }
               : null
           }
           language={locale}

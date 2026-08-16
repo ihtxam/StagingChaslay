@@ -2,7 +2,7 @@
  * Caches the app shell /assets so the installed window can open offline.
  * API/data are never cached; WebPOS catalog/sales use IndexedDB in the page.
  */
-const CACHE = 'chaslay-shell-v2';
+const CACHE = 'chaslay-shell-v3';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.png', '/merchant/pos'];
 
 self.addEventListener('install', (event) => {

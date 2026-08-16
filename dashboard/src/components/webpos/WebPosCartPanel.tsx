@@ -288,6 +288,19 @@ export default function WebPosCartPanel({
     : null;
   const canSendNow =
     (showOrderTabs ? orderingLines.length > 0 : hasItems) && !onOrderedTab;
+  const retailBistroChannelRow =
+    isRetail && showChannelTabs && channelTabOptions.includes('dine_in');
+  const showMetaStrip =
+    membershipName ||
+    orderNote ||
+    tableLabel ||
+    tabNumber ||
+    (!isRetail &&
+      (ticketDisplay ||
+        channel === 'dine_in' ||
+        fulfillmentLabel ||
+        channel === 'takeaway' ||
+        channel === 'delivery'));
 
   return (
     <aside
@@ -298,8 +311,46 @@ export default function WebPosCartPanel({
           : `${sideBorder} border-stone-200 lg:w-[min(22rem,34vw)] lg:shrink-0`
       }`}
     >
-      {/* Channel tabs: Takeaway / Delivery / Dine-in */}
-      {showChannelTabs ? (
+      {/* Channel tabs: Takeaway / Delivery / Dine-in (retail bistro: dine-in + choose time) */}
+      {retailBistroChannelRow ? (
+        <div className="flex shrink-0 items-center gap-1.5 border-b border-stone-100 px-2 py-2">
+          <button
+            type="button"
+            onClick={() => onChannelChange('dine_in')}
+            className={`min-w-0 flex-1 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide ${
+              channel === 'dine_in'
+                ? 'bg-[var(--webpos-accent)] text-white'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+            }`}
+          >
+            {t('dineIn')}
+          </button>
+          {onEditFulfillment ? (
+            <button
+              type="button"
+              onClick={onEditFulfillment}
+              className="inline-flex h-9 w-10 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 active:scale-[0.98]"
+              title={t('webPosChooseTime')}
+              aria-label={t('webPosChooseTime')}
+            >
+              <MoreHorizontal size={18} aria-hidden />
+            </button>
+          ) : null}
+          {channelTabOptions.includes('delivery') ? (
+            <button
+              type="button"
+              onClick={() => onChannelChange('delivery')}
+              className={`min-w-0 flex-1 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide ${
+                channel === 'delivery'
+                  ? 'bg-[var(--webpos-accent)] text-white'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}
+            >
+              {t('delivery')}
+            </button>
+          ) : null}
+        </div>
+      ) : showChannelTabs ? (
         <div
           className={`shrink-0 grid gap-1.5 border-b border-stone-100 px-2 py-2 ${
             channelOptions.length >= 3
@@ -358,27 +409,6 @@ export default function WebPosCartPanel({
                 {t('dineIn')}
                 {ticketDisplay ? ` · ${ticketDisplay}` : ''}
               </span>
-            ) : isRetail && (channel === 'takeaway' || channel === 'delivery') ? (
-              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <span className="inline-flex max-w-full items-center truncate rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-bold text-amber-900">
-                  {channel === 'delivery' ? t('delivery') : t('takeaway')}
-                  {': '}
-                  {fulfillmentIsLater && fulfillmentLabel
-                    ? fulfillmentLabel
-                    : t('webPosAsap')}
-                </span>
-                {onEditFulfillment ? (
-                  <button
-                    type="button"
-                    onClick={onEditFulfillment}
-                    className="inline-flex min-h-8 touch-manipulation items-center justify-center rounded-lg border border-[var(--webpos-accent-border)] bg-[var(--webpos-accent-softer)] px-2.5 py-1 text-xs font-semibold text-[var(--webpos-accent-text)] hover:bg-[var(--webpos-accent-soft)] active:scale-[0.98]"
-                    title={t('webPosChooseTime')}
-                    aria-label={t('webPosChooseTime')}
-                  >
-                    {t('webPosChooseTime')}
-                  </button>
-                ) : null}
-              </div>
             ) : !isRetail ? (
               <span className="inline-flex max-w-full items-center truncate rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-700">
                 {channel === 'dine_in'
@@ -590,14 +620,7 @@ export default function WebPosCartPanel({
         ) : null}
       </div>
 
-      {(tableLabel ||
-        tabNumber ||
-        ticketDisplay ||
-        orderNote ||
-        membershipName ||
-        channel === 'dine_in' ||
-        (!isRetail && fulfillmentLabel) ||
-        (channel === 'takeaway' || channel === 'delivery')) && (
+      {showMetaStrip ? (
         <div className="shrink-0 flex flex-wrap items-center gap-1.5 border-b border-stone-100 px-3 py-1.5 text-[11px] text-stone-500">
           {membershipName ? (
             <span className="inline-flex max-w-full items-center gap-1 rounded bg-teal-100 px-1.5 py-0.5 font-semibold text-teal-900">
@@ -620,12 +643,12 @@ export default function WebPosCartPanel({
               ) : null}
             </span>
           ) : null}
-          {channel === 'dine_in' ? (
+          {!isRetail && channel === 'dine_in' ? (
             <span className="rounded bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-800">
               {ticketDisplay ? `${t('dineIn')} · ${ticketDisplay}` : t('dineIn')}
             </span>
           ) : null}
-          {(channel === 'takeaway' || channel === 'delivery') ? (
+          {!isRetail && (channel === 'takeaway' || channel === 'delivery') ? (
             <div className="relative z-[5] flex w-full flex-wrap items-center gap-1.5">
               <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900">
                 {channel === 'delivery' ? t('delivery') : t('takeaway')}
@@ -659,7 +682,7 @@ export default function WebPosCartPanel({
           ) : null}
           {orderNote ? <span className="truncate">{orderNote}</span> : null}
         </div>
-      )}
+      ) : null}
 
       {showOrderTabs ? (
         <div className="shrink-0 grid grid-cols-2 gap-1 border-b border-stone-100 px-2 py-1.5">
