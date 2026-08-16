@@ -1836,8 +1836,8 @@ const en: Dict = {
   webPosPrinterNotThermal: ' (not for receipts)',
   webPosRefreshPage: 'Refresh',
   webPosFullscreen: 'Fullscreen',
-  webPosEnterFullscreen: 'Enter fullscreen',
-  webPosExitFullscreen: 'Exit fullscreen',
+  webPosEnterFullscreen: 'Fullscreen',
+  webPosExitFullscreen: 'Fullscreen',
   webPosFullscreenHint:
     'Use Fullscreen here, browser F11, or install ChaslayReborn as an app (PWA) for a kiosk-like screen. After leaving fullscreen, open the menu and tap Fullscreen again.',
   webPosEodWhenShiftsOff:
@@ -3911,7 +3911,7 @@ const fr: Dict = {
   webPosRefreshPage: 'Actualiser',
   webPosFullscreen: 'Plein écran',
   webPosEnterFullscreen: 'Plein écran',
-  webPosExitFullscreen: 'Quitter le plein écran',
+  webPosExitFullscreen: 'Plein écran',
   webPosFullscreenHint:
     'Utilisez Plein écran ici, F11 du navigateur, ou installez ChaslayReborn en application (PWA). Après avoir quitté le plein écran, rouvrez le menu et tapez Plein écran.',
   webPosEodWhenShiftsOff:
@@ -5990,7 +5990,7 @@ const de: Dict = {
   webPosRefreshPage: 'Aktualisieren',
   webPosFullscreen: 'Vollbild',
   webPosEnterFullscreen: 'Vollbild',
-  webPosExitFullscreen: 'Vollbild beenden',
+  webPosExitFullscreen: 'Vollbild',
   webPosFullscreenHint:
     'Vollbild hier, Browser-F11 oder ChaslayReborn als App (PWA) installieren. Nach Verlassen des Vollbilds: Menü öffnen und erneut Vollbild tippen.',
   webPosEodWhenShiftsOff:

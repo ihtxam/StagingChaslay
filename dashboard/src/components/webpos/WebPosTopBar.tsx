@@ -574,7 +574,7 @@ export function WebPosSettingsDropdown({
         {canShowPanel && onShowPanel ? (
           <button
             type="button"
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
             onClick={onShowPanel}
           >
             <PanelLeft size={16} />
@@ -602,7 +602,7 @@ export function WebPosSettingsDropdown({
             }}
           >
             {!appMode || !fullscreenActive ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-            {!appMode || !fullscreenActive ? t('webPosEnterFullscreen') : t('webPosExitFullscreen')}
+            {t('webPosEnterFullscreen')}
           </button>
         </div>
       </div>
