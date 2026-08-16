@@ -5152,7 +5152,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
       }
     } else {
-      toast(t('webPosSaleQueuedOffline'), { icon: '📴', duration: 4000 });
       void flushOfflineOutbox();
     }
 
