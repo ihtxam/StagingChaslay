@@ -1,5 +1,8 @@
 import { isBrowserOnline } from './types';
 
+/** Axios timeout for catalog boot — fail fast offline so IndexedDB can hydrate. */
+export const WEBPOS_CATALOG_FETCH_TIMEOUT_MS = 8_000;
+
 /** True when the failure looks like connectivity / transport, not a business 4xx. */
 export function isNetworkError(err: unknown): boolean {
   if (!isBrowserOnline()) return true;

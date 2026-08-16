@@ -68,6 +68,7 @@ api.interceptors.response.use(
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         sessionStorage.removeItem('webpos_staff_session');
+        localStorage.removeItem('webpos_staff_session_persist');
         sessionStorage.removeItem('sa_return_token');
         sessionStorage.removeItem('sa_return_user');
         window.location.href = '/login';

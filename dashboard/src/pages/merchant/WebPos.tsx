@@ -205,6 +205,7 @@ import {
   flushOfflineOutbox,
   isBrowserOnline,
   isNetworkError,
+  WEBPOS_CATALOG_FETCH_TIMEOUT_MS,
   isWebPosCurrentlyOffline,
   isWebPosOfflineEnabled,
   loadWebPosOfflineSnapshot,
@@ -718,7 +719,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const hideTab = !!tableLabel || !!tabNumber;
   // Waiter / staff phone: USE_WEBPOS PIN gate works on mobile Safari; kitchen + receipt
   // print still goes through the print agent / main till printers (not the phone).
-  const pinGateRequired = staffConfigured && !webposStaff;
+  const pinGateRequired =
+    staffConfigured &&
+    !webposStaff &&
+    !(isWebPosCurrentlyOffline() && loadedFromOfflineCache);
 
   const applyStaffRoster = useCallback(
     (staffList: StaffRosterRow[], opts?: { openPinGate?: boolean }) => {
@@ -1332,14 +1336,32 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    let cacheReady = false;
+    const offlineBoot = !isBrowserOnline();
+
+    if (offlineBoot && isWebPosOfflineEnabled()) {
+      cacheReady = await applyCachedOfflineSnapshot(t('webPosOfflineCacheLoaded'));
+      if (cacheReady) {
+        setLoading(false);
+        void refreshAgent().catch(() => undefined);
+        void flushOfflineOutbox();
+        return;
+      }
+    }
+
+    const fetchTimeout = offlineBoot ? WEBPOS_CATALOG_FETCH_TIMEOUT_MS : 60_000;
+    const fetchOpts = { timeout: fetchTimeout };
+
     try {
       const [settingsRes, catRes, prodRes, webposRes, staffRes, bestsellerRes] = await Promise.all([
-        api.get('/merchant/settings'),
-        api.get('/merchant/categories'),
-        api.get('/merchant/products', { params: { limit: 500 } }),
-        api.get('/merchant/webpos-config').catch(() => ({ data: { config: null } })),
-        api.get('/merchant/staff').catch(() => ({ data: { staff: [] } })),
-        api.get('/merchant/bestsellers', { params: { limit: 20, days: 30 } }).catch(() => ({ data: { productIds: [] } })),
+        api.get('/merchant/settings', fetchOpts),
+        api.get('/merchant/categories', fetchOpts),
+        api.get('/merchant/products', { params: { limit: 500 }, ...fetchOpts }),
+        api.get('/merchant/webpos-config', fetchOpts).catch(() => ({ data: { config: null } })),
+        api.get('/merchant/staff', fetchOpts).catch(() => ({ data: { staff: [] } })),
+        api
+          .get('/merchant/bestsellers', { params: { limit: 20, days: 30 }, ...fetchOpts })
+          .catch(() => ({ data: { productIds: [] } })),
       ]);
       const merch = settingsRes.data.settings || settingsRes.data.merchant;
       setMerchant(merch);
@@ -1361,7 +1383,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setEntitlement(cfg.entitlement);
       } else {
         try {
-          const entRes = await api.get('/merchant/webpos-entitlement');
+          const entRes = await api.get('/merchant/webpos-entitlement', fetchOpts);
           nextEntitlement = entRes.data.entitlement || null;
           setEntitlement(nextEntitlement);
         } catch {
@@ -1490,12 +1512,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await refreshCurrentShift(shiftsOn);
       void flushOfflineOutbox();
     } catch (e: any) {
-      const hydrated = await applyCachedOfflineSnapshot(
-        isNetworkError(e) || !isBrowserOnline()
-          ? t('webPosOfflineCacheLoaded')
-          : undefined
-      );
-      if (!hydrated) {
+      if (!cacheReady) {
+        const hydrated = await applyCachedOfflineSnapshot(
+          isNetworkError(e) || !isBrowserOnline()
+            ? t('webPosOfflineCacheLoaded')
+            : undefined
+        );
+        cacheReady = hydrated;
+      }
+      if (!cacheReady) {
         toast.error(e.response?.data?.error || t('webPosLoadFailed'));
       }
     } finally {

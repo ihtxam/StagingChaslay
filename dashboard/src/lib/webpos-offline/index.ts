@@ -16,7 +16,7 @@ export {
   type OfflineBlockReason,
 } from './guards';
 
-export { isNetworkError, isFatalPushStatus } from './network';
+export { isNetworkError, isFatalPushStatus, WEBPOS_CATALOG_FETCH_TIMEOUT_MS } from './network';
 
 export {
   saveWebPosOfflineSnapshot,

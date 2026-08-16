@@ -125,12 +125,27 @@ export type WebPosStaffSession = {
 };
 
 const WEBPOS_STAFF_KEY = 'webpos_staff_session';
+/** Survives PWA relaunch when sessionStorage is cleared (offline register). */
+const WEBPOS_STAFF_PERSIST_KEY = 'webpos_staff_session_persist';
+
+function parseStaffSession(raw: string | null): WebPosStaffSession | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as WebPosStaffSession;
+  } catch {
+    return null;
+  }
+}
 
 export function loadWebPosStaffSession(): WebPosStaffSession | null {
   try {
-    const raw = sessionStorage.getItem(WEBPOS_STAFF_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as WebPosStaffSession;
+    const fromSession = parseStaffSession(sessionStorage.getItem(WEBPOS_STAFF_KEY));
+    if (fromSession) return fromSession;
+    const fromPersist = parseStaffSession(localStorage.getItem(WEBPOS_STAFF_PERSIST_KEY));
+    if (fromPersist) {
+      sessionStorage.setItem(WEBPOS_STAFF_KEY, JSON.stringify(fromPersist));
+    }
+    return fromPersist;
   } catch {
     return null;
   }
@@ -139,13 +154,25 @@ export function loadWebPosStaffSession(): WebPosStaffSession | null {
 export function saveWebPosStaffSession(session: WebPosStaffSession | null) {
   if (!session) {
     sessionStorage.removeItem(WEBPOS_STAFF_KEY);
+    localStorage.removeItem(WEBPOS_STAFF_PERSIST_KEY);
     return;
   }
-  sessionStorage.setItem(WEBPOS_STAFF_KEY, JSON.stringify(session));
+  const raw = JSON.stringify(session);
+  sessionStorage.setItem(WEBPOS_STAFF_KEY, raw);
+  try {
+    localStorage.setItem(WEBPOS_STAFF_PERSIST_KEY, raw);
+  } catch {
+    /* quota — session tab still works */
+  }
 }
 
 export function clearWebPosStaffSession() {
   sessionStorage.removeItem(WEBPOS_STAFF_KEY);
+  try {
+    localStorage.removeItem(WEBPOS_STAFF_PERSIST_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export type StaffRosterRow = {
