@@ -636,13 +636,34 @@ button {
   position: -webkit-sticky;
   position: sticky;
   top: var(--shop-header-height, 3.5rem);
+  left: 0;
+  right: 0;
+  width: 100%;
   z-index: 25;
+  overflow: visible;
   background-color: #f6f5f2;
   border-bottom: 1px solid rgb(231 229 228 / 0.95);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
 }
 
+.shop-sticky-category-bar__inner {
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+  padding-block: 0.5rem;
+}
+
 .shop-sticky-category-bar .shop-category-scroll {
+  flex: 1 1 0%;
+  min-width: 0;
+  max-width: 100%;
+  /*
+   * Single-axis horizontal scroller only — overflow-x:auto pairs overflow-y to auto,
+   * which makes this row a vertical scrollport and breaks sticky / drifts pills left.
+   */
+  overflow-x: auto;
+  overflow-y: clip;
+  overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }

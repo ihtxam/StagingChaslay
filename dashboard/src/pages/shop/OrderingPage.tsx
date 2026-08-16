@@ -1481,9 +1481,9 @@ export default function OrderingPage() {
       </section>
 
       <div className="shop-sticky-category-bar">
-        <div className="max-w-7xl mx-auto px-4 py-2">
+        <div className="shop-sticky-category-bar__inner">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="shop-category-scroll flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5">
+            <div className="shop-category-scroll flex gap-1.5 pb-0.5">
               <button
                 type="button"
                 onClick={() => {
