@@ -171,7 +171,12 @@ export function canEditPayment(o: MerchantOrder): boolean {
 /** Pickup / handoff stage — unpaid orders can be collected at the till. */
 export function isReadyForPaymentCollection(o: MerchantOrder): boolean {
   const status = (o.status || '').toLowerCase();
-  return status === 'ready' || status === 'out_for_delivery';
+  if (status === 'ready' || status === 'out_for_delivery') return true;
+  // Counter POS pay-later: staff can collect while the ticket is still in kitchen.
+  if (['preparing', 'accepted'].includes(status) && isAwaitingPaymentOrder(o) && !isOnlineShopOrder(o)) {
+    return true;
+  }
+  return false;
 }
 
 export function isPaidOrder(o: MerchantOrder): boolean {
@@ -194,7 +199,7 @@ export function canCollectPayment(o: MerchantOrder): boolean {
 }
 
 export function canShowAwaitingPaymentBadge(o: MerchantOrder): boolean {
-  return canCollectPayment(o);
+  return isAwaitingPaymentOrder(o);
 }
 
 /** Friendly order lifecycle label (FR/EN/DE via i18n keys). */

@@ -4322,7 +4322,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setBillDiscount({ percent: 0, amount: Number(order.discountAmount || 0) });
     setChannel(ch);
     setOrderNote('');
-    setTableId(null);
+    setTableId((order as { tableId?: string | null }).tableId || null);
     setTableLabel(order.tableLabel || null);
     setTabNumber(order.tabNumber || null);
     setTicketDisplay(order.ticketDisplay || order.orderNumber);

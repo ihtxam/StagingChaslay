@@ -814,6 +814,15 @@ export default function WebPosOrdersPanel({
     closeMenus();
   };
 
+  /** Unpaid collectable orders open checkout; others show the detail panel. */
+  const openOrderClick = (o: PosOrder) => {
+    if (canCollectPayment(o)) {
+      startCollectPayment(o);
+      return;
+    }
+    selectOrder(o);
+  };
+
   const orderActionMenu = (
     order: PosOrder,
     opts: { onClose: () => void; align?: 'left' | 'right'; anchor: HTMLElement | null }
@@ -1173,8 +1182,8 @@ export default function WebPosOrdersPanel({
                     <button
                       key={`og-${o.id}`}
                       type="button"
-                      onClick={() => selectOrder(o)}
-                      className="flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border border-stone-200 bg-stone-900 text-left text-white shadow-sm transition hover:ring-2 hover:ring-teal-400"
+                        onClick={() => openOrderClick(o)}
+                        className="flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border border-stone-200 bg-stone-900 text-left text-white shadow-sm transition hover:ring-2 hover:ring-teal-400"
                     >
                       <div
                         className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${orderHeaderClass(o)}`}
@@ -1316,7 +1325,7 @@ export default function WebPosOrdersPanel({
                     <li key={`o-${o.id}`} className="relative">
                       <button
                         type="button"
-                        onClick={() => selectOrder(o)}
+                        onClick={() => openOrderClick(o)}
                         className={`flex w-full items-start gap-2 px-3 py-3.5 text-left hover:bg-stone-50 sm:items-center sm:gap-3 sm:px-4 ${
                           selected ? 'bg-teal-50' : ''
                         }`}
