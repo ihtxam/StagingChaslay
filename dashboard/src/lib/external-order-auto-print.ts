@@ -12,6 +12,7 @@ import {
   type PosOrderForReceipt,
   type PosPrintSettingsClient,
 } from '@/lib/webpos-receipt';
+import { isRetailPosMode } from '@/lib/pos-checkout';
 import { printViaAgentOrQueue } from '@/lib/webpos-print-relay';
 
 export type AutoPrintOrderPayload = {
@@ -127,7 +128,11 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
     }
   }
 
-  if (payload.printKitchen === true && printSettings?.autoPrintKitchen !== false) {
+  if (
+    payload.printKitchen === true &&
+    !isRetailPosMode(settings.posCheckoutSettings) &&
+    printSettings?.autoPrintKitchen !== false
+  ) {
     const kitchenPrinterRows = (printSettings?.printers || []).filter(
       (p) => p.enabled !== false && p.printKitchenTickets && p.name
     );

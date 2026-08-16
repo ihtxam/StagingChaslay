@@ -1263,6 +1263,7 @@ class PosViewModel @Inject constructor(
     }
 
     fun sendCurrentOrderToKitchen() {
+        if (!isRestaurantMode()) return
         val cart = cartManager.snapshot()
         if (cart.isEmpty) {
             showError("Kitchen", "Add items before sending to kitchen")
@@ -1966,6 +1967,7 @@ class PosViewModel @Inject constructor(
     }
 
     fun printKitchenTicket() {
+        if (!isRestaurantMode()) return
         viewModelScope.launch {
             val cart = cartManager.snapshot()
             if (cart.isEmpty) {
@@ -3765,6 +3767,7 @@ class PosViewModel @Inject constructor(
         isFollowUp: Boolean = false,
         message: String? = null
     ): Result<Unit> {
+        if (!isRestaurantMode()) return Result.success(Unit)
         if (usesRemoteKitchenPrint(settings)) {
             return runCatching {
                 floorSyncRepository.queueKitchenPrint(

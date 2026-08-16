@@ -18,6 +18,7 @@ import {
   mapUberEatsWebhookBody,
   isUberNotificationOnly,
 } from "@/lib/delivery-platform-webhook-mappers";
+import { isRetailPosMode } from "@/lib/pos-checkout-settings";
 import { normalizePosPrintSettings } from "@/lib/pos-print-settings";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { ChaslayFloorService } from "@/services/chaslay-floor.service";
@@ -563,13 +564,15 @@ export class DeliveryPlatformService {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(schema.merchants.id, merchantId),
-      columns: { posPrintSettings: true },
+      columns: { posPrintSettings: true, posCheckoutSettings: true },
     });
     if (!merchant) return;
 
     const printSettings = normalizePosPrintSettings(merchant.posPrintSettings);
     const printKitchen =
-      opts?.printKitchen === true && printSettings.autoPrintKitchen !== false;
+      opts?.printKitchen === true &&
+      !isRetailPosMode(merchant.posCheckoutSettings) &&
+      printSettings.autoPrintKitchen !== false;
     const printReceipt =
       opts?.printReceipt === true && printSettings.autoPrintReceipt !== false;
     const printNotification = opts?.printNotification === true;

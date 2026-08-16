@@ -10,6 +10,7 @@ import com.chaslay.pos.data.repository.ProductRepository
 import com.chaslay.pos.data.repository.SettingsRepository
 import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.HeldOrderStatus
+import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.printer.BluetoothPrinterService
 import com.chaslay.pos.printer.KitchenPrintMeta
 import javax.inject.Inject
@@ -33,6 +34,7 @@ class OnlineKitchenPrintHelper @Inject constructor(
     ) = withContext(Dispatchers.IO) {
         if (printKitchen == false) return@withContext
         val settings = settingsRepository.getSettings()
+        if (settings.posMode != PosMode.RESTAURANT) return@withContext
         if (!settings.autoPrintKitchen) return@withContext
 
         val hasKitchenPrinter = runCatching { printerConfigDao.getAll() }

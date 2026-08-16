@@ -78,6 +78,10 @@ function asNumberArray(v: unknown, fallback: number[]): number[] {
   return nums.length ? nums : fallback;
 }
 
+export function isRetailPosMode(raw: unknown): boolean {
+  return normalizePosCheckoutSettings(raw).posMode === "retail";
+}
+
 export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings {
   const src = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const presetsRaw = Array.isArray(src.discountPresets) ? src.discountPresets : null;

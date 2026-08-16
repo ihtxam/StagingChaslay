@@ -65,6 +65,10 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   retailDeliveryEnabled: false,
 };
 
+export function isRetailPosMode(raw: unknown): boolean {
+  return normalizePosCheckoutSettings(raw).posMode === 'retail';
+}
+
 export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings {
   const src = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const tipPresets = Array.isArray(src.tipPresetsPercent)

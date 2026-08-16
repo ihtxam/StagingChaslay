@@ -14,6 +14,7 @@ import com.chaslay.pos.data.local.entity.TableOrderItemEntity
 import com.chaslay.pos.data.local.entity.TransactionEntity
 import com.chaslay.pos.data.local.entity.TransactionItemEntity
 import com.chaslay.pos.domain.model.FulfillmentType
+import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.EndOfDayReport
 import com.chaslay.pos.domain.model.VatBreakdownRow
@@ -357,6 +358,7 @@ class BluetoothPrinterService @Inject constructor(
         meta: KitchenPrintMeta = KitchenPrintMeta(),
         paperWidthMm: Int = 80
     ): Result<Unit> {
+        if (settings.posMode != PosMode.RESTAURANT) return Result.success(Unit)
         if (items.isEmpty() && !isFollowUp) return Result.success(Unit)
         val lineWidth = lineWidthFor(paperWidthMm)
         val kitchenItems = items.filter {
@@ -414,6 +416,7 @@ class BluetoothPrinterService @Inject constructor(
         categories: List<CategoryEntity> = emptyList(),
         meta: KitchenPrintMeta = KitchenPrintMeta()
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        if (settings.posMode != PosMode.RESTAURANT) return@withContext Result.success(Unit)
         if (items.isEmpty() && !isFollowUp) return@withContext Result.success(Unit)
         val kitchenPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
             .filter { it.isEnabled && it.printKitchenTickets && it.address.isNotBlank() }

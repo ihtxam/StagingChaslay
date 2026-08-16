@@ -15,6 +15,7 @@ import com.chaslay.pos.data.repository.TableOrderRepository
 import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.FloorConnectionMode
 import com.chaslay.pos.domain.model.FloorDeviceRole
+import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.printer.BluetoothPrinterService
 import com.chaslay.pos.printer.KitchenPrintMeta
@@ -193,6 +194,7 @@ class FloorSyncRepository @Inject constructor(
         items: List<TableOrderItemEntity>,
         meta: KitchenPrintMeta
     ) {
+        if (settings.posMode != PosMode.RESTAURANT) return
         if (!settings.floorSyncEnabled) return
         val payload = JsonObject().apply {
             addProperty("tableName", tableName)

@@ -4539,6 +4539,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tableLabel?: string | null;
     }
   ) => {
+    if (isRetail) return;
     if (printSettings?.autoPrintKitchen === false && !opts?.forcePrint && !opts?.cancelled) return;
     const lang = resolveReceiptLanguage(printSettings, printSettings?.receiptLanguage === 'panel' ? locale : printSettings?.receiptLanguage || locale);
     const kitchenPrinters = (printSettings?.printers || []).filter(
