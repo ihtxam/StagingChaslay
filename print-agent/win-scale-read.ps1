@@ -11,6 +11,17 @@ function Write-Json($obj) {
   $obj | ConvertTo-Json -Compress -Depth 6
 }
 
+function Normalize-PortName([string]$Name) {
+  $n = $Name.Trim()
+  if ($n -match '^\\\\\.\\(.+)$') { $n = $Matches[1] }
+  if ($n -match '^COM(\d+)$') {
+    $num = [int]$Matches[1]
+    if ($num -ge 10) { return "\\.\COM$num" }
+    return "COM$num"
+  }
+  return $Name.Trim()
+}
+
 try {
   Add-Type -AssemblyName System.IO.Ports | Out-Null
 } catch {
@@ -23,8 +34,10 @@ if ($ListPorts -or [string]::IsNullOrWhiteSpace($PortName)) {
   exit 0
 }
 
+$openName = Normalize-PortName $PortName
+
 $port = New-Object System.IO.Ports.SerialPort
-$port.PortName = $PortName
+$port.PortName = $openName
 $port.BaudRate = 9600
 $port.DataBits = 8
 $port.Parity = [System.IO.Ports.Parity]::None
@@ -38,7 +51,7 @@ $port.RtsEnable = $true
 try {
   $port.Open()
 } catch {
-  Write-Json @{ ok = $false; error = "Could not open $PortName : $($_.Exception.Message)" }
+  Write-Json @{ ok = $false; error = "Could not open $openName : $($_.Exception.Message)" }
   exit 1
 }
 
@@ -70,7 +83,7 @@ $bytes = $chunks.ToArray()
 $b64 = if ($bytes.Length -gt 0) { [Convert]::ToBase64String($bytes) } else { "" }
 Write-Json @{
   ok = $true
-  port = $PortName
+  port = $openName
   bytes = $bytes.Length
   dataBase64 = $b64
 }

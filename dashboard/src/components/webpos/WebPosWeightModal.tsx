@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Scale, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { RefreshCw, Scale, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
 import {
+  formatScalePortLabel,
   isPrintAgentAvailable,
   listScalePorts,
   readScaleWeight,
@@ -28,6 +29,14 @@ function money(n: number) {
   return `CHF ${Number(n || 0).toFixed(2)}`;
 }
 
+function persistPort(port: string) {
+  try {
+    if (port.trim()) localStorage.setItem(SCALE_PORT_KEY, port.trim());
+  } catch {
+    /* ignore */
+  }
+}
+
 export default function WebPosWeightModal({
   open,
   productName,
@@ -42,21 +51,46 @@ export default function WebPosWeightModal({
   const [entryUnit, setEntryUnit] = useState<'kg' | 'g'>('kg');
   const [ports, setPorts] = useState<string[]>([]);
   const [port, setPort] = useState('');
+  const [portsError, setPortsError] = useState('');
+  const [portsLoading, setPortsLoading] = useState(false);
   const [scaleReading, setScaleReading] = useState<ScaleReading | null>(null);
   const [scaleMsg, setScaleMsg] = useState('');
   const [agentOk, setAgentOk] = useState(false);
 
   const fixedPort = (configuredPort || '').trim();
 
+  const refreshPorts = useCallback(async () => {
+    setPortsLoading(true);
+    setPortsError('');
+    try {
+      const ok = await isPrintAgentAvailable();
+      setAgentOk(ok);
+      if (!ok) return;
+      const list = await listScalePorts();
+      setPorts(list);
+      setPort((prev) => {
+        const saved = prev.trim();
+        if (saved) return saved;
+        return list[0] || '';
+      });
+    } catch (e: any) {
+      setPorts([]);
+      setPortsError(e?.message || t('webPosScalePortsFailed'));
+    } finally {
+      setPortsLoading(false);
+    }
+  }, [t]);
+
   useEffect(() => {
     if (!open) return;
     setBuffer('');
     setScaleReading(null);
     setScaleMsg('');
+    setPortsError('');
     setEntryUnit(weightUnit === 'g' ? 'g' : 'kg');
 
     if (fixedPort) {
-      setPort(fixedPort);
+      setPort(formatScalePortLabel(fixedPort));
       void (async () => {
         const ok = await isPrintAgentAvailable();
         setAgentOk(ok);
@@ -65,26 +99,15 @@ export default function WebPosWeightModal({
     }
 
     try {
-      setPort(localStorage.getItem(SCALE_PORT_KEY) || '');
+      setPort(formatScalePortLabel(localStorage.getItem(SCALE_PORT_KEY) || ''));
     } catch {
       setPort('');
     }
-    void (async () => {
-      const ok = await isPrintAgentAvailable();
-      setAgentOk(ok);
-      if (!ok) return;
-      try {
-        const list = await listScalePorts();
-        setPorts(list);
-        setPort((prev) => prev || list[0] || '');
-      } catch {
-        setPorts([]);
-      }
-    })();
-  }, [open, weightUnit, fixedPort]);
+    void refreshPorts();
+  }, [open, weightUnit, fixedPort, refreshPorts]);
 
   useEffect(() => {
-    if (!open || !agentOk || !port) return;
+    if (!open || !agentOk || !port.trim()) return;
     let cancelled = false;
     const tick = async () => {
       try {
@@ -202,34 +225,48 @@ export default function WebPosWeightModal({
               <>
                 {fixedPort ? (
                   <p className="mb-1.5 text-xs font-mono text-[var(--webpos-text-muted,var(--text-muted))]">
-                    {fixedPort}
+                    {formatScalePortLabel(fixedPort)}
                   </p>
                 ) : (
-                  <select
-                    className="input mb-1.5 w-full text-sm"
-                    value={port}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setPort(v);
-                      try {
-                        localStorage.setItem(SCALE_PORT_KEY, v);
-                      } catch {
-                        /* ignore */
-                      }
-                    }}
-                  >
-                    <option value="">{t('webPosScaleSelectPort')}</option>
-                    {ports.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <div className="mb-1.5 flex gap-1.5">
+                      <input
+                        list="webpos-scale-ports"
+                        className="input flex-1 font-mono text-sm uppercase"
+                        value={port}
+                        placeholder={t('webPosScalePortPlaceholder')}
+                        onChange={(e) => {
+                          const v = formatScalePortLabel(e.target.value);
+                          setPort(v);
+                          persistPort(v);
+                        }}
+                        aria-label={t('webPosScaleSelectPort')}
+                      />
+                      <datalist id="webpos-scale-ports">
+                        {ports.map((p) => (
+                          <option key={p} value={p} />
+                        ))}
+                      </datalist>
+                      <button
+                        type="button"
+                        className="webpos-keypad-key !px-2.5"
+                        onClick={() => void refreshPorts()}
+                        disabled={portsLoading}
+                        aria-label={t('webPosScaleRefreshPorts')}
+                        title={t('webPosScaleRefreshPorts')}
+                      >
+                        <RefreshCw size={14} className={portsLoading ? 'animate-spin' : ''} />
+                      </button>
+                    </div>
+                    <p className="mb-1 text-[10px] text-[var(--webpos-text-muted,var(--text-muted))]">
+                      {portsError || t('webPosScalePortHint')}
+                    </p>
+                  </>
                 )}
                 <p className="text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
                   {scaleReading
                     ? `${t('webPosScaleLive')}: ${scaleReading.weightKg.toFixed(3)} kg (${scaleReading.status})`
-                    : scaleMsg || t('webPosScaleWaiting')}
+                    : scaleMsg || (port.trim() ? t('webPosScaleWaiting') : t('webPosScaleSelectPort'))}
                 </p>
               </>
             ) : (

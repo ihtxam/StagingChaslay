@@ -20,7 +20,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.3.1";
+const VERSION = "1.3.2";
 const APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "chaslay-print-agent.exe";
 const RUN_VALUE_NAME = "ChaslayPrintAgent";
@@ -199,6 +199,41 @@ function ensurePs1OnDisk() {
   return dest;
 }
 
+/** Resolve win-scale-read.ps1 (install dir, pkg asset dir, or dev source). */
+function ensureScaleScriptOnDisk() {
+  const installDest = path.join(installDir(), "win-scale-read.ps1");
+  if (fs.existsSync(installDest)) return installDest;
+
+  const candidates = [
+    path.join(runtimeDir(), "win-scale-read.ps1"),
+    path.join(__dirname, "win-scale-read.ps1"),
+  ];
+  for (const src of candidates) {
+    if (!fs.existsSync(src)) continue;
+    try {
+      fs.mkdirSync(installDir(), { recursive: true });
+      fs.copyFileSync(src, installDest);
+      appendInstallLog(`Copied win-scale-read.ps1 to ${installDest}`);
+      return installDest;
+    } catch {
+      return src;
+    }
+  }
+  return installDest;
+}
+
+/** Windows COM10+ needs \\.\COM10 prefix; COM1–COM9 use plain COMn. */
+function normalizeComPort(port) {
+  const raw = String(port || "").trim();
+  if (!raw) return "";
+  const stripped = raw.replace(/^\\\\\.\\/i, "").toUpperCase();
+  const m = stripped.match(/^COM(\d+)$/);
+  if (!m) return raw;
+  const num = parseInt(m[1], 10);
+  const com = `COM${num}`;
+  return num >= 10 ? `\\\\.\\${com}` : com;
+}
+
 /**
  * Show a blocking Windows MessageBox (awaited so process.exit does not kill it).
  * Title/body are passed via UTF-8 temp files to avoid quoting/encoding issues.
@@ -311,6 +346,19 @@ async function doInstall() {
     appendInstallLog(`Copied win-raw-print.ps1`);
   } else {
     appendInstallLog(`WARNING: win-raw-print.ps1 missing at ${ps1Src}`);
+  }
+
+  const scalePs1Src = path.join(__dirname, "win-scale-read.ps1");
+  const scalePs1Dest = path.join(dir, "win-scale-read.ps1");
+  if (fs.existsSync(scalePs1Src)) {
+    try {
+      fs.copyFileSync(scalePs1Src, scalePs1Dest);
+    } catch {
+      copyFileRetry(scalePs1Src, scalePs1Dest);
+    }
+    appendInstallLog(`Copied win-scale-read.ps1`);
+  } else {
+    appendInstallLog(`WARNING: win-scale-read.ps1 missing at ${scalePs1Src}`);
   }
 
   const launchPath = fs.existsSync(targetExe) ? targetExe : path.join(dir, "start-agent.cmd");
@@ -620,7 +668,12 @@ function startServer() {
       if (!isWindows()) {
         return res.json({ ok: true, ports: [] });
       }
-      const scriptPath = path.join(installDir(), "win-scale-read.ps1");
+      const scriptPath = ensureScaleScriptOnDisk();
+      if (!fs.existsSync(scriptPath)) {
+        return res.status(500).json({
+          error: `win-scale-read.ps1 not found at ${scriptPath}. Reinstall Chaslay Print Agent.`,
+        });
+      }
       const stdout = await runPowerShell(scriptPath, ["-ListPorts"]);
       const parsed = JSON.parse(stdout || "{}");
       res.json({ ok: true, ports: Array.isArray(parsed.ports) ? parsed.ports : [] });
@@ -636,7 +689,7 @@ function startServer() {
       if (!isWindows()) {
         return res.json({ ok: true, reading: null, message: "Scale supported on Windows only" });
       }
-      const port = String(req.query.port || "").trim();
+      const port = normalizeComPort(String(req.query.port || "").trim());
       if (!port) {
         return res.status(400).json({ error: "port query param required (e.g. COM3)" });
       }
@@ -644,7 +697,12 @@ function startServer() {
         5000,
         Math.max(300, Number(req.query.timeoutMs || 1200) || 1200)
       );
-      const scriptPath = path.join(installDir(), "win-scale-read.ps1");
+      const scriptPath = ensureScaleScriptOnDisk();
+      if (!fs.existsSync(scriptPath)) {
+        return res.status(500).json({
+          error: `win-scale-read.ps1 not found at ${scriptPath}. Reinstall Chaslay Print Agent.`,
+        });
+      }
       const stdout = await runPowerShell(scriptPath, [
         "-PortName",
         port,

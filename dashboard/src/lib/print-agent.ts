@@ -110,7 +110,7 @@ export async function printViaAgent(opts: {
   }
   if (looksCorruptedPrinterName(name)) {
     throw new Error(
-      `Printer name looks corrupted ('${name}'). Re-select the printer in WebPOS after updating the Print Agent.`
+      `Printer name looks corrupted ('${name}'). Re-select the printer in ChaslayReborn after updating the Print Agent.`
     );
   }
 
@@ -176,10 +176,41 @@ export type ScaleReading = {
   isTare?: boolean;
 };
 
+/** Normalize COM port for Windows serial open (COM10+ needs \\.\ prefix). */
+export function normalizeScalePort(port: string): string {
+  const raw = String(port || '').trim();
+  if (!raw) return '';
+  const stripped = raw.replace(/^\\\\\.\\/i, '').toUpperCase();
+  const m = stripped.match(/^COM(\d+)$/);
+  if (!m) return raw;
+  const num = parseInt(m[1], 10);
+  const com = `COM${num}`;
+  return num >= 10 ? `\\\\.\\${com}` : com;
+}
+
+/** User-facing COM label (always COMn, no \\.\ prefix). */
+export function formatScalePortLabel(port: string): string {
+  const raw = String(port || '').trim();
+  if (!raw) return '';
+  const stripped = raw.replace(/^\\\\\.\\/i, '').toUpperCase();
+  const m = stripped.match(/^COM(\d+)$/);
+  return m ? `COM${parseInt(m[1], 10)}` : raw;
+}
+
 /** Windows COM ports from Print Agent (Aclas USB-serial → COMx). */
 export async function listScalePorts(): Promise<string[]> {
-  const data = await agentFetch('/scale/ports');
-  return Array.isArray(data?.ports) ? data.ports.map(String) : [];
+  try {
+    const data = await agentFetch('/scale/ports');
+    return Array.isArray(data?.ports) ? data.ports.map(String) : [];
+  } catch (e: any) {
+    const msg = String(e?.message || '');
+    if (/HTTP 404|Cannot GET \/scale\/ports/i.test(msg)) {
+      throw new Error(
+        'Print Agent is outdated — reinstall Chaslay Print Agent to enable scale support.'
+      );
+    }
+    throw e;
+  }
 }
 
 /** One Aclas reading from Print Agent (null if no frame yet). */
@@ -187,8 +218,12 @@ export async function readScaleWeight(
   port: string,
   timeoutMs = 2500
 ): Promise<{ reading: ScaleReading | null; message?: string }> {
+  const normalized = normalizeScalePort(port);
+  if (!normalized) {
+    throw new Error('COM port required (e.g. COM3)');
+  }
   const q = new URLSearchParams({
-    port,
+    port: normalized,
     timeoutMs: String(timeoutMs),
   });
   const data = await agentFetch(`/scale/reading?${q.toString()}`);
