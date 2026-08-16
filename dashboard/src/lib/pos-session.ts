@@ -3,6 +3,8 @@ import { webPosDeviceId } from '@/lib/webpos-print-relay';
 
 const SESSION_KEY = 'manupos_pos_session';
 
+export const POS_SESSION_KICKED_EVENT = 'pos-session:kicked';
+
 export type PosSessionKind = 'main' | 'waiter';
 export type PosSessionPlatform = 'webpos' | 'waiter_web' | 'android';
 
@@ -13,6 +15,7 @@ type StoredPosSession = {
 };
 
 let heartbeatTimer: number | null = null;
+let visibilityHookInstalled = false;
 
 function readStored(): StoredPosSession | null {
   try {
@@ -42,21 +45,38 @@ function stopHeartbeat() {
   }
 }
 
+function notifySessionKicked() {
+  stopHeartbeat();
+  writeStored(null);
+  window.dispatchEvent(new CustomEvent(POS_SESSION_KICKED_EVENT));
+}
+
 async function sendHeartbeat(sessionId: string) {
   try {
     await api.post('/merchant/pos/sessions/heartbeat', { sessionId });
   } catch (e: any) {
     const code = e?.response?.data?.code;
     if (code === 'POS_SESSION_EXPIRED' || e?.response?.status === 410) {
-      stopHeartbeat();
-      writeStored(null);
+      notifySessionKicked();
     }
   }
 }
 
+function installVisibilityHeartbeat() {
+  if (visibilityHookInstalled || typeof document === 'undefined') return;
+  visibilityHookInstalled = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const stored = readStored();
+    if (stored) void sendHeartbeat(stored.sessionId);
+  });
+}
+
 function startHeartbeat(session: StoredPosSession) {
   stopHeartbeat();
+  installVisibilityHeartbeat();
   const intervalMs = Math.max(15, session.heartbeatIntervalSec || 45) * 1000;
+  void sendHeartbeat(session.sessionId);
   heartbeatTimer = window.setInterval(() => {
     void sendHeartbeat(session.sessionId);
   }, intervalMs);
@@ -97,7 +117,8 @@ export async function registerPosSession(opts: {
     writeStored(stored);
     startHeartbeat(stored);
     return { sessionId };
-  } catch {
+  } catch (e) {
+    console.warn('[pos-session] register failed', e);
     return null;
   }
 }

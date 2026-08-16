@@ -69,7 +69,11 @@ import {
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
 } from '@/lib/webpos-print-relay';
-import { registerPosSession, resumePosSessionHeartbeat } from '@/lib/pos-session';
+import {
+  POS_SESSION_KICKED_EVENT,
+  registerPosSession,
+  resumePosSessionHeartbeat,
+} from '@/lib/pos-session';
 import { buildReceiptUrl, resolvePublishedReceiptRef, normalizeScannedPayload, parseTableQrPayload } from '@/lib/qr';
 import WebPosMembershipSellModal from '@/components/webpos/WebPosMembershipSellModal';
 import { membershipDiscountPercent } from '@/lib/membership-plans';
@@ -775,14 +779,30 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (!webposStaff?.id) return;
+    const onKicked = () => {
+      clearWebPosStaffSession();
+      setWebposStaff(null);
+      toast.error(t('webPosSessionKicked'));
+      if (!staffConfigured) {
+        void registerPosSession({
+          sessionKind: 'main',
+          platform: 'webpos',
+        });
+      }
+    };
+    window.addEventListener(POS_SESSION_KICKED_EVENT, onKicked);
+    return () => window.removeEventListener(POS_SESSION_KICKED_EVENT, onKicked);
+  }, [staffConfigured, t]);
+
+  useEffect(() => {
+    if (pinGateRequired) return;
     void registerPosSession({
       sessionKind: 'main',
       platform: 'webpos',
-      staffId: webposStaff.id,
-      staffName: webposStaff.name,
+      staffId: webposStaff?.id || null,
+      staffName: webposStaff?.name || null,
     });
-  }, [webposStaff?.id, webposStaff?.name]);
+  }, [pinGateRequired, webposStaff?.id, webposStaff?.name]);
 
   useEffect(() => {
     if (!staffRoster.length) return;

@@ -1694,6 +1694,8 @@ const en: Dict = {
   webPosDrawerOpened: 'Cash drawer opened',
   webPosDrawerFailed: 'Could not open cash drawer',
   webPosSignedInAs: 'Signed in as {name}',
+  webPosSessionKicked:
+    'This till was signed out because another device took your POS station slot.',
   webPosPinTitle: 'Switch user',
   webPosPinGateTitle: 'Enter staff PIN',
   webPosPinGateHint: 'PIN unlocks this register for your shift. Digits submit automatically.',
@@ -3870,6 +3872,8 @@ const fr: Dict = {
   webPosDrawerOpened: 'Tiroir-caisse ouvert',
   webPosDrawerFailed: 'Impossible d’ouvrir le tiroir-caisse',
   webPosSignedInAs: 'Connecté en tant que {name}',
+  webPosSessionKicked:
+    'Cette caisse a été déconnectée car un autre appareil a pris votre poste POS.',
   webPosPinTitle: 'Changer d’utilisateur',
   webPosPinGateTitle: 'Entrez le code PIN',
   webPosPinGateHint: 'Le PIN déverrouille la caisse pour votre session. Validation automatique.',
@@ -6047,6 +6051,8 @@ const de: Dict = {
   webPosDrawerOpened: 'Kassenschublade geöffnet',
   webPosDrawerFailed: 'Kassenschublade konnte nicht geöffnet werden',
   webPosSignedInAs: 'Angemeldet als {name}',
+  webPosSessionKicked:
+    'Diese Kasse wurde abgemeldet, weil ein anderes Gerät Ihren Kassenplatz übernommen hat.',
   webPosPinTitle: 'Benutzer wechseln',
   webPosPinGateTitle: 'Mitarbeiter-PIN eingeben',
   webPosPinGateHint: 'Die PIN entsperrt die Kasse für Ihre Sitzung. Automatische Bestätigung.',

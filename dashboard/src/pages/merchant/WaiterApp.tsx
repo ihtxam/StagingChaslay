@@ -19,7 +19,12 @@ import {
   clearWebPosStaffSession,
   type WebPosStaffSession,
 } from '@/lib/permissions';
-import { registerPosSession, resumePosSessionHeartbeat, revokePosSession } from '@/lib/pos-session';
+import {
+  POS_SESSION_KICKED_EVENT,
+  registerPosSession,
+  resumePosSessionHeartbeat,
+  revokePosSession,
+} from '@/lib/pos-session';
 import {
   nextWaiterTicketNumber,
   persistWaiterHeldOrder,
@@ -69,6 +74,16 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     resumePosSessionHeartbeat();
   }, []);
+
+  useEffect(() => {
+    if (pinRequired) return;
+    void registerPosSession({
+      sessionKind: 'waiter',
+      platform: 'waiter_web',
+      staffId: staff?.id || null,
+      staffName: staff?.name || null,
+    });
+  }, [pinRequired, staff?.id, staff?.name]);
 
   useEffect(() => {
     let cancelled = false;
@@ -229,6 +244,18 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     setOrderNote('');
     setTab('tables');
   };
+
+  useEffect(() => {
+    const onKicked = () => {
+      clearWebPosStaffSession();
+      setStaff(null);
+      resetOrder();
+      toast.error(t('webPosSessionKicked'));
+      setPinGateOpen(true);
+    };
+    window.addEventListener(POS_SESSION_KICKED_EVENT, onKicked);
+    return () => window.removeEventListener(POS_SESSION_KICKED_EVENT, onKicked);
+  }, [t]);
 
   const onPinSuccess = async (s: {
     id: string;

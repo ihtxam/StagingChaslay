@@ -1,11 +1,13 @@
 import { and, asc, eq, gt, isNull, lt, or } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { getDb, schema, type Database } from "@/db";
 
 export type PosSessionKind = "main" | "waiter";
 export type PosSessionPlatform = "webpos" | "waiter_web" | "android";
 
 const HEARTBEAT_TTL_MS = 120_000;
 export const POS_SESSION_HEARTBEAT_SEC = 45;
+
+type DbClient = Database;
 
 export class PosSessionsService {
   static isActive(lastHeartbeat: Date | null | undefined): boolean {
@@ -69,13 +71,13 @@ export class PosSessionsService {
   }
 
   private static async enforceLimit(
+    db: DbClient,
     merchantId: string,
     sessionKind: PosSessionKind,
     max: number,
     keepDeviceId: string
-  ) {
-    if (max <= 0) return;
-    const db = getDb();
+  ): Promise<string[]> {
+    if (max <= 0) return [];
     const cutoff = new Date(Date.now() - HEARTBEAT_TTL_MS);
     let active = await db.query.posSessions.findMany({
       where: and(
@@ -86,6 +88,8 @@ export class PosSessionsService {
       ),
       orderBy: [asc(schema.posSessions.createdAt)],
     });
+
+    const kicked: string[] = [];
 
     // Same device re-registering: revoke its previous row first (does not count twice).
     const sameDevice = active.filter((s) => s.deviceId === keepDeviceId);
@@ -104,7 +108,10 @@ export class PosSessionsService {
         .update(schema.posSessions)
         .set({ revokedAt: new Date() })
         .where(eq(schema.posSessions.id, oldest.id));
+      kicked.push(oldest.id);
     }
+
+    return kicked;
   }
 
   static async registerSession(
@@ -125,29 +132,40 @@ export class PosSessionsService {
     const limits = await this.getLimits(merchantId);
     const max =
       input.sessionKind === "waiter" ? limits.maxWaiterPosts : limits.maxPosPosts;
-    await this.enforceLimit(merchantId, input.sessionKind, max, deviceId);
 
     const db = getDb();
     const now = new Date();
-    const [row] = await db
-      .insert(schema.posSessions)
-      .values({
+
+    const { row, kickedSessionIds } = await db.transaction(async (tx) => {
+      const kickedSessionIds = await this.enforceLimit(
+        tx,
         merchantId,
-        sessionKind: input.sessionKind,
-        platform: input.platform,
-        deviceId,
-        deviceLabel: input.deviceLabel?.trim()?.slice(0, 255) || null,
-        staffId: input.staffId || null,
-        staffName: input.staffName?.trim()?.slice(0, 255) || null,
-        lastHeartbeat: now,
-      })
-      .returning();
+        input.sessionKind,
+        max,
+        deviceId
+      );
+      const [inserted] = await tx
+        .insert(schema.posSessions)
+        .values({
+          merchantId,
+          sessionKind: input.sessionKind,
+          platform: input.platform,
+          deviceId,
+          deviceLabel: input.deviceLabel?.trim()?.slice(0, 255) || null,
+          staffId: input.staffId || null,
+          staffName: input.staffName?.trim()?.slice(0, 255) || null,
+          lastHeartbeat: now,
+        })
+        .returning();
+      return { row: inserted, kickedSessionIds };
+    });
 
     return {
       sessionId: row.id,
       heartbeatIntervalSec: POS_SESSION_HEARTBEAT_SEC,
       maxPosPosts: limits.maxPosPosts,
       maxWaiterPosts: limits.maxWaiterPosts,
+      kickedSessionIds,
     };
   }
 
