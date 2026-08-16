@@ -169,7 +169,7 @@ class AuthViewModel @Inject constructor(
         val access = authRepository.toUserAccess(session)
         sessionManager.saveSession(session.user.id, session.user.name, access)
         runCatching {
-            posSessionRepository.registerAfterLogin(session.user.id, session.user.name, access)
+            posSessionRepository.registerAfterLogin(session.user.id.toString(), session.user.name, access)
         }
         posSessionRepository.startHeartbeat(viewModelScope)
         _uiState.update { AuthUiState(isLoggedIn = true) }
