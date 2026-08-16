@@ -597,6 +597,82 @@ function isGiftCardMerchandiseItem(item: WebPosReceiptItem): boolean {
  * Order/payment receipt VAT — merchandise tax for thermal / digital receipts.
  * VAT-included (CH/EU): TTC = bill total excl. tips & rounding; NET = TTC/(1+rate); TVA = TTC−NET.
  */
+/** Totals block for the public digital receipt page (pay.chaslay.com/receipt/…). */
+export function buildDigitalReceiptTotals(order: {
+  items: Array<{
+    name?: string | null;
+    quantity?: number | string;
+    unitPrice?: number | string;
+    lineTotal: number | string;
+  }>;
+  subtotal: number | string;
+  taxAmount: number | string;
+  discountAmount?: number | string | null;
+  tipAmount?: number | string | null;
+  roundingAmount?: number | string | null;
+  total: number | string;
+  taxRate?: number;
+  vatIncludedInPrice?: boolean;
+  vatAfterDiscount?: boolean;
+}): {
+  net: number;
+  tax: number;
+  taxRate: number;
+  discount: number;
+  tip: number;
+  rounding: number;
+  total: number;
+  grossMerchandise: number;
+  vatIncluded: boolean;
+  showVatBreakdown: boolean;
+} {
+  const subtotal = Number(order.subtotal) || 0;
+  const taxAmount = Number(order.taxAmount) || 0;
+  let taxRate = Number(order.taxRate) || 0;
+  if (taxRate <= 0 && subtotal > 0 && taxAmount > 0) {
+    taxRate = roundMoney2((taxAmount / subtotal) * 100);
+  }
+  const tx: WebPosReceipt = {
+    businessName: '',
+    id: '',
+    completedAt: Date.now(),
+    paymentMethod: 'cash',
+    items: (order.items || []).map((i) => ({
+      name: String(i.name || 'Item'),
+      quantity: Number(i.quantity) || 1,
+      unitPrice: Number(i.unitPrice) || 0,
+      lineTotal: Number(i.lineTotal) || 0,
+    })),
+    subtotal,
+    discount: Number(order.discountAmount) || 0,
+    taxAmount,
+    taxRate,
+    rounding: Number(order.roundingAmount) || 0,
+    tipAmount: Number(order.tipAmount) || 0,
+    total: Number(order.total) || 0,
+    vatIncludedInPrice: order.vatIncludedInPrice !== false,
+    vatAfterDiscount: order.vatAfterDiscount !== false,
+    showVat: true,
+  };
+  const vat = resolveOrderReceiptVat(tx);
+  const vatIncluded = tx.vatIncludedInPrice !== false;
+  const grossMerchandise = vatIncluded
+    ? roundMoney2(vat.subtotal + vat.taxAmount)
+    : roundMoney2(vat.subtotal);
+  return {
+    net: vat.subtotal,
+    tax: vat.taxAmount,
+    taxRate: vat.taxRate,
+    discount: roundMoney2(tx.discount),
+    tip: roundMoney2(tx.tipAmount || 0),
+    rounding: roundMoney2(tx.rounding || 0),
+    total: roundMoney2(tx.total),
+    grossMerchandise,
+    vatIncluded,
+    showVatBreakdown: vat.taxRate > 0 && vat.taxAmount > 0,
+  };
+}
+
 export function resolveOrderReceiptVat(tx: WebPosReceipt): {
   subtotal: number;
   taxAmount: number;

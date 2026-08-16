@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
-import { I18nProvider, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
+import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
 import { resolveShopKey } from '@/lib/shop-cart';
 import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
 
@@ -130,7 +130,14 @@ function App() {
           {!shopMode && <Route path="/login" element={<LoginPage />} />}
           {!shopMode && <Route path="/set-password" element={<SetPasswordPage />} />}
           {!shopMode && <Route path="/pos-embed" element={<PosEmbedPage />} />}
-          <Route path="/receipt/:saleId" element={<ReceiptPage />} />
+          <Route
+            path="/receipt/:saleId"
+            element={
+              <I18nProvider storageKey={PANEL_LANG_KEY}>
+                <ReceiptPage />
+              </I18nProvider>
+            }
+          />
           <Route path="/receipts/:saleId" element={<LegacyReceiptRedirect />} />
           <Route
             path="/shop/:merchantSlug"

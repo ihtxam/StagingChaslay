@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { formatDateTimeDDMMYYYY } from '@/lib/date-format';
 import { publicApi } from '@/lib/api';
 import { APP_NAME } from '@/lib/brand';
+import { useI18n, type Locale } from '@/lib/i18n';
 import { normalizeReceiptDomain, qrImageUrl } from '@/lib/qr';
+import { receiptLabels } from '@/lib/receipt-labels';
+import { buildDigitalReceiptTotals } from '@/lib/webpos-receipt';
 
 type Receipt = {
   id: string;
@@ -11,11 +14,17 @@ type Receipt = {
   businessName?: string;
   address?: string;
   phone?: string;
+  vatNumber?: string;
   channel?: string;
   paymentMethod?: string;
   subtotal: string | number;
   taxAmount: string | number;
+  taxRate?: number;
+  vatIncludedInPrice?: boolean;
+  vatAfterDiscount?: boolean;
   discountAmount?: string | number;
+  tipAmount?: string | number;
+  roundingAmount?: string | number;
   total: string | number;
   tableLabel?: string | null;
   guestCount?: number | null;
@@ -42,7 +51,6 @@ function decodeSaleRef(raw: string | undefined): string {
   } catch {
     /* keep raw */
   }
-  // If a full URL was pasted into the path, take the last segment.
   if (ref.includes('://')) {
     const parts = ref.replace(/\/$/, '').split('/');
     ref = parts[parts.length - 1] || ref;
@@ -50,14 +58,40 @@ function decodeSaleRef(raw: string | undefined): string {
   return ref.trim();
 }
 
+function TotalsRow({
+  label,
+  value,
+  bold,
+  muted,
+  accent,
+}: {
+  label: string;
+  value: string;
+  bold?: boolean;
+  muted?: boolean;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={`flex justify-between gap-3 ${
+        bold ? 'text-lg font-bold pt-2' : muted ? 'text-stone-500' : accent ? 'text-emerald-700' : ''
+      }`}
+    >
+      <span>{label}</span>
+      <span className="tabular-nums shrink-0">{value}</span>
+    </div>
+  );
+}
+
 export default function ReceiptPage() {
   const { saleId: rawSaleId } = useParams();
   const saleId = decodeSaleRef(rawSaleId);
+  const { t, locale } = useI18n();
+  const L = receiptLabels(locale as Locale);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Canonical host for public receipts is pay.chaslay.com (not app.* or chasly typo).
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const host = window.location.hostname.toLowerCase().replace(/chasly\.com/gi, 'chaslay.com');
@@ -74,7 +108,6 @@ export default function ReceiptPage() {
         setLoading(true);
         setError('');
         const res = await publicApi.get(`/receipts/${encodeURIComponent(saleId)}`, {
-          // Never attach merchant JWT to public receipt lookups.
           headers: { Authorization: undefined },
         });
         setReceipt(res.data.receipt);
@@ -82,28 +115,51 @@ export default function ReceiptPage() {
         const status = e.response?.status;
         const apiError = e.response?.data?.error;
         if (status === 404) {
-          setError('Receipt not found. The order may not be uploaded to the server yet.');
+          setError(t('receiptNotFoundHint'));
         } else if (status === 401 || /unauthorized/i.test(String(apiError || ''))) {
-          setError('Could not load receipt (server rejected the request). Try again later.');
+          setError(t('receiptLoadRejected'));
         } else {
-          setError(apiError || e.message || 'Receipt not found');
+          setError(apiError || e.message || t('receiptNotFoundHint'));
         }
       } finally {
         setLoading(false);
       }
     })();
-  }, [saleId]);
+  }, [saleId, t]);
+
+  const totals = useMemo(
+    () =>
+      receipt
+        ? buildDigitalReceiptTotals({
+            items: receipt.items,
+            subtotal: receipt.subtotal,
+            taxAmount: receipt.taxAmount,
+            discountAmount: receipt.discountAmount,
+            tipAmount: receipt.tipAmount,
+            roundingAmount: receipt.roundingAmount,
+            total: receipt.total,
+            taxRate: receipt.taxRate,
+            vatIncludedInPrice: receipt.vatIncludedInPrice,
+            vatAfterDiscount: receipt.vatAfterDiscount,
+          })
+        : null,
+    [receipt]
+  );
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading receipt…</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-500">
+        {t('receiptLoading')}
+      </div>
+    );
   }
 
-  if (error || !receipt) {
+  if (error || !receipt || !totals) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <div className="max-w-md text-center">
-          <h1 className="text-xl font-bold mb-2">Receipt unavailable</h1>
-          <p className="text-gray-600">{error || 'Not found'}</p>
+          <h1 className="text-xl font-bold mb-2">{t('receiptUnavailable')}</h1>
+          <p className="text-gray-600">{error || t('receiptNotFoundHint')}</p>
           <p className="text-xs text-gray-400 mt-4 font-mono">{saleId}</p>
         </div>
       </div>
@@ -111,6 +167,10 @@ export default function ReceiptPage() {
   }
 
   const url = normalizeReceiptDomain(typeof window !== 'undefined' ? window.location.href : '');
+  const taxLabel =
+    totals.taxRate > 0
+      ? `${L.tva} (${totals.taxRate}%)`
+      : L.tax;
 
   return (
     <div className="min-h-screen bg-slate-100 py-8 px-4">
@@ -118,27 +178,36 @@ export default function ReceiptPage() {
         <div className="text-center mb-4">
           <h1 className="text-xl font-bold">{receipt.businessName || APP_NAME}</h1>
           {receipt.address && <p className="text-sm text-gray-600">{receipt.address}</p>}
-          {receipt.phone && <p className="text-sm text-gray-600">Tel: {receipt.phone}</p>}
+          {receipt.phone && (
+            <p className="text-sm text-gray-600">
+              {t('receiptTel')}: {receipt.phone}
+            </p>
+          )}
+          {receipt.vatNumber && (
+            <p className="text-sm text-gray-600">
+              {t('receiptVatNo')}: {receipt.vatNumber}
+            </p>
+          )}
         </div>
         <div className="text-sm space-y-1 border-y py-3 mb-3">
           <p>
-            <span className="text-gray-500">Order:</span> {receipt.orderNumber}
+            <span className="text-gray-500">{t('receiptOrder')}:</span> {receipt.orderNumber}
           </p>
           {receipt.completedAt && (
             <p>
-              <span className="text-gray-500">Date:</span>{' '}
+              <span className="text-gray-500">{t('receiptDate')}:</span>{' '}
               {formatDateTimeDDMMYYYY(receipt.completedAt)}
             </p>
           )}
           {receipt.channel && (
             <p>
-              <span className="text-gray-500">Channel:</span> {receipt.channel}
+              <span className="text-gray-500">{t('receiptChannel')}:</span> {receipt.channel}
             </p>
           )}
           {receipt.tableLabel && (
             <p>
-              <span className="text-gray-500">Table:</span> {receipt.tableLabel}
-              {receipt.guestCount ? ` · ${receipt.guestCount} PAX` : ''}
+              <span className="text-gray-500">{L.table}:</span> {receipt.tableLabel}
+              {receipt.guestCount ? ` · ${receipt.guestCount} ${L.pax}` : ''}
             </p>
           )}
         </div>
@@ -146,39 +215,41 @@ export default function ReceiptPage() {
           {receipt.items.map((item, idx) => (
             <li key={idx} className="flex justify-between gap-3">
               <span>
-                {item.quantity}× {item.name || 'Item'}
+                {item.quantity}× {item.name || t('receiptItemFallback')}
               </span>
-              <span className="font-medium">{money(item.lineTotal)}</span>
+              <span className="font-medium tabular-nums shrink-0">{money(item.lineTotal)}</span>
             </li>
           ))}
         </ul>
         <div className="text-sm space-y-1 border-t pt-3">
-          <div className="flex justify-between">
-            <span>Subtotal</span>
-            <span>{money(receipt.subtotal)}</span>
-          </div>
-          {Number(receipt.discountAmount || 0) > 0 && (
-            <div className="flex justify-between">
-              <span>Discount</span>
-              <span>-{money(receipt.discountAmount)}</span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span>Tax</span>
-            <span>{money(receipt.taxAmount)}</span>
-          </div>
-          <div className="flex justify-between text-lg font-bold pt-2">
-            <span>Total</span>
-            <span>{money(receipt.total)}</span>
-          </div>
-          {receipt.paymentMethod && (
-            <p className="text-gray-500 pt-1">Paid: {receipt.paymentMethod.toUpperCase()}</p>
-          )}
+          {totals.discount > 0 ? (
+            <TotalsRow label={L.discount} value={`-${money(totals.discount)}`} accent />
+          ) : null}
+          {totals.vatIncluded && totals.showVatBreakdown ? (
+            <p className="text-xs text-stone-500 pb-1">{L.vatIncludedNote}</p>
+          ) : null}
+          <TotalsRow label={L.subtotal} value={money(totals.net)} />
+          {totals.showVatBreakdown ? (
+            <TotalsRow label={taxLabel} value={money(totals.tax)} />
+          ) : null}
+          {totals.tip > 0 ? <TotalsRow label={L.tip} value={money(totals.tip)} /> : null}
+          {Math.abs(totals.rounding) > 0.001 ? (
+            <TotalsRow
+              label={L.rounding}
+              value={`${totals.rounding > 0 ? '+' : ''}${money(totals.rounding)}`}
+            />
+          ) : null}
+          <TotalsRow label={L.total} value={money(totals.total)} bold />
+          {receipt.paymentMethod ? (
+            <p className="text-gray-500 pt-1">
+              {L.paid}: {receipt.paymentMethod.toUpperCase()}
+            </p>
+          ) : null}
         </div>
         {receipt.adyenPaymentReceiptText ? (
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-              Card payment receipt
+              {t('receiptCardPayment')}
             </p>
             <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-800">
               {receipt.adyenPaymentReceiptText}
@@ -188,15 +259,23 @@ export default function ReceiptPage() {
         {url && (
           <div className="text-center mt-6">
             <img src={qrImageUrl(url, 160)} alt="QR" className="mx-auto" width={160} height={160} />
-            <p className="text-xs text-gray-500 mt-2">Digital receipt QR</p>
+            <p className="text-xs text-gray-500 mt-2">{t('webPosDigitalReceipt')}</p>
           </div>
         )}
-        <button
-          className="btn-primary w-full mt-6"
-          onClick={() => window.print()}
-        >
-          Print
+        <button className="btn-primary w-full mt-6" onClick={() => window.print()}>
+          {t('receiptPrint')}
         </button>
+        <p className="mt-3 text-center text-xs text-gray-400">
+          {t('receiptPosByPrefix')}{' '}
+          <a
+            href="https://chaslay.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-violet-600 hover:underline"
+          >
+            chaslay.com
+          </a>
+        </p>
       </div>
     </div>
   );

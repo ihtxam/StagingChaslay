@@ -7,6 +7,7 @@ import {
   parseAdyenReceiptJson,
   type AdyenTerminalReceipt,
 } from "@/lib/adyen-receipt";
+import { MerchantSettingsService } from "@/services/merchant-settings.service";
 
 const router = Router();
 
@@ -48,6 +49,11 @@ router.get("/:ref", async (req: Request, res: Response) => {
     const adyenCustomerReceipt: AdyenTerminalReceipt | null = parseAdyenReceiptJson(
       order.adyenCustomerReceiptJson
     );
+    const merchant = order.merchant;
+    const channel = (order.fulfillmentChannel || "takeaway") as "takeaway" | "dine_in" | "delivery";
+    const taxRate = merchant
+      ? MerchantSettingsService.channelTaxRate(merchant, channel)
+      : 0;
 
     res.json({
       success: true,
@@ -55,18 +61,23 @@ router.get("/:ref", async (req: Request, res: Response) => {
         id: order.id,
         clientId: order.clientId,
         orderNumber: order.orderNumber,
-        businessName: order.merchant?.name,
-        address: [order.merchant?.address, order.merchant?.city].filter(Boolean).join(", "),
-        phone: order.merchant?.phone,
+        businessName: merchant?.name,
+        address: [merchant?.address, merchant?.city].filter(Boolean).join(", "),
+        phone: merchant?.phone,
+        vatNumber: merchant?.vatNumber,
         channel: order.fulfillmentChannel,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
         status: order.status,
         subtotal: order.subtotal,
         taxAmount: order.taxAmount,
+        taxRate,
+        vatIncludedInPrice: merchant?.taxIncludedInPrice === true,
+        vatAfterDiscount: merchant?.vatAfterDiscount !== false,
         discountAmount: order.discountAmount,
         total: order.total,
         tipAmount: order.tipAmount,
+        roundingAmount: order.roundingAmount,
         tableLabel: order.tableLabel,
         guestCount: order.guestCount,
         notes: order.notes,
