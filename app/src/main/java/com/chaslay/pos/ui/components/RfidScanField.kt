@@ -18,6 +18,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.chaslay.pos.R
@@ -77,12 +78,15 @@ fun RfidScanField(
     }
 
     if (invisible) {
+        // Hidden wedge capture: keep HID keyboard focus but never steal taps from the POS UI.
         BasicTextField(
             value = buffer.ifBlank { value },
             onValueChange = onFieldChange,
+            readOnly = true,
             modifier = modifier
                 .size(1.dp)
                 .alpha(0f)
+                .pointerInteropFilter { false }
                 .then(keyHandler),
             singleLine = true
         )

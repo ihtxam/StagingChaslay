@@ -199,6 +199,18 @@ fun PosScreen(
         onBarcode = viewModel::onBarcodeScanned
     )
 
+    // Compose before main Column so NavHost Box stacking does not put this above the register UI.
+    if (state.giftCardsEnabled && !state.showMembershipDialog && !state.showCheckoutScreen) {
+        var rfidCapture by remember { mutableStateOf("") }
+        RfidScanField(
+            value = rfidCapture,
+            onValueChange = { rfidCapture = it },
+            onScanComplete = viewModel::onRfidScanned,
+            autoFocus = true,
+            invisible = true
+        )
+    }
+
     if (showBarcodeScanner) {
         BarcodeScannerDialog(
             onBarcode = { code ->
@@ -666,17 +678,6 @@ fun PosScreen(
                 onAddToCart = viewModel::addGiftCardLineToCart
             )
         }
-    }
-
-    if (state.giftCardsEnabled && !state.showMembershipDialog && !state.showCheckoutScreen) {
-        var rfidCapture by remember { mutableStateOf("") }
-        RfidScanField(
-            value = rfidCapture,
-            onValueChange = { rfidCapture = it },
-            onScanComplete = viewModel::onRfidScanned,
-            autoFocus = true,
-            invisible = true
-        )
     }
 
     if (state.showCartCancelSimpleDialog) {
