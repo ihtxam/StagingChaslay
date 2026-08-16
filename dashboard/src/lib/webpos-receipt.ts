@@ -1079,7 +1079,22 @@ function formatKitchenQtyLabel(item: KitchenTicketItem): string {
   if (weightKg != null && weightKg > 0) {
     return `${weightKg.toFixed(3)} kg`;
   }
-  return `${Number(item.quantity) || 0}x`;
+  return String(Number(item.quantity) || 0);
+}
+
+function formatKitchenChannelWhenLines(
+  L: ReturnType<typeof receiptLabels>,
+  channel: string | undefined,
+  scheduledFor: string | number | null | undefined,
+  tableLabel: string | null | undefined,
+  width: number
+): string[] {
+  const channelWhen = formatChannelWhen(L, channel, scheduledFor);
+  const table = String(tableLabel || '').trim();
+  if (table) {
+    return [padLine(channelWhen, table, width)];
+  }
+  return wrapKitchenWords(channelWhen, width);
 }
 
 type KitchenLine = {
@@ -1151,7 +1166,8 @@ function formatKitchenItemLines(
     }
   }
 
-  const wrappedProduct = wrapKitchenWords(product, width);
+  const primary = `${qty} ${product}`.trim();
+  const wrappedPrimary = wrapKitchenWords(primary, width);
   const lines: KitchenLine[] = [];
 
   const pushLine = (kind: KitchenLine['kind'], text: string, blankAfter = 0) => {
@@ -1174,18 +1190,17 @@ function formatKitchenItemLines(
   const pushItem = (text: string, blankAfter = 0) => pushLine('item', text, blankAfter);
   const pushNote = (text: string, blankAfter = 0) => pushLine('note', text, blankAfter);
 
-  if (wrappedProduct.length) {
-    wrappedProduct.forEach((w, i) => {
-      const text = i === 0 ? padLine(w, qty, width) : w;
+  if (wrappedPrimary.length) {
+    wrappedPrimary.forEach((w, i) => {
       const last =
-        i === wrappedProduct.length - 1 &&
+        i === wrappedPrimary.length - 1 &&
         !comboLines.length &&
         !modifierLines.length &&
         !lineNote;
-      pushItem(text, last ? 1 : 0);
+      pushItem(w, last ? 1 : 0);
     });
   } else {
-    pushItem(padLine('', qty, width).trim() || qty, comboLines.length || modifierLines.length || lineNote ? 0 : 1);
+    pushItem(qty, comboLines.length || modifierLines.length || lineNote ? 0 : 1);
   }
 
   for (const combo of comboLines) {
@@ -1264,8 +1279,11 @@ function buildKitchenTicketLines(
     { kind: 'center', text: title },
     { kind: 'center', text: ticketNo },
   ];
-  for (const w of wrapKitchenWords(
-    formatChannelWhen(L, opts.channel, opts.scheduledFor),
+  for (const w of formatKitchenChannelWhenLines(
+    L,
+    opts.channel,
+    opts.scheduledFor,
+    opts.tableLabel,
     headerWidth
   )) {
     lines.push({ kind: 'header', text: w });
@@ -1285,11 +1303,6 @@ function buildKitchenTicketLines(
   }
   lines.push({ kind: 'normal', text: thin });
 
-  if (opts.tableLabel) {
-    for (const w of wrapKitchenWords(`TABLE ${opts.tableLabel}`, headerWidth)) {
-      lines.push({ kind: 'header', text: w });
-    }
-  }
   if (cancelled && opts.cancelReason) {
     for (const w of wrapKitchenWords(String(opts.cancelReason), footWidth)) {
       lines.push({ kind: 'normal', text: w });

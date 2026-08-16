@@ -2033,7 +2033,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const openLineForEdit = (line: CartLine) => {
     if (line.sentToKitchen) {
-      toast.error(t('webPosCancelSentToEdit'));
+      setSelectedLineId((prev) => (prev === line.lineId ? null : line.lineId));
+      setKeypadBuffer('');
       return;
     }
     const product = products.find((p) => p.id === line.productId);
@@ -3517,6 +3518,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tableId: target.id,
       tableLabel: target.label,
       tabNumber: null,
+      orderSent: tgtDraft.orderSent || !!line.sentToKitchen,
     };
     openCartDraftsRef.current.set(targetKey, updatedTarget);
 
