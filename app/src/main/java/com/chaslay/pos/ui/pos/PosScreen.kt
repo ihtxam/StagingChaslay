@@ -33,7 +33,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Remove
@@ -395,6 +395,15 @@ fun PosScreen(
             isTableServiceEnabled = isTableServiceEnabled,
             selectedTab = mainTab,
             pendingOnlineOrderCount = state.pendingOnlineOrderCount,
+            showProductFilters = mainTab == PosMainTab.REGISTER,
+            showProductImages = state.productGridShowImages,
+            sortAlpha = state.productGridSortAlpha,
+            sortBestseller = state.productGridSortBestseller,
+            gridColumns = state.productGridColumns,
+            onToggleShowImages = viewModel::toggleProductGridShowImages,
+            onToggleSortAlpha = viewModel::toggleProductGridSortAlpha,
+            onToggleSortBestseller = viewModel::toggleProductGridSortBestseller,
+            onCycleGridColumns = viewModel::cycleProductGridColumns,
             onTabSelected = { tab ->
                 when (tab) {
                     PosMainTab.REGISTER -> {
@@ -540,12 +549,6 @@ fun PosScreen(
                         currencySymbol = state.currencySymbol,
                         gridColumns = state.productGridColumns,
                         showProductImages = state.productGridShowImages,
-                        onToggleShowImages = viewModel::toggleProductGridShowImages,
-                        onCycleGridColumns = viewModel::cycleProductGridColumns,
-                        onToggleSortAlpha = viewModel::toggleProductGridSortAlpha,
-                        onToggleSortBestseller = viewModel::toggleProductGridSortBestseller,
-                        sortAlpha = state.productGridSortAlpha,
-                        sortBestseller = state.productGridSortBestseller,
                         paymentEnabled = state.cart.isEmpty.not() && !state.isProcessingPayment,
                         expressEnabled = state.settings.expressEnabled,
                         cashEnabled = state.settings.cashEnabled,
@@ -882,6 +885,15 @@ private fun OdooPosNavBar(
     isTableServiceEnabled: Boolean,
     selectedTab: PosMainTab,
     pendingOnlineOrderCount: Int = 0,
+    showProductFilters: Boolean = false,
+    showProductImages: Boolean = false,
+    sortAlpha: Boolean = false,
+    sortBestseller: Boolean = false,
+    gridColumns: Int = 5,
+    onToggleShowImages: () -> Unit = {},
+    onToggleSortAlpha: () -> Unit = {},
+    onToggleSortBestseller: () -> Unit = {},
+    onCycleGridColumns: () -> Unit = {},
     onTabSelected: (PosMainTab) -> Unit,
     userAccess: UserAccess,
     onNavigate: (String) -> Unit,
@@ -923,15 +935,32 @@ private fun OdooPosNavBar(
                 onClick = { onTabSelected(PosMainTab.ORDERS) }
             )
         }
-        Text(
-            businessName,
-            color = vc.textPrimary,
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 8.dp)
-        )
+        ) {
+            Text(
+                businessName,
+                color = vc.textPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
+            if (showProductFilters) {
+                ProductGridFilterChips(
+                    showProductImages = showProductImages,
+                    sortAlpha = sortAlpha,
+                    sortBestseller = sortBestseller,
+                    gridColumns = gridColumns,
+                    onToggleShowImages = onToggleShowImages,
+                    onToggleSortAlpha = onToggleSortAlpha,
+                    onToggleSortBestseller = onToggleSortBestseller,
+                    onCycleGridColumns = onCycleGridColumns
+                )
+            }
+        }
         Row(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -995,6 +1024,65 @@ private fun PosBottomTabChip(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ProductGridFilterChips(
+    showProductImages: Boolean,
+    sortAlpha: Boolean,
+    sortBestseller: Boolean,
+    gridColumns: Int,
+    onToggleShowImages: () -> Unit,
+    onToggleSortAlpha: () -> Unit,
+    onToggleSortBestseller: () -> Unit,
+    onCycleGridColumns: () -> Unit
+) {
+    val chipColors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = Color(0xFF714B67),
+        selectedLabelColor = Color.White,
+        containerColor = Color(0xFF455A64).copy(alpha = 0.45f),
+        labelColor = Color.White
+    )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        FilterChip(
+            selected = showProductImages,
+            onClick = onToggleShowImages,
+            label = { Text(stringResource(R.string.product_grid_images), fontSize = 10.sp) },
+            leadingIcon = {
+                Icon(
+                    Icons.Default.Image,
+                    contentDescription = stringResource(R.string.product_grid_images_cd),
+                    modifier = Modifier.size(14.dp)
+                )
+            },
+            colors = chipColors,
+            modifier = Modifier.height(28.dp)
+        )
+        FilterChip(
+            selected = sortAlpha,
+            onClick = onToggleSortAlpha,
+            label = { Text(stringResource(R.string.product_grid_sort_alpha), fontSize = 10.sp) },
+            colors = chipColors,
+            modifier = Modifier.height(28.dp)
+        )
+        FilterChip(
+            selected = sortBestseller,
+            onClick = onToggleSortBestseller,
+            label = { Text(stringResource(R.string.product_grid_sort_top), fontSize = 10.sp) },
+            colors = chipColors,
+            modifier = Modifier.height(28.dp)
+        )
+        FilterChip(
+            selected = false,
+            onClick = onCycleGridColumns,
+            label = { Text(stringResource(R.string.product_grid_columns, gridColumns), fontSize = 10.sp) },
+            colors = chipColors,
+            modifier = Modifier.height(28.dp)
+        )
     }
 }
 
@@ -1559,22 +1647,32 @@ private fun VectronOrderPanel(
 
         FulfillmentInfoBar(cart = cart)
 
-        VectronKeypad(
-            total = displayTotal,
-            buffer = keypadBuffer,
-            currencySymbol = currencySymbol,
-            activeTableName = activeTableName,
-            hint = keypadHint,
-            keypadMode = keypadMode,
-            expanded = keypadExpanded,
-            onModeChange = onKeypadModeChange,
-            onExpandedChange = onKeypadExpandedChange,
-            onInput = onKeypadInput,
-            onBackspace = onKeypadBackspace,
-            onClear = onKeypadClear,
-            onClearAll = onKeypadClearAll,
-            onEnter = onKeypadEnter
-        )
+        if (cart.items.isNotEmpty()) {
+            if (selectedCartItemId != null) {
+                VectronKeypad(
+                    total = displayTotal,
+                    buffer = keypadBuffer,
+                    currencySymbol = currencySymbol,
+                    activeTableName = activeTableName,
+                    hint = keypadHint,
+                    keypadMode = keypadMode,
+                    expanded = keypadExpanded,
+                    onModeChange = onKeypadModeChange,
+                    onExpandedChange = onKeypadExpandedChange,
+                    onInput = onKeypadInput,
+                    onBackspace = onKeypadBackspace,
+                    onClear = onKeypadClear,
+                    onClearAll = onKeypadClearAll,
+                    onEnter = onKeypadEnter
+                )
+            } else {
+                CartTotalBar(
+                    total = displayTotal,
+                    currencySymbol = currencySymbol,
+                    activeTableName = activeTableName
+                )
+            }
+        }
     }
     }
 }
@@ -2150,6 +2248,54 @@ private fun VectronCartRow(
 }
 
 @Composable
+private fun CartTotalBar(
+    total: Double,
+    currencySymbol: String,
+    activeTableName: String?
+) {
+    val vc = vectronColors()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(vc.totalBar, RoundedCornerShape(4.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(stringResource(R.string.total), color = VectronColors.TextSecondary, fontSize = 13.sp)
+            Text(
+                text = formatMoney(total, currencySymbol),
+                color = VectronColors.TextPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    if (activeTableName != null) VectronColors.CardBlue.copy(alpha = 0.35f) else VectronColors.KeypadButton,
+                    RoundedCornerShape(4.dp)
+                )
+                .padding(vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (activeTableName != null) {
+                Text(activeTableName, color = VectronColors.TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text(stringResource(R.string.dine_in), color = Color(0xFF8FD4FF), fontSize = 11.sp)
+            } else {
+                Text(stringResource(R.string.take_away_delivery), color = VectronColors.TextSecondary, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
 private fun VectronKeypad(
     total: Double,
     buffer: String,
@@ -2413,12 +2559,6 @@ private fun VectronProductGrid(
     cardEnabled: Boolean = true,
     gridColumns: Int = 5,
     showProductImages: Boolean = false,
-    onToggleShowImages: (() -> Unit)? = null,
-    onCycleGridColumns: (() -> Unit)? = null,
-    onToggleSortAlpha: (() -> Unit)? = null,
-    onToggleSortBestseller: (() -> Unit)? = null,
-    sortAlpha: Boolean = false,
-    sortBestseller: Boolean = false,
     isGiftCardCategory: Boolean = false,
     highlightedProductId: Long? = null,
     onProductClick: (Long) -> Unit,
@@ -2434,33 +2574,6 @@ private fun VectronProductGrid(
     val vc = vectronColors()
     val colorByCategory = categories.associate { it.id to categoryColor(it.colorHex) }
     Column(modifier = modifier.background(vc.background)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.End
-        ) {
-            onToggleShowImages?.let { toggle ->
-                TextButton(onClick = toggle) {
-                    Text(if (showProductImages) "Img ✓" else "Img", fontSize = 11.sp)
-                }
-            }
-            onCycleGridColumns?.let { cycle ->
-                TextButton(onClick = cycle) {
-                    Text("${gridColumns}col", fontSize = 11.sp)
-                }
-            }
-            onToggleSortAlpha?.let { toggle ->
-                TextButton(onClick = toggle) {
-                    Text(if (sortAlpha) "A-Z ✓" else "A-Z", fontSize = 11.sp)
-                }
-            }
-            onToggleSortBestseller?.let { toggle ->
-                TextButton(onClick = toggle) {
-                    Text(if (sortBestseller) "Top ✓" else "Top", fontSize = 11.sp)
-                }
-            }
-        }
         if (isGiftCardCategory) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
