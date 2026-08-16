@@ -267,6 +267,14 @@ data class BusinessSettingsEntity(
     val posMode: PosMode = PosMode.RESTAURANT,
     /** Synced from merchant panel — show Tables tab / table picker in restaurant mode. */
     val tablesEnabled: Boolean = true,
+    /** Retail only — show dine-in toggle in cart (bistro-style counter service). */
+    val retailDineInEnabled: Boolean = false,
+    /** Retail only — show takeaway channel. */
+    val retailTakeawayEnabled: Boolean = false,
+    /** Retail only — show delivery channel. */
+    val retailDeliveryEnabled: Boolean = false,
+    /** When true, dine-in must pick a table; when false, counter ticket (D-001) with dine-in VAT. */
+    val requireTableForDineIn: Boolean = true,
     /** Synced from merchant panel — multi-course firing on dine-in tables. */
     val coursesEnabled: Boolean = false,
     val receiptBaseUrl: String = "https://pay.chaslay.com/receipt",

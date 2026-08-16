@@ -141,6 +141,11 @@ data class SettingsUiState(
     val isPrinterBusy: Boolean = false,
     val posMode: PosMode = PosMode.RESTAURANT,
     val coursesEnabled: Boolean = false,
+    val tablesEnabled: Boolean = true,
+    val retailDineInEnabled: Boolean = false,
+    val retailTakeawayEnabled: Boolean = false,
+    val retailDeliveryEnabled: Boolean = false,
+    val requireTableForDineIn: Boolean = true,
     val openHour: String = "10",
     val openMinute: String = "0",
     val closeHour: String = "22",
@@ -249,6 +254,11 @@ class SettingsViewModel @Inject constructor(
                     receiptTemplateName = settings.receiptTemplateName,
                     posMode = settings.posMode,
                     coursesEnabled = settings.coursesEnabled,
+                    tablesEnabled = settings.tablesEnabled,
+                    retailDineInEnabled = settings.retailDineInEnabled,
+                    retailTakeawayEnabled = settings.retailTakeawayEnabled,
+                    retailDeliveryEnabled = settings.retailDeliveryEnabled,
+                    requireTableForDineIn = settings.requireTableForDineIn,
                     trackCoversFromSeatingPlan = settings.trackCoversFromSeatingPlan,
                     floorSyncEnabled = settings.floorSyncEnabled,
                     floorDeviceRole = FloorDeviceRole.fromApi(settings.floorDeviceRole),
@@ -480,8 +490,18 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun updateBusinessName(value: String) = _uiState.update { it.copy(businessName = value) }
-    fun updatePosMode(mode: PosMode) = _uiState.update { it.copy(posMode = mode) }
+    fun updatePosMode(mode: PosMode) = _uiState.update {
+        it.copy(
+            posMode = mode,
+            requireTableForDineIn = if (mode == PosMode.RETAIL) false else it.requireTableForDineIn
+        )
+    }
     fun updateCoursesEnabled(enabled: Boolean) = _uiState.update { it.copy(coursesEnabled = enabled) }
+    fun updateTablesEnabled(enabled: Boolean) = _uiState.update { it.copy(tablesEnabled = enabled) }
+    fun updateRetailDineInEnabled(enabled: Boolean) = _uiState.update { it.copy(retailDineInEnabled = enabled) }
+    fun updateRetailTakeawayEnabled(enabled: Boolean) = _uiState.update { it.copy(retailTakeawayEnabled = enabled) }
+    fun updateRetailDeliveryEnabled(enabled: Boolean) = _uiState.update { it.copy(retailDeliveryEnabled = enabled) }
+    fun updateRequireTableForDineIn(enabled: Boolean) = _uiState.update { it.copy(requireTableForDineIn = enabled) }
     fun updateTrackCoversFromSeatingPlan(enabled: Boolean) =
         _uiState.update { it.copy(trackCoversFromSeatingPlan = enabled) }
 
@@ -1152,6 +1172,11 @@ class SettingsViewModel @Inject constructor(
             receiptTemplateName = state.receiptTemplateName,
             posMode = state.posMode,
             coursesEnabled = state.coursesEnabled,
+            tablesEnabled = state.tablesEnabled,
+            retailDineInEnabled = state.retailDineInEnabled,
+            retailTakeawayEnabled = state.retailTakeawayEnabled,
+            retailDeliveryEnabled = state.retailDeliveryEnabled,
+            requireTableForDineIn = state.requireTableForDineIn,
             trackCoversFromSeatingPlan = state.trackCoversFromSeatingPlan,
             floorSyncEnabled = state.floorSyncEnabled,
             floorDeviceRole = state.floorDeviceRole.apiValue,

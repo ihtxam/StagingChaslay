@@ -182,7 +182,12 @@ data class SyncCheckoutDto(
     /** Net prices: order discounts reduce VAT base when true (default, Swiss law). */
     val vatAfterDiscount: Boolean = true,
     /** Restaurant only: hide table picker / Tables tab when false (fast-food mode). */
-    val tablesEnabled: Boolean = true
+    val tablesEnabled: Boolean = true,
+    val posMode: String? = null,
+    val retailTakeawayEnabled: Boolean = false,
+    val retailDeliveryEnabled: Boolean = false,
+    val retailDineInEnabled: Boolean = false,
+    val requireTableForDineIn: Boolean? = null
 )
 
 data class SyncScaleDto(

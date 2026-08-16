@@ -193,8 +193,13 @@ fun PosScreen(
     }
 
     val isRestaurantMode = state.settings.posMode == PosMode.RESTAURANT
+    val isRetailMode = !isRestaurantMode
     val tablesEnabled = state.settings.tablesEnabled
+    val retailDineInEnabled = state.settings.retailDineInEnabled
+    val retailTakeawayEnabled = state.settings.retailTakeawayEnabled
+    val retailDeliveryEnabled = state.settings.retailDeliveryEnabled
     val isTableServiceEnabled = isRestaurantMode && tablesEnabled
+    val showRetailDineInToggle = isRetailMode && retailDineInEnabled
     var showBarcodeScanner by remember { mutableStateOf(false) }
 
     BarcodeWedgeListener(
@@ -425,6 +430,8 @@ fun PosScreen(
             val orderingItemsForRail = state.cart.items.filter { !it.sentToKitchen }
             CartActionSidebar(
                 isRestaurantMode = isRestaurantMode,
+                showRetailTakeaway = isRetailMode && retailTakeawayEnabled,
+                showRetailDelivery = isRetailMode && retailDeliveryEnabled,
                 isTableMode = isTableServiceEnabled && state.activeTableName != null,
                 fulfillmentType = state.cart.fulfillmentType,
                 canReleaseEmptyTable =
@@ -519,6 +526,9 @@ fun PosScreen(
                         onPickup = viewModel::showPickupOrderDialog,
                         onDelivery = viewModel::showDeliveryOrderDialog,
                         isRestaurantMode = isRestaurantMode,
+                        showRetailDineInToggle = showRetailDineInToggle,
+                        showRetailDeliveryToggle = isRetailMode && retailDeliveryEnabled,
+                        onToggleRetailDineIn = viewModel::toggleRetailDineIn,
                         tablesEnabled = tablesEnabled,
                         coursesEnabled = coursesEnabled,
                         onMoveEntireTable = viewModel::startMoveEntireTable,
@@ -1428,6 +1438,9 @@ private fun VectronOrderPanel(
     onPickup: () -> Unit,
     onDelivery: () -> Unit,
     isRestaurantMode: Boolean,
+    showRetailDineInToggle: Boolean = false,
+    showRetailDeliveryToggle: Boolean = false,
+    onToggleRetailDineIn: () -> Unit = {},
     tablesEnabled: Boolean = true,
     coursesEnabled: Boolean = false,
     onMoveEntireTable: () -> Unit = {},
@@ -1493,7 +1506,8 @@ private fun VectronOrderPanel(
             CartOrderMenuButton(
                 enabled = !cart.isEmpty,
                 isRestaurantMode = isRestaurantMode,
-                isDineIn = isTableMode,
+                showOrderTypeToggle = isRestaurantMode || showRetailDineInToggle,
+                isDineIn = serviceType == ServiceType.DINE_IN || isTableMode,
                 isTableMode = isTableMode,
                 showFulfillmentActions = cart.fulfillmentType == FulfillmentType.PICKUP ||
                     cart.fulfillmentType == FulfillmentType.DELIVERY,
@@ -1507,6 +1521,16 @@ private fun VectronOrderPanel(
                 onMoveEntireTable = onMoveEntireTable,
                 onMoveDishes = onMoveDishes
             )
+            if (showRetailDineInToggle) {
+                RetailBistroChannelRow(
+                    serviceType = serviceType,
+                    fulfillmentType = cart.fulfillmentType,
+                    orderNumber = cart.orderNumber,
+                    showDelivery = showRetailDeliveryToggle,
+                    onToggleDineIn = onToggleRetailDineIn,
+                    onDelivery = onDelivery
+                )
+            }
             if (cart.fulfillmentType == FulfillmentType.DELIVERY) {
                 TextButton(
                     onClick = onAddCustomer,
@@ -1711,6 +1735,15 @@ private fun cartFulfillmentHeadline(
     serviceType: ServiceType
 ): String? {
     if (activeTableName != null) return activeTableName
+    if (serviceType == ServiceType.DINE_IN && cart.orderNumber != null && cart.tableId == null) {
+        return cart.orderNumber
+    }
+    if (cart.fulfillmentType == com.chaslay.pos.domain.model.FulfillmentType.WALK_IN &&
+        serviceType == ServiceType.TAKEAWAY &&
+        cart.orderNumber.isNullOrBlank()
+    ) {
+        return null
+    }
     val typeLabel = when {
         cart.fulfillmentType == FulfillmentType.DELIVERY -> stringResource(R.string.delivery)
         cart.fulfillmentType == FulfillmentType.PICKUP -> stringResource(R.string.takeout)
@@ -1763,9 +1796,50 @@ private fun formatScheduledTimeLabel(timeMs: Long?): String {
 }
 
 @Composable
+private fun RetailBistroChannelRow(
+    serviceType: ServiceType,
+    fulfillmentType: com.chaslay.pos.domain.model.FulfillmentType,
+    orderNumber: String?,
+    showDelivery: Boolean,
+    onToggleDineIn: () -> Unit,
+    onDelivery: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        FilterChip(
+            selected = serviceType == ServiceType.DINE_IN,
+            onClick = onToggleDineIn,
+            label = { Text(stringResource(R.string.dine_in), fontSize = 11.sp) }
+        )
+        if (showDelivery) {
+            FilterChip(
+                selected = fulfillmentType == com.chaslay.pos.domain.model.FulfillmentType.DELIVERY,
+                onClick = onDelivery,
+                label = { Text(stringResource(R.string.delivery), fontSize = 11.sp) }
+            )
+        }
+        if (serviceType == ServiceType.DINE_IN && orderNumber != null) {
+            Text(
+                text = orderNumber.takeIf { it.startsWith("D-") } ?: orderNumber,
+                color = Color(0xFF0277BD),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
 private fun CartOrderMenuButton(
     enabled: Boolean,
     isRestaurantMode: Boolean,
+    showOrderTypeToggle: Boolean,
     isDineIn: Boolean,
     isTableMode: Boolean,
     showFulfillmentActions: Boolean,
@@ -1844,7 +1918,7 @@ private fun CartOrderMenuButton(
                     }
                 )
             }
-            if (isRestaurantMode) {
+            if (showOrderTypeToggle) {
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -1911,6 +1985,8 @@ private fun CartCancelOrderDialog(
 @Composable
 private fun CartActionSidebar(
     isRestaurantMode: Boolean,
+    showRetailTakeaway: Boolean = false,
+    showRetailDelivery: Boolean = false,
     isTableMode: Boolean,
     fulfillmentType: com.chaslay.pos.domain.model.FulfillmentType,
     canReleaseEmptyTable: Boolean,
@@ -1941,23 +2017,29 @@ private fun CartActionSidebar(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        CartSidebarButton(
-            label = stringResource(R.string.pickup),
-            shortLabel = stringResource(R.string.pickup_short),
-            icon = Icons.Default.ShoppingBag,
-            color = Color(0xFF1565C0),
-            selected = fulfillmentType == FulfillmentType.PICKUP,
-            onClick = onPickup
-        )
-        CartSidebarButton(
-            label = stringResource(R.string.delivery),
-            shortLabel = stringResource(R.string.delivery_short),
-            icon = Icons.Default.LocalShipping,
-            color = Color(0xFF6A1B9A),
-            selected = fulfillmentType == FulfillmentType.DELIVERY,
-            onClick = onDelivery
-        )
-        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
+        if (isRestaurantMode || showRetailTakeaway) {
+            CartSidebarButton(
+                label = stringResource(R.string.pickup),
+                shortLabel = stringResource(R.string.pickup_short),
+                icon = Icons.Default.ShoppingBag,
+                color = Color(0xFF1565C0),
+                selected = fulfillmentType == FulfillmentType.PICKUP,
+                onClick = onPickup
+            )
+        }
+        if (isRestaurantMode || showRetailDelivery) {
+            CartSidebarButton(
+                label = stringResource(R.string.delivery),
+                shortLabel = stringResource(R.string.delivery_short),
+                icon = Icons.Default.LocalShipping,
+                color = Color(0xFF6A1B9A),
+                selected = fulfillmentType == FulfillmentType.DELIVERY,
+                onClick = onDelivery
+            )
+        }
+        if (isRestaurantMode || showRetailTakeaway || showRetailDelivery) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
+        }
         if (isRestaurantMode && hasUnsentItems) {
             CartSidebarButton(
                 label = stringResource(R.string.send_to_kitchen),

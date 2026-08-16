@@ -341,6 +341,15 @@
     <string name="pos_mode_retail">Commerce de détail</string>
     <string name="pos_mode_restaurant">Restaurant</string>
     <string name="pos_mode_help">La vente au détail cache les tables, les commandes en attente et l\'impression de cuisine. Le restaurant permet un service de table complet.</string>
+    <string name="pos_tables_enabled">Activer les tables</string>
+    <string name="pos_tables_enabled_hint">Afficher l\'onglet Tables et le sélecteur pour le service sur place.</string>
+    <string name="pos_retail_dine_in">Activer sur place en retail</string>
+    <string name="pos_retail_dine_in_hint">Style bistro : sur place et à emporter au comptoir sans choix de table.</string>
+    <string name="pos_retail_takeaway">Activer à emporter en retail</string>
+    <string name="pos_retail_delivery">Activer livraison en retail</string>
+    <string name="pos_require_table_dine_in">Table obligatoire pour sur place</string>
+    <string name="pos_require_table_dine_in_hint">Désactivé : numéro comptoir (D-001…) et TVA sur place — pas de sélection de table.</string>
+    <string name="snackbar_switched_dine_in">Passé en sur place (%1$s)</string>
     <string name="scan_barcode">Scannez code à barres</string>
     <string name="camera_permission_required">L\'autorisation de l\'appareil photo est requise pour scanner les codes-barres.</string>
     <string name="barcode_not_found">Aucun produit trouvé pour le code-barres %1$s</string>

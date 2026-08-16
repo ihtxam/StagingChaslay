@@ -338,6 +338,15 @@
     <string name="pos_mode_retail">Einzelhandel</string>
     <string name="pos_mode_restaurant">Restaurant</string>
     <string name="pos_mode_help">Der Einzelhandel versteckt Tische, hält Bestellungen zurück und druckt in der Küche. Das Restaurant ermöglicht einen kompletten Tischservice.</string>
+    <string name="pos_tables_enabled">Tische aktivieren</string>
+    <string name="pos_tables_enabled_hint">Tables-Tab und Tischwahl für Vor-Ort-Service anzeigen.</string>
+    <string name="pos_retail_dine_in">Vor-Ort im Retail aktivieren</string>
+    <string name="pos_retail_dine_in_hint">Bistro-Stil: Vor Ort und Takeaway an der Theke ohne Tischwahl.</string>
+    <string name="pos_retail_takeaway">Takeaway im Retail aktivieren</string>
+    <string name="pos_retail_delivery">Lieferung im Retail aktivieren</string>
+    <string name="pos_require_table_dine_in">Tisch für Vor Ort erforderlich</string>
+    <string name="pos_require_table_dine_in_hint">Aus: Thekennummer (D-001…) und Vor-Ort-MwSt. — keine Tischauswahl.</string>
+    <string name="snackbar_switched_dine_in">Auf Vor Ort umgestellt (%1$s)</string>
     <string name="scan_barcode">Barcode abscannen</string>
     <string name="camera_permission_required">Für das Scannen von Barcodes ist eine Kameraberechtigung erforderlich.</string>
     <string name="barcode_not_found">Kein Produkt für Barcode %1$s gefunden</string>

@@ -330,7 +330,16 @@
     <string name="pos_mode">Type d\'Entreprise</string>
     <string name="pos_mode_retail">Commerce de détail</string>
     <string name="pos_mode_restaurant">Restaurant</string>
-    <string name="pos_mode_help">La vente au détail cache les tavolos, les ordini en attente et l\'impression de cucina. Le restaurant permet un service de tavolo complet.</string>
+    <string name="pos_mode_help">Il retail nasconde tavoli, ordini in sospeso e stampa cucina. Il ristorante abilita il servizio al tavolo completo.</string>
+    <string name="pos_tables_enabled">Abilita tavoli</string>
+    <string name="pos_tables_enabled_hint">Mostra la scheda Tavoli e il selettore per il servizio al tavolo.</string>
+    <string name="pos_retail_dine_in">Abilita consumo sul posto nel retail</string>
+    <string name="pos_retail_dine_in_hint">Stile bistro: sul posto e asporto al bancone senza scelta del tavolo.</string>
+    <string name="pos_retail_takeaway">Abilita asporto nel retail</string>
+    <string name="pos_retail_delivery">Abilita consegna nel retail</string>
+    <string name="pos_require_table_dine_in">Tavolo obbligatorio per consumo sul posto</string>
+    <string name="pos_require_table_dine_in_hint">Disattivato: numero bancone (D-001…) e IVA sul posto — nessuna scelta tavolo.</string>
+    <string name="snackbar_switched_dine_in">Passato a consumo sul posto (%1$s)</string>
     <string name="scan_barcode">Scannez code à barres</string>
     <string name="camera_permission_required">L\'autorisation de l\'appareil photo est requise pour scanner les codes-barres.</string>
     <string name="barcode_not_found">Aucun produit trouvé pour le code-barres %1$s</string>

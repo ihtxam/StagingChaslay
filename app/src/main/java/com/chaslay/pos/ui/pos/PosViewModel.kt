@@ -60,6 +60,8 @@ import com.chaslay.pos.payment.TapToPayService
 import com.chaslay.pos.printer.BluetoothPrinterService
 import com.chaslay.pos.sync.FloorSyncRepository
 import com.chaslay.pos.sync.FloorSyncEvents
+import com.chaslay.pos.sync.mergePosCheckoutSettings
+import com.chaslay.pos.util.DineInCounterTicket
 import com.chaslay.pos.printer.KitchenPrintMeta
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -513,15 +515,62 @@ class PosViewModel @Inject constructor(
         if (cartManager.snapshot().tableId != null) {
             viewModelScope.launch { switchToWalkIn() }
         }
+        applyRetailSilentDefaultIfNeeded()
+    }
+
+    private fun applyRetailSilentDefaultIfNeeded() {
+        if (isRestaurantMode()) return
+        val cart = cartManager.snapshot()
+        if (!cart.isEmpty) return
+        if (cart.fulfillmentType != FulfillmentType.WALK_IN || cart.orderNumber != null) {
+            cartManager.applyRetailSilentDefault()
+        }
     }
 
     private fun isRestaurantMode(): Boolean = cachedSettings.posMode == PosMode.RESTAURANT
 
+    private fun isRetailMode(): Boolean = cachedSettings.posMode == PosMode.RETAIL
+
+    private fun isRetailDineInEnabled(): Boolean =
+        isRetailMode() && cachedSettings.retailDineInEnabled
+
     private fun isTableServiceEnabled(): Boolean =
         isRestaurantMode() && cachedSettings.tablesEnabled
 
+    private fun shouldPickTableForDineIn(): Boolean =
+        cachedSettings.requireTableForDineIn &&
+            cachedSettings.tablesEnabled &&
+            (isRestaurantMode() || isRetailDineInEnabled())
+
+    private fun ensureCounterDineInTicket(): String {
+        val cart = cartManager.snapshot()
+        val existing = cart.orderNumber?.takeIf { it.isNotBlank() }
+        if (cart.serviceType == ServiceType.DINE_IN && existing != null) {
+            return counterTicketDisplay(existing)
+        }
+        val ticket = DineInCounterTicket.next(appContext)
+        cartManager.setCounterDineInOrder(ticket.display, ticket.orderNumber)
+        return ticket.display
+    }
+
+    private fun counterTicketDisplay(orderNumber: String): String {
+        val raw = orderNumber.trim()
+        if (raw.startsWith("D-")) return raw
+        val suffix = raw.substringAfterLast('-', "")
+        val num = suffix.toIntOrNull()
+        return if (num != null) "D-${num.toString().padStart(3, '0')}" else raw
+    }
+
+    private fun clearCounterDineInTicketIfNeeded() {
+        val cart = cartManager.snapshot()
+        if (cart.tableId != null) return
+        if (cart.serviceType == ServiceType.DINE_IN && cart.orderNumber != null) {
+            cartManager.clearCounterDineInOrder()
+        }
+    }
+
     fun showTablePicker() {
-        if (!isTableServiceEnabled()) return
+        if (!shouldPickTableForDineIn()) return
         refreshTables()
         updateExtras { it.copy(showTablePicker = true) }
     }
@@ -531,7 +580,7 @@ class PosViewModel @Inject constructor(
     }
 
     fun openTable(tableId: Long) {
-        if (!isTableServiceEnabled()) return
+        if (!shouldPickTableForDineIn() && !isTableServiceEnabled()) return
         viewModelScope.launch {
             persistTableOrderIfNeeded()
             val table = tableOrderRepository.getTable(tableId) ?: return@launch
@@ -639,7 +688,7 @@ class PosViewModel @Inject constructor(
     fun releaseEmptyTable() {
         viewModelScope.launch {
             if (!releaseEmptyTableOrderIfNeeded()) return@launch
-            cartManager.resetForNewWalkInOrder()
+            cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
             refreshTables()
             updateExtras {
                 it.copy(
@@ -655,7 +704,7 @@ class PosViewModel @Inject constructor(
         viewModelScope.launch {
             persistTableOrderIfNeeded()
             releaseEmptyTableOrderIfNeeded()
-            cartManager.resetForNewWalkInOrder()
+            cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
             refreshTables()
             updateExtras { it.copy(showTablePicker = false, kitchenSentToPrinter = false, orderCommittedForCancel = false) }
         }
@@ -665,7 +714,7 @@ class PosViewModel @Inject constructor(
         viewModelScope.launch {
             persistTableOrderIfNeeded()
             releaseEmptyTableOrderIfNeeded()
-            cartManager.resetForNewWalkInOrder()
+            cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
             refreshTables()
             updateExtras { it.copy(kitchenSentToPrinter = false, orderCommittedForCancel = false) }
         }
@@ -1569,7 +1618,7 @@ class PosViewModel @Inject constructor(
             }
 
             result.onSuccess {
-                cartManager.resetForNewWalkInOrder()
+                cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
                 updateExtras {
                     it.copy(
                         selectedCartItemId = null,
@@ -2126,7 +2175,7 @@ class PosViewModel @Inject constructor(
                 )
             }
             cfg.checkout?.let { checkout ->
-                merged = merged.copy(tablesEnabled = checkout.tablesEnabled)
+                merged = merged.mergePosCheckoutSettings(checkout)
             }
             merged = merged.copy(giftCardsEnabled = cfg.methods?.giftCard == true)
             if (merged != current) {
@@ -2555,7 +2604,11 @@ class PosViewModel @Inject constructor(
                 cart.tableOrderId?.let { tableOrderRepository.voidOpenOrder(it, "Converted to takeaway") }
                 cartManager.clear()
                 applyServiceTypeRates(ServiceType.TAKEAWAY)
-                cartManager.setPickupOrder(suggestOrderNumber(), null)
+                if (isRestaurantMode()) {
+                    cartManager.setPickupOrder(suggestOrderNumber(), null)
+                } else {
+                    cartManager.applyRetailSilentDefault()
+                }
                 items.forEach { cartManager.addItem(it) }
                 refreshTables()
                 updateExtras { it.copy(snackbarMessage = appContext.getString(R.string.snackbar_switched_takeaway)) }
@@ -2563,22 +2616,47 @@ class PosViewModel @Inject constructor(
             return
         }
         when (cart.serviceType) {
-            ServiceType.TAKEAWAY -> {
-                if (isTableServiceEnabled()) {
-                    refreshTables()
-                    val pendingCart = cart.takeIf { !it.isEmpty }?.copy(
-                        items = cart.items.map { item -> item.copy(sentToKitchen = false) }
-                    )
-                    updateExtras { it.copy(showTablePicker = true, pendingDineInCart = pendingCart) }
-                } else {
-                    setServiceType(ServiceType.DINE_IN)
-                    updateExtras { it.copy(snackbarMessage = "Switched to dine-in") }
-                }
-            }
-            ServiceType.DINE_IN -> {
-                setServiceType(ServiceType.TAKEAWAY)
-                updateExtras { it.copy(snackbarMessage = appContext.getString(R.string.snackbar_switched_takeaway)) }
-            }
+            ServiceType.TAKEAWAY -> switchToDineInFromTakeaway(cart)
+            ServiceType.DINE_IN -> switchToTakeawayFromDineIn()
+        }
+    }
+
+    fun toggleRetailDineIn() {
+        if (!isRetailDineInEnabled()) return
+        val cart = cartManager.snapshot()
+        if (cart.serviceType == ServiceType.DINE_IN && cart.tableId == null) {
+            switchToTakeawayFromDineIn()
+        } else if (cart.serviceType == ServiceType.DINE_IN && cart.tableId != null) {
+            toggleCartOrderType()
+        } else {
+            switchToDineInFromTakeaway(cart)
+        }
+    }
+
+    private fun switchToDineInFromTakeaway(cart: CartSummary) {
+        if (shouldPickTableForDineIn()) {
+            refreshTables()
+            val pendingCart = cart.takeIf { !it.isEmpty }?.copy(
+                items = cart.items.map { item -> item.copy(sentToKitchen = false) }
+            )
+            updateExtras { it.copy(showTablePicker = true, pendingDineInCart = pendingCart) }
+            return
+        }
+        val ticketLabel = ensureCounterDineInTicket()
+        setServiceType(ServiceType.DINE_IN)
+        updateExtras {
+            it.copy(snackbarMessage = appContext.getString(R.string.snackbar_switched_dine_in, ticketLabel))
+        }
+    }
+
+    private fun switchToTakeawayFromDineIn() {
+        clearCounterDineInTicketIfNeeded()
+        setServiceType(ServiceType.TAKEAWAY)
+        if (isRetailMode()) {
+            cartManager.applyRetailSilentDefault()
+        }
+        updateExtras {
+            it.copy(snackbarMessage = appContext.getString(R.string.snackbar_switched_takeaway))
         }
     }
 
@@ -2586,7 +2664,7 @@ class PosViewModel @Inject constructor(
         val cart = cartManager.snapshot()
         if (cart.isEmpty) {
             if (!isRestaurantMode()) {
-                cartManager.resetForNewWalkInOrder()
+                cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
                 updateExtras {
                     it.copy(
                         snackbarMessage = "Order cleared",
@@ -2769,7 +2847,7 @@ class PosViewModel @Inject constructor(
         }
         val after = cartManager.snapshot()
         if (after.isEmpty && after.tableId == null) {
-            cartManager.resetForNewWalkInOrder()
+            cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
         }
     }
 
@@ -3094,7 +3172,7 @@ class PosViewModel @Inject constructor(
                         finalTotal = roundedTotal
                     )
                 }.onSuccess {
-                    cartManager.resetForNewWalkInOrder()
+                    cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
                     cartManager.resetSplit()
                     updateExtras {
                         it.copy(
@@ -3319,7 +3397,7 @@ class PosViewModel @Inject constructor(
                         val paid = _uiExtras.value.equalSplitPaidCount + 1
                         updateExtras { it.copy(equalSplitPaidCount = paid) }
                         if (paid >= fullCart.splitCount) {
-                            cartManager.resetForNewWalkInOrder()
+                            cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
                             cartManager.resetSplit()
                             updateExtras { it.copy(masterOrderId = null, equalSplitPaidCount = 0) }
                         }
@@ -3362,7 +3440,7 @@ class PosViewModel @Inject constructor(
                     if (remaining.items.isEmpty()) {
                         remaining.tableOrderId?.let { tableOrderRepository.closeOrder(it) }
                         if (!isEqualSplit || equalSplitPaid >= fullCart.splitCount) {
-                            cartManager.resetForNewWalkInOrder()
+                            cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
                             cartManager.resetSplit()
                             clearMembershipOnNewSale()
                             updateExtras { it.copy(masterOrderId = null, equalSplitPaidCount = 0) }
@@ -3526,7 +3604,7 @@ class PosViewModel @Inject constructor(
     fun dismissClearCartDialog() = updateExtras { it.copy(showClearCartDialog = false) }
 
     fun confirmClearCart() {
-        cartManager.resetForNewWalkInOrder()
+        cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
         clearMembershipOnNewSale()
         updateExtras {
             it.copy(

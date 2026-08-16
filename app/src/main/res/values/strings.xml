@@ -356,6 +356,15 @@
     <string name="pos_mode_retail">Retail</string>
     <string name="pos_mode_restaurant">Restaurant</string>
     <string name="pos_mode_help">Retail hides tables, hold orders, and kitchen printing. Restaurant enables full table service.</string>
+    <string name="pos_tables_enabled">Enable tables</string>
+    <string name="pos_tables_enabled_hint">Show Tables tab and table picker for dine-in service.</string>
+    <string name="pos_retail_dine_in">Enable dine-in in retail</string>
+    <string name="pos_retail_dine_in_hint">Bistro-style: dine-in and takeaway at the counter without table selection.</string>
+    <string name="pos_retail_takeaway">Enable takeaway in retail</string>
+    <string name="pos_retail_delivery">Enable delivery in retail</string>
+    <string name="pos_require_table_dine_in">Require table for dine-in</string>
+    <string name="pos_require_table_dine_in_hint">When off, dine-in uses a counter ticket number (D-001…) and dine-in VAT — no table picker.</string>
+    <string name="snackbar_switched_dine_in">Switched to dine-in (%1$s)</string>
     <string name="scan_barcode">Scan barcode</string>
     <string name="camera_permission_required">Camera permission is required to scan barcodes.</string>
     <string name="barcode_not_found">No product found for barcode %1$s</string>

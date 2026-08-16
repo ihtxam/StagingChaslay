@@ -1509,17 +1509,56 @@ class CartManager @Inject constructor(
     }
 
     /** After a completed sale or cleared cart — default next order to takeaway ASAP (not dine-in). */
-    fun resetForNewWalkInOrder() {
+    fun resetForNewWalkInOrder(retailSilent: Boolean = false) {
         _cart.update { cart ->
             CartSummary(
                 items = emptyList(),
                 vatIncludedInPrice = cart.vatIncludedInPrice,
                 serviceType = ServiceType.TAKEAWAY,
-                fulfillmentType = FulfillmentType.PICKUP,
-                pickupTimeMs = null
+                fulfillmentType = if (retailSilent) FulfillmentType.WALK_IN else FulfillmentType.PICKUP,
+                pickupTimeMs = null,
+                orderNumber = null
             )
         }
         cartPreferences.clear()
+    }
+
+    /** Retail register: silent walk-in sale (no pickup ticket label). */
+    fun applyRetailSilentDefault() {
+        _cart.update {
+            it.copy(
+                serviceType = ServiceType.TAKEAWAY,
+                fulfillmentType = FulfillmentType.WALK_IN,
+                orderNumber = null,
+                pickupTimeMs = null,
+                tableId = null,
+                tableOrderId = null,
+                tableName = null
+            )
+        }
+    }
+
+    fun setCounterDineInOrder(display: String, orderNumber: String) {
+        _cart.update {
+            it.copy(
+                serviceType = ServiceType.DINE_IN,
+                fulfillmentType = FulfillmentType.WALK_IN,
+                orderNumber = display,
+                pickupTimeMs = null,
+                tableId = null,
+                tableOrderId = null,
+                tableName = null
+            )
+        }
+    }
+
+    fun clearCounterDineInOrder() {
+        _cart.update {
+            it.copy(
+                orderNumber = null,
+                fulfillmentType = FulfillmentType.WALK_IN
+            )
+        }
     }
 
     fun setPickupTime(pickupTimeMs: Long?) {

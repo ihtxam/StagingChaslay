@@ -298,6 +298,17 @@ fun SettingsScreen(
         if (state.posMode == PosMode.RESTAURANT) {
             Spacer(modifier = Modifier.height(8.dp))
             SettingSwitch(
+                stringResource(R.string.pos_tables_enabled),
+                state.tablesEnabled,
+                viewModel::updateTablesEnabled
+            )
+            Text(
+                stringResource(R.string.pos_tables_enabled_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingSwitch(
                 stringResource(R.string.enable_courses),
                 state.coursesEnabled,
                 viewModel::updateCoursesEnabled
@@ -307,7 +318,40 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary
             )
+        } else {
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingSwitch(
+                stringResource(R.string.pos_retail_dine_in),
+                state.retailDineInEnabled,
+                viewModel::updateRetailDineInEnabled
+            )
+            Text(
+                stringResource(R.string.pos_retail_dine_in_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+            SettingSwitch(
+                stringResource(R.string.pos_retail_takeaway),
+                state.retailTakeawayEnabled,
+                viewModel::updateRetailTakeawayEnabled
+            )
+            SettingSwitch(
+                stringResource(R.string.pos_retail_delivery),
+                state.retailDeliveryEnabled,
+                viewModel::updateRetailDeliveryEnabled
+            )
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingSwitch(
+            stringResource(R.string.pos_require_table_dine_in),
+            state.requireTableForDineIn,
+            viewModel::updateRequireTableForDineIn
+        )
+        Text(
+            stringResource(R.string.pos_require_table_dine_in_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.textSecondary
+        )
         }
 
         SettingsSectionCard(title = stringResource(R.string.business_hours), icon = Icons.Outlined.Schedule) {
