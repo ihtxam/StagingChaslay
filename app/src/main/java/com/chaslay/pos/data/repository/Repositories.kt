@@ -2359,7 +2359,8 @@ class HeldOrderRepository @Inject constructor(
             deliveryName = cart.deliveryName,
             deliveryAddress = cart.deliveryAddress,
             deliveryZip = cart.deliveryZip,
-            deliveryPhone = cart.deliveryPhone
+            deliveryPhone = cart.deliveryPhone,
+            paymentMethod = PaymentMethod.PAY_LATER
         )
         heldOrderDao.upsert(entity)
         val items = cart.items.map { item ->

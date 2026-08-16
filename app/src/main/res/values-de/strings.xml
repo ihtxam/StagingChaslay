@@ -468,6 +468,12 @@
     <string name="delete">Löschen</string>
     <string name="loading">Lädt…</string>
     <string name="no_ongoing_orders">Keine offenen oder gehaltenen Aufträge</string>
+    <string name="orders_filter_active">In Bearbeitung</string>
+    <string name="orders_filter_completed">Abgeschlossen</string>
+    <string name="orders_filter_unpaid">Später zahlen</string>
+    <string name="orders_search_hint">Suche nach Nr., Kunde, Tisch…</string>
+    <string name="orders_no_completed">Heute keine abgeschlossenen Bestellungen</string>
+    <string name="orders_awaiting_payment">Zahlung ausstehend</string>
     <string name="add_course">Kurs hinzufügen</string>
     <string name="appearance_settings">Aussehen</string>
     <string name="theme_light">Leichte Caisse</string>

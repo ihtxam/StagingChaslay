@@ -512,6 +512,7 @@ data class HeldOrderEntity(
     val deliveryAddress: String? = null,
     val deliveryZip: String? = null,
     val deliveryPhone: String? = null,
+    val paymentMethod: com.chaslay.pos.domain.model.PaymentMethod? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

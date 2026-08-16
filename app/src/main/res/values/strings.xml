@@ -571,6 +571,12 @@
     <string name="delete">Delete</string>
     <string name="loading">Loading…</string>
     <string name="no_ongoing_orders">No open or held orders</string>
+    <string name="orders_filter_active">In progress</string>
+    <string name="orders_filter_completed">Completed</string>
+    <string name="orders_filter_unpaid">Pay later</string>
+    <string name="orders_search_hint">Search order #, customer, table…</string>
+    <string name="orders_no_completed">No completed orders today</string>
+    <string name="orders_awaiting_payment">Awaiting payment</string>
     <string name="add_course">Add course</string>
     <string name="appearance_settings">Appearance</string>
     <string name="theme_light">Light caisse</string>

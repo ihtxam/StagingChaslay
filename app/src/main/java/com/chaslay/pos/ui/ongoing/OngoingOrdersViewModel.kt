@@ -8,6 +8,7 @@ import com.chaslay.pos.data.repository.HeldOrderRepository
 import com.chaslay.pos.data.repository.ProductRepository
 import com.chaslay.pos.data.repository.SettingsRepository
 import com.chaslay.pos.data.repository.TableOrderRepository
+import com.chaslay.pos.data.repository.TransactionRepository
 import com.chaslay.pos.debug.CrashLogger
 import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.CartSummary
@@ -15,6 +16,8 @@ import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.HeldOrderStatus
 import com.chaslay.pos.domain.model.OngoingOrderCard
 import com.chaslay.pos.domain.model.OngoingOrderSource
+import com.chaslay.pos.domain.model.PaymentMethod
+import com.chaslay.pos.domain.model.PaymentStatus
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.TableOrderStatus
 import com.chaslay.pos.printer.BluetoothPrinterService
@@ -22,26 +25,55 @@ import com.chaslay.pos.printer.KitchenPrintMeta
 import com.chaslay.pos.sync.OnlineKitchenPrintHelper
 import com.chaslay.pos.sync.OnlineOrderAlertCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.Calendar
+import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
+
+enum class OrdersStatusFilter { ACTIVE, COMPLETED }
+
+enum class OrdersChannelFilter { ALL, DINE_IN, TAKEAWAY, DELIVERY }
+
+enum class OrdersPaymentFilter { ALL, UNPAID }
 
 data class OngoingOrdersUiState(
     val orders: List<OngoingOrderCard> = emptyList(),
-    val filter: ServiceType? = null,
+    val statusFilter: OrdersStatusFilter = OrdersStatusFilter.ACTIVE,
+    val channelFilter: OrdersChannelFilter = OrdersChannelFilter.ALL,
+    val paymentFilter: OrdersPaymentFilter = OrdersPaymentFilter.ALL,
+    val searchQuery: String = "",
+    val currencySymbol: String = "CHF",
     val isLoading: Boolean = false,
     val errorMessage: String? = null
-)
+) {
+    val filteredOrders: List<OngoingOrderCard>
+        get() {
+            val q = searchQuery.trim().lowercase()
+            return orders.filter { card ->
+                if (!matchesChannel(card, channelFilter)) return@filter false
+                if (paymentFilter == OrdersPaymentFilter.UNPAID && !isUnpaid(card)) return@filter false
+                if (q.isBlank()) return@filter true
+                val hay = listOfNotNull(
+                    card.orderNumber,
+                    card.tableName,
+                    card.customerLabel,
+                    card.statusLabel
+                ).joinToString(" ").lowercase()
+                hay.contains(q)
+            }
+        }
+}
 
 @HiltViewModel
 class OngoingOrdersViewModel @Inject constructor(
     private val heldOrderRepository: HeldOrderRepository,
     private val tableOrderRepository: TableOrderRepository,
+    private val transactionRepository: TransactionRepository,
     private val cartManager: CartManager,
     private val sessionManager: SessionManager,
     private val settingsRepository: SettingsRepository,
@@ -56,36 +88,67 @@ class OngoingOrdersViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, filter = null)
+            val previous = _uiState.value
+            _uiState.value = previous.copy(isLoading = true, errorMessage = null)
             runCatching { flushActiveTableCart() }
                 .onFailure { e -> crashLogger.logError("OngoingOrders", "flushActiveTableCart failed", e) }
             runCatching {
-                val heldOrdersWithItems = heldOrderRepository.getOngoingHeldOrdersWithItems()
-                android.util.Log.i("ONGOING", "held=${heldOrdersWithItems.size} activeCount=${heldOrderRepository.countActive()}")
-                val heldTableOrderIds = heldOrdersWithItems.mapNotNull { (order, _) -> order.tableOrderId }.toSet()
-                val held = heldOrdersWithItems
-                    .filter { (order, _) -> order.pickupTimeMs == null }
-                    .map { (order, items) ->
-                    OngoingOrderCard(
-                        id = order.id,
-                        orderNumber = order.orderNumber,
-                        serviceType = order.serviceType,
-                        fulfillmentType = order.fulfillmentType,
-                        total = if (items.isEmpty()) order.total else CartSummary(items.map { it.toCartItem() }).total,
-                        itemCount = items.sumOf { it.quantity },
-                        statusLabel = when (order.status) {
-                            HeldOrderStatus.SENT_TO_KITCHEN -> "Kitchen sent"
-                            HeldOrderStatus.HELD -> "On hold"
-                        },
-                        source = OngoingOrderSource.HELD,
-                        tableName = order.tableName,
-                        updatedAt = order.updatedAt
-                    )
+                val settings = settingsRepository.getSettings()
+                val currency = settings.currencySymbol.ifBlank { "CHF" }
+                val orders = when (previous.statusFilter) {
+                    OrdersStatusFilter.ACTIVE -> loadActiveOrders()
+                    OrdersStatusFilter.COMPLETED -> loadCompletedOrders()
                 }
-                val table = runCatching {
-                    tableOrderRepository.getOngoingTableOrders()
-                    .filter { (order, _) -> order.id !in heldTableOrderIds }
-                    .map { (order, items) ->
+                _uiState.value = previous.copy(
+                    orders = orders.sortedByDescending { it.updatedAt },
+                    currencySymbol = currency,
+                    isLoading = false,
+                    errorMessage = null
+                )
+            }.onFailure { e ->
+                android.util.Log.e("ONGOING", "refresh failed", e)
+                crashLogger.logError("OngoingOrders", "Failed to load ongoing orders", e)
+                _uiState.value = previous.copy(
+                    isLoading = false,
+                    errorMessage = e.message ?: "Could not load orders"
+                )
+            }
+        }
+    }
+
+    private suspend fun loadActiveOrders(): List<OngoingOrderCard> {
+        val heldOrdersWithItems = heldOrderRepository.getOngoingHeldOrdersWithItems()
+        android.util.Log.i(
+            "ONGOING",
+            "held=${heldOrdersWithItems.size} activeCount=${heldOrderRepository.countActive()}"
+        )
+        val heldTableOrderIds = heldOrdersWithItems.mapNotNull { (order, _) -> order.tableOrderId }.toSet()
+        val held = heldOrdersWithItems.map { (order, items) ->
+            val isPayLater = order.paymentMethod == PaymentMethod.PAY_LATER
+            OngoingOrderCard(
+                id = order.id,
+                orderNumber = order.orderNumber,
+                serviceType = order.serviceType,
+                fulfillmentType = order.fulfillmentType,
+                total = if (items.isEmpty()) order.total else CartSummary(items.map { it.toCartItem() }).total,
+                itemCount = items.sumOf { it.quantity },
+                statusLabel = when {
+                    isPayLater -> "Awaiting payment"
+                    order.status == HeldOrderStatus.SENT_TO_KITCHEN -> "Kitchen sent"
+                    else -> "On hold"
+                },
+                source = OngoingOrderSource.HELD,
+                tableName = order.tableName,
+                customerLabel = order.deliveryName ?: order.deliveryPhone,
+                paymentMethod = order.paymentMethod,
+                pickupTimeMs = order.pickupTimeMs,
+                updatedAt = order.updatedAt
+            )
+        }
+        val table = runCatching {
+            tableOrderRepository.getOngoingTableOrders()
+                .filter { (order, _) -> order.id !in heldTableOrderIds }
+                .map { (order, items) ->
                     val tableEntity = tableOrderRepository.getTable(order.tableId)
                     val cartItems = items.map { it.toCartItem() }
                     OngoingOrderCard(
@@ -105,26 +168,44 @@ class OngoingOrdersViewModel @Inject constructor(
                         updatedAt = order.updatedAt
                     )
                 }
-                }.getOrElse { e ->
-                    crashLogger.logError("OngoingOrders", "Loading table orders failed", e)
-                    emptyList()
-                }
-                val merged = mergeWithActiveCart(held + table)
-                android.util.Log.i("ONGOING", "heldCards=${held.size} tableCards=${table.size} merged=${merged.size}")
-                _uiState.value = OngoingOrdersUiState(
-                    orders = merged.sortedByDescending { it.updatedAt },
-                    filter = _uiState.value.filter,
-                    isLoading = false
-                )
-            }.onFailure { e ->
-                android.util.Log.e("ONGOING", "refresh failed", e)
-                crashLogger.logError("OngoingOrders", "Failed to load ongoing orders", e)
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = e.message ?: "Could not load orders"
+        }.getOrElse { e ->
+            crashLogger.logError("OngoingOrders", "Loading table orders failed", e)
+            emptyList()
+        }
+        val merged = mergeWithActiveCart(held + table)
+        android.util.Log.i("ONGOING", "heldCards=${held.size} tableCards=${table.size} merged=${merged.size}")
+        return merged
+    }
+
+    private suspend fun loadCompletedOrders(): List<OngoingOrderCard> {
+        val (startMs, endMs) = todayBounds()
+        return transactionRepository.searchOrders(
+            startMs = startMs,
+            endMs = endMs,
+            paymentMethod = null,
+            serviceType = null
+        ).filter { it.paymentStatus == PaymentStatus.COMPLETED }
+            .map { tx ->
+                val items = transactionRepository.getTransaction(tx.id)?.second.orEmpty()
+                OngoingOrderCard(
+                    id = tx.id,
+                    orderNumber = tx.transactionNumber,
+                    serviceType = tx.serviceType ?: ServiceType.TAKEAWAY,
+                    fulfillmentType = when {
+                        tx.tableId != null -> FulfillmentType.DINE_IN
+                        tx.pickupTimeMs != null -> FulfillmentType.PICKUP
+                        else -> FulfillmentType.WALK_IN
+                    },
+                    total = tx.total,
+                    itemCount = items.sumOf { it.quantity },
+                    statusLabel = "Completed",
+                    source = OngoingOrderSource.TRANSACTION,
+                    tableName = tx.tableId?.toString(),
+                    paymentMethod = tx.paymentMethod,
+                    pickupTimeMs = tx.pickupTimeMs,
+                    updatedAt = tx.createdAt
                 )
             }
-        }
     }
 
     private suspend fun flushActiveTableCart() {
@@ -163,21 +244,31 @@ class OngoingOrdersViewModel @Inject constructor(
         }
     }
 
-    fun setFilter(serviceType: ServiceType?) {
-        _uiState.value = _uiState.value.copy(filter = serviceType)
+    fun setStatusFilter(filter: OrdersStatusFilter) {
+        if (_uiState.value.statusFilter == filter) return
+        _uiState.value = _uiState.value.copy(statusFilter = filter)
+        refresh()
     }
 
-    val filteredOrders: List<OngoingOrderCard>
-        get() {
-            val filter = _uiState.value.filter ?: return _uiState.value.orders
-            return _uiState.value.orders.filter { it.serviceType == filter }
-        }
+    fun setChannelFilter(filter: OrdersChannelFilter) {
+        _uiState.value = _uiState.value.copy(channelFilter = filter)
+    }
+
+    fun setPaymentFilter(filter: OrdersPaymentFilter) {
+        _uiState.value = _uiState.value.copy(paymentFilter = filter)
+    }
+
+    fun setSearchQuery(query: String) {
+        _uiState.value = _uiState.value.copy(searchQuery = query)
+    }
 
     fun resumeOrder(card: OngoingOrderCard, onDone: () -> Unit) {
+        if (card.source == OngoingOrderSource.TRANSACTION) return
         viewModelScope.launch {
             val loaded = when (card.source) {
                 OngoingOrderSource.HELD -> heldOrderRepository.loadHeldOrderToCart(cartManager, card.id)
                 OngoingOrderSource.TABLE -> tableOrderRepository.loadTableOrderToCart(cartManager, card.id)
+                OngoingOrderSource.TRANSACTION -> false
             }
             if (loaded) {
                 if (card.source == OngoingOrderSource.HELD) {
@@ -191,26 +282,47 @@ class OngoingOrdersViewModel @Inject constructor(
     fun printReceiptForOrder(card: OngoingOrderCard) {
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
-            val lines = loadOrderLines(card)
-            if (lines.isEmpty()) {
-                _uiState.value = _uiState.value.copy(errorMessage = "No items to print")
-                return@launch
-            }
-            val total = lines.sumOf { it.second }
-            withContext(Dispatchers.IO) {
-                printerService.routeCartPreview(
-                    settings = settings,
-                    lines = lines.map { it.first to it.second },
-                    total = total,
-                    title = "ORDER ${card.orderNumber}"
-                )
-            }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(errorMessage = e.message ?: "Print failed")
+            when (card.source) {
+                OngoingOrderSource.TRANSACTION -> {
+                    val detail = transactionRepository.getTransaction(card.id) ?: return@launch
+                    withContext(Dispatchers.IO) {
+                        val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+                            .appendableForTransaction(detail.first)
+                        printerService.routeReceipt(
+                            settings,
+                            detail.first,
+                            detail.second,
+                            customerCopy,
+                            cashierCopy
+                        )
+                    }.onFailure { e ->
+                        _uiState.value = _uiState.value.copy(errorMessage = e.message ?: "Print failed")
+                    }
+                }
+                else -> {
+                    val lines = loadOrderLines(card)
+                    if (lines.isEmpty()) {
+                        _uiState.value = _uiState.value.copy(errorMessage = "No items to print")
+                        return@launch
+                    }
+                    val total = lines.sumOf { it.second }
+                    withContext(Dispatchers.IO) {
+                        printerService.routeCartPreview(
+                            settings = settings,
+                            lines = lines.map { it.first to it.second },
+                            total = total,
+                            title = "ORDER ${card.orderNumber}"
+                        )
+                    }.onFailure { e ->
+                        _uiState.value = _uiState.value.copy(errorMessage = e.message ?: "Print failed")
+                    }
+                }
             }
         }
     }
 
     fun sendKitchenForOrder(card: OngoingOrderCard) {
+        if (card.source == OngoingOrderSource.TRANSACTION) return
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
             val categories = productRepository.getAllCategories()
@@ -257,6 +369,7 @@ class OngoingOrdersViewModel @Inject constructor(
                 "${it.quantity}x ${it.productName}" to it.lineSubtotal
             }
         }
+        OngoingOrderSource.TRANSACTION -> emptyList()
     }
 
     private suspend fun loadKitchenPayload(card: OngoingOrderCard, userName: String): KitchenPayload? {
@@ -314,6 +427,7 @@ class OngoingOrdersViewModel @Inject constructor(
                     )
                 )
             }
+            OngoingOrderSource.TRANSACTION -> null
         }
     }
 
@@ -342,4 +456,31 @@ class OngoingOrdersViewModel @Inject constructor(
         courseNumber = courseNumber,
         isWeighed = isWeighed
     )
+
+    private fun todayBounds(): Pair<Long, Long> {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        val start = cal.timeInMillis
+        cal.add(Calendar.DAY_OF_YEAR, 1)
+        return start to cal.timeInMillis
+    }
+
+    companion object {
+        fun isUnpaid(card: OngoingOrderCard): Boolean =
+            card.paymentMethod == PaymentMethod.PAY_LATER
+
+        fun matchesChannel(card: OngoingOrderCard, filter: OrdersChannelFilter): Boolean = when (filter) {
+            OrdersChannelFilter.ALL -> true
+            OrdersChannelFilter.DINE_IN ->
+                card.fulfillmentType == FulfillmentType.DINE_IN || card.serviceType == ServiceType.DINE_IN
+            OrdersChannelFilter.TAKEAWAY ->
+                card.fulfillmentType == FulfillmentType.PICKUP ||
+                    (card.fulfillmentType == FulfillmentType.WALK_IN && card.serviceType == ServiceType.TAKEAWAY)
+            OrdersChannelFilter.DELIVERY ->
+                card.fulfillmentType == FulfillmentType.DELIVERY
+        }
+    }
 }

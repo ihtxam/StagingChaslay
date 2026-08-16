@@ -461,6 +461,12 @@
     <string name="delete">Elimina</string>
     <string name="loading">Caricamento…</string>
     <string name="no_ongoing_orders">Aucune commande ouverte ou en attente</string>
+    <string name="orders_filter_active">In corso</string>
+    <string name="orders_filter_completed">Completate</string>
+    <string name="orders_filter_unpaid">Paga dopo</string>
+    <string name="orders_search_hint">Cerca n°, cliente, tavolo…</string>
+    <string name="orders_no_completed">Nessun ordine completato oggi</string>
+    <string name="orders_awaiting_payment">In attesa di pagamento</string>
     <string name="add_course">Ajouter un Cours</string>
     <string name="appearance_settings">Aspetto</string>
     <string name="theme_light">Cassa chiara</string>

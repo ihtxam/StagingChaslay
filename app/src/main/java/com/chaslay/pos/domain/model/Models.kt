@@ -523,7 +523,8 @@ enum class TableStatus {
 
 enum class OngoingOrderSource {
     HELD,
-    TABLE
+    TABLE,
+    TRANSACTION
 }
 
 enum class ProgrammedOrderSource {
@@ -555,6 +556,9 @@ data class OngoingOrderCard(
     val statusLabel: String,
     val source: OngoingOrderSource,
     val tableName: String? = null,
+    val customerLabel: String? = null,
+    val paymentMethod: PaymentMethod? = null,
+    val pickupTimeMs: Long? = null,
     val updatedAt: Long
 )
 
