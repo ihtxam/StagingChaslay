@@ -1337,6 +1337,27 @@ export type EodShiftCash = {
   staffName?: string | null;
 };
 
+const EOD_INCLUDE_PRODUCTS_KEY = 'chaslay_eod_include_products_sold';
+
+/** Persisted preference: include product breakdown on EOD thermal print (default ON). */
+export function readEodIncludeProductsSold(): boolean {
+  try {
+    const v = localStorage.getItem(EOD_INCLUDE_PRODUCTS_KEY);
+    if (v === '0' || v === 'false') return false;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+export function writeEodIncludeProductsSold(include: boolean): void {
+  try {
+    localStorage.setItem(EOD_INCLUDE_PRODUCTS_KEY, include ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
 export type EodReportPrint = {
   label: string;
   periodFrom?: string;
@@ -1359,6 +1380,8 @@ export type EodReportPrint = {
   coversServed?: number | null;
   vatRows?: EodVatRow[];
   productsSold: Array<{ name: string; quantity: number; total: number }>;
+  /** When false, omit products-sold section from thermal print (totals unchanged). Default true. */
+  includeProductsSold?: boolean;
   paymentRows: Array<{ method: string; count: number; total: number; percent?: number }>;
   orderTypeRows?: Array<{ label: string; count: number; total: number; percent?: number }>;
   channelRows?: Array<{ channel: string; count: number; total: number }>;
@@ -1524,7 +1547,8 @@ export function generateEodReportText(report: EodReportPrint): string {
       ) + '\n';
   }
 
-  if (report.productsSold.length) {
+  const includeProductsSold = report.includeProductsSold !== false;
+  if (includeProductsSold && report.productsSold.length) {
     r += '\n';
     r += thin + '\n';
     r += centerLine(L.productsSold, width) + '\n';

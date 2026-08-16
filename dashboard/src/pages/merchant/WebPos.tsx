@@ -218,6 +218,10 @@ import {
   WebPosCloseShiftModal,
   WebPosShiftClosedModal,
 } from '@/components/webpos/WebPosShiftModals';
+import {
+  EodIncludeProductsCheckbox,
+  useEodIncludeProductsSold,
+} from '@/components/EodIncludeProductsCheckbox';
 import { printRefundReceipt } from '@/lib/print-order-receipt';
 import WebPosCartPanel from '@/components/webpos/WebPosCartPanel';
 import WebPosProductArea, {
@@ -303,6 +307,7 @@ import {
 import {
   getEffectivePanelAccess,
   hasPermission,
+  clearWebPosStaffSession,
   loadWebPosStaffSession,
   resolveWebPosStaffSession,
   saveWebPosStaffSession,
@@ -676,6 +681,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [staffRoster, setStaffRoster] = useState<StaffRosterRow[]>([]);
   const [panelStaff, setPanelStaff] = useState<Array<{ id: string; name: string }>>([]);
   const [eodPickerOpen, setEodPickerOpen] = useState(false);
+  const [eodIncludeProductsSold, setEodIncludeProductsSold] = useEodIncludeProductsSold();
   const scanBufferRef = useRef('');
   const scanTimerRef = useRef<number | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -2113,7 +2119,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const printShiftEod = async () => {
+  const printShiftEod = async (opts?: { includeProductsSold?: boolean }) => {
+    const includeProductsSold = opts?.includeProductsSold !== false;
     if (!lastClosedShift) {
       toast.error(t('webPosShiftNoReport'));
       return;
@@ -2219,6 +2226,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           variance: lastClosedShift.variance,
           staffName: webposStaff?.name || null,
         },
+        includeProductsSold,
       });
       await printEscPosToTargets(text, { role: 'eod' });
     } catch (e: any) {
@@ -2232,11 +2240,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setStartShiftOpen(true);
   };
 
+  const handleStaffLogoutFromShiftClosed = () => {
+    setShiftClosedOpen(false);
+    clearWebPosStaffSession();
+    setWebposStaff(null);
+    window.dispatchEvent(new CustomEvent('webpos:staff-session'));
+  };
+
   /** EOD print/download when cash shifts are disabled (late-night venues). */
   const printTodayEod = async (
     scopeStaffId?: string | null,
-    scopeStaffName?: string | null
+    scopeStaffName?: string | null,
+    opts?: { includeProductsSold?: boolean }
   ) => {
+    const includeProductsSold = opts?.includeProductsSold !== false;
     try {
       const headers: Record<string, string> = {};
       if (webposStaff?.accessToken) {
@@ -2321,6 +2338,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
         shiftCash: report?.shiftCash,
+        includeProductsSold,
       });
       await printEscPosToTargets(text, { role: 'eod' });
     } catch (e: any) {
@@ -5504,7 +5522,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setEodPickerOpen(true);
       return;
     }
-    void printTodayEod();
+    void printTodayEod(undefined, undefined, { includeProductsSold: eodIncludeProductsSold });
   };
 
   const openCashDrawer = async () => {
@@ -7120,13 +7138,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900">{t('webPosEodReport')}</h3>
             <p className="mt-1 text-sm text-slate-600">Choose company-wide or an individual waiter.</p>
+            <EodIncludeProductsCheckbox
+              className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
+              checked={eodIncludeProductsSold}
+              onChange={setEodIncludeProductsSold}
+            />
             <div className="mt-4 flex flex-col gap-2">
               <button
                 type="button"
                 className="rounded-lg border border-slate-200 px-4 py-2 text-left font-semibold hover:bg-slate-50"
                 onClick={() => {
                   setEodPickerOpen(false);
-                  void printTodayEod();
+                  void printTodayEod(undefined, undefined, {
+                    includeProductsSold: eodIncludeProductsSold,
+                  });
                 }}
               >
                 Company-wide
@@ -7138,7 +7163,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   className="rounded-lg border border-slate-200 px-4 py-2 text-left hover:bg-slate-50"
                   onClick={() => {
                     setEodPickerOpen(false);
-                    void printTodayEod(s.id, s.name);
+                    void printTodayEod(s.id, s.name, {
+                      includeProductsSold: eodIncludeProductsSold,
+                    });
                   }}
                 >
                   {s.name}
@@ -7158,9 +7185,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       <WebPosShiftClosedModal
         open={shiftClosedOpen}
         balanced={shiftBalanced}
-        onPrintEod={() => void printShiftEod()}
+        onPrintEod={(opts) => void printShiftEod(opts)}
         onRestart={handleRestartShift}
         onStay={() => setShiftClosedOpen(false)}
+        onLogout={handleStaffLogoutFromShiftClosed}
       />
     </div>
   );

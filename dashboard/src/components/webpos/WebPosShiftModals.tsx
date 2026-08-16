@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, X, XCircle } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import {
+  EodIncludeProductsCheckbox,
+  useEodIncludeProductsSold,
+} from '@/components/EodIncludeProductsCheckbox';
 
 /** Integer digits allowed in Start/Close Shift cash amounts (excludes decimals). */
 const MAX_CASH_INT_DIGITS = 10;
@@ -412,14 +416,17 @@ export function WebPosShiftClosedModal({
   onPrintEod,
   onRestart,
   onStay,
+  onLogout,
 }: {
   open: boolean;
   balanced: boolean;
-  onPrintEod: () => void;
+  onPrintEod: (opts: { includeProductsSold: boolean }) => void;
   onRestart: () => void;
   onStay: () => void;
+  onLogout: () => void;
 }) {
   const { t } = useI18n();
+  const [includeProductsSold, setIncludeProductsSold] = useEodIncludeProductsSold();
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4">
@@ -436,19 +443,29 @@ export function WebPosShiftClosedModal({
           </p>
         </div>
         <div className="mt-5 space-y-2">
+          <EodIncludeProductsCheckbox
+            className="mb-3 rounded-xl border border-stone-100 bg-stone-50 px-3 py-2.5"
+            checked={includeProductsSold}
+            onChange={setIncludeProductsSold}
+          />
           <button
             type="button"
             className="w-full rounded-xl bg-[var(--webpos-accent)] py-3 text-sm font-bold text-white"
-            onClick={onPrintEod}
+            onClick={() => onPrintEod({ includeProductsSold })}
           >
             {t('webPosShiftPrintEod')}
           </button>
           <button type="button" className="btn-secondary w-full py-3" onClick={onRestart}>
             {t('webPosShiftRestart')}
           </button>
-          <button type="button" className="w-full py-2 text-sm font-medium text-stone-600 hover:underline" onClick={onStay}>
-            {t('webPosShiftStayConnected')}
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" className="btn-secondary py-2.5 text-sm font-semibold" onClick={onStay}>
+              {t('webPosShiftStayConnected')}
+            </button>
+            <button type="button" className="btn-secondary py-2.5 text-sm font-semibold" onClick={onLogout}>
+              {t('webPosShiftLogout')}
+            </button>
+          </div>
         </div>
       </div>
     </div>

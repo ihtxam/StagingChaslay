@@ -19,6 +19,10 @@ import {
   printViaAgent,
   unsuitableRawPrinterMessage,
 } from '@/lib/print-agent';
+import {
+  EodIncludeProductsCheckbox,
+  useEodIncludeProductsSold,
+} from '@/components/EodIncludeProductsCheckbox';
 
 type EodShiftCash = {
   openingFloat: number;
@@ -88,6 +92,7 @@ export default function ReportsPage() {
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [businessName, setBusinessName] = useState('');
   const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
+  const [eodIncludeProductsSold, setEodIncludeProductsSold] = useEodIncludeProductsSold();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -165,6 +170,7 @@ export default function ReportsPage() {
         paperWidthMm,
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
+        includeProductsSold: eodIncludeProductsSold,
       });
       const names =
         targets.length > 0
@@ -243,15 +249,21 @@ export default function ReportsPage() {
             </p>
           ) : null}
         </div>
-        <button
-          type="button"
-          className="btn-secondary inline-flex items-center gap-2"
-          onClick={() => void printEod()}
-          disabled={!report || loading}
-        >
-          <Printer size={16} />
-          {t('reportsPrintEod')}
-        </button>
+        <div className="flex flex-col items-end gap-2">
+          <EodIncludeProductsCheckbox
+            checked={eodIncludeProductsSold}
+            onChange={setEodIncludeProductsSold}
+          />
+          <button
+            type="button"
+            className="btn-secondary inline-flex items-center gap-2"
+            onClick={() => void printEod()}
+            disabled={!report || loading}
+          >
+            <Printer size={16} />
+            {t('reportsPrintEod')}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-[var(--border)] pb-2">

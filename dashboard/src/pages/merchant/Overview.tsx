@@ -44,6 +44,10 @@ import {
   printViaAgent,
   unsuitableRawPrinterMessage,
 } from '@/lib/print-agent';
+import {
+  EodIncludeProductsCheckbox,
+  useEodIncludeProductsSold,
+} from '@/components/EodIncludeProductsCheckbox';
 
 type Preset = 'today' | 'yesterday' | 'last_week' | 'custom';
 
@@ -136,6 +140,7 @@ export default function Overview() {
   const [exportOpen, setExportOpen] = useState(false);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
+  const [eodIncludeProductsSold, setEodIncludeProductsSold] = useEodIncludeProductsSold();
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams({ preset });
@@ -291,6 +296,7 @@ export default function Overview() {
         paperWidthMm,
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
+        includeProductsSold: eodIncludeProductsSold,
       });
       const names =
         targets.length > 0
@@ -381,6 +387,10 @@ export default function Overview() {
               </option>
             ))}
           </select>
+          <EodIncludeProductsCheckbox
+            checked={eodIncludeProductsSold}
+            onChange={setEodIncludeProductsSold}
+          />
           <button type="button" className="btn-secondary inline-flex items-center gap-1.5" onClick={() => void printOverview()}>
             <Printer className="w-4 h-4" />
             {t('ovPrint')}
