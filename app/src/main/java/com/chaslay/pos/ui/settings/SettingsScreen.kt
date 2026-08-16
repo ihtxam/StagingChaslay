@@ -1,5 +1,6 @@
 package com.chaslay.pos.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -687,18 +688,24 @@ fun SettingsScreen(
             }
         }
         state.scaleUsbAddress?.let { selected ->
-            Text("Selected: $selected", fontSize = 12.sp, color = Color(0xFF16A085))
+            Text(
+                stringResource(R.string.scale_selected) + ": $selected",
+                fontSize = 12.sp,
+                color = Color(0xFF16A085)
+            )
         }
         state.scaleTestReading?.let { reading ->
             Text(reading, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF16A085))
         }
         state.scaleDevices.forEach { device ->
+            val isSelected = device.stableAddress == state.scaleUsbAddress
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 4.dp)
+                    .clickable { viewModel.selectScaleDeviceAndSave(device.stableAddress) },
                 colors = CardDefaults.cardColors(
-                    containerColor = if (device.stableAddress == state.scaleUsbAddress) {
+                    containerColor = if (isSelected) {
                         Color(0xFFECFDF5)
                     } else {
                         MaterialTheme.colorScheme.surfaceVariant
@@ -707,21 +714,20 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(device.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Button(onClick = { viewModel.requestScalePermission(device.stableAddress) }) {
-                            Text(
-                                if (device.hasPermission) stringResource(R.string.usb_printer_allowed)
-                                else stringResource(R.string.usb_printer_permission),
-                                fontSize = 11.sp
-                            )
-                        }
-                        Button(onClick = { viewModel.selectScaleDevice(device.stableAddress) }) {
-                            Text(stringResource(R.string.scale_select_usb), fontSize = 11.sp)
-                        }
-                    }
+                    Text(
+                        when {
+                            isSelected -> stringResource(R.string.scale_selected)
+                            device.hasPermission -> stringResource(R.string.scale_usb_ready)
+                            else -> stringResource(R.string.scale_tap_to_connect)
+                        },
+                        fontSize = 11.sp,
+                        color = when {
+                            isSelected -> Color(0xFF047857)
+                            device.hasPermission -> Color(0xFF6B7280)
+                            else -> Color(0xFF2563EB)
+                        },
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             }
         }

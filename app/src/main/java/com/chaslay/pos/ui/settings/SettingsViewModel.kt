@@ -1168,6 +1168,31 @@ class SettingsViewModel @Inject constructor(
         it.copy(scaleUsbAddress = address, message = "Scale device selected — tap Save")
     }
 
+    fun selectScaleDeviceAndSave(address: String) {
+        fun applySelection() {
+            _uiState.update {
+                it.copy(
+                    scaleUsbAddress = address,
+                    scaleEnabled = true,
+                    message = "Scale selected — saving…"
+                )
+            }
+            saveSettings()
+        }
+        if (scaleService.hasPermission(address)) {
+            applySelection()
+            return
+        }
+        scaleService.requestPermission(address) { granted ->
+            _uiState.update { it.copy(scaleDevices = scaleService.listDevices()) }
+            if (granted) {
+                applySelection()
+            } else {
+                _uiState.update { it.copy(message = "USB permission denied") }
+            }
+        }
+    }
+
     fun scanScaleUsbDevices() {
         val devices = scaleService.listDevices()
         _uiState.update {
@@ -1176,20 +1201,9 @@ class SettingsViewModel @Inject constructor(
                 message = if (devices.isEmpty()) {
                     "No USB scale found — connect Aclas OS6X via USB OTG"
                 } else {
-                    "${devices.size} scale device(s) found — tap one and allow USB access"
+                    "${devices.size} scale device(s) found — tap one below to connect"
                 }
             )
-        }
-    }
-
-    fun requestScalePermission(address: String) {
-        scaleService.requestPermission(address) { granted ->
-            _uiState.update {
-                it.copy(
-                    scaleDevices = scaleService.listDevices(),
-                    message = if (granted) "Scale USB permission granted — tap Save" else "USB permission denied"
-                )
-            }
         }
     }
 

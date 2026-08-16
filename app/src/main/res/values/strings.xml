@@ -373,6 +373,9 @@
     <string name="scale_enabled">Enable Aclas scale (USB)</string>
     <string name="scale_help">Connect Aclas OS6X via USB OTG. Uses standard RS232 auto-upload protocol at 9600 baud.</string>
     <string name="scale_select_usb">Select scale USB device</string>
+    <string name="scale_selected">Selected</string>
+    <string name="scale_usb_ready">USB access allowed</string>
+    <string name="scale_tap_to_connect">Tap to connect and save</string>
     <string name="scale_test_reading">Test scale reading</string>
     <string name="scale_scan_usb">Scan USB scales</string>
     <string name="scale_stable">Stable</string>

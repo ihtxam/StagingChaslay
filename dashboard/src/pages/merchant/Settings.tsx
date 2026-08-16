@@ -23,9 +23,11 @@ import {
 import api from '@/lib/api';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
+  formatScalePortLabel,
   isPrintAgentAvailable,
   isUnsuitableRawPrinter,
   listAgentPrinters,
+  listScalePorts,
   type AgentPrinter,
 } from '@/lib/print-agent';
 import { useI18n, type Locale } from '@/lib/i18n';
@@ -422,6 +424,10 @@ export default function Settings() {
   const [printAgentOk, setPrintAgentOk] = useState(false);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
+  const [scalePorts, setScalePorts] = useState<string[]>([]);
+  const [scanningScalePorts, setScanningScalePorts] = useState(false);
+  const [scalePortsScanned, setScalePortsScanned] = useState(false);
+  const [scaleScanError, setScaleScanError] = useState('');
   const [productCategories, setProductCategories] = useState<Array<{ id: string; name: string }>>([]);
   const [savingTerminal, setSavingTerminal] = useState(false);
   const vacationImageInputRef = useRef<HTMLInputElement>(null);
@@ -836,10 +842,34 @@ export default function Settings() {
     }
   }, []);
 
+  const refreshScalePorts = useCallback(async () => {
+    setScanningScalePorts(true);
+    setScaleScanError('');
+    try {
+      const ok = await isPrintAgentAvailable();
+      if (!ok) {
+        setScalePorts([]);
+        setScalePortsScanned(false);
+        setScaleScanError('');
+        return;
+      }
+      const ports = await listScalePorts();
+      setScalePorts(ports.map((p) => formatScalePortLabel(p)));
+      setScalePortsScanned(true);
+    } catch (e: any) {
+      setScalePorts([]);
+      setScalePortsScanned(true);
+      setScaleScanError(e?.message || t('settingsScaleScanFailed'));
+    } finally {
+      setScanningScalePorts(false);
+    }
+  }, [t]);
+
   useEffect(() => {
     if (tab !== 'receipt') return;
     void refreshPrintAgentPrinters();
-  }, [tab, refreshPrintAgentPrinters]);
+    void refreshScalePorts();
+  }, [tab, refreshPrintAgentPrinters, refreshScalePorts]);
 
   const onSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -1005,12 +1035,8 @@ export default function Settings() {
     }
   };
 
-  const saveReceiptPrint = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!settings) return;
-    setSavingReceipt(true);
-    try {
-      const ps = settings.posPrintSettings || {};
+  const buildPosPrintSettingsPayload = useCallback(
+    (ps: NonNullable<SettingsData['posPrintSettings']>) => {
       const printers = (ps.printers || []).map((p) => ({
         ...p,
         linkedCategoryIds: Array.isArray(p.linkedCategoryIds)
@@ -1018,38 +1044,79 @@ export default function Settings() {
           : [],
         linkedProductIds: Array.isArray(p.linkedProductIds) ? p.linkedProductIds.filter(Boolean) : [],
       }));
+      return {
+        receiptHeader: ps.receiptHeader || '',
+        receiptFooter: ps.receiptFooter || '',
+        kitchenTicketHeader: ps.kitchenTicketHeader || '',
+        kitchenTicketFooter: ps.kitchenTicketFooter || '',
+        kitchenItemTextScale: ps.kitchenItemTextScale === 1 || ps.kitchenItemTextScale === 3 ? ps.kitchenItemTextScale : 2,
+        kitchenHeaderTextScale:
+          ps.kitchenHeaderTextScale === 1 || ps.kitchenHeaderTextScale === 3
+            ? ps.kitchenHeaderTextScale
+            : 2,
+        kitchenBoldText: ps.kitchenBoldText !== false,
+        receiptShowVatTable: ps.receiptShowVatTable !== false,
+        receiptShowStaffLine: ps.receiptShowStaffLine !== false,
+        receiptShowQrCode: ps.receiptShowQrCode !== false,
+        receiptDeliveryDirectionsQr: ps.receiptDeliveryDirectionsQr !== false,
+        adyenReceiptDigitalOnly: ps.adyenReceiptDigitalOnly === true,
+        paperWidthMm: ps.paperWidthMm === 58 ? 58 : 80,
+        receiptLanguage: ps.receiptLanguage || 'panel',
+        receiptLogoUrl: ps.receiptLogoUrl || null,
+        autoPrintReceipt: ps.autoPrintReceipt !== false,
+        autoPrintKitchen: ps.autoPrintKitchen !== false,
+        scaleComPort: ps.scaleComPort?.trim() || null,
+        scaleUsbAddress: ps.scaleUsbAddress?.trim() || null,
+        scaleEnabled:
+          !!ps.scaleComPort?.trim() || !!ps.scaleUsbAddress?.trim() || ps.scaleEnabled === true,
+        printers,
+      };
+    },
+    []
+  );
+
+  const persistPosPrintSettings = useCallback(
+    async (snapshot: SettingsData, successMessage = t('saved')) => {
+      const ps = snapshot.posPrintSettings || {};
       const response = await api.put('/merchant/settings', {
-        posPrintSettings: {
-          receiptHeader: ps.receiptHeader || '',
-          receiptFooter: ps.receiptFooter || '',
-          kitchenTicketHeader: ps.kitchenTicketHeader || '',
-          kitchenTicketFooter: ps.kitchenTicketFooter || '',
-          kitchenItemTextScale: ps.kitchenItemTextScale === 1 || ps.kitchenItemTextScale === 3 ? ps.kitchenItemTextScale : 2,
-          kitchenHeaderTextScale:
-            ps.kitchenHeaderTextScale === 1 || ps.kitchenHeaderTextScale === 3
-              ? ps.kitchenHeaderTextScale
-              : 2,
-          kitchenBoldText: ps.kitchenBoldText !== false,
-          receiptShowVatTable: ps.receiptShowVatTable !== false,
-          receiptShowStaffLine: ps.receiptShowStaffLine !== false,
-          receiptShowQrCode: ps.receiptShowQrCode !== false,
-          receiptDeliveryDirectionsQr: ps.receiptDeliveryDirectionsQr !== false,
-          adyenReceiptDigitalOnly: ps.adyenReceiptDigitalOnly === true,
-          paperWidthMm: ps.paperWidthMm === 58 ? 58 : 80,
-          receiptLanguage: ps.receiptLanguage || 'panel',
-          receiptLogoUrl: ps.receiptLogoUrl || null,
-          autoPrintReceipt: ps.autoPrintReceipt !== false,
-          autoPrintKitchen: ps.autoPrintKitchen !== false,
-          scaleComPort: ps.scaleComPort?.trim() || null,
-          scaleUsbAddress: ps.scaleUsbAddress?.trim() || null,
-          scaleEnabled:
-            !!ps.scaleComPort?.trim() || !!ps.scaleUsbAddress?.trim() || ps.scaleEnabled === true,
-          printers,
-        },
+        posPrintSettings: buildPosPrintSettingsPayload(ps),
       });
       const next = response.data.merchant || response.data.settings || {};
       setSettings((prev) => (prev ? { ...prev, ...next } : prev));
-      toast.success(t('saved'));
+      toast.success(successMessage);
+    },
+    [buildPosPrintSettingsPayload, t]
+  );
+
+  const selectScalePortAndSave = async (port: string) => {
+    if (!settings) return;
+    const label = formatScalePortLabel(port);
+    if (!label) return;
+    const nextSettings: SettingsData = {
+      ...settings,
+      posPrintSettings: {
+        ...(settings.posPrintSettings || {}),
+        scaleComPort: label,
+        scaleEnabled: true,
+      },
+    };
+    setSettings(nextSettings);
+    setSavingReceipt(true);
+    try {
+      await persistPosPrintSettings(nextSettings, t('settingsScaleSaved'));
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('failedSaveReceipt'));
+    } finally {
+      setSavingReceipt(false);
+    }
+  };
+
+  const saveReceiptPrint = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!settings) return;
+    setSavingReceipt(true);
+    try {
+      await persistPosPrintSettings(settings);
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('failedSaveReceipt'));
     } finally {
@@ -2765,25 +2832,61 @@ export default function Settings() {
                     <option value={58}>58mm</option>
                   </select>
                 </Field>
-                <Field
-                  label="Scale COM port (ChaslayReborn)"
-                  hint="Print Agent serial port, e.g. COM3. Skips port scan for faster reads."
-                >
-                  <input
-                    className="input font-mono"
-                    value={settings.posPrintSettings?.scaleComPort || ''}
-                    placeholder="COM3"
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        posPrintSettings: {
-                          ...(settings.posPrintSettings || {}),
-                          scaleComPort: e.target.value.trim() || null,
-                          scaleEnabled: !!e.target.value.trim(),
-                        },
-                      })
-                    }
-                  />
+                <Field label={t('settingsScaleTitle')} hint={t('settingsScaleHint')}>
+                  <div className="space-y-3">
+                    {settings.posPrintSettings?.scaleComPort ? (
+                      <p className="text-sm m-0 text-emerald-700">
+                        {t('settingsScaleSelected')}:{' '}
+                        <span className="font-mono">
+                          {formatScalePortLabel(settings.posPrintSettings.scaleComPort)}
+                        </span>
+                      </p>
+                    ) : null}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        className="btn-secondary inline-flex items-center gap-2 text-sm"
+                        onClick={() => void refreshScalePorts()}
+                        disabled={scanningScalePorts || !printAgentOk}
+                      >
+                        <RefreshCw size={14} className={scanningScalePorts ? 'animate-spin' : ''} />
+                        {scanningScalePorts ? t('settingsScaleScanning') : t('settingsScaleScan')}
+                      </button>
+                      {!printAgentOk ? (
+                        <p className="text-sm m-0 text-[var(--text-muted)]">{t('webPosAgentOffline')}</p>
+                      ) : null}
+                    </div>
+                    {scaleScanError ? (
+                      <p className="text-sm m-0 text-red-600">{scaleScanError}</p>
+                    ) : null}
+                    {scalePorts.length > 0 ? (
+                      <ul className="m-0 list-none space-y-1.5 p-0">
+                        {scalePorts.map((port) => {
+                          const selected =
+                            formatScalePortLabel(settings.posPrintSettings?.scaleComPort || '') === port;
+                          return (
+                            <li key={port}>
+                              <button
+                                type="button"
+                                className={`w-full rounded-lg border px-3 py-2.5 text-left font-mono text-sm transition-colors ${
+                                  selected
+                                    ? 'border-emerald-500 bg-emerald-50 text-emerald-900'
+                                    : 'border-[var(--border)] bg-[var(--bg-elevated)] hover:border-emerald-300 hover:bg-emerald-50/50'
+                                }`}
+                                onClick={() => void selectScalePortAndSave(port)}
+                                disabled={savingReceipt}
+                              >
+                                {port}
+                                {selected ? ` · ${t('settingsScaleSelected')}` : ''}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : scalePortsScanned && printAgentOk && !scanningScalePorts ? (
+                      <p className="text-sm m-0 text-[var(--text-muted)]">{t('settingsScaleNoPorts')}</p>
+                    ) : null}
+                  </div>
                 </Field>
                 <Field
                   label="Scale USB address (Android POS)"
