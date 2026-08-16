@@ -15,6 +15,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -55,6 +56,13 @@ class AdyenTerminalClient @Inject constructor() {
         .readTimeout(160, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
+
+    @Volatile
+    private var activeCall: Call? = null
+
+    fun cancelActiveRequest() {
+        activeCall?.cancel()
+    }
 
     suspend fun testConnection(settings: BusinessSettingsEntity): AdyenConnectionTestResult =
         withContext(Dispatchers.IO) {
@@ -394,8 +402,10 @@ class AdyenTerminalClient @Inject constructor() {
             .header("Content-Type", "application/json")
             .build()
 
+        val call = httpClient.newCall(request)
+        activeCall = call
         return try {
-            httpClient.newCall(request).execute().use { response ->
+            call.execute().use { response ->
                 val responseBody = response.body?.string().orEmpty()
                 Log.d(TAG, "Adyen response HTTP ${response.code} from $url: ${responseBody.take(500)}")
 
@@ -408,8 +418,17 @@ class AdyenTerminalClient @Inject constructor() {
                 parsePaymentResponse(responseBody)
             }
         } catch (e: IOException) {
-            Log.e(TAG, "Adyen terminal network error", e)
-            AdyenTerminalResponse.Error("Network error: ${e.message ?: "Could not reach Adyen"}")
+            if (call.isCanceled) {
+                Log.d(TAG, "Adyen terminal payment request cancelled")
+                AdyenTerminalResponse.Cancelled("Payment request cancelled")
+            } else {
+                Log.e(TAG, "Adyen terminal network error", e)
+                AdyenTerminalResponse.Error("Network error: ${e.message ?: "Could not reach Adyen"}")
+            }
+        } finally {
+            if (activeCall == call) {
+                activeCall = null
+            }
         }
     }
 

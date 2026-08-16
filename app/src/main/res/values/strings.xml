@@ -381,9 +381,22 @@
     <string name="scale_stable">Stable</string>
     <string name="scale_unstable">Unstable — wait for stable weight</string>
     <string name="scale_place_item">Place item on scale</string>
+    <string name="scale_waiting_reading">Waiting for scale reading…</string>
+    <string name="scale_live_reading">Live: %1$s (%2$s)</string>
     <string name="scale_not_connected">Scale not connected — configure in Settings</string>
     <string name="weighed_product_title">Weigh product</string>
     <string name="add_weighed_to_cart">Add to cart</string>
+    <string name="weight_unit_kg">kg</string>
+    <string name="weight_unit_g">g</string>
+    <string name="weight_price_per_kg">%1$s / kg</string>
+    <string name="weight_line_total">= %1$s kg · %2$s</string>
+    <string name="terminal_pay_processing">Processing payment</string>
+    <string name="terminal_pay_sent">Complete the payment on your terminal…</string>
+    <string name="terminal_pay_cancelled">Payment cancelled</string>
+    <string name="terminal_pay_cancelled_msg">The payment was cancelled on the terminal.</string>
+    <string name="terminal_pay_failed">Payment failed</string>
+    <string name="terminal_pay_failed_msg">The terminal could not complete this payment.</string>
+    <string name="terminal_pay_retry">Try again</string>
     <string name="variants">Variants</string>
 
     <!-- Navigation -->

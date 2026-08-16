@@ -99,6 +99,10 @@ class AdyenTerminalService @Inject constructor(
         return result.message
     }
 
+    fun cancelActivePayment() {
+        adyenTerminalClient.cancelActiveRequest()
+    }
+
     suspend fun showDigitalReceipt(
         settings: BusinessSettingsEntity,
         items: List<com.chaslay.pos.domain.model.CartItem>,

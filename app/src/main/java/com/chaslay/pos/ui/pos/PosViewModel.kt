@@ -165,6 +165,10 @@ data class PosUiState(
     val canCancelCartOrder: Boolean = false,
     val showWeighedProductDialog: Boolean = false,
     val scaleReading: com.chaslay.pos.scale.AclasScaleReading? = null,
+    val showTerminalPaymentModal: Boolean = false,
+    val terminalPaymentPhase: TerminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
+    val terminalPaymentAmount: Double = 0.0,
+    val terminalPaymentMessage: String? = null,
     val showGuestCountDialog: Boolean = false,
     val guestCountTableName: String = "",
     val guestCountSeatCapacity: Int = 4,
@@ -355,6 +359,10 @@ class PosViewModel @Inject constructor(
             canCancelCartOrder = !bundle.cart.isEmpty || extras.orderCommittedForCancel,
             showWeighedProductDialog = extras.showWeighedProductDialog,
             scaleReading = extras.scaleReading,
+            showTerminalPaymentModal = extras.showTerminalPaymentModal,
+            terminalPaymentPhase = extras.terminalPaymentPhase,
+            terminalPaymentAmount = extras.terminalPaymentAmount,
+            terminalPaymentMessage = extras.terminalPaymentMessage,
             showGuestCountDialog = extras.showGuestCountDialog,
             guestCountTableName = extras.guestCountTableName,
             guestCountSeatCapacity = extras.guestCountSeatCapacity,
@@ -2932,6 +2940,34 @@ class PosViewModel @Inject constructor(
         expressPay(PaymentMethod.ADYEN_TERMINAL, activity)
     }
 
+    fun cancelTerminalPayment() {
+        adyenTerminalService.cancelActivePayment()
+        updateExtras {
+            it.copy(
+                terminalPaymentPhase = TerminalPaymentPhase.CANCELLED,
+                terminalPaymentMessage = appContext.getString(R.string.terminal_pay_cancelled),
+                isProcessingPayment = false
+            )
+        }
+    }
+
+    fun dismissTerminalPaymentModal() {
+        updateExtras {
+            it.copy(
+                showTerminalPaymentModal = false,
+                terminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
+                terminalPaymentAmount = 0.0,
+                terminalPaymentMessage = null,
+                isProcessingPayment = false
+            )
+        }
+    }
+
+    fun retryTerminalPayment(activity: Activity?) {
+        dismissTerminalPaymentModal()
+        initiateTerminalPayment(activity)
+    }
+
     fun xpressSale() {
         if (!cachedSettings.expressEnabled) return
         val payable = cartManager.paymentSnapshot()
@@ -3144,6 +3180,14 @@ class PosViewModel @Inject constructor(
                     if (!settings.adyenTerminalEnabled) {
                         PaymentResult.Failure("Enable Adyen terminal in Settings")
                     } else {
+                        updateExtras {
+                            it.copy(
+                                showTerminalPaymentModal = true,
+                                terminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
+                                terminalPaymentAmount = roundedTotal,
+                                terminalPaymentMessage = null
+                            )
+                        }
                         paymentOrchestrator.processAdyenTerminalPayment(
                             roundedTotal,
                             settings.defaultCurrency,
@@ -3339,6 +3383,10 @@ class PosViewModel @Inject constructor(
                     updateExtras {
                         it.copy(
                             isProcessingPayment = false,
+                            showTerminalPaymentModal = false,
+                            terminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
+                            terminalPaymentAmount = 0.0,
+                            terminalPaymentMessage = null,
                             showCheckoutScreen = false,
                             showOrderComplete = true,
                             completedTransaction = publishedTx,
@@ -3367,12 +3415,47 @@ class PosViewModel @Inject constructor(
                     it.copy(
                         isProcessingPayment = false,
                         tapToPayMessage = null,
-                        errorMessage = paymentResult.message,
-                        errorTitle = "Payment failed"
+                        showTerminalPaymentModal = method == PaymentMethod.ADYEN_TERMINAL,
+                        terminalPaymentPhase = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                            TerminalPaymentPhase.FAILED
+                        } else {
+                            it.terminalPaymentPhase
+                        },
+                        terminalPaymentAmount = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                            roundedTotal
+                        } else {
+                            it.terminalPaymentAmount
+                        },
+                        terminalPaymentMessage = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                            paymentResult.message
+                        } else {
+                            it.terminalPaymentMessage
+                        },
+                        errorMessage = if (method == PaymentMethod.ADYEN_TERMINAL) null else paymentResult.message,
+                        errorTitle = if (method == PaymentMethod.ADYEN_TERMINAL) null else "Payment failed"
                     )
                 }
                 PaymentResult.Cancelled -> updateExtras {
-                    it.copy(isProcessingPayment = false, tapToPayMessage = null)
+                    it.copy(
+                        isProcessingPayment = false,
+                        tapToPayMessage = null,
+                        showTerminalPaymentModal = method == PaymentMethod.ADYEN_TERMINAL,
+                        terminalPaymentPhase = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                            TerminalPaymentPhase.CANCELLED
+                        } else {
+                            it.terminalPaymentPhase
+                        },
+                        terminalPaymentAmount = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                            roundedTotal
+                        } else {
+                            it.terminalPaymentAmount
+                        },
+                        terminalPaymentMessage = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                            appContext.getString(R.string.terminal_pay_cancelled_msg)
+                        } else {
+                            it.terminalPaymentMessage
+                        }
+                    )
                 }
             }
         }
@@ -3986,6 +4069,10 @@ class PosViewModel @Inject constructor(
         val receiptPrintedForOrder: Boolean = false,
         val showWeighedProductDialog: Boolean = false,
         val scaleReading: com.chaslay.pos.scale.AclasScaleReading? = null,
+        val showTerminalPaymentModal: Boolean = false,
+        val terminalPaymentPhase: TerminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
+        val terminalPaymentAmount: Double = 0.0,
+        val terminalPaymentMessage: String? = null,
         val showGuestCountDialog: Boolean = false,
         val guestCountTableName: String = "",
         val guestCountSeatCapacity: Int = 4,

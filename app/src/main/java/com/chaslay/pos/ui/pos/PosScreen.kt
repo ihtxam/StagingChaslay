@@ -818,16 +818,27 @@ fun PosScreen(
 
     if (state.showWeighedProductDialog) {
         state.selectedProduct?.let { product ->
-        WeighedProductDialog(
-            productName = product.name,
-            pricePerKg = product.price,
-            currencySymbol = state.currencySymbol,
-            scaleEnabled = state.settings.scaleEnabled,
-            reading = state.scaleReading,
-            onConfirm = viewModel::addWeighedProductToCart,
-            onDismiss = viewModel::dismissWeighedProductDialog
-        )
+            WeightProductDialog(
+                productName = product.name,
+                pricePerKg = product.price,
+                currencySymbol = state.currencySymbol,
+                scaleEnabled = state.settings.scaleEnabled,
+                reading = state.scaleReading,
+                onConfirm = viewModel::addWeighedProductToCart,
+                onDismiss = viewModel::dismissWeighedProductDialog
+            )
         }
+    }
+
+    if (state.showTerminalPaymentModal) {
+        TerminalPaymentDialog(
+            phase = state.terminalPaymentPhase,
+            amountLabel = formatMoney(state.terminalPaymentAmount, state.currencySymbol),
+            message = state.terminalPaymentMessage,
+            onCancel = viewModel::cancelTerminalPayment,
+            onRetry = { viewModel.retryTerminalPayment(activity) },
+            onClose = viewModel::dismissTerminalPaymentModal
+        )
     }
 
     state.productCustomize?.let { customize ->
@@ -3074,68 +3085,6 @@ private fun OpenPriceDialog(
         confirmButton = {
             Button(onClick = { priceText.toDoubleOrNull()?.let(onConfirm) }) {
                 Text(stringResource(R.string.add_to_cart))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        }
-    )
-}
-
-@Composable
-private fun WeighedProductDialog(
-    productName: String,
-    pricePerKg: Double,
-    currencySymbol: String,
-    scaleEnabled: Boolean,
-    reading: com.chaslay.pos.scale.AclasScaleReading?,
-    onConfirm: (Double) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val weightKg = reading?.weightKg ?: 0.0
-    val stable = reading?.status == com.chaslay.pos.scale.AclasScaleStatus.STABLE
-    val total = pricePerKg * weightKg.coerceAtLeast(0.0)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.weighed_product_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(productName, fontWeight = FontWeight.Bold)
-                Text(
-                    "${formatMoney(pricePerKg, currencySymbol)} / kg",
-                    color = Color.Gray,
-                    fontSize = 14.sp
-                )
-                if (!scaleEnabled) {
-                    Text(stringResource(R.string.scale_not_connected), color = Color(0xFFB91C1C), fontSize = 13.sp)
-                } else if (reading == null) {
-                    Text(stringResource(R.string.scale_place_item), color = Color.Gray, fontSize = 13.sp)
-                } else {
-                    Text(
-                        com.chaslay.pos.scale.AclasScaleProtocol.formatWeight(weightKg),
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        if (stable) stringResource(R.string.scale_stable) else stringResource(R.string.scale_unstable),
-                        color = if (stable) Color(0xFF16A085) else Color(0xFFE67E22),
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        "Total: ${formatMoney(total, currencySymbol)}",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(weightKg) },
-                enabled = scaleEnabled && stable && weightKg > 0.0
-            ) {
-                Text(stringResource(R.string.add_weighed_to_cart))
             }
         },
         dismissButton = {
