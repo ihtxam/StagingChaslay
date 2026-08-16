@@ -99,6 +99,17 @@ const TABLE_PATCHES: string[] = [
   `CREATE INDEX IF NOT EXISTS voucher_redemptions_voucher_id_idx ON voucher_redemptions(voucher_id)`,
   `CREATE INDEX IF NOT EXISTS voucher_redemptions_order_id_idx ON voucher_redemptions(order_id)`,
   `CREATE INDEX IF NOT EXISTS voucher_redemptions_customer_id_idx ON voucher_redemptions(customer_id)`,
+  `CREATE TABLE IF NOT EXISTS table_qr_codes (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    table_id uuid NOT NULL REFERENCES dining_tables(id) ON DELETE CASCADE,
+    code_type varchar(20) NOT NULL DEFAULT 'static',
+    code varchar(512) NOT NULL,
+    expires_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS table_qr_codes_merchant_id_idx ON table_qr_codes(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS table_qr_codes_table_id_idx ON table_qr_codes(table_id)`,
 ];
 
 let startupPatchPromise: Promise<void> | null = null;

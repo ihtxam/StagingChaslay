@@ -1061,6 +1061,30 @@ export const diningTables = pgTable(
   })
 );
 
+/** Optional static / temporary QR payloads per table (default QR uses table UUID). */
+export const tableQrCodes = pgTable(
+  "table_qr_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    tableId: uuid("table_id")
+      .notNull()
+      .references(() => diningTables.id, { onDelete: "cascade" }),
+    /** static | temporary */
+    codeType: varchar("code_type", { length: 20 }).notNull().default("static"),
+    /** QR payload string (CHASLAY:T:… or shop URL) */
+    code: varchar("code", { length: 512 }).notNull(),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdIdx: index("table_qr_codes_merchant_id_idx").on(table.merchantId),
+    tableIdIdx: index("table_qr_codes_table_id_idx").on(table.tableId),
+  })
+);
+
 // ============================================================================
 // RESTAURANT RESERVATIONS
 // ============================================================================
@@ -1974,9 +1998,15 @@ export const floorPlansRelations = relations(floorPlans, ({ one, many }) => ({
   tables: many(diningTables),
 }));
 
-export const diningTablesRelations = relations(diningTables, ({ one }) => ({
+export const diningTablesRelations = relations(diningTables, ({ one, many }) => ({
   merchant: one(merchants, { fields: [diningTables.merchantId], references: [merchants.id] }),
   floorPlan: one(floorPlans, { fields: [diningTables.floorPlanId], references: [floorPlans.id] }),
+  qrCodes: many(tableQrCodes),
+}));
+
+export const tableQrCodesRelations = relations(tableQrCodes, ({ one }) => ({
+  merchant: one(merchants, { fields: [tableQrCodes.merchantId], references: [merchants.id] }),
+  table: one(diningTables, { fields: [tableQrCodes.tableId], references: [diningTables.id] }),
 }));
 
 export const devicesRelations = relations(devices, ({ one, many }) => ({

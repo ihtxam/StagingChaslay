@@ -18,7 +18,10 @@ import Settings from './Settings';
 import Billing from './Billing';
 import Staff from './Staff';
 import OnlineShop from './OnlineShop';
-import FloorPlan from './FloorPlan';
+import TableManagementLayout from './tables/TableManagementLayout';
+import TableSettings from './tables/TableSettings';
+import TableLayout from './tables/TableLayout';
+import TableQrCodes from './tables/TableQrCodes';
 import Reservations from './Reservations';
 import Newsletter from './Newsletter';
 import WebPos from './WebPos';
@@ -232,8 +235,19 @@ function MerchantShell() {
         { label: t('cmsWebsite'), path: '/merchant/website', icon: '✏️' },
       ].filter((item) => allow(item.path)),
     },
-    ...(allow('/merchant/floor-plan')
-      ? [{ label: t('floorPlan'), path: '/merchant/floor-plan', icon: '🪑' }]
+    ...(allow('/merchant/tables/settings')
+      ? [
+          {
+            id: 'tables',
+            label: t('navTableManagement'),
+            icon: '🪑',
+            children: [
+              { label: t('tableNavSettings'), path: '/merchant/tables/settings', icon: '⚙️' },
+              { label: t('tableNavLayout'), path: '/merchant/tables/layout', icon: '🗺️' },
+              { label: t('tableNavQr'), path: '/merchant/tables/qr', icon: '📱' },
+            ].filter((item) => allow(item.path)),
+          },
+        ]
       : []),
     ...(allow('/merchant/users')
       ? [{ label: t('staffPageTitle'), path: '/merchant/users', icon: '👤' }]
@@ -409,12 +423,42 @@ function MerchantShell() {
             <Route path="terminals" element={<Terminals />} />
             <Route
               path="floor-plan"
+              element={<Navigate to="/merchant/tables/layout" replace />}
+            />
+            <Route
+              path="tables"
               element={
-                <PanelRouteGuard path="/merchant/floor-plan" allow={allow}>
-                  <FloorPlan />
+                <PanelRouteGuard path="/merchant/tables/settings" allow={allow}>
+                  <TableManagementLayout />
                 </PanelRouteGuard>
               }
-            />
+            >
+              <Route index element={<Navigate to="settings" replace />} />
+              <Route
+                path="settings"
+                element={
+                  <PanelRouteGuard path="/merchant/tables/settings" allow={allow}>
+                    <TableSettings />
+                  </PanelRouteGuard>
+                }
+              />
+              <Route
+                path="layout"
+                element={
+                  <PanelRouteGuard path="/merchant/tables/layout" allow={allow}>
+                    <TableLayout />
+                  </PanelRouteGuard>
+                }
+              />
+              <Route
+                path="qr"
+                element={
+                  <PanelRouteGuard path="/merchant/tables/qr" allow={allow}>
+                    <TableQrCodes />
+                  </PanelRouteGuard>
+                }
+              />
+            </Route>
             <Route
               path="sales/reservations"
               element={

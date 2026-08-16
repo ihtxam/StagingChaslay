@@ -148,7 +148,7 @@ const STATUS_COLOR: Record<TableStatus, string> = {
   dirty: '#94a3b8',
 };
 
-export default function FloorPlan({ embedded = false }: { embedded?: boolean }) {
+export default function FloorPlan({ embedded = false, hideQr = false }: { embedded?: boolean; hideQr?: boolean }) {
   const { t } = useI18n();
   const [plans, setPlans] = useState<FloorPlanData[]>([]);
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
@@ -787,7 +787,7 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                 </span>
               ))}
             </div>
-            {merchantSlug && activePlan ? (
+            {merchantSlug && activePlan && !hideQr ? (
               <TableQrPrintPanel
                 merchantSlug={merchantSlug}
                 tables={tables

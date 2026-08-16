@@ -66,7 +66,13 @@ export class FloorPlanService {
   static async updatePlan(
     merchantId: string,
     planId: string,
-    updates: { name?: string; canvasWidth?: number; canvasHeight?: number; isActive?: boolean }
+    updates: {
+      name?: string;
+      canvasWidth?: number;
+      canvasHeight?: number;
+      isActive?: boolean;
+      sortOrder?: number;
+    }
   ) {
     const db = getDb();
     const existing = await db.query.floorPlans.findFirst({
@@ -81,6 +87,7 @@ export class FloorPlanService {
         canvasWidth: updates.canvasWidth ?? existing.canvasWidth,
         canvasHeight: updates.canvasHeight ?? existing.canvasHeight,
         isActive: updates.isActive !== undefined ? !!updates.isActive : existing.isActive,
+        sortOrder: updates.sortOrder ?? existing.sortOrder,
         updatedAt: new Date(),
       })
       .where(eq(schema.floorPlans.id, planId));
@@ -157,6 +164,162 @@ export class FloorPlanService {
       .where(eq(schema.floorPlans.id, planId));
 
     return this.getPlan(merchantId, planId);
+  }
+
+  /** Add multiple tables with sequential labels (batch create). */
+  static async batchAddTables(
+    merchantId: string,
+    planId: string,
+    input: {
+      prefix?: string;
+      startNumber?: number;
+      count?: number;
+      capacity?: number;
+    }
+  ) {
+    const plan = await this.getPlan(merchantId, planId);
+    const prefix = String(input.prefix ?? "").trim() || "T";
+    const startNumber = Math.max(0, Number(input.startNumber) || 1);
+    const count = Math.max(1, Math.min(100, Number(input.count) || 1));
+    const capacity = Math.max(1, Math.min(50, Number(input.capacity) || 4));
+
+    const existing = (plan.tables || []).map((t) => ({
+      id: t.id,
+      label: t.label,
+      capacity: t.capacity,
+      shape: (t.shape === "round" ? "round" : "rect") as TableShape,
+      posX: t.posX,
+      posY: t.posY,
+      width: t.width,
+      height: t.height,
+      rotation: t.rotation,
+      status: t.status as TableStatus,
+      sortOrder: t.sortOrder,
+    }));
+
+    const additions: DiningTableInput[] = [];
+    for (let i = 0; i < count; i++) {
+      const idx = existing.length + i;
+      additions.push({
+        label: `${prefix}${startNumber + i}`,
+        capacity,
+        shape: "rect",
+        posX: 40 + (idx % 6) * 120,
+        posY: 40 + Math.floor(idx / 6) * 100,
+        width: 100,
+        height: 80,
+        rotation: 0,
+        status: "available",
+        sortOrder: idx,
+      });
+    }
+
+    return this.saveTables(merchantId, planId, [...existing, ...additions], plan.elements || []);
+  }
+
+  /** Patch a single table without replacing the whole plan. */
+  static async patchTable(
+    merchantId: string,
+    tableId: string,
+    patch: Partial<DiningTableInput & { floorPlanId?: string }>
+  ) {
+    const db = getDb();
+    const table = await db.query.diningTables.findFirst({
+      where: and(eq(schema.diningTables.id, tableId), eq(schema.diningTables.merchantId, merchantId)),
+    });
+    if (!table) throw new Error("Table not found");
+
+    if (patch.floorPlanId && patch.floorPlanId !== table.floorPlanId) {
+      const target = await db.query.floorPlans.findFirst({
+        where: and(
+          eq(schema.floorPlans.id, patch.floorPlanId),
+          eq(schema.floorPlans.merchantId, merchantId)
+        ),
+      });
+      if (!target) throw new Error("Section not found");
+    }
+
+    const [updated] = await db
+      .update(schema.diningTables)
+      .set({
+        floorPlanId: patch.floorPlanId ?? table.floorPlanId,
+        label: patch.label !== undefined ? String(patch.label).trim() || table.label : table.label,
+        capacity:
+          patch.capacity !== undefined
+            ? Math.max(1, Math.min(50, Number(patch.capacity) || table.capacity))
+            : table.capacity,
+        shape: patch.shape === "round" ? "round" : patch.shape === "rect" ? "rect" : table.shape,
+        posX: patch.posX !== undefined ? Number(patch.posX) : table.posX,
+        posY: patch.posY !== undefined ? Number(patch.posY) : table.posY,
+        width: patch.width !== undefined ? Math.max(40, Number(patch.width) || table.width) : table.width,
+        height:
+          patch.height !== undefined ? Math.max(40, Number(patch.height) || table.height) : table.height,
+        rotation: patch.rotation !== undefined ? Number(patch.rotation) : table.rotation,
+        sortOrder: patch.sortOrder !== undefined ? Number(patch.sortOrder) : table.sortOrder,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.diningTables.id, tableId))
+      .returning();
+
+    return updated!;
+  }
+
+  /** Delete one table from a plan. */
+  static async deleteTable(merchantId: string, tableId: string) {
+    const db = getDb();
+    const table = await db.query.diningTables.findFirst({
+      where: and(eq(schema.diningTables.id, tableId), eq(schema.diningTables.merchantId, merchantId)),
+    });
+    if (!table) throw new Error("Table not found");
+    await db.delete(schema.diningTables).where(eq(schema.diningTables.id, tableId));
+    return { success: true };
+  }
+
+  /** Add one table to a section. */
+  static async addTable(
+    merchantId: string,
+    planId: string,
+    input: { label: string; capacity?: number }
+  ) {
+    const plan = await this.getPlan(merchantId, planId);
+    const label = String(input.label || "").trim();
+    if (!label) throw new Error("Table label is required");
+
+    const existing = (plan.tables || []).map((t) => ({
+      id: t.id,
+      label: t.label,
+      capacity: t.capacity,
+      shape: (t.shape === "round" ? "round" : "rect") as TableShape,
+      posX: t.posX,
+      posY: t.posY,
+      width: t.width,
+      height: t.height,
+      rotation: t.rotation,
+      status: t.status as TableStatus,
+      sortOrder: t.sortOrder,
+    }));
+
+    const idx = existing.length;
+    return this.saveTables(
+      merchantId,
+      planId,
+      [
+        ...existing,
+        {
+          label,
+          capacity: Math.max(1, Math.min(50, Number(input.capacity) || 4)),
+          shape: "rect",
+          posX: 40 + (idx % 6) * 120,
+          posY: 40 + Math.floor(idx / 6) * 100,
+          width: 100,
+          height: 80,
+          rotation: 0,
+          status: "available",
+          sortOrder: idx,
+        },
+      ],
+      plan.elements || []
+    );
   }
 
   static async setTableStatus(

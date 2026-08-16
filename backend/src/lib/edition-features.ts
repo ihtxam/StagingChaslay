@@ -87,6 +87,10 @@ export const ALL_EDITION_FEATURES: EditionFeatureKey[] = EDITION_FEATURE_GROUPS.
 /** Merchant panel routes gated by edition features */
 export const EDITION_ROUTE_FEATURES: Record<string, EditionFeatureKey[]> = {
   "/merchant/floor-plan": ["pos_tables"],
+  "/merchant/tables": ["pos_tables"],
+  "/merchant/tables/settings": ["pos_tables"],
+  "/merchant/tables/layout": ["pos_tables"],
+  "/merchant/tables/qr": ["pos_tables"],
   "/merchant/loyalty": ["loyalty", "gift_cards"],
   "/merchant/offers": ["offers"],
   "/merchant/newsletter": ["online_shop"],
