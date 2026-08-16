@@ -61,6 +61,10 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_use_legacy_endpoint boolean NOT NULL DEFAULT false",
   courses_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS courses_enabled boolean NOT NULL DEFAULT false",
+  max_pos_posts:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS max_pos_posts integer NOT NULL DEFAULT 0",
+  max_waiter_posts:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS max_waiter_posts integer NOT NULL DEFAULT 0",
 };
 
 /** Idempotent CREATE TABLE for features added after initial deploy. */
@@ -112,6 +116,41 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS table_qr_codes_merchant_id_idx ON table_qr_codes(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS table_qr_codes_table_id_idx ON table_qr_codes(table_id)`,
+  `CREATE TABLE IF NOT EXISTS gift_card_purchases (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    amount numeric(10, 2) NOT NULL,
+    recipient_email varchar(255) NOT NULL,
+    recipient_name varchar(255),
+    sender_name varchar(255),
+    sender_email varchar(255),
+    message text,
+    payment_method varchar(20) NOT NULL DEFAULT 'card',
+    payment_status varchar(30) NOT NULL DEFAULT 'awaiting_payment',
+    adyen_reference varchar(255),
+    card_id uuid REFERENCES gift_cards(id) ON DELETE SET NULL,
+    fulfilled_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS gift_card_purchases_merchant_id_idx ON gift_card_purchases(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS gift_card_purchases_payment_status_idx ON gift_card_purchases(payment_status)`,
+  `CREATE TABLE IF NOT EXISTS pos_sessions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    session_kind varchar(20) NOT NULL DEFAULT 'main',
+    platform varchar(30) NOT NULL,
+    device_id varchar(128) NOT NULL,
+    device_label varchar(255),
+    staff_id uuid,
+    staff_name varchar(255),
+    last_heartbeat timestamptz NOT NULL DEFAULT now(),
+    revoked_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_id_idx ON pos_sessions(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_device_idx ON pos_sessions(merchant_id, device_id, session_kind)`,
+  `CREATE INDEX IF NOT EXISTS pos_sessions_active_idx ON pos_sessions(merchant_id, session_kind, last_heartbeat)`,
 ];
 
 let startupPatchPromise: Promise<void> | null = null;

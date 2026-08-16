@@ -374,13 +374,16 @@ export class GiftCardService {
       type: "sell" | "reload";
       orderId?: string;
       createIfMissing?: boolean;
+      skipShiftCheck?: boolean;
     }
   ) {
     const db = getDb();
     const settings = await this.getSettings(merchantId);
     if (!settings.enabled) throw new Error("Gift cards are disabled");
     if (opts.type === "sell") {
-      await assertOpenShiftForSell(merchantId);
+      if (!opts.skipShiftCheck) {
+        await assertOpenShiftForSell(merchantId);
+      }
     }
     if (opts.type === "reload" && !settings.reloadEnabled) {
       throw new Error("Card reload is disabled");
@@ -904,13 +907,18 @@ export class GiftCardService {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(schema.merchants.id, merchantId),
-      columns: { name: true },
+      columns: { name: true, slug: true },
     });
     const shopName = merchant?.name || "Shop";
     const code = buildGiftCardRedeemQrPayload(opts.code);
     if (!code) throw new Error("Gift card code is required");
     const balance = money(opts.balance);
     const redeemUrl = buildGiftCardRedeemUrl(code);
+    const shopSlug = merchant?.slug;
+    const shopGiftUrl =
+      shopSlug && process.env.DOMAIN
+        ? `https://shop.${process.env.DOMAIN.replace(/^https?:\/\//, '')}/${shopSlug}/gift/${encodeURIComponent(code)}`
+        : redeemUrl;
     const holder = opts.holderName?.trim();
 
     const subject = `${shopName} · Gift card CHF ${balance.toFixed(2)}`;
@@ -922,8 +930,8 @@ export class GiftCardService {
         <p style="margin:16px 0 8px;font-weight:600;">Your gift card code</p>
         <p style="font-family:ui-monospace,monospace;font-size:20px;letter-spacing:1px;background:#f5f5f4;padding:12px 16px;border-radius:8px;">${code.replace(/</g, "&lt;")}</p>
         <p style="margin:16px 0 8px;color:#57534e;">Present this code or QR at checkout to redeem.</p>
-        <p><a href="${redeemUrl}" style="display:inline-block;padding:10px 16px;background:#0f766e;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">View gift card</a></p>
-        <p style="color:#666;font-size:12px;word-break:break-all;">${redeemUrl}</p>
+        <p><a href="${shopGiftUrl}" style="display:inline-block;padding:10px 16px;background:#0f766e;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">View gift card</a></p>
+        <p style="color:#666;font-size:12px;word-break:break-all;">${shopGiftUrl}</p>
       </div>
     `;
     const text =
@@ -931,7 +939,7 @@ export class GiftCardService {
       (holder ? `For: ${holder}\n` : "") +
       `Code: ${code}\n` +
       `Redeem at checkout by scanning or entering the code.\n` +
-      `${redeemUrl}\n`;
+      `${shopGiftUrl}\n`;
 
     await EmailService.send({
       to,

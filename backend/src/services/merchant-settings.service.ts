@@ -143,6 +143,11 @@ export class MerchantSettingsService {
       paxOrderingEnabled: merchant.paxOrderingEnabled,
       coursesEnabled: !!merchant.coursesEnabled,
       shiftsEnabled: !!merchant.shiftsEnabled,
+      maxPosPosts: Math.max(0, Number((merchant as { maxPosPosts?: number }).maxPosPosts ?? 0)),
+      maxWaiterPosts: Math.max(
+        0,
+        Number((merchant as { maxWaiterPosts?: number }).maxWaiterPosts ?? 0)
+      ),
       posColorTheme: (merchant.posColorTheme as string) || "teal",
       storeHours: merchant.storeHours || {},
       shopLogoUrl: merchant.shopLogoUrl,
@@ -231,6 +236,8 @@ export class MerchantSettingsService {
       paxOrderingEnabled?: boolean;
       coursesEnabled?: boolean;
       shiftsEnabled?: boolean;
+      maxPosPosts?: number;
+      maxWaiterPosts?: number;
       posColorTheme?: string;
       storeHours?: Record<string, unknown>;
       shopLogoUrl?: string | null;
@@ -314,6 +321,12 @@ export class MerchantSettingsService {
     if (updates.paxOrderingEnabled !== undefined) patch.paxOrderingEnabled = !!updates.paxOrderingEnabled;
     if (updates.coursesEnabled !== undefined) patch.coursesEnabled = !!updates.coursesEnabled;
     if (updates.shiftsEnabled !== undefined) patch.shiftsEnabled = !!updates.shiftsEnabled;
+    if (updates.maxPosPosts !== undefined) {
+      patch.maxPosPosts = Math.max(0, Math.min(99, Number(updates.maxPosPosts) || 0));
+    }
+    if (updates.maxWaiterPosts !== undefined) {
+      patch.maxWaiterPosts = Math.max(0, Math.min(99, Number(updates.maxWaiterPosts) || 0));
+    }
     if (updates.posColorTheme !== undefined) {
       const theme = String(updates.posColorTheme || "teal").toLowerCase();
       patch.posColorTheme = ["teal", "green", "blue", "violet", "mono"].includes(theme)

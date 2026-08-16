@@ -99,6 +99,8 @@ export interface ShopCheckoutDraft {
   voucherCode?: string;
   voucherDiscount?: number;
   voucherName?: string;
+  /** Gift card code for checkout redemption */
+  giftCardCode?: string;
   /** Dine-in table from QR scan */
   tableId?: string;
 }
@@ -187,6 +189,7 @@ export function emptyDraft(channel: ShopChannel = 'takeaway'): ShopCheckoutDraft
     authMode: 'guest',
     pointsToRedeem: 0,
     voucherCode: '',
+    giftCardCode: '',
     voucherDiscount: 0,
     voucherName: '',
   };

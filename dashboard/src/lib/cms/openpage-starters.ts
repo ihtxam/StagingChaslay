@@ -5,7 +5,7 @@
  */
 import type { OpenPageBlocks, OpenPageSiteConfig } from './openpage-types';
 
-export type CmsStarterKey = 'blank' | 'restaurant' | 'food_truck';
+export type CmsStarterKey = 'blank' | 'restaurant' | 'food_truck' | 'cafe_classic' | 'bistro_light';
 
 type Block = OpenPageSiteConfig['blocks'][number];
 
@@ -487,12 +487,151 @@ export function blankStarter(title = 'Homepage'): OpenPageBlocks {
   return bundle(config, html);
 }
 
+const CAFE_LIGHT_THEME = {
+  bg0: '#ffffff',
+  bg1: '#fafafa',
+  bg2: '#f5f5f4',
+  bg3: '#e7e5e4',
+  bg4: '#d6d3d1',
+  bg5: '#a8a29e',
+  text0: '#171717',
+  text1: '#404040',
+  text2: '#737373',
+  text3: '#a3a3a3',
+  accent: '#171717',
+  accentDim: '#404040',
+  borderDefault: '#e5e5e5',
+  borderSubtle: '#f0f0f0',
+  borderHover: '#d4d4d4',
+  fontSans: 'DM Sans',
+  fontDisplay: 'DM Sans',
+  fontMono: 'JetBrains Mono',
+  radius: 8,
+  radiusLg: 16,
+  presetId: 'clean',
+};
+
+function cafeClassicBlocks(name: string): Block[] {
+  return [
+    {
+      id: 'block-navbar',
+      type: 'navbar',
+      variant: 'pill',
+      props: {
+        logo: name,
+        links: ['Menu', 'Catering', 'Our Story', 'Location', 'FAQs'],
+        ctaText: 'Order online →',
+        ctaUrl: '/menu',
+        signInText: 'Sign in',
+      },
+    },
+    {
+      id: 'block-hero',
+      type: 'hero',
+      variant: 'overlay',
+      props: {
+        badge: 'Best cafe in the neighborhood',
+        headline: 'Where Every Meal Feels Like Home, Served Fresh Daily',
+        subheadline: 'Craft coffee, brunch, and comfort food made from scratch every morning.',
+        primaryCta: 'Order online →',
+        primaryCtaUrl: '/menu',
+      },
+    },
+    {
+      id: 'block-featured',
+      type: 'featured',
+      variant: 'row',
+      props: {
+        title: 'Featured',
+        viewAllText: 'View menu →',
+        viewAllUrl: '/menu',
+        items: [
+          { title: 'Morning croissant' },
+          { title: 'Avocado toast' },
+          { title: 'Seasonal latte' },
+          { title: 'House sandwich' },
+          { title: 'Chef special' },
+        ],
+      },
+    },
+    {
+      id: 'block-footer',
+      type: 'footer',
+      variant: 'minimal',
+      props: {
+        copyright: `${YEAR()} ${name}`,
+        links: ['Menu', 'Gift cards', 'Contact'],
+      },
+    },
+  ];
+}
+
+function renderCafeLightHtml(name: string, headline: string, subheadline: string, badge: string): string {
+  const safeName = escapeHtml(name);
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${safeName}</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>body{margin:0;font-family:"DM Sans",sans-serif;background:#fff;color:#171717}.wrap{max-width:72rem;margin:0 auto;padding:0 1.25rem}
+header{display:flex;align-items:center;justify-content:space-between;padding:1rem 0;border-bottom:1px solid #eee}
+.btn{padding:.65rem 1.25rem;border-radius:999px;background:#171717;color:#fff;font-weight:600;text-decoration:none;font-size:.85rem}
+.hero{min-height:380px;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;background:linear-gradient(135deg,#78716c,#44403c);margin:0 -1.25rem;padding:3rem 1.25rem;position:relative}
+.hero::before{content:"";position:absolute;inset:0;background:rgba(0,0,0,.4)}.hero>div{position:relative;z-index:1;max-width:40rem}
+.hero h1{font-size:clamp(1.75rem,4vw,2.75rem);margin:0 0 .75rem;line-height:1.1}.featured{padding:2rem 0;display:flex;gap:1rem;overflow-x:auto}
+.card{flex:0 0 10rem;height:13rem;border-radius:1rem;background:#f5f5f4;border:1px solid #e5e5e5}
+a{color:inherit;text-decoration:none}</style></head><body><div class="wrap">
+<header><strong>${safeName}</strong><a class="btn" href="/menu">Order online →</a></header>
+<section class="hero"><div><p>${escapeHtml(badge)}</p><h1>${escapeHtml(headline)}</h1><p>${escapeHtml(subheadline)}</p><a class="btn" href="/menu">Order online →</a></div></section>
+<section class="featured"><div class="card"></div><div class="card"></div><div class="card"></div><div class="card"></div></section>
+</div></body></html>`;
+}
+
+export function cafeClassicStarter(title = 'Cafe'): OpenPageBlocks {
+  const name = String(title || 'Cafe').trim() || 'Cafe';
+  const blocks = cafeClassicBlocks(name);
+  const config = withPages(name, blocks, CAFE_LIGHT_THEME);
+  const html = renderCafeLightHtml(
+    name,
+    'Where Every Meal Feels Like Home, Served Fresh Daily',
+    'Craft coffee, brunch, and comfort food made from scratch every morning.',
+    'Best cafe in the neighborhood'
+  );
+  return bundle(config, html);
+}
+
+export function bistroLightStarter(title = 'Bistro'): OpenPageBlocks {
+  const name = String(title || 'Bistro').trim() || 'Bistro';
+  const blocks = cafeClassicBlocks(name).map((b) =>
+    b.type === 'hero'
+      ? {
+          ...b,
+          props: {
+            ...b.props,
+            headline: `Welcome to ${name}`,
+            subheadline: 'Neighborhood bistro — order pickup or delivery online.',
+            badge: 'Neighborhood bistro',
+          },
+        }
+      : b
+  );
+  const config = withPages(name, blocks, CAFE_LIGHT_THEME);
+  const html = renderCafeLightHtml(
+    name,
+    `Welcome to ${name}`,
+    'Neighborhood bistro — order pickup or delivery online.',
+    'Neighborhood bistro'
+  );
+  return bundle(config, html);
+}
+
 export function starterForTemplate(key: string | null | undefined, title: string): OpenPageBlocks {
   switch (key) {
     case 'restaurant':
       return restaurantStarter(title);
     case 'blank':
       return blankStarter(title);
+    case 'cafe_classic':
+      return cafeClassicStarter(title);
+    case 'bistro_light':
+      return bistroLightStarter(title);
     case 'food_truck':
     default:
       return foodTruckStarter(title);

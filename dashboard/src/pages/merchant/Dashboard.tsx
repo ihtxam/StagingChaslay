@@ -21,6 +21,7 @@ import OnlineShop from './OnlineShop';
 import Reservations from './Reservations';
 import Newsletter from './Newsletter';
 import WebPos from './WebPos';
+import WaiterApp from './WaiterApp';
 import Reports from './Reports';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
@@ -76,6 +77,8 @@ function MerchantShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
+  const isWaiterRoute = /^\/merchant\/waiter\/?$/.test(location.pathname);
+  const isPosLikeRoute = isPosRoute || isWaiterRoute;
   const isPosEmbed =
     typeof window !== 'undefined' &&
     (new URLSearchParams(location.search).get('embed') === '1' ||
@@ -89,7 +92,7 @@ function MerchantShell() {
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
   );
-  const hideChrome = (isPosRoute && posAppMode) || isPosEmbed;
+  const hideChrome = (isPosLikeRoute && posAppMode) || isPosEmbed;
 
   // Keep PIN session in sync when WebPOS switches users
   useEffect(() => {
@@ -126,8 +129,8 @@ function MerchantShell() {
   }, []);
 
   useEffect(() => {
-    if (isPosRoute) setPosAppMode(true);
-  }, [isPosRoute]);
+    if (isPosLikeRoute) setPosAppMode(true);
+  }, [isPosLikeRoute]);
 
   useEffect(() => {
     document.title = APP_PANEL_TITLE;
@@ -288,7 +291,7 @@ function MerchantShell() {
 
         <main
           className={
-            isPosRoute && posAppMode
+            isPosLikeRoute && posAppMode
               ? 'flex-1 overflow-hidden p-0 min-h-0'
               : 'panel-main flex-1 p-3 sm:p-4'
           }
@@ -311,6 +314,7 @@ function MerchantShell() {
               }
             />
             <Route path="pos" element={<WebPos appMode={hideChrome} />} />
+            <Route path="waiter" element={<WaiterApp appMode={hideChrome} />} />
             <Route
               path="reports"
               element={

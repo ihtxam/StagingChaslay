@@ -284,12 +284,72 @@ ${secondaryHtml}
   </section>`
 }
 
+function renderHeroOverlay(block: BlockConfig): string {
+  const badge = escapeHtml(prop(block.props, 'badge', ''))
+  const headline = escapeHtml(prop(block.props, 'headline', ''))
+  const subheadline = escapeHtml(prop(block.props, 'subheadline', ''))
+  const primaryCta = prop<string>(block.props, 'primaryCta', 'Order online')
+  const primaryCtaUrl = prop<string>(block.props, 'primaryCtaUrl', '/menu')
+  const heroImage = prop<string>(block.props, 'heroImage', '')
+
+  const bgStyle = heroImage
+    ? `background-image:url('${escapeHtml(heroImage)}');background-size:cover;background-position:center;`
+    : 'background:linear-gradient(135deg,#78716c 0%,#44403c 100%);'
+
+  return `  <section class="relative min-h-[420px] md:min-h-[520px] flex items-center justify-center text-center px-6 py-20 text-white" style="${bgStyle}">
+      <div class="absolute inset-0 bg-black/45"></div>
+      <div class="relative z-10 max-w-3xl mx-auto">
+        ${badge ? `<p class="text-sm md:text-base mb-4 opacity-90">${badge}</p>` : ''}
+        <h1 class="text-3xl md:text-5xl font-bold tracking-tight leading-[1.1] mb-4">${headline}</h1>
+        <p class="text-base md:text-lg opacity-90 mb-8 max-w-xl mx-auto">${subheadline}</p>
+        ${renderLink(primaryCta, primaryCtaUrl, 'px-6 py-3 rounded-full bg-stone-900 text-white text-sm font-semibold inline-flex items-center gap-2 border border-white/10')}
+      </div>
+  </section>`
+}
+
+function renderFeatured(block: BlockConfig): string {
+  const title = escapeHtml(prop(block.props, 'title', 'Featured'))
+  const viewAllText = escapeHtml(prop(block.props, 'viewAllText', 'View menu'))
+  const viewAllUrl = prop<string>(block.props, 'viewAllUrl', '/menu')
+  const items = prop<Array<{ title?: string; image?: string; price?: string; url?: string }>>(
+    block.props,
+    'items',
+    []
+  )
+  const cards = (items.length ? items : [{ title: 'Item 1' }, { title: 'Item 2' }, { title: 'Item 3' }])
+    .map((item) => {
+      const img = item.image
+        ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title || '')}" class="w-full h-full object-cover" />`
+        : `<div class="w-full h-full bg-gradient-to-br from-bg-3 to-bg-4"></div>`
+      return `        <a href="${escapeHtml(item.url || '/menu')}" class="snap-start shrink-0 w-44 md:w-52 block">
+          <div class="aspect-[4/5] rounded-2xl overflow-hidden bg-bg-2 border border-border-default mb-2">${img}</div>
+          ${item.title ? `<p class="text-sm font-medium text-text-0 truncate">${escapeHtml(item.title)}</p>` : ''}
+          ${item.price ? `<p class="text-xs text-text-2 mt-0.5">${escapeHtml(item.price)}</p>` : ''}
+        </a>`
+    })
+    .join('\n')
+
+  return `  <section class="px-6 md:px-10 py-10 md:py-14 bg-bg-0">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex items-center justify-between gap-4 mb-6">
+        <h2 class="text-xl md:text-2xl font-semibold tracking-tight text-text-0">${title}</h2>
+        ${renderLink(viewAllText, viewAllUrl, 'text-sm font-medium text-text-2 hover:text-text-0 inline-flex items-center gap-1')}
+      </div>
+      <div class="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory">
+${cards}
+      </div>
+    </div>
+  </section>`
+}
+
 function renderHero(block: BlockConfig): string {
   switch (block.variant) {
     case 'split':
       return renderHeroSplit(block)
     case 'gradient':
       return renderHeroGradient(block)
+    case 'overlay':
+      return renderHeroOverlay(block)
     default:
       return renderHeroCentered(block)
   }
@@ -1182,6 +1242,8 @@ function renderBlock(block: BlockConfig): string {
       return renderNewsletter(block)
     case 'logocloud':
       return renderLogoCloud(block)
+    case 'featured':
+      return renderFeatured(block)
     default:
       return `  <!-- Unknown block type: ${escapeHtml(block.type)} -->`
   }

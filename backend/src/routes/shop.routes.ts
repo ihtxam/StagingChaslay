@@ -22,6 +22,7 @@ import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACAT
 import { geocodeQuery } from "@/lib/geocode";
 import { OffersService } from "@/services/offers.service";
 import { VoucherService } from "@/services/voucher.service";
+import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 import { generateWebOrderNumber } from "@/lib/web-order-number";
 
 const router = Router();
@@ -587,6 +588,9 @@ router.get("/:slug", async (req: Request, res: Response) => {
           currency: "CHF",
         },
         loyalty: ShopLoyaltyService.programFromMerchant(merchant),
+        giftCards: ShopGiftCardService.publicSettings(
+          ShopGiftCardService.settingsFromMerchant(merchant)
+        ),
         reservationsEnabled: !!merchant.reservationsEnabled,
         acceptingOrders: merchant.acceptingOrders !== false,
         acceptingReservations: merchant.acceptingReservations !== false,
@@ -1392,6 +1396,149 @@ router.get("/:slug/payment-options", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/shop/:slug/gift-cards/settings — public gift card purchase settings
+ */
+router.get("/:slug/gift-cards/settings", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    res.json({
+      success: true,
+      settings: ShopGiftCardService.publicSettings(
+        ShopGiftCardService.settingsFromMerchant(merchant)
+      ),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * GET /api/shop/:slug/gift-cards/balance/:code — public balance lookup
+ */
+router.get("/:slug/gift-cards/balance/:code", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    const data = await ShopGiftCardService.lookupPublicBalance(
+      merchant.id,
+      req.params.code
+    );
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Card not found" });
+  }
+});
+
+/**
+ * POST /api/shop/:slug/gift-cards/purchase — start online e-gift purchase
+ */
+router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+
+    const body = req.body || {};
+    const result = await ShopGiftCardService.createOnlinePurchase(
+      merchant,
+      req.params.slug,
+      {
+        amount: Number(body.amount),
+        recipientEmail: body.recipientEmail,
+        recipientName: body.recipientName,
+        senderName: body.senderName,
+        senderEmail: body.senderEmail,
+        message: body.message,
+      }
+    );
+
+    res.status(201).json({
+      success: true,
+      purchase: {
+        id: result.purchase.id,
+        amount: result.amount,
+        recipientEmail: result.purchase.recipientEmail,
+        paymentStatus: result.purchase.paymentStatus,
+      },
+      paymentSession: result.paymentSession,
+    });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Purchase failed" });
+  }
+});
+
+/**
+ * GET /api/shop/:slug/gift-cards/purchase/:purchaseId
+ */
+router.get("/:slug/gift-cards/purchase/:purchaseId", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    const purchase = await ShopGiftCardService.getPurchase(
+      merchant.id,
+      req.params.purchaseId
+    );
+    let card: { ecardCode?: string | null; balance?: string | null } | null = null;
+    if (purchase.cardId) {
+      const db = getDb();
+      card = await db.query.giftCards.findFirst({
+        where: eq(schema.giftCards.id, purchase.cardId),
+        columns: { ecardCode: true, balance: true },
+      });
+    }
+    res.json({
+      success: true,
+      purchase: {
+        id: purchase.id,
+        amount: purchase.amount,
+        recipientEmail: purchase.recipientEmail,
+        recipientName: purchase.recipientName,
+        senderName: purchase.senderName,
+        message: purchase.message,
+        paymentStatus: purchase.paymentStatus,
+        fulfilledAt: purchase.fulfilledAt,
+        cardCode: card?.ecardCode || null,
+        cardBalance: card?.balance || null,
+      },
+    });
+  } catch (error) {
+    res.status(404).json({ error: error instanceof Error ? error.message : "Not found" });
+  }
+});
+
+/**
+ * POST /api/shop/:slug/gift-cards/purchase/:purchaseId/confirm-payment
+ */
+router.post(
+  "/:slug/gift-cards/purchase/:purchaseId/confirm-payment",
+  async (req: Request, res: Response) => {
+    try {
+      const merchant = await resolveMerchant(req.params.slug);
+      if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+      const result = await ShopGiftCardService.confirmPurchasePayment(
+        merchant.id,
+        req.params.purchaseId,
+        req.body?.pspReference || req.body?.adyenReference
+      );
+      res.json({
+        success: true,
+        alreadyFulfilled: result.alreadyFulfilled,
+        purchase: {
+          id: result.purchase.id,
+          paymentStatus: result.purchase.paymentStatus,
+        },
+        card: {
+          code: result.card.ecardCode || result.card.cardNumber,
+          balance: result.card.balance,
+        },
+      });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Confirm failed" });
+    }
+  }
+);
+
+/**
  * POST /api/shop/:slug/orders — checkout create
  */
 router.post("/:slug/orders", async (req: Request, res: Response) => {
@@ -1425,6 +1572,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       guestCheckout = true,
       pointsToRedeem = 0,
       voucherCode,
+      giftCardCode,
     } = req.body as {
       items: Array<{
         productId: string;
@@ -1449,6 +1597,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       guestCheckout?: boolean;
       pointsToRedeem?: number;
       voucherCode?: string;
+      giftCardCode?: string;
     };
 
     if (scheduledFor) {
@@ -1790,6 +1939,27 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     }
     const totalPointsRedeemed = rewardPointsNeeded + cashPointsUsed;
 
+    const trimmedGiftCode = String(giftCardCode || "").trim();
+    let giftCardDiscount = 0;
+    let giftCardPreviewBalance = 0;
+    if (trimmedGiftCode) {
+      const gcSettings = ShopGiftCardService.settingsFromMerchant(merchant);
+      if (!gcSettings.enabled) {
+        return res.status(400).json({ error: "Gift cards are not enabled" });
+      }
+      try {
+        const preview = await ShopGiftCardService.lookupPublicBalance(
+          merchant.id,
+          trimmedGiftCode
+        );
+        giftCardPreviewBalance = preview.balance;
+      } catch (error) {
+        return res.status(400).json({
+          error: error instanceof Error ? error.message : "Invalid gift card",
+        });
+      }
+    }
+
     let customerId = authCustomer.customerId;
     const emailNorm = customerEmail?.trim().toLowerCase();
     if (!customerId && emailNorm) {
@@ -1852,11 +2022,18 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       offerDiscount + voucherDiscount + pointsDiscount,
       taxDiscountOpts
     );
+    const preGiftTotal = roundMoney2(
+      Math.max(
+        0,
+        subtotal + deliveryFee + taxAmount - offerDiscount - voucherDiscount - pointsDiscount
+      ) + tip
+    );
+    if (trimmedGiftCode && giftCardPreviewBalance > 0) {
+      giftCardDiscount = roundMoney2(Math.min(giftCardPreviewBalance, preGiftTotal));
+    }
     const orderNumber = await generateWebOrderNumber(db, merchant.id);
-    // Offer + voucher + points discount apply to food (+ delivery/tax for points); tip and card fee remain payable
-    const preCardTotal =
-      Math.max(0, subtotal + deliveryFee + taxAmount - offerDiscount - voucherDiscount - pointsDiscount) +
-      tip;
+    // Offer + voucher + points + gift card discount apply to food (+ delivery/tax for points); tip and card fee remain payable
+    const preCardTotal = Math.max(0, preGiftTotal - giftCardDiscount);
     const cardFeeFixed = Number(merchant.onlineCardFeeFixed || 0) || 0;
     const cardFeePercent = Number(merchant.onlineCardFeePercent || 0) || 0;
     const cardFee =
@@ -1875,6 +2052,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         appliedVoucher
           ? `[Voucher ${appliedVoucher.code}: −CHF ${voucherDiscount.toFixed(2)}]`
           : "",
+        giftCardDiscount > 0
+          ? `[Gift card: −CHF ${giftCardDiscount.toFixed(2)}]`
+          : "",
         roundAdj !== 0 ? `[Rounding ${roundAdj > 0 ? "+" : ""}${roundAdj.toFixed(2)}]` : "",
       ]
         .filter(Boolean)
@@ -1889,7 +2069,11 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
             : null;
 
     const paymentStatus =
-      payMethod === "card" || payMethod === "pay_later" ? "awaiting_payment" : "cash";
+      payMethod === "card" || payMethod === "pay_later"
+        ? "awaiting_payment"
+        : giftCardDiscount > 0 && preCardTotal <= 0
+          ? "completed"
+          : "cash";
 
     const prepMinutes =
       channel === "delivery"
@@ -1916,7 +2100,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         status: "pending_approval",
         subtotal: subtotal.toFixed(2),
         taxAmount: taxAmount.toFixed(2),
-        discountAmount: roundMoney2(offerDiscount + voucherDiscount + pointsDiscount).toFixed(2),
+        discountAmount: roundMoney2(offerDiscount + voucherDiscount + pointsDiscount + giftCardDiscount).toFixed(2),
         deliveryFee: deliveryFee.toFixed(2),
         tipAmount: tip.toFixed(2),
         cardFee: cardFee.toFixed(2),
@@ -1924,8 +2108,15 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         pointsEarned: 0,
         pointsRedeemed: totalPointsRedeemed,
         total: total.toFixed(2),
-        paymentMethod: payMethod,
+        paymentMethod: giftCardDiscount > 0 && preCardTotal <= 0 ? "gift_card" : payMethod,
         paymentStatus,
+        paymentBreakdown:
+          giftCardDiscount > 0
+            ? [
+                { method: "gift_card", amount: giftCardDiscount },
+                ...(preCardTotal > 0 ? [{ method: payMethod, amount: preCardTotal }] : []),
+              ]
+            : null,
         notes: notesWithRounding || null,
         shippingAddress: addressText,
         deliveryZoneId,
@@ -1974,6 +2165,23 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         await db.delete(schema.orders).where(eq(schema.orders.id, order.id));
         return res.status(400).json({
           error: error instanceof Error ? error.message : "Voucher could not be applied",
+        });
+      }
+    }
+
+    if (giftCardDiscount > 0 && trimmedGiftCode) {
+      try {
+        await ShopGiftCardService.redeemForOrder(
+          merchant.id,
+          trimmedGiftCode,
+          giftCardDiscount,
+          order.id
+        );
+      } catch (error) {
+        await db.delete(schema.orderItems).where(eq(schema.orderItems.orderId, order.id));
+        await db.delete(schema.orders).where(eq(schema.orders.id, order.id));
+        return res.status(400).json({
+          error: error instanceof Error ? error.message : "Gift card could not be applied",
         });
       }
     }
@@ -2046,7 +2254,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     }
 
     let paymentSession: unknown = null;
-    if (payMethod === "card") {
+    if (payMethod === "card" && preCardTotal > 0) {
       try {
         const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
         const returnUrl = `https://${domain}/shop/${merchant.slug || req.params.slug}/order/${order.id}?paid=1`;

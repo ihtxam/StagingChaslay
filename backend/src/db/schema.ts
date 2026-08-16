@@ -235,6 +235,14 @@ export const merchants = pgTable(
      * Staff declare opening float and reconcile cash on close.
      */
     shiftsEnabled: boolean("shifts_enabled").default(false).notNull(),
+    /**
+     * Max concurrent main POS stations (WebPOS + Android register). 0 = unlimited.
+     */
+    maxPosPosts: integer("max_pos_posts").default(0).notNull(),
+    /**
+     * Max concurrent waiter stations (waiter web + Android waiter). 0 = unlimited.
+     */
+    maxWaiterPosts: integer("max_waiter_posts").default(0).notNull(),
     /** WebPOS / counter accent theme: teal | green | blue | violet */
     posColorTheme: varchar("pos_color_theme", { length: 20 }).default("teal").notNull(),
     /** Online / phone restaurant table reservations */
@@ -958,6 +966,44 @@ export const heldOrders = pgTable(
 );
 
 // ============================================================================
+// POS SESSION REGISTRY (concurrent station limits)
+// ============================================================================
+
+export const posSessions = pgTable(
+  "pos_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    /** main = register till; waiter = floor order entry */
+    sessionKind: varchar("session_kind", { length: 20 }).default("main").notNull(),
+    /** webpos | waiter_web | android */
+    platform: varchar("platform", { length: 30 }).notNull(),
+    deviceId: varchar("device_id", { length: 128 }).notNull(),
+    deviceLabel: varchar("device_label", { length: 255 }),
+    staffId: uuid("staff_id"),
+    staffName: varchar("staff_name", { length: 255 }),
+    lastHeartbeat: timestamp("last_heartbeat").defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("pos_sessions_merchant_id_idx").on(table.merchantId),
+    deviceIdx: index("pos_sessions_merchant_device_idx").on(
+      table.merchantId,
+      table.deviceId,
+      table.sessionKind
+    ),
+    activeIdx: index("pos_sessions_active_idx").on(
+      table.merchantId,
+      table.sessionKind,
+      table.lastHeartbeat
+    ),
+  })
+);
+
+// ============================================================================
 // ORDER ITEMS
 // ============================================================================
 
@@ -1594,6 +1640,33 @@ export const giftCards = pgTable(
   })
 );
 
+export const giftCardPurchases = pgTable(
+  "gift_card_purchases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    recipientEmail: varchar("recipient_email", { length: 255 }).notNull(),
+    recipientName: varchar("recipient_name", { length: 255 }),
+    senderName: varchar("sender_name", { length: 255 }),
+    senderEmail: varchar("sender_email", { length: 255 }),
+    message: text("message"),
+    paymentMethod: varchar("payment_method", { length: 20 }).default("card").notNull(),
+    paymentStatus: varchar("payment_status", { length: 30 }).default("awaiting_payment").notNull(),
+    adyenReference: varchar("adyen_reference", { length: 255 }),
+    cardId: uuid("card_id").references(() => giftCards.id, { onDelete: "set null" }),
+    fulfilledAt: timestamp("fulfilled_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdIdx: index("gift_card_purchases_merchant_id_idx").on(table.merchantId),
+    paymentStatusIdx: index("gift_card_purchases_payment_status_idx").on(table.paymentStatus),
+  })
+);
+
 export const giftCardTransactions = pgTable(
   "gift_card_transactions",
   {
@@ -1955,6 +2028,7 @@ export const merchantsRelations = relations(merchants, ({ many, one }) => ({
   loyaltyCards: many(loyaltyCards),
   loyaltyTransactions: many(loyaltyTransactions),
   giftCards: many(giftCards),
+  giftCardPurchases: many(giftCardPurchases),
   giftCardTransactions: many(giftCardTransactions),
   loyaltyPointLots: many(loyaltyPointLots),
   loyaltyPointEvents: many(loyaltyPointEvents),
@@ -2100,6 +2174,17 @@ export const giftCardsRelations = relations(giftCards, ({ one, many }) => ({
   merchant: one(merchants, { fields: [giftCards.merchantId], references: [merchants.id] }),
   customer: one(customers, { fields: [giftCards.customerId], references: [customers.id] }),
   transactions: many(giftCardTransactions),
+}));
+
+export const giftCardPurchasesRelations = relations(giftCardPurchases, ({ one }) => ({
+  merchant: one(merchants, {
+    fields: [giftCardPurchases.merchantId],
+    references: [merchants.id],
+  }),
+  card: one(giftCards, {
+    fields: [giftCardPurchases.cardId],
+    references: [giftCards.id],
+  }),
 }));
 
 export const giftCardTransactionsRelations = relations(giftCardTransactions, ({ one }) => ({

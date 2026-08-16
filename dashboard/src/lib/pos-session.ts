@@ -1,0 +1,146 @@
+import api from '@/lib/api';
+import { webPosDeviceId } from '@/lib/webpos-print-relay';
+
+const SESSION_KEY = 'manupos_pos_session';
+
+export type PosSessionKind = 'main' | 'waiter';
+export type PosSessionPlatform = 'webpos' | 'waiter_web' | 'android';
+
+type StoredPosSession = {
+  sessionId: string;
+  sessionKind: PosSessionKind;
+  heartbeatIntervalSec: number;
+};
+
+let heartbeatTimer: number | null = null;
+
+function readStored(): StoredPosSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredPosSession;
+    if (!parsed?.sessionId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(session: StoredPosSession | null) {
+  try {
+    if (!session) localStorage.removeItem(SESSION_KEY);
+    else localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    /* ignore */
+  }
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer != null) {
+    window.clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+async function sendHeartbeat(sessionId: string) {
+  try {
+    await api.post('/merchant/pos/sessions/heartbeat', { sessionId });
+  } catch (e: any) {
+    const code = e?.response?.data?.code;
+    if (code === 'POS_SESSION_EXPIRED' || e?.response?.status === 410) {
+      stopHeartbeat();
+      writeStored(null);
+    }
+  }
+}
+
+function startHeartbeat(session: StoredPosSession) {
+  stopHeartbeat();
+  const intervalMs = Math.max(15, session.heartbeatIntervalSec || 45) * 1000;
+  heartbeatTimer = window.setInterval(() => {
+    void sendHeartbeat(session.sessionId);
+  }, intervalMs);
+}
+
+export function posSessionDeviceLabel(): string {
+  if (typeof navigator === 'undefined') return 'Browser';
+  const ua = navigator.userAgent || '';
+  if (/iPad|Tablet/i.test(ua)) return 'Tablet';
+  if (/Mobile/i.test(ua)) return 'Phone';
+  return 'Browser POS';
+}
+
+/** Register or refresh a POS station session after staff unlock. */
+export async function registerPosSession(opts: {
+  sessionKind: PosSessionKind;
+  platform: PosSessionPlatform;
+  staffId?: string | null;
+  staffName?: string | null;
+  deviceLabel?: string;
+}): Promise<{ sessionId: string } | null> {
+  try {
+    const res = await api.post('/merchant/pos/sessions/register', {
+      sessionKind: opts.sessionKind,
+      platform: opts.platform,
+      deviceId: webPosDeviceId(),
+      deviceLabel: opts.deviceLabel || posSessionDeviceLabel(),
+      staffId: opts.staffId || null,
+      staffName: opts.staffName || null,
+    });
+    const sessionId = String(res.data?.sessionId || '');
+    if (!sessionId) return null;
+    const stored: StoredPosSession = {
+      sessionId,
+      sessionKind: opts.sessionKind,
+      heartbeatIntervalSec: Number(res.data?.heartbeatIntervalSec) || 45,
+    };
+    writeStored(stored);
+    startHeartbeat(stored);
+    return { sessionId };
+  } catch {
+    return null;
+  }
+}
+
+export async function revokePosSession(): Promise<void> {
+  const stored = readStored();
+  stopHeartbeat();
+  writeStored(null);
+  if (!stored?.sessionId) return;
+  try {
+    await api.delete(`/merchant/pos/sessions/${stored.sessionId}`);
+  } catch {
+    /* best-effort */
+  }
+}
+
+export function resumePosSessionHeartbeat(): void {
+  const stored = readStored();
+  if (stored) startHeartbeat(stored);
+}
+
+export type ActivePosSession = {
+  id: string;
+  sessionKind: PosSessionKind;
+  platform: PosSessionPlatform;
+  deviceId: string;
+  deviceLabel?: string | null;
+  staffName?: string | null;
+  lastHeartbeat: string;
+  createdAt: string;
+};
+
+export async function fetchActivePosSessions(): Promise<{
+  limits: { maxPosPosts: number; maxWaiterPosts: number };
+  sessions: { main: ActivePosSession[]; waiter: ActivePosSession[] };
+}> {
+  const res = await api.get('/merchant/pos/sessions');
+  return {
+    limits: res.data?.limits || { maxPosPosts: 0, maxWaiterPosts: 0 },
+    sessions: res.data?.sessions || { main: [], waiter: [] },
+  };
+}
+
+export async function kickPosSession(sessionId: string): Promise<void> {
+  await api.delete(`/merchant/pos/sessions/${sessionId}`);
+}

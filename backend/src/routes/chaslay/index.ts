@@ -5,6 +5,7 @@ import syncRoutes from "./sync.routes";
 import ordersRoutes from "./orders.routes";
 import receiptsRoutes from "./receipts.routes";
 import floorRoutes from "./floor.routes";
+import posSessionsRoutes from "./pos-sessions.routes";
 
 /**
  * Chaslay / FoodTruck Android POS compatibility routes.
@@ -18,5 +19,6 @@ router.use("/sync", syncRoutes);
 router.use("/orders", ordersRoutes);
 router.use("/receipts", receiptsRoutes);
 router.use("/floor", floorRoutes);
+router.use("/pos/sessions", posSessionsRoutes);
 
 export default router;

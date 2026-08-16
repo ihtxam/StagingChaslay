@@ -15,7 +15,7 @@ export const blockMetadata: BlockMeta[] = [
     label: 'Navbar',
     description: 'Navigation bar with logo, links, and CTA',
     category: 'Navigation',
-    variants: ['default', 'centered'],
+    variants: ['default', 'centered', 'pill'],
     defaultProps: { logo: 'Brand', links: ['Features', 'Pricing', 'About'], ctaText: 'Get Started' },
   },
   {
@@ -23,7 +23,7 @@ export const blockMetadata: BlockMeta[] = [
     label: 'Hero',
     description: 'Full-width hero section with headline and CTAs',
     category: 'Hero',
-    variants: ['centered', 'split', 'gradient', 'minimal'],
+    variants: ['centered', 'split', 'gradient', 'minimal', 'overlay'],
     defaultProps: { headline: 'Your Headline Here', subheadline: 'A compelling subheadline that explains your value proposition.', primaryCta: 'Get Started', secondaryCta: 'Learn More' },
   },
   {
@@ -145,6 +145,25 @@ export const blockMetadata: BlockMeta[] = [
     category: 'Media',
     variants: ['grid', 'masonry'],
     defaultProps: { title: 'Gallery' },
+  },
+  {
+    type: 'featured',
+    label: 'Featured',
+    description: 'Horizontal row of featured products or highlights',
+    category: 'Commerce',
+    variants: ['row'],
+    defaultProps: {
+      title: 'Featured',
+      viewAllText: 'View menu',
+      viewAllUrl: '/menu',
+      items: [
+        { title: 'House special' },
+        { title: 'Chef pick' },
+        { title: 'Seasonal' },
+        { title: 'Popular' },
+        { title: 'New' },
+      ],
+    },
   },
   {
     type: 'divider',

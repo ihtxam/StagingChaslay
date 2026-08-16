@@ -10,6 +10,8 @@ export type GiftCardSettings = {
   maxAmount: number;
   reloadEnabled: boolean;
   customAmountEnabled: boolean;
+  /** Allow purchasing e-gift cards on the online shop */
+  onlinePurchaseEnabled?: boolean;
   /** Enable membership card sell / tier benefits */
   membershipEnabled?: boolean;
   /** Configurable membership tiers (discount %, stamp cards, etc.) */
@@ -23,6 +25,7 @@ export const DEFAULT_GIFT_CARD_SETTINGS: GiftCardSettings = {
   maxAmount: 500,
   reloadEnabled: true,
   customAmountEnabled: true,
+  onlinePurchaseEnabled: true,
   membershipEnabled: false,
   membershipPlans: [],
 };
@@ -71,6 +74,7 @@ export function normalizeGiftCardSettings(raw: unknown): GiftCardSettings {
     maxAmount,
     reloadEnabled: src.reloadEnabled !== false,
     customAmountEnabled: src.customAmountEnabled !== false,
+    onlinePurchaseEnabled: src.onlinePurchaseEnabled !== false,
     membershipEnabled: src.membershipEnabled === true,
     membershipPlans,
   };

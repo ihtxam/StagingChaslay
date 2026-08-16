@@ -20,7 +20,7 @@ import {
   Truck,
   UtensilsCrossed,
 } from 'lucide-react';
-import api from '@/lib/api';
+import PosPostsSection from '@/components/settings/PosPostsSection';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
   formatScalePortLabel,
@@ -70,6 +70,8 @@ interface SettingsData {
   paxOrderingEnabled?: boolean;
   coursesEnabled?: boolean;
   shiftsEnabled?: boolean;
+  maxPosPosts?: number;
+  maxWaiterPosts?: number;
   posColorTheme?: string;
   posCheckoutSettings?: {
     tipsEnabled?: boolean;
@@ -902,6 +904,8 @@ export default function Settings() {
         paxOrderingEnabled: !!settings.paxOrderingEnabled,
         coursesEnabled: !!settings.coursesEnabled,
         shiftsEnabled: !!settings.shiftsEnabled,
+        maxPosPosts: Math.max(0, Number(settings.maxPosPosts) || 0),
+        maxWaiterPosts: Math.max(0, Number(settings.maxWaiterPosts) || 0),
         posColorTheme: settings.posColorTheme || 'teal',
         posCheckoutSettings: settings.posCheckoutSettings || undefined,
         webposExpressEnabled: settings.webposExpressEnabled !== false,
@@ -1892,6 +1896,26 @@ export default function Settings() {
                 <a href="/merchant/pos" className="btn-secondary mt-3 inline-flex">
                   {t('openWebPos')}
                 </a>
+                <a href="/merchant/waiter" className="btn-secondary mt-3 ml-2 inline-flex">
+                  {t('waiterAppTitle')}
+                </a>
+              </Section>
+
+              <Section
+                id="pos-posts"
+                icon={Monitor}
+                accent={settingsDash.accent}
+                title={t('posPostsTitle')}
+                description={t('posPostsHint')}
+                highlight={isSectionHighlight('pos-posts')}
+                dimmed={normalizedQuery ? !isSectionVisible('pos-posts') : false}
+              >
+                <PosPostsSection
+                  maxPosPosts={Math.max(0, Number(settings.maxPosPosts) || 0)}
+                  maxWaiterPosts={Math.max(0, Number(settings.maxWaiterPosts) || 0)}
+                  onMaxPosPostsChange={(n) => setSettings({ ...settings, maxPosPosts: n })}
+                  onMaxWaiterPostsChange={(n) => setSettings({ ...settings, maxWaiterPosts: n })}
+                />
               </Section>
 
               <Section

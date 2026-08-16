@@ -14,6 +14,7 @@ interface GiftCardSettings {
   maxAmount: number;
   reloadEnabled: boolean;
   customAmountEnabled: boolean;
+  onlinePurchaseEnabled?: boolean;
   membershipEnabled?: boolean;
   membershipPlans?: MembershipPlan[];
 }
@@ -62,6 +63,7 @@ const DEFAULT_GC: GiftCardSettings = {
   maxAmount: 500,
   reloadEnabled: true,
   customAmountEnabled: true,
+  onlinePurchaseEnabled: true,
   membershipEnabled: false,
   membershipPlans: [],
 };
@@ -576,6 +578,12 @@ export default function Loyalty() {
                 onChange={(v) => setGcSettings({ ...gcSettings, customAmountEnabled: v })}
                 label={t('giftCardCustomAmount')}
                 hint={t('giftCardCustomAmountHint')}
+              />
+              <Toggle
+                checked={gcSettings.onlinePurchaseEnabled !== false}
+                onChange={(v) => setGcSettings({ ...gcSettings, onlinePurchaseEnabled: v })}
+                label={t('giftCardOnlinePurchase')}
+                hint={t('giftCardOnlinePurchaseHint')}
               />
 
               <div className="pt-4">

@@ -14,6 +14,9 @@ import ResellerDashboard from '@/pages/reseller/Dashboard';
 import OrderingPage from '@/pages/shop/OrderingPage';
 import CheckoutPage from '@/pages/shop/CheckoutPage';
 import OrderConfirmationPage from '@/pages/shop/OrderConfirmationPage';
+import GiftCardsPage from '@/pages/shop/GiftCardsPage';
+import GiftCardConfirmPage from '@/pages/shop/GiftCardConfirmPage';
+import GiftCardViewPage from '@/pages/shop/GiftCardViewPage';
 import AccountPage from '@/pages/shop/AccountPage';
 import ReservationsPage from '@/pages/shop/ReservationsPage';
 import ReceiptPage from '@/pages/ReceiptPage';
@@ -29,7 +32,7 @@ function LegacyReceiptRedirect() {
 }
 
 function isWebPosRoute(pathname: string): boolean {
-  return /\/merchant\/pos(?:\/|$)/.test(pathname);
+  return /\/merchant\/(?:pos|waiter)(?:\/|$)/.test(pathname);
 }
 
 /** WebPOS uses center-top toasts so they do not cover the right-side menu. */
@@ -187,6 +190,30 @@ function App() {
               </ShopRoutes>
             }
           />
+          <Route
+            path="/shop/:merchantSlug/gift-cards"
+            element={
+              <ShopRoutes>
+                <GiftCardsPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/gift-cards/confirm/:purchaseId"
+            element={
+              <ShopRoutes>
+                <GiftCardConfirmPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/gift/:code"
+            element={
+              <ShopRoutes>
+                <GiftCardViewPage />
+              </ShopRoutes>
+            }
+          />
 
           {/* shop.domain/{slug} - Chaslay-style path shops */}
           {shopHub && (
@@ -228,6 +255,30 @@ function App() {
                 element={
                   <ShopRoutes>
                     <ReservationsPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/gift-cards"
+                element={
+                  <ShopRoutes>
+                    <GiftCardsPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/gift-cards/confirm/:purchaseId"
+                element={
+                  <ShopRoutes>
+                    <GiftCardConfirmPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/gift/:code"
+                element={
+                  <ShopRoutes>
+                    <GiftCardViewPage />
                   </ShopRoutes>
                 }
               />
@@ -294,6 +345,30 @@ function App() {
                 }
               />
               <Route
+                path="/gift-cards"
+                element={
+                  <ShopRoutes>
+                    <GiftCardsPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/gift-cards/confirm/:purchaseId"
+                element={
+                  <ShopRoutes>
+                    <GiftCardConfirmPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/gift/:code"
+                element={
+                  <ShopRoutes>
+                    <GiftCardViewPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/"
                 element={
                   <ShopRoutes>
@@ -352,6 +427,30 @@ function App() {
                 element={
                   <ShopRoutes>
                     <ReservationsPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/gift-cards"
+                element={
+                  <ShopRoutes>
+                    <GiftCardsPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/gift-cards/confirm/:purchaseId"
+                element={
+                  <ShopRoutes>
+                    <GiftCardConfirmPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/gift/:code"
+                element={
+                  <ShopRoutes>
+                    <GiftCardViewPage />
                   </ShopRoutes>
                 }
               />

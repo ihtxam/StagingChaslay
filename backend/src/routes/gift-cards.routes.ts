@@ -43,6 +43,7 @@ router.put("/settings", async (req: Request, res: Response) => {
       maxAmount: body.maxAmount,
       reloadEnabled: body.reloadEnabled,
       customAmountEnabled: body.customAmountEnabled,
+      onlinePurchaseEnabled: body.onlinePurchaseEnabled,
       membershipEnabled: body.membershipEnabled,
       membershipPlans: body.membershipPlans,
     });

@@ -5,6 +5,9 @@ interface NavbarProps {
   logo: string
   links: string[]
   ctaText: string
+  ctaUrl?: string
+  signInText?: string
+  signInUrl?: string
 }
 
 function NavbarDefault({ props }: { props: NavbarProps }) {
@@ -94,12 +97,46 @@ function NavbarCentered({ props }: { props: NavbarProps }) {
   )
 }
 
+function NavbarPill({ props }: { props: NavbarProps }) {
+  const { logo, links = [], ctaText, signInText = 'Sign in' } = props
+
+  return (
+    <nav className="bg-bg-0 border-b border-border-subtle">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-4 @md:px-6 @lg:px-8">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-semibold text-[15px] text-text-0 tracking-tight">{logo}</span>
+        </div>
+        <div className="hidden @lg:flex items-center gap-6 shrink-0">
+          {links.map((link, i) => (
+            <span
+              key={i}
+              className="text-[13px] text-text-2 hover:text-text-0 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              {link}
+            </span>
+          ))}
+        </div>
+        <div className="flex shrink-0 items-center gap-3 @md:gap-4">
+          <span className="hidden @sm:inline text-[13px] text-text-2 hover:text-text-0 cursor-pointer">
+            {signInText}
+          </span>
+          <button className="whitespace-nowrap px-4 @md:px-5 py-2 rounded-full bg-stone-900 text-white text-[12px] @md:text-[13px] font-semibold">
+            {ctaText}
+          </button>
+        </div>
+      </div>
+    </nav>
+  )
+}
+
 export function NavbarBlock({ block }: { block: BlockConfig }) {
   const props = block.props as unknown as NavbarProps
 
   switch (block.variant) {
     case 'centered':
       return <NavbarCentered props={props} />
+    case 'pill':
+      return <NavbarPill props={props} />
     default:
       return <NavbarDefault props={props} />
   }

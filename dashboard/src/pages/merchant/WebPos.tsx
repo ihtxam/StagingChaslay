@@ -69,6 +69,7 @@ import {
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
 } from '@/lib/webpos-print-relay';
+import { registerPosSession, resumePosSessionHeartbeat } from '@/lib/pos-session';
 import { buildReceiptUrl, resolvePublishedReceiptRef, normalizeScannedPayload, parseTableQrPayload } from '@/lib/qr';
 import WebPosMembershipSellModal from '@/components/webpos/WebPosMembershipSellModal';
 import { membershipDiscountPercent } from '@/lib/membership-plans';
@@ -768,6 +769,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     },
     [authUser?.staffId, authUser?.role, authUser?.permissions]
   );
+
+  useEffect(() => {
+    resumePosSessionHeartbeat();
+  }, []);
+
+  useEffect(() => {
+    if (!webposStaff?.id) return;
+    void registerPosSession({
+      sessionKind: 'main',
+      platform: 'webpos',
+      staffId: webposStaff.id,
+      staffName: webposStaff.name,
+    });
+  }, [webposStaff?.id, webposStaff?.name]);
 
   useEffect(() => {
     if (!staffRoster.length) return;
@@ -5939,6 +5954,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setWebposStaff(session);
     saveWebPosStaffSession(session);
     window.dispatchEvent(new CustomEvent('webpos:staff-session'));
+    void registerPosSession({
+      sessionKind: 'main',
+      platform: 'webpos',
+      staffId: session.id,
+      staffName: session.name,
+    });
     setPinModalOpen(false);
     toast.success(t('webPosSignedInAs').replace('{name}', staff.name));
     void refreshCurrentShift();

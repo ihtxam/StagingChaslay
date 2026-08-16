@@ -7,6 +7,9 @@ interface HeroProps {
   subheadline: string
   primaryCta: string
   secondaryCta?: string
+  heroImage?: string
+  primaryCtaUrl?: string
+  secondaryCtaUrl?: string
 }
 
 function HeroCentered({ props }: { props: HeroProps }) {
@@ -128,6 +131,36 @@ function HeroGradient({ props }: { props: HeroProps }) {
   )
 }
 
+function HeroOverlay({ props }: { props: HeroProps }) {
+  const bg = props.heroImage
+    ? `url(${props.heroImage})`
+    : 'linear-gradient(135deg, #78716c 0%, #44403c 100%)'
+
+  return (
+    <section
+      className="relative min-h-[420px] @md:min-h-[520px] flex items-center justify-center text-center px-6 py-20 bg-cover bg-center"
+      style={{ backgroundImage: bg }}
+    >
+      <div className="absolute inset-0 bg-black/45" />
+      <div className="relative z-10 max-w-3xl mx-auto text-white">
+        {props.badge && (
+          <p className="text-sm @md:text-base mb-4 opacity-90">{props.badge}</p>
+        )}
+        <h1 className="text-3xl @md:text-5xl font-bold tracking-tight leading-[1.1] mb-4">
+          {props.headline}
+        </h1>
+        <p className="text-base @md:text-lg opacity-90 mb-8 max-w-xl mx-auto">
+          {props.subheadline}
+        </p>
+        <button className="px-6 py-3 rounded-full bg-stone-900 text-white text-sm font-semibold inline-flex items-center gap-2 border border-white/10">
+          {props.primaryCta}
+          <ArrowRight size={16} />
+        </button>
+      </div>
+    </section>
+  )
+}
+
 function HeroMinimal({ props }: { props: HeroProps }) {
   return (
     <section className="px-6 @md:px-10 py-24 @md:py-36 text-center">
@@ -157,6 +190,8 @@ export function HeroBlock({ block }: { block: BlockConfig }) {
       return <HeroGradient props={props} />
     case 'minimal':
       return <HeroMinimal props={props} />
+    case 'overlay':
+      return <HeroOverlay props={props} />
     default:
       return <HeroCentered props={props} />
   }

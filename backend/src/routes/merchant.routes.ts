@@ -20,7 +20,7 @@ import { geocodeQuery } from "@/lib/geocode";
 import { isAllowedImageMime, saveMerchantImage } from "@/services/media-upload.service";
 import { getDb, schema } from "@/db";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
-import { SubscriptionPlansService } from "@/services/subscription-plans.service";
+import posSessionsRoutes from "@/routes/pos-sessions.routes";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -2406,5 +2406,7 @@ router.post("/billing/confirm", async (req: Request, res: Response) => {
     });
   }
 });
+
+router.use(posSessionsRoutes);
 
 export default router;

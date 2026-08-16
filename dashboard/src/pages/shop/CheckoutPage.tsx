@@ -78,6 +78,9 @@ export default function CheckoutPage() {
   /** Explicit "Pay with points" option on the payment step */
   const [payWithPoints, setPayWithPoints] = useState(false);
   const [offerDiscount, setOfferDiscount] = useState(0);
+  const [giftCardBalance, setGiftCardBalance] = useState(0);
+  const [giftCardLookupError, setGiftCardLookupError] = useState<string | null>(null);
+  const [giftCardsEnabled, setGiftCardsEnabled] = useState(false);
   const [offerLabels, setOfferLabels] = useState<string[]>([]);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -105,6 +108,7 @@ export default function CheckoutPage() {
           axios.get(`/api/shop/${shopKey}/payment-options`),
         ]);
         setMerchant(shopRes.data.data);
+        setGiftCardsEnabled(!!shopRes.data.data?.giftCards?.enabled);
         setPaymentOptions(payRes.data.options);
         if (isLocale(shopRes.data.data?.language)) {
           try {
@@ -425,8 +429,13 @@ export default function CheckoutPage() {
     offerDiscount + voucherDiscount + pointsDiscount,
     taxOpts
   );
-  const preCardTotal =
+  const preGiftTotal =
     Math.max(0, subtotal + deliveryFee + tax - offerDiscount - voucherDiscount - pointsDiscount) + tip;
+  const giftCardDiscount =
+    draft.giftCardCode?.trim() && giftCardBalance > 0
+      ? roundMoney2(Math.min(giftCardBalance, preGiftTotal))
+      : 0;
+  const preCardTotal = Math.max(0, preGiftTotal - giftCardDiscount);
   const cardFeeFixed = Number(paymentOptions?.cardFeeFixed || 0) || 0;
   const cardFeePercent = Number(paymentOptions?.cardFeePercent || 0) || 0;
   const remainingAfterPoints = Math.max(0, redeemableBase - pointsDiscount) + tip;
@@ -760,6 +769,7 @@ export default function CheckoutPage() {
               : null,
           guestCheckout: draft.authMode === 'guest',
           voucherCode: draft.voucherCode?.trim() || undefined,
+          giftCardCode: draft.giftCardCode?.trim() || undefined,
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
@@ -1577,6 +1587,58 @@ export default function CheckoutPage() {
                 </label>
               </div>
 
+              {giftCardsEnabled && (
+                <div className="border border-stone-200 p-4 space-y-2">
+                  <label className="block text-sm font-medium">{t('shopGiftCardPayAtCheckout')}</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      className="flex-1 border border-stone-300 px-3 py-2 text-sm font-mono"
+                      placeholder={t('giftCardEcardPlaceholder')}
+                      value={draft.giftCardCode || ''}
+                      onChange={(e) => {
+                        patch({ giftCardCode: e.target.value });
+                        setGiftCardBalance(0);
+                        setGiftCardLookupError(null);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="px-3 py-2 text-sm border border-stone-300 bg-white shrink-0"
+                      onClick={async () => {
+                        const code = draft.giftCardCode?.trim();
+                        if (!code || !shopKey) return;
+                        setGiftCardLookupError(null);
+                        try {
+                          const res = await axios.get(
+                            `/api/shop/${shopKey}/gift-cards/balance/${encodeURIComponent(code)}`
+                          );
+                          setGiftCardBalance(Number(res.data.balance) || 0);
+                        } catch (err: any) {
+                          setGiftCardBalance(0);
+                          setGiftCardLookupError(
+                            err?.response?.data?.error || t('giftCardNotFound')
+                          );
+                        }
+                      }}
+                    >
+                      {t('giftCardLookup')}
+                    </button>
+                  </div>
+                  {giftCardBalance > 0 && (
+                    <p className="text-sm text-teal-800">
+                      {t('shopGiftCardBalanceApplied').replace(
+                        '{amount}',
+                        giftCardDiscount.toFixed(2)
+                      )}
+                    </p>
+                  )}
+                  {giftCardLookupError && (
+                    <p className="text-sm text-red-600">{giftCardLookupError}</p>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium mb-2">{t('shopTip')}</label>
                 <div className="flex flex-wrap gap-2 mb-2">
@@ -1956,6 +2018,12 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-amber-800">
                 <span>{offerLabels.join(', ') || t('shopOffer')}</span>
                 <span>- CHF {offerDiscount.toFixed(2)}</span>
+              </div>
+            )}
+            {giftCardDiscount > 0 && (
+              <div className="flex justify-between text-sm text-teal-800">
+                <span>{t('giftCard')}</span>
+                <span>- CHF {giftCardDiscount.toFixed(2)}</span>
               </div>
             )}
             {voucherDiscount > 0 && (

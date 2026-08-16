@@ -18,6 +18,7 @@ export type BlockType =
   | 'image'
   | 'video'
   | 'gallery'
+  | 'featured'
 
 export type BlockVariant = string
 

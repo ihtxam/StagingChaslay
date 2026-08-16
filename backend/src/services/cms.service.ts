@@ -366,7 +366,154 @@ function foodTruckData(shopName: string): CmsOpenPageData {
   );
 }
 
-export type CmsTemplateKey = "blank" | "restaurant" | "food_truck";
+const CAFE_LIGHT_THEME = {
+  presetId: "clean",
+  bg0: "#ffffff",
+  bg1: "#fafafa",
+  bg2: "#f5f5f4",
+  bg3: "#e7e5e4",
+  bg4: "#d6d3d1",
+  bg5: "#a8a29e",
+  text0: "#171717",
+  text1: "#404040",
+  text2: "#737373",
+  text3: "#a3a3a3",
+  accent: "#171717",
+  accentDim: "#404040",
+  borderDefault: "#e5e5e5",
+  borderSubtle: "#f0f0f0",
+  borderHover: "#d4d4d4",
+  fontSans: "DM Sans",
+  fontDisplay: "DM Sans",
+  fontMono: "JetBrains Mono",
+  radius: 8,
+  radiusLg: 16,
+};
+
+function cafeLightHtml(
+  title: string,
+  opts: { badge: string; headline: string; subheadline: string }
+): string {
+  const year = new Date().getFullYear();
+  const safe = escapeHtml(title);
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${safe}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+html,body{margin:0;font-family:"DM Sans",system-ui,sans-serif;background:#fff;color:#171717;-webkit-font-smoothing:antialiased}
+.wrap{max-width:72rem;margin:0 auto;padding:0 1.25rem}
+header{display:flex;align-items:center;justify-content:space-between;padding:1rem 0;gap:1rem;border-bottom:1px solid #eee}
+.logo{font-weight:700}.nav{display:none;gap:1.5rem;font-size:.85rem;color:#525252}@media(min-width:900px){.nav{display:flex}}
+.btn{display:inline-flex;align-items:center;padding:.65rem 1.25rem;border-radius:999px;background:#171717;color:#fff;font-weight:600;font-size:.85rem;text-decoration:none}
+.hero{position:relative;min-height:420px;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;background:linear-gradient(135deg,#78716c,#44403c);margin:0 -1.25rem;padding:3rem 1.25rem}
+.hero::before{content:"";position:absolute;inset:0;background:rgba(0,0,0,.4)}
+.hero-inner{position:relative;z-index:1;max-width:40rem}
+.hero h1{font-size:clamp(1.75rem,4vw,2.75rem);line-height:1.1;margin:0 0 .75rem;font-weight:700}
+.hero p{opacity:.92;margin:0 0 1.25rem;font-size:1.05rem}
+.featured{padding:2.5rem 0}
+.featured-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.featured-head h2{margin:0;font-size:1.35rem}
+.featured-row{display:flex;gap:1rem;overflow-x:auto;padding-bottom:.5rem}
+.card{flex:0 0 11rem;height:14rem;border-radius:1rem;background:#f5f5f4;border:1px solid #e5e5e5}
+footer{border-top:1px solid #eee;padding:1.25rem 0 2rem;color:#737373;font-size:.8rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:.75rem}
+a{color:inherit;text-decoration:none}
+</style></head><body><div class="wrap">
+<header><div class="logo">${safe}</div><nav class="nav"><a href="/menu">Menu</a><a href="/menu">Catering</a><a href="/menu">Our Story</a></nav><a class="btn" href="/menu">Order online →</a></header>
+<section class="hero"><div class="hero-inner"><p style="font-size:.9rem;margin-bottom:.75rem">${escapeHtml(opts.badge)}</p><h1>${escapeHtml(opts.headline)}</h1><p>${escapeHtml(opts.subheadline)}</p><a class="btn" href="/menu">Order online →</a></div></section>
+<section class="featured"><div class="featured-head"><h2>Featured</h2><a href="/menu">View menu →</a></div><div class="featured-row"><div class="card"></div><div class="card"></div><div class="card"></div><div class="card"></div><div class="card"></div></div></section>
+<footer><span>© ${year} ${safe}</span><a href="/menu">Menu</a></footer>
+</div></body></html>`;
+}
+
+function cafeClassicData(shopName: string): CmsOpenPageData {
+  return openPageScaffold(
+    shopName,
+    [
+      {
+        id: bid(),
+        type: "navbar",
+        variant: "pill",
+        props: {
+          logo: shopName,
+          links: ["Menu", "Catering", "Our Story", "Location", "FAQs"],
+          ctaText: "Order online →",
+          ctaUrl: "/menu",
+          signInText: "Sign in",
+        },
+      },
+      {
+        id: bid(),
+        type: "hero",
+        variant: "overlay",
+        props: {
+          badge: "Best cafe in the neighborhood",
+          headline: "Where Every Meal Feels Like Home, Served Fresh Daily",
+          subheadline: "Craft coffee, brunch, and comfort food made from scratch every morning.",
+          primaryCta: "Order online →",
+          primaryCtaUrl: "/menu",
+        },
+      },
+      {
+        id: bid(),
+        type: "featured",
+        variant: "row",
+        props: {
+          title: "Featured",
+          viewAllText: "View menu →",
+          viewAllUrl: "/menu",
+          items: [
+            { title: "Morning croissant" },
+            { title: "Avocado toast" },
+            { title: "Seasonal latte" },
+            { title: "House sandwich" },
+            { title: "Chef special" },
+          ],
+        },
+      },
+      {
+        id: bid(),
+        type: "footer",
+        variant: "minimal",
+        props: {
+          copyright: `${new Date().getFullYear()} ${shopName}`,
+          links: ["Menu", "Gift cards", "Contact"],
+        },
+      },
+    ],
+    cafeLightHtml(shopName, {
+      badge: "Best cafe in the neighborhood",
+      headline: "Where Every Meal Feels Like Home, Served Fresh Daily",
+      subheadline: "Craft coffee, brunch, and comfort food made from scratch every morning.",
+    }),
+    CAFE_LIGHT_THEME
+  );
+}
+
+function bistroLightData(shopName: string): CmsOpenPageData {
+  const data = cafeClassicData(shopName);
+  const blocks = data.config.blocks.map((b) =>
+    b.type === "hero"
+      ? {
+          ...b,
+          props: {
+            ...b.props,
+            headline: `Welcome to ${shopName}`,
+            subheadline: "Neighborhood bistro — order pickup or delivery online.",
+          },
+        }
+      : b
+  );
+  return {
+    ...data,
+    config: { ...data.config, blocks, pages: [{ id: "page-home", name: "Home", path: "/", blocks }] },
+    html: cafeLightHtml(shopName, {
+      badge: "Neighborhood bistro",
+      headline: `Welcome to ${shopName}`,
+      subheadline: "Order pickup or delivery online.",
+    }),
+  };
+}
+
+export type CmsTemplateKey = "blank" | "restaurant" | "food_truck" | "cafe_classic" | "bistro_light";
 
 export const CMS_TEMPLATES: Array<{
   key: CmsTemplateKey;
@@ -385,6 +532,18 @@ export const CMS_TEMPLATES: Array<{
     name: "Restaurant",
     description: "Hero, features, order + reservations CTAs",
     data: restaurantData,
+  },
+  {
+    key: "cafe_classic",
+    name: "Café Classic",
+    description: "Light Ashley-style cafe — hero overlay, featured row, pill nav",
+    data: cafeClassicData,
+  },
+  {
+    key: "bistro_light",
+    name: "Bistro Light",
+    description: "Clean white bistro theme with featured highlights",
+    data: bistroLightData,
   },
   {
     key: "blank",
