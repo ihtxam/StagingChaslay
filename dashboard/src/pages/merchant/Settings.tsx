@@ -36,8 +36,8 @@ import {
   SettingsPageHeader,
   SettingsReportCard,
 } from '@/components/settings/SettingsReportUi';
-import FloorPlan from './FloorPlan';
 import SettingsBusinessTab from './settings/SettingsBusinessTab';
+import SettingsTablesTab from './settings/SettingsTablesTab';
 import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
@@ -432,6 +432,8 @@ export default function Settings() {
       const q = new URLSearchParams(window.location.search).get('tab');
       if (q === 'payments') return 'payments';
       if (q === 'tables') return 'tables';
+      const section = new URLSearchParams(window.location.search).get('section');
+      if (section === 'settings' || section === 'layout' || section === 'qr') return 'tables';
       if (q === 'taxes') return 'taxes';
       if (q === 'pos' || q === 'operations') return 'pos';
       if (q === 'shop') return 'shop';
@@ -600,6 +602,21 @@ export default function Settings() {
         id: 'tables-floor',
         tab: 'tables',
         keywords: ['tables', 'floor', 'plan', 'pax', t('floorPlanEnabled'), t('paxOrderingEnabled')],
+      },
+      {
+        id: 'tables-management',
+        tab: 'tables',
+        keywords: [
+          'table',
+          'tables',
+          'section',
+          'layout',
+          'qr',
+          t('navTableManagement'),
+          t('tableNavSettings'),
+          t('tableNavLayout'),
+          t('tableNavQr'),
+        ],
       },
       {
         id: 'payments-adyen',
@@ -1477,66 +1494,21 @@ export default function Settings() {
           {tab === 'reservations' && <SettingsReservationsTab />}
 
           {tab === 'tables' && (
-            <div className="space-y-5">
-              <SettingsPageHeader title={t('settingsTables')} subtitle={t('floorPlanSettingsHint')} />
-              <form onSubmit={onSave} className="space-y-5">
-                <Section
-                  id="tables-floor"
-                  icon={UtensilsCrossed}
-                  accent={settingsDash.accent}
-                  title={t('settingsTables')}
-                  description={t('floorPlanSettingsHint')}
-                  highlight={isSectionHighlight('tables-floor')}
-                  dimmed={normalizedQuery ? !isSectionVisible('tables-floor') : false}
-                >
-                  <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={!!settings.floorPlanEnabled}
-                      onChange={(e) => setSettings({ ...settings, floorPlanEnabled: e.target.checked })}
-                    />
-                    <span className="font-medium">{t('floorPlanEnabled')}</span>
-                  </label>
-                  <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={!!settings.paxOrderingEnabled}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          paxOrderingEnabled: e.target.checked,
-                          floorPlanEnabled: e.target.checked ? true : settings.floorPlanEnabled,
-                        })
-                      }
-                    />
-                    <span>
-                      <span className="font-medium block">{t('paxOrderingEnabled')}</span>
-                      <span className="text-xs muted">{t('paxOrderingHint')}</span>
-                    </span>
-                  </label>
-                  <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-2.5 text-xs muted">
-                    {t('coursesMovedToPosHint')}{' '}
-                    <button
-                      type="button"
-                      className="font-medium text-[var(--text)] underline underline-offset-2"
-                      onClick={() => {
-                        setSettingsQuery('courses');
-                        setTab('pos');
-                        setHighlightId('pos-courses');
-                      }}
-                    >
-                      {t('settingsPos')}
-                    </button>
-                  </p>
-                </Section>
-                <SettingsSaveBar saving={saving} />
-              </form>
-              <Section icon={UtensilsCrossed} accent={settingsDash.info} title={t('tableDesigner')} description={t('tableDesignerHint')}>
-                <FloorPlan embedded />
-              </Section>
-            </div>
+            <SettingsTablesTab
+              settings={settings}
+              setSettings={(next) => setSettings({ ...settings, ...next })}
+              onSave={onSave}
+              saving={saving}
+              highlightId={highlightId}
+              normalizedQuery={normalizedQuery}
+              isSectionVisible={isSectionVisible}
+              isSectionHighlight={isSectionHighlight}
+              onGoToPosTab={(query, sectionId) => {
+                setSettingsQuery(query);
+                setTab('pos');
+                setHighlightId(sectionId);
+              }}
+            />
           )}
 
           {tab === 'pos' && (
