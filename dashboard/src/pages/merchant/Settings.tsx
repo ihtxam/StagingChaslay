@@ -28,10 +28,6 @@ import {
   listAgentPrinters,
   type AgentPrinter,
 } from '@/lib/print-agent';
-import {
-  KITCHEN_PRINT_DESTINATIONS,
-  type KitchenPrintDestination,
-} from '@/lib/webpos-receipt';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { compressImageIfNeeded } from '@/lib/compress-image';
 import {
@@ -185,8 +181,9 @@ interface SettingsData {
       printKitchenTickets?: boolean;
       printEndOfDayReports?: boolean;
       printAllProducts?: boolean;
+      linkedCategoryIds?: string[];
+      linkedProductIds?: string[];
     }>;
-    kitchenPrintRouting?: Record<string, 'kitchen1' | 'kitchen2' | 'receipt' | 'none'>;
   } | null;
 }
 
@@ -195,6 +192,46 @@ interface AdyenCreds {
   clientId?: string | null;
   apiKeyMasked?: string | null;
   apiKeySet?: boolean;
+}
+
+type PrinterProfile = NonNullable<NonNullable<SettingsData['posPrintSettings']>['printers']>[number];
+
+function printerPrintsAllCategories(p: PrinterProfile): boolean {
+  return !(p.linkedCategoryIds?.length) && p.printAllProducts !== false;
+}
+
+function isPrinterCategoryLinked(
+  p: PrinterProfile,
+  categoryId: string
+): boolean {
+  if (printerPrintsAllCategories(p)) return true;
+  return (p.linkedCategoryIds || []).includes(categoryId);
+}
+
+function togglePrinterCategoryLink(
+  p: PrinterProfile,
+  categoryId: string,
+  allCategoryIds: string[],
+  checked: boolean
+): PrinterProfile {
+  const allMode = printerPrintsAllCategories(p);
+  let nextIds: string[];
+
+  if (allMode && !checked) {
+    nextIds = allCategoryIds.filter((id) => id !== categoryId);
+  } else if (allMode) {
+    return p;
+  } else {
+    const current = new Set(p.linkedCategoryIds || []);
+    if (checked) current.add(categoryId);
+    else current.delete(categoryId);
+    nextIds = allCategoryIds.filter((id) => current.has(id));
+  }
+
+  if (!nextIds.length || nextIds.length === allCategoryIds.length) {
+    return { ...p, linkedCategoryIds: [], printAllProducts: true };
+  }
+  return { ...p, linkedCategoryIds: nextIds, printAllProducts: false };
 }
 
 interface TerminalRow {
@@ -957,12 +994,13 @@ export default function Settings() {
     setSavingReceipt(true);
     try {
       const ps = settings.posPrintSettings || {};
-      const routingRaw = ps.kitchenPrintRouting || {};
-      const kitchenPrintRouting: Record<string, KitchenPrintDestination> = {};
-      for (const cat of productCategories) {
-        const dest = routingRaw[cat.id] || 'kitchen1';
-        if (dest !== 'kitchen1') kitchenPrintRouting[cat.id] = dest;
-      }
+      const printers = (ps.printers || []).map((p) => ({
+        ...p,
+        linkedCategoryIds: Array.isArray(p.linkedCategoryIds)
+          ? p.linkedCategoryIds.filter(Boolean)
+          : [],
+        linkedProductIds: Array.isArray(p.linkedProductIds) ? p.linkedProductIds.filter(Boolean) : [],
+      }));
       const response = await api.put('/merchant/settings', {
         posPrintSettings: {
           receiptHeader: ps.receiptHeader || '',
@@ -985,8 +1023,7 @@ export default function Settings() {
           receiptLogoUrl: ps.receiptLogoUrl || null,
           autoPrintReceipt: ps.autoPrintReceipt !== false,
           autoPrintKitchen: ps.autoPrintKitchen !== false,
-          printers: ps.printers || [],
-          kitchenPrintRouting,
+          printers,
         },
       });
       const next = response.data.merchant || response.data.settings || {};
@@ -3169,6 +3206,48 @@ export default function Settings() {
                         </label>
                       ))}
                     </div>
+                    {p.printKitchenTickets ? (
+                      <div className="space-y-2 rounded-lg border border-dashed border-[var(--border)] p-3">
+                        <div>
+                          <p className="text-sm font-medium m-0">{t('printerLinkedCategories')}</p>
+                          <p className="text-xs text-[var(--muted)] m-0 mt-0.5">
+                            {t('printerLinkedCategoriesHint')}
+                          </p>
+                        </div>
+                        {productCategories.length === 0 ? (
+                          <p className="text-xs text-[var(--muted)] m-0">{t('printerLinkedCategoriesEmpty')}</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-x-4 gap-y-2">
+                            {productCategories.map((cat) => (
+                              <label key={cat.id} className="inline-flex items-center gap-1.5 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={isPrinterCategoryLinked(p, cat.id)}
+                                  onChange={(e) => {
+                                    const allIds = productCategories.map((c) => c.id);
+                                    const printers = [...(settings.posPrintSettings?.printers || [])];
+                                    printers[idx] = togglePrinterCategoryLink(
+                                      p,
+                                      cat.id,
+                                      allIds,
+                                      e.target.checked
+                                    );
+                                    setSettings({
+                                      ...settings,
+                                      posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                                    });
+                                  }}
+                                />
+                                {cat.name}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        {printerPrintsAllCategories(p) && productCategories.length > 0 ? (
+                          <p className="text-xs text-emerald-700 m-0">{t('printerLinkedCategoriesAll')}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <button
                       type="button"
                       className="text-xs text-red-600"
@@ -3212,65 +3291,6 @@ export default function Settings() {
                 >
                   {t('addPrinterProfile')}
                 </button>
-              </Section>
-
-              <Section
-                icon={UtensilsCrossed}
-                accent={settingsDash.warning}
-                title={t('kitchenPrintRouting')}
-                description={t('kitchenPrintRoutingHint')}
-              >
-                {productCategories.length === 0 ? (
-                  <p className="text-sm text-[var(--muted)] m-0">{t('kitchenPrintRoutingEmpty')}</p>
-                ) : (
-                  <div className="space-y-2">
-                    {productCategories.map((cat) => {
-                      const routing = settings.posPrintSettings?.kitchenPrintRouting || {};
-                      const value: KitchenPrintDestination = routing[cat.id] || 'kitchen1';
-                      return (
-                        <div
-                          key={cat.id}
-                          className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--border)] px-3 py-2"
-                        >
-                          <span className="min-w-[8rem] flex-1 text-sm font-medium">{cat.name}</span>
-                          <select
-                            className="input max-w-xs"
-                            value={value}
-                            onChange={(e) => {
-                              const dest = e.target.value as KitchenPrintDestination;
-                              const prev = settings.posPrintSettings?.kitchenPrintRouting || {};
-                              const next = { ...prev };
-                              if (dest === 'kitchen1') {
-                                delete next[cat.id];
-                              } else {
-                                next[cat.id] = dest;
-                              }
-                              setSettings({
-                                ...settings,
-                                posPrintSettings: {
-                                  ...(settings.posPrintSettings || {}),
-                                  kitchenPrintRouting: next,
-                                },
-                              });
-                            }}
-                          >
-                            {KITCHEN_PRINT_DESTINATIONS.map((dest) => (
-                              <option key={dest} value={dest}>
-                                {dest === 'kitchen1'
-                                  ? t('kitchenPrintDestKitchen1')
-                                  : dest === 'kitchen2'
-                                    ? t('kitchenPrintDestKitchen2')
-                                    : dest === 'receipt'
-                                      ? t('kitchenPrintDestReceipt')
-                                      : t('kitchenPrintDestNone')}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </Section>
 
               <SettingsSaveBar saving={savingReceipt} />

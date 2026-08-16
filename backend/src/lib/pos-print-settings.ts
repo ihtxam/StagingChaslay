@@ -56,8 +56,16 @@ export type PosPrintSettings = {
   scaleUsbAddress?: string | null;
   scaleEnabled?: boolean;
   printers?: PosPrinterProfile[];
-  /** categoryId → kitchen1 | kitchen2 | receipt | none. Empty/absent = legacy (all kitchen printers). */
+  /**
+   * @deprecated Migrated to printer-level linkedCategoryIds. Kept for one-time migration only.
+   * categoryId → kitchen1 | kitchen2 | receipt | none.
+   */
   kitchenPrintRouting?: Record<string, KitchenPrintDestination>;
+  /**
+   * Categories excluded from all kitchen printers (migrated from kitchenPrintRouting "none").
+   * Cleared once merchants save printer profiles from the panel.
+   */
+  kitchenExcludedCategoryIds?: string[];
 };
 
 export const DEFAULT_POS_PRINT_SETTINGS: Required<
@@ -120,14 +128,6 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     })
     .filter(Boolean) as PosPrinterProfile[];
 
-  const itemScale = Number(src.kitchenItemTextScale);
-  const headerScale = Number(src.kitchenHeaderTextScale);
-  const kitchenItemTextScale = (itemScale === 1 || itemScale === 3 ? itemScale : 2) as 1 | 2 | 3;
-  const kitchenHeaderTextScale = (headerScale === 1 || headerScale === 3 ? headerScale : 2) as
-    | 1
-    | 2
-    | 3;
-
   const routingDests = new Set<string>(KITCHEN_PRINT_DESTINATIONS);
   let kitchenPrintRouting: Record<string, KitchenPrintDestination> | undefined;
   if (src.kitchenPrintRouting && typeof src.kitchenPrintRouting === "object") {
@@ -142,6 +142,26 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     }
     if (Object.keys(next).length) kitchenPrintRouting = next;
   }
+
+  let kitchenExcludedCategoryIds: string[] | undefined;
+  if (Array.isArray(src.kitchenExcludedCategoryIds)) {
+    const ids = src.kitchenExcludedCategoryIds.map(String).filter(Boolean).slice(0, 200);
+    if (ids.length) kitchenExcludedCategoryIds = ids;
+  }
+
+  const migrated = migrateKitchenPrintRoutingToPrinters(
+    printers,
+    kitchenPrintRouting,
+    kitchenExcludedCategoryIds
+  );
+
+  const itemScale = Number(src.kitchenItemTextScale);
+  const headerScale = Number(src.kitchenHeaderTextScale);
+  const kitchenItemTextScale = (itemScale === 1 || itemScale === 3 ? itemScale : 2) as 1 | 2 | 3;
+  const kitchenHeaderTextScale = (headerScale === 1 || headerScale === 3 ? headerScale : 2) as
+    | 1
+    | 2
+    | 3;
 
   return {
     receiptHeader: String(src.receiptHeader ?? "").slice(0, 2000),
@@ -173,8 +193,74 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
         ? null
         : String(src.scaleUsbAddress).trim().slice(0, 120) || null,
     scaleEnabled: src.scaleEnabled === true,
-    printers,
-    kitchenPrintRouting,
+    printers: migrated.printers,
+    kitchenPrintRouting: migrated.routing,
+    kitchenExcludedCategoryIds: migrated.excludedCategoryIds,
+  };
+}
+
+/** One-time migration: category→destination map → per-printer linkedCategoryIds (Android-aligned). */
+export function migrateKitchenPrintRoutingToPrinters(
+  printers: PosPrinterProfile[],
+  routing?: Record<string, KitchenPrintDestination>,
+  existingExcluded?: string[]
+): {
+  printers: PosPrinterProfile[];
+  routing?: Record<string, KitchenPrintDestination>;
+  excludedCategoryIds?: string[];
+} {
+  if (!routing || !Object.keys(routing).length) {
+    return { printers, routing, excludedCategoryIds: existingExcluded };
+  }
+
+  const result = printers.map((p) => ({ ...p }));
+  const kitchenIndices = result
+    .map((p, i) => (p.printKitchenTickets ? i : -1))
+    .filter((i) => i >= 0);
+  const receiptIndices = result
+    .map((p, i) => (p.printReceipts ? i : -1))
+    .filter((i) => i >= 0);
+
+  const byDest: Record<KitchenPrintDestination, string[]> = {
+    kitchen1: [],
+    kitchen2: [],
+    receipt: [],
+    none: [],
+  };
+  for (const [catId, dest] of Object.entries(routing)) {
+    byDest[dest]?.push(catId);
+  }
+
+  const excluded = new Set([...(existingExcluded || []), ...byDest.none]);
+
+  if (kitchenIndices[1] !== undefined && byDest.kitchen2.length) {
+    const idx = kitchenIndices[1];
+    result[idx] = {
+      ...result[idx],
+      printAllProducts: false,
+      linkedCategoryIds: [...new Set(byDest.kitchen2)],
+    };
+  }
+
+  if (byDest.receipt.length && receiptIndices.length) {
+    for (const idx of receiptIndices) {
+      const p = result[idx];
+      result[idx] = {
+        ...p,
+        printKitchenTickets: true,
+        printAllProducts: false,
+        linkedCategoryIds: [...new Set([...(p.linkedCategoryIds || []), ...byDest.receipt])],
+      };
+    }
+  }
+
+  const migratedExplicitly =
+    byDest.kitchen2.length > 0 || byDest.receipt.length > 0 || byDest.none.length > 0;
+
+  return {
+    printers: result,
+    routing: migratedExplicitly ? undefined : routing,
+    excludedCategoryIds: excluded.size ? [...excluded] : existingExcluded,
   };
 }
 

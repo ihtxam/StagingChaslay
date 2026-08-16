@@ -989,7 +989,8 @@ const en: Dict = {
   printAgentInstallSteps:
     'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Printer profiles',
-  printerProfilesHint: 'Map Windows printer names (print-agent) to receipt, kitchen, or end-of-day roles.',
+  printerProfilesHint:
+    'Map Windows printer names (print-agent) to receipt, kitchen, or end-of-day roles. For kitchen printers, pick which categories print on each device.',
   printerName: 'Windows printer name',
   settingsPrinterManualEntry:
     'Print agent offline — type the exact Windows printer name. Install and start the agent on this PC, then click Refresh printers.',
@@ -997,6 +998,11 @@ const en: Dict = {
   printRoleKitchen: 'Kitchen',
   printRoleEod: 'End of day',
   addPrinterProfile: 'Add printer',
+  printerLinkedCategories: 'Categories on this printer',
+  printerLinkedCategoriesHint:
+    'Choose which menu categories print kitchen tickets here. Leave all checked (default) to print every category.',
+  printerLinkedCategoriesEmpty: 'Add menu categories in Products to configure routing.',
+  printerLinkedCategoriesAll: 'All categories — uncheck to limit this printer.',
   failedSaveReceipt: 'Failed to save receipt settings',
   reports: 'Reports',
   reportsHint: 'End-of-day sales statistics for POS and ChaslayReborn (synced sales).',
@@ -2931,7 +2937,8 @@ const fr: Dict = {
   printAgentInstallSteps:
     'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Journal : %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Profils imprimantes',
-  printerProfilesHint: 'Associez les noms Windows (print-agent) aux rôles reçu, cuisine ou fin de journée.',
+  printerProfilesHint:
+    'Associez les noms Windows (print-agent) aux rôles reçu, cuisine ou fin de journée. Pour la cuisine, choisissez les catégories par imprimante.',
   printerName: 'Nom imprimante Windows',
   settingsPrinterManualEntry:
     'Agent d’impression hors ligne — saisissez le nom Windows exact. Installez et démarrez l’agent sur ce PC, puis Actualiser les imprimantes.',
@@ -2939,6 +2946,11 @@ const fr: Dict = {
   printRoleKitchen: 'Cuisine',
   printRoleEod: 'Fin de journée',
   addPrinterProfile: 'Ajouter une imprimante',
+  printerLinkedCategories: 'Catégories sur cette imprimante',
+  printerLinkedCategoriesHint:
+    'Choisissez quelles catégories du menu impriment les tickets cuisine ici. Tout cocher (défaut) = toutes les catégories.',
+  printerLinkedCategoriesEmpty: 'Ajoutez des catégories dans Produits pour configurer le routage.',
+  printerLinkedCategoriesAll: 'Toutes les catégories — décochez pour limiter cette imprimante.',
   failedSaveReceipt: 'Échec de l’enregistrement des reçus',
   reports: 'Rapports',
   reportsHint: 'Statistiques de fin de journée POS et ChaslayReborn (ventes synchronisées).',
@@ -4875,7 +4887,8 @@ const de: Dict = {
   printAgentInstallSteps:
     'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Druckerprofile',
-  printerProfilesHint: 'Windows-Druckernamen (Print-Agent) Rollen zuweisen: Beleg, Küche, Tagesabschluss.',
+  printerProfilesHint:
+    'Windows-Druckernamen (Print-Agent) Rollen zuweisen: Beleg, Küche, Tagesabschluss. Für Küche Kategorien pro Drucker wählen.',
   printerName: 'Windows-Druckername',
   settingsPrinterManualEntry:
     'Druckagent offline — exakten Windows-Druckernamen eingeben. Agent auf diesem PC installieren und starten, dann Drucker aktualisieren.',
@@ -4883,6 +4896,11 @@ const de: Dict = {
   printRoleKitchen: 'Küche',
   printRoleEod: 'Tagesabschluss',
   addPrinterProfile: 'Drucker hinzufügen',
+  printerLinkedCategories: 'Kategorien auf diesem Drucker',
+  printerLinkedCategoriesHint:
+    'Wählen Sie, welche Menükategorien hier Küchentickets drucken. Alle aktiviert (Standard) = alle Kategorien.',
+  printerLinkedCategoriesEmpty: 'Legen Sie Kategorien unter Produkte an, um das Routing zu konfigurieren.',
+  printerLinkedCategoriesAll: 'Alle Kategorien — abwählen, um diesen Drucker einzuschränken.',
   failedSaveReceipt: 'Belegeinstellungen speichern fehlgeschlagen',
   reports: 'Berichte',
   reportsHint: 'Tagesabschluss-Statistiken für POS und ChaslayReborn (synchronisierte Verkäufe).',
