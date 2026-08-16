@@ -537,4 +537,16 @@
     <string name="license_device_id_help">Envoyez cet ID d\'appareil à l\'assistance lors de la demande d\'un code d\'activation ou de renouvellement.</string>
     <string name="license_trial_banner">Essai : %1$d jour(s) restant(s)</string>
     <string name="license_renewal_banner">L\'abonnement se renouvelle le (s) jour(s) %1$d. Contactez l\'assistance pour renouveler.</string>
+    <string name="combo_add_to_order">Ajouter à la commande</string>
+    <string name="combo_slot_included">%1$d inclus</string>
+    <string name="combo_slot_selected">%1$d/%2$d sélectionné(s)</string>
+    <string name="combo_slot_pick_range">Choisir %1$d–%2$d</string>
+    <string name="cash_movement_title">Entrée / Sortie de caisse</string>
+    <string name="cash_in">Entrée de caisse</string>
+    <string name="cash_out">Sortie de caisse</string>
+    <string name="cash_amount">Montant</string>
+    <string name="cash_reason">Motif</string>
+    <string name="cash_movement_success">Mouvement de caisse enregistré</string>
+    <string name="cash_movement_failed">Impossible d\'enregistrer le mouvement</string>
+    <string name="cash_movement_requires_shift">Ouvrez un shift avant une entrée/sortie de caisse</string>
 </resources>

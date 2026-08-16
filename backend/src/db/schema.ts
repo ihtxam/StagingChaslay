@@ -2229,6 +2229,31 @@ export const posShifts = pgTable(
   })
 );
 
+/** Manual cash in/out during an open POS shift (petty cash, bank drops, etc.) */
+export const posCashMovements = pgTable(
+  "pos_cash_movements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => posShifts.id, { onDelete: "cascade" }),
+    staffId: uuid("staff_id").references(() => merchantStaff.id, { onDelete: "set null" }),
+    staffName: varchar("staff_name", { length: 255 }),
+    type: varchar("type", { length: 10 }).notNull(), // in | out
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    reason: text("reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("pos_cash_movements_merchant_idx").on(table.merchantId),
+    shiftIdx: index("pos_cash_movements_shift_idx").on(table.shiftId),
+    createdIdx: index("pos_cash_movements_created_idx").on(table.merchantId, table.createdAt),
+  })
+);
+
 export const subscriptionPlansRelations = relations(subscriptionPlans, ({ many }) => ({
   payments: many(subscriptionPayments),
 }));

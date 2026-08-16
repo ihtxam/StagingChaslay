@@ -534,4 +534,16 @@
     <string name="license_device_id_help">Senden Sie diese Geräte-ID an den Support, wenn Sie einen Aktivierungs- oder Verlängerungscode anfordern.</string>
     <string name="license_trial_banner">Studie: %1$d Tag(e) verbleibend</string>
     <string name="license_renewal_banner">Das Abonnement verlängert sich in %1$d Tag(en). Wenden Sie sich an den Support, um zu verlängern.</string>
+    <string name="combo_add_to_order">Zur Bestellung hinzufügen</string>
+    <string name="combo_slot_included">%1$d inbegriffen</string>
+    <string name="combo_slot_selected">%1$d/%2$d ausgewählt</string>
+    <string name="combo_slot_pick_range">Wählen Sie %1$d–%2$d</string>
+    <string name="cash_movement_title">Bareinlage / Barentnahme</string>
+    <string name="cash_in">Bareinlage</string>
+    <string name="cash_out">Barentnahme</string>
+    <string name="cash_amount">Betrag</string>
+    <string name="cash_reason">Grund</string>
+    <string name="cash_movement_success">Kassenbewegung erfasst</string>
+    <string name="cash_movement_failed">Kassenbewegung konnte nicht erfasst werden</string>
+    <string name="cash_movement_requires_shift">Schicht öffnen vor Bareinlage/Barentnahme</string>
 </resources>

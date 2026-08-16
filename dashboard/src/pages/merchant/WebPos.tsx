@@ -77,18 +77,18 @@ import {
   type ShopComboSelection,
   type ShopSelectedExtra,
 } from '@/lib/shop-cart';
-import ShopProductModifiersModal, {
+import WebPosProductModifiersModal, {
   defaultConfiguredAdd,
   productHasModifiers,
   productRequiresModifierModal,
   type ShopModifierGroup,
   type ShopProductForModifiers,
-} from '@/components/shop/ShopProductModifiersModal';
-import ShopComboWizard, {
+} from '@/components/webpos/WebPosProductModifiersModal';
+import WebPosComboModal, {
   productHasComboSlots,
   type ComboSlot,
   type ShopComboProduct,
-} from '@/components/shop/ShopComboWizard';
+} from '@/components/webpos/WebPosComboModal';
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
@@ -205,6 +205,7 @@ import {
   WebPosCloseShiftModal,
   WebPosShiftClosedModal,
 } from '@/components/webpos/WebPosShiftModals';
+import WebPosCashMovementModal from '@/components/webpos/WebPosCashMovementModal';
 import {
   EodIncludeProductsCheckbox,
   useEodIncludeProductsSold,
@@ -347,6 +348,7 @@ type CartLine = {
   lineDiscountPercent?: number;
   sentToKitchen?: boolean;
   sentToKitchenAt?: number;
+  lineNote?: string;
   giftCard?: GiftCardLineMeta;
 };
 
@@ -507,6 +509,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   } | null>(null);
   const [shiftLive, setShiftLive] = useState<{
     cashSales: number;
+    cashIn?: number;
+    cashOut?: number;
     cardSales: number;
     terminalSales: number;
     totalSales: number;
@@ -515,6 +519,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   } | null>(null);
   const [startShiftOpen, setStartShiftOpen] = useState(false);
   const [closeShiftOpen, setCloseShiftOpen] = useState(false);
+  const [cashMovementOpen, setCashMovementOpen] = useState(false);
   const [shiftClosedOpen, setShiftClosedOpen] = useState(false);
   const [shiftBalanced, setShiftBalanced] = useState(true);
   const [shiftBusy, setShiftBusy] = useState(false);
@@ -1211,6 +1216,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     shift: { id: string; openingCash: number; openedAt: string } | null;
     live: {
       cashSales: number;
+      cashIn?: number;
+      cashOut?: number;
       cardSales: number;
       terminalSales: number;
       totalSales: number;
@@ -1879,11 +1886,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     p: Product,
     unitPrice: number,
     selectedExtras: ShopSelectedExtra[] = [],
-    comboSelections: ShopComboSelection[] = []
+    comboSelections: ShopComboSelection[] = [],
+    quantity = 1,
+    lineNote?: string
   ) => {
     const price = roundMoney2(unitPrice);
+    const qty = Math.max(1, Math.round(quantity));
     const sig = lineSignature(selectedExtras, comboSelections);
     const courseNumber = coursesEnabled ? activeCourse : undefined;
+    const noteSuffix = lineNote?.trim() ? `:note:${lineNote.trim()}` : '';
     setCart((prev) => {
       const isOpen = p.isOpenPrice || p.productType === 'open_price';
       if (isOpen) {
@@ -1893,6 +1904,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             lineId: `${p.id}-${Date.now()}-open`,
             productId: p.id,
             name: p.name,
+            quantity: qty,
+            unitPrice: price,
+            lineTotal: roundMoney2(price * qty),
+            taxable: p.isTaxable !== false,
+            categoryId: p.categoryId,
+            selectedExtras,
+            comboSelections,
+            isOpenPrice: true,
+            courseNumber,
+            lineNote: lineNote?.trim() || undefined,
+          },
+        ];
+      }
+      if (qty === 1 && !lineNote?.trim()) {
+        return collapseStackableCart([
+          ...prev,
+          {
+            lineId: `${p.id}-${Date.now()}-${sig || 'plain'}`,
+            productId: p.id,
+            name: p.name,
             quantity: 1,
             unitPrice: price,
             lineTotal: price,
@@ -1900,29 +1931,43 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             categoryId: p.categoryId,
             selectedExtras,
             comboSelections,
-            isOpenPrice: true,
+            isOpenPrice: false,
             courseNumber,
           },
-        ];
+        ]);
       }
-      return collapseStackableCart([
+      return [
         ...prev,
         {
-          lineId: `${p.id}-${Date.now()}-${sig || 'plain'}`,
+          lineId: `${p.id}-${Date.now()}-${sig || 'plain'}${noteSuffix}`,
           productId: p.id,
           name: p.name,
-          quantity: 1,
+          quantity: qty,
           unitPrice: price,
-          lineTotal: price,
+          lineTotal: roundMoney2(price * qty),
           taxable: p.isTaxable !== false,
           categoryId: p.categoryId,
           selectedExtras,
           comboSelections,
           isOpenPrice: false,
           courseNumber,
+          lineNote: lineNote?.trim() || undefined,
         },
-      ]);
+      ];
     });
+  };
+
+  const pushConfiguredProductWithQty = (
+    p: Product,
+    unitPrice: number,
+    selectedExtras: ShopSelectedExtra[] = [],
+    comboSelections: ShopComboSelection[] = [],
+    quantity = 1,
+    lineNote?: string
+  ) => {
+    void ensureShift(() =>
+      pushConfiguredProduct(p, unitPrice, selectedExtras, comboSelections, quantity, lineNote)
+    );
   };
 
   const addConfiguredProduct = (
@@ -1931,7 +1976,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     selectedExtras: ShopSelectedExtra[] = [],
     comboSelections: ShopComboSelection[] = []
   ) => {
-    void ensureShift(() => pushConfiguredProduct(p, unitPrice, selectedExtras, comboSelections));
+    pushConfiguredProductWithQty(p, unitPrice, selectedExtras, comboSelections, 1);
   };
 
   const isWeighedProduct = (p: Product) =>
@@ -1990,8 +2035,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         });
         return;
       }
-      // Only open options when something is required. Optional extras → one-tap stack.
-      if (productRequiresModifierModal(p as ShopProductForModifiers)) {
+      // Open tabbed modifier modal for any product with modifier groups / extras.
+      if (productHasModifiers(p as ShopProductForModifiers)) {
         setPendingProduct({
           id: p.id,
           name: p.name,
@@ -2000,18 +2045,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           extras: p.extras,
           modifierGroups: p.modifierGroups,
         });
-        return;
-      }
-      if (productHasModifiers(p as ShopProductForModifiers)) {
-        const configured = defaultConfiguredAdd({
-          id: p.id,
-          name: p.name,
-          price: Number(p.price) || 0,
-          allowExtras: p.allowExtras,
-          extras: p.extras,
-          modifierGroups: p.modifierGroups,
-        });
-        pushConfiguredProduct(p, configured.unitPrice, configured.selectedExtras, []);
         return;
       }
       pushConfiguredProduct(p, roundMoney2(Number(p.price) || 0), [], []);
@@ -6144,6 +6177,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setSettingsOpen(false);
               setStartShiftOpen(true);
             }}
+            onCashMovement={() => {
+              if (!openShift) {
+                toast.error(t('webPosCashRequiresShift'));
+                return;
+              }
+              setSettingsOpen(false);
+              setCashMovementOpen(true);
+            }}
             showEodButton={showEodButton}
             onEodReport={openEodPrint}
             onlinePendingCount={onlinePendingCount}
@@ -6929,10 +6970,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       {pendingProduct && (
         <ShopProductModifiersModal
           product={pendingProduct}
+          variant="pos"
           onClose={() => setPendingProduct(null)}
-          onConfirm={(extras, unitPrice) => {
+          onConfirm={(extras, unitPrice, options) => {
             const base = products.find((p) => p.id === pendingProduct.id);
-            if (base) addConfiguredProduct(base, unitPrice, extras, []);
+            if (base) {
+              const qty = Math.max(1, options?.qty ?? 1);
+              pushConfiguredProductWithQty(base, unitPrice, extras, [], qty, options?.note);
+            }
             setPendingProduct(null);
           }}
         />
@@ -7272,6 +7317,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         live={shiftLive}
         onCancel={() => setCloseShiftOpen(false)}
         onConfirm={(cash) => void handleCloseShift(cash)}
+      />
+      <WebPosCashMovementModal
+        open={cashMovementOpen}
+        shiftId={openShift?.id ?? null}
+        staffId={webposStaff?.id}
+        staffName={webposStaff?.name}
+        onClose={() => setCashMovementOpen(false)}
+        onSuccess={(live) => {
+          setShiftLive((prev) => ({ ...(prev || {}), ...live } as NonNullable<typeof shiftLive>));
+          toast.success(t('webPosCashMovementSuccess'));
+        }}
       />
       {eodPickerOpen ? (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">

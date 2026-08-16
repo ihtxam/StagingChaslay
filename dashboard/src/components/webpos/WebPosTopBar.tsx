@@ -16,6 +16,7 @@ import {
   UserCircle2,
   Vault,
   X,
+  ArrowDownUp,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
@@ -497,6 +498,7 @@ export function WebPosSettingsDropdown({
   shiftOpen,
   onCloseShift,
   onStartShift,
+  onCashMovement,
   showEodButton,
   onEodReport,
   onlinePendingCount = 0,
@@ -534,6 +536,7 @@ export function WebPosSettingsDropdown({
   shiftOpen?: boolean;
   onCloseShift?: () => void;
   onStartShift?: () => void;
+  onCashMovement?: () => void;
   showEodButton?: boolean;
   onEodReport?: () => void;
   /** Mobile overflow actions (hidden on desktop top bar). */
@@ -734,6 +737,16 @@ export function WebPosSettingsDropdown({
               {t('webPosShiftStart')}
             </button>
           )}
+          {shiftOpen && onCashMovement ? (
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+              onClick={onCashMovement}
+            >
+              <ArrowDownUp size={16} />
+              {t('webPosCashMovementTitle')}
+            </button>
+          ) : null}
           <p className="text-[10px] text-stone-500">
             {shiftOpen ? t('webPosShiftOpenHint') : t('webPosShiftClosedHint')}
           </p>

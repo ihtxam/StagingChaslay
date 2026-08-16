@@ -427,17 +427,51 @@ export class PosReportsService {
       orderBy: [desc(schema.posShifts.closedAt)],
     });
 
-    const shiftCash = closedShifts.map((s) => ({
-      openingFloat: round2(money(s.openingCash)),
-      cashSales: round2(money(s.cashSales)),
-      expectedCash: round2(money(s.expectedCash)),
-      closingCashCounted:
-        s.closingCashCounted != null ? round2(money(s.closingCashCounted)) : null,
-      variance: s.variance != null ? round2(money(s.variance)) : null,
-      staffName: s.staffName || null,
-      openedAt: s.openedAt?.toISOString?.() ?? null,
-      closedAt: s.closedAt?.toISOString?.() ?? null,
-    }));
+    const shiftIds = closedShifts.map((s) => s.id);
+    const movementTotals = new Map<string, { cashIn: number; cashOut: number }>();
+    if (shiftIds.length) {
+      try {
+        const movementRows = await db
+          .select({
+            shiftId: schema.posCashMovements.shiftId,
+            type: schema.posCashMovements.type,
+            amount: schema.posCashMovements.amount,
+          })
+          .from(schema.posCashMovements)
+          .where(
+            and(
+              eq(schema.posCashMovements.merchantId, merchantId),
+              inArray(schema.posCashMovements.shiftId, shiftIds)
+            )
+          );
+        for (const row of movementRows) {
+          const cur = movementTotals.get(row.shiftId) || { cashIn: 0, cashOut: 0 };
+          const amt = money(row.amount);
+          if (String(row.type).toLowerCase() === "out") cur.cashOut = round2(cur.cashOut + amt);
+          else cur.cashIn = round2(cur.cashIn + amt);
+          movementTotals.set(row.shiftId, cur);
+        }
+      } catch {
+        /* table may not exist yet on older DBs */
+      }
+    }
+
+    const shiftCash = closedShifts.map((s) => {
+      const mov = movementTotals.get(s.id) || { cashIn: 0, cashOut: 0 };
+      return {
+        openingFloat: round2(money(s.openingCash)),
+        cashSales: round2(money(s.cashSales)),
+        cashIn: mov.cashIn,
+        cashOut: mov.cashOut,
+        expectedCash: round2(money(s.expectedCash)),
+        closingCashCounted:
+          s.closingCashCounted != null ? round2(money(s.closingCashCounted)) : null,
+        variance: s.variance != null ? round2(money(s.variance)) : null,
+        staffName: s.staffName || null,
+        openedAt: s.openedAt?.toISOString?.() ?? null,
+        closedAt: s.closedAt?.toISOString?.() ?? null,
+      };
+    });
 
     const salesScope = scopeStaffId
       ? {

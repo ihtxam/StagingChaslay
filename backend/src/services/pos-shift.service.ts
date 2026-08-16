@@ -91,7 +91,8 @@ export class PosShiftService {
         const openedYmd = ymdInMerchantTz(open.openedAt);
         const { end: dayEnd } = zurichDayBounds(openedYmd);
         const live = await this.computeLiveTotals(open.merchantId, open.openedAt, dayEnd);
-        const expectedCash = round2(num(open.openingCash) + live.cashSales);
+        const movements = await this.sumCashMovements(open.id);
+        const expectedCash = round2(num(open.openingCash) + live.cashSales + movements.cashIn - movements.cashOut);
 
         await db
           .update(schema.posShifts)
@@ -127,11 +128,14 @@ export class PosShiftService {
     const open = await this.getOpenShift(merchantId);
     if (!open) return { shift: null, live: null };
     const live = await this.computeLiveTotals(merchantId, open.openedAt);
+    const movements = await this.sumCashMovements(open.id);
     return {
       shift: this.serialize(open),
       live: {
         ...live,
-        expectedCash: round2(num(open.openingCash) + live.cashSales),
+        cashIn: movements.cashIn,
+        cashOut: movements.cashOut,
+        expectedCash: round2(num(open.openingCash) + live.cashSales + movements.cashIn - movements.cashOut),
       },
     };
   }
@@ -169,7 +173,8 @@ export class PosShiftService {
     if (!open) throw new Error("No open shift to close.");
 
     const live = await this.computeLiveTotals(merchantId, open.openedAt);
-    const expectedCash = round2(num(open.openingCash) + live.cashSales);
+    const movements = await this.sumCashMovements(open.id);
+    const expectedCash = round2(num(open.openingCash) + live.cashSales + movements.cashIn - movements.cashOut);
     const counted = round2(Math.max(0, Number(input.closingCashCounted) || 0));
     const variance = round2(counted - expectedCash);
 
@@ -201,6 +206,115 @@ export class PosShiftService {
         to: (updated.closedAt || new Date()).toISOString(),
       },
     };
+  }
+
+  /** Sum completed POS orders in [openedAt, until). */
+  private static async sumCashMovements(shiftId: string) {
+    const db = getDb();
+    try {
+      const rows = await db
+        .select({
+          type: schema.posCashMovements.type,
+          amount: schema.posCashMovements.amount,
+        })
+        .from(schema.posCashMovements)
+        .where(eq(schema.posCashMovements.shiftId, shiftId));
+
+      let cashIn = 0;
+      let cashOut = 0;
+      for (const row of rows) {
+        const amt = num(row.amount);
+        if (String(row.type).toLowerCase() === "out") cashOut += amt;
+        else cashIn += amt;
+      }
+      return { cashIn: round2(cashIn), cashOut: round2(cashOut) };
+    } catch {
+      return { cashIn: 0, cashOut: 0 };
+    }
+  }
+
+  static async recordCashMovement(
+    merchantId: string,
+    input: {
+      type: "in" | "out";
+      amount: number;
+      reason?: string | null;
+      staffId?: string | null;
+      staffName?: string | null;
+    }
+  ) {
+    const open = await this.getOpenShift(merchantId);
+    if (!open) throw new Error("No open shift. Start a shift before recording cash movements.");
+
+    const type = String(input.type || "").toLowerCase();
+    if (type !== "in" && type !== "out") throw new Error("type must be 'in' or 'out'");
+
+    const amount = round2(Math.max(0, Number(input.amount) || 0));
+    if (amount <= 0) throw new Error("amount must be greater than zero");
+
+    const db = getDb();
+    const [created] = await db
+      .insert(schema.posCashMovements)
+      .values({
+        merchantId,
+        shiftId: open.id,
+        staffId: input.staffId || null,
+        staffName: input.staffName || null,
+        type,
+        amount: amount.toFixed(2),
+        reason: input.reason?.trim() || null,
+      })
+      .returning();
+
+    const live = await this.computeLiveTotals(merchantId, open.openedAt);
+    const movements = await this.sumCashMovements(open.id);
+
+    return {
+      movement: {
+        id: created.id,
+        shiftId: created.shiftId,
+        type: created.type,
+        amount: num(created.amount),
+        reason: created.reason,
+        staffId: created.staffId,
+        staffName: created.staffName,
+        createdAt: created.createdAt?.toISOString?.() ?? created.createdAt,
+      },
+      live: {
+        ...live,
+        cashIn: movements.cashIn,
+        cashOut: movements.cashOut,
+        expectedCash: round2(num(open.openingCash) + live.cashSales + movements.cashIn - movements.cashOut),
+      },
+    };
+  }
+
+  static async listCashMovements(merchantId: string, shiftId: string) {
+    const db = getDb();
+    try {
+      const rows = await db
+        .select()
+        .from(schema.posCashMovements)
+        .where(
+          and(
+            eq(schema.posCashMovements.merchantId, merchantId),
+            eq(schema.posCashMovements.shiftId, shiftId)
+          )
+        )
+        .orderBy(desc(schema.posCashMovements.createdAt));
+      return rows.map((r) => ({
+        id: r.id,
+        shiftId: r.shiftId,
+        type: r.type,
+        amount: num(r.amount),
+        reason: r.reason,
+        staffId: r.staffId,
+        staffName: r.staffName,
+        createdAt: r.createdAt?.toISOString?.() ?? r.createdAt,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   /** Sum completed POS orders in [openedAt, until). */

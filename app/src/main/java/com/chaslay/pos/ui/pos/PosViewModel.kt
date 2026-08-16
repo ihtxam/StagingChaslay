@@ -190,6 +190,9 @@ data class PosUiState(
     val lastLoyaltyPointsEarned: Int? = null,
     val lastLoyaltyPointsBalance: Int? = null,
     val showGiftCardOpsMenu: Boolean = false,
+    val showCashMovementDialog: Boolean = false,
+    val cashMovementBusy: Boolean = false,
+    val cashMovementError: String? = null,
     val showGiftCardOpsDialog: Boolean = false,
     val giftCardOpsMode: GiftCardOp? = null,
     val giftCardSettings: com.chaslay.pos.data.remote.dto.GiftCardSettingsDto? = null,
@@ -383,6 +386,9 @@ class PosViewModel @Inject constructor(
             lastLoyaltyPointsEarned = extras.lastLoyaltyPointsEarned,
             lastLoyaltyPointsBalance = extras.lastLoyaltyPointsBalance,
             showGiftCardOpsMenu = extras.showGiftCardOpsMenu,
+            showCashMovementDialog = extras.showCashMovementDialog,
+            cashMovementBusy = extras.cashMovementBusy,
+            cashMovementError = extras.cashMovementError,
             showGiftCardOpsDialog = extras.showGiftCardOpsDialog,
             giftCardOpsMode = extras.giftCardOpsMode,
             giftCardSettings = extras.giftCardSettings,
@@ -2213,6 +2219,58 @@ class PosViewModel @Inject constructor(
 
     fun dismissGiftCardOpsMenu() {
         updateExtras { it.copy(showGiftCardOpsMenu = false) }
+    }
+
+    fun showCashMovementDialog() {
+        if (!_uiExtras.value.shiftsEnabled) return
+        updateExtras { it.copy(showCashMovementDialog = true, cashMovementError = null) }
+    }
+
+    fun dismissCashMovementDialog() {
+        updateExtras { it.copy(showCashMovementDialog = false, cashMovementError = null, cashMovementBusy = false) }
+    }
+
+    fun submitCashMovement(type: CashMovementTab, amount: Double, reason: String) {
+        viewModelScope.launch {
+            updateExtras { it.copy(cashMovementBusy = true, cashMovementError = null) }
+            val open = posShiftRepository.hasOpenShift().getOrDefault(false)
+            if (!open) {
+                updateExtras {
+                    it.copy(
+                        cashMovementBusy = false,
+                        cashMovementError = appContext.getString(R.string.cash_movement_requires_shift)
+                    )
+                }
+                return@launch
+            }
+            val staffName = sessionManager.currentUserName.first() ?: "Staff"
+            val result = posShiftRepository.recordCashMovement(
+                type = if (type == CashMovementTab.IN) "in" else "out",
+                amount = amount,
+                reason = reason.ifBlank { null },
+                staffName = staffName
+            )
+            result.fold(
+                onSuccess = {
+                    updateExtras {
+                        it.copy(
+                            cashMovementBusy = false,
+                            showCashMovementDialog = false,
+                            cashMovementError = null,
+                            snackbarMessage = appContext.getString(R.string.cash_movement_success)
+                        )
+                    }
+                },
+                onFailure = { err ->
+                    updateExtras {
+                        it.copy(
+                            cashMovementBusy = false,
+                            cashMovementError = err.message ?: appContext.getString(R.string.cash_movement_failed)
+                        )
+                    }
+                }
+            )
+        }
     }
 
     fun startGiftCardOpFromMenu(mode: GiftCardOp) {
@@ -4170,6 +4228,9 @@ class PosViewModel @Inject constructor(
         val lastLoyaltyPointsEarned: Int? = null,
         val lastLoyaltyPointsBalance: Int? = null,
         val showGiftCardOpsMenu: Boolean = false,
+    val showCashMovementDialog: Boolean = false,
+    val cashMovementBusy: Boolean = false,
+    val cashMovementError: String? = null,
         val showGiftCardOpsDialog: Boolean = false,
         val giftCardOpsMode: GiftCardOp? = null,
         val giftCardSettings: com.chaslay.pos.data.remote.dto.GiftCardSettingsDto? = null,

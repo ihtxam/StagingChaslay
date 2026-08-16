@@ -6,16 +6,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -41,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -56,7 +58,6 @@ data class ComboPickResult(
     val quantity: Int
 )
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ComboPickDialog(
     state: ComboPickState,
@@ -69,9 +70,14 @@ fun ComboPickDialog(
     var itemQty by remember { mutableIntStateOf(1) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val picks = remember(combo.product.id) {
-        mutableStateMapOf<Long, MutableSet<Long>>().apply {
-            combo.slots.forEach { slot -> put(slot.id, mutableSetOf()) }
+        mutableStateMapOf<Long, MutableMap<Long, Int>>().apply {
+            combo.slots.forEach { slot -> put(slot.id, mutableMapOf()) }
         }
+    }
+
+    val allValid = combo.slots.all { slot ->
+        val count = picks[slot.id]?.values?.sum() ?: 0
+        count >= slot.minPick && count <= slot.maxPick
     }
 
     Dialog(
@@ -118,24 +124,38 @@ fun ComboPickDialog(
                             .fillMaxHeight()
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         combo.slots.forEach { slot ->
                             ComboSlotSection(
                                 slot = slot,
-                                selected = picks[slot.id].orEmpty(),
+                                picks = picks[slot.id].orEmpty(),
                                 onToggle = { productId ->
-                                    val set = picks.getOrPut(slot.id) { mutableSetOf() }
+                                    val map = picks.getOrPut(slot.id) { mutableMapOf() }
+                                    val current = map.values.sum()
                                     if (slot.maxPick <= 1) {
-                                        set.clear()
-                                        set.add(productId)
+                                        map.clear()
+                                        map[productId] = 1
                                     } else {
-                                        if (set.contains(productId)) {
-                                            set.remove(productId)
-                                        } else if (set.size < slot.maxPick) {
-                                            set.add(productId)
+                                        val qty = map[productId] ?: 0
+                                        if (qty > 0) {
+                                            if (qty == 1) map.remove(productId) else map[productId] = qty - 1
+                                        } else if (current < slot.maxPick) {
+                                            map[productId] = 1
                                         }
                                     }
+                                },
+                                onIncrement = { productId ->
+                                    val map = picks.getOrPut(slot.id) { mutableMapOf() }
+                                    val current = map.values.sum()
+                                    if (current < slot.maxPick) {
+                                        map[productId] = (map[productId] ?: 0) + 1
+                                    }
+                                },
+                                onDecrement = { productId ->
+                                    val map = picks.getOrPut(slot.id) { mutableMapOf() }
+                                    val qty = map[productId] ?: 0
+                                    if (qty > 1) map[productId] = qty - 1 else map.remove(productId)
                                 }
                             )
                         }
@@ -210,14 +230,18 @@ fun ComboPickDialog(
                             val selections = buildComboSelections(combo.slots, picks)
                             onConfirm(ComboPickResult(selections, itemQty))
                         },
+                        enabled = allValid,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF00897B),
+                            disabledContainerColor = Color(0xFF424242)
+                        ),
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Text(
-                            stringResource(R.string.add_to_cart).uppercase(),
+                            stringResource(R.string.combo_add_to_order).uppercase(),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp
@@ -229,70 +253,117 @@ fun ComboPickDialog(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ComboSlotSection(
     slot: ComboSlotModel,
-    selected: Set<Long>,
-    onToggle: (Long) -> Unit
+    picks: Map<Long, Int>,
+    onToggle: (Long) -> Unit,
+    onIncrement: (Long) -> Unit,
+    onDecrement: (Long) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(slot.name, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-        Text(comboSlotSubtitle(slot), color = Color.Gray, fontSize = 11.sp)
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+    val selectedCount = picks.values.sum()
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            slot.options.forEach { option ->
-                val isSelected = option.productId in selected
-                val bg = if (isSelected) Color(0xFF00897B) else Color(0xFF333333)
+            Text(slot.name, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(
+                comboSlotHeader(slot, selectedCount),
+                color = if (selectedCount >= slot.minPick) Color(0xFF80CBC4) else Color.Gray,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.height(((slot.options.size + 1) / 2 * 88).coerceAtLeast(88).dp)
+        ) {
+            items(slot.options, key = { it.productId }) { option ->
+                val qty = picks[option.productId] ?: 0
+                val selected = qty > 0
                 Box(
                     modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1.2f)
                         .border(
-                            1.dp,
-                            if (isSelected) Color(0xFF00897B) else Color(0xFF555555),
-                            RoundedCornerShape(20.dp)
+                            width = if (selected) 2.dp else 1.dp,
+                            color = if (selected) Color(0xFF00897B) else Color(0xFF555555),
+                            shape = RoundedCornerShape(8.dp)
                         )
-                        .background(bg, RoundedCornerShape(20.dp))
+                        .background(
+                            if (selected) Color(0xFF1B3A38) else Color(0xFF333333),
+                            RoundedCornerShape(8.dp)
+                        )
                         .clickable { onToggle(option.productId) }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .padding(8.dp)
                 ) {
-                    Text(
-                        option.productName,
-                        color = Color.White,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        fontSize = 13.sp
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            option.productName,
+                            color = Color.White,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 13.sp,
+                            maxLines = 2
+                        )
+                        if (slot.maxPick > 1 && selected) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(
+                                    onClick = { onDecrement(option.productId) },
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Icon(Icons.Default.Remove, contentDescription = null, tint = Color.White, modifier = Modifier.padding(0.dp))
+                                }
+                                Text(
+                                    qty.toString(),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+                                IconButton(
+                                    onClick = { onIncrement(option.productId) },
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                                }
+                            }
+                        }
+                    }
                 }
             }
-        }
-        if (selected.isNotEmpty()) {
-            Text(
-                selected.size.toString() + " / " + slot.maxPick,
-                color = Color(0xFF80CBC4),
-                fontSize = 11.sp
-            )
         }
     }
 }
 
-private fun comboSlotSubtitle(slot: ComboSlotModel): String {
-    val pick = when {
-        slot.minPick == slot.maxPick && slot.minPick == 1 -> "Choose 1"
-        slot.minPick == slot.maxPick -> "Choose ${slot.minPick}"
-        slot.minPick <= 0 -> "Up to ${slot.maxPick} (optional)"
-        else -> "Choose ${slot.minPick}�${slot.maxPick}"
+@Composable
+private fun comboSlotHeader(slot: ComboSlotModel, selectedCount: Int): String {
+    return when {
+        slot.minPick == slot.maxPick ->
+            stringResource(R.string.combo_slot_included, slot.maxPick)
+        selectedCount > 0 ->
+            stringResource(R.string.combo_slot_selected, selectedCount, slot.maxPick)
+        else ->
+            stringResource(R.string.combo_slot_pick_range, slot.minPick, slot.maxPick)
     }
-    val req = if (slot.minPick > 0) " � Required" else ""
-    return pick + req
 }
 
 private fun validateComboPicks(
     slots: List<ComboSlotModel>,
-    picks: Map<Long, Set<Long>>
+    picks: Map<Long, Map<Long, Int>>
 ): String? {
     slots.forEach { slot ->
-        val count = picks[slot.id]?.size ?: 0
+        val count = picks[slot.id]?.values?.sum() ?: 0
         if (count < slot.minPick) return "Please choose ${slot.minPick} for ${slot.name}"
         if (count > slot.maxPick) return "Too many picks for ${slot.name}"
     }
@@ -301,13 +372,16 @@ private fun validateComboPicks(
 
 private fun buildComboSelections(
     slots: List<ComboSlotModel>,
-    picks: Map<Long, Set<Long>>
+    picks: Map<Long, Map<Long, Int>>
 ): List<ComboSelection> {
     val result = mutableListOf<ComboSelection>()
     slots.forEach { slot ->
-        val selectedIds = picks[slot.id].orEmpty()
-        slot.options.filter { it.productId in selectedIds }.forEach { opt ->
-            result.add(ComboSelection(slot.name, opt.productId, opt.productName))
+        val map = picks[slot.id].orEmpty()
+        slot.options.filter { map.containsKey(it.productId) }.forEach { opt ->
+            val qty = map[opt.productId] ?: 0
+            repeat(qty) {
+                result.add(ComboSelection(slot.name, opt.productId, opt.productName))
+            }
         }
     }
     return result

@@ -268,6 +268,8 @@ export function WebPosCloseShiftModal({
   openingCash: number;
   live: {
     cashSales: number;
+    cashIn?: number;
+    cashOut?: number;
     cardSales: number;
     terminalSales: number;
     totalSales: number;
@@ -292,6 +294,8 @@ export function WebPosCloseShiftModal({
   if (!open) return null;
 
   const cardTotal = (live?.cardSales ?? 0) + (live?.terminalSales ?? 0);
+  const cashIn = live?.cashIn ?? 0;
+  const cashOut = live?.cashOut ?? 0;
   const expectedFormula = t('webPosShiftExpectedFormula')
     .replace('{float}', openingCash.toFixed(2))
     .replace('{sales}', (live?.cashSales ?? 0).toFixed(2));
@@ -335,6 +339,18 @@ export function WebPosCloseShiftModal({
                 label={t('webPosShiftCashSales')}
                 value={`${(live?.cashSales ?? 0).toFixed(2)} CHF`}
               />
+              {cashIn > 0 ? (
+                <ShiftSummaryStat
+                  label={t('webPosShiftCashIn')}
+                  value={`+${cashIn.toFixed(2)} CHF`}
+                />
+              ) : null}
+              {cashOut > 0 ? (
+                <ShiftSummaryStat
+                  label={t('webPosShiftCashOut')}
+                  value={`−${cashOut.toFixed(2)} CHF`}
+                />
+              ) : null}
               <ShiftSummaryStat
                 label={t('webPosShiftExpectedDrawer')}
                 value={`${expected.toFixed(2)} CHF`}

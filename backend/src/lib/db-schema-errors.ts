@@ -29,6 +29,11 @@ const COLUMN_HINTS: Record<string, MigrateHint> = {
     message:
       "Database is missing pos_shifts. Run drizzle-kit push or backend/sql/ensure-shifts.sql.",
   },
+  pos_cash_movements: {
+    logTag: "cash_movements",
+    message:
+      "Database is missing pos_cash_movements. Run backend/sql/ensure-cash-movements.sql or drizzle-kit push.",
+  },
   delivery_platform_settings: {
     logTag: "delivery_platforms",
     message:

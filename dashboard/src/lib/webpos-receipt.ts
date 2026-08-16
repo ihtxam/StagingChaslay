@@ -1370,6 +1370,8 @@ export type EodVatRow = {
 export type EodShiftCash = {
   openingFloat: number;
   cashSales: number;
+  cashIn?: number;
+  cashOut?: number;
   expectedCash: number;
   closingCashCounted?: number | null;
   variance?: number | null;
@@ -1626,6 +1628,12 @@ export function generateEodReportText(report: EodReportPrint): string {
       r += padLine(L.openingFloat, money(s.openingFloat), width) + '\n';
       r += centerLine(`(${L.floatCarriesForward})`, width) + '\n';
       r += padLine(L.cashSalesDuringShift, money(s.cashSales), width) + '\n';
+      if ((s.cashIn ?? 0) > 0) {
+        r += padLine(L.cashInDuringShift, money(s.cashIn!), width) + '\n';
+      }
+      if ((s.cashOut ?? 0) > 0) {
+        r += padLine(L.cashOutDuringShift, money(-(s.cashOut ?? 0)), width) + '\n';
+      }
       r += padLine(L.expectedInDrawer, money(s.expectedCash), width) + '\n';
       if (s.closingCashCounted != null) {
         r += padLine(L.countedClosingCash, money(s.closingCashCounted), width) + '\n';

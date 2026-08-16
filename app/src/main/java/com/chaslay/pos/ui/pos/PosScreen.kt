@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CalendarToday
@@ -403,6 +404,8 @@ fun PosScreen(
             isTableServiceEnabled = isTableServiceEnabled,
             selectedTab = mainTab,
             pendingOnlineOrderCount = state.pendingOnlineOrderCount,
+            shiftsEnabled = state.shiftsEnabled,
+            onCashMovement = viewModel::showCashMovementDialog,
             showProductFilters = mainTab == PosMainTab.REGISTER,
             showProductImages = state.productGridShowImages,
             sortAlpha = state.productGridSortAlpha,
@@ -869,6 +872,15 @@ fun PosScreen(
         )
     }
 
+    if (state.showCashMovementDialog) {
+        CashMovementDialog(
+            busy = state.cashMovementBusy,
+            errorMessage = state.cashMovementError,
+            onDismiss = viewModel::dismissCashMovementDialog,
+            onConfirm = viewModel::submitCashMovement
+        )
+    }
+
     if (state.showDiscountDialog) {
         DiscountDialog(
             onApply = viewModel::applyDiscount,
@@ -912,6 +924,8 @@ private fun OdooPosNavBar(
     isTableServiceEnabled: Boolean,
     selectedTab: PosMainTab,
     pendingOnlineOrderCount: Int = 0,
+    shiftsEnabled: Boolean = false,
+    onCashMovement: () -> Unit = {},
     showProductFilters: Boolean = false,
     showProductImages: Boolean = false,
     sortAlpha: Boolean = false,
@@ -992,6 +1006,15 @@ private fun OdooPosNavBar(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (shiftsEnabled) {
+                IconButton(onClick = onCashMovement) {
+                    Icon(
+                        Icons.Default.AccountBalanceWallet,
+                        contentDescription = stringResource(R.string.cash_movement_title),
+                        tint = vc.textPrimary
+                    )
+                }
+            }
             if (userAccess.canAccessSettings() || userAccess.canManageProducts() || userAccess.canAccessReports()) {
                 IconButton(onClick = { onNavigate(AppRoute.Admin.route) }) {
                     Icon(

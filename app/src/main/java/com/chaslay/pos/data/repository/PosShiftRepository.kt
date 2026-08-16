@@ -21,4 +21,24 @@ class PosShiftRepository @Inject constructor(
         val response = posShiftApi.current(bearer())
         response.shift?.status == "open"
     }
+
+    suspend fun recordCashMovement(
+        type: String,
+        amount: Double,
+        reason: String?,
+        staffId: String? = null,
+        staffName: String? = null
+    ): Result<Unit> = runCatching {
+        val response = posShiftApi.recordCashMovement(
+            bearer(),
+            com.chaslay.pos.data.remote.dto.CashMovementRequest(
+                type = type,
+                amount = amount,
+                reason = reason,
+                staffId = staffId,
+                staffName = staffName
+            )
+        )
+        require(response.success) { "Cash movement failed" }
+    }
 }

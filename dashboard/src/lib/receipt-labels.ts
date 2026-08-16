@@ -65,6 +65,8 @@ export type ReceiptLabels = {
   cashDrawer: string;
   openingFloat: string;
   cashSalesDuringShift: string;
+  cashInDuringShift: string;
+  cashOutDuringShift: string;
   expectedInDrawer: string;
   countedClosingCash: string;
   cashVariance: string;
@@ -140,6 +142,8 @@ const EN: ReceiptLabels = {
   cashDrawer: 'CASH DRAWER',
   openingFloat: 'Opening float',
   cashSalesDuringShift: 'Cash sales (shift)',
+  cashInDuringShift: 'Cash in',
+  cashOutDuringShift: 'Cash out',
   expectedInDrawer: 'Expected in drawer',
   countedClosingCash: 'Counted / closing cash',
   cashVariance: 'Variance',
@@ -216,6 +220,8 @@ const FR: ReceiptLabels = {
   cashDrawer: 'CAISSE / FOND DE BASE',
   openingFloat: 'Fond de base',
   cashSalesDuringShift: 'Ventes especes (shift)',
+  cashInDuringShift: 'Entree caisse',
+  cashOutDuringShift: 'Sortie caisse',
   expectedInDrawer: 'Caisse attendue',
   countedClosingCash: 'Especes comptees',
   cashVariance: 'Ecart',
@@ -292,6 +298,8 @@ const DE: ReceiptLabels = {
   cashDrawer: 'KASSENABSTIMMUNG',
   openingFloat: 'Anfangsbestand',
   cashSalesDuringShift: 'Barverkaeufe (Schicht)',
+  cashInDuringShift: 'Bareinlage',
+  cashOutDuringShift: 'Barentnahme',
   expectedInDrawer: 'Erwarteter Bestand',
   countedClosingCash: 'Gezaehltes Bargeld',
   cashVariance: 'Differenz',

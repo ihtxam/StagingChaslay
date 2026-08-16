@@ -1385,6 +1385,59 @@ router.post("/pos/shifts/close", async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/merchant/pos/shifts/cash-movement
+ * Body: { type: 'in'|'out', amount, reason?, staffId?, staffName? }
+ */
+router.post("/pos/shifts/cash-movement", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { PosShiftService } = await import("@/services/pos-shift.service");
+    const type = String(req.body?.type || "").toLowerCase();
+    if (type !== "in" && type !== "out") {
+      return res.status(400).json({ error: "type must be 'in' or 'out'" });
+    }
+    const result = await PosShiftService.recordCashMovement(merchantId, {
+      type,
+      amount: Number(req.body?.amount ?? 0),
+      reason: req.body?.reason || null,
+      staffId: req.body?.staffId || null,
+      staffName: req.body?.staffName || null,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Error recording cash movement:", error);
+    const raw = error instanceof Error ? error.message : "Failed to record cash movement";
+    const needsMigrate = /pos_cash_movements/i.test(raw) && /does not exist|relation/i.test(raw);
+    res.status(400).json({
+      error: needsMigrate
+        ? "Database is missing pos_cash_movements. Run backend/sql/ensure-cash-movements.sql (or drizzle-kit push)."
+        : raw,
+    });
+  }
+});
+
+/**
+ * GET /api/merchant/pos/shifts/cash-movements?shiftId=
+ */
+router.get("/pos/shifts/cash-movements", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const shiftId = String(req.query.shiftId || "");
+    if (!shiftId) return res.status(400).json({ error: "shiftId is required" });
+    const { PosShiftService } = await import("@/services/pos-shift.service");
+    const movements = await PosShiftService.listCashMovements(merchantId, shiftId);
+    res.json({ success: true, movements });
+  } catch (error) {
+    console.error("Error listing cash movements:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to list cash movements",
+    });
+  }
+});
+
+/**
  * PUT /api/merchant/settings
  * Update merchant settings
  */
