@@ -595,8 +595,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     catalogCachedAt: null,
   });
   const [loadedFromOfflineCache, setLoadedFromOfflineCache] = useState(false);
-  const [offlineBannerVisible, setOfflineBannerVisible] = useState(false);
-  const offlineBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [printers, setPrinters] = useState<AgentPrinter[]>([]);
   const [printerName, setPrinterName] = useState(() => localStorage.getItem('manupos_webpos_printer') || '');
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('manupos_webpos_autoprint') !== '0');
@@ -1585,27 +1583,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (timer != null) window.clearTimeout(timer);
     };
   }, [agentOk]);
-
-  useEffect(() => {
-    const clearOfflineBannerTimer = () => {
-      if (offlineBannerTimerRef.current) {
-        clearTimeout(offlineBannerTimerRef.current);
-        offlineBannerTimerRef.current = null;
-      }
-    };
-    if (!isWebPosCurrentlyOffline()) {
-      clearOfflineBannerTimer();
-      setOfflineBannerVisible(false);
-      return;
-    }
-    setOfflineBannerVisible(true);
-    clearOfflineBannerTimer();
-    offlineBannerTimerRef.current = setTimeout(() => {
-      setOfflineBannerVisible(false);
-      offlineBannerTimerRef.current = null;
-    }, 10_000);
-    return clearOfflineBannerTimer;
-  }, [offlineSync.online]);
 
   useEffect(() => {
     if (!isWebPosOfflineEnabled()) return;
@@ -6201,49 +6178,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           >
             {t('webPosShiftStart')}
           </button>
-        </div>
-      ) : null}
-
-      {(offlineNow && offlineBannerVisible) ||
-      offlineSync.pendingCount > 0 ||
-      offlineSync.failedCount > 0 ? (
-        <div
-          className={`flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-4 ${
-            offlineNow && offlineBannerVisible
-              ? 'border-amber-200 bg-amber-50'
-              : offlineSync.failedCount > 0
-                ? 'border-red-200 bg-red-50'
-                : 'border-sky-200 bg-sky-50'
-          }`}
-        >
-          <p
-            className={`min-w-0 text-xs font-medium sm:text-sm ${
-              offlineNow && offlineBannerVisible
-                ? 'text-amber-950'
-                : offlineSync.failedCount > 0
-                  ? 'text-red-900'
-                  : 'text-sky-950'
-            }`}
-          >
-            {offlineNow && offlineBannerVisible
-              ? t('webPosOfflineBanner')
-              : offlineSync.failedCount > 0
-                ? t('webPosSyncFailed').replace('{n}', String(offlineSync.failedCount))
-                : t('webPosSyncPending').replace('{n}', String(offlineSync.pendingCount))}
-            {loadedFromOfflineCache && offlineNow && offlineBannerVisible
-              ? ` ${t('webPosOfflineCachedHint')}`
-              : ''}
-          </p>
-          {!offlineNow ? (
-            <button
-              type="button"
-              className="shrink-0 rounded-lg bg-sky-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-800 disabled:opacity-60"
-              disabled={offlineSync.syncing}
-              onClick={() => void flushOfflineOutbox()}
-            >
-              {t('webPosSyncNow')}
-            </button>
-          ) : null}
         </div>
       ) : null}
 

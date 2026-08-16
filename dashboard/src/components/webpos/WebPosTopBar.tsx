@@ -445,14 +445,37 @@ export default function WebPosTopBar({
       ) : null}
 
       {merchantName ? (
-        <p className="hidden px-4 pb-1 text-[10px] text-stone-400 sm:block">
-          {merchantName}
-          {!agentOk ? ` - ${t('webPosStartPrintAgent')}` : ''}
-          {!syncOnline ? ` - ${t('webPosSyncOfflineShort')}` : ''}
-          {syncOnline && syncPendingCount > 0
-            ? ` - ${t('webPosSyncPendingShort').replace('{n}', String(syncPendingCount))}`
-            : ''}
-          {shiftsEnabled && shiftOpen ? ` - ${t('webPosShiftOpenBadge')}` : ''}
+        <p className="webpos-merchant-subline truncate px-2 pb-1 text-[10px] text-stone-400 sm:px-4">
+          <span>{merchantName}</span>
+          {!agentOk ? (
+            <span className="webpos-merchant-subline__warn">
+              {' '}
+              - {t('webPosStartPrintAgent')}
+            </span>
+          ) : null}
+          {!syncOnline ? (
+            <span className="webpos-merchant-subline__offline">
+              {' '}
+              - {t('webPosSyncOfflineShort')}
+            </span>
+          ) : null}
+          {syncFailedCount > 0 ? (
+            <span className="webpos-merchant-subline__sync-failed">
+              {' '}
+              - {t('webPosSyncFailed').replace('{n}', String(syncFailedCount))}
+            </span>
+          ) : syncPendingCount > 0 ? (
+            <span className="webpos-merchant-subline__sync-pending">
+              {' '}
+              - {t('webPosSyncPending').replace('{n}', String(syncPendingCount))}
+            </span>
+          ) : null}
+          {shiftsEnabled && shiftOpen ? (
+            <span>
+              {' '}
+              - {t('webPosShiftOpenBadge')}
+            </span>
+          ) : null}
         </p>
       ) : null}
     </header>

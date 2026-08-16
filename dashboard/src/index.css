@@ -460,6 +460,34 @@ button {
     display: none;
   }
 
+  /* Merchant subline — sync/offline status inline (replaces banner row) */
+  .webpos-merchant-subline__offline {
+    color: #b45309;
+  }
+  .webpos-merchant-subline__sync-pending {
+    color: #0369a1;
+    font-weight: 600;
+  }
+  .webpos-merchant-subline__sync-failed {
+    color: #b91c1c;
+    font-weight: 600;
+  }
+  .webpos-merchant-subline__warn {
+    color: #b45309;
+  }
+  .webpos-shell[data-appearance='night'] .webpos-merchant-subline__offline {
+    color: #fbbf24;
+  }
+  .webpos-shell[data-appearance='night'] .webpos-merchant-subline__sync-pending {
+    color: #7dd3fc;
+  }
+  .webpos-shell[data-appearance='night'] .webpos-merchant-subline__sync-failed {
+    color: #fca5a5;
+  }
+  .webpos-shell[data-appearance='night'] .webpos-merchant-subline__warn {
+    color: #fbbf24;
+  }
+
   /* Product grid — touch scroll inside zoomed .webpos-shell (tablet / kiosk) */
   .webpos-product-scroll {
     -webkit-overflow-scrolling: touch;
