@@ -1,5 +1,6 @@
 import api from '@/lib/api';
 import { isPrintAgentAvailable, printViaAgent } from '@/lib/print-agent';
+import { isBrowserOnline } from '@/lib/webpos-offline/types';
 import {
   processAutoPrintOrderJob,
   processAutoPrintReservationJob,
@@ -73,6 +74,10 @@ export async function printViaAgentOrQueue(opts: {
       text: opts.text,
     });
     return 'local';
+  }
+  // Cloud print-job queue needs the merchant API — unavailable while offline.
+  if (!isBrowserOnline()) {
+    throw new Error('Print agent offline — start Chaslay Print Agent on this PC to print.');
   }
   await enqueueEscPosPrintJob(opts);
   return 'queued';

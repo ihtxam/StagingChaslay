@@ -5252,7 +5252,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       !payLater &&
       autoPrint &&
       printSettings?.autoPrintReceipt !== false;
-    if (shouldPrintReceipt && receiptUrl) {
+    // Offline sales have no published receipt URL yet — still print text via local Print Agent.
+    if (shouldPrintReceipt) {
       // Never hold checkout/busy on the print agent.
       void printReceipt(receiptText, receiptUrl, deliveryQrUrl).catch((e: any) => {
         toast.error(e?.message || t('webPosPrintFailed'));
