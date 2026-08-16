@@ -1511,7 +1511,7 @@ const en: Dict = {
   webPosSaleFailed: 'Sale failed',
   webPosLoadFailed: 'Failed to load ChaslayReborn catalog',
   webPosOfflineCacheLoaded: 'Offline mode — using last saved catalog',
-  webPosOfflineBanner: 'You are offline. Cash/card sales are saved on this device and sync when online.',
+  webPosOfflineBanner: 'Offline — sales are saved locally, and sync when online',
   webPosOfflineCachedHint: 'Catalog from last successful sync.',
   webPosOfflineNeedNetwork: 'Network required for this action',
   webPosOfflinePaymentBlocked:
@@ -3466,7 +3466,7 @@ const fr: Dict = {
   webPosLoadFailed: 'Échec du chargement du catalogue ChaslayReborn',
   webPosOfflineCacheLoaded: 'Mode hors ligne — catalogue enregistré utilisé',
   webPosOfflineBanner:
-    'Hors ligne. Les ventes cash/carte sont enregistrées sur cet appareil et se synchronisent au retour du réseau.',
+    'Hors ligne — les ventes sont enregistrées localement et se synchronisent en ligne',
   webPosOfflineCachedHint: 'Catalogue de la dernière sync réussie.',
   webPosOfflineNeedNetwork: 'Connexion requise pour cette action',
   webPosOfflinePaymentBlocked:
@@ -5423,7 +5423,7 @@ const de: Dict = {
   webPosLoadFailed: 'ChaslayReborn-Katalog konnte nicht geladen werden',
   webPosOfflineCacheLoaded: 'Offline-Modus — letzter gespeicherter Katalog',
   webPosOfflineBanner:
-    'Offline. Bar/Karte-Verkäufe werden auf diesem Gerät gespeichert und synchronisiert, sobald Sie online sind.',
+    'Offline — Verkäufe werden lokal gespeichert und bei Verbindung synchronisiert',
   webPosOfflineCachedHint: 'Katalog vom letzten erfolgreichen Sync.',
   webPosOfflineNeedNetwork: 'Für diese Aktion ist eine Verbindung nötig',
   webPosOfflinePaymentBlocked:
