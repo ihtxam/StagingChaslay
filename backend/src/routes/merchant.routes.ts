@@ -1423,9 +1423,8 @@ router.put("/settings", async (req: Request, res: Response) => {
  * GET /api/merchant/reports/eod
  * End-of-day / sales report (POS + synced sales in orders table)
  * Query: preset=today|yesterday|last_week|last_month|last_3_months|custom&from=&to=
- * Requires VIEW_REPORTS or END_OF_DAY.
- * Without VIEW_ALL_SALES (or with a WebPOS PIN session lacking it), results are
- * scoped to that staff member's own sales.
+ * Requires VIEW_REPORTS or END_OF_DAY, plus VIEW_ALL_SALES for company-wide totals.
+ * Staff without View all sales should use GET /reports/shift for their own shift window.
  */
 router.get(
   "/reports/eod",
@@ -1448,14 +1447,14 @@ router.get(
         }
       }
       const scope = salesScopeForActor(actor);
-      if (!scope.viewAll && !scope.staffId) {
+      if (!scope.viewAll) {
         return res.status(403).json({
-          error: "Own-sales reports require a staff PIN session",
+          error: "Whole-day report requires View all sales permission",
         });
       }
-      let staffId = scope.staffId;
-      let staffName = scope.staffName;
-      if (scope.viewAll && req.query.staffId) {
+      let staffId: string | null = null;
+      let staffName: string | null = null;
+      if (req.query.staffId) {
         staffId = String(req.query.staffId);
         staffName = req.query.staffName ? String(req.query.staffName) : null;
       }

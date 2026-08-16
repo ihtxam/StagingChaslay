@@ -1746,7 +1746,8 @@ const en: Dict = {
   webPosShiftPrintEod: 'Print end-of-day report',
   webPosShiftPrinted: 'Shift report sent to printer',
   webPosShiftReportLabel: 'End of shift',
-  webPosEodPermissionDenied: 'End-of-day report requires manager permission',
+  webPosEodPermissionDenied:
+    'Whole-day report requires manager permission (End of day + View all sales)',
   webPosShiftRestart: 'Restart shift',
   webPosShiftStayConnected: 'Stay connected',
   webPosShiftLogout: 'Logout',
@@ -1771,7 +1772,7 @@ const en: Dict = {
   shiftsLateNightHint:
     'Open past midnight (e.g. until 2:00)? Turn shifts OFF — ChaslayReborn then shows an End of day button instead of shift close.',
   shiftsDisabledEodHint:
-    'Shifts off: managers with End of day permission see an EOD report button in ChaslayReborn.',
+    'Shifts off: managers with End of day and View all sales see an EOD report button in ChaslayReborn.',
   shiftsMigrateHint:
     'If this toggle will not save, run backend/sql/ensure-shifts.sql on Postgres (see DEPLOY.md).',
   posColorTheme: 'ChaslayReborn color theme',
@@ -3702,7 +3703,8 @@ const fr: Dict = {
   webPosShiftPrintEod: 'Imprimer le rapport de fin de journée',
   webPosShiftPrinted: 'Rapport de shift envoyé à l’imprimante',
   webPosShiftReportLabel: 'Fin de shift',
-  webPosEodPermissionDenied: 'Le rapport de fin de journée nécessite une autorisation manager',
+  webPosEodPermissionDenied:
+    'Le rapport journalier nécessite les autorisations Fin de journée et Voir toutes les ventes',
   webPosShiftRestart: 'Redémarrer un shift',
   webPosShiftStayConnected: 'Rester connecté',
   webPosShiftLogout: 'Déconnexion',
@@ -3727,7 +3729,7 @@ const fr: Dict = {
   shiftsLateNightHint:
     'Ouvert après minuit (ex. jusqu’à 2:00) ? Désactivez les shifts — ChaslayReborn affiche alors un bouton Fin de journée.',
   shiftsDisabledEodHint:
-    'Shifts off : les managers avec la permission Fin de journée voient un bouton FDJ dans ChaslayReborn.',
+    'Shifts off : les managers avec Fin de journée et Voir toutes les ventes voient un bouton FDJ dans ChaslayReborn.',
   shiftsMigrateHint:
     'Si ce réglage ne se sauvegarde pas, exécutez backend/sql/ensure-shifts.sql sur Postgres (voir DEPLOY.md).',
   posColorTheme: 'Thème couleur ChaslayReborn',
@@ -5663,7 +5665,8 @@ const de: Dict = {
   webPosShiftPrintEod: 'Tagesabschluss drucken',
   webPosShiftPrinted: 'Schichtbericht an Drucker gesendet',
   webPosShiftReportLabel: 'Schichtende',
-  webPosEodPermissionDenied: 'Tagesabschluss erfordert Manager-Berechtigung',
+  webPosEodPermissionDenied:
+    'Tagesabschluss erfordert Berechtigungen „Tagesabschluss“ und „Alle Verkäufe ansehen“',
   webPosShiftRestart: 'Schicht neu starten',
   webPosShiftStayConnected: 'Angemeldet bleiben',
   webPosShiftLogout: 'Abmelden',
@@ -5688,7 +5691,7 @@ const de: Dict = {
   shiftsLateNightHint:
     'Offen nach Mitternacht (z. B. bis 2:00)? Schichten AUS — ChaslayReborn zeigt dann einen Tagesabschluss-Button.',
   shiftsDisabledEodHint:
-    'Schichten aus: Manager mit Tagesabschluss-Recht sehen den EOD-Button in ChaslayReborn.',
+    'Schichten aus: Manager mit Tagesabschluss und „Alle Verkäufe ansehen“ sehen den EOD-Button in ChaslayReborn.',
   shiftsMigrateHint:
     'Speichert der Schalter nicht: backend/sql/ensure-shifts.sql auf Postgres ausführen (siehe DEPLOY.md).',
   posColorTheme: 'ChaslayReborn-Farbthema',

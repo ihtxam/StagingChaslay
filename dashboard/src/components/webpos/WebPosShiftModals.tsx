@@ -413,6 +413,7 @@ export function WebPosCloseShiftModal({
 export function WebPosShiftClosedModal({
   open,
   balanced,
+  showEodPrint = false,
   onPrintShift,
   onPrintEod,
   onRestart,
@@ -421,6 +422,8 @@ export function WebPosShiftClosedModal({
 }: {
   open: boolean;
   balanced: boolean;
+  /** Whole-day EOD — managers with View all sales + EOD permission only. */
+  showEodPrint?: boolean;
   onPrintShift: (opts: { includeProductsSold: boolean }) => void;
   onPrintEod: (opts: { includeProductsSold: boolean }) => void;
   onRestart: () => void;
@@ -457,13 +460,15 @@ export function WebPosShiftClosedModal({
           >
             {t('webPosShiftPrintShift')}
           </button>
-          <button
-            type="button"
-            className="btn-secondary w-full py-3 text-sm font-semibold"
-            onClick={() => onPrintEod({ includeProductsSold })}
-          >
-            {t('webPosShiftPrintEod')}
-          </button>
+          {showEodPrint ? (
+            <button
+              type="button"
+              className="btn-secondary w-full py-3 text-sm font-semibold"
+              onClick={() => onPrintEod({ includeProductsSold })}
+            >
+              {t('webPosShiftPrintEod')}
+            </button>
+          ) : null}
           <button type="button" className="btn-secondary w-full py-3" onClick={onRestart}>
             {t('webPosShiftRestart')}
           </button>
