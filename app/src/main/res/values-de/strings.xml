@@ -169,6 +169,14 @@
     <string name="pay_later_subtitle">Zahlung bei Abholung einziehen</string>
     <string name="pos_register">Kasse</string>
     <string name="pos_orders">Bestellungen</string>
+    <string name="product_grid_images">Img</string>
+    <string name="product_grid_images_cd">Produktbilder anzeigen</string>
+    <string name="product_grid_sort_alpha">A-Z</string>
+    <string name="product_grid_sort_alpha_cd">Produkte A-Z sortieren</string>
+    <string name="product_grid_sort_top">Top</string>
+    <string name="product_grid_sort_top_cd">Nach Top-Verkäufen sortieren</string>
+    <string name="product_grid_columns">%1$d Sp</string>
+    <string name="product_grid_columns_cd">Spaltenanzahl ändern</string>
     <string name="main_floor">Hauptgeschoss</string>
     <string name="patio_floor">Terrasse</string>
     <string name="fire_course_n">Brandverlauf %1$d</string>

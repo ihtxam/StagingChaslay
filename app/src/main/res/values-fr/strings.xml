@@ -171,6 +171,14 @@
     <string name="pay_later_subtitle">Collecter le paiement à la prise en charge</string>
     <string name="pos_register">Caisse</string>
     <string name="pos_orders">Commandes</string>
+    <string name="product_grid_images">Img</string>
+    <string name="product_grid_images_cd">Afficher les images produits</string>
+    <string name="product_grid_sort_alpha">A-Z</string>
+    <string name="product_grid_sort_alpha_cd">Trier les produits A-Z</string>
+    <string name="product_grid_sort_top">Top</string>
+    <string name="product_grid_sort_top_cd">Trier par meilleures ventes</string>
+    <string name="product_grid_columns">%1$d col</string>
+    <string name="product_grid_columns_cd">Changer le nombre de colonnes</string>
     <string name="main_floor">Main Floor</string>
     <string name="patio_floor">Patio</string>
     <string name="fire_course_n">Parcours incendie %1$d</string>

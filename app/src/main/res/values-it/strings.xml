@@ -169,6 +169,14 @@
     <string name="pay_later_subtitle">Incassa al ritiro</string>
     <string name="pos_register">Cassa</string>
     <string name="pos_orders">Ordini</string>
+    <string name="product_grid_images">Img</string>
+    <string name="product_grid_images_cd">Mostra immagini prodotti</string>
+    <string name="product_grid_sort_alpha">A-Z</string>
+    <string name="product_grid_sort_alpha_cd">Ordina prodotti A-Z</string>
+    <string name="product_grid_sort_top">Top</string>
+    <string name="product_grid_sort_top_cd">Ordina per vendite top</string>
+    <string name="product_grid_columns">%1$d col</string>
+    <string name="product_grid_columns_cd">Cambia numero colonne</string>
     <string name="main_floor">Main Floor</string>
     <string name="patio_floor">Patio</string>
     <string name="fire_course_n">Parcours incendie %1$d</string>

@@ -629,6 +629,14 @@
     <string name="add_floor">Add floor</string>
     <string name="floor_plan_view">Floor plan</string>
     <string name="grid_view">Grid view</string>
+    <string name="product_grid_images">Img</string>
+    <string name="product_grid_images_cd">Show product images</string>
+    <string name="product_grid_sort_alpha">A-Z</string>
+    <string name="product_grid_sort_alpha_cd">Sort products A-Z</string>
+    <string name="product_grid_sort_top">Top</string>
+    <string name="product_grid_sort_top_cd">Sort by top sales</string>
+    <string name="product_grid_columns">%1$d col</string>
+    <string name="product_grid_columns_cd">Change grid column count</string>
     <string name="waiter_tables">Tables</string>
     <string name="waiter_order">Order</string>
     <string name="waiter_pick_table">Select a table to start an order</string>

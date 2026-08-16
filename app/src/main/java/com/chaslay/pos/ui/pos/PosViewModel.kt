@@ -829,6 +829,10 @@ class PosViewModel @Inject constructor(
     }
 
     fun setKeypadExpanded(expanded: Boolean) {
+        if (expanded) {
+            val extras = _uiExtras.value
+            if (extras.selectedCartItemId == null || cartManager.snapshot().items.isEmpty()) return
+        }
         updateExtras { it.copy(keypadExpanded = expanded) }
     }
 
@@ -875,7 +879,7 @@ class PosViewModel @Inject constructor(
 
     fun clearWalkInOrder() {
         cartManager.clear()
-        updateExtras { it.copy(selectedCartItemId = null, keypadBuffer = "") }
+        updateExtras { it.copy(selectedCartItemId = null, keypadBuffer = "", keypadExpanded = false) }
     }
 
     fun onProductClick(productId: Long) {
@@ -945,13 +949,12 @@ class PosViewModel @Inject constructor(
             val product = productRepository.getProductWithVariants(lookup.productId) ?: return@launch
             when {
                 product.isWeighed -> updateExtras {
-                    it.copy(showWeighedProductDialog = true, selectedProduct = product, keypadExpanded = true)
+                    it.copy(showWeighedProductDialog = true, selectedProduct = product)
                 }
                 product.isOpenPrice -> updateExtras {
                     it.copy(
                         showOpenPriceDialog = true,
-                        selectedProduct = product,
-                        keypadExpanded = true
+                        selectedProduct = product
                     )
                 }
                 lookup.variantName != null -> addProductToCart(
@@ -1151,15 +1154,24 @@ class PosViewModel @Inject constructor(
 
     fun removeItem(itemId: String) {
         cartManager.removeItem(itemId)
-        if (_uiExtras.value.selectedCartItemId == itemId) {
-            updateExtras { it.copy(selectedCartItemId = null) }
+        updateExtras { extras ->
+            val clearedSelection = extras.selectedCartItemId == itemId
+            extras.copy(
+                selectedCartItemId = if (clearedSelection) null else extras.selectedCartItemId,
+                keypadBuffer = if (clearedSelection) "" else extras.keypadBuffer,
+                keypadExpanded = if (clearedSelection) false else extras.keypadExpanded
+            )
         }
         persistTableOrderAsync()
     }
 
     fun selectCartItem(itemId: String?) {
         updateExtras {
-            it.copy(selectedCartItemId = itemId, keypadExpanded = itemId != null || it.keypadExpanded)
+            it.copy(
+                selectedCartItemId = itemId,
+                keypadExpanded = itemId != null,
+                keypadBuffer = if (itemId == null) "" else it.keypadBuffer
+            )
         }
     }
 
@@ -1203,7 +1215,9 @@ class PosViewModel @Inject constructor(
 
     fun onKeypadClearAll() {
         cartManager.clear()
-        updateExtras { it.copy(keypadBuffer = "", selectedCartItemId = null, lastAddedItemId = null) }
+        updateExtras {
+            it.copy(keypadBuffer = "", selectedCartItemId = null, lastAddedItemId = null, keypadExpanded = false)
+        }
         persistTableOrderAsync()
     }
 
@@ -1250,7 +1264,7 @@ class PosViewModel @Inject constructor(
 
     fun addMiscItemQuick() {
         updateExtras {
-            it.copy(selectedCartItemId = null, keypadBuffer = "", showMiscPriceDialog = true, keypadExpanded = true)
+            it.copy(selectedCartItemId = null, keypadBuffer = "", showMiscPriceDialog = true, keypadExpanded = false)
         }
     }
 
