@@ -16,6 +16,9 @@ data class GiftCardDto(
     val balance: String? = null,
     val status: String? = null,
     @SerializedName("membershipEnabled") val membershipEnabled: Boolean = false,
+    @SerializedName("membershipPlanId") val membershipPlanId: String? = null,
+    @SerializedName("membershipPlan") val membershipPlan: GiftCardMembershipPlanDto? = null,
+    @SerializedName("stampCount") val stampCount: Int? = null,
     @SerializedName("pointsBalance") val pointsBalance: Int? = null,
     @SerializedName("customerId") val customerId: String? = null,
     @SerializedName("holderName") val holderName: String? = null,
@@ -34,6 +37,43 @@ data class GiftCardCustomerDto(
     @SerializedName("lastName") val lastName: String? = null,
     val email: String? = null,
     val phone: String? = null
+)
+
+data class GiftCardMembershipPlanDto(
+    val id: String,
+    val label: String,
+    val type: String,
+    @SerializedName("discountPercent") val discountPercent: Double? = null,
+    @SerializedName("stampsRequired") val stampsRequired: Int? = null,
+    @SerializedName("rewardProductId") val rewardProductId: String? = null,
+    val active: Boolean = true
+)
+
+data class GiftCardSellMembershipRequest(
+    @SerializedName("cardNumber") val cardNumber: String,
+    @SerializedName("planId") val planId: String,
+    val name: String,
+    val email: String? = null,
+    val phone: String? = null
+)
+
+data class GiftCardSellMembershipResponse(
+    val success: Boolean = false,
+    val card: GiftCardDto? = null,
+    val error: String? = null
+)
+
+data class GiftCardStampRequest(
+    @SerializedName("orderId") val orderId: String? = null,
+    val increment: Int = 1
+)
+
+data class GiftCardStampResponse(
+    val success: Boolean = false,
+    val card: GiftCardDto? = null,
+    @SerializedName("rewardEarned") val rewardEarned: Boolean = false,
+    @SerializedName("stampCount") val stampCount: Int? = null,
+    val error: String? = null
 )
 
 data class GiftCardSettingsResponse(

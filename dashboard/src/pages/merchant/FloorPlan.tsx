@@ -1,7 +1,7 @@
 import { CSSProperties, FormEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { useI18n } from '@/lib/i18n';
+import TableQrPrintPanel from '@/components/merchant/TableQrPrintPanel';
 
 type TableShape = 'rect' | 'round';
 type TableStatus = 'available' | 'occupied' | 'reserved' | 'dirty';
@@ -160,6 +160,7 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
   const [saving, setSaving] = useState(false);
   const [newPlanName, setNewPlanName] = useState('');
   const [covers, setCovers] = useState<{ coversServed: number; dineInOrders: number; averagePartySize: number } | null>(null);
+  const [merchantSlug, setMerchantSlug] = useState('');
   const [drag, setDrag] = useState<{
     kind: 'table' | 'element';
     localId: string;
@@ -188,10 +189,13 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [plansRes, coversRes] = await Promise.all([
+      const [plansRes, coversRes, settingsRes] = await Promise.all([
         api.get('/merchant/floor-plans'),
         api.get('/merchant/floor-plans/covers').catch(() => null),
+        api.get('/merchant/settings').catch(() => null),
       ]);
+      const slug = settingsRes?.data?.settings?.slug || settingsRes?.data?.slug || '';
+      if (slug) setMerchantSlug(String(slug));
       const list: FloorPlanData[] = plansRes.data.plans || [];
       setPlans(list);
       if (coversRes?.data) {
@@ -783,6 +787,14 @@ export default function FloorPlan({ embedded = false }: { embedded?: boolean }) 
                 </span>
               ))}
             </div>
+            {merchantSlug && activePlan ? (
+              <TableQrPrintPanel
+                merchantSlug={merchantSlug}
+                tables={tables
+                  .filter((t) => t.id)
+                  .map((t) => ({ id: t.id!, label: t.label }))}
+              />
+            ) : null}
           </div>
         </div>
       </div>

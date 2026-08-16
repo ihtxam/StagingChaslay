@@ -940,6 +940,22 @@ class PosViewModel @Inject constructor(
     fun onBarcodeScanned(rawCode: String) {
         val code = rawCode.trim()
         if (code.isEmpty()) return
+        // Table QR: CHASLAY:T:{slug}:{tableUuid}
+        val tableMatch = Regex("^CHASLAY:T:[^:]+:([a-f0-9-]+)$", RegexOption.IGNORE_CASE).find(code)
+        if (tableMatch != null) {
+            val tableUuid = tableMatch.groupValues[1]
+            viewModelScope.launch {
+                val table = tableOrderRepository.getAllTables().firstOrNull {
+                    it.remoteId?.equals(tableUuid, ignoreCase = true) == true
+                }
+                if (table != null) {
+                    openTableInternal(table.id, guestCount = null)
+                } else {
+                    updateExtras { it.copy(snackbarMessage = "Table not found: $tableUuid") }
+                }
+            }
+            return
+        }
         viewModelScope.launch {
             val lookup = productRepository.findByBarcode(code)
             if (lookup == null) {
@@ -2380,6 +2396,17 @@ class PosViewModel @Inject constructor(
                 zip = null
             )
         }
+        val planDisc = membership.membershipPlan
+            ?.takeIf { it.type == "discount" && it.active }
+            ?.discountPercent
+            ?.coerceIn(0.0, 100.0)
+            ?: 0.0
+        if (planDisc > 0.0) {
+            cartManager.applyDiscount(planDisc, 0.0)
+            updateExtras {
+                it.copy(checkoutState = it.checkoutState.copy(discountPercent = planDisc))
+            }
+        }
         updateExtras {
             it.copy(
                 attachedMembership = membership,
@@ -2419,6 +2446,19 @@ class PosViewModel @Inject constructor(
                         it.copy(
                             lastLoyaltyPointsEarned = earned,
                             lastLoyaltyPointsBalance = balance
+                        )
+                    }
+                }
+        }
+        if (membership.membershipPlan?.type == "stamp_card") {
+            giftCardRepository.incrementStamp(membership.cardId, transactionId)
+                .onSuccess { (count, reward) ->
+                    if (reward) {
+                        updateExtras { it.copy(snackbarMessage = "Stamp reward earned!") }
+                    }
+                    updateExtras {
+                        it.copy(
+                            attachedMembership = membership.copy(stampCount = count)
                         )
                     }
                 }

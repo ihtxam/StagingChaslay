@@ -1,3 +1,8 @@
+import {
+  normalizeMembershipPlans,
+  type MembershipPlan,
+} from "@/lib/membership-plans";
+
 export type GiftCardSettings = {
   enabled: boolean;
   presetDenominations: number[];
@@ -5,6 +10,10 @@ export type GiftCardSettings = {
   maxAmount: number;
   reloadEnabled: boolean;
   customAmountEnabled: boolean;
+  /** Enable membership card sell / tier benefits */
+  membershipEnabled?: boolean;
+  /** Configurable membership tiers (discount %, stamp cards, etc.) */
+  membershipPlans?: MembershipPlan[];
 };
 
 export const DEFAULT_GIFT_CARD_SETTINGS: GiftCardSettings = {
@@ -14,6 +23,8 @@ export const DEFAULT_GIFT_CARD_SETTINGS: GiftCardSettings = {
   maxAmount: 500,
   reloadEnabled: true,
   customAmountEnabled: true,
+  membershipEnabled: false,
+  membershipPlans: [],
 };
 
 function roundMoney2(n: number): number {
@@ -49,6 +60,8 @@ export function normalizeGiftCardSettings(raw: unknown): GiftCardSettings {
     maxAmount = Math.max(minAmount, DEFAULT_GIFT_CARD_SETTINGS.maxAmount);
   }
 
+  const membershipPlans = normalizeMembershipPlans(src.membershipPlans);
+
   return {
     enabled: src.enabled === true,
     presetDenominations: presets.length
@@ -58,6 +71,8 @@ export function normalizeGiftCardSettings(raw: unknown): GiftCardSettings {
     maxAmount,
     reloadEnabled: src.reloadEnabled !== false,
     customAmountEnabled: src.customAmountEnabled !== false,
+    membershipEnabled: src.membershipEnabled === true,
+    membershipPlans,
   };
 }
 

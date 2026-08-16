@@ -1,6 +1,17 @@
 package com.chaslay.pos.domain.model
 
 /** Membership / gift card attached to the active sale (cloud lookup). */
+data class MembershipPlanInfo(
+    val id: String,
+    val label: String,
+    val type: String,
+    val discountPercent: Double? = null,
+    val stampsRequired: Int? = null,
+    val rewardProductId: String? = null,
+    val active: Boolean = true
+)
+
+/** Membership / gift card attached to the active sale (cloud lookup). */
 data class AttachedMembership(
     val cardId: String,
     val cardNumber: String,
@@ -8,7 +19,10 @@ data class AttachedMembership(
     val customerId: String?,
     val pointsBalance: Int,
     val giftBalance: Double,
-    val membershipEnabled: Boolean
+    val membershipEnabled: Boolean,
+    val membershipPlanId: String? = null,
+    val membershipPlan: MembershipPlanInfo? = null,
+    val stampCount: Int = 0
 )
 
 enum class GiftCardOp {

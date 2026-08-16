@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import {
   emptyDraft,
@@ -90,6 +90,7 @@ interface ChannelInfo {
 export default function OrderingPage() {
   const { t, setLocale, locale } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug: string }>();
+  const [searchParams] = useSearchParams();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const navigate = useNavigate();
 
@@ -230,10 +231,18 @@ export default function OrderingPage() {
           stored?.channel && channels[stored.channel]?.enabled
             ? stored.channel
             : first || 'takeaway';
+        const urlChannel = searchParams.get('channel') as ShopChannel | null;
+        const urlTable = searchParams.get('table');
+        const tableChannel =
+          urlChannel === 'dine_in' && channels.dine_in?.enabled ? 'dine_in' : null;
         setDraft((d) => {
+          const channel =
+            tableChannel ||
+            (d.channel && channels[d.channel]?.enabled ? d.channel : first || 'takeaway');
           const next = {
             ...d,
-            channel: d.channel && channels[d.channel]?.enabled ? d.channel : first || 'takeaway',
+            channel,
+            tableId: urlTable || d.tableId,
           };
           saveCart(shopKey, next);
           return next;

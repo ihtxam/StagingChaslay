@@ -57,4 +57,17 @@ interface GiftCardApi {
         @Header("Authorization") auth: String,
         @Body body: com.chaslay.pos.data.remote.dto.GiftCardSendEcardEmailRequest
     ): com.chaslay.pos.data.remote.dto.GiftCardSendEcardEmailResponse
+
+    @POST("api/gift-cards/sell-membership")
+    suspend fun sellMembership(
+        @Header("Authorization") auth: String,
+        @Body body: com.chaslay.pos.data.remote.dto.GiftCardSellMembershipRequest
+    ): com.chaslay.pos.data.remote.dto.GiftCardSellMembershipResponse
+
+    @POST("api/gift-cards/{cardId}/stamps/increment")
+    suspend fun incrementStamp(
+        @Header("Authorization") auth: String,
+        @Path("cardId") cardId: String,
+        @Body body: com.chaslay.pos.data.remote.dto.GiftCardStampRequest
+    ): com.chaslay.pos.data.remote.dto.GiftCardStampResponse
 }

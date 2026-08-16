@@ -4,6 +4,8 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import api from '@/lib/api';
 import RfidScanInput from '@/components/RfidScanInput';
 import { useI18n } from '@/lib/i18n';
+import type { MembershipPlan } from '@/lib/membership-plans';
+import { DEFAULT_MEMBERSHIP_PLANS } from '@/lib/membership-plans';
 
 interface GiftCardSettings {
   enabled: boolean;
@@ -12,6 +14,8 @@ interface GiftCardSettings {
   maxAmount: number;
   reloadEnabled: boolean;
   customAmountEnabled: boolean;
+  membershipEnabled?: boolean;
+  membershipPlans?: MembershipPlan[];
 }
 
 interface GiftCard {
@@ -58,6 +62,8 @@ const DEFAULT_GC: GiftCardSettings = {
   maxAmount: 500,
   reloadEnabled: true,
   customAmountEnabled: true,
+  membershipEnabled: false,
+  membershipPlans: [],
 };
 
 function Toggle({
@@ -357,6 +363,89 @@ export default function Loyalty() {
                 label={t('giftCard')}
                 hint={t('giftCardEnableHint')}
               />
+              <Toggle
+                checked={!!gcSettings.membershipEnabled}
+                onChange={(v) =>
+                  setGcSettings({
+                    ...gcSettings,
+                    membershipEnabled: v,
+                    membershipPlans:
+                      v && !(gcSettings.membershipPlans || []).length
+                        ? DEFAULT_MEMBERSHIP_PLANS
+                        : gcSettings.membershipPlans,
+                  })
+                }
+                label={t('membershipEnabled')}
+                hint={t('membershipEnabledHint')}
+              />
+              {gcSettings.membershipEnabled ? (
+                <div className="py-4 border-b border-slate-100 space-y-3">
+                  <p className="text-sm font-medium text-slate-800">{t('membershipPlans')}</p>
+                  {(gcSettings.membershipPlans || []).map((plan, idx) => (
+                    <div key={plan.id} className="rounded-lg border border-slate-200 p-3 space-y-2">
+                      <input
+                        className="input"
+                        value={plan.label}
+                        onChange={(e) => {
+                          const next = [...(gcSettings.membershipPlans || [])];
+                          next[idx] = { ...plan, label: e.target.value };
+                          setGcSettings({ ...gcSettings, membershipPlans: next });
+                        }}
+                        placeholder={t('membershipPlanLabel')}
+                      />
+                      <select
+                        className="input"
+                        value={plan.type}
+                        onChange={(e) => {
+                          const next = [...(gcSettings.membershipPlans || [])];
+                          next[idx] = {
+                            ...plan,
+                            type: e.target.value as 'discount' | 'stamp_card',
+                          };
+                          setGcSettings({ ...gcSettings, membershipPlans: next });
+                        }}
+                      >
+                        <option value="discount">{t('membershipPlanDiscount')}</option>
+                        <option value="stamp_card">{t('membershipPlanStamp')}</option>
+                      </select>
+                      {plan.type === 'discount' ? (
+                        <input
+                          className="input"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={plan.discountPercent ?? 10}
+                          onChange={(e) => {
+                            const next = [...(gcSettings.membershipPlans || [])];
+                            next[idx] = {
+                              ...plan,
+                              discountPercent: Number(e.target.value),
+                            };
+                            setGcSettings({ ...gcSettings, membershipPlans: next });
+                          }}
+                          placeholder={t('membershipDiscountPercent')}
+                        />
+                      ) : (
+                        <input
+                          className="input"
+                          type="number"
+                          min={1}
+                          value={plan.stampsRequired ?? 6}
+                          onChange={(e) => {
+                            const next = [...(gcSettings.membershipPlans || [])];
+                            next[idx] = {
+                              ...plan,
+                              stampsRequired: Number(e.target.value),
+                            };
+                            setGcSettings({ ...gcSettings, membershipPlans: next });
+                          }}
+                          placeholder={t('membershipStampsRequired')}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
               <div className="py-4 border-b border-slate-100">
                 <div className="flex items-center justify-between gap-3 mb-2">

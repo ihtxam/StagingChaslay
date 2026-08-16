@@ -12,6 +12,11 @@ import {
   validateGiftAmount,
   type GiftCardSettings,
 } from "@/lib/gift-card-settings";
+import {
+  applyStampProgress,
+  findMembershipPlan,
+  type MembershipPlan,
+} from "@/lib/membership-plans";
 import { CustomerService } from "@/services/customer.service";
 import { EmailService } from "@/services/email.service";
 
@@ -72,6 +77,24 @@ export class GiftCardService {
       .set({ giftCardSettings: next, updatedAt: new Date() })
       .where(eq(schema.merchants.id, merchantId));
     return next;
+  }
+
+  static resolveMembershipPlan(
+    settings: GiftCardSettings,
+    planId: string | null | undefined
+  ): MembershipPlan | null {
+    return findMembershipPlan(settings.membershipPlans || [], planId);
+  }
+
+  /** Enrich card JSON with resolved membership plan for POS clients. */
+  static enrichCard(card: Record<string, unknown>, settings: GiftCardSettings) {
+    const planId = card.membershipPlanId as string | null | undefined;
+    const plan = this.resolveMembershipPlan(settings, planId);
+    return {
+      ...card,
+      membershipPlan: plan,
+      stampCount: card.stampCount ?? 0,
+    };
   }
 
   static async listCards(
@@ -210,7 +233,8 @@ export class GiftCardService {
     }
 
     if (!card) throw new Error("Card not found");
-    return card;
+    const settings = await this.getSettings(merchantId);
+    return this.enrichCard(card as unknown as Record<string, unknown>, settings);
   }
 
   static async createCard(
@@ -220,6 +244,7 @@ export class GiftCardService {
       cardMediaType?: "physical" | "e_card";
       initialBalance?: number;
       membershipEnabled?: boolean;
+      membershipPlanId?: string;
       holderName?: string;
       holderEmail?: string;
       holderPhone?: string;
@@ -258,7 +283,11 @@ export class GiftCardService {
       initial = check.amount;
     }
 
-    const membershipEnabled = !!input.membershipEnabled || !!input.customerId;
+    const membershipEnabled = !!input.membershipEnabled || !!input.customerId || !!input.membershipPlanId;
+    if (input.membershipPlanId) {
+      const plan = this.resolveMembershipPlan(settings, input.membershipPlanId);
+      if (!plan) throw new Error("Membership plan not found");
+    }
     const rows = await db
       .insert(schema.giftCards)
       .values({
@@ -268,6 +297,8 @@ export class GiftCardService {
         balance: initial.toFixed(2),
         status: "active",
         membershipEnabled,
+        membershipPlanId: input.membershipPlanId || null,
+        stampCount: 0,
         pointsBalance: 0,
         customerId: input.customerId || null,
         holderName: input.holderName?.trim() || null,
@@ -548,7 +579,131 @@ export class GiftCardService {
     return updated[0]!;
   }
 
-  /** Restore gift-card balance after an order refund (same card that paid). */
+  /** Sell / register a membership card: RFID + customer + tier plan. */
+  static async sellMembership(
+    merchantId: string,
+    input: {
+      cardNumber: string;
+      planId: string;
+      name: string;
+      email?: string;
+      phone?: string;
+      orderId?: string;
+    }
+  ) {
+    const settings = await this.getSettings(merchantId);
+    if (!settings.membershipEnabled) throw new Error("Membership is disabled");
+    const plan = this.resolveMembershipPlan(settings, input.planId);
+    if (!plan) throw new Error("Membership plan not found");
+
+    const name = String(input.name || "").trim();
+    const email = String(input.email || "").trim();
+    const phone = String(input.phone || "").trim();
+    if (!name) throw new Error("Member name is required");
+    if (!email && !phone) throw new Error("Email or phone is required");
+
+    const cardNumber = normalizeRfidUid(input.cardNumber);
+    if (!cardNumber) throw new Error("RFID card number is required");
+
+    const db = getDb();
+    const existing = await db.query.giftCards.findFirst({
+      where: and(
+        eq(schema.giftCards.merchantId, merchantId),
+        eq(schema.giftCards.cardNumber, cardNumber)
+      ),
+    });
+    if (existing) throw new Error("A card with this number already exists");
+
+    const parts = name.split(/\s+/).filter(Boolean);
+    const customer = await CustomerService.createCustomer(
+      merchantId,
+      email || undefined,
+      phone || undefined,
+      parts[0] || "Member",
+      parts.slice(1).join(" ") || ""
+    );
+
+    const rows = await db
+      .insert(schema.giftCards)
+      .values({
+        merchantId,
+        cardNumber,
+        cardMediaType: "physical",
+        balance: "0",
+        status: "active",
+        membershipEnabled: true,
+        membershipPlanId: plan.id,
+        stampCount: 0,
+        pointsBalance: 0,
+        customerId: customer.id,
+        holderName: name,
+        holderEmail: email || null,
+        holderPhone: phone || null,
+        issuedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    const card = rows[0]!;
+    await db.insert(schema.giftCardTransactions).values({
+      merchantId,
+      cardId: card.id,
+      transactionType: "membership_issue",
+      orderId: input.orderId || null,
+      description: `Membership sold: ${plan.label}`,
+    });
+
+    return this.enrichCard(card as unknown as Record<string, unknown>, settings);
+  }
+
+  /** Increment stamp-card progress after a qualifying sale. */
+  static async incrementStamp(
+    merchantId: string,
+    cardId: string,
+    orderId?: string,
+    increment = 1
+  ) {
+    const db = getDb();
+    const settings = await this.getSettings(merchantId);
+    const card = await this.getById(merchantId, cardId);
+    if (!card.membershipEnabled || !card.membershipPlanId) {
+      throw new Error("Card has no membership plan");
+    }
+    const plan = this.resolveMembershipPlan(settings, card.membershipPlanId);
+    if (!plan || plan.type !== "stamp_card") {
+      throw new Error("Card is not on a stamp-card plan");
+    }
+    assertActive(card);
+
+    const { stampCount, rewardEarned } = applyStampProgress(
+      plan,
+      card.stampCount || 0,
+      increment
+    );
+
+    const updated = await db
+      .update(schema.giftCards)
+      .set({ stampCount, updatedAt: new Date() })
+      .where(eq(schema.giftCards.id, cardId))
+      .returning();
+
+    await db.insert(schema.giftCardTransactions).values({
+      merchantId,
+      cardId,
+      transactionType: rewardEarned ? "stamp_reward" : "stamp_earn",
+      orderId: orderId || null,
+      description: rewardEarned
+        ? `${plan.label}: reward earned (${plan.stampsRequired} stamps)`
+        : `${plan.label}: stamp ${stampCount}/${plan.stampsRequired}`,
+    });
+
+    return {
+      card: this.enrichCard(updated[0]! as unknown as Record<string, unknown>, settings),
+      rewardEarned,
+      stampCount,
+      plan,
+    };
+  }
   static async refundToCard(
     merchantId: string,
     opts: {

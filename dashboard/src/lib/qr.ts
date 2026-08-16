@@ -288,3 +288,62 @@ export function concatBytes(...parts: Uint8Array[]): Uint8Array {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Table QR (dine-in)
+// ---------------------------------------------------------------------------
+
+/** Compact POS scan payload: CHASLAY:T:{merchantSlug}:{tableUuid} */
+export function buildTableQrPayload(merchantSlug: string, tableId: string): string {
+  const slug = String(merchantSlug || '').trim();
+  const tid = String(tableId || '').trim();
+  return `CHASLAY:T:${slug}:${tid}`;
+}
+
+export type ParsedTableQr = {
+  merchantSlug?: string;
+  tableId: string;
+};
+
+/** Parse table QR from POS wedge or customer phone scan. */
+export function parseTableQrPayload(raw: string): ParsedTableQr | null {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return null;
+
+  const compact = trimmed.match(/^CHASLAY:T:([^:]+):([a-f0-9-]+)$/i);
+  if (compact) {
+    return { merchantSlug: compact[1], tableId: compact[2]! };
+  }
+
+  try {
+    if (/^https?:\/\//i.test(trimmed)) {
+      const url = new URL(trimmed);
+      const table = url.searchParams.get('table');
+      if (table) {
+        const parts = url.pathname.split('/').filter(Boolean);
+        const shopIdx = parts.indexOf('shop');
+        const slug = shopIdx >= 0 ? parts[shopIdx + 1] : undefined;
+        return { merchantSlug: slug, tableId: table };
+      }
+    }
+  } catch {
+    /* not a URL */
+  }
+
+  const inline = trimmed.match(/[?&]table=([a-f0-9-]+)/i);
+  if (inline) return { tableId: inline[1]! };
+
+  return null;
+}
+
+/** Customer-facing shop URL — opens dine-in menu for a table. */
+export function buildTableShopUrl(
+  merchantSlug: string,
+  tableId: string,
+  origin?: string
+): string {
+  const base = String(origin || (typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com')).replace(/\/$/, '');
+  const slug = encodeURIComponent(merchantSlug);
+  const table = encodeURIComponent(tableId);
+  return `${base}/shop/${slug}/menu?channel=dine_in&table=${table}`;
+}

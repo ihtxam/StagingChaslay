@@ -43,6 +43,8 @@ router.put("/settings", async (req: Request, res: Response) => {
       maxAmount: body.maxAmount,
       reloadEnabled: body.reloadEnabled,
       customAmountEnabled: body.customAmountEnabled,
+      membershipEnabled: body.membershipEnabled,
+      membershipPlans: body.membershipPlans,
     });
     res.json({ success: true, message: "Gift card settings saved", settings });
   } catch (error) {
@@ -120,6 +122,48 @@ router.get("/lookup/:code", async (req: Request, res: Response) => {
   } catch (error) {
     res.status(404).json({
       error: error instanceof Error ? error.message : "Card not found",
+    });
+  }
+});
+
+/**
+ * POST /api/gift-cards/sell-membership
+ * Register RFID membership card with customer + tier plan.
+ */
+router.post("/sell-membership", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const card = await GiftCardService.sellMembership(merchantId, {
+      cardNumber: req.body.cardNumber || req.body.rfidCode,
+      planId: req.body.planId,
+      name: req.body.name || req.body.holderName,
+      email: req.body.email || req.body.holderEmail,
+      phone: req.body.phone || req.body.holderPhone,
+      orderId: req.body.orderId,
+    });
+    res.status(201).json({ success: true, card });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to sell membership",
+    });
+  }
+});
+
+/**
+ * POST /api/gift-cards/:cardId/stamps/increment
+ */
+router.post("/:cardId/stamps/increment", async (req: Request, res: Response) => {
+  try {
+    const result = await GiftCardService.incrementStamp(
+      req.merchantId!,
+      req.params.cardId,
+      req.body?.orderId,
+      Math.max(1, Math.floor(Number(req.body?.increment) || 1))
+    );
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to increment stamp",
     });
   }
 });

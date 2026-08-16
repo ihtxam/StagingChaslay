@@ -1536,6 +1536,10 @@ export const giftCards = pgTable(
     /** Optional membership: linked customer for points / visits */
     customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
     membershipEnabled: boolean("membership_enabled").default(false).notNull(),
+    /** Active membership tier id from merchant gift_card_settings.membershipPlans */
+    membershipPlanId: varchar("membership_plan_id", { length: 64 }),
+    /** Stamp-card progress (resets when reward earned) */
+    stampCount: integer("stamp_count").default(0).notNull(),
     pointsBalance: integer("points_balance").default(0).notNull(),
     holderName: varchar("holder_name", { length: 255 }),
     holderEmail: varchar("holder_email", { length: 255 }),

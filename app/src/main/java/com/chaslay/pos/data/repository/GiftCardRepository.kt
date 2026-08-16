@@ -8,6 +8,7 @@ import com.chaslay.pos.data.remote.dto.GiftCardPointsRequest
 import com.chaslay.pos.data.remote.dto.GiftCardRedeemRequest
 import com.chaslay.pos.data.remote.dto.GiftCardSettingsDto
 import com.chaslay.pos.domain.model.AttachedMembership
+import com.chaslay.pos.domain.model.MembershipPlanInfo
 import com.chaslay.pos.domain.model.GiftCardOp
 import com.chaslay.pos.domain.model.LoyaltyMath
 import com.chaslay.pos.data.remote.dto.GiftCardSendEcardEmailRequest
@@ -142,6 +143,25 @@ class GiftCardRepository @Inject constructor(
             customerId = card.customerId ?: card.customer?.id,
             pointsBalance = card.points,
             giftBalance = card.balanceAmount,
-            membershipEnabled = card.membershipEnabled
+            membershipEnabled = card.membershipEnabled,
+            membershipPlanId = card.membershipPlanId,
+            membershipPlan = card.membershipPlan?.let {
+                MembershipPlanInfo(
+                    id = it.id,
+                    label = it.label,
+                    type = it.type,
+                    discountPercent = it.discountPercent,
+                    stampsRequired = it.stampsRequired,
+                    rewardProductId = it.rewardProductId,
+                    active = it.active
+                )
+            },
+            stampCount = card.stampCount ?: 0
         )
+
+    suspend fun incrementStamp(cardId: String, orderId: String? = null): Result<Pair<Int, Boolean>> = runCatching {
+        val response = giftCardApi.incrementStamp(bearer(), cardId, com.chaslay.pos.data.remote.dto.GiftCardStampRequest(orderId))
+        val count = response.stampCount ?: response.card?.stampCount ?: 0
+        Pair(count, response.rewardEarned)
+    }
 }

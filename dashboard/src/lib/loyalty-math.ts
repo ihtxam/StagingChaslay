@@ -1,5 +1,7 @@
 /** Mirrors Android `LoyaltyMath` and `AttachedMembership`. */
 
+import type { MembershipPlan } from '@/lib/membership-plans';
+
 export type AttachedMembership = {
   cardId: string;
   cardNumber: string;
@@ -8,6 +10,9 @@ export type AttachedMembership = {
   pointsBalance: number;
   giftBalance: number;
   membershipEnabled: boolean;
+  membershipPlanId?: string | null;
+  membershipPlan?: MembershipPlan | null;
+  stampCount?: number;
 };
 
 export const REDEEM_THRESHOLD_POINTS = 100;

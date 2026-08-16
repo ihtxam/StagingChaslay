@@ -57,3 +57,6 @@ CREATE INDEX IF NOT EXISTS gift_card_transactions_card_id_idx
   ON gift_card_transactions(card_id);
 CREATE INDEX IF NOT EXISTS gift_card_transactions_order_id_idx
   ON gift_card_transactions(order_id);
+
+ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS membership_plan_id varchar(64);
+ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS stamp_count integer NOT NULL DEFAULT 0;

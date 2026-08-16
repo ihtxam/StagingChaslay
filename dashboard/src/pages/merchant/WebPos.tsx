@@ -68,7 +68,10 @@ import {
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
 } from '@/lib/webpos-print-relay';
-import { buildReceiptUrl, resolvePublishedReceiptRef, normalizeScannedPayload } from '@/lib/qr';
+import { buildReceiptUrl, resolvePublishedReceiptRef, normalizeScannedPayload, parseTableQrPayload } from '@/lib/qr';
+import WebPosMembershipSellModal from '@/components/webpos/WebPosMembershipSellModal';
+import { membershipDiscountPercent } from '@/lib/membership-plans';
+import type { MembershipPlan } from '@/lib/membership-plans';
 import {
   lineSignature,
   type ShopComboSelection,
@@ -648,6 +651,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   >('cash');
   const [checkoutExtras, setCheckoutExtras] = useState<CheckoutExtras | null>(null);
   const [giftCardOpsOpen, setGiftCardOpsOpen] = useState(false);
+  const [membershipSellOpen, setMembershipSellOpen] = useState(false);
   const [giftCardPayOpen, setGiftCardPayOpen] = useState(false);
   const [giftCardPayDue, setGiftCardPayDue] = useState(0);
   const [giftPayInject, setGiftPayInject] = useState<AppliedPayment | null>(null);
@@ -4001,6 +4005,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         return prev;
       });
     }
+    const disc = membershipDiscountPercent(membership);
+    if (disc > 0) {
+      setBillDiscount((prev) =>
+        prev.percent >= disc ? prev : { percent: disc, amount: 0 }
+      );
+    }
     setAttachedMembership(membership);
     toast.success(displayName || membership.cardNumber || t('webPosMembershipAttached'));
   };
@@ -4031,6 +4041,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         pointsBalance: Math.max(0, Math.floor(Number(c.points ?? c.pointsBalance ?? 0))),
         giftBalance: Number(c.balance ?? c.balanceAmount ?? 0),
         membershipEnabled: !!c.membershipEnabled,
+        membershipPlanId: c.membershipPlanId || null,
+        membershipPlan: (c.membershipPlan as MembershipPlan | null) || null,
+        stampCount: Number(c.stampCount ?? 0),
       });
     } catch (e: any) {
       toast.error(e.response?.data?.error || e.message || t('webPosMembershipLookupFailed'));
@@ -4065,6 +4078,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         points: earned,
         orderId,
       });
+    }
+    if (membership.membershipPlan?.type === 'stamp_card') {
+      try {
+        const stampRes = await api.post(`/gift-cards/${membership.cardId}/stamps/increment`, {
+          orderId,
+        });
+        if (stampRes.data?.rewardEarned) {
+          toast.success(t('membershipRewardEarned'));
+        }
+        const nextCount = stampRes.data?.stampCount;
+        if (typeof nextCount === 'number') {
+          setAttachedMembership((prev) =>
+            prev?.cardId === membership.cardId ? { ...prev, stampCount: nextCount } : prev
+          );
+        }
+      } catch {
+        /* stamp optional — don't fail sale */
+      }
     }
   };
 
@@ -5770,6 +5801,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onProductClick(product);
         return;
       }
+      const tableQr = parseTableQrPayload(code);
+      if (tableQr?.tableId && tablesUiEnabled) {
+        switchToTableOrder({
+          id: tableQr.tableId,
+          label: `T-${tableQr.tableId.slice(0, 6).toUpperCase()}`,
+        });
+        toast.success(
+          t('tableQrAssigned').replace('{label}', tableQr.tableId.slice(0, 8).toUpperCase())
+        );
+        return;
+      }
       const cardsScanEnabled =
         giftCardsEditionOk &&
         (paymentConfig?.methods.giftCard === true) &&
@@ -5807,6 +5849,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       giftCardsEditionOk,
       paymentConfig?.methods.giftCard,
       canPay,
+      tablesUiEnabled,
+      switchToTableOrder,
       t,
     ]
   );
@@ -6639,6 +6683,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   }
                   void ensureShift(() => setGiftCardOpsOpen(true));
                 }}
+                onSellMembership={() => {
+                  if (offlineNow) {
+                    toast.error(t('webPosOfflineGiftCardBlocked'));
+                    return;
+                  }
+                  if (!(paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null)?.membershipEnabled) {
+                    toast.error(t('membershipEnabled'));
+                    return;
+                  }
+                  void ensureShift(() => setMembershipSellOpen(true));
+                }}
+                membershipEnabled={
+                  !!(paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null)?.membershipEnabled
+                }
                 onReloadGiftCard={() => {
                   if (offlineNow) {
                     toast.error(t('webPosOfflineGiftCardBlocked'));
@@ -7175,6 +7233,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             phone: c.phone || null,
           } as WebPosCustomer);
         }}
+      />
+      <WebPosMembershipSellModal
+        open={membershipSellOpen}
+        plans={(paymentConfig?.giftCardSettings as { membershipPlans?: MembershipPlan[] } | null)?.membershipPlans || []}
+        onClose={() => setMembershipSellOpen(false)}
+        onSold={(m) => attachMembershipCard(m)}
       />
       <WebPosGiftCardModal
         open={giftCardPayOpen}

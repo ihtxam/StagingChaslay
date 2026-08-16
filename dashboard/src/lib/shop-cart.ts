@@ -99,6 +99,8 @@ export interface ShopCheckoutDraft {
   voucherCode?: string;
   voucherDiscount?: number;
   voucherName?: string;
+  /** Dine-in table from QR scan */
+  tableId?: string;
 }
 
 const PREFIX = 'manupos_shop_cart_v1:';
