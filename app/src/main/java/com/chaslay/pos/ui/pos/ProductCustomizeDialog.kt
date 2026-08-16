@@ -10,6 +10,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -116,6 +122,13 @@ fun ProductCustomizeDialog(
             }
         }
     }
+    var activeTab by remember(editKey) { mutableIntStateOf(0) }
+    val customizeTabs = remember(state.modifierGroups, state.addonGroups) {
+        buildList {
+            state.modifierGroups.forEach { add(CustomizeTabKind.Modifier(it)) }
+            state.addonGroups.forEach { add(CustomizeTabKind.Addon(it)) }
+        }
+    }
     val isEditing = state.editingItemId != null
 
     val unitBase = selectedVariant?.price ?: basePrice
@@ -186,77 +199,78 @@ fun ProductCustomizeDialog(
                             }
                         }
 
-                        state.modifierGroups.forEach { group ->
-                            OptionGroupSection(
-                                title = group.name,
-                                subtitle = groupSubtitle(group)
+                        if (customizeTabs.isNotEmpty()) {
+                            ScrollableTabRow(
+                                selectedTabIndex = activeTab.coerceIn(0, customizeTabs.lastIndex),
+                                containerColor = Color(0xFF252525),
+                                contentColor = Color.White,
+                                edgePadding = 0.dp
                             ) {
-                                group.options.filter { it.inStock }.forEach { option ->
-                                    if (group.isSingleSelect) {
-                                        OptionChip(
-                                            label = option.name,
-                                            selected = singleModifier[group.id] == option.id,
-                                            onClick = {
-                                                singleModifier[group.id] = option.id
-                                                modifierQty.clear()
-                                                modifierQty[option.id] = 1
-                                            }
-                                        )
-                                    } else {
-                                        QtyOptionChip(
-                                            label = option.name,
-                                            quantity = modifierQty[option.id] ?: 0,
-                                            maxTotal = group.limitQuantity,
-                                            currentTotal = group.options.sumOf { modifierQty[it.id] ?: 0 },
-                                            onIncrement = {
-                                                val total = group.options.sumOf { modifierQty[it.id] ?: 0 }
-                                                if (total < group.limitQuantity) {
-                                                    modifierQty[option.id] = (modifierQty[option.id] ?: 0) + 1
-                                                }
-                                            },
-                                            onDecrement = {
-                                                val q = (modifierQty[option.id] ?: 0) - 1
-                                                if (q <= 0) modifierQty.remove(option.id) else modifierQty[option.id] = q
-                                            }
-                                        )
-                                    }
+                                customizeTabs.forEachIndexed { index, tab ->
+                                    Tab(
+                                        selected = activeTab == index,
+                                        onClick = { activeTab = index },
+                                        text = {
+                                            Text(
+                                                tab.title,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (activeTab == index) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    )
                                 }
                             }
-                        }
-
-                        state.addonGroups.forEach { group ->
-                            OptionGroupSection(
-                                title = group.name,
-                                subtitle = addonGroupSubtitle(group)
-                            ) {
-                                group.options.filter { it.inStock }.forEach { option ->
-                                    QtyOptionChip(
-                                        label = option.name,
-                                        priceLabel = "+$currencySymbol ${"%.2f".format(Locale.getDefault(), option.price)}",
-                                        quantity = addonQty[option.id] ?: 0,
-                                        maxTotal = group.limitQuantity,
-                                        currentTotal = group.options.sumOf { addonQty[it.id] ?: 0 },
-                                        allowRepeat = group.allowMultipleSame,
-                                        onIncrement = {
+                            Spacer(Modifier.height(10.dp))
+                            when (val tab = activeCustomizeTab) {
+                                is CustomizeTabKind.Modifier -> {
+                                    ModifierAddonGrid(
+                                        currencySymbol = currencySymbol,
+                                        group = tab.group,
+                                        singleModifier = singleModifier,
+                                        modifierQty = modifierQty,
+                                        onSelectSingle = { groupId, optionId ->
+                                            singleModifier[groupId] = optionId
+                                            modifierQty.clear()
+                                            modifierQty[optionId] = 1
+                                        },
+                                        onIncrement = { group, optionId ->
+                                            val total = group.options.sumOf { modifierQty[it.id] ?: 0 }
+                                            if (total < group.limitQuantity) {
+                                                modifierQty[optionId] = (modifierQty[optionId] ?: 0) + 1
+                                            }
+                                        },
+                                        onDecrement = { optionId ->
+                                            val q = (modifierQty[optionId] ?: 0) - 1
+                                            if (q <= 0) modifierQty.remove(optionId) else modifierQty[optionId] = q
+                                        }
+                                    )
+                                }
+                                is CustomizeTabKind.Addon -> {
+                                    ModifierAddonGrid(
+                                        currencySymbol = currencySymbol,
+                                        addonGroup = tab.group,
+                                        addonQty = addonQty,
+                                        onIncrement = { group, optionId ->
                                             val total = group.options.sumOf { addonQty[it.id] ?: 0 }
-                                            val current = addonQty[option.id] ?: 0
+                                            val current = addonQty[optionId] ?: 0
                                             if (group.allowMultipleSame || current == 0) {
                                                 if (total < group.limitQuantity) {
-                                                    addonQty[option.id] = current + 1
+                                                    addonQty[optionId] = current + 1
                                                 }
                                             } else {
                                                 addonQty.keys.filter { id ->
                                                     group.options.any { it.id == id }
                                                 }.forEach { addonQty.remove(it) }
-                                                addonQty[option.id] = 1
+                                                addonQty[optionId] = 1
                                             }
                                         },
-                                        onDecrement = {
-                                            val q = (addonQty[option.id] ?: 0) - 1
-                                            if (q <= 0) addonQty.remove(option.id) else addonQty[option.id] = q
+                                        onDecrement = { optionId ->
+                                            val q = (addonQty[optionId] ?: 0) - 1
+                                            if (q <= 0) addonQty.remove(optionId) else addonQty[optionId] = q
                                         }
                                     )
                                 }
+                                null -> Unit
                             }
                         }
                     }
@@ -397,6 +411,111 @@ fun ProductCustomizeDialog(
     }
 }
 
+private sealed class CustomizeTabKind(val title: String) {
+    data class Modifier(val group: ModifierGroupModel) : CustomizeTabKind(group.name)
+    data class Addon(val group: AddonGroupModel) : CustomizeTabKind(group.name)
+}
+
+@Composable
+private fun ModifierAddonGrid(
+    currencySymbol: String,
+    group: ModifierGroupModel? = null,
+    addonGroup: AddonGroupModel? = null,
+    singleModifier: Map<Long, Long> = emptyMap(),
+    modifierQty: Map<Long, Int> = emptyMap(),
+    addonQty: Map<Long, Int> = emptyMap(),
+    onSelectSingle: (Long, Long) -> Unit = { _, _ -> },
+    onIncrement: (Any, Long) -> Unit = { _, _ -> },
+    onDecrement: (Long) -> Unit = {}
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (group != null) {
+            items(group.options.filter { it.inStock }, key = { it.id }) { option ->
+                val selected = if (group.isSingleSelect) {
+                    singleModifier[group.id] == option.id
+                } else {
+                    (modifierQty[option.id] ?: 0) > 0
+                }
+                val qty = modifierQty[option.id] ?: 0
+                ModifierGridTile(
+                    label = option.name,
+                    priceLabel = null,
+                    selected = selected,
+                    quantity = qty,
+                    onClick = {
+                        if (group.isSingleSelect) onSelectSingle(group.id, option.id)
+                        else onIncrement(group, option.id)
+                    },
+                    onDecrement = if (!group.isSingleSelect && qty > 0) ({ onDecrement(option.id) }) else null
+                )
+            }
+        } else if (addonGroup != null) {
+            items(addonGroup.options.filter { it.inStock }, key = { it.id }) { option ->
+                val qty = addonQty[option.id] ?: 0
+                ModifierGridTile(
+                    label = option.name,
+                    priceLabel = "+$currencySymbol ${"%.2f".format(Locale.getDefault(), option.price)}",
+                    selected = qty > 0,
+                    quantity = qty,
+                    onClick = { onIncrement(addonGroup, option.id) },
+                    onDecrement = if (qty > 0) ({ onDecrement(option.id) }) else null
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModifierGridTile(
+    label: String,
+    priceLabel: String?,
+    selected: Boolean,
+    quantity: Int,
+    onClick: () -> Unit,
+    onDecrement: (() -> Unit)?
+) {
+    val border = if (selected) Color(0xFF2563EB) else Color(0xFF555555)
+    val bg = if (selected) Color(0xFF1E3A5F) else Color(0xFF333333)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(2.dp, border, RoundedCornerShape(8.dp))
+            .background(bg, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            priceLabel ?: "Included",
+            color = if (selected) Color(0xFF93C5FD) else Color(0xFFFCD34D),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            label,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            textAlign = TextAlign.Center,
+            maxLines = 3
+        )
+        if (quantity > 1) {
+            Text("?$quantity", color = Color(0xFF93C5FD), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        } else if (selected && onDecrement != null) {
+            TextButton(onClick = onDecrement) {
+                Text("-", color = Color(0xFFE57373), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OptionGroupSection(title: String, subtitle: String, content: @Composable () -> Unit) {
@@ -497,14 +616,14 @@ private fun QtyOptionChip(
 
 private fun groupSubtitle(group: ModifierGroupModel): String {
     val pick = if (group.limitQuantity <= 1) "Choose 1" else "Up to ${group.limitQuantity}"
-    val req = if (group.required) "  Required" else ""
+    val req = if (group.required) " ? Required" else ""
     return pick + req
 }
 
 private fun addonGroupSubtitle(group: AddonGroupModel): String {
     val pick = if (group.limitQuantity <= 1) "Choose 1" else "Up to ${group.limitQuantity}"
-    val req = if (group.required) "  Required" else ""
-    return pick + req + "  Paid extras"
+    val req = if (group.required) " ? Required" else ""
+    return pick + req + " ? Paid extras"
 }
 
 private fun validateSelections(
