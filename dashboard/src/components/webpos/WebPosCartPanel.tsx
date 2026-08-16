@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Ban,
+  CalendarClock,
   MessageSquare,
   MoreHorizontal,
   Printer,
@@ -325,17 +326,6 @@ export default function WebPosCartPanel({
           >
             {t('dineIn')}
           </button>
-          {onEditFulfillment ? (
-            <button
-              type="button"
-              onClick={onEditFulfillment}
-              className="inline-flex h-9 w-10 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 active:scale-[0.98]"
-              title={t('webPosChooseTime')}
-              aria-label={t('webPosChooseTime')}
-            >
-              <MoreHorizontal size={18} aria-hidden />
-            </button>
-          ) : null}
           {channelTabOptions.includes('delivery') ? (
             <button
               type="button"
@@ -409,6 +399,14 @@ export default function WebPosCartPanel({
                 {t('dineIn')}
                 {ticketDisplay ? ` · ${ticketDisplay}` : ''}
               </span>
+            ) : isRetail && channel === 'delivery' ? (
+              <span className="inline-flex max-w-full items-center truncate rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-bold text-amber-900">
+                {t('delivery')}
+                {': '}
+                {fulfillmentIsLater && fulfillmentLabel
+                  ? fulfillmentLabel
+                  : t('webPosAsap')}
+              </span>
             ) : !isRetail ? (
               <span className="inline-flex max-w-full items-center truncate rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-700">
                 {channel === 'dine_in'
@@ -472,6 +470,26 @@ export default function WebPosCartPanel({
                 <Printer size={14} className="shrink-0 text-stone-500" />
                 {t('webPosProvisionalReceipt')}
               </button>
+              {onEditFulfillment && (channel === 'takeaway' || channel === 'delivery') ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onEditFulfillment();
+                  }}
+                >
+                  <CalendarClock size={14} className="shrink-0 text-stone-500" />
+                  <span className="min-w-0 truncate">
+                    {t('webPosProgrammedOrder')}
+                    {' · '}
+                    {fulfillmentIsLater && fulfillmentLabel
+                      ? fulfillmentLabel
+                      : t('webPosAsap')}
+                  </span>
+                </button>
+              ) : null}
               {kitchenEnabled && requireTableForDineIn && tablesEnabled ? (
                 <button
                   type="button"
