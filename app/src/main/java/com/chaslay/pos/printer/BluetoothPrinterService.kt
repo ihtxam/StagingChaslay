@@ -736,9 +736,12 @@ class BluetoothPrinterService @Inject constructor(
         val orderNo = meta.orderNumber?.trim()?.takeIf { it.isNotBlank() }
 
         sb.appendLine(escBold(true))
-        sb.appendLine(center(labels.kitchenTitle, lineWidth))
+        sb.appendLine(center(if (meta.cancelled) labels.cancelledKitchenTitle else labels.kitchenTitle, lineWidth))
         sb.appendLine(escBold(false))
         orderNo?.let { sb.appendLine(center("#$it", lineWidth)) }
+        if (meta.cancelled && !meta.cancelReason.isNullOrBlank()) {
+            sb.appendLine(center(meta.cancelReason.trim(), lineWidth))
+        }
 
         val fulfillmentLabel = labels.fulfillmentLabel(effectiveFulfillment, serviceType)
         if (effectiveKitchenHeaderScale(settings) > 1) {
@@ -793,7 +796,7 @@ class BluetoothPrinterService @Inject constructor(
         val courses = items.groupBy { it.courseNumber }.toSortedMap()
         if (courses.size <= 1) {
             items.forEach { item ->
-                appendKitchenItemBlock(sb, item, settings, lineWidth)
+                appendKitchenItemBlock(sb, item, settings, lineWidth, meta.cancelled)
             }
         } else {
             courses.forEach { (course, courseItems) ->
@@ -801,7 +804,7 @@ class BluetoothPrinterService @Inject constructor(
                 sb.appendLine(center("--- ${labels.courseLabel} $course ---", lineWidth))
                 sb.appendLine(escBold(false))
                 courseItems.forEach { item ->
-                    appendKitchenItemBlock(sb, item, settings, lineWidth)
+                    appendKitchenItemBlock(sb, item, settings, lineWidth, meta.cancelled)
                 }
                 sb.appendLine(dash)
             }
@@ -1775,9 +1778,10 @@ class BluetoothPrinterService @Inject constructor(
         sb: StringBuilder,
         item: TableOrderItemEntity,
         settings: BusinessSettingsEntity,
-        lineWidth: Int
+        lineWidth: Int,
+        cancelled: Boolean = false
     ) {
-        val line = formatKitchenItemQtyLabel(item)
+        val line = if (cancelled) "- ${formatKitchenItemQtyLabel(item)}" else formatKitchenItemQtyLabel(item)
         sb.append(escAlignLeft())
         val itemScale = effectiveKitchenItemScale(settings)
         val wrapped = wrapText(line, lineWidth)

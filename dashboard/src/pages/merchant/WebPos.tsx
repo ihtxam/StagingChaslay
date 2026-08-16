@@ -686,15 +686,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
   const [draftVersion, setDraftVersion] = useState(0);
   const cartPersistReadyRef = useRef(false);
+  const draftOccupiesTable = (draft: OpenCartDraft) =>
+    draft.cart.length > 0 || draft.cart.some((l) => l.sentToKitchen);
   const draftTableIds = useMemo(() => {
     const ids = new Set<string>();
     for (const [key, draft] of openCartDraftsRef.current.entries()) {
       if (!key.startsWith('table:')) continue;
-      const occupied =
-        draft.cart.length > 0 ||
-        draft.orderSent ||
-        draft.cart.some((l) => l.sentToKitchen);
-      if (occupied) ids.add(key.slice(6));
+      if (draftOccupiesTable(draft)) ids.add(key.slice(6));
     }
     for (const id of heldTableIds) ids.add(id);
     return [...ids];
@@ -3281,7 +3279,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const releaseEmptyTable = () => {
-    if (!tableId || cart.length > 0 || orderSent) return;
+    if (!tableId || cart.length > 0) return;
     const releasedId = tableId;
     void (async () => {
       const key = openCartDraftKey({ tableId: releasedId, tabNumber, channel });

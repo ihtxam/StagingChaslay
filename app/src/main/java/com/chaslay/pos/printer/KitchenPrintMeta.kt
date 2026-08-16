@@ -13,5 +13,7 @@ data class KitchenPrintMeta(
     val deliveryName: String? = null,
     val deliveryAddress: String? = null,
     val deliveryPhone: String? = null,
-    val fireCourseNumber: Int? = null
+    val fireCourseNumber: Int? = null,
+    val cancelled: Boolean = false,
+    val cancelReason: String? = null
 )

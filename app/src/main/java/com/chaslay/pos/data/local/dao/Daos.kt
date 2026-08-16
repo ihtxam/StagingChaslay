@@ -578,6 +578,9 @@ interface TableOrderItemDao {
     @Query("DELETE FROM table_order_items WHERE orderId = :orderId")
     suspend fun deleteByOrder(orderId: String)
 
+    @Query("DELETE FROM table_order_items WHERE id IN (:itemIds)")
+    suspend fun deleteByIds(itemIds: List<String>)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<TableOrderItemEntity>)
 

@@ -162,9 +162,12 @@ data class PosUiState(
     val splitPaymentTotal: Int? = null,
     val showCartCancelDialog: Boolean = false,
     val showCartCancelSimpleDialog: Boolean = false,
+    val showCartCancelItemDialog: Boolean = false,
+    val pendingCancelItemId: String? = null,
     val cartCancelReasons: List<String> = emptyList(),
     val showAttachCustomerDialog: Boolean = false,
     val canCancelCartOrder: Boolean = false,
+    val canCancelCartItem: Boolean = false,
     val showWeighedProductDialog: Boolean = false,
     val scaleReading: com.chaslay.pos.scale.AclasScaleReading? = null,
     val showTerminalPaymentModal: Boolean = false,
@@ -359,9 +362,14 @@ class PosViewModel @Inject constructor(
             splitPaymentTotal = extras.splitPaymentTotal,
             showCartCancelDialog = extras.showCartCancelDialog,
             showCartCancelSimpleDialog = extras.showCartCancelSimpleDialog,
+            showCartCancelItemDialog = extras.showCartCancelItemDialog,
+            pendingCancelItemId = extras.pendingCancelItemId,
             cartCancelReasons = extras.cartCancelReasons,
             showAttachCustomerDialog = extras.showAttachCustomerDialog,
             canCancelCartOrder = !bundle.cart.isEmpty || extras.orderCommittedForCancel,
+            canCancelCartItem = bundle.cart.items.any {
+                it.id == extras.selectedCartItemId && it.sentToKitchen
+            },
             showWeighedProductDialog = extras.showWeighedProductDialog,
             scaleReading = extras.scaleReading,
             showTerminalPaymentModal = extras.showTerminalPaymentModal,
@@ -686,7 +694,6 @@ class PosViewModel @Inject constructor(
         val cart = cartManager.snapshot()
         if (cart.tableId == null || cart.tableOrderId == null) return false
         if (!cart.isEmpty) return false
-        if (_uiExtras.value.orderCommittedForCancel || _uiExtras.value.kitchenSentToPrinter) return false
         tableOrderRepository.voidOpenOrder(cart.tableOrderId!!, "Empty table released")
         return true
     }
@@ -2754,6 +2761,103 @@ class PosViewModel @Inject constructor(
 
     fun dismissCartCancelDialog() = updateExtras { it.copy(showCartCancelDialog = false) }
 
+    fun showCartCancelItemDialog() {
+        val itemId = _uiExtras.value.selectedCartItemId ?: return
+        val item = cartManager.snapshot().items.find { it.id == itemId } ?: return
+        if (!item.sentToKitchen) {
+            updateExtras {
+                it.copy(snackbarMessage = appContext.getString(R.string.cancel_item_need_sent))
+            }
+            return
+        }
+        viewModelScope.launch {
+            val settings = settingsRepository.getSettings()
+            val reasons = CancelReasonLabels.localizedLabels(settings.defaultLanguage)
+            updateExtras {
+                it.copy(
+                    showCartCancelItemDialog = true,
+                    pendingCancelItemId = itemId,
+                    cartCancelReasons = reasons
+                )
+            }
+        }
+    }
+
+    fun dismissCartCancelItemDialog() = updateExtras {
+        it.copy(showCartCancelItemDialog = false, pendingCancelItemId = null)
+    }
+
+    fun confirmCancelCartItem(reason: String) {
+        val itemId = _uiExtras.value.pendingCancelItemId ?: return
+        viewModelScope.launch {
+            tableOrderMutex.withLock {
+                val cart = cartManager.snapshot()
+                val item = cart.items.find { it.id == itemId } ?: return@withLock
+                if (!item.sentToKitchen) return@withLock
+                val userId = sessionManager.currentUserId.first() ?: 0L
+                val userName = sessionManager.currentUserName.first() ?: "Staff"
+                val settings = settingsRepository.getSettings()
+                val orderId = cart.tableOrderId
+                val kitchenEntity = orderId?.let { oid ->
+                    tableOrderRepository.getOrderItemEntities(oid).find { it.id == itemId }
+                } ?: com.chaslay.pos.data.local.entity.TableOrderItemEntity(
+                    id = item.id,
+                    orderId = orderId ?: "walk-in",
+                    productId = item.productId,
+                    productName = item.productName,
+                    variantName = item.variantName,
+                    sku = item.sku,
+                    unitPrice = item.unitPrice,
+                    quantity = item.quantity,
+                    taxRate = item.taxRate,
+                    notes = item.notes ?: item.optionNotes(),
+                    sentToKitchenAt = System.currentTimeMillis(),
+                    kitchenRound = 1,
+                    courseNumber = item.courseNumber.coerceAtLeast(1),
+                    isWeighed = item.isWeighed
+                )
+                if (isRestaurantMode()) {
+                    deliverKitchenPrint(
+                        settings = settings,
+                        orderId = orderId ?: "walk-in",
+                        tableName = cart.tableName.orEmpty(),
+                        serviceType = cart.serviceType,
+                        round = kitchenEntity.kitchenRound.takeIf { it > 0 } ?: 1,
+                        items = listOf(kitchenEntity),
+                        meta = buildKitchenMeta(cart).copy(cancelled = true, cancelReason = reason)
+                    )
+                }
+                transactionRepository.recordCancelledOrder(
+                    cart.copy(
+                        items = listOf(item),
+                        discountPercent = 0.0,
+                        discountAmount = 0.0
+                    ),
+                    userId,
+                    userName,
+                    reason
+                )
+                cartManager.removeItem(itemId)
+                if (orderId != null) {
+                    syncTableOrderToDb()
+                    if (cartManager.snapshot().isEmpty) {
+                        tableOrderRepository.voidOpenOrder(orderId, reason)
+                    }
+                }
+                refreshTables()
+                updateExtras {
+                    it.copy(
+                        showCartCancelItemDialog = false,
+                        pendingCancelItemId = null,
+                        selectedCartItemId = null,
+                        keypadBuffer = "",
+                        snackbarMessage = appContext.getString(R.string.cancel_item_done)
+                    )
+                }
+            }
+        }
+    }
+
     fun confirmCancelCartOrder(reason: String) {
         viewModelScope.launch {
             val cart = cartManager.snapshot()
@@ -4199,6 +4303,8 @@ class PosViewModel @Inject constructor(
         val receiptEmailError: String? = null,
         val showCartCancelDialog: Boolean = false,
         val showCartCancelSimpleDialog: Boolean = false,
+        val showCartCancelItemDialog: Boolean = false,
+        val pendingCancelItemId: String? = null,
         val cartCancelReasons: List<String> = emptyList(),
         val showAttachCustomerDialog: Boolean = false,
         val orderCommittedForCancel: Boolean = false,

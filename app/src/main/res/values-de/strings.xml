@@ -268,6 +268,9 @@
     <string name="split_by_items">Nach Artikeln aufteilen</string>
     <string name="split_equal">Gleichmäßig aufteilen</string>
     <string name="cancel_order">Bestellung stornieren</string>
+    <string name="cancel_item">Artikel stornieren</string>
+    <string name="cancel_item_need_sent">Gesendeten Artikel auswählen</string>
+    <string name="cancel_item_done">Artikel storniert — Küche informiert</string>
     <string name="refund_order">Rückerstattungsauftrag</string>
     <string name="refund_full">Vollständige Rückerstattung</string>
     <string name="refund_partial">Teilweise Erstattung</string>

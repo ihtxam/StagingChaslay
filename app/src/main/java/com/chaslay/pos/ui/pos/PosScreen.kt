@@ -440,8 +440,7 @@ fun PosScreen(
                 canReleaseEmptyTable =
                     isTableServiceEnabled &&
                     state.activeTableName != null &&
-                    state.cart.isEmpty &&
-                    !state.canCancelCartOrder,
+                    state.cart.isEmpty,
                 coursesEnabled = coursesEnabled,
                 activeTableName = state.activeTableName,
                 activeCourse = state.cart.activeCourse,
@@ -509,7 +508,9 @@ fun PosScreen(
                         onAddCustomer = viewModel::showAttachCustomerDialog,
                         onChangeOrderType = viewModel::toggleCartOrderType,
                         onCancelOrder = viewModel::showCartCancelDialog,
+                        onCancelItem = viewModel::showCartCancelItemDialog,
                         canCancelOrder = state.canCancelCartOrder,
+                        canCancelItem = state.canCancelCartItem,
                         onChooseTime = {
                             when (state.cart.fulfillmentType) {
                                 FulfillmentType.DELIVERY -> viewModel.showDeliveryTimeEditor()
@@ -725,6 +726,15 @@ fun PosScreen(
             reasons = state.cartCancelReasons,
             onDismiss = viewModel::dismissCartCancelDialog,
             onConfirm = viewModel::confirmCancelCartOrder
+        )
+    }
+
+    if (state.showCartCancelItemDialog) {
+        CartCancelOrderDialog(
+            titleRes = R.string.cancel_item,
+            reasons = state.cartCancelReasons,
+            onDismiss = viewModel::dismissCartCancelItemDialog,
+            onConfirm = viewModel::confirmCancelCartItem
         )
     }
 
@@ -1450,6 +1460,8 @@ private fun VectronOrderPanel(
     onChangeOrderType: () -> Unit,
     onCancelOrder: () -> Unit,
     canCancelOrder: Boolean,
+    onCancelItem: () -> Unit = {},
+    canCancelItem: Boolean = false,
     onChooseTime: () -> Unit = {},
     serviceType: ServiceType,
     onSendActiveCourse: () -> Unit,
@@ -1542,6 +1554,8 @@ private fun VectronOrderPanel(
                 onAddCustomer = onAddCustomer,
                 onChangeOrderType = onChangeOrderType,
                 onCancelOrder = onCancelOrder,
+                onCancelItem = onCancelItem,
+                canCancelItem = canCancelItem,
                 onChooseTime = onChooseTime,
                 onMoveEntireTable = onMoveEntireTable,
                 onMoveDishes = onMoveDishes
@@ -1874,6 +1888,8 @@ private fun CartOrderMenuButton(
     onAddCustomer: () -> Unit,
     onChangeOrderType: () -> Unit,
     onCancelOrder: () -> Unit,
+    onCancelItem: () -> Unit = {},
+    canCancelItem: Boolean = false,
     onChooseTime: () -> Unit,
     onMoveEntireTable: () -> Unit,
     onMoveDishes: () -> Unit
@@ -1958,6 +1974,14 @@ private fun CartOrderMenuButton(
                 )
             }
             DropdownMenuItem(
+                text = { Text(stringResource(R.string.cancel_item), color = Color(0xFFC0392B)) },
+                onClick = {
+                    expanded = false
+                    onCancelItem()
+                },
+                enabled = canCancelItem
+            )
+            DropdownMenuItem(
                 text = { Text(stringResource(R.string.cancel_order), color = Color(0xFFC0392B)) },
                 onClick = {
                     expanded = false
@@ -1973,12 +1997,13 @@ private fun CartOrderMenuButton(
 private fun CartCancelOrderDialog(
     reasons: List<String>,
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
+    onConfirm: (String) -> Unit,
+    titleRes: Int = R.string.cancel_order
 ) {
     var selected by remember(reasons) { mutableStateOf(reasons.firstOrNull().orEmpty()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.cancel_order)) },
+        title = { Text(stringResource(titleRes)) },
         text = {
             Column {
                 Text(stringResource(R.string.cancel_order_reason_prompt), fontSize = 13.sp)

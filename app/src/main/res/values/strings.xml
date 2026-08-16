@@ -278,6 +278,9 @@
     <string name="split_by_items">Split by items</string>
     <string name="split_equal">Split equally</string>
     <string name="cancel_order">Cancel Order</string>
+    <string name="cancel_item">Cancel item</string>
+    <string name="cancel_item_need_sent">Select a sent item to cancel</string>
+    <string name="cancel_item_done">Item cancelled — kitchen informed</string>
     <string name="refund_order">Refund Order</string>
     <string name="refund_full">Full refund</string>
     <string name="refund_partial">Partial refund</string>
