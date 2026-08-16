@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { normalizeDashes, repairCatalogText } from '@/lib/text-encoding';
 import WebPosNumericKeypad from './WebPosNumericKeypad';
+import WebPosSwipeableCartLine from './WebPosSwipeableCartLine';
 import type { CartLine, KeypadMode, PosChannel } from './types';
 
 type CartListTab = 'ordering' | 'ordered';
@@ -65,6 +66,8 @@ type Props = {
   onPayment: () => void;
   onCancelOrder: () => void;
   onCancelItem: () => void;
+  /** Swipe-left / remove — same logic as keypad delete (unsent) or cancel modal (sent). */
+  onRemoveLine?: (line: CartLine) => void;
   onPayLater: () => void;
   onEditFulfillment?: () => void;
   showSend: boolean;
@@ -191,6 +194,7 @@ export default function WebPosCartPanel({
   onPayment,
   onCancelOrder,
   onCancelItem,
+  onRemoveLine,
   onPayLater,
   onEditFulfillment,
   showSend,
@@ -795,62 +799,81 @@ export default function WebPosCartPanel({
               const extras = lineExtrasLabel(l);
               const lineName = repairCatalogText(l.name || '');
               const sentAtLabel = formatSentAt(l.sentToKitchenAt);
+              const lineBody = (
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-snug">
+                      <span className="tabular-nums">
+                        {l.isWeighed
+                          ? `${Number(l.weightKg ?? l.quantity).toFixed(3)} kg`
+                          : l.quantity}
+                      </span>{' '}
+                      {lineName}
+                      {l.isWeighed ? (
+                        <span className="ml-1 text-[10px] font-semibold text-stone-500">
+                          @ {money(l.unitPrice)}/kg
+                        </span>
+                      ) : null}
+                      {l.sentToKitchen ? (
+                        <span className="ml-1 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
+                          {t('webPosSentBadge')}
+                        </span>
+                      ) : null}
+                    </p>
+                    {extras ? (
+                      <p className="mt-0.5 text-[11px] text-stone-500">
+                        {'- '}
+                        {extras}
+                      </p>
+                    ) : null}
+                    {l.sentToKitchen && sentAtLabel ? (
+                      <p className="mt-0.5 text-[11px] font-medium text-stone-500">
+                        {t('webPosSentAt').replace('{time}', sentAtLabel)}
+                      </p>
+                    ) : null}
+                    {l.lineDiscountPercent ? (
+                      <p className="text-[11px] font-medium text-[var(--webpos-accent-text)]">
+                        -{l.lineDiscountPercent}%
+                      </p>
+                    ) : null}
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums">
+                    {money(l.lineTotal)}
+                  </span>
+                </div>
+              );
               return (
                 <li key={l.lineId}>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectLine(selected ? null : l.lineId);
-                    }}
-                    className={`w-full rounded-lg px-2 py-2 text-left transition ${
-                      selected
-                        ? 'bg-[var(--webpos-accent-softer)] ring-2 ring-[var(--webpos-accent-ring)]'
-                        : 'hover:bg-stone-50'
-                    } ${l.sentToKitchen ? 'opacity-80' : ''}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium leading-snug">
-                          <span className="tabular-nums">
-                            {l.isWeighed
-                              ? `${Number(l.weightKg ?? l.quantity).toFixed(3)} kg`
-                              : l.quantity}
-                          </span>{' '}
-                          {lineName}
-                          {l.isWeighed ? (
-                            <span className="ml-1 text-[10px] font-semibold text-stone-500">
-                              @ {money(l.unitPrice)}/kg
-                            </span>
-                          ) : null}
-                          {l.sentToKitchen ? (
-                            <span className="ml-1 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
-                              {t('webPosSentBadge')}
-                            </span>
-                          ) : null}
-                        </p>
-                        {extras ? (
-                          <p className="mt-0.5 text-[11px] text-stone-500">
-                            {'- '}
-                            {extras}
-                          </p>
-                        ) : null}
-                        {l.sentToKitchen && sentAtLabel ? (
-                          <p className="mt-0.5 text-[11px] font-medium text-stone-500">
-                            {t('webPosSentAt').replace('{time}', sentAtLabel)}
-                          </p>
-                        ) : null}
-                        {l.lineDiscountPercent ? (
-                          <p className="text-[11px] font-medium text-[var(--webpos-accent-text)]">
-                            -{l.lineDiscountPercent}%
-                          </p>
-                        ) : null}
-                      </div>
-                      <span className="shrink-0 text-sm font-semibold tabular-nums">
-                        {money(l.lineTotal)}
-                      </span>
-                    </div>
-                  </button>
+                  {onRemoveLine ? (
+                    <WebPosSwipeableCartLine
+                      lineId={l.lineId}
+                      selected={selected}
+                      sentToKitchen={!!l.sentToKitchen}
+                      disabled={busy}
+                      onRemove={() => onRemoveLine(l)}
+                      onSelect={(e) => {
+                        e.stopPropagation();
+                        onSelectLine(selected ? null : l.lineId);
+                      }}
+                    >
+                      {lineBody}
+                    </WebPosSwipeableCartLine>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectLine(selected ? null : l.lineId);
+                      }}
+                      className={`w-full rounded-lg px-2 py-2 text-left transition ${
+                        selected
+                          ? 'bg-[var(--webpos-accent-softer)] ring-2 ring-[var(--webpos-accent-ring)]'
+                          : 'hover:bg-stone-50'
+                      } ${l.sentToKitchen ? 'opacity-80' : ''}`}
+                    >
+                      {lineBody}
+                    </button>
+                  )}
                 </li>
               );
             })}

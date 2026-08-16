@@ -6402,6 +6402,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   }
                   setCancelModal({ scope: 'item', lineId: line.lineId });
                 }}
+                onRemoveLine={removeSelectedLine}
                 onPayLater={() => beginCheckout('pay_later')}
                 onEditFulfillment={() => setScheduleOpen(true)}
                 showSend={showSend}
