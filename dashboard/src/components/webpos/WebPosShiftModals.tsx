@@ -31,9 +31,10 @@ function parseCashAmount(raw: string): number {
 type KeypadProps = {
   value: string;
   onChange: (v: string) => void;
+  compact?: boolean;
 };
 
-function CashKeypad({ value, onChange }: KeypadProps) {
+function CashKeypad({ value, onChange, compact }: KeypadProps) {
   const append = (ch: string) => {
     if (ch === 'C') {
       onChange('');
@@ -52,19 +53,19 @@ function CashKeypad({ value, onChange }: KeypadProps) {
     onChange(sanitizeCashAmountInput(`${value}${ch}`));
   };
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
+  const keyClass = compact ? 'webpos-keypad-key webpos-keypad-key--compact' : 'webpos-keypad-key py-3.5';
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className={`grid grid-cols-3 ${compact ? 'gap-1.5' : 'gap-2'}`}>
       {keys.map((k) => (
-        <button
-          key={k}
-          type="button"
-          onClick={() => append(k)}
-          className="webpos-keypad-key py-3.5"
-        >
+        <button key={k} type="button" onClick={() => append(k)} className={keyClass}>
           {k}
         </button>
       ))}
-      <button type="button" onClick={() => append('C')} className="webpos-keypad-key col-span-3 py-2 text-sm">
+      <button
+        type="button"
+        onClick={() => append('C')}
+        className={`${keyClass} col-span-3 ${compact ? '!py-2 text-sm' : 'py-2 text-sm'}`}
+      >
         C
       </button>
     </div>
@@ -75,17 +76,21 @@ function CashAmountField({
   value,
   onChange,
   label,
+  compact,
 }: {
   value: string;
   onChange: (v: string) => void;
   label: string;
+  compact?: boolean;
 }) {
   return (
-    <div className="my-4">
-      <label className="mb-1.5 block text-center text-xs font-semibold uppercase tracking-wide text-stone-500">
+    <div className={compact ? 'my-1' : 'my-4'}>
+      <label className="mb-1 block text-center text-xs font-semibold uppercase tracking-wide text-stone-500">
         {label}
       </label>
-      <div className="flex items-center justify-center gap-2 rounded-xl bg-stone-50 px-3 py-3">
+      <div
+        className={`flex items-center justify-center gap-2 rounded-xl bg-stone-50 px-3 ${compact ? 'py-2' : 'py-3'}`}
+      >
         <input
           type="text"
           inputMode="decimal"
@@ -100,12 +105,46 @@ function CashAmountField({
             const text = e.clipboardData.getData('text');
             onChange(sanitizeCashAmountInput(text));
           }}
-          className="w-full min-w-0 max-w-[14rem] border-0 bg-transparent text-center text-3xl font-bold tabular-nums text-stone-900 outline-none placeholder:text-stone-400"
+          className={`w-full min-w-0 max-w-[14rem] border-0 bg-transparent text-center font-bold tabular-nums text-stone-900 outline-none placeholder:text-stone-400 ${
+            compact ? 'text-2xl' : 'text-3xl'
+          }`}
           aria-label={label}
           aria-valuemax={10 ** MAX_CASH_INT_DIGITS - 1}
         />
         <span className="shrink-0 text-base font-semibold text-stone-500">CHF</span>
       </div>
+    </div>
+  );
+}
+
+function ShiftSummaryStat({
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-lg px-2.5 py-2 ${
+        accent
+          ? 'border border-[var(--webpos-accent)]/30 bg-[var(--webpos-accent)]/5'
+          : 'bg-stone-50'
+      }`}
+    >
+      <p
+        className={`truncate text-[10px] font-semibold uppercase tracking-wide ${
+          accent ? 'text-[var(--webpos-accent)]' : 'text-stone-500'
+        }`}
+      >
+        {label}
+      </p>
+      <p className="mt-0.5 text-base font-bold tabular-nums leading-tight text-stone-900">{value}</p>
+      {hint ? <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-stone-500">{hint}</p> : null}
     </div>
   );
 }
@@ -248,20 +287,25 @@ export function WebPosCloseShiftModal({
 
   if (!open) return null;
 
+  const cardTotal = (live?.cardSales ?? 0) + (live?.terminalSales ?? 0);
+  const expectedFormula = t('webPosShiftExpectedFormula')
+    .replace('{float}', openingCash.toFixed(2))
+    .replace('{sales}', (live?.cashSales ?? 0).toFixed(2));
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/45 p-3 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="webpos-close-shift-title"
-        className="relative my-3 flex w-full max-w-lg max-h-[min(92dvh,900px)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:my-auto"
+        className="relative flex max-h-[min(96dvh,900px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-stone-100 px-4 py-3 sm:px-5 sm:py-4">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-stone-100 px-4 py-3 sm:px-5">
           <div className="min-w-0 flex-1">
             <h2 id="webpos-close-shift-title" className="text-lg font-bold text-stone-900">
               {t('webPosShiftCloseTitle')}
             </h2>
-            <p className="mt-1 text-sm text-stone-600">{t('webPosShiftCloseHint')}</p>
+            <p className="mt-0.5 text-sm text-stone-600">{t('webPosShiftCloseHint')}</p>
           </div>
           <button
             type="button"
@@ -274,75 +318,77 @@ export function WebPosCloseShiftModal({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
-          <div className="rounded-xl border border-[var(--webpos-accent)]/30 bg-[var(--webpos-accent)]/5 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--webpos-accent)]">
-              {t('webPosShiftOpeningCash')}
-            </p>
-            <p className="mt-0.5 text-2xl font-bold tabular-nums text-stone-900">
-              {openingCash.toFixed(2)} <span className="text-base font-semibold text-stone-500">CHF</span>
-            </p>
-            <p className="mt-1 text-xs text-stone-600">{t('webPosShiftFloatCarriesForward')}</p>
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <div className="rounded-xl bg-stone-50 p-3">
-              <p className="text-xs text-stone-500">{t('webPosShiftCashSales')}</p>
-              <p className="text-lg font-bold tabular-nums">{(live?.cashSales ?? 0).toFixed(2)} CHF</p>
-            </div>
-            <div className="rounded-xl bg-stone-50 p-3">
-              <p className="text-xs text-stone-500">{t('webPosShiftExpectedDrawer')}</p>
-              <p className="text-lg font-bold tabular-nums">{expected.toFixed(2)} CHF</p>
-              <p className="mt-0.5 text-[11px] text-stone-500">
-                {t('webPosShiftExpectedFormula')
-                  .replace('{float}', openingCash.toFixed(2))
-                  .replace('{sales}', (live?.cashSales ?? 0).toFixed(2))}
-              </p>
-            </div>
-            <div className="rounded-xl bg-stone-50 p-3">
-              <p className="text-xs text-stone-500">{t('webPosShiftCardSales')}</p>
-              <p className="font-semibold tabular-nums">
-                {((live?.cardSales ?? 0) + (live?.terminalSales ?? 0)).toFixed(2)} CHF
-              </p>
-            </div>
-            <div className="rounded-xl bg-stone-50 p-3">
-              <p className="text-xs text-stone-500">{t('webPosShiftOrders')}</p>
-              <p className="font-semibold tabular-nums">{live?.orderCount ?? 0}</p>
+        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] md:divide-x md:divide-stone-100">
+          <div className="shrink-0 border-b border-stone-100 px-4 py-3 md:border-b-0 md:overflow-y-auto md:overscroll-contain">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-2">
+              <ShiftSummaryStat
+                accent
+                label={t('webPosShiftOpeningCash')}
+                value={`${openingCash.toFixed(2)} CHF`}
+                hint={t('webPosShiftFloatCarriesForward')}
+              />
+              <ShiftSummaryStat
+                label={t('webPosShiftCashSales')}
+                value={`${(live?.cashSales ?? 0).toFixed(2)} CHF`}
+              />
+              <ShiftSummaryStat
+                label={t('webPosShiftExpectedDrawer')}
+                value={`${expected.toFixed(2)} CHF`}
+                hint={expectedFormula}
+              />
+              <ShiftSummaryStat
+                label={t('webPosShiftCardSales')}
+                value={`${cardTotal.toFixed(2)} CHF`}
+              />
+              <ShiftSummaryStat
+                label={t('webPosShiftOrders')}
+                value={String(live?.orderCount ?? 0)}
+              />
+              <ShiftSummaryStat
+                label={t('webPosShiftTotalSales')}
+                value={`${(live?.totalSales ?? 0).toFixed(2)} CHF`}
+              />
             </div>
           </div>
 
-          <div
-            className={
-              cash === ''
-                ? undefined
-                : balanced
-                  ? 'rounded-xl bg-emerald-50/80 px-2'
-                  : 'rounded-xl bg-amber-50/80 px-2'
-            }
-          >
-            <CashAmountField
-              value={cash}
-              onChange={setCashSafe}
-              label={t('webPosShiftCountCash')}
-            />
-          </div>
-          {cash !== '' ? (
-            <p
-              className={`mb-2 flex items-center justify-center gap-1 text-sm font-semibold ${
-                balanced ? 'text-emerald-700' : 'text-amber-700'
-              }`}
+          <div className="flex min-h-0 flex-col px-4 py-3">
+            <div
+              className={
+                cash === ''
+                  ? undefined
+                  : balanced
+                    ? 'rounded-xl bg-emerald-50/80 px-1'
+                    : 'rounded-xl bg-amber-50/80 px-1'
+              }
             >
-              {balanced ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
-              {balanced
-                ? t('webPosShiftBalanced')
-                : t('webPosShiftVariance').replace('{amount}', diff.toFixed(2))}
-            </p>
-          ) : null}
-
-          <CashKeypad value={cash} onChange={setCashSafe} />
+              <CashAmountField
+                compact
+                value={cash}
+                onChange={setCashSafe}
+                label={t('webPosShiftCountCash')}
+              />
+            </div>
+            {cash !== '' ? (
+              <p
+                className={`mb-2 flex items-center justify-center gap-1 text-sm font-semibold ${
+                  balanced ? 'text-emerald-700' : 'text-amber-700'
+                }`}
+              >
+                {balanced ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+                {balanced
+                  ? t('webPosShiftBalanced')
+                  : t('webPosShiftVariance').replace('{amount}', diff.toFixed(2))}
+              </p>
+            ) : (
+              <p className="mb-2 text-center text-xs text-stone-500">{t('webPosShiftCountCashHint')}</p>
+            )}
+            <div className="min-h-0 flex-1">
+              <CashKeypad compact value={cash} onChange={setCashSafe} />
+            </div>
+          </div>
         </div>
 
-        <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-stone-100 bg-white px-4 py-3 sm:px-5 sm:py-4">
+        <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-stone-100 bg-white px-4 py-3 sm:px-5">
           <button type="button" className="btn-secondary py-3" onClick={onCancel} disabled={busy}>
             {t('cancel')}
           </button>
