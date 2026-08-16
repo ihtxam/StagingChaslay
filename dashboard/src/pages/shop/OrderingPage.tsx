@@ -154,7 +154,10 @@ export default function OrderingPage() {
     }
 
     const stored = loadCart(shopKey);
-    if (stored) setDraft(stored);
+    if (stored) {
+      setDraft(stored);
+      if (stored.deliveryInfo) setDeliveryInfo(stored.deliveryInfo);
+    }
 
     const load = async () => {
       try {
@@ -777,10 +780,12 @@ export default function OrderingPage() {
         subtotal: cartTotal,
       });
       setDeliveryInfo(res.data);
+      patch({ deliveryInfo: res.data });
       if (!res.data.deliverable) setError(res.data.error || t('shopOutsideDelivery'));
     } catch (e: any) {
       setError(e.response?.data?.error || t('shopCouldNotVerifyAddress'));
       setDeliveryInfo(null);
+      patch({ deliveryInfo: undefined });
     } finally {
       setCheckingDelivery(false);
     }
@@ -889,6 +894,7 @@ export default function OrderingPage() {
     const next: Partial<ShopCheckoutDraft> = {
       channel: payload.channel,
       scheduledFor: payload.scheduledFor || '',
+      fulfillmentConfirmed: true,
     };
     if (payload.channel === 'delivery') {
       if (payload.address) next.address = payload.address;
@@ -896,8 +902,12 @@ export default function OrderingPage() {
       if (payload.city != null) next.city = payload.city;
       if (payload.lat != null) next.lat = payload.lat;
       if (payload.lng != null) next.lng = payload.lng;
-      if (payload.deliveryInfo) setDeliveryInfo(payload.deliveryInfo);
+      if (payload.deliveryInfo) {
+        next.deliveryInfo = payload.deliveryInfo;
+        setDeliveryInfo(payload.deliveryInfo);
+      }
     } else {
+      next.deliveryInfo = undefined;
       setDeliveryInfo(null);
     }
     patch(next);
@@ -954,6 +964,10 @@ export default function OrderingPage() {
   const vacationActive = !!merchant?.vacation?.active;
   const ordersPaused = merchant?.acceptingOrders === false;
   const showReservations = !!merchant?.reservationsEnabled;
+
+  const fulfillmentLocked =
+    !!draft.fulfillmentConfirmed &&
+    (channel !== 'delivery' || (!!draft.address.trim() && !!effectiveDeliveryInfo?.deliverable));
 
   const Basket = (
     <aside className="bg-white border border-stone-200 flex flex-col max-h-[calc(100dvh-6rem)] min-h-[12rem]">
@@ -1125,20 +1139,49 @@ export default function OrderingPage() {
 
       <div className="border-t border-stone-200 px-5 py-4 space-y-3">
         {channel === 'delivery' && (
+          fulfillmentLocked ? (
+            <div className="space-y-1 pb-2 border-b border-stone-100">
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                {t('shopDeliverTo')}
+              </p>
+              <p className="text-sm font-medium text-stone-900">
+                {draft.address}
+                {draft.zipCode || draft.city
+                  ? `, ${[draft.zipCode, draft.city].filter(Boolean).join(' ')}`
+                  : ''}
+              </p>
+              {effectiveDeliveryInfo?.deliverable && (
+                <p className={`text-xs ${effectiveDeliveryInfo.meetsMinOrder ? 'text-teal-800' : 'text-amber-800'}`}>
+                  {effectiveDeliveryInfo.zone?.name}: {t('shopFee')} CHF{' '}
+                  {Number(effectiveDeliveryInfo.zone?.deliveryFee || 0).toFixed(2)}
+                  {Number(effectiveDeliveryInfo.zone?.minOrderAmount || 0) > 0
+                    ? ` · ${t('shopMin')} CHF ${Number(effectiveDeliveryInfo.zone?.minOrderAmount).toFixed(2)}`
+                    : ''}
+                </p>
+              )}
+              <button
+                type="button"
+                className="text-xs font-semibold text-stone-600 underline"
+                onClick={() => openChannelPrompt()}
+              >
+                {t('edit')}
+              </button>
+            </div>
+          ) : (
           <div className="space-y-2 pb-2 border-b border-stone-100">
             <p className="text-xs text-stone-500">{t('shopCheckDeliverHint')}</p>
             <input
               className="w-full border border-stone-300 px-3 py-2 text-sm"
               placeholder={t('shopStreetAddress')}
               value={draft.address}
-              onChange={(e) => patch({ address: e.target.value })}
+              onChange={(e) => patch({ address: e.target.value, fulfillmentConfirmed: false, deliveryInfo: undefined })}
             />
             <ZipCityFields
               shopKey={shopKey}
               zipCode={draft.zipCode}
               city={draft.city}
-              onZipChange={(zipCode) => patch({ zipCode })}
-              onCityChange={(city) => patch({ city })}
+              onZipChange={(zipCode) => patch({ zipCode, fulfillmentConfirmed: false, deliveryInfo: undefined })}
+              onCityChange={(city) => patch({ city, fulfillmentConfirmed: false, deliveryInfo: undefined })}
               zipClassName="w-full border border-stone-300 px-3 py-2 text-sm"
               cityClassName="w-full border border-stone-300 px-3 py-2 text-sm"
             />
@@ -1162,6 +1205,7 @@ export default function OrderingPage() {
               </p>
             )}
           </div>
+          )
         )}
 
         <div className="border-t border-stone-100 pt-3 space-y-2">

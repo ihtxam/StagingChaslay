@@ -71,6 +71,12 @@ type PaymentSession = {
 const money = (v: string | number) =>
   new Intl.NumberFormat(undefined, { style: 'currency', currency: 'CHF' }).format(Number(v));
 
+const TERMINAL_ORDER_STATUSES = ['ready', 'completed', 'cancelled', 'refunded'] as const;
+
+function isOrderEtaComplete(status: string) {
+  return TERMINAL_ORDER_STATUSES.includes(status as (typeof TERMINAL_ORDER_STATUSES)[number]);
+}
+
 export default function OrderConfirmationPage() {
   const { t, formatDateTime } = useI18n();
   const { merchantSlug, orderId = '' } = useParams<{ merchantSlug?: string; orderId?: string }>();
@@ -118,11 +124,15 @@ export default function OrderConfirmationPage() {
   const [countdownSec, setCountdownSec] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!order?.estimatedReadyAt) {
+    if (!order?.estimatedReadyAt || isOrderEtaComplete(order.status)) {
       setCountdownSec(null);
       return;
     }
     const tick = () => {
+      if (isOrderEtaComplete(order.status)) {
+        setCountdownSec(0);
+        return;
+      }
       const target = Date.parse(order.estimatedReadyAt!);
       const diff = Math.max(0, Math.round((target - Date.now()) / 1000));
       setCountdownSec(diff);
@@ -130,7 +140,7 @@ export default function OrderConfirmationPage() {
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [order?.estimatedReadyAt]);
+  }, [order?.estimatedReadyAt, order?.status]);
 
   useEffect(() => {
     if (order?.store?.name) {
@@ -355,8 +365,7 @@ export default function OrderConfirmationPage() {
               {formatDateTime(order.scheduledFor)}
             </p>
           )}
-          {order.estimatedReadyAt &&
-          !['completed', 'cancelled', 'refunded'].includes(order.status) ? (
+          {order.estimatedReadyAt && !isOrderEtaComplete(order.status) ? (
             <div className="flex items-center gap-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <div
                 className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-emerald-500 bg-white text-sm font-bold text-emerald-800"
@@ -377,6 +386,13 @@ export default function OrderConfirmationPage() {
                 </p>
                 <p className="text-xs text-stone-600">{formatDateTime(order.estimatedReadyAt)}</p>
               </div>
+            </div>
+          ) : order.status === 'ready' || order.status === 'completed' ? (
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-lg font-bold">
+                ✓
+              </div>
+              <p className="text-sm font-bold text-emerald-900">{t('shopOrderEtaReady')}</p>
             </div>
           ) : null}
         </section>

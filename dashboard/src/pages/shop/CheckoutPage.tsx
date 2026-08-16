@@ -95,6 +95,8 @@ export default function CheckoutPage() {
     }
     setDraft(stored);
     if (stored.scheduledFor) setWhenMode('later');
+    if (stored.deliveryInfo) setDeliveryInfo(stored.deliveryInfo);
+    if (stored.fulfillmentConfirmed) setStep('payment');
 
     const boot = async () => {
       try {
@@ -502,6 +504,7 @@ export default function CheckoutPage() {
         subtotal,
       });
       setDeliveryInfo(res.data);
+      patch({ deliveryInfo: res.data });
       const live = withDeliveryMinOrderStatus(res.data, subtotal);
       if (!res.data.deliverable) {
         setError(res.data.error || t('shopOutsideDelivery'));
@@ -809,7 +812,10 @@ export default function CheckoutPage() {
   const channelLabel =
     draft.channel === 'delivery' ? t('shopDelivery') : draft.channel === 'dine_in' ? t('shopDineIn') : t('shopPickup');
 
+  const fulfillmentLocked = !!draft.fulfillmentConfirmed;
+
   const showChannelPicker =
+    !fulfillmentLocked &&
     channelOptions.length > 1 &&
     (String(merchant?.channelSelectMode || 'checkout') === 'checkout' ||
       String(merchant?.channelSelectMode || '') === 'popup_start' ||
@@ -881,6 +887,27 @@ export default function CheckoutPage() {
 
           {step === 'details' && (
             <section className="bg-white border border-stone-200 p-5 space-y-4">
+              {fulfillmentLocked ? (
+                <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 space-y-1 text-sm">
+                  <p className="font-semibold text-stone-900">{channelLabel}</p>
+                  <p className="text-stone-600">
+                    {whenMode === 'later' && draft.scheduledFor
+                      ? formatDateTime(localDateTimeToIso(draft.scheduledFor) || draft.scheduledFor)
+                      : t('shopAsap')}
+                  </p>
+                  {draft.channel === 'delivery' && draft.address.trim() ? (
+                    <p className="text-stone-600">
+                      {t('shopDeliverTo')}: {draft.address}, {draft.zipCode} {draft.city}
+                    </p>
+                  ) : draft.channel !== 'delivery' ? (
+                    <p className="text-stone-600">
+                      {t('shopCollectFrom')} {merchant?.address || t('shopRestaurant')}
+                      {merchant?.city ? `, ${merchant.city}` : ''}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
               {/* 1. Order type */}
               {showChannelPicker ? (
                 <div className="space-y-2">
@@ -939,6 +966,7 @@ export default function CheckoutPage() {
               )}
 
               {/* 2. When / schedule */}
+              {!fulfillmentLocked ? (
               <div className="border-t border-stone-100 pt-4 space-y-3">
                 <label className="block text-sm font-semibold">{t('shopWhen')}</label>
                 {!channelOpen && (
@@ -1034,13 +1062,19 @@ export default function CheckoutPage() {
                   </>
                 )}
               </div>
+              ) : null}
 
               {/* 3. Customer / order details */}
               <div className="border-t border-stone-100 pt-4 space-y-4">
                 <div>
                   <h1 className="text-2xl font-bold tracking-tight">
-                    {draft.channel === 'delivery' ? t('shopDeliveryDetails') : t('shopPickupDetails')}
+                    {fulfillmentLocked
+                      ? t('shopStepDetails')
+                      : draft.channel === 'delivery'
+                        ? t('shopDeliveryDetails')
+                        : t('shopPickupDetails')}
                   </h1>
+                  {!fulfillmentLocked ? (
                   <p className="text-sm text-stone-500 mt-1">
                     {draft.channel === 'delivery'
                       ? t('shopWhereDeliver')
@@ -1048,6 +1082,9 @@ export default function CheckoutPage() {
                           merchant?.city ? `, ${merchant.city}` : ''
                         }`}
                   </p>
+                  ) : (
+                    <p className="text-sm text-stone-500 mt-1">{t('shopNamePhoneRequired')}</p>
+                  )}
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-3">
@@ -1181,7 +1218,7 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
-                {draft.channel === 'delivery' && (
+                {draft.channel === 'delivery' && !fulfillmentLocked && (
                   <div className="space-y-3 border-t border-stone-100 pt-4">
                     {customer ? (
                       <div className="space-y-2">
@@ -1328,6 +1365,49 @@ export default function CheckoutPage() {
 
           {step === 'payment' && (
             <section className="bg-white border border-stone-200 p-5 space-y-4">
+              {fulfillmentLocked ? (
+                <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 space-y-1 text-sm">
+                  <p className="font-semibold text-stone-900">{channelLabel}</p>
+                  <p className="text-stone-600">
+                    {whenMode === 'later' && draft.scheduledFor
+                      ? formatDateTime(localDateTimeToIso(draft.scheduledFor) || draft.scheduledFor)
+                      : t('shopAsap')}
+                  </p>
+                  {draft.channel === 'delivery' && draft.address.trim() ? (
+                    <p className="text-stone-600">
+                      {t('shopDeliverTo')}: {draft.address}, {draft.zipCode} {draft.city}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {!draft.customerName.trim() || !draft.customerPhone.trim() ? (
+                <div className="space-y-3 border-b border-stone-100 pb-4">
+                  <h2 className="text-lg font-bold tracking-tight">{t('shopStepDetails')}</h2>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <input
+                      className="border border-stone-300 px-3 py-2 text-sm md:col-span-2"
+                      placeholder={t('shopFullNameRequired')}
+                      value={draft.customerName}
+                      onChange={(e) => patch({ customerName: e.target.value })}
+                      required
+                    />
+                    <input
+                      className="border border-stone-300 px-3 py-2 text-sm"
+                      placeholder={t('shopPhoneRequired')}
+                      value={draft.customerPhone}
+                      onChange={(e) => patch({ customerPhone: e.target.value })}
+                      required
+                    />
+                    <input
+                      className="border border-stone-300 px-3 py-2 text-sm"
+                      type="email"
+                      placeholder={t('shopEmailReceipt')}
+                      value={draft.customerEmail}
+                      onChange={(e) => patch({ customerEmail: e.target.value })}
+                    />
+                  </div>
+                </div>
+              ) : null}
               <h1 className="text-2xl font-bold tracking-tight">{t('shopPayment')}</h1>
               <div className="space-y-3">
                 {loyaltyEnabled && maxCashPoints > 0 && (
@@ -1524,7 +1604,14 @@ export default function CheckoutPage() {
               <button
                 type="button"
                 className="w-full bg-stone-900 text-white py-3 font-semibold"
-                onClick={() => setStep('review')}
+                onClick={() => {
+                  if (!draft.customerName.trim() || !draft.customerPhone.trim()) {
+                    setError(t('shopNamePhoneRequired'));
+                    return;
+                  }
+                  setError(null);
+                  setStep('review');
+                }}
               >
                 {t('shopReviewOrder')}
               </button>
@@ -1945,6 +2032,8 @@ export default function CheckoutPage() {
             city: payload.city,
             lat: payload.lat,
             lng: payload.lng,
+            deliveryInfo: payload.deliveryInfo,
+            fulfillmentConfirmed: true,
           }));
           setDeliveryInfo(payload.deliveryInfo);
           setDeliveryAddressOpen(false);

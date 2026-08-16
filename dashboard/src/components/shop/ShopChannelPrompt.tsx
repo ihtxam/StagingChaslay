@@ -463,9 +463,6 @@ export default function ShopChannelPrompt({
                         {freeBadge}
                       </span>
                     ) : null}
-                    {!effectiveDeliveryInfo.meetsMinOrder && effectiveDeliveryInfo.message ? (
-                      <span className="text-xs text-amber-800">{effectiveDeliveryInfo.message}</span>
-                    ) : null}
                   </div>
                 ) : null}
                 {error ? <p className="text-sm text-red-600">{error}</p> : null}

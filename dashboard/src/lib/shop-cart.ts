@@ -60,6 +60,19 @@ export interface ShopVoucherState {
   voucherName?: string;
 }
 
+/** Cached delivery zone check from fulfillment popup / cart verify */
+export type ShopDeliveryInfo = {
+  deliverable?: boolean;
+  meetsMinOrder?: boolean;
+  message?: string;
+  error?: string;
+  zone?: {
+    name?: string;
+    minOrderAmount?: number | string | null;
+    deliveryFee?: number | string | null;
+  };
+};
+
 export interface ShopCheckoutDraft {
   channel: ShopChannel;
   items: ShopCartItem[];
@@ -78,6 +91,10 @@ export interface ShopCheckoutDraft {
   pointsToRedeem?: number;
   lat?: number;
   lng?: number;
+  /** User confirmed channel + address/schedule in start popup */
+  fulfillmentConfirmed?: boolean;
+  /** Persisted delivery zone result (survives page refresh) */
+  deliveryInfo?: ShopDeliveryInfo;
   /** Applied discount voucher */
   voucherCode?: string;
   voucherDiscount?: number;
