@@ -9,6 +9,7 @@ type Props = {
   excludeTableId?: string | null;
   title?: string;
   draftTableIds?: string[];
+  refreshToken?: number;
 };
 
 export default function WebPosSetTableModal({
@@ -19,6 +20,7 @@ export default function WebPosSetTableModal({
   excludeTableId,
   title,
   draftTableIds,
+  refreshToken,
 }: Props) {
   const { t } = useI18n();
   if (!open) return null;
@@ -35,6 +37,7 @@ export default function WebPosSetTableModal({
         selectedTableId={selectedTableId}
         excludeTableId={excludeTableId}
         draftTableIds={draftTableIds}
+        refreshToken={refreshToken}
         onSelectTable={(table) => {
           onSelect(table);
           onClose();

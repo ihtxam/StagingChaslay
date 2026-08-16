@@ -603,6 +603,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [printChooserBusy, setPrintChooserBusy] = useState(false);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [ordersRefreshToken, setOrdersRefreshToken] = useState(0);
+  const [tablesRefreshToken, setTablesRefreshToken] = useState(0);
+  const [heldTableIds, setHeldTableIds] = useState<string[]>([]);
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
   const [ordersChannelPref, setOrdersChannelPref] = useState<'online' | null>(null);
   const [collectOrderRef, setCollectOrderRef] = useState<CollectOrderRef | null>(null);
@@ -685,16 +687,41 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [draftVersion, setDraftVersion] = useState(0);
   const cartPersistReadyRef = useRef(false);
   const draftTableIds = useMemo(() => {
-    const ids: string[] = [];
+    const ids = new Set<string>();
     for (const [key, draft] of openCartDraftsRef.current.entries()) {
-      if (key.startsWith('table:') && (draft.cart.length > 0 || draft.orderSent)) {
-        ids.push(key.slice(6));
-      }
+      if (!key.startsWith('table:')) continue;
+      const occupied =
+        draft.cart.length > 0 ||
+        draft.orderSent ||
+        draft.cart.some((l) => l.sentToKitchen);
+      if (occupied) ids.add(key.slice(6));
     }
-    return ids;
-  }, [draftVersion]);
+    for (const id of heldTableIds) ids.add(id);
+    return [...ids];
+  }, [draftVersion, heldTableIds]);
 
   const cartCount = useMemo(() => cart.reduce((n, l) => n + l.quantity, 0), [cart]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await api.get('/merchant/pos/held');
+        const ids = new Set<string>();
+        for (const h of (res.data?.held || []) as Array<{ cartJson?: Record<string, unknown> | null }>) {
+          const cj = h.cartJson;
+          if (!cj || typeof cj !== 'object') continue;
+          if (typeof cj.tableId === 'string' && cj.tableId) ids.add(cj.tableId);
+        }
+        if (!cancelled) setHeldTableIds([...ids]);
+      } catch {
+        if (!cancelled) setHeldTableIds([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ordersRefreshToken, tablesRefreshToken, draftVersion]);
 
   const cartQtyByProduct = useMemo(() => {
     const map = new Map<string, number>();
@@ -777,7 +804,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       billDiscount,
     };
     const key = openCartDraftKey({ tableId, tabNumber, channel });
-    if (cart.length > 0 || orderSent) {
+    if (draftOccupiesTable(active)) {
       openCartDraftsRef.current.set(key, active);
     } else {
       openCartDraftsRef.current.delete(key);
@@ -785,7 +812,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     savePersistedWebPosCarts({
       drafts: draftsMapToRecord(openCartDraftsRef.current),
-      active: cart.length > 0 || orderSent ? active : null,
+      active: draftOccupiesTable(active) ? active : null,
       mobileCartOpen,
       customer: selectedCustomer
         ? {
@@ -817,7 +844,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     billDiscount,
     mobileCartOpen,
     selectedCustomer,
-    draftVersion,
   ]);
 
   /** Mobile cart page is phone-only; restore side-cart layout from lg (1024px) up. */
@@ -2958,14 +2984,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tabNumber: snap.tabNumber,
       channel: snap.channel,
     });
-    if (snap.cart.length > 0 || snap.orderSent) {
+    if (draftOccupiesTable(snap)) {
       openCartDraftsRef.current.set(key, snap);
     } else {
       openCartDraftsRef.current.delete(key);
     }
     savePersistedWebPosCarts({
       drafts: draftsMapToRecord(openCartDraftsRef.current),
-      active: snap.cart.length > 0 || snap.orderSent ? snap : null,
+      active: draftOccupiesTable(snap) ? snap : null,
       mobileCartOpen,
       customer: selectedCustomer
         ? {
@@ -3240,10 +3266,67 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     });
   };
 
+  const clearHeldOrdersForTable = async (tid: string) => {
+    const res = await api.get('/merchant/pos/held');
+    const list = (res.data?.held || []) as Array<{
+      id: string;
+      cartJson?: Record<string, unknown> | null;
+    }>;
+    for (const h of list) {
+      const cj = h.cartJson;
+      if (!cj || typeof cj !== 'object') continue;
+      if (cj.tableId !== tid) continue;
+      await api.delete(`/merchant/pos/held/${h.id}`);
+    }
+  };
+
   const releaseEmptyTable = () => {
     if (!tableId || cart.length > 0 || orderSent) return;
-    startNewOrder();
-    toast.success(t('webPosTableReleased'));
+    const releasedId = tableId;
+    void (async () => {
+      const key = openCartDraftKey({ tableId: releasedId, tabNumber, channel });
+      openCartDraftsRef.current.delete(key);
+      setDraftVersion((n) => n + 1);
+      resumedHeldIdRef.current = null;
+      setCart([]);
+      setSelectedLineId(null);
+      setKeypadBuffer('');
+      setMobileCartOpen(false);
+      setOrderNote('');
+      setBillDiscount({ percent: 0, amount: 0 });
+      setTableId(null);
+      setTableLabel(null);
+      setTabNumber(null);
+      clearCartTicket();
+      setActiveCourse(1);
+      setOrderSent(false);
+      setCoursesBulkSent(false);
+      setChannel('takeaway');
+      setFulfillmentWhen(asapFulfillment());
+      setSelectedCustomer(null);
+      clearAttachedMembership();
+      setProvisionalPrinted(false);
+      savePersistedWebPosCarts({
+        drafts: draftsMapToRecord(openCartDraftsRef.current),
+        active: null,
+        mobileCartOpen: false,
+        customer: null,
+      });
+      try {
+        await clearHeldOrdersForTable(releasedId);
+        await api.patch(`/merchant/floor-plans/tables/${releasedId}/status`, {
+          status: 'available',
+          currentOrderId: null,
+        });
+      } catch {
+        /* best-effort server sync */
+      }
+      setOrdersRefreshToken((n) => n + 1);
+      setTablesRefreshToken((n) => n + 1);
+      setPosTab('tables');
+      setPosView('tables');
+      toast.success(t('webPosTableReleased'));
+    })();
   };
 
   const getDraftForTable = (tid: string): OpenCartDraft | undefined => {
@@ -3803,7 +3886,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
 
       if (scope === 'item' && lineId) {
-        setCart((prev) => prev.filter((l) => l.lineId !== lineId));
+        setCart((prev) => {
+          const next = prev.filter((l) => l.lineId !== lineId);
+          if (next.length === 0) {
+            setOrderSent(false);
+            setCoursesBulkSent(false);
+          }
+          return next;
+        });
         if (selectedLineId === lineId) setSelectedLineId(null);
         toast.success(t('webPosItemCancelled'));
       } else {
@@ -6467,6 +6557,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           <WebPosTablesView
             selectedTableId={tableId}
             draftTableIds={draftTableIds}
+            refreshToken={tablesRefreshToken}
             onSelectTable={(table) => switchToTableOrder(table)}
             onMoveTable={(table) => openMoveTablePicker(table)}
           />
@@ -6696,7 +6787,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 }
                 canApplyBillDiscount={canApplyDiscounts}
                 billDiscountLabel={billDiscountLabel}
-                canReleaseTable={!!tableLabel && cart.length === 0 && !orderSent}
+                canReleaseTable={!!tableLabel && cart.length === 0}
                 onReleaseTable={releaseEmptyTable}
                 isRetail={isRetail}
                 layout={isNarrowViewport && mobileCartOpen ? 'page' : 'side'}
@@ -6986,6 +7077,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               : undefined
         }
         draftTableIds={draftTableIds}
+        refreshToken={tablesRefreshToken}
         onSelect={handleTablePickerSelect}
       />
 

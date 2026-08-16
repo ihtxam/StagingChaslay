@@ -43,6 +43,8 @@ type Props = {
   excludeTableId?: string | null;
   /** Move whole open order from an occupied table. */
   onMoveTable?: (table: { id: string; label: string }) => void;
+  /** Bump to reload floor plans (e.g. after table release). */
+  refreshToken?: number;
 };
 
 export default function WebPosTablesView({
@@ -51,6 +53,7 @@ export default function WebPosTablesView({
   draftTableIds = [],
   excludeTableId = null,
   onMoveTable,
+  refreshToken = 0,
 }: Props) {
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -75,7 +78,7 @@ export default function WebPosTablesView({
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshToken]);
 
   const activePlan = useMemo(
     () => plans.find((p) => p.id === activePlanId) || null,
