@@ -129,8 +129,8 @@ export function qrImageUrl(data: string, size = 180): string {
 }
 
 /** Thermal receipt QR raster width — ~25% of 80mm printable (384 dots), bitmap path. */
-export const RECEIPT_QR_RASTER_PX_80 = 96;
-export const RECEIPT_QR_RASTER_PX_58 = 72;
+export const RECEIPT_QR_RASTER_PX_80 = 115;
+export const RECEIPT_QR_RASTER_PX_58 = 86;
 
 export function receiptQrRasterPx(paperWidthMm?: 58 | 80): number {
   return paperWidthMm === 58 ? RECEIPT_QR_RASTER_PX_58 : RECEIPT_QR_RASTER_PX_80;
