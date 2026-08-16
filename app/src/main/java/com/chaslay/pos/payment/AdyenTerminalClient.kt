@@ -418,7 +418,7 @@ class AdyenTerminalClient @Inject constructor() {
                 parsePaymentResponse(responseBody)
             }
         } catch (e: IOException) {
-            if (call.isCanceled) {
+            if (call.isCanceled()) {
                 Log.d(TAG, "Adyen terminal payment request cancelled")
                 AdyenTerminalResponse.Cancelled("Payment request cancelled")
             } else {
