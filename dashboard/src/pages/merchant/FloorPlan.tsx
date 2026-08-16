@@ -1,6 +1,7 @@
 import { CSSProperties, FormEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import TableQrPrintPanel from '@/components/merchant/TableQrPrintPanel';
 
 type TableShape = 'rect' | 'round';
