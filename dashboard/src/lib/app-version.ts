@@ -1,3 +1,5 @@
+import { APP_NAME } from '@/lib/brand';
+
 /** Injected from dashboard/package.json at build time via vite.config.ts */
 declare const __APP_VERSION__: string;
 
@@ -6,4 +8,4 @@ export const APP_VERSION =
 
 export const dashboardVersionLabel = `Dashboard v${APP_VERSION}`;
 
-export const webPosVersionLabel = `WebPOS v${APP_VERSION}`;
+export const webPosVersionLabel = `${APP_NAME} v${APP_VERSION}`;

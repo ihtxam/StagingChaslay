@@ -483,7 +483,7 @@ export default function Licenses() {
                     <option value="tablet">Tablet</option>
                     <option value="mobile">Mobile</option>
                     <option value="terminal">Terminal</option>
-                    <option value="desktop">Desktop / WebPOS</option>
+                    <option value="desktop">Desktop / ChaslayReborn</option>
                   </select>
                 </label>
                 <label className="block">

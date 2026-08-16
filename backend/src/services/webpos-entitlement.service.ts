@@ -167,7 +167,7 @@ export class WebPosEntitlementService {
       const err = new Error(
         entitlement.reason === "suspended"
           ? "Merchant account is suspended"
-          : "WebPOS trial or subscription has expired. Buy a license or contact your reseller."
+          : "ChaslayReborn trial or subscription has expired. Buy a license or contact your reseller."
       ) as Error & { statusCode?: number; code?: string; entitlement?: WebPosEntitlement };
       err.statusCode = 402;
       err.code = "WEBPOS_LICENSE_REQUIRED";

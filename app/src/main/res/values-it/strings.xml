@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ChaslayPOS</string>
+    <string name="app_name">ChaslayReborn</string>
     <string name="login_title">Accedi</string>
     <string name="pin_login">Accesso PIN</string>
     <string name="email_login">Accesso e-mail</string>
@@ -30,7 +30,7 @@
     <string name="settings_section_license">Licenza</string>
     <string name="online_settings_title">Impostazioni online</string>
     <string name="online_settings_open">Apri impostazioni online</string>
-    <string name="online_settings_hint">Online apre lo stesso pannello merchant di WebPOS. Offline usa le schermate locali sotto.</string>
+    <string name="online_settings_hint">Online apre lo stesso pannello merchant di ChaslayReborn. Offline usa le schermate locali sotto.</string>
     <string name="online_settings_offline">Nessuna connessione — usa le impostazioni locali.</string>
     <string name="online_settings_need_login">Accedi prima con l’email del pannello.</string>
     <string name="online_settings_opening">Apertura impostazioni online…</string>
@@ -372,7 +372,7 @@
     <string name="adyen_api_key">Clé API Adyen</string>
     <string name="adyen_client_id">Identifiant client Adyen</string>
     <string name="adyen_sale_id">ID de vente PDV (facultatif)</string>
-    <string name="adyen_sale_id_help">Identifie ce PDV dans les journaux Adyen. Laissez vide pour utiliser ChaslayPOS.</string>
+    <string name="adyen_sale_id_help">Identifica questo POS nei log Adyen. Lasciare vuoto per usare ChaslayReborn.</string>
     <string name="adyen_merchant_account">Compte marchand Adyen</string>
     <string name="adyen_terminal_id">Adyen Terminal ID (POIID)</string>
     <string name="adyen_terminal_id_help">Format : modèle-série, par exemple V400m-324688179</string>
@@ -471,7 +471,7 @@
     <string name="verify_printer_ip">Vérifier la accesso IP</string>
     <string name="printer_name_optional_hint">Le nom de l\'imprimante est facultatif — un nom par défaut sera utilisé s\'il est laissé vide.</string>
     <string name="quick_edit">Edition rapide</string>
-    <string name="license_activate_title">Activer ChaslayPOS</string>
+    <string name="license_activate_title">Attiva ChaslayReborn</string>
     <string name="license_activate_body">Votre essai est terminé. Saisissez le code d\'activation que nous vous avons envoyé. Internet est nécessaire une fois pour activer cet appareil.</string>
     <string name="license_expired_title">Votre souscription a expiré</string>
     <string name="license_expired_body">Votre abonnement annuel a expiré. Contactez l\'assistance pour obtenir un code de renouvellement, puis saisissez-le ci-dessous.</string>

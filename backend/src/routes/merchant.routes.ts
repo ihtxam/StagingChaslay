@@ -1269,7 +1269,7 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error getting webpos config:", error);
-    const raw = error instanceof Error ? error.message : "Failed to get WebPOS config";
+    const raw = error instanceof Error ? error.message : "Failed to get POS config";
     const needsShiftMigrate =
       /shifts_enabled|pos_color_theme|pos_shifts/i.test(raw) &&
       /does not exist|column|relation/i.test(raw);
@@ -1304,7 +1304,7 @@ router.get("/webpos-entitlement", async (req: Request, res: Response) => {
     res.json({ success: true, entitlement });
   } catch (error) {
     res.status(500).json({
-      error: error instanceof Error ? error.message : "Failed to check WebPOS entitlement",
+      error: error instanceof Error ? error.message : "Failed to check POS entitlement",
     });
   }
 });

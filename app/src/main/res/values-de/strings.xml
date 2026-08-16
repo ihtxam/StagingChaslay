@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ChaslayPOS</string>
+    <string name="app_name">ChaslayReborn</string>
     <string name="login_title">Anmelden</string>
     <string name="pin_login">PIN-Anmeldung</string>
     <string name="email_login">E-Mail-Login</string>
@@ -30,7 +30,7 @@
     <string name="settings_section_license">Lizenz</string>
     <string name="online_settings_title">Online-Einstellungen</string>
     <string name="online_settings_open">Online-Einstellungen öffnen</string>
-    <string name="online_settings_hint">Online denselben Händler-Panel wie WebPOS öffnen. Offline die lokalen Bildschirme unten nutzen.</string>
+    <string name="online_settings_hint">Online denselben Händler-Panel wie ChaslayReborn öffnen. Offline die lokalen Bildschirme unten nutzen.</string>
     <string name="online_settings_offline">Kein Internet — lokale Einstellungen verwenden.</string>
     <string name="online_settings_need_login">Zuerst mit Panel-E-Mail anmelden.</string>
     <string name="online_settings_opening">Online-Einstellungen werden geöffnet…</string>
@@ -379,7 +379,7 @@
     <string name="adyen_api_key">Adyen-API-Schlüssel</string>
     <string name="adyen_client_id">Adyen-Kunden-ID</string>
     <string name="adyen_sale_id">POS-Verkaufs-ID (optional)</string>
-    <string name="adyen_sale_id_help">Identifiziert diesen Pos in den Adyen-Protokollen. Leer lassen, um ChaslayPOS zu verwenden.</string>
+    <string name="adyen_sale_id_help">Identifiziert diesen Pos in den Adyen-Protokollen. Leer lassen, um ChaslayReborn zu verwenden.</string>
     <string name="adyen_merchant_account">Adyen Händler-Konto.</string>
     <string name="adyen_terminal_id">Adyen-Terminal-ID (POIID)</string>
     <string name="adyen_terminal_id_help">Ausführung: modellseriell, z.B. V400m-324688179</string>
@@ -478,7 +478,7 @@
     <string name="verify_printer_ip">Überprüfen Sie die IP-Verbindung</string>
     <string name="printer_name_optional_hint">Der Druckername ist optional — ein Standardname wird verwendet, wenn er leer bleibt.</string>
     <string name="quick_edit">Schnellbearbeitung</string>
-    <string name="license_activate_title">ChaslayPOS aktivieren</string>
+    <string name="license_activate_title">ChaslayReborn aktivieren</string>
     <string name="license_activate_body">Ihre Testphase ist beendet. Geben Sie den Aktivierungscode ein, den wir Ihnen gesendet haben. Zur Aktivierung dieses Geräts ist einmal Internet erforderlich.</string>
     <string name="license_expired_title">Abonnement abgelaufen</string>
     <string name="license_expired_body">Ihr Jahresabonnement ist abgelaufen. Wenden Sie sich an den Support, um einen Verlängerungscode zu erhalten, und geben Sie ihn unten ein.</string>

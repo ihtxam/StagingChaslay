@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ChaslayPOS</string>
+    <string name="app_name">ChaslayReborn</string>
 
     <!-- Auth -->
     <string name="login_title">Sign in</string>
@@ -38,7 +38,7 @@
     <string name="settings_section_license">License</string>
     <string name="online_settings_title">Online settings</string>
     <string name="online_settings_open">Open online settings</string>
-    <string name="online_settings_hint">When online, open the same merchant panel settings used by WebPOS. Offline, use the local screens below.</string>
+    <string name="online_settings_hint">When online, open the same merchant panel settings used by ChaslayReborn. Offline, use the local screens below.</string>
     <string name="online_settings_offline">No internet — use local settings. Cloud settings open when you are online.</string>
     <string name="online_settings_need_login">Sign in with your panel email first to open online settings.</string>
     <string name="online_settings_opening">Opening online settings…</string>
@@ -482,7 +482,7 @@
     <string name="adyen_api_key">Adyen API Key</string>
     <string name="adyen_client_id">Adyen Client ID</string>
     <string name="adyen_sale_id">POS Sale ID (optional)</string>
-    <string name="adyen_sale_id_help">Identifies this POS in Adyen logs. Leave blank to use ChaslayPOS.</string>
+    <string name="adyen_sale_id_help">Identifies this POS in Adyen logs. Leave blank to use ChaslayReborn.</string>
     <string name="adyen_merchant_account">Adyen Merchant Account</string>
     <string name="adyen_terminal_id">Adyen Terminal ID (POIID)</string>
     <string name="adyen_terminal_id_help">Format: model-serial, e.g. V400m-324688179</string>
@@ -598,7 +598,7 @@
     <string name="quick_edit">Quick edit</string>
 
     <!-- License -->
-    <string name="license_activate_title">Activate ChaslayPOS</string>
+    <string name="license_activate_title">Activate ChaslayReborn</string>
     <string name="license_activate_body">Your trial has ended. Enter the activation code we sent you. Internet is required once to activate this device.</string>
     <string name="license_expired_title">Subscription expired</string>
     <string name="license_expired_body">Your yearly subscription has expired. Contact support for a renewal code, then enter it below.</string>

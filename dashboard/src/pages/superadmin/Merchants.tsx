@@ -676,7 +676,7 @@ export default function Merchants() {
                   )}
                 </div>
                 <p className="text-xs text-gray-500">
-                  Each seat creates a POS device slot + license key the Android/Web POS can activate.
+                  Each seat creates a POS device slot + license key the Android/ChaslayReborn app can activate.
                 </p>
               </div>
 
@@ -786,7 +786,7 @@ export default function Merchants() {
                     <Eraser className="w-4 h-4" /> Purge test sales data
                   </p>
                   <p className="text-xs text-red-800">
-                    Deletes all POS / WebPOS / online orders, held carts, payment records, shifts,
+                    Deletes all POS / ChaslayReborn / online orders, held carts, payment records, shifts,
                     daily reports, floor sync orders, and loyalty/gift history. Keeps menu, staff,
                     settings, licenses, and devices. Use after merchant testing to start from zero.
                   </p>

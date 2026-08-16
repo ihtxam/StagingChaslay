@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { APP_NAME } from '@/lib/brand';
 import { useI18n } from '@/lib/i18n';
 
 export type WebPosEntitlement = {
@@ -62,7 +63,7 @@ export default function WebPosLicenseGate({ entitlement, businessName }: Props) 
     <div className="flex min-h-0 flex-1 items-center justify-center bg-gradient-to-b from-stone-100 via-stone-50 to-amber-50/40 p-4">
       <div className="w-full max-w-lg rounded-2xl border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-stone-500">
-          {businessName || 'WebPOS'}
+          {businessName || APP_NAME}
         </p>
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-stone-900">{title}</h1>
         <p className="mt-3 text-sm leading-relaxed text-stone-600">{body}</p>
