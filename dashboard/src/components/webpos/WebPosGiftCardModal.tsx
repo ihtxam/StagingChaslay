@@ -123,6 +123,9 @@ export default function WebPosGiftCardModal({
           { params: { mediaType } }
         );
         const c = res.data.card;
+        if (c.status && c.status !== 'active') {
+          throw new Error(t('webPosCardBlocked'));
+        }
         const looked: LookedUpCard = {
           id: c.id,
           cardNumber: c.cardNumber,

@@ -39,7 +39,14 @@ class GiftCardRepository @Inject constructor(
         val normalized = LoyaltyMath.normalizeRfidUid(parsed).ifBlank { parsed }
         val lookupKey = normalized.ifBlank { parsed }
         val response = giftCardApi.lookup(bearer(), lookupKey, mediaType)
-        response.card ?: throw IllegalStateException(response.error ?: "Card not found")
+        val card = response.card ?: throw IllegalStateException(response.error ?: "Card not found")
+        val status = card.status?.trim()?.lowercase()
+        if (status != null && status != "active") {
+            throw IllegalStateException(
+                if (status == "suspended") "Card is blocked" else "Card is not active"
+            )
+        }
+        card
     }
 
     suspend fun earnPoints(cardId: String, points: Int, orderId: String? = null): Result<Int> = runCatching {

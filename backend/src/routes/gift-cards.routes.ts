@@ -241,12 +241,84 @@ router.post("/send-ecard-email", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/gift-cards/:cardId/spending
+ * Purchase history linked to customer or gift card.
+ */
+router.get("/:cardId/spending", async (req: Request, res: Response) => {
+  try {
+    const result = await GiftCardService.getMemberSpending(
+      req.merchantId!,
+      req.params.cardId,
+      {
+        page: parseInt(String(req.query.page || "1"), 10) || 1,
+        limit: parseInt(String(req.query.limit || "20"), 10) || 20,
+      }
+    );
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(404).json({
+      error: error instanceof Error ? error.message : "Failed to get spending",
+    });
+  }
+});
+
+/**
+ * PATCH /api/gift-cards/:cardId
+ * Update holder / linked customer contact fields.
+ */
+router.patch("/:cardId", async (req: Request, res: Response) => {
+  try {
+    const card = await GiftCardService.updateCard(req.merchantId!, req.params.cardId, {
+      holderName: req.body.holderName ?? req.body.name,
+      holderEmail: req.body.holderEmail ?? req.body.email,
+      holderPhone: req.body.holderPhone ?? req.body.phone,
+      firstName: req.body.firstName,
+      lastName: req.body.lastName,
+      email: req.body.email,
+      phone: req.body.phone,
+    });
+    res.json({ success: true, card, message: "Card updated" });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to update card",
+    });
+  }
+});
+
+/**
+ * POST /api/gift-cards/:cardId/top-up
+ * Manual admin top-up (balance or stamps) with audit log.
+ */
+router.post("/:cardId/top-up", async (req: Request, res: Response) => {
+  try {
+    const type = req.body.type === "stamps" ? "stamps" : "balance";
+    const result = await GiftCardService.adminTopUp(req.merchantId!, req.params.cardId, {
+      type,
+      amount: req.body.amount != null ? Number(req.body.amount) : undefined,
+      stamps: req.body.stamps != null ? Number(req.body.stamps) : undefined,
+      note: req.body.note || req.body.reason,
+    });
+    res.json({ success: true, ...result, message: "Top-up applied" });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to top up",
+    });
+  }
+});
+
+/**
  * GET /api/gift-cards/:cardId
  */
 router.get("/:cardId", async (req: Request, res: Response) => {
   try {
-    const card = await GiftCardService.getById(req.merchantId!, req.params.cardId);
-    res.json({ success: true, card });
+    const merchantId = req.merchantId!;
+    const card = await GiftCardService.getById(merchantId, req.params.cardId);
+    const settings = await GiftCardService.getSettings(merchantId);
+    const enriched = GiftCardService.enrichCard(
+      card as unknown as Record<string, unknown>,
+      settings
+    );
+    res.json({ success: true, card: enriched });
   } catch (error) {
     res.status(404).json({
       error: error instanceof Error ? error.message : "Card not found",

@@ -4029,6 +4029,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       );
       const c = res.data?.card;
       if (!c?.id) throw new Error(t('webPosMembershipLookupFailed'));
+      if (c.status && c.status !== 'active') {
+        throw new Error(t('webPosCardBlocked'));
+      }
       const holder =
         c.holderName ||
         [c.customer?.firstName, c.customer?.lastName].filter(Boolean).join(' ') ||

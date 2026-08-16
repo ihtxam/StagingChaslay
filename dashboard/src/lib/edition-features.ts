@@ -1,5 +1,5 @@
 /**
- * SaaS edition feature catalog ó keep in sync with backend/src/lib/edition-features.ts
+ * SaaS edition feature catalog ù keep in sync with backend/src/lib/edition-features.ts
  */
 
 export type EditionFeatureKey =
@@ -85,7 +85,12 @@ export const ALL_EDITION_FEATURES: EditionFeatureKey[] = EDITION_FEATURE_GROUPS.
 
 export const EDITION_ROUTE_FEATURES: Record<string, EditionFeatureKey[]> = {
   '/merchant/floor-plan': ['pos_tables'],
+  '/merchant/tables': ['pos_tables'],
+  '/merchant/tables/settings': ['pos_tables'],
+  '/merchant/tables/layout': ['pos_tables'],
+  '/merchant/tables/qr': ['pos_tables'],
   '/merchant/loyalty': ['loyalty', 'gift_cards'],
+  '/merchant/members': ['loyalty', 'gift_cards'],
   '/merchant/offers': ['offers'],
   '/merchant/newsletter': ['online_shop'],
   '/merchant/online-shop': ['online_shop'],

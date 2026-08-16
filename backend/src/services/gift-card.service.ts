@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { and, desc, eq, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import {
   buildGiftCardRedeemQrPayload,
   buildGiftCardRedeemUrl,
@@ -25,6 +25,12 @@ function money(n: number | string | null | undefined): number {
   return Math.round((v + Number.EPSILON) * 100) / 100;
 }
 
+function cleanOptional(value?: string | null) {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  return trimmed ? trimmed : null;
+}
+
 /** Normalize RFID UIDs so tap / manual / issue all match (strip separators, uppercase). */
 export function normalizeRfidUid(raw: string): string {
   return String(raw || "")
@@ -34,13 +40,31 @@ export function normalizeRfidUid(raw: string): string {
 }
 
 function assertActive(card: { status: string; expiresAt?: Date | null }) {
-  if (card.status === "suspended") throw new Error("Card is suspended");
+  if (card.status === "suspended") throw new Error("Card is blocked");
   if (card.status === "expired") throw new Error("Card is expired");
   if (card.expiresAt && card.expiresAt.getTime() < Date.now()) {
     throw new Error("Card is expired");
   }
   if (card.status !== "active") throw new Error("Card is not active");
 }
+
+/** Reject blocked/inactive cards at RFID lookup (POS scan). */
+function assertLookupAllowed(card: { status: string; expiresAt?: Date | null }) {
+  if (card.status === "suspended") throw new Error("Card is blocked");
+  if (card.status === "expired") throw new Error("Card is expired");
+  if (card.expiresAt && card.expiresAt.getTime() < Date.now()) {
+    throw new Error("Card is expired");
+  }
+  if (card.status !== "active") throw new Error("Card is not active");
+}
+
+const PURCHASE_TX_TYPES = [
+  "redeem",
+  "points_earn",
+  "points_redeem",
+  "stamp_earn",
+  "stamp_reward",
+] as const;
 
 async function assertOpenShiftForSell(merchantId: string) {
   const db = getDb();
@@ -140,7 +164,11 @@ export class GiftCardService {
         })
       : cards;
 
-    return { cards: filtered, page, limit };
+    const settings = await this.getSettings(merchantId);
+    const enriched = filtered.map((c) =>
+      this.enrichCard(c as unknown as Record<string, unknown>, settings)
+    );
+    return { cards: enriched, page, limit };
   }
 
   static async getById(merchantId: string, cardId: string) {
@@ -233,6 +261,7 @@ export class GiftCardService {
     }
 
     if (!card) throw new Error("Card not found");
+    assertLookupAllowed(card);
     const settings = await this.getSettings(merchantId);
     return this.enrichCard(card as unknown as Record<string, unknown>, settings);
   }
@@ -913,6 +942,256 @@ export class GiftCardService {
     });
 
     return { sent: true, to, code };
+  }
+
+  static async updateCard(
+    merchantId: string,
+    cardId: string,
+    patch: {
+      holderName?: string;
+      holderEmail?: string;
+      holderPhone?: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      phone?: string;
+    }
+  ) {
+    const db = getDb();
+    const card = await this.getById(merchantId, cardId);
+
+    const holderName =
+      patch.holderName !== undefined ? cleanOptional(patch.holderName) : card.holderName;
+    const holderEmail =
+      patch.holderEmail !== undefined ? cleanOptional(patch.holderEmail) : card.holderEmail;
+    let holderPhone =
+      patch.holderPhone !== undefined ? cleanOptional(patch.holderPhone) : card.holderPhone;
+    if (holderPhone) {
+      const digits = holderPhone.replace(/\D/g, "");
+      if (!/^\d{1,15}$/.test(digits)) throw new Error("Phone number must be digits only (max 15)");
+      holderPhone = digits;
+    }
+
+    const updated = await db
+      .update(schema.giftCards)
+      .set({
+        holderName: holderName ?? null,
+        holderEmail: holderEmail ?? null,
+        holderPhone: holderPhone ?? null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(schema.giftCards.id, cardId), eq(schema.giftCards.merchantId, merchantId))
+      )
+      .returning();
+
+    if (card.customerId) {
+      const customerPatch: Record<string, string | null> = {};
+      if (patch.firstName !== undefined) customerPatch.firstName = cleanOptional(patch.firstName);
+      if (patch.lastName !== undefined) customerPatch.lastName = cleanOptional(patch.lastName);
+      if (patch.email !== undefined) customerPatch.email = cleanOptional(patch.email);
+      if (patch.phone !== undefined) {
+        const tel = cleanOptional(patch.phone);
+        if (tel) {
+          const digits = tel.replace(/\D/g, "");
+          if (!/^\d{1,15}$/.test(digits)) {
+            throw new Error("Phone number must be digits only (max 15)");
+          }
+          customerPatch.phone = digits;
+        } else {
+          customerPatch.phone = null;
+        }
+      }
+      if (Object.keys(customerPatch).length > 0) {
+        await CustomerService.updateCustomer(merchantId, card.customerId, customerPatch);
+      }
+    }
+
+    return updated[0]!;
+  }
+
+  /** Merchant admin top-up — balance or stamp progress with audit log. */
+  static async adminTopUp(
+    merchantId: string,
+    cardId: string,
+    input: {
+      type: "balance" | "stamps";
+      amount?: number;
+      stamps?: number;
+      note?: string;
+    }
+  ) {
+    const db = getDb();
+    const card = await this.getById(merchantId, cardId);
+    assertActive(card);
+    const note = String(input.note || "").trim();
+
+    if (input.type === "balance") {
+      const amount = money(input.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("Valid amount is required");
+      }
+      const settings = await this.getSettings(merchantId);
+      const newBalance = money(card.balance) + amount;
+      if (newBalance > settings.maxAmount) {
+        throw new Error(`Balance cannot exceed CHF ${settings.maxAmount.toFixed(2)}`);
+      }
+      const updated = await db
+        .update(schema.giftCards)
+        .set({ balance: newBalance.toFixed(2), updatedAt: new Date() })
+        .where(eq(schema.giftCards.id, cardId))
+        .returning();
+      await db.insert(schema.giftCardTransactions).values({
+        merchantId,
+        cardId,
+        transactionType: "adjust",
+        amount: amount.toFixed(2),
+        balanceAfter: newBalance.toFixed(2),
+        description: note
+          ? `Admin top-up CHF ${amount.toFixed(2)}: ${note}`
+          : `Admin top-up CHF ${amount.toFixed(2)}`,
+      });
+      return updated[0]!;
+    }
+
+    if (!card.membershipEnabled || !card.membershipPlanId) {
+      throw new Error("Card has no membership plan for stamp top-up");
+    }
+    const settings = await this.getSettings(merchantId);
+    const plan = this.resolveMembershipPlan(settings, card.membershipPlanId);
+    if (!plan || plan.type !== "stamp_card") {
+      throw new Error("Card is not on a stamp-card plan");
+    }
+    const add = Math.floor(Number(input.stamps) || 0);
+    if (!Number.isFinite(add) || add <= 0) throw new Error("Valid stamp count is required");
+
+    const required = Math.max(1, plan.stampsRequired || 6);
+    let stampCount = Math.max(0, (card.stampCount || 0) + add);
+    let rewardEarned = false;
+    while (stampCount >= required) {
+      rewardEarned = true;
+      stampCount -= required;
+    }
+
+    const updated = await db
+      .update(schema.giftCards)
+      .set({ stampCount, updatedAt: new Date() })
+      .where(eq(schema.giftCards.id, cardId))
+      .returning();
+
+    await db.insert(schema.giftCardTransactions).values({
+      merchantId,
+      cardId,
+      transactionType: rewardEarned ? "stamp_reward" : "stamp_adjust",
+      description: note
+        ? `Admin stamp top-up +${add}${rewardEarned ? " (reward earned)" : ""}: ${note}`
+        : `Admin stamp top-up +${add}${rewardEarned ? " (reward earned)" : ""}`,
+    });
+
+    return {
+      card: this.enrichCard(updated[0]! as unknown as Record<string, unknown>, settings),
+      stampCount,
+      rewardEarned,
+    };
+  }
+
+  /** Aggregate purchase history for a member card (customer + gift-card order links). */
+  static async getMemberSpending(
+    merchantId: string,
+    cardId: string,
+    opts: { page?: number; limit?: number } = {}
+  ) {
+    const db = getDb();
+    const card = await this.getById(merchantId, cardId);
+    const page = Math.max(1, opts.page || 1);
+    const limit = Math.min(100, Math.max(1, opts.limit || 20));
+    const offset = (page - 1) * limit;
+
+    const orderIdSet = new Set<string>();
+
+    const txRows = await db
+      .select({ orderId: schema.giftCardTransactions.orderId })
+      .from(schema.giftCardTransactions)
+      .where(
+        and(
+          eq(schema.giftCardTransactions.merchantId, merchantId),
+          eq(schema.giftCardTransactions.cardId, cardId),
+          isNotNull(schema.giftCardTransactions.orderId),
+          inArray(schema.giftCardTransactions.transactionType, [...PURCHASE_TX_TYPES])
+        )
+      );
+    for (const row of txRows) {
+      if (row.orderId) orderIdSet.add(row.orderId);
+    }
+
+    let customerOrders: Array<{ id: string; total: string; createdAt: Date; orderNumber: string; status: string; paymentStatus: string | null }> = [];
+    if (card.customerId) {
+      customerOrders = await db
+        .select({
+          id: schema.orders.id,
+          total: schema.orders.total,
+          createdAt: schema.orders.createdAt,
+          orderNumber: schema.orders.orderNumber,
+          status: schema.orders.status,
+          paymentStatus: schema.orders.paymentStatus,
+        })
+        .from(schema.orders)
+        .where(
+          and(
+            eq(schema.orders.merchantId, merchantId),
+            eq(schema.orders.customerId, card.customerId)
+          )
+        );
+      for (const o of customerOrders) orderIdSet.add(o.id);
+    }
+
+    const allOrderIds = [...orderIdSet];
+    if (allOrderIds.length === 0) {
+      return {
+        statistics: { totalSpent: 0, orderCount: 0, averageOrderValue: 0 },
+        orders: [],
+        page,
+        limit,
+        total: 0,
+      };
+    }
+
+    const orders = await db.query.orders.findMany({
+      where: and(
+        eq(schema.orders.merchantId, merchantId),
+        inArray(schema.orders.id, allOrderIds)
+      ),
+      orderBy: desc(schema.orders.createdAt),
+      limit,
+      offset,
+    });
+
+    const completed = orders.filter(
+      (o) => o.status !== "cancelled" && o.paymentStatus !== "failed"
+    );
+    const allForStats = await db.query.orders.findMany({
+      where: and(
+        eq(schema.orders.merchantId, merchantId),
+        inArray(schema.orders.id, allOrderIds)
+      ),
+    });
+    const statsOrders = allForStats.filter(
+      (o) => o.status !== "cancelled" && o.paymentStatus !== "failed"
+    );
+    const totalSpent = statsOrders.reduce((sum, o) => sum + money(o.total), 0);
+    const orderCount = statsOrders.length;
+
+    return {
+      statistics: {
+        totalSpent,
+        orderCount,
+        averageOrderValue: orderCount > 0 ? totalSpent / orderCount : 0,
+      },
+      orders: completed,
+      page,
+      limit,
+      total: statsOrders.length,
+    };
   }
 
   static async getTransactions(
