@@ -92,70 +92,17 @@ export default function WebPosModifierTabPanel({
           <h2 className="min-w-0 flex-1 truncate text-lg font-bold leading-tight sm:text-xl">
             {title}
           </h2>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
-            <button
-              type="button"
-              onClick={() => setNoteOpen((v) => !v)}
-              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold sm:text-sm ${
-                noteOpen || lineNote.trim()
-                  ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)]'
-                  : 'border-[var(--webpos-border,#e7e5e4)] bg-white text-stone-700 hover:bg-stone-50'
-              }`}
-            >
-              <MessageSquare size={14} />
-              {t('webPosAddNote')}
-            </button>
-            <button
-              type="button"
-              onClick={onDiscard}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--webpos-border,#e7e5e4)] text-stone-500 hover:bg-red-50 hover:text-red-600"
-              aria-label={t('webPosDiscardItem')}
-            >
-              <Trash2 size={18} />
-            </button>
-            <div className="inline-flex items-center rounded-lg border border-[var(--webpos-border,#e7e5e4)] bg-white">
-              <button
-                type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-l-lg hover:bg-stone-100 disabled:opacity-40"
-                disabled={quantity <= 1}
-                onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
-                aria-label={t('webPosDecreaseQty')}
-              >
-                <Minus size={16} />
-              </button>
-              <span className="min-w-[2rem] text-center text-sm font-bold tabular-nums">{quantity}</span>
-              <button
-                type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-r-lg hover:bg-stone-100"
-                onClick={() => onQuantityChange(quantity + 1)}
-                aria-label={t('webPosIncreaseQty')}
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-            <button
-              type="button"
-              disabled={confirmDisabled}
-              onClick={onConfirm}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#2563eb] px-3 py-2 text-sm font-bold text-white shadow-sm hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45 sm:px-4"
-            >
-              <Check size={16} strokeWidth={3} />
-              {t('webPosModAdd')} · {money(lineTotal)}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onDiscard}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--webpos-border,#e7e5e4)] text-stone-500 hover:bg-red-50 hover:text-red-600"
+            aria-label={t('webPosDiscardItem')}
+          >
+            <Trash2 size={18} />
+          </button>
         </div>
 
         <p className="mt-2 truncate text-sm text-[var(--webpos-text-muted,#78716c)]">{summaryText}</p>
-
-        {noteOpen ? (
-          <textarea
-            className="input mt-2 min-h-[2.75rem] w-full text-sm"
-            value={lineNote}
-            onChange={(e) => onLineNoteChange(e.target.value)}
-            placeholder={t('webPosLineNotePlaceholder')}
-            rows={2}
-          />
-        ) : null}
       </header>
 
       {groups.length > 0 ? (
@@ -240,11 +187,71 @@ export default function WebPosModifierTabPanel({
         </div>
       )}
 
-      {error ? (
-        <div className="shrink-0 border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
-          {error}
+      <footer className="shrink-0 border-t border-[var(--webpos-border,#e7e5e4)] bg-[var(--webpos-surface,#fff)]">
+        {error ? (
+          <div className="border-b border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
+
+        {noteOpen ? (
+          <div className="border-b border-[var(--webpos-border,#e7e5e4)] px-3 py-2 sm:px-5">
+            <textarea
+              className="input min-h-[2.75rem] w-full text-sm"
+              value={lineNote}
+              onChange={(e) => onLineNoteChange(e.target.value)}
+              placeholder={t('webPosLineNotePlaceholder')}
+              rows={2}
+            />
+          </div>
+        ) : null}
+
+        <div className="flex items-center justify-end gap-2 px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3">
+          <button
+            type="button"
+            onClick={() => setNoteOpen((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-semibold ${
+              noteOpen || lineNote.trim()
+                ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)]'
+                : 'border-[var(--webpos-border,#e7e5e4)] bg-white text-stone-700 hover:bg-stone-50'
+            }`}
+          >
+            <MessageSquare size={16} />
+            {t('webPosAddNote')}
+          </button>
+
+          <div className="inline-flex items-center rounded-xl border border-[var(--webpos-border,#e7e5e4)] bg-white">
+            <button
+              type="button"
+              className="inline-flex h-12 w-12 items-center justify-center rounded-l-xl hover:bg-stone-100 active:bg-stone-200 disabled:opacity-40"
+              disabled={quantity <= 1}
+              onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
+              aria-label={t('webPosDecreaseQty')}
+            >
+              <Minus size={22} strokeWidth={2.5} />
+            </button>
+            <span className="min-w-[2.5rem] text-center text-base font-bold tabular-nums">{quantity}</span>
+            <button
+              type="button"
+              className="inline-flex h-12 w-12 items-center justify-center rounded-r-xl hover:bg-stone-100 active:bg-stone-200"
+              onClick={() => onQuantityChange(quantity + 1)}
+              aria-label={t('webPosIncreaseQty')}
+            >
+              <Plus size={22} strokeWidth={2.5} />
+            </button>
+          </div>
         </div>
-      ) : null}
+
+        <button
+          type="button"
+          disabled={confirmDisabled}
+          onClick={onConfirm}
+          className="flex w-full items-center justify-center gap-2 bg-[#2563eb] py-4 text-base font-bold text-white shadow-sm hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:cursor-not-allowed disabled:opacity-45 sm:rounded-b-2xl"
+        >
+          <Check size={20} strokeWidth={3} />
+          {t('webPosModAdd')} · {money(lineTotal)}
+        </button>
+      </footer>
     </div>
   );
 }
