@@ -1,5 +1,5 @@
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY, formatTimeHHMM, ymdZurich } from '@/lib/date-format';
-import { roundMoney2 } from '@/lib/money';
+import { roundMoney2, splitVatIncludedGross } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
 import {
   buildReceiptUrl,
@@ -318,10 +318,9 @@ export function computeGiftCardSaleVat(
   if (rate <= 0) {
     return { subtotal: gross, taxAmount: 0, total: gross };
   }
-  if (vatIncludedInPrice) {
-    const subtotal = roundMoney2(gross / (1 + rate / 100));
-    const taxAmount = roundMoney2(gross - subtotal);
-    return { subtotal, taxAmount, total: gross };
+  if (vatIncludedInPrice !== false) {
+    const split = splitVatIncludedGross(gross, rate);
+    return { subtotal: split.net, taxAmount: split.tax, total: split.gross };
   }
   const subtotal = gross;
   const taxAmount = roundMoney2(subtotal * (rate / 100));
@@ -504,20 +503,48 @@ function formatVatSection(
   width: number
 ): string | null {
   if (tx.showVat === false || tx.taxAmount <= 0 || tx.taxRate <= 0) return null;
-  const net = roundMoney2(tx.subtotal);
-  const tva = roundMoney2(tx.taxAmount);
-  const brut = roundMoney2(net + tva);
+
   const rateLabel = `${L.tva}: ${tx.taxRate}%`;
 
   if (tx.vatIncludedInPrice !== false) {
+    const net = roundMoney2(tx.subtotal);
+    const tva = roundMoney2(tx.taxAmount);
+    const brut = roundMoney2(net + tva);
     let r = L.vatIncludedNote.slice(0, width) + '\n';
     r += vatTableRow(L.type, L.net, L.tva, L.brut, width) + '\n';
     r += vatTableRow(rateLabel, net.toFixed(2), tva.toFixed(2), brut.toFixed(2), width);
     return r;
   }
 
+  const net = roundMoney2(tx.subtotal);
+  const tva = roundMoney2(tx.taxAmount);
+  const brut = roundMoney2(net + tva);
   const text = `${L.tva} ${tx.taxRate}% ${L.net} ${net.toFixed(2)} ${L.tva} ${tva.toFixed(2)} ${L.total} ${brut.toFixed(2)}`;
   return text.slice(0, width);
+}
+
+/**
+ * Merchandise TTC after order-level remise (excl. tips & cash rounding).
+ * Matches Android ReceiptVatCalculator discount factor + WebPOS cart gross.
+ */
+function merchandiseBrutAfterDiscount(tx: WebPosReceipt): number {
+  if (!tx.items?.length) return 0;
+  const gross = roundMoney2(
+    tx.items.reduce((sum, item) => sum + roundMoney2(item.lineTotal), 0)
+  );
+  if (gross <= 0) return 0;
+  const disc = roundMoney2(Math.max(0, tx.discount || 0));
+  const vatIncluded = tx.vatIncludedInPrice !== false;
+  const vatAfterDiscount = tx.vatAfterDiscount !== false;
+  if (disc <= 0 || (!vatIncluded && !vatAfterDiscount)) return gross;
+  return roundMoney2(Math.max(0, gross - Math.min(disc, gross)));
+}
+
+/** Bill merchandise TTC from payable total (order 1-6610 class: TTC = total − tip − rounding). */
+function billMerchandiseTtc(tx: WebPosReceipt): number {
+  const tip = roundMoney2(tx.tipAmount || 0);
+  const rounding = roundMoney2(tx.rounding || 0);
+  return roundMoney2(tx.total - tip - rounding);
 }
 
 function formatReceiptMetaFooter(
@@ -567,8 +594,8 @@ function isGiftCardMerchandiseItem(item: WebPosReceiptItem): boolean {
 }
 
 /**
- * Order/payment receipt VAT — merchandise tax plus gift-card sell/reload lines
- * (those lines are non-taxable in cart totals but still carry VAT on the receipt).
+ * Order/payment receipt VAT — merchandise tax for thermal / digital receipts.
+ * VAT-included (CH/EU): TTC = bill total excl. tips & rounding; NET = TTC/(1+rate); TVA = TTC−NET.
  */
 export function resolveOrderReceiptVat(tx: WebPosReceipt): {
   subtotal: number;
@@ -576,24 +603,36 @@ export function resolveOrderReceiptVat(tx: WebPosReceipt): {
   taxRate: number;
 } {
   const rate = Number(tx.taxRate) || 0;
+  const vatIncluded = tx.vatIncludedInPrice !== false;
+
+  if (rate <= 0) {
+    return { subtotal: roundMoney2(tx.subtotal), taxAmount: 0, taxRate: rate };
+  }
+
+  if (vatIncluded) {
+    const fromItems = merchandiseBrutAfterDiscount(tx);
+    const fromBill = billMerchandiseTtc(tx);
+    let brut = fromItems > 0 ? fromItems : fromBill;
+    if (fromItems > 0 && fromBill > 0 && Math.abs(fromItems - fromBill) > 0.02) {
+      // Trust payable total when line sum and stored total diverge (reprints / sync).
+      brut = fromBill;
+    }
+    if (brut <= 0) {
+      const adjusted = adjustReceiptVatForDiscount(tx.subtotal, tx.taxAmount, tx.discount || 0, {
+        vatIncludedInPrice: true,
+        vatAfterDiscount: tx.vatAfterDiscount,
+      });
+      brut = roundMoney2(adjusted.subtotal + adjusted.taxAmount);
+    }
+    const split = splitVatIncludedGross(brut, rate);
+    return { subtotal: split.net, taxAmount: split.tax, taxRate: rate };
+  }
+
   const adjusted = adjustReceiptVatForDiscount(tx.subtotal, tx.taxAmount, tx.discount || 0, {
-    vatIncludedInPrice: tx.vatIncludedInPrice,
+    vatIncludedInPrice: false,
     vatAfterDiscount: tx.vatAfterDiscount,
   });
-  let net = adjusted.subtotal;
-  let tax = adjusted.taxAmount;
-  if (rate <= 0) return { subtotal: net, taxAmount: tax, taxRate: rate };
-
-  const vatIncluded = tx.vatIncludedInPrice !== false;
-  for (const item of tx.items) {
-    if (!isGiftCardMerchandiseItem(item)) continue;
-    const amount = roundMoney2(item.lineTotal);
-    if (amount <= 0) continue;
-    const row = computeGiftCardSaleVat(amount, rate, vatIncluded);
-    net = roundMoney2(net + row.subtotal);
-    tax = roundMoney2(tax + row.taxAmount);
-  }
-  return { subtotal: net, taxAmount: tax, taxRate: rate };
+  return { subtotal: adjusted.subtotal, taxAmount: adjusted.taxAmount, taxRate: rate };
 }
 
 export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string): string {

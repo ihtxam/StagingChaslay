@@ -47,7 +47,7 @@ export function adjustReceiptVatForDiscount(
   const net = roundMoney2(subtotal);
   const tax = roundMoney2(taxAmount);
   const disc = roundMoney2(Math.max(0, Number(discount) || 0));
-  const vatIncluded = opts.vatIncludedInPrice === true;
+  const vatIncluded = opts.vatIncludedInPrice !== false;
   const vatAfterDiscount = opts.vatAfterDiscount !== false;
 
   if (disc <= 0) return { subtotal: net, taxAmount: tax };

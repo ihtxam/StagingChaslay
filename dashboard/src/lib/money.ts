@@ -58,10 +58,33 @@ export function resolvePosTaxRate(
   return defaultRate;
 }
 
+/** Extract net (HT) from a gross (TTC) amount when VAT is included in price. */
+export function extractNetFromGross(gross: number, ratePercent: number): number {
+  if (!Number.isFinite(gross) || gross <= 0 || ratePercent <= 0) return roundMoney2(gross);
+  return roundMoney2(gross / (1 + ratePercent / 100));
+}
+
 /** Extract VAT from a gross (tax-included) amount. */
 export function extractVatFromGross(gross: number, ratePercent: number): number {
   if (!Number.isFinite(gross) || gross <= 0 || ratePercent <= 0) return 0;
-  return roundMoney2(gross - gross / (1 + ratePercent / 100));
+  return roundMoney2(gross - extractNetFromGross(gross, ratePercent));
+}
+
+/**
+ * Split TTC into NET + TVA for VAT-included prices.
+ * TVA = TTC − NET so NET + TVA always equals TTC (Swiss receipt rule).
+ */
+export function splitVatIncludedGross(
+  gross: number,
+  ratePercent: number
+): { net: number; tax: number; gross: number } {
+  const brut = roundMoney2(gross);
+  if (brut <= 0 || ratePercent <= 0) {
+    return { net: brut, tax: 0, gross: brut };
+  }
+  const net = extractNetFromGross(brut, ratePercent);
+  const tax = roundMoney2(brut - net);
+  return { net, tax, gross: brut };
 }
 
 export type MerchandiseLine = { lineTotal: number; taxable: boolean };
