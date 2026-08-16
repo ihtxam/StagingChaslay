@@ -78,9 +78,7 @@ import {
   type ShopSelectedExtra,
 } from '@/lib/shop-cart';
 import WebPosProductModifiersModal, {
-  defaultConfiguredAdd,
   productHasModifiers,
-  productRequiresModifierModal,
   type ShopModifierGroup,
   type ShopProductForModifiers,
 } from '@/components/webpos/WebPosProductModifiersModal';
@@ -1848,10 +1846,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     selectedExtras: ShopSelectedExtra[];
     comboSelections: ShopComboSelection[];
     courseNumber?: number;
+    lineNote?: string;
   }) => {
     if (l.isOpenPrice || l.giftCard || l.sentToKitchen) return null;
     const course = coursesEnabled ? l.courseNumber || 1 : 0;
-    return `${l.productId}|${lineSignature(l.selectedExtras, l.comboSelections)}|c${course}`;
+    const note = (l.lineNote || '').trim();
+    return `${l.productId}|${lineSignature(l.selectedExtras, l.comboSelections)}|c${course}|n${note}`;
   };
 
   /** Collapse duplicate stackable lines (qty sum). Keeps first line’s price/discount. */
@@ -6968,15 +6968,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       />
 
       {pendingProduct && (
-        <ShopProductModifiersModal
+        <WebPosProductModifiersModal
           product={pendingProduct}
-          variant="pos"
           onClose={() => setPendingProduct(null)}
-          onConfirm={(extras, unitPrice, options) => {
+          onConfirm={({ selectedExtras, unitPrice, quantity, lineNote }) => {
             const base = products.find((p) => p.id === pendingProduct.id);
             if (base) {
-              const qty = Math.max(1, options?.qty ?? 1);
-              pushConfiguredProductWithQty(base, unitPrice, extras, [], qty, options?.note);
+              pushConfiguredProductWithQty(base, unitPrice, selectedExtras, [], quantity, lineNote);
             }
             setPendingProduct(null);
           }}
@@ -6984,17 +6982,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       )}
 
       {pendingCombo && (
-        <ShopComboWizard
+        <WebPosComboModal
           product={pendingCombo}
           onClose={() => setPendingCombo(null)}
-          onConfirm={({ comboSelections, selectedExtras, unitPrice }) => {
+          onConfirm={({ comboSelections, selectedExtras, unitPrice, quantity, lineNote }) => {
             const base = products.find((p) => p.id === pendingCombo.id);
             if (base) {
-              addConfiguredProduct(
+              pushConfiguredProductWithQty(
                 base,
                 unitPrice,
                 selectedExtras,
-                comboSelections as ShopComboSelection[]
+                comboSelections as ShopComboSelection[],
+                quantity,
+                lineNote
               );
             }
             setPendingCombo(null);

@@ -47,6 +47,8 @@ export type CartLine = {
   sentToKitchen?: boolean;
   /** Epoch ms when line was sent to kitchen (Ordered tab). */
   sentToKitchenAt?: number;
+  /** Per-line kitchen note from modifier modal */
+  lineNote?: string;
   /** Gift card sell/reload  - credited after successful payment */
   giftCard?: GiftCardLineMeta;
 };

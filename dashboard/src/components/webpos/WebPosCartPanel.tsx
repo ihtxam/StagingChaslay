@@ -826,6 +826,11 @@ export default function WebPosCartPanel({
                         {extras}
                       </p>
                     ) : null}
+                    {l.lineNote?.trim() ? (
+                      <p className="mt-0.5 text-[11px] italic text-stone-500">
+                        {t('webPosNote')}: {l.lineNote.trim()}
+                      </p>
+                    ) : null}
                     {l.sentToKitchen && sentAtLabel ? (
                       <p className="mt-0.5 text-[11px] font-medium text-stone-500">
                         {t('webPosSentAt').replace('{time}', sentAtLabel)}

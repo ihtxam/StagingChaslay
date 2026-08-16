@@ -1,262 +1,240 @@
 import { useMemo, useState } from 'react';
+import { MessageSquarePlus, Minus, Plus, Trash2 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { ShopSelectedExtra } from '@/lib/shop-cart';
 import { roundMoney2 } from '@/lib/money';
+import ShopModifierTabGrid from '@/components/shop/ShopModifierTabGrid';
+import {
+  buildExtrasFromSelection,
+  effectiveGroups,
+  initialSelection,
+  productHasModifiers,
+  productRequiresModifierModal,
+  defaultConfiguredAdd,
+  selectionSummary,
+  validateModifierGroups,
+  type ShopProductForModifiers,
+} from '@/components/shop/shop-modifier-utils';
 
-export interface ShopModifierOption {
-  id: string;
-  name: string;
-  price: number;
-  isDefault?: boolean;
-}
+export type {
+  ShopModifierOption,
+  ShopModifierGroup,
+  ShopProductForModifiers,
+} from '@/components/shop/shop-modifier-utils';
 
-export interface ShopModifierGroup {
-  id: string;
-  title: string;
-  pricingType?: string;
-  selectionType?: 'optional' | 'required' | string;
-  minSelectable?: number;
-  maxSelectable?: number;
-  options: ShopModifierOption[];
-}
+export { productHasModifiers, productRequiresModifierModal, defaultConfiguredAdd };
 
-export interface ShopProductForModifiers {
-  id: string;
-  name: string;
-  price: number;
-  description?: string;
-  image?: string;
-  allowExtras?: boolean;
-  extras?: ShopModifierOption[];
-  modifierGroups?: ShopModifierGroup[];
-}
+type ConfirmOptions = {
+  qty?: number;
+  note?: string;
+};
 
 type Props = {
   product: ShopProductForModifiers;
   onClose: () => void;
-  onConfirm: (extras: ShopSelectedExtra[], unitPrice: number) => void;
+  onConfirm: (extras: ShopSelectedExtra[], unitPrice: number, options?: ConfirmOptions) => void;
+  /** POS-style header with qty, note, and blue add button */
+  variant?: 'shop' | 'pos';
+  initialQty?: number;
 };
 
-function effectiveGroups(product: ShopProductForModifiers): ShopModifierGroup[] {
-  if (product.modifierGroups?.length) return product.modifierGroups;
-  if (product.allowExtras && product.extras?.length) {
-    return [
-      {
-        id: '__legacy__',
-        title: 'Extras',
-        selectionType: 'optional',
-        minSelectable: 0,
-        maxSelectable: product.extras.length,
-        options: product.extras,
-      },
-    ];
-  }
-  return [];
-}
-
-function initialSelection(groups: ShopModifierGroup[]): Record<string, string[]> {
-  const sel: Record<string, string[]> = {};
-  for (const g of groups) {
-    const defaults = g.options.filter((o) => o.isDefault).map((o) => o.id);
-    const max = Math.max(1, Number(g.maxSelectable) || 1);
-    sel[g.id] = defaults.slice(0, max);
-  }
-  return sel;
-}
-
-function groupMin(g: ShopModifierGroup) {
-  if (g.selectionType === 'required') return Math.max(1, Number(g.minSelectable) || 1);
-  return Math.max(0, Number(g.minSelectable) || 0);
-}
-
-function groupMax(g: ShopModifierGroup) {
-  const min = groupMin(g);
-  return Math.max(min, Number(g.maxSelectable) || 1);
-}
-
-export default function ShopProductModifiersModal({ product, onClose, onConfirm }: Props) {
+export default function ShopProductModifiersModal({
+  product,
+  onClose,
+  onConfirm,
+  variant = 'shop',
+  initialQty = 1,
+}: Props) {
   const { t } = useI18n();
   const groups = useMemo(() => effectiveGroups(product), [product]);
   const [selection, setSelection] = useState<Record<string, string[]>>(() => initialSelection(groups));
+  const [qty, setQty] = useState(Math.max(1, initialQty));
+  const [note, setNote] = useState('');
+  const [noteOpen, setNoteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedExtras: ShopSelectedExtra[] = useMemo(() => {
-    const extras: ShopSelectedExtra[] = [];
-    for (const g of groups) {
-      for (const id of selection[g.id] || []) {
-        const opt = g.options.find((o) => o.id === id);
-        if (!opt) continue;
-        extras.push({
-          id: opt.id,
-          name: opt.name,
-          price: Number(opt.price) || 0,
-          groupId: g.id,
-          groupTitle: g.title,
-        });
-      }
-    }
-    return extras;
-  }, [groups, selection]);
+  const selectedExtras = useMemo(
+    () => buildExtrasFromSelection(groups, selection),
+    [groups, selection]
+  );
 
   const extrasTotal = roundMoney2(selectedExtras.reduce((s, e) => s + e.price, 0));
   const unitPrice = roundMoney2(product.price + extrasTotal);
-
-  const toggle = (group: ShopModifierGroup, optionId: string) => {
-    setError(null);
-    const max = groupMax(group);
-    setSelection((prev) => {
-      const current = prev[group.id] || [];
-      const has = current.includes(optionId);
-      if (max === 1) {
-        return { ...prev, [group.id]: has ? [] : [optionId] };
-      }
-      if (has) {
-        return { ...prev, [group.id]: current.filter((id) => id !== optionId) };
-      }
-      if (current.length >= max) {
-        // Replace oldest when at max for multi-select
-        return { ...prev, [group.id]: [...current.slice(1), optionId] };
-      }
-      return { ...prev, [group.id]: [...current, optionId] };
-    });
-  };
+  const lineTotal = roundMoney2(unitPrice * qty);
+  const summary = selectionSummary(groups, selection, t('shopDefaultToppings'));
 
   const confirm = () => {
-    for (const g of groups) {
-      const count = (selection[g.id] || []).length;
-      const min = groupMin(g);
-      const max = groupMax(g);
-      if (count < min) {
-        setError(
-          min === 1
-            ? t('shopChooseOptionFor').replace('{name}', g.title)
-            : t('shopChooseOptionFor').replace('{name}', g.title)
-        );
-        return;
-      }
-      if (count > max) {
-        setError(t('shopTooManyOptions').replace('{name}', g.title));
-        return;
-      }
+    const err = validateModifierGroups(groups, selection, {
+      chooseOne: (name) => t('shopChooseOptionFor').replace('{name}', name),
+      chooseAtLeast: (n, name) =>
+        t('shopChooseAtLeastOptions').replace('{n}', String(n)).replace('{name}', name),
+      tooMany: (name) => t('shopTooManyOptions').replace('{name}', name),
+      groupTitle: (title) => (title === 'Extras' ? t('shopExtras') : title),
+    });
+    if (err) {
+      setError(err);
+      return;
     }
-    onConfirm(selectedExtras, unitPrice);
+    onConfirm(selectedExtras, unitPrice, variant === 'pos' ? { qty, note: note.trim() || undefined } : undefined);
   };
 
+  const isPos = variant === 'pos';
+
   return (
-    <div className="fixed inset-0 z-[60] bg-black/45 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+    <>
       <div
-        className="bg-white w-full sm:max-w-md max-h-[90vh] flex flex-col shadow-xl"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+        onClick={onClose}
       >
-        <div className="px-5 py-4 border-b border-stone-200 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold tracking-tight truncate">{product.name}</h2>
-            <p className="text-sm text-stone-500 mt-0.5">{t('shopCustomizeItem')}</p>
-          </div>
-          <button type="button" className="text-sm font-semibold text-stone-600 shrink-0" onClick={onClose}>
-            {t('close')}
-          </button>
-        </div>
+        <div
+          className={`flex w-full flex-col bg-white shadow-2xl ${
+            isPos ? 'max-h-[92vh] sm:max-w-2xl' : 'max-h-[90vh] sm:max-w-md'
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="border-b border-stone-200 px-4 py-3 sm:px-5 sm:py-4">
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-lg font-bold tracking-tight text-stone-900">
+                  {product.name}
+                </h2>
+                {!isPos ? (
+                  <p className="mt-0.5 text-sm text-stone-500">{t('shopCustomizeItem')}</p>
+                ) : null}
+                <p className="mt-1.5 line-clamp-2 text-sm text-stone-600">{summary}</p>
+              </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-          {groups.map((g) => {
-            const min = groupMin(g);
-            const max = groupMax(g);
-            const selected = selection[g.id] || [];
-            return (
-              <section key={g.id}>
-                <div className="flex items-baseline justify-between gap-2 mb-2">
-                  <h3 className="font-semibold text-stone-900">{g.title === 'Extras' ? t('shopExtras') : g.title}</h3>
-                  <span className="text-xs text-stone-500">
-                    {g.selectionType === 'required' || min > 0 ? t('shopRequired') : t('shopOptional')}
-                    {max > 1 ? ` · ${t('shopUpTo').replace('{n}', String(max))}` : ''}
-                  </span>
+              {isPos ? (
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setNoteOpen(true)}
+                      className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold ${
+                        note.trim()
+                          ? 'border-blue-300 bg-blue-50 text-blue-700'
+                          : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                      }`}
+                    >
+                      <MessageSquarePlus size={14} />
+                      {note.trim() ? t('shopEditNote') : t('shopAddNote')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="rounded-lg border border-stone-200 p-1.5 text-stone-500 hover:bg-red-50 hover:text-red-600"
+                      aria-label={t('shopDiscard')}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center rounded-lg border border-stone-300 bg-stone-50">
+                      <button
+                        type="button"
+                        className="p-1.5 text-stone-700 hover:bg-stone-100 disabled:opacity-40"
+                        disabled={qty <= 1}
+                        onClick={() => setQty((n) => Math.max(1, n - 1))}
+                        aria-label={t('shopDecreaseQty')}
+                      >
+                        <Minus size={16} />
+                      </button>
+                      <span className="min-w-[2rem] text-center text-sm font-bold tabular-nums">{qty}</span>
+                      <button
+                        type="button"
+                        className="p-1.5 text-stone-700 hover:bg-stone-100"
+                        onClick={() => setQty((n) => n + 1)}
+                        aria-label={t('shopIncreaseQty')}
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={confirm}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
+                    >
+                      {t('shopAdd')} · CHF {lineTotal.toFixed(2)}
+                    </button>
+                  </div>
                 </div>
-                <ul className="space-y-2">
-                  {g.options.map((opt) => {
-                    const checked = selected.includes(opt.id);
-                    const inputType = max === 1 ? 'radio' : 'checkbox';
-                    return (
-                      <li key={opt.id}>
-                        <label className="flex items-center gap-3 border border-stone-200 px-3 py-2.5 cursor-pointer hover:border-stone-400">
-                          <input
-                            type={inputType}
-                            name={`group-${g.id}`}
-                            checked={checked}
-                            onChange={() => toggle(g, opt.id)}
-                            className="accent-stone-900"
-                          />
-                          <span className="flex-1 text-sm font-medium text-stone-900">{opt.name}</span>
-                          <span className="text-sm text-stone-600">
-                            {opt.price > 0 ? `+CHF ${opt.price.toFixed(2)}` : t('shopIncluded')}
-                          </span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            );
-          })}
-        </div>
-
-        <div className="border-t border-stone-200 px-5 py-4 space-y-3">
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <div className="flex justify-between text-sm">
-            <span className="text-stone-500">{t('shopItemTotal')}</span>
-            <span className="font-semibold">CHF {unitPrice.toFixed(2)}</span>
+              ) : (
+                <button
+                  type="button"
+                  className="shrink-0 text-sm font-semibold text-stone-600"
+                  onClick={onClose}
+                >
+                  {t('close')}
+                </button>
+              )}
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={confirm}
-            className="w-full bg-stone-900 text-white py-3 font-semibold"
-          >
-            {t('shopAddToBasket')}
-          </button>
+
+          <ShopModifierTabGrid
+            groups={groups}
+            selection={selection}
+            onSelectionChange={(updater) => {
+              setError(null);
+              setSelection(updater);
+            }}
+            compact={!isPos}
+          />
+
+          {!isPos ? (
+            <div className="space-y-3 border-t border-stone-200 px-5 py-4">
+              {error ? <p className="text-sm text-red-600">{error}</p> : null}
+              <div className="flex justify-between text-sm">
+                <span className="text-stone-500">{t('shopItemTotal')}</span>
+                <span className="font-semibold">CHF {unitPrice.toFixed(2)}</span>
+              </div>
+              <button
+                type="button"
+                onClick={confirm}
+                className="w-full bg-stone-900 py-3 font-semibold text-white"
+              >
+                {t('shopAddToBasket')}
+              </button>
+            </div>
+          ) : error ? (
+            <div className="border-t border-stone-200 px-4 py-2">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          ) : null}
         </div>
       </div>
-    </div>
+
+      {noteOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-3"
+          onClick={() => setNoteOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-stone-200 bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-stone-100 px-4 py-3">
+              <h3 className="font-semibold">{t('shopAddNote')}</h3>
+            </div>
+            <div className="space-y-3 p-4">
+              <textarea
+                className="input min-h-[5rem] w-full text-sm"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={t('shopItemNotePlaceholder')}
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button type="button" className="btn-secondary flex-1" onClick={() => setNoteOpen(false)}>
+                  {t('cancel')}
+                </button>
+                <button type="button" className="btn-primary flex-1" onClick={() => setNoteOpen(false)}>
+                  {t('save')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
-}
-
-export function productHasModifiers(product: ShopProductForModifiers) {
-  return (
-    (product.modifierGroups?.some((g) => g.options?.length) ?? false) ||
-    (!!(product.allowExtras && product.extras?.length))
-  );
-}
-
-/** True only when the cashier must open the options modal (required / min > 0). */
-export function productRequiresModifierModal(product: ShopProductForModifiers) {
-  const groups = effectiveGroups(product);
-  if (!groups.length) return false;
-  return groups.some((g) => groupMin(g) > 0);
-}
-
-/** Default extras + unit price for one-tap add (optional groups / defaults only). */
-export function defaultConfiguredAdd(product: ShopProductForModifiers): {
-  selectedExtras: ShopSelectedExtra[];
-  unitPrice: number;
-} {
-  const groups = effectiveGroups(product);
-  const selection = initialSelection(groups);
-  const selectedExtras: ShopSelectedExtra[] = [];
-  for (const g of groups) {
-    for (const id of selection[g.id] || []) {
-      const opt = g.options.find((o) => o.id === id);
-      if (!opt) continue;
-      selectedExtras.push({
-        id: opt.id,
-        name: opt.name,
-        price: Number(opt.price) || 0,
-        groupId: g.id,
-        groupTitle: g.title,
-      });
-    }
-  }
-  const extrasTotal = roundMoney2(selectedExtras.reduce((s, e) => s + e.price, 0));
-  return {
-    selectedExtras,
-    unitPrice: roundMoney2(Number(product.price) + extrasTotal),
-  };
 }
