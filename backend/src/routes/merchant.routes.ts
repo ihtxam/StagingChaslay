@@ -20,6 +20,7 @@ import { geocodeQuery } from "@/lib/geocode";
 import { isAllowedImageMime, saveMerchantImage } from "@/services/media-upload.service";
 import { getDb, schema } from "@/db";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
+import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import posSessionsRoutes from "@/routes/pos-sessions.routes";
 
 const router = Router();

@@ -319,6 +319,13 @@ if [[ -f "$REPO_DIR/backend/sql/ensure-vat-after-discount.sql" ]]; then
     < "$REPO_DIR/backend/sql/ensure-vat-after-discount.sql" || true
 fi
 
+if [[ -f "$REPO_DIR/backend/sql/ensure-cash-movements.sql" ]]; then
+  echo "=== Apply POS cash in/out SQL patch ==="
+  docker compose --env-file .env.production exec -T db \
+    psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
+    < "$REPO_DIR/backend/sql/ensure-cash-movements.sql" || true
+fi
+
 echo "=== Health checks ==="
 API_HEALTH="$(curl -sf http://127.0.0.1:3000/health || docker compose --env-file .env.production exec -T api wget -qO- http://127.0.0.1:3000/health || true)"
 echo "local api: ${API_HEALTH:-unreachable}"
