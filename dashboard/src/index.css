@@ -219,13 +219,26 @@ button {
     max-height: calc((100dvh - 4rem) / var(--webpos-zoom));
   }
 
-  /* WebPOS toast stack — center-top, clear of right-side ⋮ menu (react-hot-toast) */
+  /* WebPOS toast stack — center-top column only; wrappers must not block top-bar clicks */
   .webpos-toast-container {
     top: max(0.5rem, env(safe-area-inset-top, 0px)) !important;
     bottom: auto !important;
+    left: 50% !important;
+    right: auto !important;
+    width: min(92vw, 22rem) !important;
+    transform: translateX(-50%) !important;
     height: auto !important;
     z-index: 60 !important;
     pointer-events: none;
+  }
+
+  /* react-hot-toast positions each toast in a full-width wrapper (left:0; right:0) */
+  .webpos-toast-container > div {
+    pointer-events: none !important;
+  }
+
+  .webpos-toast-container > div > * {
+    pointer-events: auto !important;
   }
 
   .webpos-shell[data-theme='teal'] {

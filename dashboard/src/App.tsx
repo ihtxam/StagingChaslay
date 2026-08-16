@@ -47,6 +47,11 @@ function AppToaster() {
               bottom: 'auto',
               height: 'auto',
               pointerEvents: 'none',
+              left: '50%',
+              right: 'auto',
+              width: 'min(92vw, 22rem)',
+              transform: 'translateX(-50%)',
+              zIndex: 60,
             }
           : undefined
       }
