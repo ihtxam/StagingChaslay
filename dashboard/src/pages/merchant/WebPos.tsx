@@ -8,7 +8,7 @@ import { useI18n } from '@/lib/i18n';
 import { roundMoney2, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
 import {
-  filterKitchenItems,
+  buildKitchenPrintJobs,
   generateKitchenTicketEscPos,
   generateKitchenTicketText,
   generateKitchenMessageTicketEscPos,
@@ -454,6 +454,11 @@ function mergeBillDiscounts(
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const { t, locale } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    document.title = APP_NAME;
+  }, []);
+
   const authUser = useAuthStore((s) => s.user);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
@@ -4588,9 +4593,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (isRetail) return;
     if (printSettings?.autoPrintKitchen === false && !opts?.forcePrint && !opts?.cancelled) return;
     const lang = resolveReceiptLanguage(printSettings, printSettings?.receiptLanguage === 'panel' ? locale : printSettings?.receiptLanguage || locale);
-    const kitchenPrinters = (printSettings?.printers || []).filter(
-      (p) => p.enabled !== false && p.printKitchenTickets && p.name
-    );
     const filteredLines = (
       opts?.courseOnly != null
         ? lines.filter((l) => (l.courseNumber || 1) === opts.courseOnly)
@@ -4643,23 +4645,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
 
     let queuedAny = false;
-    if (kitchenPrinters.length) {
-      for (const kp of kitchenPrinters) {
-        const items = filterKitchenItems(receiptItems, kp);
-        if (!items.length) continue;
-        const paperWidthMm = resolveKitchenPaperWidthMm(printSettings, kp.paperWidthMm);
+    const printJobs = buildKitchenPrintJobs(receiptItems, printSettings);
+    if (printJobs.length) {
+      for (const job of printJobs) {
+        const paperWidthMm = job.paperWidthMm;
         const escpos = generateKitchenTicketEscPos({
           ...kitchenOpts,
-          items,
+          items: job.items,
           paperWidthMm,
         });
         const text = generateKitchenTicketText({
           ...kitchenOpts,
-          items,
+          items: job.items,
           paperWidthMm,
         });
         const mode = await printViaAgentOrQueue({
-          printerName: kp.name,
+          printerName: job.printerName || printerName || undefined,
           dataBase64: uint8ToBase64(escpos),
           text,
           orderId: opts?.orderNumber || null,

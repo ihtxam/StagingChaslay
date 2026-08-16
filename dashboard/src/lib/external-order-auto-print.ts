@@ -1,7 +1,7 @@
 import api from '@/lib/api';
 import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
 import {
-  filterKitchenItems,
+  buildKitchenPrintJobs,
   generateKitchenTicketEscPos,
   generateOrderNotificationTicketEscPos,
   generateReservationTicketEscPos,
@@ -133,17 +133,6 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
     !isRetailPosMode(settings.posCheckoutSettings) &&
     printSettings?.autoPrintKitchen !== false
   ) {
-    const kitchenPrinterRows = (printSettings?.printers || []).filter(
-      (p) => p.enabled !== false && p.printKitchenTickets && p.name
-    );
-    const kitchenPrinters = printersForRole(printSettings, 'kitchen');
-    const targets =
-      kitchenPrinterRows.length > 0
-        ? kitchenPrinterRows
-        : kitchenPrinters.length > 0
-          ? (printSettings?.printers || []).filter((p) => p.enabled !== false && p.name)
-          : [{ name: localStorage.getItem('manupos_webpos_printer') || '', paperWidthMm: 80 }];
-
     const receiptItems = (order.items || []).map((i) => {
       const extras = (i.selectedExtras || [])
         .map((e) => e.name)
@@ -179,18 +168,22 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
     };
 
     let printedAny = false;
-    for (const printer of targets) {
-      const items =
-        kitchenPrinterRows.length > 0 ? filterKitchenItems(receiptItems, printer) : receiptItems;
-      if (!items.length) continue;
-      const paper = resolveKitchenPaperWidthMm(printSettings, printer.paperWidthMm);
+    const printJobs = buildKitchenPrintJobs(receiptItems, printSettings);
+    const targets =
+      printJobs.length > 0
+        ? printJobs
+        : [{ printerName: localStorage.getItem('manupos_webpos_printer') || '', paperWidthMm: resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80), items: receiptItems }];
+
+    for (const job of targets) {
+      if (!job.items.length) continue;
+      const paper = job.paperWidthMm ?? resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
       const escpos = generateKitchenTicketEscPos({
         ...kitchenOpts,
-        items,
+        items: job.items,
         paperWidthMm: paper,
       });
       await printViaAgentOrQueue({
-        printerName: printer.name || undefined,
+        printerName: job.printerName || undefined,
         dataBase64: uint8ToBase64(escpos),
         orderId,
       });

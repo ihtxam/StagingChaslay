@@ -209,7 +209,18 @@ export type PosPrintSettingsClient = {
     linkedCategoryIds?: string[];
     linkedProductIds?: string[];
   }>;
+  /** categoryId → kitchen1 | kitchen2 | receipt | none. Empty/absent = legacy (all kitchen printers). */
+  kitchenPrintRouting?: Record<string, KitchenPrintDestination>;
 };
+
+export type KitchenPrintDestination = 'kitchen1' | 'kitchen2' | 'receipt' | 'none';
+
+export const KITCHEN_PRINT_DESTINATIONS: KitchenPrintDestination[] = [
+  'kitchen1',
+  'kitchen2',
+  'receipt',
+  'none',
+];
 
 export type WebPosReceipt = {
   businessName: string;
@@ -1735,6 +1746,112 @@ export function filterKitchenItems(
   return items.filter(
     (i) => (i.productId && prods.has(i.productId)) || (i.categoryId && cats.has(i.categoryId))
   );
+}
+
+export function hasKitchenPrintRouting(
+  routing?: Record<string, KitchenPrintDestination> | null
+): boolean {
+  return !!routing && Object.keys(routing).length > 0;
+}
+
+/** Default unmapped / uncategorized items → kitchen printer 1. */
+export function resolveCategoryKitchenDestination(
+  categoryId: string | null | undefined,
+  routing?: Record<string, KitchenPrintDestination> | null
+): KitchenPrintDestination {
+  if (!categoryId) return 'kitchen1';
+  const dest = routing?.[categoryId];
+  if (dest && KITCHEN_PRINT_DESTINATIONS.includes(dest)) return dest;
+  return 'kitchen1';
+}
+
+export type KitchenPrintJob = {
+  printerName: string;
+  paperWidthMm: 58 | 80;
+  items: KitchenTicketItem[];
+};
+
+/**
+ * Build per-printer kitchen print jobs from cart/order lines.
+ * When kitchenPrintRouting is empty, uses legacy printer-profile filtering (printAllProducts / linkedCategoryIds).
+ * When routing is configured, items are split by category destination.
+ */
+export function buildKitchenPrintJobs(
+  items: KitchenTicketItem[],
+  settings: PosPrintSettingsClient | null | undefined
+): KitchenPrintJob[] {
+  if (!items.length) return [];
+
+  const routing = settings?.kitchenPrintRouting;
+  const globalPaper: 58 | 80 = settings?.paperWidthMm === 58 ? 58 : 80;
+  const allPrinters = (settings?.printers || []).filter((p) => p.enabled !== false && p.name);
+  const kitchenPrinters = allPrinters.filter((p) => p.printKitchenTickets);
+  const receiptPrinters = allPrinters.filter((p) => p.printReceipts);
+
+  if (!hasKitchenPrintRouting(routing)) {
+    if (kitchenPrinters.length) {
+      const jobs: KitchenPrintJob[] = [];
+      for (const kp of kitchenPrinters) {
+        const filtered = filterKitchenItems(items, kp);
+        if (!filtered.length) continue;
+        jobs.push({
+          printerName: kp.name,
+          paperWidthMm: resolveKitchenPaperWidthMm(settings, kp.paperWidthMm),
+          items: filtered,
+        });
+      }
+      return jobs;
+    }
+    return [{ printerName: '', paperWidthMm: globalPaper, items }];
+  }
+
+  const buckets: Record<KitchenPrintDestination, KitchenTicketItem[]> = {
+    kitchen1: [],
+    kitchen2: [],
+    receipt: [],
+    none: [],
+  };
+  for (const item of items) {
+    const dest = resolveCategoryKitchenDestination(item.categoryId, routing);
+    if (dest !== 'none') buckets[dest].push(item);
+  }
+
+  const jobs: KitchenPrintJob[] = [];
+
+  const pushKitchenBucket = (bucketItems: KitchenTicketItem[], printerIdx: number) => {
+    if (!bucketItems.length) return;
+    const printer = kitchenPrinters[printerIdx] ?? kitchenPrinters[0];
+    if (!printer) {
+      jobs.push({ printerName: '', paperWidthMm: globalPaper, items: bucketItems });
+      return;
+    }
+    jobs.push({
+      printerName: printer.name,
+      paperWidthMm: resolveKitchenPaperWidthMm(settings, printer.paperWidthMm),
+      items: bucketItems,
+    });
+  };
+
+  pushKitchenBucket(buckets.kitchen1, 0);
+  pushKitchenBucket(buckets.kitchen2, 1);
+
+  if (buckets.receipt.length) {
+    const targets =
+      receiptPrinters.length > 0
+        ? receiptPrinters
+        : kitchenPrinters.length > 0
+          ? [kitchenPrinters[0]]
+          : [{ name: '', paperWidthMm: globalPaper }];
+    for (const rp of targets) {
+      jobs.push({
+        printerName: rp.name,
+        paperWidthMm: resolveKitchenPaperWidthMm(settings, rp.paperWidthMm),
+        items: buckets.receipt,
+      });
+    }
+  }
+
+  return jobs;
 }
 
 export function resolveReceiptLanguage(

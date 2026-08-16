@@ -28,6 +28,10 @@ import {
   listAgentPrinters,
   type AgentPrinter,
 } from '@/lib/print-agent';
+import {
+  KITCHEN_PRINT_DESTINATIONS,
+  type KitchenPrintDestination,
+} from '@/lib/webpos-receipt';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { compressImageIfNeeded } from '@/lib/compress-image';
 import {
@@ -182,6 +186,7 @@ interface SettingsData {
       printEndOfDayReports?: boolean;
       printAllProducts?: boolean;
     }>;
+    kitchenPrintRouting?: Record<string, 'kitchen1' | 'kitchen2' | 'receipt' | 'none'>;
   } | null;
 }
 
@@ -380,6 +385,7 @@ export default function Settings() {
   const [printAgentOk, setPrintAgentOk] = useState(false);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
+  const [productCategories, setProductCategories] = useState<Array<{ id: string; name: string }>>([]);
   const [savingTerminal, setSavingTerminal] = useState(false);
   const vacationImageInputRef = useRef<HTMLInputElement>(null);
   const [settingsQuery, setSettingsQuery] = useState('');
@@ -691,15 +697,22 @@ export default function Settings() {
 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const [settingsRes, terminalsRes] = await Promise.all([
+        const [settingsRes, terminalsRes, categoriesRes] = await Promise.all([
           api.get('/merchant/settings'),
           api.get('/terminals').catch(() => ({ data: { adyen: {}, terminals: [] } })),
+          api.get('/merchant/categories').catch(() => ({ data: { categories: [] } })),
         ]);
         const s = settingsRes.data?.settings;
         if (!s) {
           throw new Error('Settings response missing data');
         }
         setSettings(s);
+        setProductCategories(
+          (categoriesRes.data?.categories || []).map((c: { id: string; name: string }) => ({
+            id: c.id,
+            name: c.name,
+          }))
+        );
         setCardFeeFixed(String(s?.onlineCardFeeFixed ?? '0'));
         setCardFeePercent(String(s?.onlineCardFeePercent ?? '0'));
         const a = terminalsRes.data.adyen || {};
@@ -932,7 +945,7 @@ export default function Settings() {
       setSettings((prev) => (prev ? { ...prev, ...next } : prev));
       toast.success(t('saved'));
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to save WebPOS payment settings');
+      toast.error(error.response?.data?.error || 'Failed to save POS payment settings');
     } finally {
       setSavingWebposPay(false);
     }
@@ -944,6 +957,12 @@ export default function Settings() {
     setSavingReceipt(true);
     try {
       const ps = settings.posPrintSettings || {};
+      const routingRaw = ps.kitchenPrintRouting || {};
+      const kitchenPrintRouting: Record<string, KitchenPrintDestination> = {};
+      for (const cat of productCategories) {
+        const dest = routingRaw[cat.id] || 'kitchen1';
+        if (dest !== 'kitchen1') kitchenPrintRouting[cat.id] = dest;
+      }
       const response = await api.put('/merchant/settings', {
         posPrintSettings: {
           receiptHeader: ps.receiptHeader || '',
@@ -967,6 +986,7 @@ export default function Settings() {
           autoPrintReceipt: ps.autoPrintReceipt !== false,
           autoPrintKitchen: ps.autoPrintKitchen !== false,
           printers: ps.printers || [],
+          kitchenPrintRouting,
         },
       });
       const next = response.data.merchant || response.data.settings || {};
@@ -2733,7 +2753,7 @@ export default function Settings() {
                   </select>
                 </Field>
                 <Field
-                  label="Scale COM port (WebPOS)"
+                  label="Scale COM port (ChaslayReborn)"
                   hint="Print Agent serial port, e.g. COM3. Skips port scan for faster reads."
                 >
                   <input
@@ -3192,6 +3212,65 @@ export default function Settings() {
                 >
                   {t('addPrinterProfile')}
                 </button>
+              </Section>
+
+              <Section
+                icon={UtensilsCrossed}
+                accent={settingsDash.warning}
+                title={t('kitchenPrintRouting')}
+                description={t('kitchenPrintRoutingHint')}
+              >
+                {productCategories.length === 0 ? (
+                  <p className="text-sm text-[var(--muted)] m-0">{t('kitchenPrintRoutingEmpty')}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {productCategories.map((cat) => {
+                      const routing = settings.posPrintSettings?.kitchenPrintRouting || {};
+                      const value: KitchenPrintDestination = routing[cat.id] || 'kitchen1';
+                      return (
+                        <div
+                          key={cat.id}
+                          className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--border)] px-3 py-2"
+                        >
+                          <span className="min-w-[8rem] flex-1 text-sm font-medium">{cat.name}</span>
+                          <select
+                            className="input max-w-xs"
+                            value={value}
+                            onChange={(e) => {
+                              const dest = e.target.value as KitchenPrintDestination;
+                              const prev = settings.posPrintSettings?.kitchenPrintRouting || {};
+                              const next = { ...prev };
+                              if (dest === 'kitchen1') {
+                                delete next[cat.id];
+                              } else {
+                                next[cat.id] = dest;
+                              }
+                              setSettings({
+                                ...settings,
+                                posPrintSettings: {
+                                  ...(settings.posPrintSettings || {}),
+                                  kitchenPrintRouting: next,
+                                },
+                              });
+                            }}
+                          >
+                            {KITCHEN_PRINT_DESTINATIONS.map((dest) => (
+                              <option key={dest} value={dest}>
+                                {dest === 'kitchen1'
+                                  ? t('kitchenPrintDestKitchen1')
+                                  : dest === 'kitchen2'
+                                    ? t('kitchenPrintDestKitchen2')
+                                    : dest === 'receipt'
+                                      ? t('kitchenPrintDestReceipt')
+                                      : t('kitchenPrintDestNone')}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </Section>
 
               <SettingsSaveBar saving={savingReceipt} />

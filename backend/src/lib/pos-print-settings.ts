@@ -1,5 +1,15 @@
 /** Cloud POS / WebPOS receipt + printer settings (shared with Android later). */
 
+/** Per-category kitchen print destination (WebPOS + print agent). */
+export type KitchenPrintDestination = "kitchen1" | "kitchen2" | "receipt" | "none";
+
+export const KITCHEN_PRINT_DESTINATIONS: KitchenPrintDestination[] = [
+  "kitchen1",
+  "kitchen2",
+  "receipt",
+  "none",
+];
+
 export type PosPrinterProfile = {
   id: string;
   /** Windows printer name (print-agent) or device label */
@@ -46,6 +56,8 @@ export type PosPrintSettings = {
   scaleUsbAddress?: string | null;
   scaleEnabled?: boolean;
   printers?: PosPrinterProfile[];
+  /** categoryId → kitchen1 | kitchen2 | receipt | none. Empty/absent = legacy (all kitchen printers). */
+  kitchenPrintRouting?: Record<string, KitchenPrintDestination>;
 };
 
 export const DEFAULT_POS_PRINT_SETTINGS: Required<
@@ -116,6 +128,21 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     | 2
     | 3;
 
+  const routingDests = new Set<string>(KITCHEN_PRINT_DESTINATIONS);
+  let kitchenPrintRouting: Record<string, KitchenPrintDestination> | undefined;
+  if (src.kitchenPrintRouting && typeof src.kitchenPrintRouting === "object") {
+    const rawRouting = src.kitchenPrintRouting as Record<string, unknown>;
+    const next: Record<string, KitchenPrintDestination> = {};
+    for (const [catId, dest] of Object.entries(rawRouting)) {
+      const id = String(catId || "").trim().slice(0, 64);
+      const d = String(dest || "").trim();
+      if (id && routingDests.has(d)) {
+        next[id] = d as KitchenPrintDestination;
+      }
+    }
+    if (Object.keys(next).length) kitchenPrintRouting = next;
+  }
+
   return {
     receiptHeader: String(src.receiptHeader ?? "").slice(0, 2000),
     receiptFooter: String(src.receiptFooter ?? DEFAULT_POS_PRINT_SETTINGS.receiptFooter).slice(0, 2000),
@@ -147,6 +174,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
         : String(src.scaleUsbAddress).trim().slice(0, 120) || null,
     scaleEnabled: src.scaleEnabled === true,
     printers,
+    kitchenPrintRouting,
   };
 }
 
