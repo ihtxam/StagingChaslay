@@ -499,8 +499,16 @@ export function WebPosSettingsDropdown({
   return (
     <div className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-50 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl">
       <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
-      <div className="border-b border-stone-100 pb-3">
-        <div className={`grid gap-1.5 ${canShowPanel && onShowPanel ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      <div className="space-y-1.5 border-b border-stone-100 pb-3">
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={() => window.location.reload()}
+          >
+            <RefreshCw size={16} />
+            {t('webPosRefreshPage')}
+          </button>
           <button
             type="button"
             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
@@ -513,19 +521,19 @@ export function WebPosSettingsDropdown({
             }}
           >
             {!appMode || !fullscreenActive ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-            {!appMode || !fullscreenActive ? t('webPosFullscreen') : t('webPosExitFullscreen')}
+            {!appMode || !fullscreenActive ? t('webPosEnterFullscreen') : t('webPosExitFullscreen')}
           </button>
-          {canShowPanel && onShowPanel ? (
-            <button
-              type="button"
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
-              onClick={onShowPanel}
-            >
-              <PanelLeft size={16} />
-              {t('webPosDashboard')}
-            </button>
-          ) : null}
         </div>
+        {canShowPanel && onShowPanel ? (
+          <button
+            type="button"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={onShowPanel}
+          >
+            <PanelLeft size={16} />
+            {t('webPosDashboard')}
+          </button>
+        ) : null}
       </div>
 
       {(onAppearanceChange || onTextSizeChange) && (

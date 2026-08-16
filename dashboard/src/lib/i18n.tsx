@@ -1699,7 +1699,9 @@ const en: Dict = {
   webPosUnsuitablePrinter:
     'Select a receipt/ESC-POS thermal printer, not OneNote or Microsoft Print to PDF.',
   webPosPrinterNotThermal: ' (not for receipts)',
+  webPosRefreshPage: 'Refresh page',
   webPosFullscreen: 'Fullscreen',
+  webPosEnterFullscreen: 'Enter fullscreen',
   webPosExitFullscreen: 'Exit fullscreen',
   webPosFullscreenHint:
     'Use Fullscreen here, browser F11, or install WebPOS as an app (PWA) for a kiosk-like screen. After leaving fullscreen, open the menu and tap Fullscreen again.',
@@ -3628,7 +3630,9 @@ const fr: Dict = {
   webPosUnsuitablePrinter:
     'Choisissez une imprimante tickets ESC/POS, pas OneNote ni Microsoft Print to PDF.',
   webPosPrinterNotThermal: ' (pas pour tickets)',
+  webPosRefreshPage: 'Actualiser la page',
   webPosFullscreen: 'Plein écran',
+  webPosEnterFullscreen: 'Plein écran',
   webPosExitFullscreen: 'Quitter le plein écran',
   webPosFullscreenHint:
     'Utilisez Plein écran ici, F11 du navigateur, ou installez WebPOS en application (PWA). Après avoir quitté le plein écran, rouvrez le menu et tapez Plein écran.',
@@ -5562,7 +5566,9 @@ const de: Dict = {
   webPosUnsuitablePrinter:
     'Bitte einen ESC/POS-Bondrucker wählen, nicht OneNote oder Microsoft Print to PDF.',
   webPosPrinterNotThermal: ' (nicht für Belege)',
+  webPosRefreshPage: 'Seite aktualisieren',
   webPosFullscreen: 'Vollbild',
+  webPosEnterFullscreen: 'Vollbild',
   webPosExitFullscreen: 'Vollbild beenden',
   webPosFullscreenHint:
     'Vollbild hier, Browser-F11 oder WebPOS als App (PWA) installieren. Nach Verlassen des Vollbilds: Menü öffnen und erneut Vollbild tippen.',
