@@ -1547,6 +1547,9 @@ export function generateEodReportText(report: EodReportPrint): string {
   return r;
 }
 
+/** Thermal receipt QR module size (2 = small but reliable; size 1 fails on many ESC/POS printers). */
+const RECEIPT_QR_MODULE_SIZE = 2;
+
 /** Minimal ESC/POS: init + optional logo + text + optional QR + optional delivery QR + optional Code128 + feed + partial cut */
 export function textToEscPos(
   text: string,
@@ -1568,10 +1571,10 @@ export function textToEscPos(
   }
   parts.push(alignLeft, body);
   if (qrData) {
-    parts.push(alignCenter, escposQrCode(qrData, 1), alignLeft);
+    parts.push(alignCenter, escposQrCode(qrData, RECEIPT_QR_MODULE_SIZE), alignLeft);
   }
   if (deliveryQrData) {
-    parts.push(alignCenter, escposQrCode(deliveryQrData, 1), alignLeft);
+    parts.push(alignCenter, escposQrCode(deliveryQrData, RECEIPT_QR_MODULE_SIZE), alignLeft);
   }
   if (barcodeData) {
     parts.push(escposCode128(barcodeData, 72, 2));

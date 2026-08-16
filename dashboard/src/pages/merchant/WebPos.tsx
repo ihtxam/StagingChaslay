@@ -4243,10 +4243,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const paidAmount = totals.total;
     setBusy(true);
     try {
-      // Express: popup only - never auto-print receipt
-      await finalizeSale(method, undefined, whenForPay, extras, false, {
-        skipReceiptPrint: true,
-      });
+      // Express: compact success popup; honor autoPrintReceipt like normal checkout.
+      await finalizeSale(method, undefined, whenForPay, extras, false);
       setSuccessInfo({ amount: paidAmount, changeDue: 0 });
       setExpressSuccessOpen(true);
     } catch (e: any) {

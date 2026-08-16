@@ -110,7 +110,7 @@ function ReceiptQr({
   label: string;
   compact?: boolean;
 }) {
-  const size = compact ? 50 : 60;
+  const size = compact ? 100 : 120;
   return (
     <div className="flex flex-col items-center gap-1.5">
       <img
