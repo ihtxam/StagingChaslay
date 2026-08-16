@@ -5,6 +5,7 @@ import com.chaslay.pos.data.preferences.SyncApiKeyStore
 import com.chaslay.pos.data.remote.FloorApi
 import com.chaslay.pos.data.remote.LicenseApi
 import com.chaslay.pos.data.remote.PosAuthApi
+import com.chaslay.pos.data.remote.PosSessionApi
 import com.chaslay.pos.data.remote.SyncApi
 import dagger.Module
 import dagger.Provides
@@ -74,6 +75,11 @@ object NetworkModule {
     @Singleton
     fun provideGiftCardApi(retrofit: Retrofit): com.chaslay.pos.data.remote.GiftCardApi =
         retrofit.create(com.chaslay.pos.data.remote.GiftCardApi::class.java)
+
+    @Provides
+    @Singleton
+    fun providePosSessionApi(retrofit: Retrofit): PosSessionApi =
+        retrofit.create(PosSessionApi::class.java)
 
     @Provides
     @Singleton

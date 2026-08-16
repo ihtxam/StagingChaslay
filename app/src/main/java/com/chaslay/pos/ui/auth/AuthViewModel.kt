@@ -8,6 +8,7 @@ import com.chaslay.pos.data.repository.AuthRepository
 import com.chaslay.pos.domain.model.LoginResult
 import com.chaslay.pos.sync.MenuSyncMode
 import com.chaslay.pos.sync.MenuSyncRepository
+import com.chaslay.pos.sync.PosSessionRepository
 import com.chaslay.pos.sync.SyncService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -32,7 +33,8 @@ class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val sessionManager: SessionManager,
     private val menuSyncRepository: MenuSyncRepository,
-    private val syncService: SyncService
+    private val syncService: SyncService,
+    private val posSessionRepository: PosSessionRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -166,6 +168,10 @@ class AuthViewModel @Inject constructor(
     private suspend fun finishLogin(session: AuthRepository.AuthSession, pullCloudMenu: Boolean) {
         val access = authRepository.toUserAccess(session)
         sessionManager.saveSession(session.user.id, session.user.name, access)
+        runCatching {
+            posSessionRepository.registerAfterLogin(session.user.id, session.user.name, access)
+        }
+        posSessionRepository.startHeartbeat(viewModelScope)
         _uiState.update { AuthUiState(isLoggedIn = true) }
         if (pullCloudMenu) {
             runCatching {
@@ -177,6 +183,7 @@ class AuthViewModel @Inject constructor(
 
     fun logout() {
         viewModelScope.launch {
+            runCatching { posSessionRepository.revoke() }
             sessionManager.clearSession()
             pendingSession = null
             pendingPullCloudMenu = false

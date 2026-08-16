@@ -27,6 +27,7 @@ import com.chaslay.pos.payment.taptopay.TapToPayCallbackRouter
 import com.chaslay.pos.domain.model.LicenseGateState
 import com.chaslay.pos.domain.model.PosThemeMode
 import com.chaslay.pos.sync.FloorSyncCoordinator
+import com.chaslay.pos.sync.PosSessionRepository
 import com.chaslay.pos.sync.SyncService
 import com.chaslay.pos.ui.license.ActivationScreen
 import com.chaslay.pos.ui.navigation.ChaslayNavHost
@@ -43,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var syncService: SyncService
     @Inject lateinit var licenseRepository: LicenseRepository
     @Inject lateinit var floorSyncCoordinator: FloorSyncCoordinator
+    @Inject lateinit var posSessionRepository: PosSessionRepository
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -78,6 +80,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         floorSyncCoordinator.start(lifecycleScope)
+        posSessionRepository.startHeartbeat(lifecycleScope)
 
         setContent {
             val userAccess by sessionManager.currentUserAccess.collectAsStateWithLifecycle(initialValue = null)
