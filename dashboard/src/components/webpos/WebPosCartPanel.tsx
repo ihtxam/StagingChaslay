@@ -354,7 +354,20 @@ export default function WebPosCartPanel({
       {/* Table / channel toggles + ⋮ on one line */}
       <div className="relative shrink-0 border-b border-stone-100 px-2 py-1.5">
         <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            {showFulfillmentTime ? (
+              <button
+                type="button"
+                onClick={onEditFulfillment}
+                className="inline-flex max-w-[9.5rem] min-h-8 touch-manipulation items-center justify-center truncate rounded-lg border border-[var(--webpos-accent-border)] bg-[var(--webpos-accent-softer)] px-2 py-1 text-[11px] font-semibold text-[var(--webpos-accent-text)] hover:bg-[var(--webpos-accent-soft)] active:scale-[0.98]"
+                title={t('webPosChooseTime')}
+                aria-label={t('webPosChooseTime')}
+              >
+                {fulfillmentIsLater && fulfillmentLabel
+                  ? fulfillmentLabel
+                  : t('webPosChooseTime')}
+              </button>
+            ) : null}
             {tableLabel ? (
               <span className="inline-flex max-w-full items-center gap-2 truncate">
                 <span className="inline-flex items-center truncate rounded-lg bg-sky-100 px-2.5 py-1.5 text-xs font-bold text-sky-900">
@@ -437,21 +450,7 @@ export default function WebPosCartPanel({
               </span>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {showFulfillmentTime ? (
-              <button
-                type="button"
-                onClick={onEditFulfillment}
-                className="inline-flex max-w-[9.5rem] min-h-8 touch-manipulation items-center justify-center truncate rounded-lg border border-[var(--webpos-accent-border)] bg-[var(--webpos-accent-softer)] px-2 py-1 text-[11px] font-semibold text-[var(--webpos-accent-text)] hover:bg-[var(--webpos-accent-soft)] active:scale-[0.98]"
-                title={t('webPosChooseTime')}
-                aria-label={t('webPosChooseTime')}
-              >
-                {fulfillmentIsLater && fulfillmentLabel
-                  ? fulfillmentLabel
-                  : t('webPosChooseTime')}
-              </button>
-            ) : null}
-            <button
+          <button
             type="button"
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
             onClick={() => setMoreOpen((v) => !v)}
@@ -462,7 +461,6 @@ export default function WebPosCartPanel({
           >
             <MoreHorizontal size={18} aria-hidden />
           </button>
-          </div>
         </div>
         {moreOpen ? (
           <>
