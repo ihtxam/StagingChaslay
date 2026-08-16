@@ -27,6 +27,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_checkout_settings jsonb",
   pos_print_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_print_settings jsonb",
+  table_qr_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS table_qr_settings jsonb",
   tax_included_in_price:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS tax_included_in_price boolean NOT NULL DEFAULT false",
   tax_takeaway_rate:

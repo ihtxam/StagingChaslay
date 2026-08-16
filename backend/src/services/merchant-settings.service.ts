@@ -18,6 +18,10 @@ import {
   type PosCheckoutSettings,
 } from "@/lib/pos-checkout-settings";
 import {
+  normalizeTableQrSettings,
+  type TableQrSettings,
+} from "@/lib/table-qr-settings";
+import {
   getDeliveryPlatformPublic,
   mergeDeliveryPlatformSettings,
   applyProductionCredentialDefaults,
@@ -173,6 +177,7 @@ export class MerchantSettingsService {
       panelLanguage: merchant.panelLanguage || "en",
       shopLanguage: merchant.shopLanguage || merchant.panelLanguage || "en",
       posPrintSettings: normalizePosPrintSettings(merchant.posPrintSettings),
+      tableQrSettings: normalizeTableQrSettings(merchant.tableQrSettings),
       posCheckoutSettings: normalizePosCheckoutSettings(merchant.posCheckoutSettings),
       deliveryPlatformSettings: getDeliveryPlatformPublic(merchant.deliveryPlatformSettings),
       status: merchant.status,
@@ -256,6 +261,7 @@ export class MerchantSettingsService {
       panelLanguage?: string;
       shopLanguage?: string;
       posPrintSettings?: PosPrintSettings | null;
+      tableQrSettings?: TableQrSettings | null;
       posCheckoutSettings?: PosCheckoutSettings | Partial<PosCheckoutSettings> | null;
       deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
     }
@@ -436,6 +442,9 @@ export class MerchantSettingsService {
     }
     if (updates.posPrintSettings !== undefined) {
       patch.posPrintSettings = normalizePosPrintSettings(updates.posPrintSettings);
+    }
+    if (updates.tableQrSettings !== undefined) {
+      patch.tableQrSettings = normalizeTableQrSettings(updates.tableQrSettings);
     }
     if (updates.posCheckoutSettings !== undefined) {
       patch.posCheckoutSettings = normalizePosCheckoutSettings(updates.posCheckoutSettings);

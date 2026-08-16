@@ -1,14 +1,23 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, QrCode, Users } from 'lucide-react';
+import { Download, QrCode, Save, Settings2, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useTableManagement } from '@/hooks/useTableManagement';
 import {
-  QR_DOWNLOAD_SIZES,
+  DEFAULT_TABLE_QR_SETTINGS,
+  QR_LAYOUT_TEMPLATES,
   type QrDownloadStyle,
+  type QrLayoutTemplate,
   type TableQrCodeRow,
+  type TableQrSettings,
 } from '@/lib/table-management';
+import {
+  downloadQrBlob,
+  mergeTableQrSettings,
+  renderTableQrPng,
+  tableQrDownloadFilename,
+} from '@/lib/table-qr-download';
 import { buildTableQrPayload, buildTableShopUrl, qrImageUrl } from '@/lib/qr';
 
 type TableQrView = {
@@ -22,58 +31,6 @@ type TableQrView = {
   codes: TableQrCodeRow[];
 };
 
-async function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
-}
-
-async function renderQrCardPng(
-  label: string,
-  qrSrc: string,
-  style: QrDownloadStyle
-): Promise<Blob> {
-  const cfg = QR_DOWNLOAD_SIZES[style];
-  const pad = cfg.showLabel ? 24 : 8;
-  const labelH = cfg.showLabel ? cfg.label + pad : 0;
-  const w = cfg.qr + pad * 2;
-  const h = cfg.qr + pad * 2 + labelH;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, w, h);
-
-  const img = await loadImage(qrSrc);
-  ctx.drawImage(img, pad, pad, cfg.qr, cfg.qr);
-
-  if (cfg.showLabel) {
-    ctx.fillStyle = '#111827';
-    ctx.font = `bold ${cfg.label}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText(label, w / 2, cfg.qr + pad + cfg.label);
-  }
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG failed'))), 'image/png');
-  });
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function TableQrCodes() {
   const { t } = useI18n();
   const { sections, allTables, merchantSlug, loading, reload } = useTableManagement();
@@ -85,6 +42,9 @@ export default function TableQrCodes() {
   const [codeType, setCodeType] = useState<'static' | 'temporary'>('static');
   const [customCode, setCustomCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [qrSettings, setQrSettings] = useState<TableQrSettings>(DEFAULT_TABLE_QR_SETTINGS);
+  const [draftSettings, setDraftSettings] = useState<Required<TableQrSettings>>(DEFAULT_TABLE_QR_SETTINGS);
 
   const loadQrCodes = useCallback(async () => {
     try {
@@ -95,9 +55,22 @@ export default function TableQrCodes() {
     }
   }, []);
 
+  const loadSettings = useCallback(async () => {
+    try {
+      const res = await api.get('/merchant/settings');
+      const merged = mergeTableQrSettings(res.data?.tableQrSettings);
+      setQrSettings(merged);
+      setDraftSettings(merged);
+    } catch {
+      setQrSettings(DEFAULT_TABLE_QR_SETTINGS);
+      setDraftSettings(DEFAULT_TABLE_QR_SETTINGS);
+    }
+  }, []);
+
   useEffect(() => {
     void loadQrCodes();
-  }, [loadQrCodes, allTables.length]);
+    void loadSettings();
+  }, [loadQrCodes, loadSettings, allTables.length]);
 
   const sectionNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -129,7 +102,7 @@ export default function TableQrCodes() {
   const filtered = useMemo(() => {
     if (activeSectionId === 'all') return rows;
     return rows.filter((r) => {
-      const table = allTables.find((t) => t.id === r.id);
+      const table = allTables.find((tbl) => tbl.id === r.id);
       return table?.floorPlanId === activeSectionId;
     });
   }, [rows, activeSectionId, allTables]);
@@ -166,10 +139,30 @@ export default function TableQrCodes() {
     }
   };
 
+  const saveSettings = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api.put('/merchant/settings', { tableQrSettings: draftSettings });
+      setQrSettings(draftSettings);
+      toast.success(t('tableQrSettingsSaved'));
+      setSettingsOpen(false);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('tableQrSettingsSaveFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const downloadOne = async (row: TableQrView, style: QrDownloadStyle) => {
     try {
-      const blob = await renderQrCardPng(row.label, row.qrUrl, style);
-      downloadBlob(blob, `table-${row.label.replace(/[^a-z0-9]+/gi, '-')}-qr.png`);
+      const blob = await renderTableQrPng({
+        payload: row.payload,
+        tableLabel: row.label,
+        style,
+        settings: qrSettings,
+      });
+      downloadQrBlob(blob, tableQrDownloadFilename(row.label, style));
     } catch {
       toast.error(t('tableQrDownloadFailed'));
     }
@@ -179,8 +172,13 @@ export default function TableQrCodes() {
     setBusy(true);
     try {
       for (const row of filtered) {
-        const blob = await renderQrCardPng(row.label, row.qrUrl, bulkStyle);
-        downloadBlob(blob, `table-${row.label.replace(/[^a-z0-9]+/gi, '-')}-qr.png`);
+        const blob = await renderTableQrPng({
+          payload: row.payload,
+          tableLabel: row.label,
+          style: bulkStyle,
+          settings: qrSettings,
+        });
+        downloadQrBlob(blob, tableQrDownloadFilename(row.label, bulkStyle));
         await new Promise((r) => setTimeout(r, 120));
       }
       toast.success(t('tableQrBulkDone'));
@@ -200,15 +198,39 @@ export default function TableQrCodes() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-[var(--text-muted)]">{t('tableQrHint')}</p>
-        <button
-          type="button"
-          className="btn-primary inline-flex items-center gap-2 text-sm"
-          disabled={!filtered.length}
-          onClick={() => setBulkOpen(true)}
-        >
-          <Download className="h-4 w-4" />
-          {t('tableQrBulkDownload')}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn-secondary inline-flex items-center gap-2 text-sm"
+            onClick={() => {
+              setDraftSettings(mergeTableQrSettings(qrSettings));
+              setSettingsOpen(true);
+            }}
+          >
+            <Settings2 className="h-4 w-4" />
+            {t('tableQrStandSettings')}
+          </button>
+          <button
+            type="button"
+            className="btn-primary inline-flex items-center gap-2 text-sm"
+            disabled={!filtered.length}
+            onClick={() => setBulkOpen(true)}
+          >
+            <Download className="h-4 w-4" />
+            {t('tableQrBulkDownload')}
+          </button>
+        </div>
+      </div>
+
+      <div className="card flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
+        <span>
+          <span className="font-medium text-[var(--text-primary)]">{qrSettings.headerText}</span>
+          {' · '}
+          {qrSettings.subtitleText}
+        </span>
+        <span className="rounded bg-[var(--bg-subtle)] px-2 py-0.5">
+          {t(`tableQrLayout_${qrSettings.layoutTemplate}`)}
+        </span>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[200px_1fr]">
@@ -312,17 +334,20 @@ export default function TableQrCodes() {
                   onChange={(e) => setCustomCode(e.target.value)}
                   placeholder={t('tableQrCodePlaceholder')}
                 />
-                <div className="flex flex-wrap gap-2">
-                  {(['code_only', 'small', 'medium', 'large'] as QrDownloadStyle[]).map((style) => (
-                    <button
-                      key={style}
-                      type="button"
-                      className="btn-secondary text-xs"
-                      onClick={() => void downloadOne(selected, style)}
-                    >
-                      {t(`tableQrStyle_${style}`)}
-                    </button>
-                  ))}
+                <div>
+                  <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('tableQrDownloadStyle')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(['code_only', 'small', 'medium', 'large'] as QrDownloadStyle[]).map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        className="btn-secondary text-xs"
+                        onClick={() => void downloadOne(selected, style)}
+                      >
+                        {t(`tableQrStyle_${style}`)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2">
                   <button type="button" className="btn-secondary" onClick={() => setSelected(null)}>
@@ -334,6 +359,63 @@ export default function TableQrCodes() {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
+            <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+              <Settings2 className="h-5 w-5 text-emerald-500" />
+              <h3 className="font-semibold text-[var(--text-primary)]">{t('tableQrStandSettings')}</h3>
+            </div>
+            <form onSubmit={saveSettings} className="space-y-4 p-4">
+              <p className="text-xs text-[var(--text-muted)]">{t('tableQrStandSettingsHint')}</p>
+              <label className="block text-sm">
+                <span className="font-medium">{t('tableQrHeaderText')}</span>
+                <input
+                  className="input mt-1"
+                  value={draftSettings.headerText}
+                  maxLength={80}
+                  onChange={(e) => setDraftSettings((s) => ({ ...s, headerText: e.target.value }))}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium">{t('tableQrSubtitleText')}</span>
+                <input
+                  className="input mt-1"
+                  value={draftSettings.subtitleText}
+                  maxLength={120}
+                  onChange={(e) => setDraftSettings((s) => ({ ...s, subtitleText: e.target.value }))}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium">{t('tableQrLayoutTemplate')}</span>
+                <select
+                  className="input mt-1"
+                  value={draftSettings.layoutTemplate}
+                  onChange={(e) =>
+                    setDraftSettings((s) => ({ ...s, layoutTemplate: e.target.value as QrLayoutTemplate }))
+                  }
+                >
+                  {QR_LAYOUT_TEMPLATES.map((layout) => (
+                    <option key={layout} value={layout}>
+                      {t(`tableQrLayout_${layout}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex justify-end gap-2">
+                <button type="button" className="btn-secondary" onClick={() => setSettingsOpen(false)}>
+                  {t('cancel')}
+                </button>
+                <button type="submit" disabled={busy} className="btn-primary inline-flex items-center gap-2">
+                  <Save className="h-4 w-4" />
+                  {t('save')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

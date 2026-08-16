@@ -30,9 +30,25 @@ export type TableQrCodeRow = {
 
 export type QrDownloadStyle = 'code_only' | 'small' | 'medium' | 'large';
 
-export const QR_DOWNLOAD_SIZES: Record<QrDownloadStyle, { qr: number; label: number; showLabel: boolean }> = {
-  code_only: { qr: 200, label: 0, showLabel: false },
-  small: { qr: 120, label: 14, showLabel: true },
-  medium: { qr: 180, label: 18, showLabel: true },
-  large: { qr: 280, label: 24, showLabel: true },
+export type QrLayoutTemplate = 'vertical' | 'horizontal' | 'curved';
+
+export type TableQrSettings = {
+  headerText?: string;
+  subtitleText?: string;
+  layoutTemplate?: QrLayoutTemplate;
 };
+
+export const DEFAULT_TABLE_QR_SETTINGS: Required<TableQrSettings> = {
+  headerText: 'MENU',
+  subtitleText: 'Scan me to order',
+  layoutTemplate: 'vertical',
+};
+
+/** Styled stand PNG heights (code_only uses plain QR sizing). */
+export const STYLED_QR_HEIGHTS: Record<Exclude<QrDownloadStyle, 'code_only'>, number> = {
+  small: 400,
+  medium: 600,
+  large: 900,
+};
+
+export const QR_LAYOUT_TEMPLATES: QrLayoutTemplate[] = ['vertical', 'horizontal', 'curved'];

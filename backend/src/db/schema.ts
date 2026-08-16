@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import type { PosPrintSettings } from "../lib/pos-print-settings";
+import type { TableQrSettings } from "../lib/table-qr-settings";
 
 // ============================================================================
 // SUPERADMIN & AUTHENTICATION
@@ -283,6 +284,11 @@ export const merchants = pgTable(
      *   autoPrintReceipt, autoPrintKitchen, printers: PosPrinterProfile[] }
      */
     posPrintSettings: json("pos_print_settings").$type<PosPrintSettings | null>(),
+    /**
+     * Table QR stand defaults for dashboard downloads:
+     * { headerText, subtitleText, layoutTemplate: vertical | horizontal | curved }
+     */
+    tableQrSettings: json("table_qr_settings").$type<TableQrSettings | null>(),
     /**
      * Shared WebPOS / Android checkout behaviour:
      * tips, discount presets, rounding, quick-cash denominations, split bills.
