@@ -112,6 +112,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.PosMode
+import com.chaslay.pos.ui.components.RfidScanField
 import com.chaslay.pos.ui.scanner.BarcodeScannerDialog
 import com.chaslay.pos.ui.scanner.BarcodeWedgeListener
 import com.chaslay.pos.domain.model.ProductVariantModel
