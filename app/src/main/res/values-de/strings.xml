@@ -178,6 +178,8 @@
     <string name="product_grid_sort_top_cd">Nach Top-Verkäufen sortieren</string>
     <string name="product_grid_columns">%1$d Sp</string>
     <string name="product_grid_columns_cd">Spaltenanzahl ändern</string>
+    <string name="product_grid_filters_cd">Produktfilter</string>
+    <string name="cart_fulfillment_summary">%1$s · %2$s</string>
     <string name="main_floor">Hauptgeschoss</string>
     <string name="patio_floor">Terrasse</string>
     <string name="fire_course_n">Brandverlauf %1$d</string>

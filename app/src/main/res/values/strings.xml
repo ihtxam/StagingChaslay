@@ -638,6 +638,8 @@
     <string name="product_grid_sort_top_cd">Sort by top sales</string>
     <string name="product_grid_columns">%1$d col</string>
     <string name="product_grid_columns_cd">Change grid column count</string>
+    <string name="product_grid_filters_cd">Product filters</string>
+    <string name="cart_fulfillment_summary">%1$s · %2$s</string>
     <string name="waiter_tables">Tables</string>
     <string name="waiter_order">Order</string>
     <string name="waiter_pick_table">Select a table to start an order</string>

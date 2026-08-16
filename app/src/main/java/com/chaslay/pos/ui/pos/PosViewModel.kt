@@ -484,6 +484,9 @@ class PosViewModel @Inject constructor(
 
     fun selectCategory(categoryId: Long?) {
         _selectedCategoryId.value = categoryId
+        if (PosVirtualCategories.isGiftCards(categoryId)) {
+            refreshGiftCardFeature()
+        }
     }
 
     fun setServiceType(serviceType: ServiceType) {
@@ -931,9 +934,7 @@ class PosViewModel @Inject constructor(
         updateExtras {
             it.copy(
                 lastAddedItemId = itemId,
-                lastClickedProductId = product.id,
-                selectedCartItemId = itemId,
-                keypadExpanded = true
+                lastClickedProductId = product.id
             )
         }
         persistTableOrderAsync()
@@ -1158,9 +1159,7 @@ class PosViewModel @Inject constructor(
         updateExtras {
             it.copy(
                 lastAddedItemId = itemId,
-                lastClickedProductId = product.id,
-                selectedCartItemId = itemId,
-                keypadExpanded = true
+                lastClickedProductId = product.id
             )
         }
         persistTableOrderAsync()
@@ -1848,10 +1847,10 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    fun openCheckout(method: PaymentMethod = PaymentMethod.CASH, fromSplit: Boolean = false) {
+    private fun buildExpressCheckoutState(method: PaymentMethod): CheckoutState? {
         val full = cartManager.snapshot()
         val payable = cartManager.paymentSnapshot()
-        if (payable.isEmpty && !(full.splitCount > 1 && !full.splitByItems)) return
+        if (payable.isEmpty && !(full.splitCount > 1 && !full.splitByItems)) return null
         val resolvedMethod = resolveCheckoutMethod(method)
         val membership = _uiExtras.value.attachedMembership
         val cartForMerchandise = cartManager.paymentSnapshot()
@@ -1873,20 +1872,25 @@ class PosViewModel @Inject constructor(
         val defaultGiftRedeem = if (canPayWithGiftCard) {
             kotlin.math.min(giftBalance, afterPoints)
         } else 0.0
+        return CheckoutState(
+            method = resolvedMethod,
+            roundingStep = checkoutRoundingDefault(),
+            payWithPoints = defaultPayWithPoints && pointsDiscount > 0,
+            pointsRedeemed = if (defaultPayWithPoints) maxPoints else 0,
+            pointsDiscount = pointsDiscount,
+            payWithGiftCard = defaultGiftRedeem > 0.01,
+            giftCardRedeemAmount = defaultGiftRedeem
+        )
+    }
+
+    fun openCheckout(method: PaymentMethod = PaymentMethod.CASH, fromSplit: Boolean = false) {
+        val checkoutState = buildExpressCheckoutState(method) ?: return
         updateExtras {
             it.copy(
                 showCheckoutScreen = true,
                 showSplitBillScreen = false,
                 returnToSplitAfterCheckout = false,
-                checkoutState = CheckoutState(
-                    method = resolvedMethod,
-                    roundingStep = checkoutRoundingDefault(),
-                    payWithPoints = defaultPayWithPoints && pointsDiscount > 0,
-                    pointsRedeemed = if (defaultPayWithPoints) maxPoints else 0,
-                    pointsDiscount = pointsDiscount,
-                    payWithGiftCard = defaultGiftRedeem > 0.01,
-                    giftCardRedeemAmount = defaultGiftRedeem
-                ),
+                checkoutState = checkoutState,
                 errorMessage = null,
                 errorTitle = null
             )
@@ -2139,7 +2143,15 @@ class PosViewModel @Inject constructor(
 
     fun showGiftCardOpsMenu() {
         refreshGiftCardFeature()
-        updateExtras { it.copy(showGiftCardOpsMenu = true) }
+        viewModelScope.launch {
+            giftCardRepository.fetchSettings()
+                .onSuccess { settings ->
+                    updateExtras { it.copy(giftCardSettings = settings, showGiftCardOpsMenu = true) }
+                }
+                .onFailure {
+                    updateExtras { it.copy(showGiftCardOpsMenu = true) }
+                }
+        }
     }
 
     fun dismissGiftCardOpsMenu() {
@@ -2893,19 +2905,31 @@ class PosViewModel @Inject constructor(
         updateExtras { it.copy(orderCompleteNotice = null) }
     }
 
-    fun initiateCashPayment() {
+    fun expressPay(method: PaymentMethod, activity: Activity?) {
+        val checkoutState = buildExpressCheckoutState(method) ?: return
+        updateExtras {
+            it.copy(
+                checkoutState = checkoutState,
+                errorMessage = null,
+                errorTitle = null
+            )
+        }
+        completeCheckout(activity)
+    }
+
+    fun initiateCashPayment(activity: Activity? = null) {
         if (!cachedSettings.cashEnabled) return
-        openCheckout(PaymentMethod.CASH)
+        expressPay(PaymentMethod.CASH, activity)
     }
 
-    fun initiateCardPayment() {
+    fun initiateCardPayment(activity: Activity? = null) {
         if (!cachedSettings.cardEnabled) return
-        openCheckout(PaymentMethod.CARD)
+        expressPay(PaymentMethod.CARD, activity)
     }
 
-    fun initiateTerminalPayment() {
+    fun initiateTerminalPayment(activity: Activity? = null) {
         if (!cachedSettings.isAdyenTerminalCheckoutEnabled()) return
-        openCheckout(PaymentMethod.ADYEN_TERMINAL)
+        expressPay(PaymentMethod.ADYEN_TERMINAL, activity)
     }
 
     fun xpressSale() {

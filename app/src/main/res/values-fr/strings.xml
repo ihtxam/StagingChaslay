@@ -180,6 +180,8 @@
     <string name="product_grid_sort_top_cd">Trier par meilleures ventes</string>
     <string name="product_grid_columns">%1$d col</string>
     <string name="product_grid_columns_cd">Changer le nombre de colonnes</string>
+    <string name="product_grid_filters_cd">Filtres produits</string>
+    <string name="cart_fulfillment_summary">%1$s · %2$s</string>
     <string name="main_floor">Main Floor</string>
     <string name="patio_floor">Patio</string>
     <string name="fire_course_n">Parcours incendie %1$d</string>
