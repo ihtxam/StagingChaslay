@@ -1065,7 +1065,7 @@ export default function WebPosCartPanel({
                   {tabNumber ? `#${tabNumber}` : t('webPosSetTab')}
                 </button>
               )}
-              {kitchenEnabled ? (
+              {kitchenEnabled && !isRetail ? (
                 <button
                   type="button"
                   disabled={!canSendNow || busy}

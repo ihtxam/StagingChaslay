@@ -1872,7 +1872,7 @@ private fun CartActionSidebar(
             onClick = onDelivery
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
-        if (hasUnsentItems) {
+        if (isRestaurantMode && hasUnsentItems) {
             CartSidebarButton(
                 label = stringResource(R.string.send_to_kitchen),
                 shortLabel = "Send",
