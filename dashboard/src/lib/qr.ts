@@ -128,11 +128,25 @@ export function qrImageUrl(data: string, size = 180): string {
   )}`;
 }
 
+export type EscPosErrorCorrection = 'L' | 'M' | 'Q' | 'H';
+
+/** GS ( k fn 69 n — 48=L, 49=M, 50=Q, 51=H (Epson ESC/POS). */
+const ESCPOS_EC_BYTE: Record<EscPosErrorCorrection, number> = {
+  L: 0x30,
+  M: 0x31,
+  Q: 0x32,
+  H: 0x33,
+};
+
 /**
  * ESC/POS QR code (Function 165/167/169/180 - common on Epson-compatible thermals).
  * Returns raw bytes: store QR data + print.
  */
-export function escposQrCode(data: string, moduleSize = 4): Uint8Array {
+export function escposQrCode(
+  data: string,
+  moduleSize = 4,
+  errorCorrection: EscPosErrorCorrection = 'M'
+): Uint8Array {
   const encoder = new TextEncoder();
   const payload = encoder.encode(data);
   const storeLen = payload.length + 3;
@@ -141,7 +155,7 @@ export function escposQrCode(data: string, moduleSize = 4): Uint8Array {
   const cn = 0x31; // QR
   const model = [0x1d, 0x28, 0x6b, 0x04, 0x00, cn, 0x41, 0x32, 0x00]; // model 2
   const sizeCmd = [0x1d, 0x28, 0x6b, 0x03, 0x00, cn, 0x43, Math.max(1, Math.min(16, moduleSize))];
-  const errorLevel = [0x1d, 0x28, 0x6b, 0x03, 0x00, cn, 0x45, 0x31]; // M
+  const errorLevel = [0x1d, 0x28, 0x6b, 0x03, 0x00, cn, 0x45, ESCPOS_EC_BYTE[errorCorrection]];
   const storeHeader = [0x1d, 0x28, 0x6b, pL, pH, cn, 0x50, 0x30];
   const print = [0x1d, 0x28, 0x6b, 0x03, 0x00, cn, 0x51, 0x30];
 
