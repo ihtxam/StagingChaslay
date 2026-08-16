@@ -993,14 +993,16 @@ export default function WebPosCartPanel({
               )}
             </>
           )}
-          <button
-            type="button"
-            disabled={!hasItems || busy}
-            onClick={onPayment}
-            className="rounded-lg bg-stone-200 py-3 text-sm font-bold text-stone-800 hover:bg-stone-300 disabled:opacity-40"
-          >
-            {t('webPosPayment')}
-          </button>
+          {!isRetail ? (
+            <button
+              type="button"
+              disabled={!hasItems || busy}
+              onClick={onPayment}
+              className="rounded-lg bg-stone-200 py-3 text-sm font-bold text-stone-800 hover:bg-stone-300 disabled:opacity-40"
+            >
+              {t('webPosPayment')}
+            </button>
+          ) : null}
         </div>
       </div>
     </aside>
