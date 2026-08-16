@@ -300,3 +300,36 @@ fun GiftCardOpsDialog(
         }
     )
 }
+
+@Composable
+fun GiftCardOpsMenuDialog(
+    reloadEnabled: Boolean,
+    onDismiss: () -> Unit,
+    onSell: () -> Unit,
+    onReload: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.membership_gift_cards)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onSell, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.gift_card_sell))
+                }
+                OutlinedButton(
+                    onClick = onReload,
+                    enabled = reloadEnabled,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.gift_card_reload))
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text(stringResource(R.string.close))
+            }
+        }
+    )
+}

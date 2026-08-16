@@ -183,6 +183,7 @@ data class PosUiState(
     val membershipLookupError: String? = null,
     val lastLoyaltyPointsEarned: Int? = null,
     val lastLoyaltyPointsBalance: Int? = null,
+    val showGiftCardOpsMenu: Boolean = false,
     val showGiftCardOpsDialog: Boolean = false,
     val giftCardOpsMode: GiftCardOp? = null,
     val giftCardSettings: com.chaslay.pos.data.remote.dto.GiftCardSettingsDto? = null,
@@ -371,6 +372,7 @@ class PosViewModel @Inject constructor(
             membershipLookupError = extras.membershipLookupError,
             lastLoyaltyPointsEarned = extras.lastLoyaltyPointsEarned,
             lastLoyaltyPointsBalance = extras.lastLoyaltyPointsBalance,
+            showGiftCardOpsMenu = extras.showGiftCardOpsMenu,
             showGiftCardOpsDialog = extras.showGiftCardOpsDialog,
             giftCardOpsMode = extras.giftCardOpsMode,
             giftCardSettings = extras.giftCardSettings,
@@ -2132,6 +2134,23 @@ class PosViewModel @Inject constructor(
         refreshGiftCardFeature()
         updateExtras {
             it.copy(showMembershipDialog = true, membershipLookupError = null)
+        }
+    }
+
+    fun showGiftCardOpsMenu() {
+        refreshGiftCardFeature()
+        updateExtras { it.copy(showGiftCardOpsMenu = true) }
+    }
+
+    fun dismissGiftCardOpsMenu() {
+        updateExtras { it.copy(showGiftCardOpsMenu = false) }
+    }
+
+    fun startGiftCardOpFromMenu(mode: GiftCardOp) {
+        dismissGiftCardOpsMenu()
+        when (mode) {
+            GiftCardOp.SELL -> showGiftCardSellDialog()
+            GiftCardOp.RELOAD -> showGiftCardReloadDialog()
         }
     }
 
@@ -3961,6 +3980,7 @@ class PosViewModel @Inject constructor(
         val membershipLookupError: String? = null,
         val lastLoyaltyPointsEarned: Int? = null,
         val lastLoyaltyPointsBalance: Int? = null,
+        val showGiftCardOpsMenu: Boolean = false,
         val showGiftCardOpsDialog: Boolean = false,
         val giftCardOpsMode: GiftCardOp? = null,
         val giftCardSettings: com.chaslay.pos.data.remote.dto.GiftCardSettingsDto? = null,

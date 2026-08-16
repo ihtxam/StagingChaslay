@@ -6692,13 +6692,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 membershipEnabled={
                   !!(paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null)?.membershipEnabled
                 }
-                onReloadGiftCard={() => {
-                  if (offlineNow) {
-                    toast.error(t('webPosOfflineGiftCardBlocked'));
-                    return;
-                  }
-                  setGiftCardOpsOpen(true);
-                }}
                 onCustomAmount={openCustomAmountModal}
                 onBackgroundClick={() => handleSelectLine(null)}
               />

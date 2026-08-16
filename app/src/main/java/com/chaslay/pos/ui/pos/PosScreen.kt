@@ -117,6 +117,7 @@ import com.chaslay.pos.ui.scanner.BarcodeScannerDialog
 import com.chaslay.pos.ui.scanner.BarcodeWedgeListener
 import com.chaslay.pos.domain.model.ProductVariantModel
 import com.chaslay.pos.domain.model.FulfillmentType
+import com.chaslay.pos.domain.model.GiftCardOp
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.TableStatus
 import com.chaslay.pos.domain.model.TableWithOrderInfo
@@ -496,8 +497,7 @@ fun PosScreen(
                         onPrintKitchen = viewModel::printKitchenTicket,
                         onAddCustomer = viewModel::showAttachCustomerDialog,
                         onGiftCards = viewModel::showMembershipDialog,
-                        onSellGiftCard = viewModel::showGiftCardSellDialog,
-                        onReloadGiftCard = viewModel::showGiftCardReloadDialog,
+                        onSellGiftCard = viewModel::showGiftCardOpsMenu,
                         onChangeOrderType = viewModel::toggleCartOrderType,
                         onCancelOrder = viewModel::showCartCancelDialog,
                         canCancelOrder = state.canCancelCartOrder,
@@ -562,8 +562,7 @@ fun PosScreen(
                         onCard = viewModel::initiateCardPayment,
                         onTerminal = viewModel::initiateTerminalPayment,
                         onOpenCheckout = { viewModel.openCheckout() },
-                        onSellGiftCard = viewModel::showGiftCardSellDialog,
-                        onReloadGiftCard = viewModel::showGiftCardReloadDialog,
+                        onSellGiftCard = viewModel::showGiftCardOpsMenu,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
@@ -665,6 +664,15 @@ fun PosScreen(
                 viewModel.dismissMembershipDialog()
                 viewModel.showGiftCardReloadDialog()
             }
+        )
+    }
+
+    if (state.showGiftCardOpsMenu) {
+        GiftCardOpsMenuDialog(
+            reloadEnabled = state.giftCardSettings?.reloadEnabled != false,
+            onDismiss = viewModel::dismissGiftCardOpsMenu,
+            onSell = { viewModel.startGiftCardOpFromMenu(GiftCardOp.SELL) },
+            onReload = { viewModel.startGiftCardOpFromMenu(GiftCardOp.RELOAD) }
         )
     }
 
@@ -1373,7 +1381,6 @@ private fun VectronOrderPanel(
     onAddCustomer: () -> Unit,
     onGiftCards: () -> Unit = {},
     onSellGiftCard: () -> Unit = {},
-    onReloadGiftCard: () -> Unit = {},
     onChangeOrderType: () -> Unit,
     onCancelOrder: () -> Unit,
     canCancelOrder: Boolean,
@@ -1468,7 +1475,6 @@ private fun VectronOrderPanel(
                 onAddCustomer = onAddCustomer,
                 onGiftCards = onGiftCards,
                 onSellGiftCard = onSellGiftCard,
-                onReloadGiftCard = onReloadGiftCard,
                 onChangeOrderType = onChangeOrderType,
                 onCancelOrder = onCancelOrder,
                 onChooseTime = onChooseTime,
@@ -1754,7 +1760,6 @@ private fun CartOrderMenuButton(
     onAddCustomer: () -> Unit,
     onGiftCards: () -> Unit,
     onSellGiftCard: () -> Unit,
-    onReloadGiftCard: () -> Unit,
     onChangeOrderType: () -> Unit,
     onCancelOrder: () -> Unit,
     onChooseTime: () -> Unit,
@@ -1815,13 +1820,6 @@ private fun CartOrderMenuButton(
                     onClick = {
                         expanded = false
                         onSellGiftCard()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.gift_card_reload)) },
-                    onClick = {
-                        expanded = false
-                        onReloadGiftCard()
                     }
                 )
             }
@@ -2569,7 +2567,6 @@ private fun VectronProductGrid(
     onTerminal: () -> Unit = {},
     onOpenCheckout: () -> Unit = {},
     onSellGiftCard: () -> Unit = {},
-    onReloadGiftCard: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val vc = vectronColors()
@@ -2577,7 +2574,7 @@ private fun VectronProductGrid(
     Column(modifier = modifier.background(vc.background)) {
         if (isGiftCardCategory) {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Fixed(1),
                 modifier = Modifier
                     .weight(1f)
                     .padding(12.dp),
@@ -2593,21 +2590,6 @@ private fun VectronProductGrid(
                     ) {
                         Text(
                             stringResource(R.string.gift_card_sell),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-                item(key = "gift_reload") {
-                    Button(
-                        onClick = onReloadGiftCard,
-                        modifier = Modifier.fillMaxWidth().height(120.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF14B8A6))
-                    ) {
-                        Text(
-                            stringResource(R.string.gift_card_reload),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center

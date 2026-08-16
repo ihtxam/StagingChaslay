@@ -49,7 +49,6 @@ type Props = {
   giftCardsEnabled?: boolean;
   onGiftCards?: () => void;
   onSellGiftCard?: () => void;
-  onReloadGiftCard?: () => void;
   onSellMembership?: () => void;
   membershipEnabled?: boolean;
   onCustomAmount?: () => void;
@@ -88,7 +87,6 @@ export default function WebPosProductArea({
   giftCardsEnabled = false,
   onGiftCards,
   onSellGiftCard,
-  onReloadGiftCard,
   onSellMembership,
   membershipEnabled = false,
   onCustomAmount,
@@ -218,23 +216,13 @@ export default function WebPosProductArea({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onSellGiftCard || onGiftCards?.();
+                if (onSellGiftCard) onSellGiftCard();
+                else onGiftCards?.();
               }}
-              className="flex min-h-[8rem] flex-col items-center justify-center rounded-xl bg-teal-600 px-4 py-6 text-center text-white hover:bg-teal-700"
+              className="flex min-h-[8rem] flex-col items-center justify-center rounded-xl bg-teal-600 px-4 py-6 text-center text-white hover:bg-teal-700 sm:col-span-2"
             >
               <Gift size={28} className="mb-2 opacity-90" />
               <span className="text-base font-bold">{t('giftCardSell')}</span>
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onReloadGiftCard || onGiftCards?.();
-              }}
-              className="flex min-h-[8rem] flex-col items-center justify-center rounded-xl bg-teal-500 px-4 py-6 text-center text-white hover:bg-teal-600"
-            >
-              <Gift size={28} className="mb-2 opacity-90" />
-              <span className="text-base font-bold">{t('giftCardReload')}</span>
             </button>
             {membershipEnabled && onSellMembership ? (
               <button
