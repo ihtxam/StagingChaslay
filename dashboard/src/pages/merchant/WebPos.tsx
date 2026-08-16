@@ -6601,6 +6601,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
       <WebPosTipKeypad
         open={!!pendingOpenPrice}
+        allowPercent={false}
         title={
           pendingOpenPrice
             ? `${t('webPosEnterPrice')} - ${pendingOpenPrice.name}`
