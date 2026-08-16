@@ -110,5 +110,6 @@ export function openCartDraftKey(opts: {
   if (opts.tableId) return `table:${opts.tableId}`;
   if (opts.tabNumber) return `tab:${opts.tabNumber}`;
   if (opts.channel === 'delivery') return 'channel:delivery';
+  if (opts.channel === 'dine_in') return 'channel:dine_in';
   return 'channel:takeaway';
 }

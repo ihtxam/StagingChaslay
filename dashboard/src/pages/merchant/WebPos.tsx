@@ -21,6 +21,7 @@ import {
   logoUrlToEscPos,
   encodeOrderMetaNotes,
   nextWebPosTicketNumber,
+  nextDineInCounterNumber,
   printersForRole,
   resolveReceiptLanguage,
   buildReceiptEscPos,
@@ -956,15 +957,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !!checkoutSettings.retailTakeawayEnabled && editionAllows('channel_takeaway');
   const retailDeliveryEnabled =
     !!checkoutSettings.retailDeliveryEnabled && editionAllows('channel_delivery');
+  const retailDineInEnabled = !!checkoutSettings.retailDineInEnabled;
+  const requireTableForDineIn = checkoutSettings.requireTableForDineIn !== false;
+  const counterDineInEnabled = !requireTableForDineIn;
   const showChannelTabs = isRetail
-    ? retailTakeawayEnabled || retailDeliveryEnabled
-    : editionAllows('channel_takeaway') || editionAllows('channel_delivery');
-  const channelTabOptions: Array<'takeaway' | 'delivery'> = isRetail
+    ? retailTakeawayEnabled || retailDeliveryEnabled || retailDineInEnabled
+    : editionAllows('channel_takeaway') ||
+      editionAllows('channel_delivery') ||
+      counterDineInEnabled;
+  const channelTabOptions: Array<'takeaway' | 'delivery' | 'dine_in'> = isRetail
     ? [
+        ...(retailDineInEnabled ? (['dine_in'] as const) : []),
         ...(retailTakeawayEnabled ? (['takeaway'] as const) : []),
         ...(retailDeliveryEnabled ? (['delivery'] as const) : []),
       ]
     : [
+        ...(counterDineInEnabled ? (['dine_in'] as const) : []),
         ...(editionAllows('channel_takeaway') ? (['takeaway'] as const) : []),
         ...(editionAllows('channel_delivery') ? (['delivery'] as const) : []),
       ];
@@ -982,8 +990,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const showSend =
     kitchenEnabled &&
     (!tablesUiEnabled ||
+      counterDineInEnabled ||
       channel === 'takeaway' ||
       channel === 'delivery' ||
+      (channel === 'dine_in' && counterDineInEnabled) ||
       !!tableLabel ||
       !!tabNumber);
   const cartSide = checkoutSettings.cartSide === 'left' ? 'left' : 'right';
@@ -2755,11 +2765,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (ticketDisplay && ticketOrderNumber) {
       return { display: ticketDisplay, orderNumber: ticketOrderNumber };
     }
-    const ticket = nextWebPosTicketNumber(merchant?.id);
+    const isCounterDineIn =
+      effectiveChannel === 'dine_in' && counterDineInEnabled && !tableId;
+    const ticket = isCounterDineIn
+      ? nextDineInCounterNumber(merchant?.id, openShift?.id)
+      : nextWebPosTicketNumber(merchant?.id);
     setTicketDisplay(ticket.display);
     setTicketOrderNumber(ticket.orderNumber);
     return ticket;
-  }, [ticketDisplay, ticketOrderNumber, merchant?.id]);
+  }, [
+    ticketDisplay,
+    ticketOrderNumber,
+    merchant?.id,
+    effectiveChannel,
+    counterDineInEnabled,
+    tableId,
+    openShift?.id,
+  ]);
 
   const clearCartTicket = useCallback(() => {
     setTicketDisplay(null);
@@ -3428,21 +3450,41 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const selectFulfillmentChannel = (ch: 'takeaway' | 'delivery') => {
+  const selectFulfillmentChannel = (ch: 'takeaway' | 'delivery' | 'dine_in') => {
     leaveTableForChannel();
+    if (channel === 'dine_in' && ch !== 'dine_in' && !tableId) {
+      clearCartTicket();
+    }
     const channelChanged = channel !== ch;
     setChannel(ch);
+    if (ch === 'dine_in' && counterDineInEnabled) {
+      setFulfillmentWhen(null);
+      if (!ticketDisplay) {
+        const ticket = nextDineInCounterNumber(merchant?.id, openShift?.id);
+        setTicketDisplay(ticket.display);
+        setTicketOrderNumber(ticket.orderNumber);
+      }
+      return;
+    }
     // Default ASAP immediately — no modal. Keep existing when re-tapping same channel.
     if (channelChanged || !fulfillmentWhen) {
       setFulfillmentWhen(asapFulfillment());
     }
   };
 
-  /** Menu: switch to dine-in and prompt for a table (takeaway↔delivery uses cart-top buttons). */
+  /** Menu: switch to dine-in; table picker only when tables are required. */
   const switchToDineIn = () => {
     if (channel !== 'dine_in') {
       setChannel('dine_in');
       setFulfillmentWhen(null);
+    }
+    if (counterDineInEnabled) {
+      if (!ticketDisplay) {
+        const ticket = nextDineInCounterNumber(merchant?.id, openShift?.id);
+        setTicketDisplay(ticket.display);
+        setTicketOrderNumber(ticket.orderNumber);
+      }
+      return;
     }
     if (!tableId) {
       setTablePickerPurpose('set');
@@ -6299,6 +6341,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 orderNote={orderNote}
                 tableLabel={tableLabel}
                 tabNumber={tabNumber}
+                ticketDisplay={ticketDisplay}
                 customerLabel={customerLabel}
                 membershipName={
                   attachedMembership
@@ -6367,6 +6410,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 channelTabOptions={channelTabOptions}
                 kitchenEnabled={kitchenEnabled}
                 tablesEnabled={tablesUiEnabled}
+                requireTableForDineIn={requireTableForDineIn}
                 onHoldOrder={() => void holdCurrentOrder(false)}
                 onMoveTable={
                   tablesUiEnabled && kitchenEnabled

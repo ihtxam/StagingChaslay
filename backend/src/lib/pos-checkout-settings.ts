@@ -45,6 +45,14 @@ export type PosCheckoutSettings = {
   retailTakeawayEnabled: boolean;
   /** Retail only: enable Delivery channel (default off). */
   retailDeliveryEnabled: boolean;
+  /** Retail only: enable Dine-in channel for bistro-style counter service (default off). */
+  retailDineInEnabled: boolean;
+  /**
+   * When true, dine-in orders must pick a table (traditional restaurant).
+   * When false, counter-style dine-in: auto ticket number, dine-in VAT, no table.
+   * Default: true for restaurant mode, false for retail.
+   */
+  requireTableForDineIn: boolean;
 };
 
 export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
@@ -70,6 +78,8 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   tablesEnabled: true,
   retailTakeawayEnabled: false,
   retailDeliveryEnabled: false,
+  retailDineInEnabled: false,
+  requireTableForDineIn: true,
 };
 
 function asNumberArray(v: unknown, fallback: number[]): number[] {
@@ -122,6 +132,10 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
   const postSuccessTarget: PostSuccessTarget =
     src.postSuccessTarget === "tables" ? "tables" : "register";
   const posMode: PosMode = src.posMode === "retail" ? "retail" : "restaurant";
+  const requireTableForDineIn =
+    src.requireTableForDineIn === undefined
+      ? posMode !== "retail"
+      : src.requireTableForDineIn !== false;
 
   return {
     tipsEnabled: src.tipsEnabled !== false,
@@ -142,5 +156,7 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
     tablesEnabled: src.tablesEnabled !== false,
     retailTakeawayEnabled: src.retailTakeawayEnabled === true,
     retailDeliveryEnabled: src.retailDeliveryEnabled === true,
+    retailDineInEnabled: src.retailDineInEnabled === true,
+    requireTableForDineIn,
   };
 }

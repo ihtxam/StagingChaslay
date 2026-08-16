@@ -87,6 +87,8 @@ interface SettingsData {
     tablesEnabled?: boolean;
     retailTakeawayEnabled?: boolean;
     retailDeliveryEnabled?: boolean;
+    retailDineInEnabled?: boolean;
+    requireTableForDineIn?: boolean;
   } | null;
   shopPathUrl?: string | null;
   shopSubdomainUrl?: string | null;
@@ -1544,10 +1546,11 @@ export default function Settings() {
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {(
                       [
-                        ['retailTakeawayEnabled', t('posRetailTakeaway')] as const,
-                        ['retailDeliveryEnabled', t('posRetailDelivery')] as const,
+                        ['retailDineInEnabled', t('posRetailDineIn'), t('posRetailDineInHint')] as const,
+                        ['retailTakeawayEnabled', t('posRetailTakeaway'), ''] as const,
+                        ['retailDeliveryEnabled', t('posRetailDelivery'), ''] as const,
                       ] as const
-                    ).map(([key, label]) => (
+                    ).map(([key, label, hint]) => (
                       <label
                         key={key}
                         className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm"
@@ -1566,7 +1569,10 @@ export default function Settings() {
                             })
                           }
                         />
-                        <span className="font-medium">{label}</span>
+                        <span>
+                          <span className="font-medium block">{label}</span>
+                          {hint ? <span className="text-xs muted">{hint}</span> : null}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -1596,6 +1602,30 @@ export default function Settings() {
                     </span>
                   </label>
                 )}
+                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={
+                      settings.posCheckoutSettings?.requireTableForDineIn === undefined
+                        ? (settings.posCheckoutSettings?.posMode || 'restaurant') !== 'retail'
+                        : settings.posCheckoutSettings.requireTableForDineIn !== false
+                    }
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posCheckoutSettings: {
+                          ...(settings.posCheckoutSettings || {}),
+                          requireTableForDineIn: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium block">{t('posRequireTableForDineIn')}</span>
+                    <span className="text-xs muted">{t('posRequireTableForDineInHint')}</span>
+                  </span>
+                </label>
               </Section>
 
               <Section

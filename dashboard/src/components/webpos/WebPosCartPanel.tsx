@@ -31,7 +31,7 @@ type Props = {
   onKeypadAdjust: (delta: number) => void;
   onKeypadBackspace: () => void;
   channel: PosChannel | null;
-  onChannelChange: (ch: 'takeaway' | 'delivery') => void;
+  onChannelChange: (ch: 'takeaway' | 'delivery' | 'dine_in') => void;
   activeCourse: number;
   coursesEnabled: boolean;
   courseNumbers: number[];
@@ -39,6 +39,8 @@ type Props = {
   orderNote?: string;
   tableLabel?: string | null;
   tabNumber?: string | null;
+  /** Counter-style dine-in ticket (D-001) when no table. */
+  ticketDisplay?: string | null;
   customerLabel?: string | null;
   membershipName?: string | null;
   membershipPointsBalance?: number | null;
@@ -73,11 +75,13 @@ type Props = {
   /** Show Takeaway / Delivery channel tabs (retail may disable). */
   showChannelTabs?: boolean;
   /** Which fulfillment channels appear when tabs are shown. */
-  channelTabOptions?: Array<'takeaway' | 'delivery'>;
+  channelTabOptions?: Array<'takeaway' | 'delivery' | 'dine_in'>;
   /** Kitchen message, SEND, set table - restaurant only. */
   kitchenEnabled?: boolean;
   /** When false (fast-food), hide Set table; Send is always available with kitchen. */
   tablesEnabled?: boolean;
+  /** When true, dine-in menu action opens table picker. */
+  requireTableForDineIn?: boolean;
   /** Hold current cart without kitchen send (retail / direct sale). */
   onHoldOrder?: () => void;
   /** Move whole open table order to another table. */
@@ -163,6 +167,7 @@ export default function WebPosCartPanel({
   orderNote,
   tableLabel,
   tabNumber,
+  ticketDisplay,
   customerLabel,
   membershipName,
   membershipPointsBalance,
@@ -196,6 +201,7 @@ export default function WebPosCartPanel({
   channelTabOptions = ['takeaway', 'delivery'],
   kitchenEnabled = true,
   tablesEnabled = true,
+  requireTableForDineIn = true,
   onHoldOrder,
   onMoveTable,
   onMoveDish,
@@ -292,11 +298,15 @@ export default function WebPosCartPanel({
           : `${sideBorder} border-stone-200 lg:w-[min(22rem,34vw)] lg:shrink-0`
       }`}
     >
-      {/* Channel: Takeaway / Delivery above cart (restaurant only) */}
-      {showChannelTabs && !isRetail ? (
+      {/* Channel tabs: Takeaway / Delivery / Dine-in */}
+      {showChannelTabs ? (
         <div
           className={`shrink-0 grid gap-1.5 border-b border-stone-100 px-2 py-2 ${
-            channelOptions.length > 1 ? 'grid-cols-2' : 'grid-cols-1'
+            channelOptions.length >= 3
+              ? 'grid-cols-3'
+              : channelOptions.length > 1
+                ? 'grid-cols-2'
+                : 'grid-cols-1'
           }`}
         >
           {channelOptions.map((id) => (
@@ -310,7 +320,11 @@ export default function WebPosCartPanel({
                   : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
               }`}
             >
-              {id === 'delivery' ? t('delivery') : t('takeaway')}
+              {id === 'delivery'
+                ? t('delivery')
+                : id === 'dine_in'
+                  ? t('dineIn')
+                  : t('takeaway')}
             </button>
           ))}
         </div>
@@ -339,6 +353,11 @@ export default function WebPosCartPanel({
               <span className="inline-flex max-w-full items-center truncate rounded-lg bg-indigo-100 px-2.5 py-1.5 text-xs font-bold text-indigo-900">
                 {t('webPosTab')} #{tabNumber}
               </span>
+            ) : isRetail && channel === 'dine_in' ? (
+              <span className="inline-flex max-w-full items-center truncate rounded-lg bg-sky-100 px-2.5 py-1.5 text-xs font-bold text-sky-900">
+                {t('dineIn')}
+                {ticketDisplay ? ` · ${ticketDisplay}` : ''}
+              </span>
             ) : isRetail && (channel === 'takeaway' || channel === 'delivery') ? (
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <span className="inline-flex max-w-full items-center truncate rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-bold text-amber-900">
@@ -363,7 +382,9 @@ export default function WebPosCartPanel({
             ) : !isRetail ? (
               <span className="inline-flex max-w-full items-center truncate rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-700">
                 {channel === 'dine_in'
-                  ? t('dineIn')
+                  ? ticketDisplay
+                    ? `${t('dineIn')} · ${ticketDisplay}`
+                    : t('dineIn')
                   : channel === 'delivery'
                     ? t('delivery')
                     : channel === 'takeaway'
@@ -421,7 +442,7 @@ export default function WebPosCartPanel({
                 <Printer size={14} className="shrink-0 text-stone-500" />
                 {t('webPosProvisionalReceipt')}
               </button>
-              {kitchenEnabled && tablesEnabled ? (
+              {kitchenEnabled && requireTableForDineIn && tablesEnabled ? (
                 <button
                   type="button"
                   role="menuitem"
@@ -571,11 +592,12 @@ export default function WebPosCartPanel({
 
       {(tableLabel ||
         tabNumber ||
+        ticketDisplay ||
         orderNote ||
         membershipName ||
-        (!isRetail && channel === 'dine_in') ||
+        channel === 'dine_in' ||
         (!isRetail && fulfillmentLabel) ||
-        (!isRetail && (channel === 'takeaway' || channel === 'delivery'))) && (
+        (channel === 'takeaway' || channel === 'delivery')) && (
         <div className="shrink-0 flex flex-wrap items-center gap-1.5 border-b border-stone-100 px-3 py-1.5 text-[11px] text-stone-500">
           {membershipName ? (
             <span className="inline-flex max-w-full items-center gap-1 rounded bg-teal-100 px-1.5 py-0.5 font-semibold text-teal-900">
@@ -598,12 +620,12 @@ export default function WebPosCartPanel({
               ) : null}
             </span>
           ) : null}
-          {channel === 'dine_in' && !isRetail ? (
+          {channel === 'dine_in' ? (
             <span className="rounded bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-800">
-              {t('dineIn')}
+              {ticketDisplay ? `${t('dineIn')} · ${ticketDisplay}` : t('dineIn')}
             </span>
           ) : null}
-          {!isRetail && (channel === 'takeaway' || channel === 'delivery') ? (
+          {(channel === 'takeaway' || channel === 'delivery') ? (
             <div className="relative z-[5] flex w-full flex-wrap items-center gap-1.5">
               <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900">
                 {channel === 'delivery' ? t('delivery') : t('takeaway')}

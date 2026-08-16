@@ -61,6 +61,33 @@ export function nextWebPosTicketNumber(_merchantId?: string | null): {
   return { display, orderNumber };
 }
 
+const DINE_IN_COUNTER_STORAGE_KEY = 'webpos_dine_in_counter_v1';
+
+/**
+ * Sequential counter-style dine-in ticket (e.g. D-001) per merchant + shift/session.
+ * Resets when shift id changes; falls back to session scope when shifts are off.
+ */
+export function nextDineInCounterNumber(
+  merchantId?: string | null,
+  shiftId?: string | null
+): { display: string; orderNumber: string } {
+  const scope = `${merchantId || 'default'}:${shiftId || 'session'}`;
+  let next = 1;
+  try {
+    const raw = sessionStorage.getItem(DINE_IN_COUNTER_STORAGE_KEY);
+    const map = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    next = (Number(map[scope]) || 0) + 1;
+    map[scope] = next;
+    sessionStorage.setItem(DINE_IN_COUNTER_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    next = 1 + Math.floor(Math.random() * 999);
+  }
+  const display = `D-${String(next).padStart(3, '0')}`;
+  const stamp = Date.now().toString(36).toUpperCase();
+  const orderNumber = `DI-${stamp}-${String(next).padStart(4, '0')}`.slice(0, 20);
+  return { display, orderNumber };
+}
+
 /** Machine markers stored in order.notes so UI/receipts can recover tab + ticket. */
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;

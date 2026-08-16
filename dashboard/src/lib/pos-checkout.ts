@@ -38,6 +38,13 @@ export type PosCheckoutSettings = {
   retailTakeawayEnabled: boolean;
   /** Retail only: show Delivery channel (off by default). */
   retailDeliveryEnabled: boolean;
+  /** Retail only: bistro-style dine-in at counter (off by default). */
+  retailDineInEnabled: boolean;
+  /**
+   * When true, dine-in requires a table. When false, counter ticket + dine-in VAT.
+   * Default: true for restaurant, false for retail.
+   */
+  requireTableForDineIn: boolean;
 };
 
 export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
@@ -63,6 +70,8 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   tablesEnabled: true,
   retailTakeawayEnabled: false,
   retailDeliveryEnabled: false,
+  retailDineInEnabled: false,
+  requireTableForDineIn: true,
 };
 
 export function isRetailPosMode(raw: unknown): boolean {
@@ -89,6 +98,11 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
     : DEFAULT_POS_CHECKOUT.discountPresets;
   let roundingStep = Number(src.roundingStep);
   if (![0, 0.05, 0.1, 0.5, 1].includes(roundingStep)) roundingStep = 0.05;
+  const posMode: PosMode = src.posMode === 'retail' ? 'retail' : 'restaurant';
+  const requireTableForDineIn =
+    src.requireTableForDineIn === undefined
+      ? posMode !== 'retail'
+      : src.requireTableForDineIn !== false;
   return {
     tipsEnabled: src.tipsEnabled !== false,
     tipPresetsPercent: tipPresets.length ? tipPresets : DEFAULT_POS_CHECKOUT.tipPresetsPercent,
@@ -104,9 +118,11 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
     courseSendMode: src.courseSendMode === 'send_all_once' ? 'send_all_once' : 'fire_per_course',
     cartSide: src.cartSide === 'left' ? 'left' : 'right',
     postSuccessTarget: src.postSuccessTarget === 'tables' ? 'tables' : 'register',
-    posMode: src.posMode === 'retail' ? 'retail' : 'restaurant',
+    posMode,
     tablesEnabled: src.tablesEnabled !== false,
     retailTakeawayEnabled: src.retailTakeawayEnabled === true,
     retailDeliveryEnabled: src.retailDeliveryEnabled === true,
+    retailDineInEnabled: src.retailDineInEnabled === true,
+    requireTableForDineIn,
   };
 }
