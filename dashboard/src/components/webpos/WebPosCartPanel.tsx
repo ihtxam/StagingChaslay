@@ -150,6 +150,12 @@ function formatSentAt(ms?: number): string | null {
   }
 }
 
+function lineQtyLabel(l: CartLine): string {
+  return l.isWeighed
+    ? `${Number(l.weightKg ?? l.quantity).toFixed(3)} kg`
+    : String(l.quantity);
+}
+
 export default function WebPosCartPanel({
   cart,
   totals,
@@ -791,11 +797,6 @@ export default function WebPosCartPanel({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-medium leading-snug">
-                      <span className="tabular-nums">
-                        {l.isWeighed
-                          ? `${Number(l.weightKg ?? l.quantity).toFixed(3)} kg`
-                          : l.quantity}
-                      </span>{' '}
                       {lineName}
                       {l.isWeighed ? (
                         <span className="ml-1 text-[10px] font-semibold text-stone-500">
@@ -830,9 +831,14 @@ export default function WebPosCartPanel({
                       </p>
                     ) : null}
                   </div>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums">
-                    {money(l.lineTotal)}
-                  </span>
+                  <div className="shrink-0 text-right leading-snug">
+                    <span className="block text-sm font-medium tabular-nums text-stone-600">
+                      {lineQtyLabel(l)}
+                    </span>
+                    <span className="block text-sm font-semibold tabular-nums">
+                      {money(l.lineTotal)}
+                    </span>
+                  </div>
                 </div>
               );
               return (
@@ -935,21 +941,21 @@ export default function WebPosCartPanel({
               {selectedLine ? (
                 <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
                   <p className="min-w-0 truncate text-xs font-semibold text-stone-700">
-                    <span className="tabular-nums">
-                      {selectedLine.isWeighed
-                        ? `${Number(selectedLine.weightKg ?? selectedLine.quantity).toFixed(3)} kg`
-                        : selectedLine.quantity}
-                    </span>{' '}
                     {repairCatalogText(selectedLine.name || '')}
                   </p>
-                  <button
-                    type="button"
-                    className="webpos-accent-btn shrink-0 rounded-md px-3 py-1 text-xs font-bold"
-                    onClick={onKeypadApply}
-                    disabled={busy}
-                  >
-                    {t('webPosKeypadApply')}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs font-semibold tabular-nums text-stone-600">
+                      {lineQtyLabel(selectedLine)}
+                    </span>
+                    <button
+                      type="button"
+                      className="webpos-accent-btn shrink-0 rounded-md px-3 py-1 text-xs font-bold"
+                      onClick={onKeypadApply}
+                      disabled={busy}
+                    >
+                      {t('webPosKeypadApply')}
+                    </button>
+                  </div>
                 </div>
               ) : null}
               <WebPosNumericKeypad

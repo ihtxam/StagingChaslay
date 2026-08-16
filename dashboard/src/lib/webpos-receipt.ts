@@ -1074,7 +1074,7 @@ function kitchenItemCount(items: WebPosReceiptItem[]): number {
   }, 0);
 }
 
-function formatKitchenQtyPrefix(item: KitchenTicketItem): string {
+function formatKitchenQtyLabel(item: KitchenTicketItem): string {
   const weightKg = item.weightKg;
   if (weightKg != null && weightKg > 0) {
     return `${weightKg.toFixed(3)} kg`;
@@ -1133,7 +1133,7 @@ function formatKitchenItemLines(
   cancelled: boolean,
   forEscPos: boolean
 ): KitchenLine[] {
-  const qty = formatKitchenQtyPrefix(item);
+  const qty = formatKitchenQtyLabel(item);
   const fullName = String(item.name || '').replace(/\s+/g, ' ').trim();
   let product = fullName;
   let modifierLines = (item.modifierLines || []).map((m) => m.trim()).filter(Boolean);
@@ -1151,8 +1151,7 @@ function formatKitchenItemLines(
     }
   }
 
-  const primary = `${qty} ${product}`.trim();
-  const wrappedPrimary = wrapKitchenWords(primary, width);
+  const wrappedProduct = wrapKitchenWords(product, width);
   const lines: KitchenLine[] = [];
 
   const pushLine = (kind: KitchenLine['kind'], text: string, blankAfter = 0) => {
@@ -1175,17 +1174,18 @@ function formatKitchenItemLines(
   const pushItem = (text: string, blankAfter = 0) => pushLine('item', text, blankAfter);
   const pushNote = (text: string, blankAfter = 0) => pushLine('note', text, blankAfter);
 
-  if (wrappedPrimary.length) {
-    wrappedPrimary.forEach((w, i) => {
+  if (wrappedProduct.length) {
+    wrappedProduct.forEach((w, i) => {
+      const text = i === 0 ? padLine(w, qty, width) : w;
       const last =
-        i === wrappedPrimary.length - 1 &&
+        i === wrappedProduct.length - 1 &&
         !comboLines.length &&
         !modifierLines.length &&
         !lineNote;
-      pushItem(w, last ? 1 : 0);
+      pushItem(text, last ? 1 : 0);
     });
   } else {
-    pushItem(qty, comboLines.length || modifierLines.length || lineNote ? 0 : 1);
+    pushItem(padLine('', qty, width).trim() || qty, comboLines.length || modifierLines.length || lineNote ? 0 : 1);
   }
 
   for (const combo of comboLines) {
