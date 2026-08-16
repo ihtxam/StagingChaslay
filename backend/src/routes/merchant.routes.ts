@@ -1484,6 +1484,44 @@ router.get(
 );
 
 /**
+ * GET /api/merchant/reports/shift
+ * Shift-scoped sales report (exact from/to ISO timestamps from shift open/close).
+ * Query: from=&to= (ISO). Scoped to PIN staff when VIEW_ALL_SALES is absent.
+ */
+router.get("/reports/shift", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const from = req.query.from ? String(req.query.from) : "";
+    const to = req.query.to ? String(req.query.to) : "";
+    if (!from || !to) {
+      return res.status(400).json({ error: "from and to (ISO timestamps) are required" });
+    }
+    const { resolveReportActor, salesScopeForActor } = await import(
+      "@/lib/report-sales-scope"
+    );
+    const actor = resolveReportActor(req);
+    const scope = salesScopeForActor(actor);
+    if (!scope.viewAll && !scope.staffId) {
+      return res.status(403).json({
+        error: "Own-sales shift reports require a staff PIN session",
+      });
+    }
+    const { PosReportsService } = await import("@/services/pos-reports.service");
+    const report = await PosReportsService.getShiftReport(merchantId, {
+      from,
+      to,
+      staffId: scope.staffId,
+      staffName: scope.staffName,
+    });
+    res.json({ success: true, report });
+  } catch (error) {
+    console.error("Shift report failed:", error);
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load report" });
+  }
+});
+
+/**
  * GET /api/merchant/reports/overview
  * OrderPin-style merchant overview dashboard (KPIs, charts, breakdowns).
  */

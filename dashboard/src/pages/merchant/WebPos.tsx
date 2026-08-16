@@ -29,6 +29,7 @@ import {
   posOrderToWebPosReceipt,
   deliveryDirectionsUrlForReceipt,
   generateEodReportText,
+  generateShiftReportText,
   type PosOrderForReceipt,
   type PosPrintSettingsClient,
   type WebPosReceipt,
@@ -2142,116 +2143,208 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const printShiftEod = async (opts?: { includeProductsSold?: boolean }) => {
+  type PosReportPayload = {
+    salesCount: number;
+    revenue: number;
+    subtotal?: number;
+    taxTotal: number;
+    netTotal?: number;
+    tipsTotal?: number;
+    grandTotal?: number;
+    refundTotal: number;
+    cancelledCount: number;
+    cancelledTotal: number;
+    cashTotal: number;
+    cardTotal: number;
+    terminalTotal: number;
+    coversServed?: number | null;
+    vatRows?: Array<{ label: string; net: number; tva: number; brut: number }>;
+    productsSold: Array<{ name: string; quantity: number; total: number }>;
+    paymentRows: Array<{ method: string; count: number; total: number; percent?: number }>;
+    orderTypeRows?: Array<{ label: string; count: number; total: number; percent?: number }>;
+    channelRows?: Array<{ channel: string; count: number; total: number }>;
+    range?: { label: string; from: string; to: string };
+    shiftCash?: Array<{
+      openingFloat: number;
+      cashSales: number;
+      expectedCash: number;
+      closingCashCounted?: number | null;
+      variance?: number | null;
+      staffName?: string | null;
+    }>;
+  };
+
+  const reportFetchHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = {};
+    if (webposStaff?.accessToken) {
+      headers['X-WebPos-Staff-Access'] = webposStaff.accessToken;
+    }
+    return headers;
+  };
+
+  const scopeStaffNameForReport = () =>
+    staffConfigured &&
+    webposStaff &&
+    !hasPermission(webposStaff.permissions, 'VIEW_ALL_SALES')
+      ? webposStaff.name
+      : null;
+
+  const buildClosedShiftPrintPayload = (
+    report: PosReportPayload | null,
+    includeProductsSold: boolean,
+    reportKind: 'shift' | 'eod',
+    label: string
+  ) => {
+    if (!lastClosedShift) return null;
+    const totalSales =
+      lastClosedShift.cashSales +
+      lastClosedShift.cardSales +
+      lastClosedShift.terminalSales +
+      lastClosedShift.otherSales;
+    const lang = resolveReceiptLanguage(printSettings, locale);
+    const periodFrom =
+      reportKind === 'eod'
+        ? report?.range?.from || lastClosedShift.reportPeriod.from
+        : lastClosedShift.reportPeriod.from;
+    const periodTo =
+      reportKind === 'eod'
+        ? report?.range?.to || lastClosedShift.reportPeriod.to
+        : lastClosedShift.reportPeriod.to;
+    const base = {
+      label: report?.range?.label || label,
+      periodFrom,
+      periodTo,
+      scopeStaffName: scopeStaffNameForReport(),
+      salesCount: report?.salesCount ?? (reportKind === 'eod' ? 0 : lastClosedShift.orderCount),
+      revenue: report?.revenue ?? (reportKind === 'eod' ? 0 : totalSales),
+      subtotal: report?.subtotal ?? (reportKind === 'eod' ? 0 : totalSales),
+      taxTotal: report?.taxTotal ?? 0,
+      netTotal: report?.netTotal,
+      tipsTotal: report?.tipsTotal,
+      grandTotal: report?.grandTotal ?? (reportKind === 'eod' ? 0 : totalSales),
+      refundTotal: report?.refundTotal ?? 0,
+      cancelledCount: report?.cancelledCount ?? 0,
+      cancelledTotal: report?.cancelledTotal ?? 0,
+      cashTotal: report?.cashTotal ?? (reportKind === 'eod' ? 0 : lastClosedShift.cashSales),
+      cardTotal: report?.cardTotal ?? (reportKind === 'eod' ? 0 : lastClosedShift.cardSales),
+      terminalTotal:
+        report?.terminalTotal ?? (reportKind === 'eod' ? 0 : lastClosedShift.terminalSales),
+      coversServed: report?.coversServed,
+      vatRows: report?.vatRows,
+      productsSold: report?.productsSold ?? [],
+      paymentRows:
+        report?.paymentRows ??
+        (reportKind === 'eod'
+          ? []
+          : [
+              { method: 'cash', count: 0, total: lastClosedShift.cashSales },
+              { method: 'card', count: 0, total: lastClosedShift.cardSales },
+              { method: 'terminal', count: 0, total: lastClosedShift.terminalSales },
+            ].filter((r) => r.total > 0)),
+      orderTypeRows: report?.orderTypeRows,
+      channelRows: report?.channelRows,
+      businessName: merchant?.name || APP_NAME,
+      language: lang,
+      paperWidthMm: printSettings?.paperWidthMm || 80,
+      header: printSettings?.receiptHeader,
+      footer: printSettings?.receiptFooter,
+      shiftCash:
+        reportKind === 'eod' && report?.shiftCash?.length
+          ? report.shiftCash
+          : {
+              openingFloat: lastClosedShift.openingCash,
+              cashSales: lastClosedShift.cashSales,
+              expectedCash: lastClosedShift.expectedCash,
+              closingCashCounted: lastClosedShift.closingCashCounted,
+              variance: lastClosedShift.variance,
+              staffName: webposStaff?.name || null,
+            },
+      includeProductsSold,
+      reportKind,
+    };
+    return reportKind === 'shift'
+      ? generateShiftReportText(base)
+      : generateEodReportText(base);
+  };
+
+  /** Print report for the just-closed shift only (openedAt → closedAt). */
+  const printShiftReport = async (opts?: { includeProductsSold?: boolean }) => {
     const includeProductsSold = opts?.includeProductsSold !== false;
     if (!lastClosedShift) {
       toast.error(t('webPosShiftNoReport'));
       return;
     }
     try {
-      const fromYmd = lastClosedShift.reportPeriod.from.slice(0, 10);
-      const toYmd = lastClosedShift.reportPeriod.to.slice(0, 10);
-      let report: {
-        salesCount: number;
-        revenue: number;
-        subtotal?: number;
-        taxTotal: number;
-        netTotal?: number;
-        tipsTotal?: number;
-        grandTotal?: number;
-        refundTotal: number;
-        cancelledCount: number;
-        cancelledTotal: number;
-        cashTotal: number;
-        cardTotal: number;
-        terminalTotal: number;
-        coversServed?: number | null;
-        vatRows?: Array<{ label: string; net: number; tva: number; brut: number }>;
-        productsSold: Array<{ name: string; quantity: number; total: number }>;
-        paymentRows: Array<{ method: string; count: number; total: number; percent?: number }>;
-        orderTypeRows?: Array<{ label: string; count: number; total: number; percent?: number }>;
-        channelRows?: Array<{ channel: string; count: number; total: number }>;
-        range?: { label: string; from: string; to: string };
-      } | null = null;
-      // END_OF_DAY / VIEW_REPORTS: fetch EOD (server scopes to own sales without VIEW_ALL_SALES).
-      // Waiters without those perms only get drawer totals from the closed shift.
-      const mayFetchEod =
-        !staffConfigured ||
-        (!!webposStaff &&
-          (hasPermission(webposStaff.permissions, 'VIEW_REPORTS') ||
-            hasPermission(webposStaff.permissions, 'END_OF_DAY')));
-      if (mayFetchEod) {
-        try {
-          const headers: Record<string, string> = {};
-          if (webposStaff?.accessToken) {
-            headers['X-WebPos-Staff-Access'] = webposStaff.accessToken;
-          }
-          const repRes = await api.get('/merchant/reports/eod', {
-            params: { preset: 'custom', from: fromYmd, to: toYmd },
-            headers,
-          });
-          report = repRes.data.report;
-        } catch {
-          report = null;
-        }
+      let report: PosReportPayload | null = null;
+      try {
+        const repRes = await api.get('/merchant/reports/shift', {
+          params: {
+            from: lastClosedShift.reportPeriod.from,
+            to: lastClosedShift.reportPeriod.to,
+          },
+          headers: reportFetchHeaders(),
+        });
+        report = repRes.data.report;
+      } catch {
+        report = null;
       }
-      const totalSales =
-        lastClosedShift.cashSales +
-        lastClosedShift.cardSales +
-        lastClosedShift.terminalSales +
-        lastClosedShift.otherSales;
-      const lang = resolveReceiptLanguage(printSettings, locale);
-      const text = generateEodReportText({
-        label: report?.range?.label || t('webPosShiftEodLabel'),
-        periodFrom: lastClosedShift.reportPeriod.from,
-        periodTo: lastClosedShift.reportPeriod.to,
-        scopeStaffName:
-          staffConfigured &&
-          webposStaff &&
-          !hasPermission(webposStaff.permissions, 'VIEW_ALL_SALES')
-            ? webposStaff.name
-            : null,
-        salesCount: report?.salesCount ?? lastClosedShift.orderCount,
-        revenue: report?.revenue ?? totalSales,
-        subtotal: report?.subtotal ?? totalSales,
-        taxTotal: report?.taxTotal ?? 0,
-        netTotal: report?.netTotal,
-        tipsTotal: report?.tipsTotal,
-        grandTotal: report?.grandTotal ?? totalSales,
-        refundTotal: report?.refundTotal ?? 0,
-        cancelledCount: report?.cancelledCount ?? 0,
-        cancelledTotal: report?.cancelledTotal ?? 0,
-        cashTotal: report?.cashTotal ?? lastClosedShift.cashSales,
-        cardTotal: report?.cardTotal ?? lastClosedShift.cardSales,
-        terminalTotal: report?.terminalTotal ?? lastClosedShift.terminalSales,
-        coversServed: report?.coversServed,
-        vatRows: report?.vatRows,
-        productsSold: report?.productsSold ?? [],
-        paymentRows:
-          report?.paymentRows ??
-          [
-            { method: 'cash', count: 0, total: lastClosedShift.cashSales },
-            { method: 'card', count: 0, total: lastClosedShift.cardSales },
-            { method: 'terminal', count: 0, total: lastClosedShift.terminalSales },
-          ].filter((r) => r.total > 0),
-        orderTypeRows: report?.orderTypeRows,
-        channelRows: report?.channelRows,
-        businessName: merchant?.name || APP_NAME,
-        language: lang,
-        paperWidthMm: printSettings?.paperWidthMm || 80,
-        header: printSettings?.receiptHeader,
-        footer: printSettings?.receiptFooter,
-        shiftCash: {
-          openingFloat: lastClosedShift.openingCash,
-          cashSales: lastClosedShift.cashSales,
-          expectedCash: lastClosedShift.expectedCash,
-          closingCashCounted: lastClosedShift.closingCashCounted,
-          variance: lastClosedShift.variance,
-          staffName: webposStaff?.name || null,
-        },
+      const text = buildClosedShiftPrintPayload(
+        report,
         includeProductsSold,
-      });
+        'shift',
+        t('webPosShiftReportLabel')
+      );
+      if (!text) {
+        toast.error(t('webPosShiftNoReport'));
+        return;
+      }
       await printEscPosToTargets(text, { role: 'eod' });
+      toast.success(t('webPosShiftPrinted'));
+    } catch (e: any) {
+      toast.error(e.message || t('webPosPrintFailed'));
+    }
+  };
+
+  /** Print whole-day EOD (all shifts / full calendar day). */
+  const printDayEodFromShiftClose = async (opts?: { includeProductsSold?: boolean }) => {
+    const includeProductsSold = opts?.includeProductsSold !== false;
+    if (!lastClosedShift) {
+      toast.error(t('webPosShiftNoReport'));
+      return;
+    }
+    const mayFetchEod =
+      !staffConfigured ||
+      (!!webposStaff &&
+        (hasPermission(webposStaff.permissions, 'VIEW_REPORTS') ||
+          hasPermission(webposStaff.permissions, 'END_OF_DAY')));
+    if (!mayFetchEod) {
+      toast.error(t('webPosEodPermissionDenied'));
+      return;
+    }
+    try {
+      let report: PosReportPayload | null = null;
+      try {
+        const repRes = await api.get('/merchant/reports/eod', {
+          params: { preset: 'today' },
+          headers: reportFetchHeaders(),
+        });
+        report = repRes.data.report;
+      } catch (e: any) {
+        toast.error(e.response?.data?.error || t('webPosPrintFailed'));
+        return;
+      }
+      const text = buildClosedShiftPrintPayload(
+        report,
+        includeProductsSold,
+        'eod',
+        t('webPosEodReport')
+      );
+      if (!text) {
+        toast.error(t('webPosShiftNoReport'));
+        return;
+      }
+      await printEscPosToTargets(text, { role: 'eod' });
+      toast.success(t('webPosEodPrinted'));
     } catch (e: any) {
       toast.error(e.message || t('webPosPrintFailed'));
     }
@@ -7213,7 +7306,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       <WebPosShiftClosedModal
         open={shiftClosedOpen}
         balanced={shiftBalanced}
-        onPrintEod={(opts) => void printShiftEod(opts)}
+        onPrintShift={(opts) => void printShiftReport(opts)}
+        onPrintEod={(opts) => void printDayEodFromShiftClose(opts)}
         onRestart={handleRestartShift}
         onStay={() => setShiftClosedOpen(false)}
         onLogout={handleStaffLogoutFromShiftClosed}

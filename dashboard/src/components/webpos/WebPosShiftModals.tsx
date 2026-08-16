@@ -413,6 +413,7 @@ export function WebPosCloseShiftModal({
 export function WebPosShiftClosedModal({
   open,
   balanced,
+  onPrintShift,
   onPrintEod,
   onRestart,
   onStay,
@@ -420,6 +421,7 @@ export function WebPosShiftClosedModal({
 }: {
   open: boolean;
   balanced: boolean;
+  onPrintShift: (opts: { includeProductsSold: boolean }) => void;
   onPrintEod: (opts: { includeProductsSold: boolean }) => void;
   onRestart: () => void;
   onStay: () => void;
@@ -451,6 +453,13 @@ export function WebPosShiftClosedModal({
           <button
             type="button"
             className="w-full rounded-xl bg-[var(--webpos-accent)] py-3 text-sm font-bold text-white"
+            onClick={() => onPrintShift({ includeProductsSold })}
+          >
+            {t('webPosShiftPrintShift')}
+          </button>
+          <button
+            type="button"
+            className="btn-secondary w-full py-3 text-sm font-semibold"
             onClick={() => onPrintEod({ includeProductsSold })}
           >
             {t('webPosShiftPrintEod')}

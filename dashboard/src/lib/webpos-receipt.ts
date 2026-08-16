@@ -1364,6 +1364,8 @@ export type EodReportPrint = {
   periodTo?: string;
   /** When set, print shows this is one employee's sales (not company totals). */
   scopeStaffName?: string | null;
+  /** Thermal title: whole-day EOD vs single shift. Default 'eod'. */
+  reportKind?: 'eod' | 'shift';
   salesCount: number;
   revenue: number;
   subtotal?: number;
@@ -1425,10 +1427,11 @@ export function generateEodReportText(report: EodReportPrint): string {
   const tips = Number(report.tipsTotal || 0);
   const brut = Number(report.revenue || 0);
   const grand = Number(report.grandTotal != null ? report.grandTotal : brut + tips);
-  const period =
-    report.periodFrom && report.periodTo
+  const period = report.label?.trim()
+    ? report.label
+    : report.periodFrom && report.periodTo
       ? `${report.periodFrom} to ${report.periodTo}`
-      : report.label;
+      : report.label || '';
 
   let r = '';
   r += sep + '\n';
@@ -1437,7 +1440,8 @@ export function generateEodReportText(report: EodReportPrint): string {
   }
   r += sep + '\n';
   r += '\n';
-  r += centerLine(L.endOfDay, width) + '\n';
+  const reportTitle = report.reportKind === 'shift' ? L.endOfShift : L.endOfDay;
+  r += centerLine(reportTitle, width) + '\n';
   if (report.scopeStaffName?.trim()) {
     r +=
       centerLine(
@@ -1615,6 +1619,11 @@ export function generateEodReportText(report: EodReportPrint): string {
   }
   r += '\n\n\n';
   return r;
+}
+
+/** Shift-scoped thermal report (same layout as EOD, different title and period). */
+export function generateShiftReportText(report: EodReportPrint): string {
+  return generateEodReportText({ ...report, reportKind: 'shift' });
 }
 
 /** Minimal ESC/POS: init + optional logo + text + optional QR raster + optional delivery QR raster + Code128 + feed + cut */

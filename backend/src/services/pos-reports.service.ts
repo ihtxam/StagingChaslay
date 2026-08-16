@@ -121,6 +121,19 @@ export type SalesScopeOpts = {
 };
 
 export class PosReportsService {
+  /** Shift-scoped sales report (exact openedAt–closedAt window, not full calendar day). */
+  static async getShiftReport(
+    merchantId: string,
+    opts: { from: string; to: string } & SalesScopeOpts
+  ) {
+    return this.getEndOfDayReport(merchantId, {
+      startAt: opts.from,
+      endAt: opts.to,
+      staffId: opts.staffId,
+      staffName: opts.staffName,
+    });
+  }
+
   static async getEndOfDayReport(
     merchantId: string,
     opts: {
@@ -128,10 +141,40 @@ export class PosReportsService {
       from?: string;
       to?: string;
       channel?: string;
+      /** Exact ISO timestamps — shift-scoped report (overrides preset day bounds). */
+      startAt?: string;
+      endAt?: string;
     } & SalesScopeOpts
   ) {
     const db = getDb();
-    const range = resolveReportRange(opts.preset || "today", opts.from, opts.to);
+    let range: { start: Date; end: Date; label: string; from: string; to: string };
+    if (opts.startAt && opts.endAt) {
+      const start = new Date(opts.startAt);
+      const end = new Date(opts.endAt);
+      if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
+        throw new Error("Invalid shift period");
+      }
+      const fmt = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Europe/Zurich",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      const fromLabel = fmt.format(start);
+      const toLabel = fmt.format(end);
+      range = {
+        start,
+        end,
+        label: fromLabel === toLabel ? fromLabel : `${fromLabel} – ${toLabel}`,
+        from: opts.startAt,
+        to: opts.endAt,
+      };
+    } else {
+      range = resolveReportRange(opts.preset || "today", opts.from, opts.to);
+    }
 
     const merchant = await db.query.merchants.findFirst({
       where: eq(schema.merchants.id, merchantId),
