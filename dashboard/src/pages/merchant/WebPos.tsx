@@ -347,6 +347,11 @@ function lineExtrasLabel(l: CartLine) {
   return parts.join(', ');
 }
 
+/** Kitchen delta only — skip lines already fired via Send / tab draft. */
+function unsentKitchenLines(lines: CartLine[]): CartLine[] {
+  return lines.filter((l) => !l.sentToKitchen);
+}
+
 type SaleRecord = {
   id: string;
   orderNumber?: string;
@@ -4439,6 +4444,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cancelReason?: string | null;
       /** Cancel tickets always print even if auto-print kitchen is off */
       forcePrint?: boolean;
+      /** Snapshot tab/table before cart reset (payment path). */
+      tabNumber?: string | null;
+      tableLabel?: string | null;
     }
   ) => {
     if (printSettings?.autoPrintKitchen === false && !opts?.forcePrint && !opts?.cancelled) return;
@@ -4491,8 +4499,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       headerTextScale: printSettings?.kitchenHeaderTextScale || 2,
       boldText: printSettings?.kitchenBoldText !== false,
       groupByCourse: coursesEnabled && !opts?.cancelled,
-      tableLabel: tableLabel || null,
-      tabNumber: tabNumber || null,
+      tableLabel: opts?.tableLabel !== undefined ? opts.tableLabel : tableLabel || null,
+      tabNumber: opts?.tabNumber !== undefined ? opts.tabNumber : tabNumber || null,
       cancelled: !!opts?.cancelled,
       cancelReason: opts?.cancelReason || null,
     };
@@ -4881,6 +4889,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const paperWidthMm = printSettings?.paperWidthMm || 80;
     const cartSnapshot = [...cart];
     const channelSnapshot = effectiveChannel;
+    const tabSnapshot = tabNumber;
+    const tableLabelSnapshot = tableLabel;
     const shipAddr =
       sale.shippingAddress ||
       (selectedCustomer
@@ -5063,11 +5073,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         toast.error(e?.message || t('webPosPrintFailed'));
       });
     }
-    if (!moreSplits || splitIndex === 0) {
+    const kitchenDelta = unsentKitchenLines(cartSnapshot);
+    if ((!moreSplits || splitIndex === 0) && kitchenDelta.length) {
       // Don't hold checkout/busy on kitchen print — agent latency is often several seconds.
-      void printKitchenForCart(cartSnapshot, channelSnapshot, {
-        orderNumber: ticket.display,
+      void printKitchenForCart(kitchenDelta, channelSnapshot, {
+        orderNumber: kitchenOrderNumber({ ticket }),
         when: whenSnapshot,
+        tabNumber: tabSnapshot,
+        tableLabel: tableLabelSnapshot,
       }).catch((e: any) => {
         toast.error(e?.message || t('webPosKitchenPrintFailed'));
       });
@@ -5197,18 +5210,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const cartSnapshot = cart;
       const channelSnapshot = channel;
       const whenSnapshot = fulfillmentWhen;
+      const tabSnapshot = tabNumber;
+      const tableLabelSnapshot = tableLabel;
       const ticket = ensureCartTicket();
       await persistHeldOrder(cart, sendToKitchen, { ticket });
       setCart([]);
       clearCartTicket();
       toast.success(sendToKitchen ? t('webPosHeldSentKitchen') : t('webPosOrderHeld'));
       if (sendToKitchen) {
-        void printKitchenForCart(cartSnapshot, channelSnapshot, {
-          orderNumber: ticket.display,
-          when: whenSnapshot,
-        }).catch((e: any) => {
-          toast.error(e?.message || t('webPosKitchenPrintFailed'));
-        });
+        const kitchenDelta = unsentKitchenLines(cartSnapshot);
+        if (kitchenDelta.length) {
+          void printKitchenForCart(kitchenDelta, channelSnapshot, {
+            orderNumber: kitchenOrderNumber({ ticket }),
+            when: whenSnapshot,
+            tabNumber: tabSnapshot,
+            tableLabel: tableLabelSnapshot,
+          }).catch((e: any) => {
+            toast.error(e?.message || t('webPosKitchenPrintFailed'));
+          });
+        }
       }
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosHoldFailed'));
