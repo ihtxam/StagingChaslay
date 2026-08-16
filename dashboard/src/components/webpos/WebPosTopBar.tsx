@@ -92,8 +92,17 @@ export async function toggleWebPosFullscreen(opts?: { forceEnterApp?: boolean })
 
 let pwaFullscreenGestureBound = false;
 
+/** True when the OS/PWA window is already kiosk-sized (manifest display:fullscreen). */
+function isPwaDisplayFullscreen(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(display-mode: fullscreen)').matches;
+}
+
 function bindPwaFullscreenOnFirstGesture() {
   if (pwaFullscreenGestureBound || document.fullscreenElement) return;
+  // Installed PWA with manifest display:fullscreen — Fullscreen API is redundant and
+  // a persistent capture listener steals every tap when requestFullscreen keeps failing.
+  if (isPwaDisplayFullscreen()) return;
   pwaFullscreenGestureBound = true;
 
   const cleanup = () => {
@@ -102,18 +111,15 @@ function bindPwaFullscreenOnFirstGesture() {
     pwaFullscreenGestureBound = false;
   };
 
+  /** One-shot: always detach after the first gesture so clicks reach the POS UI. */
   const onGesture = () => {
-    if (document.fullscreenElement) {
-      cleanup();
-      return;
-    }
-    void toggleWebPosFullscreen({ forceEnterApp: true }).finally(() => {
-      if (document.fullscreenElement) cleanup();
-    });
+    cleanup();
+    if (document.fullscreenElement) return;
+    void toggleWebPosFullscreen({ forceEnterApp: true });
   };
 
-  document.addEventListener('pointerdown', onGesture, { capture: true });
-  document.addEventListener('keydown', onGesture, { capture: true });
+  document.addEventListener('pointerdown', onGesture, { capture: true, once: true });
+  document.addEventListener('keydown', onGesture, { capture: true, once: true });
 }
 
 async function requestDocumentFullscreen(): Promise<boolean> {
@@ -134,6 +140,8 @@ export async function enterWebPosFullscreenOnLoad() {
   const isPwa = isStandalonePwa();
   if (!isPwa && !readWebPosFullscreenPreference()) return;
   if (document.fullscreenElement) return;
+  // Manifest display:fullscreen already fills the screen — skip Fullscreen API + gesture hook.
+  if (isPwa && isPwaDisplayFullscreen()) return;
 
   const entered = await requestDocumentFullscreen();
   if (entered) {
@@ -406,10 +414,11 @@ export default function WebPosTopBar({
                 <button
                   type="button"
                   tabIndex={-1}
-                  aria-hidden
-                  className="pointer-events-none fixed inset-0 z-[48] cursor-default border-0 bg-black/10 p-0"
+                  aria-label={t('close')}
+                  className="fixed inset-0 z-[48] cursor-default border-0 bg-black/10 p-0"
+                  onClick={onCloseSettings}
                 />
-                <div className="pointer-events-auto relative z-[50]">{settingsPanel}</div>
+                <div className="relative z-[50]">{settingsPanel}</div>
               </>
             ) : null}
           </div>
