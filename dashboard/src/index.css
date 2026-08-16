@@ -222,12 +222,10 @@ button {
   /* WebPOS toast stack — center-top, clear of right-side ⋮ menu (react-hot-toast) */
   .webpos-toast-container {
     top: max(0.5rem, env(safe-area-inset-top, 0px)) !important;
-    z-index: 9999 !important;
+    bottom: auto !important;
+    height: auto !important;
+    z-index: 60 !important;
     pointer-events: none;
-  }
-
-  .webpos-toast-container > div {
-    pointer-events: auto;
   }
 
   .webpos-shell[data-theme='teal'] {

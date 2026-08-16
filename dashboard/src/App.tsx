@@ -41,6 +41,15 @@ function AppToaster() {
     <Toaster
       position={webPos ? 'top-center' : 'top-right'}
       containerClassName={webPos ? 'webpos-toast-container' : undefined}
+      containerStyle={
+        webPos
+          ? {
+              bottom: 'auto',
+              height: 'auto',
+              pointerEvents: 'none',
+            }
+          : undefined
+      }
       toastOptions={
         webPos
           ? {

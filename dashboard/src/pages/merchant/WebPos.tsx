@@ -6090,6 +6090,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onPostSuccessChange={setPostSuccessTarget}
             onRefreshPrinters={() => {
               void refreshAgent();
+              setSettingsOpen(false);
               toast.success(t('webPosPrintersRefreshed'));
             }}
             onReloadCatalog={() => {
