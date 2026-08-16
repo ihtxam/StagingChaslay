@@ -165,24 +165,6 @@ function readStoredGridSort(): 'default' | 'alpha' | 'bestseller' {
   return 'default';
 }
 
-/** Gift-card / loyalty formats — not retail EAN/UPC product barcodes. */
-function looksLikeGiftOrLoyaltyCard(code: string): boolean {
-  const trimmed = code.trim();
-  if (!trimmed) return false;
-  const ec = normalizeScannedPayload(trimmed);
-  if (/^EC[- ]?[0-9A-F]{6,12}$/i.test(ec)) return true;
-  if (/\/gift\//i.test(trimmed)) return true;
-  const compact = normalizeRfidUid(trimmed);
-  if (
-    compact.length >= 8 &&
-    /^[0-9A-F]+$/.test(compact) &&
-    !/^\d{8,14}$/.test(trimmed.replace(/\s/g, ''))
-  ) {
-    return true;
-  }
-  return false;
-}
-
 function blurPosInputs() {
   const el = document.activeElement;
   if (
@@ -4015,9 +3997,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     toast.success(displayName || membership.cardNumber || t('webPosMembershipAttached'));
   };
 
-  const lookupMembershipCard = async (rawCode: string) => {
+  const lookupMembershipCard = async (
+    rawCode: string,
+    opts?: { silentNotFound?: boolean }
+  ): Promise<boolean> => {
     const code = rawCode.trim();
-    if (!code || membershipBusy) return;
+    if (!code || membershipBusy) return false;
     const ecParsed = normalizeScannedPayload(code);
     const normalized = ecParsed || normalizeRfidUid(code) || code;
     const mediaType = /^EC/i.test(normalized) ? 'e_card' : 'physical';
@@ -4048,8 +4033,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         membershipPlan: (c.membershipPlan as MembershipPlan | null) || null,
         stampCount: Number(c.stampCount ?? 0),
       });
+      return true;
     } catch (e: any) {
-      toast.error(e.response?.data?.error || e.message || t('webPosMembershipLookupFailed'));
+      const notFound = e.response?.status === 404;
+      if (!opts?.silentNotFound || !notFound) {
+        toast.error(e.response?.data?.error || e.message || t('webPosMembershipLookupFailed'));
+      }
+      return false;
     } finally {
       setMembershipBusy(false);
     }
@@ -5776,7 +5766,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
 
   const handlePosScan = useCallback(
-    (code: string) => {
+    async (code: string) => {
       if (pinGateRequired || pinModalOpen) return;
       if (posView !== 'register') return;
       if (
@@ -5799,6 +5789,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ) {
         return;
       }
+      const membershipEnabledSetting = !!(
+        paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null
+      )?.membershipEnabled;
+      const cardsScanEnabled =
+        giftCardsEditionOk &&
+        !isWebPosCurrentlyOffline() &&
+        (((paymentConfig?.methods.giftCard === true) && canPay) || membershipEnabledSetting);
+      if (cardsScanEnabled) {
+        const attached = await lookupMembershipCard(code, { silentNotFound: true });
+        if (attached) return;
+      }
       const product = findProductByScanCode(code);
       if (product) {
         onProductClick(product);
@@ -5813,15 +5814,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         toast.success(
           t('tableQrAssigned').replace('{label}', tableQr.tableId.slice(0, 8).toUpperCase())
         );
-        return;
-      }
-      const cardsScanEnabled =
-        giftCardsEditionOk &&
-        (paymentConfig?.methods.giftCard === true) &&
-        canPay &&
-        !isWebPosCurrentlyOffline();
-      if (cardsScanEnabled && looksLikeGiftOrLoyaltyCard(code)) {
-        void lookupMembershipCard(code);
         return;
       }
       toast.error(t('webPosBarcodeNotFound').replace('{code}', code));

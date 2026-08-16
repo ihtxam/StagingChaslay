@@ -957,6 +957,21 @@ class PosViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            if (_uiExtras.value.giftCardsEnabled) {
+                giftCardRepository.lookupCode(code, mediaType = null)
+                    .onSuccess { card ->
+                        attachMembershipCard(giftCardRepository.toAttachedMembership(card))
+                        return@launch
+                    }
+                    .onFailure { e ->
+                        val msg = e.message.orEmpty()
+                        val notFound = msg.contains("not found", ignoreCase = true)
+                        if (!notFound) {
+                            updateExtras { it.copy(snackbarMessage = msg.ifBlank { "Card lookup failed" }) }
+                            return@launch
+                        }
+                    }
+            }
             val lookup = productRepository.findByBarcode(code)
             if (lookup == null) {
                 updateExtras { it.copy(snackbarMessage = "No product for barcode $code") }
