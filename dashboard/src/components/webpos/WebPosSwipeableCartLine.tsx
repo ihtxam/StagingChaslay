@@ -1,6 +1,5 @@
 import { Trash2 } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
-import { useI18n } from '@/lib/i18n';
 
 const DELETE_WIDTH = 76;
 const SWIPE_START_PX = 10;
@@ -25,7 +24,6 @@ export default function WebPosSwipeableCartLine({
   sentToKitchen = false,
   children,
 }: Props) {
-  const { t } = useI18n();
   const [offsetX, setOffsetX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startXRef = useRef(0);
@@ -113,10 +111,7 @@ export default function WebPosSwipeableCartLine({
         }`}
         style={{ width: DELETE_WIDTH }}
       >
-        <span className="flex flex-col items-center gap-0.5 px-2 text-[10px] font-bold uppercase tracking-wide">
-          <Trash2 size={18} strokeWidth={2.25} />
-          {t('webPosRemoveItem')}
-        </span>
+        <Trash2 size={18} strokeWidth={2.25} aria-hidden />
       </div>
 
       <div
