@@ -550,16 +550,16 @@ fun PosScreen(
                         gridColumns = state.productGridColumns,
                         showProductImages = state.productGridShowImages,
                         paymentEnabled = state.cart.isEmpty.not() && !state.isProcessingPayment,
-                        expressEnabled = state.settings.expressEnabled,
                         cashEnabled = state.settings.cashEnabled,
                         cardEnabled = state.settings.cardEnabled,
+                        terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
                         isGiftCardCategory = state.isGiftCardCategory,
                         highlightedProductId = state.lastClickedProductId,
                         onProductClick = viewModel::onProductClick,
                         onMiscClick = viewModel::addMiscItemQuick,
                         onCash = viewModel::initiateCashPayment,
                         onCard = viewModel::initiateCardPayment,
-                        onXpress = viewModel::xpressSale,
+                        onTerminal = viewModel::initiateTerminalPayment,
                         onOpenCheckout = { viewModel.openCheckout() },
                         onSellGiftCard = viewModel::showGiftCardSellDialog,
                         onReloadGiftCard = viewModel::showGiftCardReloadDialog,
@@ -2554,9 +2554,9 @@ private fun VectronProductGrid(
     categories: List<CategoryEntity>,
     currencySymbol: String,
     paymentEnabled: Boolean,
-    expressEnabled: Boolean = true,
     cashEnabled: Boolean = true,
     cardEnabled: Boolean = true,
+    terminalEnabled: Boolean = false,
     gridColumns: Int = 5,
     showProductImages: Boolean = false,
     isGiftCardCategory: Boolean = false,
@@ -2565,7 +2565,7 @@ private fun VectronProductGrid(
     onMiscClick: () -> Unit,
     onCash: () -> Unit,
     onCard: () -> Unit,
-    onXpress: () -> Unit,
+    onTerminal: () -> Unit = {},
     onOpenCheckout: () -> Unit = {},
     onSellGiftCard: () -> Unit = {},
     onReloadGiftCard: () -> Unit = {},
@@ -2640,7 +2640,7 @@ private fun VectronProductGrid(
         }
         }
 
-        if (expressEnabled || cashEnabled || cardEnabled) {
+        if (cashEnabled || cardEnabled || terminalEnabled) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2649,20 +2649,6 @@ private fun VectronProductGrid(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (expressEnabled) {
-                    Button(
-                        onClick = onXpress,
-                        enabled = paymentEnabled,
-                        modifier = Modifier.weight(1f).height(64.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFE67E22),
-                            disabledContainerColor = VectronColors.KeypadButton
-                        )
-                    ) {
-                        Text(stringResource(R.string.xpress_sale), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
                 if (cashEnabled) {
                     Button(
                         onClick = onCash,
@@ -2688,28 +2674,40 @@ private fun VectronProductGrid(
                             disabledContainerColor = VectronColors.KeypadButton
                         )
                     ) {
-                        Text(stringResource(R.string.payment_by_card), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.card), fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     }
                 }
-                if (expressEnabled) {
+                if (terminalEnabled) {
                     Button(
-                        onClick = onOpenCheckout,
+                        onClick = onTerminal,
                         enabled = paymentEnabled,
-                        modifier = Modifier.width(64.dp).height(64.dp),
+                        modifier = Modifier.weight(1f).height(64.dp),
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = VectronColors.Header,
+                            containerColor = Color(0xFF8B5CF6),
                             disabledContainerColor = VectronColors.KeypadButton
-                        ),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = stringResource(R.string.open_checkout),
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
                         )
+                    ) {
+                        Text(stringResource(R.string.terminal), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
+                }
+                Button(
+                    onClick = onOpenCheckout,
+                    enabled = paymentEnabled,
+                    modifier = Modifier.width(64.dp).height(64.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = VectronColors.Header,
+                        disabledContainerColor = VectronColors.KeypadButton
+                    ),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = stringResource(R.string.open_checkout),
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
                 }
             }
         }

@@ -2829,6 +2829,11 @@ class PosViewModel @Inject constructor(
         openCheckout(PaymentMethod.CARD)
     }
 
+    fun initiateTerminalPayment() {
+        if (!cachedSettings.isAdyenTerminalCheckoutEnabled()) return
+        openCheckout(PaymentMethod.ADYEN_TERMINAL)
+    }
+
     fun xpressSale() {
         if (!cachedSettings.expressEnabled) return
         val payable = cartManager.paymentSnapshot()

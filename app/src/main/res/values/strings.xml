@@ -57,6 +57,7 @@
     <string name="total">Total</string>
     <string name="cash">Cash</string>
     <string name="card">Card</string>
+    <string name="terminal">Terminal</string>
     <string name="payment">Payment</string>
     <string name="all_categories">All</string>
     <string name="enter_price">Enter price</string>

@@ -314,47 +314,66 @@ export default function WebPosProductArea({
         )}
       </div>
 
-      {(expressCheckout && onExpressPay) ? (
-        <div className="hidden shrink-0 border-t border-stone-200 bg-white p-3 lg:block">
-          <div className="flex items-stretch gap-2">
-            <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
-              {expressCheckout && onExpressPay && expressMethods?.cash !== false ? (
+      {(() => {
+        const showCash = expressMethods?.cash !== false;
+        const showCard = expressMethods?.card !== false;
+        const showTerminal = expressMethods?.terminal === true;
+        const hasQuickPay = (showCash || showCard || showTerminal) && !!onExpressPay;
+        const showPayRow = hasQuickPay || !!onOpenCheckout;
+        if (!showPayRow) return null;
+        return (
+          <div className="hidden shrink-0 border-t border-stone-200 bg-white p-3 lg:block">
+            <div className="flex items-stretch gap-2">
+              <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
+                {hasQuickPay && showCash ? (
+                  <button
+                    type="button"
+                    disabled={expressDisabled}
+                    onClick={() => onExpressPay!('cash')}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
+                  >
+                    <Banknote size={18} />
+                    {t('webPosCash')}
+                  </button>
+                ) : null}
+                {hasQuickPay && showCard ? (
+                  <button
+                    type="button"
+                    disabled={expressDisabled}
+                    onClick={() => onExpressPay!('card')}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 py-3.5 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-40"
+                  >
+                    <CreditCard size={18} />
+                    {t('webPosCard')}
+                  </button>
+                ) : null}
+                {hasQuickPay && showTerminal ? (
+                  <button
+                    type="button"
+                    disabled={expressDisabled}
+                    onClick={() => onExpressPay!('terminal')}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-700 py-3.5 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+                  >
+                    <MonitorSmartphone size={18} />
+                    {t('webPosTerminal')}
+                  </button>
+                ) : null}
+              </div>
+              {onOpenCheckout ? (
                 <button
                   type="button"
-                  disabled={expressDisabled}
-                  onClick={() => onExpressPay('cash')}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
+                  disabled={checkoutDisabled}
+                  onClick={onOpenCheckout}
+                  className="inline-flex w-16 shrink-0 items-center justify-center rounded-xl border-2 border-stone-300 bg-stone-50 text-stone-800 hover:bg-stone-100 disabled:opacity-40"
+                  title={t('webPosOpenCheckout')}
                 >
-                  <Banknote size={18} />
-                  {t('webPosCash')}
-                </button>
-              ) : null}
-              {expressCheckout && onExpressPay && expressMethods?.card !== false ? (
-                <button
-                  type="button"
-                  disabled={expressDisabled}
-                  onClick={() => onExpressPay('card')}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 py-3.5 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-40"
-                >
-                  <CreditCard size={18} />
-                  {t('webPosCard')}
-                </button>
-              ) : null}
-              {expressCheckout && onExpressPay && expressMethods?.terminal ? (
-                <button
-                  type="button"
-                  disabled={expressDisabled}
-                  onClick={() => onExpressPay('terminal')}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-700 py-3.5 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
-                >
-                  <MonitorSmartphone size={18} />
-                  {t('webPosTerminal')}
+                  <ArrowRight size={28} strokeWidth={2.5} />
                 </button>
               ) : null}
             </div>
           </div>
-        </div>
-      ) : null}
+        );
+      })()}
     </section>
   );
 }

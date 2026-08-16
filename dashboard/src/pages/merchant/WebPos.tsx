@@ -6615,7 +6615,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     return next;
                   });
                 }}
-                expressCheckout={enabledMethods.express}
                 expressMethods={{
                   cash: enabledMethods.cash,
                   card: enabledMethods.card,
