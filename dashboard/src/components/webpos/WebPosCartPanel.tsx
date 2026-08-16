@@ -289,7 +289,7 @@ export default function WebPosCartPanel({
     : null;
   const canSendNow =
     (showOrderTabs ? orderingLines.length > 0 : hasItems) && !onOrderedTab;
-  const retailBistroChannelRow =
+  const retailBistroMode =
     isRetail && showChannelTabs && channelTabOptions.includes('dine_in');
   const showMetaStrip =
     membershipName ||
@@ -312,35 +312,8 @@ export default function WebPosCartPanel({
           : `${sideBorder} border-stone-200 lg:w-[min(22rem,34vw)] lg:shrink-0`
       }`}
     >
-      {/* Channel tabs: Takeaway / Delivery / Dine-in (retail bistro: dine-in + choose time) */}
-      {retailBistroChannelRow ? (
-        <div className="flex shrink-0 items-center gap-1.5 border-b border-stone-100 px-2 py-2">
-          <button
-            type="button"
-            onClick={() => onChannelChange('dine_in')}
-            className={`min-w-0 flex-1 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide ${
-              channel === 'dine_in'
-                ? 'bg-[var(--webpos-accent)] text-white'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-            }`}
-          >
-            {t('dineIn')}
-          </button>
-          {channelTabOptions.includes('delivery') ? (
-            <button
-              type="button"
-              onClick={() => onChannelChange('delivery')}
-              className={`min-w-0 flex-1 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide ${
-                channel === 'delivery'
-                  ? 'bg-[var(--webpos-accent)] text-white'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-              }`}
-            >
-              {t('delivery')}
-            </button>
-          ) : null}
-        </div>
-      ) : showChannelTabs ? (
+      {/* Channel tabs: Takeaway / Delivery / Dine-in (retail bistro: toggles live on order row) */}
+      {showChannelTabs && !retailBistroMode ? (
         <div
           className={`shrink-0 grid gap-1.5 border-b border-stone-100 px-2 py-2 ${
             channelOptions.length >= 3
@@ -371,7 +344,7 @@ export default function WebPosCartPanel({
         </div>
       ) : null}
 
-      {/* Table / order type + ⋮ on one line */}
+      {/* Table / channel toggles + ⋮ on one line */}
       <div className="relative shrink-0 border-b border-stone-100 px-2 py-1.5">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
@@ -394,18 +367,37 @@ export default function WebPosCartPanel({
               <span className="inline-flex max-w-full items-center truncate rounded-lg bg-indigo-100 px-2.5 py-1.5 text-xs font-bold text-indigo-900">
                 {t('webPosTab')} #{tabNumber}
               </span>
-            ) : isRetail && channel === 'dine_in' ? (
-              <span className="inline-flex max-w-full items-center truncate rounded-lg bg-sky-100 px-2.5 py-1.5 text-xs font-bold text-sky-900">
-                {t('dineIn')}
-                {ticketDisplay ? ` · ${ticketDisplay}` : ''}
-              </span>
-            ) : isRetail && channel === 'delivery' ? (
-              <span className="inline-flex max-w-full items-center truncate rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-bold text-amber-900">
-                {t('delivery')}
-                {': '}
-                {fulfillmentIsLater && fulfillmentLabel
-                  ? fulfillmentLabel
-                  : t('webPosAsap')}
+            ) : retailBistroMode ? (
+              <span className="inline-flex max-w-full min-w-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onChannelChange('dine_in')}
+                  className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide ${
+                    channel === 'dine_in'
+                      ? 'bg-[var(--webpos-accent)] text-white'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  {t('dineIn')}
+                </button>
+                {channelTabOptions.includes('delivery') ? (
+                  <button
+                    type="button"
+                    onClick={() => onChannelChange('delivery')}
+                    className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide ${
+                      channel === 'delivery'
+                        ? 'bg-[var(--webpos-accent)] text-white'
+                        : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                    }`}
+                  >
+                    {t('delivery')}
+                  </button>
+                ) : null}
+                {channel === 'dine_in' && ticketDisplay ? (
+                  <span className="truncate text-[11px] font-semibold text-sky-800">
+                    {ticketDisplay}
+                  </span>
+                ) : null}
               </span>
             ) : !isRetail ? (
               <span className="inline-flex max-w-full items-center truncate rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-700">
