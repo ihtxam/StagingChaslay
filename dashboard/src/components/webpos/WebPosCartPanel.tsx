@@ -1,4 +1,5 @@
 import {
+  ArrowDownUp,
   ArrowLeft,
   ArrowRight,
   Ban,
@@ -112,6 +113,8 @@ type Props = {
   onReleaseTable?: () => void;
   /** Retail mode — simplified cart chrome and footer. */
   isRetail?: boolean;
+  /** Record cash in/out when shift is open. */
+  onCashMovement?: () => void;
 };
 
 function lineExtrasLabel(l: CartLine) {
@@ -228,6 +231,7 @@ export default function WebPosCartPanel({
   canReleaseTable = false,
   onReleaseTable,
   isRetail = false,
+  onCashMovement,
 }: Props) {
   const { t } = useI18n();
   const hasItems = cart.length > 0;
@@ -649,6 +653,20 @@ export default function WebPosCartPanel({
                   {billDiscountLabel
                     ? `${t('webPosBillDiscount')} (${billDiscountLabel})`
                     : t('webPosBillDiscount')}
+                </button>
+              ) : null}
+              {onCashMovement ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onCashMovement();
+                  }}
+                >
+                  <ArrowDownUp size={14} className="shrink-0 text-stone-500" />
+                  {t('webPosCashMovementTitle')}
                 </button>
               ) : null}
               <button

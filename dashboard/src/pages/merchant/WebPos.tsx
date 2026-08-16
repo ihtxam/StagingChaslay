@@ -6806,6 +6806,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onBillDiscount={
                   checkoutSettings.discountsEnabled ? () => setBillDiscountOpen(true) : undefined
                 }
+                onCashMovement={
+                  shiftsEnabled && openShift
+                    ? () => setCashMovementOpen(true)
+                    : undefined
+                }
                 canApplyBillDiscount={canApplyDiscounts}
                 billDiscountLabel={billDiscountLabel}
                 canReleaseTable={!!tableLabel && cart.length === 0}

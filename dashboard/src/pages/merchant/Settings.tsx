@@ -21,6 +21,7 @@ import {
   UtensilsCrossed,
 } from 'lucide-react';
 import PosPostsSection from '@/components/settings/PosPostsSection';
+import api from '@/lib/api';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
   formatScalePortLabel,
