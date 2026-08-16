@@ -9,6 +9,7 @@ import { roundMoney2, roundTo005, roundingAdjustment, computeMerchandiseTotals, 
 import { APP_NAME } from '@/lib/brand';
 import {
   buildKitchenPrintJobs,
+  buildKitchenTicketItemFromLine,
   generateKitchenTicketEscPos,
   generateKitchenTicketText,
   generateKitchenMessageTicketEscPos,
@@ -651,6 +652,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
   const [pendingCombo, setPendingCombo] = useState<ShopComboProduct | null>(null);
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [pendingOpenPrice, setPendingOpenPrice] = useState<Product | null>(null);
   const [pendingWeighed, setPendingWeighed] = useState<Product | null>(null);
   const [customAmountOpen, setCustomAmountOpen] = useState(false);
@@ -1968,6 +1970,79 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     void ensureShift(() =>
       pushConfiguredProduct(p, unitPrice, selectedExtras, comboSelections, quantity, lineNote)
     );
+  };
+
+  const updateConfiguredLine = (
+    lineId: string,
+    unitPrice: number,
+    selectedExtras: ShopSelectedExtra[],
+    comboSelections: ShopComboSelection[],
+    quantity: number,
+    lineNote?: string
+  ) => {
+    const qty = Math.max(1, Math.round(quantity));
+    setCart((prev) =>
+      prev.map((l) => {
+        if (l.lineId !== lineId) return l;
+        const disc = l.lineDiscountPercent || 0;
+        return {
+          ...l,
+          unitPrice: roundMoney2(unitPrice),
+          selectedExtras,
+          comboSelections,
+          quantity: qty,
+          lineNote: lineNote?.trim() || undefined,
+          lineTotal: lineTotalFor(roundMoney2(unitPrice), qty, disc),
+        };
+      })
+    );
+  };
+
+  const lineIsEditable = (line: CartLine, product?: Product | null) => {
+    if (line.sentToKitchen || line.giftCard || line.isOpenPrice || line.isWeighed) return false;
+    if (line.comboSelections.length) return true;
+    if (line.selectedExtras.length || line.lineNote?.trim()) return true;
+    if (product && productHasComboSlots(product)) return true;
+    if (product && productHasModifiers(product as ShopProductForModifiers)) return true;
+    return false;
+  };
+
+  const openLineForEdit = (line: CartLine) => {
+    if (line.sentToKitchen) {
+      toast.error(t('webPosCancelSentToEdit'));
+      return;
+    }
+    const product = products.find((p) => p.id === line.productId);
+    if (!product || !lineIsEditable(line, product)) {
+      setSelectedLineId((prev) => (prev === line.lineId ? null : line.lineId));
+      setKeypadBuffer('');
+      return;
+    }
+    setEditingLineId(line.lineId);
+    setSelectedLineId(null);
+    setKeypadBuffer('');
+    if (line.comboSelections.length || productHasComboSlots(product)) {
+      setPendingCombo({
+        id: product.id,
+        name: product.name,
+        price: Number(product.price) || 0,
+        allowExtras: product.allowExtras,
+        extras: product.extras,
+        modifierGroups: product.modifierGroups,
+        comboSlots: product.comboSlots || [],
+      });
+      setPendingProduct(null);
+      return;
+    }
+    setPendingProduct({
+      id: product.id,
+      name: product.name,
+      price: Number(product.price) || 0,
+      allowExtras: product.allowExtras,
+      extras: product.extras,
+      modifierGroups: product.modifierGroups,
+    });
+    setPendingCombo(null);
   };
 
   const addConfiguredProduct = (
@@ -4805,10 +4880,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         : lines
     ).filter((l) => !l.giftCard && !String(l.productId || '').startsWith('__gift_card_'));
     if (!filteredLines.length) return;
-    const receiptItems = filteredLines.map((l) => {
-      const detail = lineExtrasLabel(l);
-      return {
-        name: detail ? `${l.name} (${detail})` : l.name,
+    const receiptItems = filteredLines.map((l) =>
+      buildKitchenTicketItemFromLine({
+        name: l.name,
         quantity: l.quantity,
         unitPrice: l.unitPrice,
         lineTotal: l.lineTotal,
@@ -4816,8 +4890,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         productId: l.productId,
         categoryId: l.categoryId,
         courseNumber: l.courseNumber,
-      };
-    });
+        selectedExtras: l.selectedExtras,
+        comboSelections: l.comboSelections,
+        lineNote: l.lineNote,
+      })
+    );
     const customerName = selectedCustomer
       ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(' ')
       : '';
@@ -6519,6 +6596,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 money={money}
                 selectedLineId={selectedLineId}
                 onSelectLine={handleSelectLine}
+                onEditLine={openLineForEdit}
                 keypadMode={keypadMode}
                 onKeypadModeChange={handleKeypadModeChange}
                 keypadBuffer={keypadBuffer}
@@ -6971,13 +7049,43 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         <WebPosProductModifiersModal
           product={pendingProduct}
           showProductImages={gridShowImages}
-          onClose={() => setPendingProduct(null)}
+          initialSelectedExtras={
+            editingLineId
+              ? cart.find((l) => l.lineId === editingLineId)?.selectedExtras
+              : undefined
+          }
+          initialQuantity={
+            editingLineId
+              ? cart.find((l) => l.lineId === editingLineId)?.quantity
+              : undefined
+          }
+          initialLineNote={
+            editingLineId
+              ? cart.find((l) => l.lineId === editingLineId)?.lineNote || ''
+              : undefined
+          }
+          onClose={() => {
+            setPendingProduct(null);
+            setEditingLineId(null);
+          }}
           onConfirm={({ selectedExtras, unitPrice, quantity, lineNote }) => {
             const base = products.find((p) => p.id === pendingProduct.id);
             if (base) {
-              pushConfiguredProductWithQty(base, unitPrice, selectedExtras, [], quantity, lineNote);
+              if (editingLineId) {
+                updateConfiguredLine(
+                  editingLineId,
+                  unitPrice,
+                  selectedExtras,
+                  [],
+                  quantity,
+                  lineNote
+                );
+              } else {
+                pushConfiguredProductWithQty(base, unitPrice, selectedExtras, [], quantity, lineNote);
+              }
             }
             setPendingProduct(null);
+            setEditingLineId(null);
           }}
         />
       )}
@@ -6986,20 +7094,55 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         <WebPosComboModal
           product={pendingCombo}
           showProductImages={gridShowImages}
-          onClose={() => setPendingCombo(null)}
+          initialComboSelections={
+            editingLineId
+              ? cart.find((l) => l.lineId === editingLineId)?.comboSelections
+              : undefined
+          }
+          initialSelectedExtras={
+            editingLineId
+              ? cart.find((l) => l.lineId === editingLineId)?.selectedExtras
+              : undefined
+          }
+          initialQuantity={
+            editingLineId
+              ? cart.find((l) => l.lineId === editingLineId)?.quantity
+              : undefined
+          }
+          initialLineNote={
+            editingLineId
+              ? cart.find((l) => l.lineId === editingLineId)?.lineNote || ''
+              : undefined
+          }
+          onClose={() => {
+            setPendingCombo(null);
+            setEditingLineId(null);
+          }}
           onConfirm={({ comboSelections, selectedExtras, unitPrice, quantity, lineNote }) => {
             const base = products.find((p) => p.id === pendingCombo.id);
             if (base) {
-              pushConfiguredProductWithQty(
-                base,
-                unitPrice,
-                selectedExtras,
-                comboSelections as ShopComboSelection[],
-                quantity,
-                lineNote
-              );
+              if (editingLineId) {
+                updateConfiguredLine(
+                  editingLineId,
+                  unitPrice,
+                  selectedExtras,
+                  comboSelections as ShopComboSelection[],
+                  quantity,
+                  lineNote
+                );
+              } else {
+                pushConfiguredProductWithQty(
+                  base,
+                  unitPrice,
+                  selectedExtras,
+                  comboSelections as ShopComboSelection[],
+                  quantity,
+                  lineNote
+                );
+              }
             }
             setPendingCombo(null);
+            setEditingLineId(null);
           }}
         />
       )}

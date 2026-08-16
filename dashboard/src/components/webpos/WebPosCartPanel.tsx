@@ -25,6 +25,8 @@ type Props = {
   money: (n: number) => string;
   selectedLineId: string | null;
   onSelectLine: (lineId: string | null) => void;
+  /** Tap cart line with modifiers/combo to re-open configuration modal. */
+  onEditLine?: (line: CartLine) => void;
   keypadMode: KeypadMode;
   onKeypadModeChange: (mode: KeypadMode) => void;
   keypadBuffer: string;
@@ -155,6 +157,7 @@ export default function WebPosCartPanel({
   money,
   selectedLineId,
   onSelectLine,
+  onEditLine,
   keypadMode,
   onKeypadModeChange,
   keypadBuffer,
@@ -295,17 +298,17 @@ export default function WebPosCartPanel({
     (showOrderTabs ? orderingLines.length > 0 : hasItems) && !onOrderedTab;
   const retailBistroMode =
     isRetail && showChannelTabs && channelTabOptions.includes('dine_in');
-  const showMetaStrip =
-    membershipName ||
-    orderNote ||
-    tableLabel ||
-    tabNumber ||
-    (!isRetail &&
-      (ticketDisplay ||
-        channel === 'dine_in' ||
-        fulfillmentLabel ||
-        channel === 'takeaway' ||
-        channel === 'delivery'));
+  const showFulfillmentTime =
+    !!onEditFulfillment && (channel === 'takeaway' || channel === 'delivery');
+  const showMetaStrip = membershipName || orderNote;
+
+  const handleLineTap = (line: CartLine, selected: boolean) => {
+    if (onEditLine) {
+      onEditLine(line);
+      return;
+    }
+    onSelectLine(selected ? null : line.lineId);
+  };
 
   return (
     <aside
@@ -411,7 +414,7 @@ export default function WebPosCartPanel({
                   </span>
                 ) : null}
               </span>
-            ) : !isRetail ? (
+            ) : !isRetail && !showChannelTabs ? (
               <span className="inline-flex max-w-full items-center truncate rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-700">
                 {channel === 'dine_in'
                   ? ticketDisplay
@@ -423,9 +426,32 @@ export default function WebPosCartPanel({
                       ? t('takeaway')
                       : t('takeaway')}
               </span>
+            ) : !isRetail && showChannelTabs && ticketDisplay && channel === 'dine_in' ? (
+              <span className="truncate text-[11px] font-semibold text-sky-800">{ticketDisplay}</span>
+            ) : !isRetail && customerLabel ? (
+              <span
+                className="min-w-0 truncate text-[11px] font-semibold text-violet-900"
+                title={customerLabel}
+              >
+                {customerLabel}
+              </span>
             ) : null}
           </div>
-          <button
+          <div className="flex shrink-0 items-center gap-1.5">
+            {showFulfillmentTime ? (
+              <button
+                type="button"
+                onClick={onEditFulfillment}
+                className="inline-flex max-w-[9.5rem] min-h-8 touch-manipulation items-center justify-center truncate rounded-lg border border-[var(--webpos-accent-border)] bg-[var(--webpos-accent-softer)] px-2 py-1 text-[11px] font-semibold text-[var(--webpos-accent-text)] hover:bg-[var(--webpos-accent-soft)] active:scale-[0.98]"
+                title={t('webPosChooseTime')}
+                aria-label={t('webPosChooseTime')}
+              >
+                {fulfillmentIsLater && fulfillmentLabel
+                  ? fulfillmentLabel
+                  : t('webPosChooseTime')}
+              </button>
+            ) : null}
+            <button
             type="button"
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
             onClick={() => setMoreOpen((v) => !v)}
@@ -436,6 +462,7 @@ export default function WebPosCartPanel({
           >
             <MoreHorizontal size={18} aria-hidden />
           </button>
+          </div>
         </div>
         {moreOpen ? (
           <>
@@ -665,43 +692,6 @@ export default function WebPosCartPanel({
               ) : null}
             </span>
           ) : null}
-          {!isRetail && channel === 'dine_in' ? (
-            <span className="rounded bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-800">
-              {ticketDisplay ? `${t('dineIn')} · ${ticketDisplay}` : t('dineIn')}
-            </span>
-          ) : null}
-          {!isRetail && (channel === 'takeaway' || channel === 'delivery') ? (
-            <div className="relative z-[5] flex w-full flex-wrap items-center gap-1.5">
-              <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900">
-                {channel === 'delivery' ? t('delivery') : t('takeaway')}
-                {': '}
-                {fulfillmentIsLater && fulfillmentLabel
-                  ? fulfillmentLabel
-                  : t('webPosAsap')}
-              </span>
-              {onEditFulfillment ? (
-                <button
-                  type="button"
-                  onClick={onEditFulfillment}
-                  className="relative z-[6] inline-flex min-h-11 min-w-[2.75rem] touch-manipulation items-center justify-center rounded-lg border border-[var(--webpos-accent-border)] bg-[var(--webpos-accent-softer)] px-3 py-2 text-xs font-semibold text-[var(--webpos-accent-text)] hover:bg-[var(--webpos-accent-soft)] active:scale-[0.98]"
-                  title={t('webPosChooseTime')}
-                  aria-label={t('webPosChooseTime')}
-                >
-                  {t('webPosChooseTime')}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-          {tableLabel ? (
-            <span className="rounded bg-rose-100 px-1.5 py-0.5 font-semibold text-rose-800">
-              {t('table')} {tableLabel}
-            </span>
-          ) : null}
-          {tabNumber ? (
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900">
-              {t('webPosTab')} #{tabNumber}
-            </span>
-          ) : null}
           {orderNote ? <span className="truncate">{orderNote}</span> : null}
         </div>
       ) : null}
@@ -858,7 +848,7 @@ export default function WebPosCartPanel({
                       onRemove={() => onRemoveLine(l)}
                       onSelect={(e) => {
                         e.stopPropagation();
-                        onSelectLine(selected ? null : l.lineId);
+                        handleLineTap(l, selected);
                       }}
                     >
                       {lineBody}
@@ -868,7 +858,7 @@ export default function WebPosCartPanel({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSelectLine(selected ? null : l.lineId);
+                        handleLineTap(l, selected);
                       }}
                       className={`w-full rounded-lg px-2 py-2 text-left transition ${
                         selected

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Check, Minus, Plus, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-import type { ShopSelectedExtra } from '@/lib/shop-cart';
+import type { ShopComboSelection, ShopSelectedExtra } from '@/lib/shop-cart';
 import { roundMoney2 } from '@/lib/money';
 import type { ShopModifierGroup } from '@/components/shop/shop-modifier-utils';
 import {
@@ -9,6 +9,7 @@ import {
   effectiveGroups,
   effectiveGroupsForComboOption,
   initialSelection,
+  selectionFromExtras,
   validateModifierGroups,
 } from '@/components/shop/shop-modifier-utils';
 import WebPosModifierTabPanel from '@/components/webpos/WebPosModifierTabPanel';
@@ -58,6 +59,10 @@ export type ComboSelection = {
 type Props = {
   product: ShopComboProduct;
   showProductImages?: boolean;
+  initialComboSelections?: ShopComboSelection[];
+  initialSelectedExtras?: ShopSelectedExtra[];
+  initialQuantity?: number;
+  initialLineNote?: string;
   onClose: () => void;
   onConfirm: (payload: {
     comboSelections: ComboSelection[];
@@ -98,6 +103,32 @@ function pickKey(productId: string, extras: ShopSelectedExtra[]) {
     .sort()
     .join(',');
   return `${productId}:${sig}`;
+}
+
+function picksBySlotFromSelections(selections: ShopComboSelection[]): Record<string, SlotPick[]> {
+  const out: Record<string, SlotPick[]> = {};
+  for (const sel of selections) {
+    const slotId = sel.slotId;
+    const key = pickKey(sel.productId, sel.selectedExtras || []);
+    if (!out[slotId]) out[slotId] = [];
+    const existing = out[slotId].find(
+      (p) => pickKey(p.productId, p.selectedExtras) === key
+    );
+    if (existing) {
+      existing.qty += 1;
+    } else {
+      out[slotId].push({
+        pickId: key,
+        productId: sel.productId,
+        productName: sel.productName,
+        image: sel.image,
+        extraPrice: sel.extraPrice || 0,
+        selectedExtras: sel.selectedExtras || [],
+        qty: 1,
+      });
+    }
+  }
+  return out;
 }
 
 function slotQty(picks: SlotPick[]) {
@@ -192,20 +223,30 @@ function WebPosComboModifierTabs({
 export default function WebPosComboModal({
   product,
   showProductImages = false,
+  initialComboSelections,
+  initialSelectedExtras,
+  initialQuantity = 1,
+  initialLineNote = '',
   onClose,
   onConfirm,
 }: Props) {
   const { t } = useI18n();
   const slots = product.comboSlots || [];
-  const [picksBySlot, setPicksBySlot] = useState<Record<string, SlotPick[]>>({});
+  const [picksBySlot, setPicksBySlot] = useState<Record<string, SlotPick[]>>(() =>
+    initialComboSelections?.length
+      ? picksBySlotFromSelections(initialComboSelections)
+      : {}
+  );
   const comboGroups = useMemo(() => effectiveGroups(product), [product]);
   const [comboExtraSelection, setComboExtraSelection] = useState<Record<string, string[]>>(() =>
-    initialSelection(comboGroups)
+    initialSelectedExtras?.length
+      ? selectionFromExtras(comboGroups, initialSelectedExtras)
+      : initialSelection(comboGroups)
   );
   const [nested, setNested] = useState<NestedState | null>(null);
   const [nestedNote, setNestedNote] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [lineNote, setLineNote] = useState('');
+  const [quantity, setQuantity] = useState(Math.max(1, initialQuantity));
+  const [lineNote, setLineNote] = useState(initialLineNote);
   const [error, setError] = useState<string | null>(null);
 
   const translateTitle = (title: string) => translateModifierGroupTitle(title, t);

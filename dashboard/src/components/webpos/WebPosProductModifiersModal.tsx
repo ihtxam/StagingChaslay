@@ -6,6 +6,7 @@ import {
   buildExtrasFromSelection,
   effectiveGroups,
   initialSelection,
+  selectionFromExtras,
   productHasModifiers,
   productRequiresModifierModal,
   defaultConfiguredAdd,
@@ -22,6 +23,9 @@ export { productHasModifiers, productRequiresModifierModal, defaultConfiguredAdd
 type Props = {
   product: ShopProductForModifiers;
   showProductImages?: boolean;
+  initialSelectedExtras?: ShopSelectedExtra[];
+  initialQuantity?: number;
+  initialLineNote?: string;
   onClose: () => void;
   onConfirm: (payload: {
     selectedExtras: ShopSelectedExtra[];
@@ -34,16 +38,21 @@ type Props = {
 export default function WebPosProductModifiersModal({
   product,
   showProductImages = false,
+  initialSelectedExtras,
+  initialQuantity = 1,
+  initialLineNote = '',
   onClose,
   onConfirm,
 }: Props) {
   const { t } = useI18n();
   const groups = useMemo(() => effectiveGroups(product), [product]);
   const [selection, setSelection] = useState<Record<string, string[]>>(() =>
-    initialSelection(groups)
+    initialSelectedExtras?.length
+      ? selectionFromExtras(groups, initialSelectedExtras)
+      : initialSelection(groups)
   );
-  const [quantity, setQuantity] = useState(1);
-  const [lineNote, setLineNote] = useState('');
+  const [quantity, setQuantity] = useState(Math.max(1, initialQuantity));
+  const [lineNote, setLineNote] = useState(initialLineNote);
   const [error, setError] = useState<string | null>(null);
 
   const handleConfirm = () => {

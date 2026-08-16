@@ -861,9 +861,69 @@ export function generateRefundReceiptText(tx: RefundReceiptPrint, panelLang?: st
   return r;
 }
 
+export type KitchenComboLine = {
+  slotName?: string;
+  productName: string;
+  modifierLines?: string[];
+};
+
 export type KitchenTicketItem = WebPosReceiptItem & {
   courseNumber?: number | null;
+  /** One indented line per modifier/extra (non-combo or combo-level extras). */
+  modifierLines?: string[];
+  /** Combo slot picks printed under the parent product name. */
+  comboLines?: KitchenComboLine[];
+  /** Per-line kitchen note from modifier modal. */
+  lineNote?: string;
 };
+
+/** Build structured kitchen ticket line from cart / order data. */
+export function buildKitchenTicketItemFromLine(input: {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  weightKg?: number | null;
+  productId?: string | null;
+  categoryId?: string | null;
+  courseNumber?: number | null;
+  selectedExtras?: Array<{ name?: string | null }>;
+  comboSelections?: Array<{
+    slotName?: string | null;
+    productName?: string | null;
+    selectedExtras?: Array<{ name?: string | null }>;
+  }>;
+  lineNote?: string | null;
+}): KitchenTicketItem {
+  const comboLines: KitchenComboLine[] = (input.comboSelections || []).map((c) => ({
+    slotName: c.slotName?.trim() || undefined,
+    productName: String(c.productName || '').trim(),
+    modifierLines: (c.selectedExtras || [])
+      .map((e) => String(e.name || '').trim())
+      .filter(Boolean),
+  }));
+  const comboLevelExtras =
+    comboLines.length > 0
+      ? (input.selectedExtras || [])
+          .map((e) => String(e.name || '').trim())
+          .filter(Boolean)
+      : (input.selectedExtras || [])
+          .map((e) => String(e.name || '').trim())
+          .filter(Boolean);
+  return {
+    name: String(input.name || '').trim(),
+    quantity: input.quantity,
+    unitPrice: input.unitPrice,
+    lineTotal: input.lineTotal,
+    weightKg: input.weightKg,
+    productId: input.productId,
+    categoryId: input.categoryId,
+    courseNumber: input.courseNumber,
+    modifierLines: comboLevelExtras.length ? comboLevelExtras : undefined,
+    comboLines: comboLines.length ? comboLines : undefined,
+    lineNote: input.lineNote?.trim() || undefined,
+  };
+}
 
 export type KitchenTicketOpts = {
   channel?: string;
@@ -947,7 +1007,7 @@ function formatKitchenQtyPrefix(item: KitchenTicketItem): string {
 }
 
 type KitchenLine = {
-  kind: 'center' | 'header' | 'item' | 'normal' | 'strike';
+  kind: 'center' | 'header' | 'item' | 'extra' | 'note' | 'normal' | 'strike';
   /** Line body without trailing newlines (ESC/POS adds LF bytes explicitly). */
   text: string;
   /** Extra blank lines after this row (kitchen readability). */
@@ -999,17 +1059,29 @@ function formatKitchenItemLines(
 ): KitchenLine[] {
   const qty = formatKitchenQtyPrefix(item);
   const fullName = String(item.name || '').replace(/\s+/g, ' ').trim();
-  const paren = fullName.match(/^(.*?)\s*\((.*)\)\s*$/);
-  const product = paren ? paren[1].trim() : fullName;
-  const extras = paren ? paren[2].trim() : '';
+  let product = fullName;
+  let modifierLines = (item.modifierLines || []).map((m) => m.trim()).filter(Boolean);
+  const comboLines = (item.comboLines || []).filter((c) => c.productName?.trim());
+  const lineNote = String(item.lineNote || '').trim();
+
+  if (!modifierLines.length && !comboLines.length) {
+    const paren = fullName.match(/^(.*?)\s*\((.*)\)\s*$/);
+    if (paren) {
+      product = paren[1].trim();
+      modifierLines = paren[2]
+        .split(/,\s*/)
+        .map((m) => m.trim())
+        .filter(Boolean);
+    }
+  }
 
   const primary = `${qty} ${product}`.trim();
   const wrappedPrimary = wrapKitchenWords(primary, width);
   const lines: KitchenLine[] = [];
 
-  const pushStrikeOrItem = (text: string, blankAfter = 0) => {
+  const pushLine = (kind: KitchenLine['kind'], text: string, blankAfter = 0) => {
     if (!cancelled) {
-      lines.push({ kind: 'item', text, blankAfter });
+      lines.push({ kind, text, blankAfter });
       return;
     }
     if (forEscPos) {
@@ -1023,20 +1095,57 @@ function formatKitchenItemLines(
     }
   };
 
+  const pushExtra = (text: string, blankAfter = 0) => pushLine('extra', text, blankAfter);
+  const pushItem = (text: string, blankAfter = 0) => pushLine('item', text, blankAfter);
+  const pushNote = (text: string, blankAfter = 0) => pushLine('note', text, blankAfter);
+
   if (wrappedPrimary.length) {
     wrappedPrimary.forEach((w, i) => {
-      const last = i === wrappedPrimary.length - 1 && !extras;
-      pushStrikeOrItem(w, last ? 1 : 0);
+      const last =
+        i === wrappedPrimary.length - 1 &&
+        !comboLines.length &&
+        !modifierLines.length &&
+        !lineNote;
+      pushItem(w, last ? 1 : 0);
     });
   } else {
-    pushStrikeOrItem(qty, extras ? 0 : 1);
+    pushItem(qty, comboLines.length || modifierLines.length || lineNote ? 0 : 1);
   }
 
-  if (extras) {
-    const extraLines = wrapKitchenWords(`(${extras})`, Math.max(8, width - 2));
-    extraLines.forEach((w, i) => {
-      pushStrikeOrItem(`  ${w}`, i === extraLines.length - 1 ? 1 : 0);
+  for (const combo of comboLines) {
+    const slotLabel = combo.slotName?.trim();
+    const pickName = combo.productName.trim();
+    const head = slotLabel ? `${slotLabel}: ${pickName}` : pickName;
+    const wrappedHead = wrapKitchenWords(head, Math.max(8, width - 2));
+    wrappedHead.forEach((w, i) => {
+      const mods = combo.modifierLines || [];
+      const lastHead = i === wrappedHead.length - 1 && !mods.length;
+      pushExtra(`  ${w}`, lastHead ? 0 : 0);
     });
+    for (const mod of combo.modifierLines || []) {
+      for (const w of wrapKitchenWords(mod, Math.max(8, width - 4))) {
+        pushExtra(`    ${w}`);
+      }
+    }
+  }
+
+  if (modifierLines.length) {
+    modifierLines.forEach((mod, i) => {
+      const wrapped = wrapKitchenWords(mod, Math.max(8, width - 2));
+      wrapped.forEach((w, j) => {
+        const last = i === modifierLines.length - 1 && j === wrapped.length - 1 && !lineNote;
+        pushExtra(`  ${w}`, last ? 0 : 0);
+      });
+    });
+  }
+
+  if (lineNote) {
+    const noteText = forEscPos ? `*${lineNote}*` : `_${lineNote}_`;
+    for (const w of wrapKitchenWords(noteText, Math.max(8, width - 2))) {
+      pushNote(w, 1);
+    }
+  } else if (lines.length && (lines[lines.length - 1]?.blankAfter || 0) === 0) {
+    lines[lines.length - 1] = { ...lines[lines.length - 1]!, blankAfter: 1 };
   }
 
   return lines;
@@ -1229,6 +1338,27 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escBold(bold || itemScale > 1),
         escUnderline(false),
         body(line.text)
+      );
+      feedLine(line.blankAfter);
+      resetSize();
+    } else if (line.kind === 'extra') {
+      parts.push(
+        escAlign(0),
+        escKitchenSize(1),
+        escBold(false),
+        escUnderline(false),
+        body(line.text)
+      );
+      feedLine(line.blankAfter);
+      resetSize();
+    } else if (line.kind === 'note') {
+      parts.push(
+        escAlign(0),
+        escKitchenSize(1),
+        escBold(false),
+        escUnderline(true),
+        body(line.text),
+        escUnderline(false)
       );
       feedLine(line.blankAfter);
       resetSize();

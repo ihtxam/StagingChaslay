@@ -57,6 +57,23 @@ export function groupMax(g: ShopModifierGroup) {
   return Math.max(min, Number(g.maxSelectable) || 1);
 }
 
+export function selectionFromExtras(
+  groups: ShopModifierGroup[],
+  extras: ShopSelectedExtra[]
+): Record<string, string[]> {
+  const sel: Record<string, string[]> = {};
+  for (const g of groups) {
+    sel[g.id] = [];
+  }
+  for (const extra of extras) {
+    const groupId = extra.groupId || groups.find((g) => g.options.some((o) => o.id === extra.id))?.id;
+    if (!groupId) continue;
+    if (!sel[groupId]) sel[groupId] = [];
+    if (!sel[groupId].includes(extra.id)) sel[groupId].push(extra.id);
+  }
+  return sel;
+}
+
 export function initialSelection(groups: ShopModifierGroup[]): Record<string, string[]> {
   const sel: Record<string, string[]> = {};
   for (const g of groups) {
