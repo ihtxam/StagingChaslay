@@ -426,24 +426,24 @@ export default function WebPosOnlineOrdersView({
                         <span className="text-xs font-semibold text-stone-700">
                           {t('orderCenterEta')}: {formatTime(o.estimatedReadyAt)}
                         </span>
-                        <div className="ml-auto flex items-center gap-1">
+                        <div className="ml-auto flex items-center gap-2">
                           <button
                             type="button"
-                            className="rounded border border-stone-200 p-1 hover:bg-white disabled:opacity-50"
+                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-stone-300 bg-white p-2.5 hover:bg-stone-50 disabled:opacity-50"
                             disabled={busyId === o.id}
                             onClick={() => void adjustEta(o, -5)}
                             aria-label="-5 min"
                           >
-                            <Minus size={14} />
+                            <Minus size={20} />
                           </button>
                           <button
                             type="button"
-                            className="rounded border border-stone-200 p-1 hover:bg-white disabled:opacity-50"
+                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-stone-300 bg-white p-2.5 hover:bg-stone-50 disabled:opacity-50"
                             disabled={busyId === o.id}
                             onClick={() => void adjustEta(o, 5)}
                             aria-label="+5 min"
                           >
-                            <Plus size={14} />
+                            <Plus size={20} />
                           </button>
                         </div>
                       </div>

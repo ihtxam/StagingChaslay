@@ -2032,7 +2032,18 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       finalOrder = (await earnLoyaltyForOrder(merchant, order)) as typeof order;
     }
 
-    // Kitchen + receipt print on staff Accept (not at checkout while pending_approval).
+    // Till notification on arrival; kitchen on Accept; customer receipt on payment.
+
+    try {
+      const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
+      await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
+        printNotification: true,
+        printKitchen: false,
+        printReceipt: false,
+      });
+    } catch (printErr) {
+      console.warn("Shop order notification print enqueue failed:", printErr);
+    }
 
     let paymentSession: unknown = null;
     if (payMethod === "card") {
@@ -2242,6 +2253,17 @@ router.post("/:slug/orders/:orderId/confirm-payment", async (req: Request, res: 
       finalOrder = (await earnLoyaltyForOrder(merchant, updated)) as typeof updated;
     } catch (earnErr) {
       console.error("Loyalty earn on confirm-payment failed:", earnErr);
+    }
+
+    try {
+      const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
+      await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
+        printKitchen: false,
+        printNotification: false,
+        printReceipt: true,
+      });
+    } catch (printErr) {
+      console.warn("Confirm-payment receipt print enqueue failed:", printErr);
     }
 
     res.json({ success: true, order: finalOrder });

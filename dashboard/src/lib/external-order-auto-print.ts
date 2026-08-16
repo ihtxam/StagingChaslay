@@ -3,6 +3,7 @@ import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
 import {
   filterKitchenItems,
   generateKitchenTicketEscPos,
+  generateOrderNotificationTicketEscPos,
   generateReservationTicketEscPos,
   printersForRole,
   resolveKitchenPaperWidthMm,
@@ -18,6 +19,7 @@ export type AutoPrintOrderPayload = {
   orderId: string;
   printKitchen?: boolean;
   printReceipt?: boolean;
+  printNotification?: boolean;
   orderSource?: string;
 };
 
@@ -80,7 +82,52 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
   const lang = resolveReceiptLanguage(printSettings, locale);
   const source = payload.orderSource || order.orderSource || 'online_shop';
 
-  if (payload.printKitchen !== false && printSettings?.autoPrintKitchen !== false) {
+  if (payload.printNotification === true) {
+    const receiptPrinters = printersForRole(printSettings, 'receipt');
+    const targets =
+      receiptPrinters.length > 0
+        ? receiptPrinters
+        : [{ name: localStorage.getItem('manupos_webpos_printer') || '', paperWidthMm: 80 }];
+    const notifyItems = (order.items || []).map((i) => {
+      const extras = (i.selectedExtras || [])
+        .map((e) => e.name)
+        .filter(Boolean)
+        .join(', ');
+      const name = String(i.productName || i.name || 'Item');
+      return {
+        name: extras ? `${name} (${extras})` : name,
+        quantity: Number(i.quantity) || 1,
+      };
+    });
+    for (const printer of targets) {
+      const paper = (printer.paperWidthMm === 58 ? 58 : 80) as 58 | 80;
+      const escpos = generateOrderNotificationTicketEscPos({
+        orderNumber: order.orderNumber || orderId.slice(0, 8),
+        orderSource: orderSourceLabel(source),
+        customerName: order.customerName || null,
+        customerPhone: order.customerPhone || null,
+        shippingAddress:
+          (order.fulfillmentChannel || order.channel) === 'delivery'
+            ? order.shippingAddress || null
+            : null,
+        scheduledFor: order.scheduledFor || null,
+        channel: order.fulfillmentChannel || order.channel || 'takeaway',
+        total: Number(order.total) || 0,
+        items: notifyItems,
+        orderedAt: order.createdAt ? Date.parse(order.createdAt) : Date.now(),
+        language: lang,
+        paperWidthMm: paper,
+        businessName: merchant.name || undefined,
+      });
+      await printViaAgentOrQueue({
+        printerName: printer.name || undefined,
+        dataBase64: uint8ToBase64(escpos),
+        orderId,
+      });
+    }
+  }
+
+  if (payload.printKitchen === true && printSettings?.autoPrintKitchen !== false) {
     const kitchenPrinterRows = (printSettings?.printers || []).filter(
       (p) => p.enabled !== false && p.printKitchenTickets && p.name
     );

@@ -1847,6 +1847,88 @@ export type ReservationTicketOpts = {
   businessName?: string;
 };
 
+export type OrderNotificationTicketOpts = {
+  orderNumber: string;
+  orderSource: string;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  shippingAddress?: string | null;
+  scheduledFor?: string | null;
+  channel?: string | null;
+  total: number;
+  items: Array<{ name: string; quantity: number }>;
+  orderedAt?: number;
+  language?: string;
+  paperWidthMm?: 58 | 80;
+  businessName?: string;
+};
+
+/** Short till alert when a new online order arrives (awaiting staff accept). */
+export function generateOrderNotificationTicketEscPos(opts: OrderNotificationTicketOpts): Uint8Array {
+  const width = lineWidthForPaper(opts.paperWidthMm ?? 80);
+  const lang = (opts.language || 'en').slice(0, 2) as ReceiptLang;
+  const L = receiptLabels(lang);
+  const sep = '-'.repeat(width);
+  const when = opts.orderedAt ? formatDateTimeDDMMYYYY(new Date(opts.orderedAt)) : formatDateTimeDDMMYYYY(new Date());
+  const channel = channelLabel(opts.channel || 'takeaway', lang);
+  const pickupLine = opts.scheduledFor
+    ? `${L.pickupTime}: ${formatTimeHHMM(new Date(opts.scheduledFor))}`
+    : L.asap;
+  const lines: string[] = [
+    'NEW ONLINE ORDER',
+    sep,
+    centerLine(opts.businessName || APP_NAME, width),
+    centerLine(String(opts.orderSource || 'ONLINE').slice(0, width), width),
+    centerLine(String(opts.orderNumber || '-').slice(0, width), width),
+    sep,
+    padLine(L.customer, String(opts.customerName || '-').slice(0, width - 10), width),
+  ];
+  if (opts.customerPhone?.trim()) {
+    lines.push(padLine('Tel', String(opts.customerPhone).slice(0, width - 5), width));
+  }
+  lines.push(
+    padLine(L.channel, channel.slice(0, width - 10), width),
+    padLine('When', when.slice(0, width - 6), width),
+    pickupLine.slice(0, width)
+  );
+  if (opts.shippingAddress?.trim()) {
+    lines.push(padLine(L.deliveryAddress, String(opts.shippingAddress).slice(0, width - 8), width));
+  }
+  lines.push(sep);
+  for (const item of opts.items.slice(0, 12)) {
+    const qty = Number(item.quantity) || 1;
+    const name = String(item.name || 'Item').replace(/\s+/g, ' ').trim();
+    lines.push(`${qty}x ${name}`.slice(0, width));
+  }
+  if (opts.items.length > 12) {
+    lines.push(`+${opts.items.length - 12} ${L.totalItems.toLowerCase()}`);
+  }
+  lines.push(
+    sep,
+    padLine(L.total, `CHF ${roundMoney2(Number(opts.total) || 0).toFixed(2)}`, width),
+    sep,
+    centerLine('>>> AWAITING ACCEPT <<<', width),
+    '',
+    ''
+  );
+
+  const parts: Uint8Array[] = [
+    new Uint8Array([0x1b, 0x40]),
+    ESC_CODEPAGE_CP850,
+    escAlign(1),
+    escKitchenSize(2),
+    escBold(true),
+    escposCp850Encode(lines[0]),
+    new Uint8Array([0x0a]),
+    escAlign(0),
+    escKitchenSize(1),
+    escBold(false),
+    escposCp850Encode(lines.slice(1).join('\n')),
+    new Uint8Array([0x0a, 0x0a, 0x0a]),
+  ];
+  return concatBytes(...parts);
+}
+
 /** Reservation alert ticket for kitchen/host stand. */
 export function generateReservationTicketEscPos(opts: ReservationTicketOpts): Uint8Array {
   const width = lineWidthForPaper(opts.paperWidthMm ?? 80);

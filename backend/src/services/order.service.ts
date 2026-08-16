@@ -21,6 +21,23 @@ function computeEstimatedReadyAt(
   return new Date(Date.now() + prepMinutes * 60 * 1000);
 }
 
+async function enqueueOnlineOrderReceiptPrint(
+  merchantId: string,
+  orderId: string,
+  order: { orderSource?: string | null }
+) {
+  const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
+  const source =
+    order.orderSource === "justeat" || order.orderSource === "ubereats"
+      ? order.orderSource
+      : "online_shop";
+  await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
+    printKitchen: false,
+    printNotification: false,
+    printReceipt: true,
+  });
+}
+
 async function sendOrderRejectedEmail(
   merchantId: string,
   order: {
@@ -423,7 +440,8 @@ export class OrderService {
               : "online_shop";
           await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
             printKitchen: true,
-            printReceipt: true,
+            printReceipt: false,
+            printNotification: false,
           });
           await db
             .update(schema.orders)
@@ -463,10 +481,16 @@ export class OrderService {
               : ["cash", "card", "terminal"].includes(methodRaw)
                 ? methodRaw
                 : "cash";
-          return set({
+          const updated = await set({
             paymentStatus: "completed",
             paymentMethod: method,
           });
+          try {
+            await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
+          } catch (printErr) {
+            console.warn("Collect payment receipt print enqueue failed:", printErr);
+          }
+          return updated;
         }
       }
       case "complete": {
@@ -495,12 +519,18 @@ export class OrderService {
           let method = methodRaw;
           if (method === "pay_later" || method === "pay-later") method = "cash";
           if (!["cash", "card", "terminal"].includes(method)) method = "cash";
-          return set({
+          const updated = await set({
             status: "completed",
             paymentStatus: "completed",
             paymentMethod: method,
             completedAt: new Date(),
           });
+          try {
+            await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
+          } catch (printErr) {
+            console.warn("Complete-and-collect receipt print enqueue failed:", printErr);
+          }
+          return updated;
         }
       }
       case "reject":
