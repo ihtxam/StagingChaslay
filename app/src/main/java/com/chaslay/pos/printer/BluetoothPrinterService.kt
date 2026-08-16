@@ -1623,7 +1623,7 @@ class BluetoothPrinterService @Inject constructor(
     }
 
     private fun receiptQrRaster(url: String, lineWidth: Int): ByteArray {
-        val maxWidthPx = if (lineWidth >= LINE_WIDTH_80) 200 else 160
+        val maxWidthPx = if (lineWidth >= LINE_WIDTH_80) 100 else 80
         val bitmap = receiptQrGenerator.generateQrBitmap(url, maxWidthPx)
         val raster = EscPosImageEncoder.encodeRaster(bitmap, maxWidthPx, maxWidthPx) ?: return byteArrayOf()
         if (!bitmap.isRecycled) bitmap.recycle()

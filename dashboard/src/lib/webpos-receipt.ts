@@ -1568,10 +1568,10 @@ export function textToEscPos(
   }
   parts.push(alignLeft, body);
   if (qrData) {
-    parts.push(alignCenter, escposQrCode(qrData, 2), alignLeft);
+    parts.push(alignCenter, escposQrCode(qrData, 1), alignLeft);
   }
   if (deliveryQrData) {
-    parts.push(alignCenter, escposQrCode(deliveryQrData, 2), alignLeft);
+    parts.push(alignCenter, escposQrCode(deliveryQrData, 1), alignLeft);
   }
   if (barcodeData) {
     parts.push(escposCode128(barcodeData, 72, 2));
