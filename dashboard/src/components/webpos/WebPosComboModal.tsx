@@ -57,6 +57,7 @@ export type ComboSelection = {
 
 type Props = {
   product: ShopComboProduct;
+  showProductImages?: boolean;
   onClose: () => void;
   onConfirm: (payload: {
     comboSelections: ComboSelection[];
@@ -188,7 +189,12 @@ function WebPosComboModifierTabs({
   );
 }
 
-export default function WebPosComboModal({ product, onClose, onConfirm }: Props) {
+export default function WebPosComboModal({
+  product,
+  showProductImages = false,
+  onClose,
+  onConfirm,
+}: Props) {
   const { t } = useI18n();
   const slots = product.comboSlots || [];
   const [picksBySlot, setPicksBySlot] = useState<Record<string, SlotPick[]>>({});
@@ -529,24 +535,26 @@ export default function WebPosComboModal({ product, onClose, onConfirm }: Props)
                                 : 'border-stone-200 hover:border-stone-400'
                             }`}
                           >
-                            <div className="relative aspect-[4/3] overflow-hidden bg-stone-100">
-                              {opt.image ? (
-                                <img
-                                  src={opt.image}
-                                  alt=""
-                                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-3xl font-light text-stone-300">
-                                  {opt.name.slice(0, 1)}
-                                </div>
-                              )}
-                              {opt.extraPrice > 0 ? (
-                                <span className="absolute right-1.5 top-1.5 rounded-md bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                                  +{opt.extraPrice.toFixed(2)}
-                                </span>
-                              ) : null}
-                            </div>
+                            {showProductImages ? (
+                              <div className="relative h-14 overflow-hidden bg-stone-100">
+                                {opt.image ? (
+                                  <img
+                                    src={opt.image}
+                                    alt=""
+                                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-lg font-light text-stone-300">
+                                    {opt.name.slice(0, 1)}
+                                  </div>
+                                )}
+                                {opt.extraPrice > 0 ? (
+                                  <span className="absolute right-1.5 top-1.5 rounded-md bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                    +{opt.extraPrice.toFixed(2)}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : null}
                             <div className="p-2.5">
                               <div className="line-clamp-2 text-sm font-semibold text-stone-900">
                                 {opt.name}
@@ -687,6 +695,7 @@ export default function WebPosComboModal({ product, onClose, onConfirm }: Props)
         <div className="fixed inset-0 z-[75] bg-black/50" onClick={() => setNested(null)}>
           <WebPosModifierTabPanel
             title={nested.option.name}
+            showProductImages={showProductImages}
             groups={effectiveGroupsForComboOption(nested.option)}
             selection={nested.extraSelection}
             onSelectionChange={(next) => {

@@ -12,6 +12,7 @@ type Props = {
   onSelectionChange: Dispatch<SetStateAction<Record<string, string[]>>>;
   currency?: string;
   compact?: boolean;
+  showProductImages?: boolean;
 };
 
 function groupLabel(title: string, t: (k: string) => string) {
@@ -25,6 +26,7 @@ export default function ShopModifierTabGrid({
   onSelectionChange,
   currency = 'CHF',
   compact = false,
+  showProductImages = true,
 }: Props) {
   const { t } = useI18n();
   const [activeIdx, setActiveIdx] = useState(0);
@@ -90,6 +92,7 @@ export default function ShopModifierTabGrid({
           {activeGroup.options.map((opt) => {
             const checked = selected.includes(opt.id);
             const price = Number(opt.price) || 0;
+            const imageSrc = opt.image || null;
             return (
               <button
                 key={opt.id}
@@ -101,6 +104,16 @@ export default function ShopModifierTabGrid({
                     : 'border-stone-200 bg-white hover:border-stone-400'
                 }`}
               >
+                {showProductImages && imageSrc ? (
+                  <div className="mb-1.5 h-10 w-10 shrink-0 overflow-hidden rounded-md bg-stone-100">
+                    <img
+                      src={imageSrc}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                ) : null}
                 <span
                   className={`mb-1.5 rounded px-1.5 py-0.5 text-[11px] font-bold leading-none ${
                     price > 0

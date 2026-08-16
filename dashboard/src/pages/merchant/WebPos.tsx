@@ -6970,6 +6970,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       {pendingProduct && (
         <WebPosProductModifiersModal
           product={pendingProduct}
+          showProductImages={gridShowImages}
           onClose={() => setPendingProduct(null)}
           onConfirm={({ selectedExtras, unitPrice, quantity, lineNote }) => {
             const base = products.find((p) => p.id === pendingProduct.id);
@@ -6984,6 +6985,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       {pendingCombo && (
         <WebPosComboModal
           product={pendingCombo}
+          showProductImages={gridShowImages}
           onClose={() => setPendingCombo(null)}
           onConfirm={({ comboSelections, selectedExtras, unitPrice, quantity, lineNote }) => {
             const base = products.find((p) => p.id === pendingCombo.id);

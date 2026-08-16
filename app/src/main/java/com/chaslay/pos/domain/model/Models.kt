@@ -451,7 +451,12 @@ data class SelectedAddon(val name: String, val price: Double, val quantity: Int 
 
 data class ComboSelection(val slotName: String, val productId: Long, val productName: String)
 
-data class ComboSlotOptionModel(val id: Long, val productId: Long, val productName: String)
+data class ComboSlotOptionModel(
+    val id: Long,
+    val productId: Long,
+    val productName: String,
+    val imageUri: String? = null
+)
 
 data class ComboSlotModel(
     val id: Long,

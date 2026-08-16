@@ -23,6 +23,7 @@ type Props = {
   onDiscard: () => void;
   confirmDisabled?: boolean;
   error?: string | null;
+  showProductImages?: boolean;
   /** z-index class for stacking nested modals */
   zClass?: string;
 };
@@ -51,6 +52,7 @@ export default function WebPosModifierTabPanel({
   onDiscard,
   confirmDisabled = false,
   error = null,
+  showProductImages = false,
   zClass = 'z-[70]',
 }: Props) {
   const { t } = useI18n();
@@ -193,6 +195,7 @@ export default function WebPosModifierTabPanel({
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
                 {activeGroup.options.map((opt) => {
                   const checked = (selection[activeGroup.id] || []).includes(opt.id);
+                  const imageSrc = opt.image || null;
                   return (
                     <button
                       key={opt.id}
@@ -204,6 +207,16 @@ export default function WebPosModifierTabPanel({
                           : 'border-stone-200 bg-white text-stone-900 hover:border-stone-400'
                       }`}
                     >
+                      {showProductImages && imageSrc ? (
+                        <div className="mb-1.5 h-10 w-10 shrink-0 overflow-hidden rounded-md bg-stone-100">
+                          <img
+                            src={imageSrc}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                      ) : null}
                       <span
                         className={`text-xs font-semibold tabular-nums ${
                           checked ? 'text-white/90' : 'text-stone-500'

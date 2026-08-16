@@ -78,6 +78,7 @@ data class CustomizedProductResult(
 fun ProductCustomizeDialog(
     state: ProductCustomizeState,
     currencySymbol: String,
+    showProductImages: Boolean = false,
     onAdd: (CustomizedProductResult) -> Unit,
     onDismiss: () -> Unit
 ) {

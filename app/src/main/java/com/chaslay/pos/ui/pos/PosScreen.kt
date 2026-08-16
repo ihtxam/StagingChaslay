@@ -858,6 +858,7 @@ fun PosScreen(
         ProductCustomizeDialog(
             state = customize,
             currencySymbol = state.currencySymbol,
+            showProductImages = state.productGridShowImages,
             onAdd = viewModel::addCustomizedProduct,
             onDismiss = viewModel::dismissProductCustomize
         )
@@ -867,6 +868,7 @@ fun PosScreen(
         ComboPickDialog(
             state = comboPick,
             currencySymbol = state.currencySymbol,
+            showProductImages = state.productGridShowImages,
             onConfirm = viewModel::addComboToCart,
             onDismiss = viewModel::dismissComboPick
         )

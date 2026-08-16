@@ -6,6 +6,7 @@ export interface ShopModifierOption {
   name: string;
   price: number;
   isDefault?: boolean;
+  image?: string | null;
 }
 
 export interface ShopModifierGroup {

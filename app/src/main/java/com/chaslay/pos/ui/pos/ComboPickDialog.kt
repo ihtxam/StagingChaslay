@@ -8,18 +8,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -62,6 +64,7 @@ data class ComboPickResult(
 fun ComboPickDialog(
     state: ComboPickState,
     currencySymbol: String,
+    showProductImages: Boolean = false,
     onConfirm: (ComboPickResult) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -130,6 +133,7 @@ fun ComboPickDialog(
                             ComboSlotSection(
                                 slot = slot,
                                 picks = picks[slot.id].orEmpty(),
+                                showProductImages = showProductImages,
                                 onToggle = { productId ->
                                     val map = picks.getOrPut(slot.id) { mutableMapOf() }
                                     val current = map.values.sum()
@@ -257,11 +261,13 @@ fun ComboPickDialog(
 private fun ComboSlotSection(
     slot: ComboSlotModel,
     picks: Map<Long, Int>,
+    showProductImages: Boolean = false,
     onToggle: (Long) -> Unit,
     onIncrement: (Long) -> Unit,
     onDecrement: (Long) -> Unit
 ) {
     val selectedCount = picks.values.sum()
+    val tileHeight = if (showProductImages) 96.dp else 72.dp
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -280,7 +286,7 @@ private fun ComboSlotSection(
             columns = GridCells.Fixed(2),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.height(((slot.options.size + 1) / 2 * 88).coerceAtLeast(88).dp)
+            modifier = Modifier.height(((slot.options.size + 1) / 2 * tileHeight.value.toInt()).coerceAtLeast(tileHeight.value.toInt()).dp)
         ) {
             items(slot.options, key = { it.productId }) { option ->
                 val qty = picks[option.productId] ?: 0
@@ -288,7 +294,7 @@ private fun ComboSlotSection(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(1.2f)
+                        .height(tileHeight)
                         .border(
                             width = if (selected) 2.dp else 1.dp,
                             color = if (selected) Color(0xFF00897B) else Color(0xFF555555),
@@ -303,14 +309,26 @@ private fun ComboSlotSection(
                 ) {
                     Column(
                         modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
+                        if (showProductImages && !option.imageUri.isNullOrBlank()) {
+                            coil.compose.AsyncImage(
+                                model = option.imageUri,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                         Text(
                             option.productName,
                             color = Color.White,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                             fontSize = 13.sp,
-                            maxLines = 2
+                            maxLines = 2,
+                            textAlign = TextAlign.Center
                         )
                         if (slot.maxPick > 1 && selected) {
                             Row(

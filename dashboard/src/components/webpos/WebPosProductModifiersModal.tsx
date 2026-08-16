@@ -21,6 +21,7 @@ export { productHasModifiers, productRequiresModifierModal, defaultConfiguredAdd
 
 type Props = {
   product: ShopProductForModifiers;
+  showProductImages?: boolean;
   onClose: () => void;
   onConfirm: (payload: {
     selectedExtras: ShopSelectedExtra[];
@@ -30,7 +31,12 @@ type Props = {
   }) => void;
 };
 
-export default function WebPosProductModifiersModal({ product, onClose, onConfirm }: Props) {
+export default function WebPosProductModifiersModal({
+  product,
+  showProductImages = false,
+  onClose,
+  onConfirm,
+}: Props) {
   const { t } = useI18n();
   const groups = useMemo(() => effectiveGroups(product), [product]);
   const [selection, setSelection] = useState<Record<string, string[]>>(() =>
@@ -62,6 +68,7 @@ export default function WebPosProductModifiersModal({ product, onClose, onConfir
     <div className="fixed inset-0 z-[70] bg-black/40" onClick={onClose}>
       <WebPosModifierTabPanel
         title={product.name}
+        showProductImages={showProductImages}
         groups={groups}
         selection={selection}
         onSelectionChange={(next) => {
