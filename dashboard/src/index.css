@@ -631,7 +631,7 @@ button {
   animation: shop-slide-in-right 0.28s ease-out;
 }
 
-/* Shop menu: category pills + cart — one bar pinned below the site header */
+/* Shop menu: category pills stick below header once scrolled past hero/offers */
 .shop-sticky-category-bar {
   position: -webkit-sticky;
   position: sticky;

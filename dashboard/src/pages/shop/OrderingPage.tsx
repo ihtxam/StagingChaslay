@@ -1372,47 +1372,6 @@ export default function OrderingPage() {
         </div>
       </header>
 
-      <div className="shop-sticky-category-bar">
-        <div className="max-w-7xl mx-auto px-4 py-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="shop-category-scroll flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCategory('all');
-                  setAllCategoriesOpen(true);
-                }}
-                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                  selectedCategory === 'all'
-                    ? 'bg-amber-700 text-white'
-                    : 'bg-white text-stone-700 border border-stone-200'
-                }`}
-              >
-                {t('shopAllCategories')}
-              </button>
-              {menu.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedCategory(cat.id);
-                    setAllCategoriesOpen(true);
-                  }}
-                  className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                    selectedCategory === cat.id
-                      ? 'bg-amber-700 text-white'
-                      : 'bg-white text-stone-700 border border-stone-200'
-                  }`}
-                >
-                  {cat.name}
-                </button>
-              ))}
-            </div>
-            <CartIconButton className={stickyCart ? 'lg:hidden' : ''} />
-          </div>
-        </div>
-      </div>
-
       {ordersPaused ? (
         <div className="max-w-7xl mx-auto px-4 pt-4">
           <ShopNotAcceptingBanner kind="orders" phone={merchant?.phone} />
@@ -1520,6 +1479,47 @@ export default function OrderingPage() {
           ) : null}
         </div>
       </section>
+
+      <div className="shop-sticky-category-bar">
+        <div className="max-w-7xl mx-auto px-4 py-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="shop-category-scroll flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategory('all');
+                  setAllCategoriesOpen(true);
+                }}
+                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
+                  selectedCategory === 'all'
+                    ? 'bg-amber-700 text-white'
+                    : 'bg-white text-stone-700 border border-stone-200'
+                }`}
+              >
+                {t('shopAllCategories')}
+              </button>
+              {menu.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(cat.id);
+                    setAllCategoriesOpen(true);
+                  }}
+                  className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
+                    selectedCategory === cat.id
+                      ? 'bg-amber-700 text-white'
+                      : 'bg-white text-stone-700 border border-stone-200'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+            <CartIconButton className={stickyCart ? 'lg:hidden' : ''} />
+          </div>
+        </div>
+      </div>
 
       <div
         className={`max-w-7xl mx-auto px-4 py-6 ${
