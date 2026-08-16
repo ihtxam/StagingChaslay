@@ -669,14 +669,13 @@ fun PosScreen(
 
     if (state.giftCardsEnabled && !state.showMembershipDialog && !state.showCheckoutScreen) {
         var rfidCapture by remember { mutableStateOf("") }
-        Box(modifier = Modifier.size(1.dp)) {
-            com.chaslay.pos.ui.components.RfidScanField(
-                value = rfidCapture,
-                onValueChange = { rfidCapture = it },
-                onScanComplete = viewModel::onRfidScanned,
-                autoFocus = true
-            )
-        }
+        RfidScanField(
+            value = rfidCapture,
+            onValueChange = { rfidCapture = it },
+            onScanComplete = viewModel::onRfidScanned,
+            autoFocus = true,
+            invisible = true
+        )
     }
 
     if (state.showCartCancelSimpleDialog) {
@@ -1574,62 +1573,7 @@ private fun VectronOrderPanel(
             onClearAll = onKeypadClearAll,
             onEnter = onKeypadEnter
         )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            if (isRestaurantMode && !tablesEnabled) {
-                Button(
-                    onClick = onSetTab,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3949AB))
-                ) {
-                    Text(
-                        cart.orderNumber?.let { "#$it" } ?: stringResource(R.string.pickup_order),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            } else if (isRestaurantMode) {
-                Button(
-                    onClick = onSetTab,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3949AB))
-                ) {
-                    Text(
-                        cart.orderNumber?.let { "#$it" } ?: stringResource(R.string.pickup_order),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
-            }
-            if (isRestaurantMode) {
-                Button(
-                    onClick = onSendToKitchen,
-                    enabled = canSendKitchen,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = VectronColors.CashGreen)
-                ) {
-                    Text(stringResource(R.string.send_to_kitchen), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
-            }
-            Button(
-                onClick = onPayment,
-                enabled = cart.items.isNotEmpty(),
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBDBDBD))
-            ) {
-                Text(stringResource(R.string.payment), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
-            }
-        }
-        }
+    }
     }
 }
 

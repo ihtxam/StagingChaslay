@@ -6403,11 +6403,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   setCancelModal({ scope: 'item', lineId: line.lineId });
                 }}
                 onPayLater={() => beginCheckout('pay_later')}
-                onEditFulfillment={() => {
-                  if (channel === 'takeaway' || channel === 'delivery') {
-                    setScheduleOpen(true);
-                  }
-                }}
+                onEditFulfillment={() => setScheduleOpen(true)}
                 showSend={showSend}
                 hideTab={hideTab}
                 canCancelOrder={cart.length > 0 || (!kitchenEnabled && !orderSent)}
@@ -6930,10 +6926,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onConfirm={confirmRejectFromAlert}
       />
 
-      {(channel === 'takeaway' || channel === 'delivery') && (
+      {(effectiveChannel === 'takeaway' || effectiveChannel === 'delivery') && (
         <WebPosFulfillmentModal
           open={scheduleOpen}
-          channel={channel}
+          channel={effectiveChannel}
           storeHours={(merchant?.storeHours || null) as StoreHours | null}
           leadMinutes={
             channel === 'delivery'

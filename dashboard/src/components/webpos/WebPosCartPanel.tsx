@@ -398,6 +398,14 @@ export default function WebPosCartPanel({
                     {ticketDisplay}
                   </span>
                 ) : null}
+                {customerLabel ? (
+                  <span
+                    className="min-w-0 truncate text-[11px] font-semibold text-violet-900"
+                    title={customerLabel}
+                  >
+                    {customerLabel}
+                  </span>
+                ) : null}
               </span>
             ) : !isRetail ? (
               <span className="inline-flex max-w-full items-center truncate rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-700">

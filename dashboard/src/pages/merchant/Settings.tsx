@@ -1023,6 +1023,10 @@ export default function Settings() {
           receiptLogoUrl: ps.receiptLogoUrl || null,
           autoPrintReceipt: ps.autoPrintReceipt !== false,
           autoPrintKitchen: ps.autoPrintKitchen !== false,
+          scaleComPort: ps.scaleComPort?.trim() || null,
+          scaleUsbAddress: ps.scaleUsbAddress?.trim() || null,
+          scaleEnabled:
+            !!ps.scaleComPort?.trim() || !!ps.scaleUsbAddress?.trim() || ps.scaleEnabled === true,
           printers,
         },
       });

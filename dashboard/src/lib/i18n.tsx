@@ -713,6 +713,7 @@ const en: Dict = {
   webPosScaleLive: 'Scale',
   webPosScaleWaiting: 'Waiting for scale reading…',
   webPosScaleAgentOffline: 'Start Print Agent on this PC to read the USB scale (manual entry still works).',
+  webPosScalePortMissing: 'Configure Scale COM port in Settings → Print, then save.',
   webPosScaleReadFailed: 'Could not read scale',
   comboMeal: 'Combo meal',
   comboSteps: 'Combo steps',
@@ -2660,6 +2661,8 @@ const fr: Dict = {
   webPosScaleWaiting: 'En attente de la balance…',
   webPosScaleAgentOffline:
     'Démarrez Print Agent sur ce PC pour lire la balance USB (saisie manuelle toujours possible).',
+  webPosScalePortMissing:
+    'Configurez le port COM balance dans Paramètres → Impression, puis enregistrez.',
   webPosScaleReadFailed: 'Lecture balance impossible',
   comboMeal: 'Menu combo',
   comboSteps: 'Étapes du combo',
@@ -4610,6 +4613,8 @@ const de: Dict = {
   webPosScaleWaiting: 'Warte auf Waagenwert…',
   webPosScaleAgentOffline:
     'Print Agent auf diesem PC starten, um die USB-Waage zu lesen (manuelle Eingabe weiterhin möglich).',
+  webPosScalePortMissing:
+    'COM-Port der Waage unter Einstellungen → Druck konfigurieren und speichern.',
   webPosScaleReadFailed: 'Waage konnte nicht gelesen werden',
   comboMeal: 'Combo-Menü',
   comboSteps: 'Combo-Schritte',

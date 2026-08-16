@@ -1,6 +1,8 @@
 package com.chaslay.pos.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -10,12 +12,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.chaslay.pos.R
 
 private const val SCAN_GAP_MS = 100L
@@ -31,7 +35,9 @@ fun RfidScanField(
     onScanComplete: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String? = null,
-    autoFocus: Boolean = false
+    autoFocus: Boolean = false,
+    /** Hidden capture for POS register — no visible text field overlay. */
+    invisible: Boolean = false
 ) {
     var buffer by remember { mutableStateOf("") }
     var lastKeyAt by remember { mutableLongStateOf(0L) }
@@ -41,36 +47,54 @@ fun RfidScanField(
         if (autoFocus) focusRequester.requestFocus()
     }
 
+    val keyHandler = Modifier
+        .focusRequester(focusRequester)
+        .onPreviewKeyEvent { event ->
+            if (event.key == Key.Enter) {
+                val scanned = (buffer.ifBlank { value }).trim()
+                if (scanned.isNotEmpty()) {
+                    onValueChange(scanned)
+                    onScanComplete(scanned)
+                    buffer = ""
+                }
+                true
+            } else {
+                false
+            }
+        }
+
+    val onFieldChange: (String) -> Unit = { newValue ->
+        val now = System.currentTimeMillis()
+        val gap = now - lastKeyAt
+        lastKeyAt = now
+        val wedge = gap < SCAN_GAP_MS || buffer.isNotEmpty()
+        if (wedge) {
+            buffer = newValue
+        } else {
+            onValueChange(newValue)
+            buffer = ""
+        }
+    }
+
+    if (invisible) {
+        BasicTextField(
+            value = buffer.ifBlank { value },
+            onValueChange = onFieldChange,
+            modifier = modifier
+                .size(1.dp)
+                .alpha(0f)
+                .then(keyHandler),
+            singleLine = true
+        )
+        return
+    }
+
     OutlinedTextField(
         value = buffer.ifBlank { value },
-        onValueChange = { newValue ->
-            val now = System.currentTimeMillis()
-            val gap = now - lastKeyAt
-            lastKeyAt = now
-            val wedge = gap < SCAN_GAP_MS || buffer.isNotEmpty()
-            if (wedge) {
-                buffer = newValue
-            } else {
-                onValueChange(newValue)
-                buffer = ""
-            }
-        },
+        onValueChange = onFieldChange,
         modifier = modifier
             .fillMaxWidth()
-            .focusRequester(focusRequester)
-            .onPreviewKeyEvent { event ->
-                if (event.key == Key.Enter) {
-                    val scanned = (buffer.ifBlank { value }).trim()
-                    if (scanned.isNotEmpty()) {
-                        onValueChange(scanned)
-                        onScanComplete(scanned)
-                        buffer = ""
-                    }
-                    true
-                } else {
-                    false
-                }
-            },
+            .then(keyHandler),
         placeholder = {
             Text(placeholder ?: stringResource(R.string.rfid_scan_placeholder))
         },
