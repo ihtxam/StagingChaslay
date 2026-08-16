@@ -2,7 +2,7 @@
 
 The merchant dashboard is a Progressive Web App. On Windows this gives you a **Start Menu / desktop shortcut** that opens ChaslayReborn in its own window (`display: standalone`), not a browser tab.
 
-**PWA is the right first step.** Electron/Tauri would ship a full desktop runtime; a Chromium PWA reuses Edge/Chrome and is much lighter for ìdouble-click the POS.î
+**PWA is the right first step.** Electron/Tauri would ship a full desktop runtime; a Chromium PWA reuses Edge/Chrome and is much lighter for ùdouble-click the POS.ù
 
 ## Requirements
 
@@ -17,7 +17,7 @@ The merchant dashboard is a Progressive Web App. On Windows this gives you a **S
 3. Install:
    - **Edge**: menu (?) ? **Apps** ? **Install this site as an app**  
      or click the **install** icon in the address bar.
-   - **Chrome**: menu (?) ? **Cast, save, and share** ? **Install page as appÖ**  
+   - **Chrome**: menu (?) ? **Cast, save, and share** ? **Install page as appù**  
      or the install icon in the address bar.
 4. Confirm the name (**ChaslayReborn**).
 5. Launch from the **Start Menu**, desktop shortcut, or taskbar pin.
@@ -30,13 +30,19 @@ After install, double-clicking the app opens a frameless window at the POS. If t
 | File | Role |
 |------|------|
 | `public/manifest.webmanifest` | Name, icons, `display: standalone`, `start_url: /merchant/pos` |
-| `public/sw.js` | App shell cache for install/open offline (`chaslay-shell-v2`) |
+| `public/sw.js` | App shell + hashed `/assets/*` cache for offline relaunch (`chaslay-shell-v4`) |
+| `public/offline.html` | Fallback page when the shell is not cached yet |
 | `src/lib/webpos-offline/*` | IndexedDB catalog snapshot + sale outbox; sync via `/sync/push-sales` |
 | `public/icons/*`, `favicon.png` | Install / Start Menu icons |
 | `index.html` | Manifest + theme / apple meta tags |
 | `src/main.tsx` | Registers `/sw.js` in production builds |
 
 ### Offline selling (browser / PWA)
+
+After at least one **successful online** visit to the POS (loads the app shell + catalog):
+
+- Close and relaunch the installed PWA offline ó it should open from cache (not a blank page).
+- If you see the offline fallback instead, reconnect once, open `/merchant/pos`, wait for the POS to load, then try offline again.
 
 After at least one **successful online** catalog load:
 
