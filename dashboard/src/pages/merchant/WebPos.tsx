@@ -99,6 +99,7 @@ import WebPosTopBar, {
   WebPosSettingsDropdown,
   WEBPOS_COLOR_THEMES,
   WEBPOS_TEXT_SIZES,
+  enterWebPosFullscreenOnLoad,
   type WebPosColorTheme,
   type WebPosTextSize,
 } from '@/components/webpos/WebPosTopBar';
@@ -158,6 +159,35 @@ function readStoredGridSort(): 'default' | 'alpha' | 'bestseller' {
   }
   return 'default';
 }
+
+/** Gift-card / loyalty formats — not retail EAN/UPC product barcodes. */
+function looksLikeGiftOrLoyaltyCard(code: string): boolean {
+  const trimmed = code.trim();
+  if (!trimmed) return false;
+  const ec = normalizeScannedPayload(trimmed);
+  if (/^EC[- ]?[0-9A-F]{6,12}$/i.test(ec)) return true;
+  if (/\/gift\//i.test(trimmed)) return true;
+  const compact = normalizeRfidUid(trimmed);
+  if (
+    compact.length >= 8 &&
+    /^[0-9A-F]+$/.test(compact) &&
+    !/^\d{8,14}$/.test(trimmed.replace(/\s/g, ''))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function blurPosInputs() {
+  const el = document.activeElement;
+  if (
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLTextAreaElement ||
+    el instanceof HTMLSelectElement
+  ) {
+    el.blur();
+  }
+}
 import {
   clearPersistedWebPosCarts,
   draftsMapToRecord,
@@ -214,7 +244,6 @@ import WebPosGiftCardModal, {
   type GiftCardPayResult,
   type GiftCardSettingsClient,
 } from '@/components/webpos/WebPosGiftCardModal';
-import RfidScanInput from '@/components/RfidScanInput';
 import {
   computeCashDiscount,
   computeEarnPoints,
@@ -611,7 +640,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [giftPayInject, setGiftPayInject] = useState<AppliedPayment | null>(null);
   const [attachedMembership, setAttachedMembership] = useState<AttachedMembership | null>(null);
   const [membershipBusy, setMembershipBusy] = useState(false);
-  const [rfidCapture, setRfidCapture] = useState('');
   const [payWithPoints, setPayWithPoints] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [splitQueue, setSplitQueue] = useState<SplitPart[]>([]);
@@ -846,6 +874,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const enterPosApp = useCallback(() => {
     window.dispatchEvent(new CustomEvent('webpos:enter-app'));
   }, []);
+
+  useEffect(() => {
+    if (loading || pinGateRequired) return;
+    void enterWebPosFullscreenOnLoad();
+  }, [loading, pinGateRequired]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -3749,7 +3782,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       toast.error(e.response?.data?.error || e.message || t('webPosMembershipLookupFailed'));
     } finally {
       setMembershipBusy(false);
-      setRfidCapture('');
     }
   };
 
@@ -5452,7 +5484,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [products]
   );
 
-  const handleBarcodeScan = useCallback(
+  const handlePosScan = useCallback(
     (code: string) => {
       if (pinGateRequired || pinModalOpen) return;
       if (posView !== 'register') return;
@@ -5477,11 +5509,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         return;
       }
       const product = findProductByScanCode(code);
-      if (!product) {
-        toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
+      if (product) {
+        onProductClick(product);
         return;
       }
-      onProductClick(product);
+      const cardsScanEnabled =
+        giftCardsEditionOk &&
+        (paymentConfig?.methods.giftCard === true) &&
+        canPay &&
+        !isWebPosCurrentlyOffline();
+      if (cardsScanEnabled && looksLikeGiftOrLoyaltyCard(code)) {
+        void lookupMembershipCard(code);
+        return;
+      }
+      toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
     },
     // onProductClick is stable enough for scan; listed intentionally
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -5506,6 +5547,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cancelModal,
       expressSuccessOpen,
       findProductByScanCode,
+      giftCardsEditionOk,
+      paymentConfig?.methods.giftCard,
+      canPay,
       t,
     ]
   );
@@ -5536,7 +5580,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         clearScanTimer();
         if (code.length >= 3) {
           e.preventDefault();
-          handleBarcodeScan(code);
+          handlePosScan(code);
         }
         return;
       }
@@ -5554,7 +5598,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       window.removeEventListener('keydown', onKeyDown);
       clearScanTimer();
     };
-  }, [handleBarcodeScan, pinGateRequired, pinModalOpen, posView]);
+  }, [handlePosScan, pinGateRequired, pinModalOpen, posView]);
 
   const offlineNow = isWebPosCurrentlyOffline();
   const enabledMethods = {
@@ -5687,6 +5731,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setSelectedLineId(null);
     setPosTab(tab);
     setPosView(tab);
+    if (tab === 'register') {
+      requestAnimationFrame(() => blurPosInputs());
+    }
   };
 
   const cartItemsLabel =
@@ -6074,6 +6121,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setOrdersRefreshToken((n) => n + 1);
               setPosTab('register');
               setPosView('register');
+              requestAnimationFrame(() => blurPosInputs());
               toast.success(t('webPosOrderResumed'));
             }}
             onPrintOrder={async (order, splitLabel) => {
@@ -6911,25 +6959,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           } as WebPosCustomer);
         }}
       />
-
-      {giftCardsFeatureOn &&
-      !offlineNow &&
-      posView === 'register' &&
-      !pinGateRequired &&
-      !pinModalOpen &&
-      !giftCardOpsOpen &&
-      !giftCardPayOpen &&
-      !paymentModalOpen &&
-      !splitOpen ? (
-        <div className="pointer-events-none fixed left-0 top-0 h-px w-px overflow-hidden opacity-0">
-          <RfidScanInput
-            value={rfidCapture}
-            onChange={setRfidCapture}
-            onScanComplete={(code) => void lookupMembershipCard(code)}
-            autoFocus
-          />
-        </div>
-      ) : null}
 
       <WebPosStartShiftModal
         open={startShiftOpen}

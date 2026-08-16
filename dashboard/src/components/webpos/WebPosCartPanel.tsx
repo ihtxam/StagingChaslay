@@ -580,7 +580,7 @@ export default function WebPosCartPanel({
             </span>
           ) : null}
           {channel === 'takeaway' || channel === 'delivery' ? (
-            <>
+            <div className="relative z-[5] flex w-full flex-wrap items-center gap-1.5">
               <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900">
                 {channel === 'delivery' ? t('delivery') : t('takeaway')}
                 {': '}
@@ -588,15 +588,18 @@ export default function WebPosCartPanel({
                   ? fulfillmentLabel
                   : t('webPosAsap')}
               </span>
-              <button
-                type="button"
-                onClick={onEditFulfillment}
-                className="text-[11px] font-semibold text-[var(--webpos-accent)] underline underline-offset-2 hover:opacity-80"
-                title={t('webPosChooseTime')}
-              >
-                {t('webPosChooseTime')}
-              </button>
-            </>
+              {onEditFulfillment ? (
+                <button
+                  type="button"
+                  onClick={onEditFulfillment}
+                  className="relative z-[6] inline-flex min-h-11 min-w-[2.75rem] touch-manipulation items-center justify-center rounded-lg border border-[var(--webpos-accent-border)] bg-[var(--webpos-accent-softer)] px-3 py-2 text-xs font-semibold text-[var(--webpos-accent-text)] hover:bg-[var(--webpos-accent-soft)] active:scale-[0.98]"
+                  title={t('webPosChooseTime')}
+                  aria-label={t('webPosChooseTime')}
+                >
+                  {t('webPosChooseTime')}
+                </button>
+              ) : null}
+            </div>
           ) : null}
           {tableLabel ? (
             <span className="rounded bg-rose-100 px-1.5 py-0.5 font-semibold text-rose-800">

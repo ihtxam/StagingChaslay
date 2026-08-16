@@ -35,6 +35,23 @@ export const WEBPOS_COLOR_THEMES: WebPosColorTheme[] = [
   'mono',
 ];
 export const WEBPOS_TEXT_SIZES: WebPosTextSize[] = ['sm', 'md', 'lg', 'xl'];
+export const WEBPOS_FULLSCREEN_KEY = 'webpos_fullscreen';
+
+function persistFullscreenPreference(active: boolean) {
+  try {
+    localStorage.setItem(WEBPOS_FULLSCREEN_KEY, active ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readWebPosFullscreenPreference(): boolean {
+  try {
+    return localStorage.getItem(WEBPOS_FULLSCREEN_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
 
 function useFullscreenActive() {
   const [active, setActive] = useState(
@@ -48,7 +65,7 @@ function useFullscreenActive() {
   return active;
 }
 
-async function toggleWebPosFullscreen(opts?: { forceEnterApp?: boolean }) {
+export async function toggleWebPosFullscreen(opts?: { forceEnterApp?: boolean }) {
   try {
     // Menus opens the backend sidebar (exits POS chrome). Fullscreen / maximize
     // must bring POS chrome back — browser FS alone leaves the left bar visible.
@@ -57,16 +74,33 @@ async function toggleWebPosFullscreen(opts?: { forceEnterApp?: boolean }) {
     }
     if (document.fullscreenElement && !opts?.forceEnterApp) {
       await document.exitFullscreen();
+      persistFullscreenPreference(false);
       return;
     }
     if (!document.fullscreenElement) {
       const el = document.documentElement;
       if (el.requestFullscreen) {
         await el.requestFullscreen();
+        persistFullscreenPreference(true);
       }
     }
   } catch {
     // Browser may block without a user gesture or if not allowed in iframe.
+  }
+}
+
+/** Enter POS chrome + browser fullscreen when preference allows (kiosk / tablet). */
+export async function enterWebPosFullscreenOnLoad() {
+  window.dispatchEvent(new CustomEvent('webpos:enter-app'));
+  if (!readWebPosFullscreenPreference()) return;
+  if (document.fullscreenElement) return;
+  try {
+    const el = document.documentElement;
+    if (el.requestFullscreen) {
+      await el.requestFullscreen();
+    }
+  } catch {
+    /* blocked without gesture — manual Fullscreen button still works */
   }
 }
 
@@ -430,7 +464,7 @@ export default function WebPosTopBar({
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               autoComplete="off"
-              autoFocus
+              inputMode="search"
             />
           </label>
         </div>

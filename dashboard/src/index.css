@@ -437,6 +437,14 @@ button {
     display: none;
   }
 
+  /* Product grid — touch scroll inside zoomed .webpos-shell (tablet / kiosk) */
+  .webpos-product-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+    transform: translateZ(0);
+  }
+
   .webpos-category-tile {
     @apply flex min-h-[4.5rem] items-center justify-center rounded-xl px-3 py-4 text-center text-sm font-bold leading-snug text-stone-800 shadow-sm transition active:scale-[0.98];
   }

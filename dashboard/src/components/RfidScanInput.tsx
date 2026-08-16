@@ -8,6 +8,9 @@ interface Props {
   placeholder?: string;
   className?: string;
   autoFocus?: boolean;
+  /** Prevent virtual keyboard on touch devices while still receiving wedge input. */
+  readOnly?: boolean;
+  inputMode?: 'none' | 'text' | 'search' | 'decimal' | 'numeric' | 'tel' | 'url' | 'email';
 }
 
 const SCAN_GAP_MS = 100;
@@ -24,6 +27,8 @@ export default function RfidScanInput({
   placeholder = 'Tap RFID card on reader…',
   className = 'input',
   autoFocus,
+  readOnly = false,
+  inputMode = 'none',
 }: Props) {
   const [buffer, setBuffer] = useState('');
   const lastKeyAt = useRef(0);
@@ -66,6 +71,9 @@ export default function RfidScanInput({
       }}
       autoComplete="off"
       spellCheck={false}
+      readOnly={readOnly}
+      inputMode={inputMode}
+      tabIndex={readOnly ? -1 : undefined}
     />
   );
 }
