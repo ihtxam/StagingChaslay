@@ -206,8 +206,6 @@ export default function WebPosTopBar({
   const { t } = useI18n();
   const inCheckout = posView === 'checkout' || posView === 'success';
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const fullscreenActive = useFullscreenActive();
-  const syncNeedsAttention = !syncOnline || syncPendingCount > 0 || syncFailedCount > 0;
 
   const tabs: Array<{ id: PosTab; label: string; Icon: typeof Pencil }> = [
     ...(!hideTablesTab
@@ -307,49 +305,6 @@ export default function WebPosTopBar({
           ) : null}
 
           {/* Desktop / tablet: shift + tools visible. Mobile: overflow into hamburger. */}
-          {onSyncNow ? (
-            <button
-              type="button"
-              className={`relative hidden h-9 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-bold lg:inline-flex ${
-                !syncOnline
-                  ? 'border-amber-300 bg-amber-50 text-amber-900'
-                  : syncFailedCount > 0
-                    ? 'border-red-300 bg-red-50 text-red-800'
-                    : syncPendingCount > 0
-                      ? 'border-sky-300 bg-sky-50 text-sky-900'
-                      : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
-              }`}
-              onClick={onSyncNow}
-              title={
-                !syncOnline
-                  ? t('webPosSyncOffline')
-                  : syncFailedCount > 0
-                    ? t('webPosSyncFailed').replace('{n}', String(syncFailedCount))
-                    : syncPendingCount > 0
-                      ? t('webPosSyncPending').replace('{n}', String(syncPendingCount))
-                      : t('webPosSyncOk')
-              }
-              disabled={syncing}
-            >
-              <RefreshCw size={14} className={syncing ? 'animate-spin' : undefined} />
-              <span className="hidden xl:inline">
-                {!syncOnline
-                  ? t('webPosSyncOfflineShort')
-                  : syncPendingCount > 0 || syncFailedCount > 0
-                    ? t('webPosSyncPendingShort').replace(
-                        '{n}',
-                        String(syncPendingCount + syncFailedCount)
-                      )
-                    : t('webPosSyncOkShort')}
-              </span>
-              {syncNeedsAttention && syncOnline ? (
-                <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-sky-600 px-1 text-[9px] font-bold text-white">
-                  {syncPendingCount + syncFailedCount}
-                </span>
-              ) : null}
-            </button>
-          ) : null}
-
           <button
             type="button"
             className={`relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9 ${
@@ -393,35 +348,6 @@ export default function WebPosTopBar({
               <Vault size={17} />
             </button>
           ) : null}
-
-          <button
-            type="button"
-            className="hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:inline-flex"
-            onClick={() => {
-              // Sidebar visible after Menus → restore POS chrome; otherwise toggle browser FS.
-              if (!appMode) {
-                void toggleWebPosFullscreen({ forceEnterApp: true });
-                return;
-              }
-              void toggleWebPosFullscreen();
-            }}
-            title={
-              !appMode
-                ? t('webPosFullscreen')
-                : fullscreenActive
-                  ? t('webPosExitFullscreen')
-                  : t('webPosFullscreen')
-            }
-            aria-label={
-              !appMode
-                ? t('webPosFullscreen')
-                : fullscreenActive
-                  ? t('webPosExitFullscreen')
-                  : t('webPosFullscreen')
-            }
-          >
-            {!appMode || !fullscreenActive ? <Maximize2 size={17} /> : <Minimize2 size={17} />}
-          </button>
 
           <div className="relative" ref={settingsRef}>
             <button
@@ -517,6 +443,11 @@ export function WebPosSettingsDropdown({
   onAppearanceChange,
   textSize = 'md',
   onTextSizeChange,
+  syncOnline = true,
+  syncPendingCount = 0,
+  syncFailedCount = 0,
+  syncing = false,
+  onSyncNow,
 }: {
   printerName: string;
   printers: Array<{ name: string; isDefault?: boolean }>;
@@ -550,9 +481,15 @@ export function WebPosSettingsDropdown({
   onAppearanceChange?: (appearance: WebPosAppearance) => void;
   textSize?: WebPosTextSize;
   onTextSizeChange?: (size: WebPosTextSize) => void;
+  syncOnline?: boolean;
+  syncPendingCount?: number;
+  syncFailedCount?: number;
+  syncing?: boolean;
+  onSyncNow?: () => void;
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
+  const syncNeedsAttention = !syncOnline || syncPendingCount > 0 || syncFailedCount > 0;
   const bumpTextSize = (dir: -1 | 1) => {
     if (!onTextSizeChange) return;
     const idx = WEBPOS_TEXT_SIZES.indexOf(textSize);
@@ -737,6 +674,46 @@ export function WebPosSettingsDropdown({
           <p className="text-[11px] text-stone-500">{t('webPosEodWhenShiftsOff')}</p>
         </div>
       ) : null}
+
+      {onSyncNow ? (
+        <div className="space-y-2 border-b border-stone-100 pb-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+            {t('webPosSyncMenu')}
+          </p>
+          <button
+            type="button"
+            className={`flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold ${
+              !syncOnline
+                ? 'border-amber-300 bg-amber-50 text-amber-900'
+                : syncFailedCount > 0
+                  ? 'border-red-300 bg-red-50 text-red-800'
+                  : syncPendingCount > 0
+                    ? 'border-sky-300 bg-sky-50 text-sky-900'
+                    : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+            }`}
+            onClick={onSyncNow}
+            disabled={syncing}
+          >
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : undefined} />
+            {!syncOnline
+              ? t('webPosSyncOfflineShort')
+              : syncPendingCount > 0 || syncFailedCount > 0
+                ? t('webPosSyncPendingShort').replace(
+                    '{n}',
+                    String(syncPendingCount + syncFailedCount)
+                  )
+                : t('webPosSyncOkShort')}
+          </button>
+          {syncNeedsAttention && syncOnline ? (
+            <p className="text-center text-[11px] text-stone-500">
+              {syncFailedCount > 0
+                ? t('webPosSyncFailed').replace('{n}', String(syncFailedCount))
+                : t('webPosSyncPending').replace('{n}', String(syncPendingCount))}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
         <MoreHorizontal size={14} />
         {t('webPosPrinting')}
@@ -795,10 +772,11 @@ export function WebPosSettingsDropdown({
           {t('webPosReloadCatalog')}
         </button>
       </div>
-      <p className="text-[11px] leading-snug text-stone-500">
+      <p
+        className={`text-[11px] leading-snug text-stone-500 ${agentOk ? 'text-center' : ''}`}
+      >
         {agentOk ? t('webPosAgentOnline') : t('webPosAgentOffline')}
       </p>
-      <p className="text-[11px] leading-snug text-stone-500">{t('webPosPrintRelayHint')}</p>
       <p className="border-t border-stone-100 pt-2 text-center text-[11px] text-stone-400">
         {webPosVersionLabel}
       </p>

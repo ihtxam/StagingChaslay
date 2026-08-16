@@ -123,9 +123,86 @@ export async function resolvePublishedReceiptRef(
 
 /** External PNG QR (works in browser print without npm dep) */
 export function qrImageUrl(data: string, size = 180): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&ecc=L&data=${encodeURIComponent(
     data
   )}`;
+}
+
+/** Thermal receipt QR raster width — ~25% of 80mm paper, Android-parity bitmap path. */
+export const RECEIPT_QR_RASTER_PX_80 = 56;
+export const RECEIPT_QR_RASTER_PX_58 = 48;
+
+export function receiptQrRasterPx(paperWidthMm?: 58 | 80): number {
+  return paperWidthMm === 58 ? RECEIPT_QR_RASTER_PX_58 : RECEIPT_QR_RASTER_PX_80;
+}
+
+/** Canvas/image pixels → ESC/POS GS v 0 monochrome raster (width padded to 8-dot boundary). */
+export function imageDataToEscPosRaster(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number
+): Uint8Array {
+  const paddedWidth = Math.ceil(width / 8) * 8;
+  const bytesPerRow = paddedWidth / 8;
+  const raster = new Uint8Array(bytesPerRow * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < paddedWidth; x++) {
+      if (x >= width) continue;
+      const i = (y * width + x) * 4;
+      const lum = data[i]! * 0.299 + data[i + 1]! * 0.587 + data[i + 2]! * 0.114;
+      if (lum < 160) {
+        raster[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
+      }
+    }
+  }
+  const header = new Uint8Array([
+    0x1d,
+    0x76,
+    0x30,
+    0x00,
+    bytesPerRow & 0xff,
+    (bytesPerRow >> 8) & 0xff,
+    height & 0xff,
+    (height >> 8) & 0xff,
+  ]);
+  return concatBytes(header, raster);
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const el = new Image();
+    el.crossOrigin = 'anonymous';
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('image load failed'));
+    el.src = url;
+  });
+}
+
+/** Bitmap receipt QR for thermal print (matches Android EscPosImageEncoder path). */
+export async function generateReceiptQrRasterEscPos(
+  data: string,
+  paperWidthMm?: 58 | 80
+): Promise<Uint8Array | null> {
+  const raw = String(data || '').trim();
+  if (!raw || typeof document === 'undefined') return null;
+  const size = receiptQrRasterPx(paperWidthMm);
+  try {
+    const img = await loadImage(qrImageUrl(raw, size));
+    const w = Math.max(8, img.width);
+    const h = Math.max(8, img.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    const { data: pixels } = ctx.getImageData(0, 0, w, h);
+    return imageDataToEscPosRaster(pixels, w, h);
+  } catch {
+    return null;
+  }
 }
 
 export type EscPosErrorCorrection = 'L' | 'M' | 'Q' | 'H';

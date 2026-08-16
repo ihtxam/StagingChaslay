@@ -1,7 +1,13 @@
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY, formatTimeHHMM, ymdZurich } from '@/lib/date-format';
 import { roundMoney2 } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
-import { buildReceiptUrl, buildGiftCardBarcodePayload, concatBytes, escposCode128, escposQrCode } from '@/lib/qr';
+import {
+  buildReceiptUrl,
+  buildGiftCardBarcodePayload,
+  concatBytes,
+  escposCode128,
+  generateReceiptQrRasterEscPos,
+} from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
 import { resolveOrderItemName } from '@/lib/order-item-name';
@@ -1547,21 +1553,14 @@ export function generateEodReportText(report: EodReportPrint): string {
   return r;
 }
 
-/**
- * Thermal receipt QR sizing — module 2 stays scannable (size 1 fails on many ESC/POS printers);
- * error correction L shrinks the QR matrix vs M without shrinking individual dots.
- */
-export const RECEIPT_QR_MODULE_SIZE = 2;
-export const RECEIPT_QR_ERROR_CORRECTION = 'L' as const;
-
-/** Minimal ESC/POS: init + optional logo + text + optional QR + optional delivery QR + optional Code128 + feed + partial cut */
+/** Minimal ESC/POS: init + optional logo + text + optional QR raster + optional delivery QR raster + Code128 + feed + cut */
 export function textToEscPos(
   text: string,
-  qrData?: string,
+  qrRaster?: Uint8Array | null,
   logoBytes?: Uint8Array | null,
   barcodeData?: string,
   barcodeLabel?: string,
-  deliveryQrData?: string
+  deliveryQrRaster?: Uint8Array | null
 ): Uint8Array {
   const body = escposCp850Encode(text);
   const init = new Uint8Array([0x1b, 0x40]);
@@ -1574,19 +1573,11 @@ export function textToEscPos(
     parts.push(alignCenter, logoBytes, alignLeft);
   }
   parts.push(alignLeft, body);
-  if (qrData) {
-    parts.push(
-      alignCenter,
-      escposQrCode(qrData, RECEIPT_QR_MODULE_SIZE, RECEIPT_QR_ERROR_CORRECTION),
-      alignLeft
-    );
+  if (qrRaster?.length) {
+    parts.push(alignCenter, qrRaster, alignLeft);
   }
-  if (deliveryQrData) {
-    parts.push(
-      alignCenter,
-      escposQrCode(deliveryQrData, RECEIPT_QR_MODULE_SIZE, RECEIPT_QR_ERROR_CORRECTION),
-      alignLeft
-    );
+  if (deliveryQrRaster?.length) {
+    parts.push(alignCenter, deliveryQrRaster, alignLeft);
   }
   if (barcodeData) {
     parts.push(escposCode128(barcodeData, 72, 2));
@@ -1596,6 +1587,35 @@ export function textToEscPos(
   }
   parts.push(feed, cut);
   return concatBytes(...parts);
+}
+
+/** Build receipt ESC/POS with bitmap QRs (web / print-agent path). */
+export async function buildReceiptEscPos(
+  text: string,
+  opts: {
+    qrData?: string;
+    deliveryQrData?: string;
+    logoBytes?: Uint8Array | null;
+    barcodeData?: string;
+    barcodeLabel?: string;
+    paperWidthMm?: 58 | 80;
+  } = {}
+): Promise<Uint8Array> {
+  const paper = opts.paperWidthMm ?? 80;
+  const qrRaster = opts.qrData
+    ? await generateReceiptQrRasterEscPos(opts.qrData, paper)
+    : null;
+  const deliveryQrRaster = opts.deliveryQrData
+    ? await generateReceiptQrRasterEscPos(opts.deliveryQrData, paper)
+    : null;
+  return textToEscPos(
+    text,
+    qrRaster,
+    opts.logoBytes,
+    opts.barcodeData,
+    opts.barcodeLabel,
+    deliveryQrRaster
+  );
 }
 
 export function uint8ToBase64(bytes: Uint8Array): string {

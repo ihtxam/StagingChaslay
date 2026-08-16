@@ -13,7 +13,7 @@ import {
   posOrderToWebPosReceipt,
   printersForRole,
   resolveReceiptLanguage,
-  textToEscPos,
+  buildReceiptEscPos,
   uint8ToBase64,
   type PosOrderForReceipt,
   type PosPrintSettingsClient,
@@ -62,7 +62,12 @@ async function printReceiptText(
   const logo = opts.logoUrl
     ? await logoUrlToEscPos(String(opts.logoUrl), paper === 58 ? 240 : 384)
     : null;
-  const escpos = textToEscPos(text, opts.qrUrl, logo, undefined, undefined, opts.deliveryQrUrl);
+  const escpos = await buildReceiptEscPos(text, {
+    qrData: opts.qrUrl,
+    deliveryQrData: opts.deliveryQrUrl,
+    logoBytes: logo,
+    paperWidthMm: paper,
+  });
   const dataBase64 = uint8ToBase64(escpos);
   for (const name of names) {
     const label = (name || '').trim();

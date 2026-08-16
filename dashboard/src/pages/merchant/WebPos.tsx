@@ -23,7 +23,7 @@ import {
   nextWebPosTicketNumber,
   printersForRole,
   resolveReceiptLanguage,
-  textToEscPos,
+  buildReceiptEscPos,
   uint8ToBase64,
   posOrderToWebPosReceipt,
   deliveryDirectionsUrlForReceipt,
@@ -4318,7 +4318,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ? opts.qrUrl
         : undefined;
     const barcode = opts.barcodeData || (opts.forceScannable ? opts.qrUrl : undefined);
-    const escpos = textToEscPos(text, qr, logo, barcode, undefined, opts.deliveryQrUrl);
+    const escpos = await buildReceiptEscPos(text, {
+      qrData: qr,
+      deliveryQrData: opts.deliveryQrUrl,
+      logoBytes: logo,
+      barcodeData: barcode,
+      paperWidthMm: paper,
+    });
     const dataBase64 = uint8ToBase64(escpos);
 
     let printedOk = 0;
@@ -5923,6 +5929,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onAppearanceChange={changePosAppearance}
             textSize={posTextSize}
             onTextSizeChange={changePosTextSize}
+            syncOnline={offlineSync.online}
+            syncPendingCount={offlineSync.pendingCount}
+            syncFailedCount={offlineSync.failedCount}
+            syncing={offlineSync.syncing}
+            onSyncNow={() => {
+              if (!isBrowserOnline()) {
+                toast.error(t('webPosOfflineNeedNetwork'));
+                return;
+              }
+              void flushOfflineOutbox().then((r) => {
+                if (r.synced > 0) {
+                  toast.success(
+                    t('webPosSyncFlushed').replace('{n}', String(r.synced))
+                  );
+                } else if (r.failed > 0) {
+                  toast.error(t('webPosSyncFailed').replace('{n}', String(r.failed)));
+                } else {
+                  toast.success(t('webPosSyncOk'));
+                }
+              });
+            }}
             canDrawer={canDrawer}
             onOpenDrawer={() => {
               setSettingsOpen(false);
@@ -6358,6 +6385,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 billDiscountLabel={billDiscountLabel}
                 canReleaseTable={!!tableLabel && cart.length === 0 && !orderSent}
                 onReleaseTable={releaseEmptyTable}
+                isRetail={isRetail}
                 layout={isNarrowViewport && mobileCartOpen ? 'page' : 'side'}
                 onBack={
                   isNarrowViewport && mobileCartOpen

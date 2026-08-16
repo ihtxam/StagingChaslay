@@ -1460,7 +1460,7 @@ const en: Dict = {
   webPosRefreshPrinters: 'Refresh printers',
   webPosReloadCatalog: 'Reload catalog',
   webPosPrintersRefreshed: 'Printers refreshed',
-  webPosAgentOnline: 'Print agent online - receipts print silently to your Windows printer (no popup).',
+  webPosAgentOnline: 'Print agent online',
   webPosPrintRelayHint:
     'Keep WebPOS open on the PC with the Print Agent — that till prints kitchen/receipt jobs from waiter phones automatically.',
   webPosPrintQueuedMainTill:
@@ -1507,6 +1507,7 @@ const en: Dict = {
   webPosOfflineRetry: 'Retry connection',
   webPosSyncOk: 'All sales synced',
   webPosSyncOkShort: 'Synced',
+  webPosSyncMenu: 'Sync',
   webPosSyncOffline: 'Offline — sales queue on this device',
   webPosSyncOfflineShort: 'Offline',
   webPosSyncPending: '{n} sale(s) waiting to sync',
@@ -3390,7 +3391,7 @@ const fr: Dict = {
   webPosRefreshPrinters: 'Actualiser les imprimantes',
   webPosReloadCatalog: 'Recharger le catalogue',
   webPosPrintersRefreshed: 'Imprimantes actualisées',
-  webPosAgentOnline: 'Agent d’impression en ligne - tickets imprimés silencieusement (sans popup).',
+  webPosAgentOnline: 'Agent d’impression en ligne',
   webPosPrintRelayHint:
     'Laissez le WebPOS ouvert sur le PC avec l\'agent d\'impression — cette caisse imprime automatiquement les tickets des téléphones serveurs.',
   webPosPrintQueuedMainTill:
@@ -3439,6 +3440,7 @@ const fr: Dict = {
   webPosOfflineRetry: 'Réessayer la connexion',
   webPosSyncOk: 'Toutes les ventes sont synchronisées',
   webPosSyncOkShort: 'Sync OK',
+  webPosSyncMenu: 'Synchronisation',
   webPosSyncOffline: 'Hors ligne — file d’attente sur cet appareil',
   webPosSyncOfflineShort: 'Hors ligne',
   webPosSyncPending: '{n} vente(s) en attente de sync',
@@ -5323,7 +5325,7 @@ const de: Dict = {
   webPosRefreshPrinters: 'Drucker aktualisieren',
   webPosReloadCatalog: 'Katalog neu laden',
   webPosPrintersRefreshed: 'Drucker aktualisiert',
-  webPosAgentOnline: 'Druckagent online - Belege werden still auf den Windows-Drucker gedruckt.',
+  webPosAgentOnline: 'Druckagent online',
   webPosPrintRelayHint:
     'Lassen Sie WebPOS auf dem PC mit Druckagent geöffnet — diese Kasse druckt Küchen-/Belegjobs von Kellner-Handys automatisch.',
   webPosPrintQueuedMainTill:
@@ -5372,6 +5374,7 @@ const de: Dict = {
   webPosOfflineRetry: 'Verbindung erneut prüfen',
   webPosSyncOk: 'Alle Verkäufe synchronisiert',
   webPosSyncOkShort: 'Sync OK',
+  webPosSyncMenu: 'Synchronisation',
   webPosSyncOffline: 'Offline — Verkäufe in lokaler Warteschlange',
   webPosSyncOfflineShort: 'Offline',
   webPosSyncPending: '{n} Verkauf/Verkäufe warten auf Sync',

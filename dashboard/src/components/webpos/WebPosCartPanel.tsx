@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  ArrowRight,
   Ban,
   MessageSquare,
   MoreHorizontal,
@@ -99,6 +100,8 @@ type Props = {
   /** Release table when dine-in cart is empty and nothing sent to kitchen. */
   canReleaseTable?: boolean;
   onReleaseTable?: () => void;
+  /** Retail mode — simplified cart chrome and footer. */
+  isRetail?: boolean;
 };
 
 function lineExtrasLabel(l: CartLine) {
@@ -204,6 +207,7 @@ export default function WebPosCartPanel({
   onBack,
   canReleaseTable = false,
   onReleaseTable,
+  isRetail = false,
 }: Props) {
   const { t } = useI18n();
   const hasItems = cart.length > 0;
@@ -288,8 +292,8 @@ export default function WebPosCartPanel({
           : `${sideBorder} border-stone-200 lg:w-[min(22rem,34vw)] lg:shrink-0`
       }`}
     >
-      {/* Channel: Takeaway / Delivery above cart */}
-      {showChannelTabs ? (
+      {/* Channel: Takeaway / Delivery above cart (restaurant only) */}
+      {showChannelTabs && !isRetail ? (
         <div
           className={`shrink-0 grid gap-1.5 border-b border-stone-100 px-2 py-2 ${
             channelOptions.length > 1 ? 'grid-cols-2' : 'grid-cols-1'
@@ -335,7 +339,28 @@ export default function WebPosCartPanel({
               <span className="inline-flex max-w-full items-center truncate rounded-lg bg-indigo-100 px-2.5 py-1.5 text-xs font-bold text-indigo-900">
                 {t('webPosTab')} #{tabNumber}
               </span>
-            ) : (
+            ) : isRetail && (channel === 'takeaway' || channel === 'delivery') ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <span className="inline-flex max-w-full items-center truncate rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-bold text-amber-900">
+                  {channel === 'delivery' ? t('delivery') : t('takeaway')}
+                  {': '}
+                  {fulfillmentIsLater && fulfillmentLabel
+                    ? fulfillmentLabel
+                    : t('webPosAsap')}
+                </span>
+                {onEditFulfillment ? (
+                  <button
+                    type="button"
+                    onClick={onEditFulfillment}
+                    className="inline-flex min-h-8 touch-manipulation items-center justify-center rounded-lg border border-[var(--webpos-accent-border)] bg-[var(--webpos-accent-softer)] px-2.5 py-1 text-xs font-semibold text-[var(--webpos-accent-text)] hover:bg-[var(--webpos-accent-soft)] active:scale-[0.98]"
+                    title={t('webPosChooseTime')}
+                    aria-label={t('webPosChooseTime')}
+                  >
+                    {t('webPosChooseTime')}
+                  </button>
+                ) : null}
+              </div>
+            ) : !isRetail ? (
               <span className="inline-flex max-w-full items-center truncate rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-700">
                 {channel === 'dine_in'
                   ? t('dineIn')
@@ -345,7 +370,7 @@ export default function WebPosCartPanel({
                       ? t('takeaway')
                       : t('takeaway')}
               </span>
-            )}
+            ) : null}
           </div>
           <button
             type="button"
@@ -548,10 +573,9 @@ export default function WebPosCartPanel({
         tabNumber ||
         orderNote ||
         membershipName ||
-        channel === 'dine_in' ||
-        fulfillmentLabel ||
-        channel === 'takeaway' ||
-        channel === 'delivery') && (
+        (!isRetail && channel === 'dine_in') ||
+        (!isRetail && fulfillmentLabel) ||
+        (!isRetail && (channel === 'takeaway' || channel === 'delivery'))) && (
         <div className="shrink-0 flex flex-wrap items-center gap-1.5 border-b border-stone-100 px-3 py-1.5 text-[11px] text-stone-500">
           {membershipName ? (
             <span className="inline-flex max-w-full items-center gap-1 rounded bg-teal-100 px-1.5 py-0.5 font-semibold text-teal-900">
@@ -574,12 +598,12 @@ export default function WebPosCartPanel({
               ) : null}
             </span>
           ) : null}
-          {channel === 'dine_in' ? (
+          {channel === 'dine_in' && !isRetail ? (
             <span className="rounded bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-800">
               {t('dineIn')}
             </span>
           ) : null}
-          {channel === 'takeaway' || channel === 'delivery' ? (
+          {!isRetail && (channel === 'takeaway' || channel === 'delivery') ? (
             <div className="relative z-[5] flex w-full flex-wrap items-center gap-1.5">
               <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900">
                 {channel === 'delivery' ? t('delivery') : t('takeaway')}
@@ -867,7 +891,13 @@ export default function WebPosCartPanel({
 
         <div
           className={`grid gap-1.5 border-t border-stone-200 bg-white p-2 ${
-            isPage && onBack ? 'grid-cols-[auto_1fr_1fr_1fr]' : 'grid-cols-3'
+            isRetail
+              ? isPage && onBack
+                ? 'grid-cols-[auto_1fr_1fr]'
+                : 'grid-cols-2'
+              : isPage && onBack
+                ? 'grid-cols-[auto_1fr_1fr_1fr]'
+                : 'grid-cols-3'
           }`}
         >
           {isPage && onBack ? (
@@ -881,7 +911,27 @@ export default function WebPosCartPanel({
               <ArrowLeft size={18} />
             </button>
           ) : null}
-          {showNewOrder ? (
+          {isRetail ? (
+            <>
+              <button
+                type="button"
+                disabled={!hasItems || busy}
+                onClick={() => (onHoldOrder ? onHoldOrder() : onNewOrder())}
+                className="rounded-lg bg-violet-700 py-3 text-sm font-bold uppercase tracking-wide text-white hover:bg-violet-800 disabled:opacity-40"
+              >
+                {t('webPosHoldOrder')}
+              </button>
+              <button
+                type="button"
+                disabled={!hasItems || busy}
+                onClick={onPayment}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--webpos-accent)] py-3 text-sm font-bold text-white hover:opacity-95 disabled:opacity-40"
+                aria-label={t('webPosPayment')}
+              >
+                <ArrowRight size={20} aria-hidden />
+              </button>
+            </>
+          ) : showNewOrder ? (
             <button
               type="button"
               disabled={busy}
