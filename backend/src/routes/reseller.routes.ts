@@ -177,6 +177,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
       licenseType,
       customDays,
       sendInvite,
+      maxPosPosts,
+      maxWaiterPosts,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
     if (!email || !trimmedBusinessName || !editionId) {
@@ -197,10 +199,33 @@ router.post("/merchants", async (req: Request, res: Response) => {
       licenseType,
       customDays: customDays != null ? Number(customDays) : undefined,
       sendInvite,
+      maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
+      maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
     });
     res.status(201).json({ success: true, merchant });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create merchant" });
+  }
+});
+
+/**
+ * PUT /api/reseller/merchants/:merchantId/pos-limits
+ * Agency sets concurrent POS / waiter station limits for a merchant license.
+ */
+router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Response) => {
+  try {
+    const { maxPosPosts, maxWaiterPosts } = req.body || {};
+    const merchant = await ResellerService.updateMerchantPosLimits(
+      resellerId(req),
+      req.params.merchantId,
+      {
+        maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
+        maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+      }
+    );
+    res.json({ success: true, merchant });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update limits" });
   }
 });
 

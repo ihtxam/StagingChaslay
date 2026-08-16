@@ -11,8 +11,11 @@ import {
 type Props = {
   maxPosPosts: number;
   maxWaiterPosts: number;
-  onMaxPosPostsChange: (n: number) => void;
-  onMaxWaiterPostsChange: (n: number) => void;
+  onMaxPosPostsChange?: (n: number) => void;
+  onMaxWaiterPostsChange?: (n: number) => void;
+  /** When true, limits are read-only (agency-assigned). Session kick still works. */
+  readOnly?: boolean;
+  hint?: string;
 };
 
 function platformLabel(platform: string, t: (k: string) => string) {
@@ -64,11 +67,17 @@ function SessionList({
   );
 }
 
+function limitLabel(n: number, t: (k: string) => string) {
+  return n <= 0 ? t('posPostsUnlimited') : String(n);
+}
+
 export default function PosPostsSection({
   maxPosPosts,
   maxWaiterPosts,
   onMaxPosPostsChange,
   onMaxWaiterPostsChange,
+  readOnly = false,
+  hint,
 }: Props) {
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -110,32 +119,53 @@ export default function PosPostsSection({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm muted">{t('posPostsHint')}</p>
+      {hint ? <p className="text-sm muted">{hint}</p> : null}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label className="block text-sm">
-          <span className="font-medium">{t('posPostsMaxMain')}</span>
-          <input
-            type="number"
-            min={0}
-            max={99}
-            value={maxPosPosts}
-            onChange={(e) => onMaxPosPostsChange(Math.max(0, Number(e.target.value) || 0))}
-            className="mt-1 w-full rounded-md border border-[var(--border)] px-3 py-2"
-          />
-          <span className="text-xs muted">{t('posPostsUnlimited')} = 0</span>
-        </label>
-        <label className="block text-sm">
-          <span className="font-medium">{t('posPostsMaxWaiter')}</span>
-          <input
-            type="number"
-            min={0}
-            max={99}
-            value={maxWaiterPosts}
-            onChange={(e) => onMaxWaiterPostsChange(Math.max(0, Number(e.target.value) || 0))}
-            className="mt-1 w-full rounded-md border border-[var(--border)] px-3 py-2"
-          />
-          <span className="text-xs muted">{t('posPostsUnlimited')} = 0</span>
-        </label>
+        {readOnly ? (
+          <>
+            <div className="block text-sm">
+              <span className="font-medium">{t('posPostsMaxMain')}</span>
+              <p className="mt-1 rounded-md border border-[var(--border)] px-3 py-2 bg-stone-50">
+                {limitLabel(maxPosPosts, t)}
+              </p>
+            </div>
+            <div className="block text-sm">
+              <span className="font-medium">{t('posPostsMaxWaiter')}</span>
+              <p className="mt-1 rounded-md border border-[var(--border)] px-3 py-2 bg-stone-50">
+                {limitLabel(maxWaiterPosts, t)}
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <label className="block text-sm">
+              <span className="font-medium">{t('posPostsMaxMain')}</span>
+              <input
+                type="number"
+                min={0}
+                max={99}
+                value={maxPosPosts}
+                onChange={(e) => onMaxPosPostsChange?.(Math.max(0, Number(e.target.value) || 0))}
+                className="mt-1 w-full rounded-md border border-[var(--border)] px-3 py-2"
+              />
+              <span className="text-xs muted">{t('posPostsUnlimited')} = 0</span>
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium">{t('posPostsMaxWaiter')}</span>
+              <input
+                type="number"
+                min={0}
+                max={99}
+                value={maxWaiterPosts}
+                onChange={(e) =>
+                  onMaxWaiterPostsChange?.(Math.max(0, Number(e.target.value) || 0))
+                }
+                className="mt-1 w-full rounded-md border border-[var(--border)] px-3 py-2"
+              />
+              <span className="text-xs muted">{t('posPostsUnlimited')} = 0</span>
+            </label>
+          </>
+        )}
       </div>
 
       <div className="flex items-center gap-2 text-sm font-medium">

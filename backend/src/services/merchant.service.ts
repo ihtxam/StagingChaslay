@@ -17,6 +17,10 @@ function cryptoRandomSecret() {
   return crypto.randomBytes(48).toString("hex");
 }
 
+export function normalizePosPostLimit(value: unknown): number {
+  return Math.max(0, Math.min(99, Number(value) || 0));
+}
+
 export class MerchantService {
   /**
    * Get all merchants with pagination + device/license counts
@@ -129,6 +133,10 @@ export class MerchantService {
       editionId?: string;
       resellerId?: string;
       businessCategory?: "retail" | "restaurant";
+      /** Concurrent main POS stations (WebPOS + Android). 0 = unlimited. Agency-assigned. */
+      maxPosPosts?: number;
+      /** Concurrent waiter stations. 0 = unlimited. Agency-assigned. */
+      maxWaiterPosts?: number;
     }
   ) {
     const db = getDb();
@@ -182,6 +190,8 @@ export class MerchantService {
           syncApiKey: generateSyncApiKey(),
           editionId: options?.editionId || null,
           resellerId: options?.resellerId || null,
+          maxPosPosts: normalizePosPostLimit(options?.maxPosPosts ?? 0),
+          maxWaiterPosts: normalizePosPostLimit(options?.maxWaiterPosts ?? 0),
         })
         .returning();
 
@@ -281,6 +291,24 @@ export class MerchantService {
       console.error("Error updating merchant:", error);
       throw error;
     }
+  }
+
+  /** POS post limits are agency/reseller-managed — not merchant self-service. */
+  static async updatePosPostLimits(
+    merchantId: string,
+    limits: { maxPosPosts?: number; maxWaiterPosts?: number }
+  ) {
+    const patch: Partial<typeof schema.merchants.$inferInsert> = {};
+    if (limits.maxPosPosts !== undefined) {
+      patch.maxPosPosts = normalizePosPostLimit(limits.maxPosPosts);
+    }
+    if (limits.maxWaiterPosts !== undefined) {
+      patch.maxWaiterPosts = normalizePosPostLimit(limits.maxWaiterPosts);
+    }
+    if (Object.keys(patch).length === 0) {
+      throw new Error("At least one of maxPosPosts or maxWaiterPosts is required");
+    }
+    return this.updateMerchant(merchantId, patch);
   }
 
   /**

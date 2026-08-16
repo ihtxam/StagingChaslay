@@ -100,7 +100,16 @@ function MerchantsPage() {
     deviceSeats: 0,
     licenseType: 'yearly' as 'trial' | 'yearly' | 'custom',
     customDays: 365,
+    maxPosPosts: 1,
+    maxWaiterPosts: 0,
   });
+  const [limitsFor, setLimitsFor] = useState<{
+    id: string;
+    name: string;
+    maxPosPosts: number;
+    maxWaiterPosts: number;
+  } | null>(null);
+  const [savingLimits, setSavingLimits] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -147,6 +156,8 @@ function MerchantsPage() {
         password: form.password || undefined,
         deviceSeats: seats,
         customDays: form.licenseType === 'custom' ? Number(form.customDays) : undefined,
+        maxPosPosts: Number(form.maxPosPosts) || 0,
+        maxWaiterPosts: Number(form.maxWaiterPosts) || 0,
       });
       toast.success(t('resellerMerchantCreated'));
       setShowCreate(false);
@@ -175,6 +186,24 @@ function MerchantsPage() {
       navigate('/merchant');
     } catch (err: any) {
       toast.error(err.response?.data?.error || t('resellerSaveFailed'));
+    }
+  };
+
+  const savePosLimits = async () => {
+    if (!limitsFor) return;
+    setSavingLimits(true);
+    try {
+      await api.put(`/reseller/merchants/${limitsFor.id}/pos-limits`, {
+        maxPosPosts: Number(limitsFor.maxPosPosts) || 0,
+        maxWaiterPosts: Number(limitsFor.maxWaiterPosts) || 0,
+      });
+      toast.success(t('posPostsLimitsSaved'));
+      setLimitsFor(null);
+      load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setSavingLimits(false);
     }
   };
 
@@ -357,6 +386,36 @@ function MerchantsPage() {
             <p className="sm:col-span-3 text-xs text-stone-500">{t('deviceLicenseSeatsHint')}</p>
           </div>
 
+          <div className="sm:col-span-2 border rounded-lg p-3 bg-stone-50 grid sm:grid-cols-2 gap-3">
+            <label className="text-sm">
+              {t('posPostsMaxMain')}
+              <input
+                type="number"
+                min={0}
+                max={99}
+                className="input mt-1"
+                value={form.maxPosPosts}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, maxPosPosts: Number(e.target.value) || 0 }))
+                }
+              />
+            </label>
+            <label className="text-sm">
+              {t('posPostsMaxWaiter')}
+              <input
+                type="number"
+                min={0}
+                max={99}
+                className="input mt-1"
+                value={form.maxWaiterPosts}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, maxWaiterPosts: Number(e.target.value) || 0 }))
+                }
+              />
+            </label>
+            <p className="sm:col-span-2 text-xs text-stone-500">{t('posPostsHint')}</p>
+          </div>
+
           <div className="sm:col-span-2 flex justify-end gap-2">
             <button type="button" className="btn-secondary text-sm" onClick={() => setShowCreate(false)}>
               {t('cancel')}
@@ -395,6 +454,20 @@ function MerchantsPage() {
                 <td className="px-3 py-2 text-right space-x-3 whitespace-nowrap">
                   <button
                     type="button"
+                    className="text-stone-700 hover:underline"
+                    onClick={() =>
+                      setLimitsFor({
+                        id: m.id,
+                        name: m.name,
+                        maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
+                        maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
+                      })
+                    }
+                  >
+                    {t('posPostsLimits')}
+                  </button>
+                  <button
+                    type="button"
                     className="text-teal-700 hover:underline"
                     onClick={() => openPanel(m)}
                   >
@@ -413,6 +486,63 @@ function MerchantsPage() {
           </tbody>
         </table>
       </div>
+
+      {limitsFor ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-2xl border bg-white p-5 shadow-xl space-y-3">
+            <h2 className="text-lg font-bold">{t('posPostsLimits')}</h2>
+            <p className="text-sm text-stone-600">{limitsFor.name}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-sm">
+                {t('posPostsMaxMain')}
+                <input
+                  type="number"
+                  min={0}
+                  max={99}
+                  className="input mt-1"
+                  value={limitsFor.maxPosPosts}
+                  onChange={(e) =>
+                    setLimitsFor({
+                      ...limitsFor,
+                      maxPosPosts: Number(e.target.value) || 0,
+                    })
+                  }
+                />
+              </label>
+              <label className="text-sm">
+                {t('posPostsMaxWaiter')}
+                <input
+                  type="number"
+                  min={0}
+                  max={99}
+                  className="input mt-1"
+                  value={limitsFor.maxWaiterPosts}
+                  onChange={(e) =>
+                    setLimitsFor({
+                      ...limitsFor,
+                      maxWaiterPosts: Number(e.target.value) || 0,
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <p className="text-xs text-stone-500">{t('posPostsHint')}</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary text-sm" onClick={() => setLimitsFor(null)}>
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                disabled={savingLimits}
+                onClick={() => void savePosLimits()}
+              >
+                {savingLimits ? '…' : t('save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {purgeFor ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">

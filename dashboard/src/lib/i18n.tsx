@@ -1715,6 +1715,10 @@ const en: Dict = {
   waiterNoKitchenPermission: 'You cannot send orders to the kitchen',
   posPostsTitle: 'POS stations',
   posPostsHint: 'Limit how many main tills (WebPOS + Android) can be signed in at once. 0 = unlimited.',
+  posPostsAgencyHint:
+    'Station limits are set by your POS provider. You can view active sessions and disconnect devices below. Contact your agency to change limits.',
+  posPostsLimits: 'POS station limits',
+  posPostsLimitsSaved: 'POS station limits saved',
   posPostsMaxMain: 'Max main POS stations',
   posPostsMaxWaiter: 'Max waiter stations',
   posPostsActiveMain: 'Active main stations',
@@ -3887,6 +3891,10 @@ const fr: Dict = {
   waiterNoKitchenPermission: 'Vous ne pouvez pas envoyer en cuisine',
   posPostsTitle: 'Postes caisse',
   posPostsHint: 'Limitez le nombre de caisses principales (WebPOS + Android) connectées. 0 = illimité.',
+  posPostsAgencyHint:
+    'Les limites de postes sont définies par votre revendeur POS. Vous pouvez voir les sessions actives et déconnecter des appareils ci-dessous. Contactez votre agence pour modifier les limites.',
+  posPostsLimits: 'Limites postes caisse',
+  posPostsLimitsSaved: 'Limites de postes enregistrées',
   posPostsMaxMain: 'Max caisses principales',
   posPostsMaxWaiter: 'Max postes serveur',
   posPostsActiveMain: 'Caisses principales actives',
@@ -6060,6 +6068,10 @@ const de: Dict = {
   waiterNoKitchenPermission: 'Keine Berechtigung für Küchensendung',
   posPostsTitle: 'Kassenplätze',
   posPostsHint: 'Begrenzen Sie gleichzeitige Hauptkassen (WebPOS + Android). 0 = unbegrenzt.',
+  posPostsAgencyHint:
+    'Postenlimits werden von Ihrem POS-Anbieter festgelegt. Sie können aktive Sitzungen anzeigen und Geräte trennen. Wenden Sie sich an Ihre Agentur, um Limits zu ändern.',
+  posPostsLimits: 'Kassenplatz-Limits',
+  posPostsLimitsSaved: 'Kassenplatz-Limits gespeichert',
   posPostsMaxMain: 'Max. Hauptkassen',
   posPostsMaxWaiter: 'Max. Kellner-Posten',
   posPostsActiveMain: 'Aktive Hauptkassen',

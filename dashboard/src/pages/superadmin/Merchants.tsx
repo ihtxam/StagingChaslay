@@ -47,6 +47,8 @@ const emptyForm = {
   editionId: '',
   resellerId: '',
   businessCategory: 'restaurant' as 'retail' | 'restaurant',
+  maxPosPosts: 1,
+  maxWaiterPosts: 0,
 };
 
 export default function Merchants() {
@@ -68,6 +70,8 @@ export default function Merchants() {
   const [purgeConfirm, setPurgeConfirm] = useState('');
   const [deleteCustomersToo, setDeleteCustomersToo] = useState(false);
   const [purgingSales, setPurgingSales] = useState(false);
+  const [posLimits, setPosLimits] = useState({ maxPosPosts: 0, maxWaiterPosts: 0 });
+  const [savingPosLimits, setSavingPosLimits] = useState(false);
   const [editions, setEditions] = useState<Array<{ id: string; name: string; businessCategory: string }>>(
     []
   );
@@ -115,8 +119,28 @@ export default function Merchants() {
     try {
       const res = await api.get(`/superadmin/merchants/${merchant.id}`);
       setDetailFull(res.data.merchant);
+      setPosLimits({
+        maxPosPosts: Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0),
+        maxWaiterPosts: Math.max(0, Number(res.data.merchant?.maxWaiterPosts) || 0),
+      });
     } catch {
       toast.error('Failed to load merchant details');
+    }
+  };
+
+  const handleSavePosLimits = async () => {
+    if (!showDetail) return;
+    setSavingPosLimits(true);
+    try {
+      await api.put(`/superadmin/merchants/${showDetail.id}`, {
+        maxPosPosts: Number(posLimits.maxPosPosts) || 0,
+        maxWaiterPosts: Number(posLimits.maxWaiterPosts) || 0,
+      });
+      toast.success('POS station limits updated');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to update limits');
+    } finally {
+      setSavingPosLimits(false);
     }
   };
 
@@ -203,6 +227,8 @@ export default function Merchants() {
         editionId: form.editionId,
         resellerId: form.resellerId || undefined,
         businessCategory: form.businessCategory,
+        maxPosPosts: Number(form.maxPosPosts) || 0,
+        maxWaiterPosts: Number(form.maxWaiterPosts) || 0,
       });
       const issued = res.data.merchant?.issuedLicenses || [];
       setIssuedKeys(issued);
@@ -678,6 +704,32 @@ export default function Merchants() {
                 <p className="text-xs text-gray-500">
                   Each seat creates a POS device slot + license key the Android/ChaslayReborn app can activate.
                 </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-200">
+                  <label className="block">
+                    <span className="text-sm font-medium">Max main POS stations</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={99}
+                      className="input mt-1"
+                      value={form.maxPosPosts}
+                      onChange={(e) => setForm({ ...form, maxPosPosts: Number(e.target.value) })}
+                    />
+                    <span className="text-xs text-gray-500">0 = unlimited</span>
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-medium">Max waiter stations</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={99}
+                      className="input mt-1"
+                      value={form.maxWaiterPosts}
+                      onChange={(e) => setForm({ ...form, maxWaiterPosts: Number(e.target.value) })}
+                    />
+                    <span className="text-xs text-gray-500">0 = unlimited</span>
+                  </label>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -754,6 +806,52 @@ export default function Merchants() {
                 </div>
               )}
               <div className="pt-3 border-t space-y-3">
+                <div>
+                  <p className="font-semibold mb-2">POS station limits</p>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Concurrent main tills (WebPOS + Android) and waiter stations. Merchants cannot
+                    change these — agency/reseller managed.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block text-xs">
+                      Max main POS
+                      <input
+                        type="number"
+                        min={0}
+                        max={99}
+                        className="input mt-1"
+                        value={posLimits.maxPosPosts}
+                        onChange={(e) =>
+                          setPosLimits({ ...posLimits, maxPosPosts: Number(e.target.value) || 0 })
+                        }
+                      />
+                    </label>
+                    <label className="block text-xs">
+                      Max waiter
+                      <input
+                        type="number"
+                        min={0}
+                        max={99}
+                        className="input mt-1"
+                        value={posLimits.maxWaiterPosts}
+                        onChange={(e) =>
+                          setPosLimits({
+                            ...posLimits,
+                            maxWaiterPosts: Number(e.target.value) || 0,
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-secondary mt-2 text-sm"
+                    disabled={savingPosLimits}
+                    onClick={() => void handleSavePosLimits()}
+                  >
+                    {savingPosLimits ? 'Saving…' : 'Save POS limits'}
+                  </button>
+                </div>
                 <div>
                   <p className="font-semibold mb-2 flex items-center gap-2">
                     <KeyRound className="w-4 h-4" /> Reset password

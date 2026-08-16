@@ -904,8 +904,6 @@ export default function Settings() {
         paxOrderingEnabled: !!settings.paxOrderingEnabled,
         coursesEnabled: !!settings.coursesEnabled,
         shiftsEnabled: !!settings.shiftsEnabled,
-        maxPosPosts: Math.max(0, Number(settings.maxPosPosts) || 0),
-        maxWaiterPosts: Math.max(0, Number(settings.maxWaiterPosts) || 0),
         posColorTheme: settings.posColorTheme || 'teal',
         posCheckoutSettings: settings.posCheckoutSettings || undefined,
         webposExpressEnabled: settings.webposExpressEnabled !== false,
@@ -1906,15 +1904,15 @@ export default function Settings() {
                 icon={Monitor}
                 accent={settingsDash.accent}
                 title={t('posPostsTitle')}
-                description={t('posPostsHint')}
+                description={t('posPostsAgencyHint')}
                 highlight={isSectionHighlight('pos-posts')}
                 dimmed={normalizedQuery ? !isSectionVisible('pos-posts') : false}
               >
                 <PosPostsSection
+                  readOnly
+                  hint={t('posPostsAgencyHint')}
                   maxPosPosts={Math.max(0, Number(settings.maxPosPosts) || 0)}
                   maxWaiterPosts={Math.max(0, Number(settings.maxWaiterPosts) || 0)}
-                  onMaxPosPostsChange={(n) => setSettings({ ...settings, maxPosPosts: n })}
-                  onMaxWaiterPostsChange={(n) => setSettings({ ...settings, maxWaiterPosts: n })}
                 />
               </Section>
 

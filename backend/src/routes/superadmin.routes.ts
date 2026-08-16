@@ -210,6 +210,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
       editionId,
       resellerId,
       businessCategory,
+      maxPosPosts,
+      maxWaiterPosts,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -236,6 +238,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
         editionId: editionId || undefined,
         resellerId: resellerId || undefined,
         businessCategory,
+        maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
+        maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
       }
     );
 
@@ -288,7 +292,19 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
     const { merchantId } = req.params;
     const updates = req.body;
 
-    const merchant = await MerchantService.updateMerchant(merchantId, updates);
+    if (updates.maxPosPosts != null || updates.maxWaiterPosts != null) {
+      await MerchantService.updatePosPostLimits(merchantId, {
+        maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
+        maxWaiterPosts: updates.maxWaiterPosts != null ? Number(updates.maxWaiterPosts) : undefined,
+      });
+      delete updates.maxPosPosts;
+      delete updates.maxWaiterPosts;
+    }
+
+    const merchant =
+      Object.keys(updates).length > 0
+        ? await MerchantService.updateMerchant(merchantId, updates)
+        : await MerchantService.getMerchantById(merchantId);
 
     res.json({
       success: true,

@@ -43,7 +43,7 @@ function serializeReseller(
 export class ResellerService {
   static async countSeatsUsed(resellerId: string): Promise<number> {
     const db = getDb();
-    // Active seats only ó revoked/suspended licenses free pool capacity
+    // Active seats only ù revoked/suspended licenses free pool capacity
     const [{ c }] = await db
       .select({ c: count() })
       .from(schema.licenses)
@@ -341,6 +341,8 @@ export class ResellerService {
         editionId: schema.merchants.editionId,
         subscriptionPlan: schema.merchants.subscriptionPlan,
         shopEnabled: schema.merchants.shopEnabled,
+        maxPosPosts: schema.merchants.maxPosPosts,
+        maxWaiterPosts: schema.merchants.maxWaiterPosts,
         createdAt: schema.merchants.createdAt,
       })
       .from(schema.merchants)
@@ -366,6 +368,8 @@ export class ResellerService {
       licenseType?: "trial" | "yearly" | "custom";
       customDays?: number;
       sendInvite?: boolean;
+      maxPosPosts?: number;
+      maxWaiterPosts?: number;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -402,9 +406,21 @@ export class ResellerService {
         editionId: input.editionId,
         resellerId,
         businessCategory: input.businessCategory,
+        maxPosPosts: input.maxPosPosts,
+        maxWaiterPosts: input.maxWaiterPosts,
       }
     );
     return created;
+  }
+
+  static async updateMerchantPosLimits(
+    resellerId: string,
+    merchantId: string,
+    limits: { maxPosPosts?: number; maxWaiterPosts?: number }
+  ) {
+    await this.assertOwnsMerchant(resellerId, merchantId);
+    const { MerchantService } = await import("./merchant.service");
+    return MerchantService.updatePosPostLimits(merchantId, limits);
   }
 
   static async assertOwnsMerchant(resellerId: string, merchantId: string) {
