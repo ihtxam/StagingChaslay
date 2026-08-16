@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { I18nProvider, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
@@ -26,6 +26,33 @@ function LegacyReceiptRedirect() {
   const { saleId } = useParams();
   if (!saleId) return <Navigate to="/" replace />;
   return <Navigate to={`/receipt/${encodeURIComponent(saleId)}`} replace />;
+}
+
+function isWebPosRoute(pathname: string): boolean {
+  return /\/merchant\/pos(?:\/|$)/.test(pathname);
+}
+
+/** WebPOS uses center-top toasts so they do not cover the right-side menu. */
+function AppToaster() {
+  const { pathname } = useLocation();
+  const webPos = isWebPosRoute(pathname);
+
+  return (
+    <Toaster
+      position={webPos ? 'top-center' : 'top-right'}
+      containerClassName={webPos ? 'webpos-toast-container' : undefined}
+      toastOptions={
+        webPos
+          ? {
+              style: {
+                maxWidth: 'min(92vw, 22rem)',
+                fontSize: '0.875rem',
+              },
+            }
+          : undefined
+      }
+    />
+  );
 }
 
 function ShopRoutes({ children }: { children: React.ReactNode }) {
@@ -356,8 +383,8 @@ function App() {
             </>
           )}
         </Routes>
+        <AppToaster />
       </BrowserRouter>
-      <Toaster position="top-right" />
     </>
   );
 }
