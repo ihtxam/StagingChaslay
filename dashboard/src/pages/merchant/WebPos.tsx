@@ -6335,6 +6335,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   setGiftCardOpsOpen(true);
                 }}
                 onCustomAmount={openCustomAmountModal}
+                onBackgroundClick={() => handleSelectLine(null)}
               />
               {/* Odoo-style sticky Pay | Cart — only on narrow viewports (JS + CSS). */}
               {isNarrowViewport ? (

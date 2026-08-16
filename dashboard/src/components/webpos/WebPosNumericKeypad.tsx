@@ -104,9 +104,9 @@ export default function WebPosNumericKeypad({
     : 'webpos-keypad-key';
 
   return (
-    <div className={`webpos-keypad ${compact ? 'space-y-1.5' : 'space-y-2.5'}`}>
+    <div className={`webpos-keypad ${compact ? 'space-y-2' : 'space-y-3'}`}>
       {showModeButtons ? (
-        <div className={`grid grid-cols-3 ${compact ? 'gap-1.5' : 'gap-2'}`}>
+        <div className={`grid grid-cols-3 ${compact ? 'gap-2' : 'gap-2.5'}`}>
           {(
             [
               ['qty', t('webPosKeypadQty')],
@@ -134,11 +134,11 @@ export default function WebPosNumericKeypad({
       ) : null}
 
       <div
-        className={`grid ${compact ? 'gap-1.5' : 'gap-2'} ${
+        className={`grid ${compact ? 'gap-2' : 'gap-2.5'} ${
           showQuickAdd ? 'grid-cols-[1fr_auto]' : 'grid-cols-1'
         }`}
       >
-        <div className={`grid grid-cols-3 ${compact ? 'gap-1.5' : 'gap-2'}`}>
+        <div className={`grid grid-cols-3 ${compact ? 'gap-2' : 'gap-2.5'}`}>
           {numKeys.map((k) => (
             <button
               key={k}
@@ -276,7 +276,7 @@ export default function WebPosNumericKeypad({
         </div>
 
         {showQuickAdd ? (
-          <div className={`flex flex-col ${compact ? 'gap-1.5' : 'gap-2'}`}>
+          <div className={`flex flex-col ${compact ? 'gap-2' : 'gap-2.5'}`}>
             {quickAmounts.map((n) => (
               <button
                 key={n}

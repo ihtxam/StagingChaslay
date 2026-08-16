@@ -51,6 +51,8 @@ type Props = {
   onSellGiftCard?: () => void;
   onReloadGiftCard?: () => void;
   onCustomAmount?: () => void;
+  /** Click empty grid area (not a product tile) — e.g. deselect cart line. */
+  onBackgroundClick?: () => void;
 };
 
 const TILE_GRID: Record<ProductGridTileSize, string> = {
@@ -86,6 +88,7 @@ export default function WebPosProductArea({
   onSellGiftCard,
   onReloadGiftCard,
   onCustomAmount,
+  onBackgroundClick,
 }: Props) {
   const { t } = useI18n();
   const colorByCat = useMemo(() => categoryColorMap(categories), [categories]);
@@ -201,12 +204,18 @@ export default function WebPosProductArea({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-2 pb-3">
+      <div
+        className="min-h-0 flex-1 overflow-auto px-3 py-2 pb-3"
+        onClick={() => onBackgroundClick?.()}
+      >
         {isGiftCardCategory ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               type="button"
-              onClick={onSellGiftCard || onGiftCards}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSellGiftCard || onGiftCards?.();
+              }}
               className="flex min-h-[8rem] flex-col items-center justify-center rounded-xl bg-teal-600 px-4 py-6 text-center text-white hover:bg-teal-700"
             >
               <Gift size={28} className="mb-2 opacity-90" />
@@ -214,7 +223,10 @@ export default function WebPosProductArea({
             </button>
             <button
               type="button"
-              onClick={onReloadGiftCard || onGiftCards}
+              onClick={(e) => {
+                e.stopPropagation();
+                onReloadGiftCard || onGiftCards?.();
+              }}
               className="flex min-h-[8rem] flex-col items-center justify-center rounded-xl bg-teal-500 px-4 py-6 text-center text-white hover:bg-teal-600"
             >
               <Gift size={28} className="mb-2 opacity-90" />
@@ -228,10 +240,13 @@ export default function WebPosProductArea({
         ) : (
           <div className={`grid gap-2 ${gridClass}`}>
             {onCustomAmount ? (
-              <button
-                type="button"
-                onClick={onCustomAmount}
-                className="webpos-product-card group min-h-[5.5rem] !bg-[#5C4B7A] text-white hover:!bg-[#4a3d62]"
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCustomAmount();
+              }}
+              className="webpos-product-card group min-h-[5.5rem] !bg-[#5C4B7A] text-white hover:!bg-[#4a3d62]"
                 title={t('webPosCustomAmount')}
               >
                 <div className="flex min-h-[4rem] flex-1 flex-col items-center justify-center px-2 py-2.5">
@@ -256,7 +271,10 @@ export default function WebPosProductArea({
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => onProductClick(p)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onProductClick(p);
+                  }}
                   className="webpos-product-card group"
                 >
                   {showProductImages && imageSrc ? (

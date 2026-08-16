@@ -646,7 +646,12 @@ export default function WebPosCartPanel({
       ) : null}
 
       {/* Cart lines take remaining height; keypad + actions stay docked below */}
-      <div className="webpos-cart-lines min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
+      <div
+        className="webpos-cart-lines min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2"
+        onClick={() => {
+          if (selectedLineId) onSelectLine(null);
+        }}
+      >
         {!hasItems ? (
           <div className="py-8 text-center">
             <p className="text-sm text-stone-400">{t('webPosTapProducts')}</p>
@@ -674,7 +679,10 @@ export default function WebPosCartPanel({
                   <li key={`course-${row.course}`}>
                     <button
                       type="button"
-                      onClick={() => onSelectCourse(row.course)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectCourse(row.course);
+                      }}
                       aria-pressed={selected}
                       className={`w-full rounded-md px-2 py-1.5 text-left text-xs font-bold uppercase tracking-wide ${
                         selected
@@ -701,7 +709,10 @@ export default function WebPosCartPanel({
                 <li key={l.lineId}>
                   <button
                     type="button"
-                    onClick={() => onSelectLine(selected ? null : l.lineId)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectLine(selected ? null : l.lineId);
+                    }}
                     className={`w-full rounded-lg px-2 py-2 text-left transition ${
                       selected
                         ? 'bg-[var(--webpos-accent-softer)] ring-2 ring-[var(--webpos-accent-ring)]'

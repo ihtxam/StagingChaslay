@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
+import WebPosKeypadModalShell from '@/components/webpos/WebPosKeypadModalShell';
 
 type TipMode = 'amount' | 'percent';
 
@@ -40,8 +40,6 @@ export default function WebPosTipKeypad({
     setBuf(initial > 0 ? String(roundMoney2(initial)) : '');
   }, [open, initial]);
 
-  if (!open) return null;
-
   const push = (ch: string) => {
     setBuf((prev) => {
       if (ch === '.' && prev.includes('.')) return prev;
@@ -67,117 +65,102 @@ export default function WebPosTipKeypad({
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-3">
-      <div className="w-full max-w-xs rounded-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] text-[var(--webpos-text,var(--text))] shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--webpos-border,var(--border))] px-4 py-3">
-          <h3 className="font-semibold text-[var(--webpos-text,var(--text))]">{title || t('webPosTip')}</h3>
+    <WebPosKeypadModalShell open={open} onClose={onClose} title={title || t('webPosTip')}>
+      {allowPercent ? (
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            className="p-2 text-[var(--webpos-text-muted,var(--text-muted))]"
-            onClick={onClose}
-            aria-label={t('close')}
+            onClick={() => {
+              setMode('amount');
+              setBuf('');
+            }}
+            className={`rounded-lg py-2.5 text-xs font-bold uppercase ${
+              mode === 'amount'
+                ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
+                : 'bg-[var(--webpos-surface-2,#f5f5f4)] text-[var(--webpos-text-muted,#78716c)] ring-1 ring-[var(--webpos-border,#e7e5e4)]'
+            }`}
           >
-            <X size={18} />
+            {t('webPosTipFixed')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('percent');
+              setBuf('');
+            }}
+            className={`rounded-lg py-2.5 text-xs font-bold uppercase ${
+              mode === 'percent'
+                ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
+                : 'bg-[var(--webpos-surface-2,#f5f5f4)] text-[var(--webpos-text-muted,#78716c)] ring-1 ring-[var(--webpos-border,#e7e5e4)]'
+            }`}
+          >
+            {t('webPosTipPercent')}
           </button>
         </div>
-        <div className="space-y-3 p-4">
-          {allowPercent ? (
-            <div className="grid grid-cols-2 gap-1.5">
+      ) : null}
+
+      {mode === 'percent' && presetsPercent.length ? (
+        <div className="flex flex-wrap gap-2">
+          {presetsPercent
+            .filter((p) => p > 0)
+            .map((pct) => (
               <button
+                key={pct}
                 type="button"
-                onClick={() => {
-                  setMode('amount');
-                  setBuf('');
-                }}
-                className={`rounded-lg py-2 text-xs font-bold uppercase ${
-                  mode === 'amount'
-                    ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
-                    : 'bg-[var(--webpos-surface-2,#f5f5f4)] text-[var(--webpos-text-muted,#78716c)] ring-1 ring-[var(--webpos-border,#e7e5e4)]'
-                }`}
+                className="rounded-lg border border-stone-200 px-3 py-2 text-sm font-semibold hover:bg-stone-50"
+                onClick={() => setBuf(String(pct))}
               >
-                {t('webPosTipFixed')}
+                {pct}%
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('percent');
-                  setBuf('');
-                }}
-                className={`rounded-lg py-2 text-xs font-bold uppercase ${
-                  mode === 'percent'
-                    ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
-                    : 'bg-[var(--webpos-surface-2,#f5f5f4)] text-[var(--webpos-text-muted,#78716c)] ring-1 ring-[var(--webpos-border,#e7e5e4)]'
-                }`}
-              >
-                {t('webPosTipPercent')}
-              </button>
-            </div>
-          ) : null}
-
-          {mode === 'percent' && presetsPercent.length ? (
-            <div className="flex flex-wrap gap-1.5">
-              {presetsPercent
-                .filter((p) => p > 0)
-                .map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm font-semibold hover:bg-stone-50"
-                    onClick={() => setBuf(String(pct))}
-                  >
-                    {pct}%
-                  </button>
-                ))}
-            </div>
-          ) : null}
-
-          <div className="rounded-xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-bg,var(--bg))] px-4 py-3 text-right text-xl font-semibold tabular-nums text-[var(--webpos-text,var(--text))]">
-            {display}
-          </div>
-
-          {allowCustom !== false ? (
-            <div className="grid grid-cols-3 gap-2">
-              {keys.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  className="webpos-keypad-key"
-                  onClick={() => {
-                    if (k === '⌫') setBuf((p) => p.slice(0, -1));
-                    else push(k);
-                  }}
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="webpos-keypad-key flex-1 !py-2.5 text-sm"
-              onClick={() => {
-                setBuf('');
-                onConfirm(0, { mode, value: 0 });
-              }}
-            >
-              {t('clear')}
-            </button>
-            <button
-              type="button"
-              className="webpos-accent-btn flex-1 rounded-lg py-2.5 text-sm font-semibold"
-              onClick={() => {
-                const value = Number(buf) || 0;
-                onConfirm(resolvedAmount, { mode, value });
-                onClose();
-              }}
-            >
-              {t('confirm')}
-            </button>
-          </div>
+            ))}
         </div>
+      ) : null}
+
+      <div className="rounded-xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-bg,var(--bg))] px-4 py-3 text-right text-xl font-semibold tabular-nums text-[var(--webpos-text,var(--text))]">
+        {display}
       </div>
-    </div>
+
+      {allowCustom !== false ? (
+        <div className="grid grid-cols-3 gap-2.5">
+          {keys.map((k) => (
+            <button
+              key={k}
+              type="button"
+              className="webpos-keypad-key"
+              onClick={() => {
+                if (k === '⌫') setBuf((p) => p.slice(0, -1));
+                else push(k);
+              }}
+            >
+              {k}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="flex gap-2.5">
+        <button
+          type="button"
+          className="webpos-keypad-key flex-1 !py-3 text-sm"
+          onClick={() => {
+            setBuf('');
+            onConfirm(0, { mode, value: 0 });
+          }}
+        >
+          {t('clear')}
+        </button>
+        <button
+          type="button"
+          className="webpos-accent-btn flex-1 rounded-lg py-3 text-sm font-semibold"
+          onClick={() => {
+            const value = Number(buf) || 0;
+            onConfirm(resolvedAmount, { mode, value });
+            onClose();
+          }}
+        >
+          {t('confirm')}
+        </button>
+      </div>
+    </WebPosKeypadModalShell>
   );
 }
