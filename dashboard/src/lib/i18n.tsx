@@ -772,6 +772,15 @@ const en: Dict = {
   importRowErrors: '{n} row error(s) — check file',
   importFailed: 'Import failed',
   importing: 'Importing…',
+  importDemoContent: 'Import demo content',
+  importDemoLoading: 'Importing demo…',
+  importDemoEmptyHint:
+    'Start with a ready-made café menu — categories, products, add-ons and combos — to try POS before adding your own items.',
+  importDemoConfirm:
+    'This merchant already has catalog items. Import demo content anyway? Existing items will stay; you may see duplicates.',
+  importDemoSuccess:
+    'Demo catalog imported: {categories} categories, {products} products, {modifiers} modifier groups, {combos} combos',
+  importDemoFailed: 'Demo import failed',
   failedLoadProducts: 'Failed to load products',
   failedSaveProductOrder: 'Failed to save product order',
   imageUploaded: 'Image uploaded',
@@ -2946,6 +2955,15 @@ const fr: Dict = {
   importRowErrors: '{n} erreur(s) de ligne — vérifiez le fichier',
   importFailed: 'Échec de l’import',
   importing: 'Import…',
+  importDemoContent: 'Importer le contenu démo',
+  importDemoLoading: 'Import démo…',
+  importDemoEmptyHint:
+    'Commencez avec un menu café prêt à l’emploi — catégories, produits, suppléments et combos — pour tester la caisse avant d’ajouter vos articles.',
+  importDemoConfirm:
+    'Ce commerce a déjà des articles. Importer le contenu démo quand même ? Les articles existants restent ; des doublons peuvent apparaître.',
+  importDemoSuccess:
+    'Catalogue démo importé : {categories} catégories, {products} produits, {modifiers} groupes de modificateurs, {combos} combos',
+  importDemoFailed: 'Échec de l’import démo',
   failedLoadProducts: 'Échec du chargement des produits',
   failedSaveProductOrder: 'Échec de l’enregistrement de l’ordre des produits',
   imageUploaded: 'Image téléversée',
@@ -5125,6 +5143,15 @@ const de: Dict = {
   importRowErrors: '{n} Zeilenfehler — Datei prüfen',
   importFailed: 'Import fehlgeschlagen',
   importing: 'Import…',
+  importDemoContent: 'Demo-Inhalt importieren',
+  importDemoLoading: 'Demo wird importiert…',
+  importDemoEmptyHint:
+    'Starten Sie mit einem fertigen Café-Menü — Kategorien, Produkte, Extras und Combos — um die Kasse zu testen, bevor Sie eigene Artikel hinzufügen.',
+  importDemoConfirm:
+    'Dieser Händler hat bereits Katalogeinträge. Demo-Inhalt trotzdem importieren? Bestehende Artikel bleiben; Duplikate sind möglich.',
+  importDemoSuccess:
+    'Demo-Katalog importiert: {categories} Kategorien, {products} Produkte, {modifiers} Modifier-Gruppen, {combos} Combos',
+  importDemoFailed: 'Demo-Import fehlgeschlagen',
   failedLoadProducts: 'Produkte konnten nicht geladen werden',
   failedSaveProductOrder: 'Produktreihenfolge konnte nicht gespeichert werden',
   imageUploaded: 'Bild hochgeladen',

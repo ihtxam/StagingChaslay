@@ -13,6 +13,7 @@ import { OrderService } from "@/services/order.service";
 import { CustomerService } from "@/services/customer.service";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { CatalogImportService } from "@/services/catalog-import.service";
+import { DemoCatalogService } from "@/services/demo-catalog.service";
 import { ModifierService } from "@/services/modifier.service";
 import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
@@ -81,6 +82,28 @@ router.post("/products/import", upload.single("file"), async (req: Request, res:
     res.status(400).json({ error: error instanceof Error ? error.message : "Import failed" });
   }
 });
+
+/**
+ * POST /api/merchant/products/import-demo
+ * Seed café/bistro demo catalog (categories, products, modifiers, combos).
+ */
+router.post(
+  "/products/import-demo",
+  requirePermission("MANAGE_PRODUCTS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+
+      const force = req.body?.force === true;
+      const result = await DemoCatalogService.importDemo(merchantId, { force });
+      res.json(result);
+    } catch (error) {
+      console.error("Demo catalog import failed:", error);
+      res.status(400).json({ error: error instanceof Error ? error.message : "Demo import failed" });
+    }
+  }
+);
 
 /**
  * GET /api/merchant/products

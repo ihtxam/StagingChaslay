@@ -8,6 +8,7 @@ import {
   Package,
   Plus,
   Search,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -240,6 +241,7 @@ export default function Products() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importingDemo, setImportingDemo] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -651,6 +653,39 @@ export default function Products() {
     }
   };
 
+  const onImportDemo = async (force = false) => {
+    setImportingDemo(true);
+    try {
+      const response = await api.post('/merchant/products/import-demo', { force });
+      const r = response.data;
+      toast.success(
+        t('importDemoSuccess')
+          .replace('{categories}', String(r.categoriesCreated))
+          .replace('{products}', String(r.productsCreated))
+          .replace('{modifiers}', String(r.modifierGroupsCreated))
+          .replace('{combos}', String(r.combosCreated))
+      );
+      await load();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('importDemoFailed'));
+    } finally {
+      setImportingDemo(false);
+    }
+  };
+
+  const onImportDemoClick = () => {
+    const catalogEmpty = products.length === 0 && categories.length === 0;
+    if (catalogEmpty) {
+      void onImportDemo(false);
+      return;
+    }
+    if (confirm(t('importDemoConfirm'))) {
+      void onImportDemo(true);
+    }
+  };
+
+  const catalogEmpty = products.length === 0 && categories.length === 0;
+
   const onImport = async (file: File) => {
     setImporting(true);
     try {
@@ -694,6 +729,15 @@ export default function Products() {
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            disabled={importingDemo}
+            onClick={onImportDemoClick}
+            className="btn-secondary"
+          >
+            <Sparkles size={14} />
+            {importingDemo ? t('importDemoLoading') : t('importDemoContent')}
+          </button>
           <button
             type="button"
             onClick={() => void downloadTemplate()}
@@ -796,15 +840,30 @@ export default function Products() {
           <div className="card border-dashed px-4 py-10 text-center">
             <Package className="mx-auto muted" size={28} />
             <p className="mt-2 text-sm font-semibold">{t('noProductsFound')}</p>
-            <p className="text-xs muted mt-1">{t('createOrImport')}</p>
-            <button
-              type="button"
-              onClick={openCreate}
-              className="btn-primary mt-3"
-            >
-              <Plus size={14} />
-              {t('addProduct')}
-            </button>
+            <p className="text-xs muted mt-1 max-w-md mx-auto">
+              {catalogEmpty ? t('importDemoEmptyHint') : t('createOrImport')}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              {catalogEmpty && (
+                <button
+                  type="button"
+                  disabled={importingDemo}
+                  onClick={onImportDemoClick}
+                  className="btn-primary"
+                >
+                  <Sparkles size={14} />
+                  {importingDemo ? t('importDemoLoading') : t('importDemoContent')}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={openCreate}
+                className={catalogEmpty ? 'btn-secondary' : 'btn-primary'}
+              >
+                <Plus size={14} />
+                {t('addProduct')}
+              </button>
+            </div>
           </div>
         )}
 
