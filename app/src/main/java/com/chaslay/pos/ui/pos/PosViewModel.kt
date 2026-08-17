@@ -1477,7 +1477,9 @@ class PosViewModel @Inject constructor(
                 }
                 val settings = settingsRepository.getSettings()
                 val previewRound = (tableOrderRepository.getOrder(orderId)?.kitchenRound ?: 0) + 1
-                val meta = buildKitchenMeta(syncedCart)
+                val meta = buildKitchenMeta(syncedCart).let { base ->
+                    if (courseNumber != null) base.copy(fireCourseNumber = courseNumber) else base
+                }
                 deliverKitchenPrint(
                     settings = settings,
                     orderId = orderId,
@@ -1521,6 +1523,35 @@ class PosViewModel @Inject constructor(
         val courseItems = cart.items.filter { it.courseNumber == active }
         if (courseItems.isEmpty()) {
             showError("Kitchen", "No items in course $active")
+            return
+        }
+        if (cart.tableId == null) {
+            val unsent = courseItems.filter { !it.sentToKitchen }
+            if (unsent.isEmpty()) {
+                showError("Kitchen", "No new items in course $active")
+                return
+            }
+            viewModelScope.launch {
+                runCatching {
+                    printWalkInKitchenTicket(cart.copy(items = unsent), fireCourseNumber = active)
+                    cartManager.refreshSentFlags(
+                        cart.items.associate { item ->
+                            item.id to (item.sentToKitchen || unsent.any { it.id == item.id })
+                        }
+                    )
+                }.onSuccess {
+                    updateExtras {
+                        it.copy(
+                            orderCommittedForCancel = true,
+                            snackbarMessage = "Course $active fired to kitchen",
+                            selectedCartItemId = null,
+                            keypadBuffer = ""
+                        )
+                    }
+                }.onFailure { e ->
+                    showError("Kitchen", e.message ?: "Kitchen print failed")
+                }
+            }
             return
         }
         if (courseItems.any { !it.sentToKitchen }) {
@@ -1656,7 +1687,7 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    private suspend fun printWalkInKitchenTicket(cart: CartSummary) {
+    private suspend fun printWalkInKitchenTicket(cart: CartSummary, fireCourseNumber: Int? = null) {
         val settings = settingsRepository.getSettings()
         val categories = productRepository.getAllCategories()
         val products = productRepository.getAllProducts()
@@ -1688,7 +1719,9 @@ class PosViewModel @Inject constructor(
             message = null,
             categories = categories,
             products = products,
-            meta = buildKitchenMeta(cart)
+            meta = buildKitchenMeta(cart).let { base ->
+                if (fireCourseNumber != null) base.copy(fireCourseNumber = fireCourseNumber) else base
+            }
         )
     }
 

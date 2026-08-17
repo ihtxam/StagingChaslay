@@ -687,7 +687,7 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine(center("BAR / POS", lineWidth))
         sb.appendLine(escBold(false))
         sb.appendLine(center(settings.businessName, lineWidth))
-        sb.appendLine("Table: $tableName  Round: $round")
+        if (tableName.isNotBlank()) sb.appendLine(formatKitchenTableLine(tableName, "Table"))
         sb.appendLine(center(sepDash(lineWidth), lineWidth))
         items.forEach { item ->
             appendKitchenItemBlock(sb, item, settings, lineWidth)
@@ -716,17 +716,20 @@ class BluetoothPrinterService @Inject constructor(
 
         if (isFollowUp) {
             sb.appendLine(escBold(true))
-            sb.appendLine(center(labels.kitchenMessageTitle, lineWidth))
+            sb.appendLine(labels.kitchenMessageTitle)
+            if (tableName.isNotBlank()) sb.appendLine(formatKitchenTableLine(tableName, labels.table))
             sb.appendLine(escBold(false))
-            meta.orderNumber?.trim()?.takeIf { it.isNotBlank() }?.let {
-                sb.appendLine(center("#$it", lineWidth))
-            }
-            if (tableName.isNotBlank()) sb.appendLine(center(tableName, lineWidth))
-            sb.appendLine(center(sepDash(lineWidth), lineWidth))
+            sb.appendLine(sepDash(lineWidth))
             message.orEmpty().lines().forEach { line ->
                 val trimmed = line.trim()
                 if (trimmed.isNotBlank()) sb.appendLine(trimmed)
             }
+            sb.appendLine(sepDash(lineWidth))
+            val followUpParts = buildList {
+                meta.orderNumber?.trim()?.takeIf { it.isNotBlank() }?.let { add("#${shortenOrderNumber(it)}") }
+                add(timeFmt.format(Date(System.currentTimeMillis())))
+            }
+            sb.appendLine(followUpParts.joinToString(" · "))
             appendFooter(sb, settings.kitchenTicketFooter, lineWidth)
             sb.appendLine("\n\n\n")
             return encodePayload(sb.toString())
@@ -734,17 +737,31 @@ class BluetoothPrinterService @Inject constructor(
 
         val effectiveFulfillment = resolveKitchenFulfillment(meta.fulfillmentType, serviceType)
         val orderNo = meta.orderNumber?.trim()?.takeIf { it.isNotBlank() }
+        val fulfillmentLabel = labels.fulfillmentLabel(effectiveFulfillment, serviceType)
+        val isDineIn = effectiveFulfillment == FulfillmentType.DINE_IN
 
-        sb.appendLine(escBold(true))
-        sb.appendLine(center(if (meta.cancelled) labels.cancelledKitchenTitle else labels.kitchenTitle, lineWidth))
-        sb.appendLine(escBold(false))
-        orderNo?.let { sb.appendLine(center("#$it", lineWidth)) }
-        if (meta.cancelled && !meta.cancelReason.isNullOrBlank()) {
-            sb.appendLine(center(meta.cancelReason.trim(), lineWidth))
+        if (meta.cancelled) {
+            sb.appendLine(escBold(true))
+            sb.appendLine(labels.cancelledKitchenTitle)
+            sb.appendLine(escBold(false))
+            if (!meta.cancelReason.isNullOrBlank()) {
+                sb.appendLine(meta.cancelReason.trim())
+            }
+        } else if (!isDineIn) {
+            sb.appendLine(escBold(true))
+            sb.appendLine(center(labels.kitchenTitle, lineWidth))
+            sb.appendLine(escBold(false))
         }
 
-        val fulfillmentLabel = labels.fulfillmentLabel(effectiveFulfillment, serviceType)
-        if (effectiveKitchenHeaderScale(settings) > 1) {
+        if (isDineIn) {
+            // Compact left header: dine-in + table. No oversized type — it wastes paper.
+            sb.appendLine(escBold(true))
+            sb.appendLine(fulfillmentLabel)
+            tableName.takeIf { it.isNotBlank() }?.let {
+                sb.appendLine(formatKitchenTableLine(it, labels.table))
+            }
+            sb.appendLine(escBold(false))
+        } else if (effectiveKitchenHeaderScale(settings) > 1) {
             sb.append(escAlignCenter())
             sb.append(escKitchenSize(effectiveKitchenHeaderScale(settings), bold = true))
             sb.appendLine(fulfillmentLabel)
@@ -772,9 +789,6 @@ class BluetoothPrinterService @Inject constructor(
             FulfillmentType.PICKUP -> {
                 val pickupLabel = meta.pickupTimeMs?.let { timeFmt.format(Date(it)) } ?: labels.asap
                 sb.appendLine(center("${labels.pickupAt}: $pickupLabel", lineWidth))
-            }
-            FulfillmentType.DINE_IN -> {
-                tableName.takeIf { it.isNotBlank() }?.let { sb.appendLine(center(it, lineWidth)) }
             }
             else -> Unit
         }
@@ -810,8 +824,6 @@ class BluetoothPrinterService @Inject constructor(
             }
         }
 
-        if (round > 1) sb.appendLine(center("${labels.roundLabel}: $round", lineWidth))
-
         sb.appendLine(center(sepDash(lineWidth), lineWidth))
         val orderedAt = meta.orderedAtMs ?: System.currentTimeMillis()
         val staff = meta.cashierName?.trim().orEmpty()
@@ -819,12 +831,25 @@ class BluetoothPrinterService @Inject constructor(
         val footerParts = buildList {
             if (staff.isNotBlank()) add(staff)
             add(timeFmt.format(Date(orderedAt)))
+            orderNo?.let { add("#${shortenOrderNumber(it)}") }
             add(source)
         }
         sb.appendLine(center(footerParts.joinToString(" · "), lineWidth))
         appendFooter(sb, settings.kitchenTicketFooter, lineWidth)
         sb.appendLine("\n\n\n")
         return encodePayload(sb.toString())
+    }
+
+    /** "Table-5" from a stored name like "5", "Table 5", or "Table-5". */
+    private fun formatKitchenTableLine(tableName: String, tableLabel: String): String {
+        val raw = tableName.trim()
+        if (raw.isBlank()) return ""
+        val prefix = tableLabel.trim().trimEnd(':', ' ', '\u00A0')
+        val stripped = raw
+            .replace(Regex("^(?i)(table|tisch|tavolo|tavola)\\s*[-:.]?\\s*"), "")
+            .trim()
+        val name = stripped.ifBlank { raw }
+        return "$prefix-$name"
     }
 
     private fun resolveKitchenFulfillment(

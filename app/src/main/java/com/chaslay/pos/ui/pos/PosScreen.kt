@@ -446,7 +446,6 @@ fun PosScreen(
                 activeCourse = state.cart.activeCourse,
                 activeCourseHasItems = state.cart.items.any { it.courseNumber == state.cart.activeCourse },
                 hasUnsentItems = orderingItemsForRail.isNotEmpty(),
-                unsentCourseCount = orderingItemsForRail.map { it.courseNumber }.distinct().size,
                 onPickup = {
                     mainTab = PosMainTab.REGISTER
                     viewModel.showPickupOrderDialog()
@@ -2025,7 +2024,6 @@ private fun CartActionSidebar(
     activeCourse: Int,
     activeCourseHasItems: Boolean,
     hasUnsentItems: Boolean,
-    unsentCourseCount: Int,
     onPickup: () -> Unit,
     onDelivery: () -> Unit,
     onSend: () -> Unit,
@@ -2070,7 +2068,7 @@ private fun CartActionSidebar(
         if (isRestaurantMode || showRetailTakeaway || showRetailDelivery) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
         }
-        if (isRestaurantMode && hasUnsentItems && !isTableMode) {
+        if (isRestaurantMode && hasUnsentItems && !coursesEnabled && !isTableMode) {
             CartSidebarButton(
                 label = stringResource(R.string.send_to_kitchen),
                 shortLabel = "Send",
@@ -2086,34 +2084,34 @@ private fun CartActionSidebar(
             color = Color(0xFF7D6608),
             onClick = onHold
         )
-        if (isRestaurantMode && isTableMode) {
-            if (coursesEnabled) {
+        if (isRestaurantMode && coursesEnabled) {
+            CartSidebarButton(
+                label = stringResource(R.string.add_course),
+                shortLabel = "C+",
+                icon = Icons.Default.Restaurant,
+                color = Color(0xFF455A64),
+                onClick = onAddCourse
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
+            if (activeCourseHasItems) {
                 CartSidebarButton(
-                    label = stringResource(R.string.add_course),
-                    shortLabel = "C+",
-                    icon = Icons.Default.Restaurant,
-                    color = Color(0xFF455A64),
-                    onClick = onAddCourse
+                    label = stringResource(R.string.fire_course_n, activeCourse),
+                    shortLabel = "Fire",
+                    icon = Icons.Default.Send,
+                    color = VectronColors.CashGreen,
+                    onClick = onSendActiveCourse
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
-                if (activeCourseHasItems) {
-                    CartSidebarButton(
-                        label = stringResource(R.string.fire_course_n, activeCourse),
-                        shortLabel = "Fire",
-                        icon = Icons.Default.Send,
-                        color = VectronColors.CashGreen,
-                        onClick = onSendActiveCourse
-                    )
-                }
-                if (hasUnsentItems && unsentCourseCount > 1) {
-                    CartSidebarButton(
-                        label = stringResource(R.string.send_all_courses),
-                        shortLabel = "All",
-                        color = Color(0xFF2E7D32),
-                        onClick = onSendAllCourses
-                    )
-                }
-            } else if (hasUnsentItems) {
+            }
+            if (isTableMode) {
+                CartSidebarButton(
+                    label = stringResource(R.string.kitchen_message),
+                    shortLabel = "MSG",
+                    color = Color(0xFF7D6608),
+                    onClick = onKitchenMessage
+                )
+            }
+        } else if (isRestaurantMode && isTableMode) {
+            if (hasUnsentItems) {
                 CartSidebarButton(
                     label = stringResource(R.string.send_to_kitchen),
                     shortLabel = "Send",
