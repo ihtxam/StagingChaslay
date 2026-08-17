@@ -1,0 +1,377 @@
+import { getDb, schema } from "@/db";
+import { and, eq, gte, lte, inArray } from "drizzle-orm";
+import { roundMoney2 } from "@/lib/money";
+import { zurichDayBounds } from "@/lib/vacation";
+import {
+  normalizePaymentMethod,
+  parsePaymentBreakdown,
+  paymentBreakdownTotals,
+} from "@/lib/payment-breakdown";
+
+const ADJUST_TAG = /\[salesAdj:/i;
+const ALLOWED_PERCENTS = [20, 40] as const;
+
+export type SalesAdjustmentPreview = {
+  monthKey: string;
+  targetPercent: number;
+  currentCashTotal: number;
+  targetCashTotal: number;
+  reductionNeeded: number;
+  eligibleOrderCount: number;
+  adjustableItemCount: number;
+  alreadyAdjustedCount: number;
+};
+
+export type SalesAdjustmentResult = {
+  monthKey: string;
+  targetPercent: number;
+  beforeCashTotal: number;
+  afterCashTotal: number;
+  reductionApplied: number;
+  ordersAdjusted: number;
+  itemsAdjusted: number;
+  runId: string;
+};
+
+function zurichMonthBounds(monthKey?: string): { start: Date; end: Date; monthKey: string } {
+  let year: number;
+  let month: number;
+  if (monthKey && /^\d{4}-\d{2}$/.test(monthKey)) {
+    [year, month] = monthKey.split("-").map(Number);
+  } else {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Zurich",
+      year: "numeric",
+      month: "2-digit",
+    }).formatToParts(new Date());
+    year = Number(parts.find((p) => p.type === "year")!.value);
+    month = Number(parts.find((p) => p.type === "month")!.value);
+  }
+  const key = `${year}-${String(month).padStart(2, "0")}`;
+  const lastDay = new Date(year, month, 0).getDate();
+  return {
+    monthKey: key,
+    start: zurichDayBounds(`${key}-01`).start,
+    end: zurichDayBounds(`${key}-${String(lastDay).padStart(2, "0")}`).end,
+  };
+}
+
+function orderNetTotal(order: { total: unknown; refundAmount?: unknown | null }): number {
+  return roundMoney2(
+    Math.max(0, Number(order.total) || 0) - (Number(order.refundAmount) || 0)
+  );
+}
+
+/** True when the order was paid entirely in cash (card/terminal/gift portions excluded). */
+export function isCashOnlyOrder(order: {
+  paymentMethod?: string | null;
+  paymentBreakdown?: unknown;
+  total: unknown;
+  refundAmount?: unknown | null;
+}): boolean {
+  const net = orderNetTotal(order);
+  if (net <= 0) return false;
+
+  const method = normalizePaymentMethod(String(order.paymentMethod || ""));
+  if (["card", "terminal"].includes(method)) return false;
+
+  const tenders = parsePaymentBreakdown(
+    order.paymentBreakdown,
+    order.paymentMethod,
+    Number(order.total) || 0
+  );
+  if (!tenders.length) return method === "cash";
+
+  const { cash, terminal, giftCard, other } = paymentBreakdownTotals(tenders);
+  if (terminal > 0.001 || giftCard > 0.001 || other > 0.001) return false;
+  return cash >= net - 0.01;
+}
+
+function isAlreadyAdjusted(notes: string | null | undefined): boolean {
+  return ADJUST_TAG.test(String(notes || ""));
+}
+
+type OrderRow = {
+  id: string;
+  notes: string | null;
+  subtotal: string;
+  taxAmount: string;
+  discountAmount: string | null;
+  tipAmount: string | null;
+  roundingAmount: string | null;
+  total: string;
+  refundAmount: string | null;
+  paymentMethod: string | null;
+  paymentBreakdown: unknown;
+  items: Array<{
+    id: string;
+    quantity: string;
+    unitPrice: string;
+    totalPrice: string;
+    taxAmount: string;
+    refundedQuantity: string | null;
+    weightKg: string | null;
+  }>;
+};
+
+function effectiveQty(item: OrderRow["items"][number]): number {
+  const qty = Number(item.quantity) || 0;
+  const refunded = Number(item.refundedQuantity) || 0;
+  return roundMoney2(Math.max(0, qty - refunded));
+}
+
+function unitLineValue(item: OrderRow["items"][number]): number {
+  const qty = effectiveQty(item);
+  if (qty <= 0) return 0;
+  return roundMoney2(Number(item.totalPrice) / qty);
+}
+
+function scaleOrderAmounts(
+  order: OrderRow,
+  ratio: number
+): { subtotal: string; taxAmount: string; discountAmount: string; total: string } {
+  const r = Math.max(0, Math.min(1, ratio));
+  const subtotal = roundMoney2(Number(order.subtotal) * r);
+  const taxAmount = roundMoney2(Number(order.taxAmount) * r);
+  const discountAmount = roundMoney2(Number(order.discountAmount || 0) * r);
+  const tip = roundMoney2(Number(order.tipAmount || 0));
+  const rounding = roundMoney2(Number(order.roundingAmount || 0));
+  const total = roundMoney2(subtotal + taxAmount - discountAmount + tip + rounding);
+  return {
+    subtotal: subtotal.toFixed(2),
+    taxAmount: taxAmount.toFixed(2),
+    discountAmount: discountAmount.toFixed(2),
+    total: total.toFixed(2),
+  };
+}
+
+function appendAdjustNote(notes: string | null, percent: number, monthKey: string): string {
+  const tag = `[salesAdj:${percent}%:${monthKey}]`;
+  const base = String(notes || "").trim();
+  return base ? `${base} ${tag}` : tag;
+}
+
+export class SalesAdjustmentService {
+  static allowedPercents(): readonly number[] {
+    return ALLOWED_PERCENTS;
+  }
+
+  static async preview(
+    merchantId: string,
+    targetPercent: number,
+    monthKey?: string
+  ): Promise<SalesAdjustmentPreview> {
+    if (!ALLOWED_PERCENTS.includes(targetPercent as (typeof ALLOWED_PERCENTS)[number])) {
+      throw new Error("Target percent must be 20 or 40");
+    }
+
+    const { start, end, monthKey: key } = zurichMonthBounds(monthKey);
+    const orders = await SalesAdjustmentService.loadEligibleOrders(merchantId, start, end);
+
+    let currentCashTotal = 0;
+    let eligibleOrderCount = 0;
+    let adjustableItemCount = 0;
+    let alreadyAdjustedCount = 0;
+
+    for (const o of orders) {
+      if (!isCashOnlyOrder(o)) continue;
+      const net = orderNetTotal(o);
+      currentCashTotal = roundMoney2(currentCashTotal + net);
+
+      if (isAlreadyAdjusted(o.notes)) {
+        alreadyAdjustedCount += 1;
+        continue;
+      }
+
+      eligibleOrderCount += 1;
+      for (const item of o.items || []) {
+        if (item.weightKg != null && Number(item.weightKg) > 0) continue;
+        if (effectiveQty(item) >= 1) adjustableItemCount += 1;
+      }
+    }
+
+    const reductionNeeded = roundMoney2(currentCashTotal * (targetPercent / 100));
+    const targetCashTotal = roundMoney2(currentCashTotal - reductionNeeded);
+
+    return {
+      monthKey: key,
+      targetPercent,
+      currentCashTotal,
+      targetCashTotal,
+      reductionNeeded,
+      eligibleOrderCount,
+      adjustableItemCount,
+      alreadyAdjustedCount,
+    };
+  }
+
+  static async apply(
+    merchantId: string,
+    targetPercent: number,
+    monthKey?: string
+  ): Promise<SalesAdjustmentResult> {
+    const preview = await SalesAdjustmentService.preview(merchantId, targetPercent, monthKey);
+    if (preview.reductionNeeded <= 0.01) {
+      throw new Error("Nothing to adjust — cash sales are already at or below the target.");
+    }
+    if (preview.adjustableItemCount === 0) {
+      throw new Error("No adjustable cash order lines found for this month.");
+    }
+
+    const { start, end, monthKey: key } = zurichMonthBounds(monthKey);
+    const orders = await SalesAdjustmentService.loadEligibleOrders(merchantId, start, end);
+    const db = getDb();
+
+    let remaining = preview.reductionNeeded;
+    let ordersAdjusted = 0;
+    let itemsAdjusted = 0;
+    const adjustedOrderIds = new Set<string>();
+    const details: Array<{ orderId: string; itemId: string; fromQty: number; toQty: number }> = [];
+
+    type Candidate = {
+      order: OrderRow;
+      item: OrderRow["items"][number];
+      unitValue: number;
+    };
+
+    const buildCandidates = (): Candidate[] => {
+      const list: Candidate[] = [];
+      for (const order of orders) {
+        if (!isCashOnlyOrder(order) || isAlreadyAdjusted(order.notes)) continue;
+        for (const item of order.items || []) {
+          if (item.weightKg != null && Number(item.weightKg) > 0) continue;
+          const qty = effectiveQty(item);
+          if (qty < 1) continue;
+          const unitValue = unitLineValue(item);
+          if (unitValue <= 0) continue;
+          list.push({ order, item, unitValue });
+        }
+      }
+      // Prefer higher unit value first — fewer line edits to reach the target.
+      list.sort((a, b) => b.unitValue - a.unitValue);
+      return list;
+    };
+
+    while (remaining > 0.01) {
+      const candidates = buildCandidates();
+      if (!candidates.length) break;
+
+      const pick = candidates[0];
+      const oldQty = effectiveQty(pick.item);
+      const newQty = roundMoney2(Math.max(0, oldQty - 1));
+      const ratio = oldQty > 0 ? newQty / oldQty : 0;
+
+      const newTotalPrice = roundMoney2(Number(pick.item.totalPrice) * ratio);
+      const newTaxAmount = roundMoney2(Number(pick.item.taxAmount) * ratio);
+      const newQuantity = roundMoney2(Number(pick.item.quantity) - 1);
+
+      await db
+        .update(schema.orderItems)
+        .set({
+          quantity: Math.max(0, newQuantity).toFixed(3),
+          totalPrice: newTotalPrice.toFixed(2),
+          taxAmount: newTaxAmount.toFixed(2),
+        })
+        .where(eq(schema.orderItems.id, pick.item.id));
+
+      pick.item.quantity = Math.max(0, newQuantity).toFixed(3);
+      pick.item.totalPrice = newTotalPrice.toFixed(2);
+      pick.item.taxAmount = newTaxAmount.toFixed(2);
+
+      const oldItemsSum = (pick.order.items || []).reduce(
+        (s, it) => s + Number(it.totalPrice),
+        0
+      );
+      const newItemsSum = (pick.order.items || []).reduce(
+        (s, it) => s + Number(it.totalPrice),
+        0
+      );
+      const orderRatio = oldItemsSum > 0 ? newItemsSum / oldItemsSum : 1;
+      const scaled = scaleOrderAmounts(pick.order, orderRatio);
+
+      pick.order.subtotal = scaled.subtotal;
+      pick.order.taxAmount = scaled.taxAmount;
+      pick.order.discountAmount = scaled.discountAmount;
+      pick.order.total = scaled.total;
+
+      if (!adjustedOrderIds.has(pick.order.id)) {
+        adjustedOrderIds.add(pick.order.id);
+        ordersAdjusted += 1;
+      }
+      itemsAdjusted += 1;
+      details.push({
+        orderId: pick.order.id,
+        itemId: pick.item.id,
+        fromQty: oldQty,
+        toQty: newQty,
+      });
+
+      const applied = roundMoney2(Math.min(remaining, pick.unitValue));
+      remaining = roundMoney2(remaining - applied);
+    }
+
+    for (const orderId of adjustedOrderIds) {
+      const order = orders.find((o) => o.id === orderId);
+      if (!order) continue;
+      await db
+        .update(schema.orders)
+        .set({
+          subtotal: order.subtotal,
+          taxAmount: order.taxAmount,
+          discountAmount: order.discountAmount || "0",
+          total: order.total,
+          notes: appendAdjustNote(order.notes, targetPercent, key),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.orders.id, orderId));
+    }
+
+    const afterPreview = await SalesAdjustmentService.preview(merchantId, targetPercent, key);
+    const beforeCashTotal = preview.currentCashTotal;
+    const afterCashTotal = afterPreview.currentCashTotal;
+
+    const [run] = await db
+      .insert(schema.salesAdjustmentRuns)
+      .values({
+        merchantId,
+        monthKey: key,
+        targetPercent: String(targetPercent),
+        beforeCashTotal: beforeCashTotal.toFixed(2),
+        afterCashTotal: afterCashTotal.toFixed(2),
+        ordersAdjusted,
+        itemsAdjusted,
+        details,
+      })
+      .returning();
+
+    return {
+      monthKey: key,
+      targetPercent,
+      beforeCashTotal,
+      afterCashTotal,
+      reductionApplied: roundMoney2(beforeCashTotal - afterCashTotal),
+      ordersAdjusted,
+      itemsAdjusted,
+      runId: run.id,
+    };
+  }
+
+  private static async loadEligibleOrders(
+    merchantId: string,
+    start: Date,
+    end: Date
+  ): Promise<OrderRow[]> {
+    const db = getDb();
+    return db.query.orders.findMany({
+      where: and(
+        eq(schema.orders.merchantId, merchantId),
+        inArray(schema.orders.orderType, ["pos"]),
+        eq(schema.orders.status, "completed"),
+        gte(schema.orders.completedAt, start),
+        lte(schema.orders.completedAt, end)
+      ),
+      with: { items: true },
+      orderBy: (orders, { desc }) => [desc(orders.completedAt)],
+    }) as Promise<OrderRow[]>;
+  }
+}

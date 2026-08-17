@@ -25,6 +25,8 @@ import {
   SettingsPageHeader,
   SettingsReportCard,
 } from '@/components/settings/SettingsReportUi';
+import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
+import { useSecretTap } from '@/lib/use-secret-tap';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
 
@@ -96,6 +98,8 @@ export default function Orders() {
   } | null>(null);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [salesAdjOpen, setSalesAdjOpen] = useState(false);
+  const registerSalesAdjTap = useSecretTap(5);
 
   const loadMeta = useCallback(async () => {
     try {
@@ -282,10 +286,13 @@ export default function Orders() {
           </SettingsField>
           <SettingsField label={t('webPosSearchOrders')}>
             <div className="relative">
-              <Search
-                size={14}
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
-              />
+              <button
+                type="button"
+                className="absolute left-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
+                onClick={() => registerSalesAdjTap(() => setSalesAdjOpen(true))}
+              >
+                <Search size={14} />
+              </button>
               <input
                 type="search"
                 className="input w-full pl-8"
@@ -589,6 +596,11 @@ export default function Orders() {
           </div>
         </div>
       ) : null}
+      <SalesAdjustmentModal
+        open={salesAdjOpen}
+        onClose={() => setSalesAdjOpen(false)}
+        onApplied={() => void load()}
+      />
     </div>
   );
 }

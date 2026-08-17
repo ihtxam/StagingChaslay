@@ -2031,6 +2031,40 @@ router.post("/pos/orders/:id/goodwill", async (req: Request, res: Response) => {
   }
 });
 
+/** Preview monthly cash sales reduction (quantity adjustments, cash-only). */
+router.get("/pos/sales-adjustment/preview", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { SalesAdjustmentService } = await import("@/services/sales-adjustment.service");
+    const percent = Number(req.query.percent);
+    const month = req.query.month ? String(req.query.month) : undefined;
+    const preview = await SalesAdjustmentService.preview(merchantId, percent, month);
+    res.json({ success: true, preview, allowedPercents: SalesAdjustmentService.allowedPercents() });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Sales adjustment preview failed",
+    });
+  }
+});
+
+/** Apply monthly cash sales reduction by lowering line quantities (no deletions). */
+router.post("/pos/sales-adjustment/apply", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { SalesAdjustmentService } = await import("@/services/sales-adjustment.service");
+    const percent = Number(req.body?.percent);
+    const month = req.body?.month ? String(req.body.month) : undefined;
+    const result = await SalesAdjustmentService.apply(merchantId, percent, month);
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Sales adjustment failed",
+    });
+  }
+});
+
 router.get("/pos/held", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;

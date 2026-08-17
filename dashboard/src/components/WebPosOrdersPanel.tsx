@@ -45,6 +45,8 @@ import WebPosRefundModal, {
   type RefundReasonOption,
 } from '@/components/webpos/WebPosRefundModal';
 import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
+import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
+import { useSecretTap } from '@/lib/use-secret-tap';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 
 function toMs(raw: string | number | Date | null | undefined): number {
@@ -389,6 +391,8 @@ export default function WebPosOrdersPanel({
   const [rowMenuOrderId, setRowMenuOrderId] = useState<string | null>(null);
   const [rowMenuAnchor, setRowMenuAnchor] = useState<HTMLElement | null>(null);
   const [detailMenuAnchor, setDetailMenuAnchor] = useState<HTMLElement | null>(null);
+  const [salesAdjOpen, setSalesAdjOpen] = useState(false);
+  const registerSalesAdjTap = useSecretTap(5);
 
   useEffect(() => {
     try {
@@ -948,7 +952,20 @@ export default function WebPosOrdersPanel({
       >
         <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-2 py-2 sm:px-3 sm:py-2.5">
           <div className="relative min-w-0 flex-1 basis-full sm:min-w-[12rem] sm:basis-auto">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+            <button
+              type="button"
+              className={`absolute left-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md ${
+                statusFilter === 'completed' ? 'text-stone-500 hover:bg-stone-100' : 'pointer-events-none text-stone-400'
+              }`}
+              aria-hidden={statusFilter !== 'completed'}
+              tabIndex={statusFilter === 'completed' ? 0 : -1}
+              onClick={() => {
+                if (statusFilter !== 'completed') return;
+                registerSalesAdjTap(() => setSalesAdjOpen(true));
+              }}
+            >
+              <Search size={14} />
+            </button>
             <input
               type="search"
               className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-8 pr-3 text-sm"
@@ -1851,6 +1868,11 @@ export default function WebPosOrdersPanel({
         terminalEnabled={terminalEnabled}
         onClose={() => setRefundFor(null)}
         onConfirm={(payload) => void doRefund(payload)}
+      />
+      <SalesAdjustmentModal
+        open={salesAdjOpen}
+        onClose={() => setSalesAdjOpen(false)}
+        onApplied={() => void load()}
       />
     </div>
   );

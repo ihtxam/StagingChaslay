@@ -2339,6 +2339,33 @@ export const posCashMovements = pgTable(
   })
 );
 
+/** Audit log for monthly cash sales quantity adjustments (no deletions). */
+export const salesAdjustmentRuns = pgTable(
+  "sales_adjustment_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    monthKey: varchar("month_key", { length: 7 }).notNull(),
+    targetPercent: decimal("target_percent", { precision: 5, scale: 2 }).notNull(),
+    beforeCashTotal: decimal("before_cash_total", { precision: 12, scale: 2 }).notNull(),
+    afterCashTotal: decimal("after_cash_total", { precision: 12, scale: 2 }).notNull(),
+    ordersAdjusted: integer("orders_adjusted").default(0).notNull(),
+    itemsAdjusted: integer("items_adjusted").default(0).notNull(),
+    details: json("details").$type<
+      Array<{ orderId: string; itemId: string; fromQty: number; toQty: number }> | null
+    >(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("sales_adjustment_runs_merchant_idx").on(
+      table.merchantId,
+      table.createdAt
+    ),
+  })
+);
+
 export const subscriptionPlansRelations = relations(subscriptionPlans, ({ many }) => ({
   payments: many(subscriptionPayments),
 }));
