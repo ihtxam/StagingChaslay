@@ -55,6 +55,7 @@ enum class SettingsSection(@StringRes val titleRes: Int) {
     VAT(R.string.settings_section_vat),
     PAYMENTS(R.string.settings_section_payments),
     PRINTERS(R.string.settings_section_printers),
+    SCALE(R.string.settings_section_scale),
     RECEIPTS(R.string.settings_section_receipts),
     FLOOR_DEVICES(R.string.settings_section_floor_devices),
     USERS_ACCOUNTS(R.string.settings_section_users),

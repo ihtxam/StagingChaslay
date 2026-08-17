@@ -23,6 +23,9 @@ interface ModifierGroupDao {
     @Query("SELECT * FROM modifier_groups WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): ModifierGroupEntity?
 
+    @Query("SELECT * FROM modifier_groups WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun getByRemoteId(remoteId: String): ModifierGroupEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(group: ModifierGroupEntity): Long
 
@@ -58,6 +61,9 @@ interface AddonGroupDao {
 
     @Query("SELECT * FROM addon_groups WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): AddonGroupEntity?
+
+    @Query("SELECT * FROM addon_groups WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun getByRemoteId(remoteId: String): AddonGroupEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(group: AddonGroupEntity): Long
@@ -145,10 +151,10 @@ interface ComboSlotDao {
     @Query("SELECT cs.* FROM combo_slots cs INNER JOIN products p ON p.id = cs.comboProductId WHERE p.isCombo = 1 AND p.isActive = 1 ORDER BY p.sortOrder, p.name, cs.sortOrder")
     suspend fun getAllForActiveCombos(): List<ComboSlotEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert
     suspend fun insert(slot: ComboSlotEntity): Long
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert
     suspend fun insertAll(slots: List<ComboSlotEntity>)
 
     @Query("DELETE FROM combo_slots WHERE comboProductId = :comboProductId")
@@ -160,7 +166,7 @@ interface ComboSlotOptionDao {
     @Query("SELECT * FROM combo_slot_options WHERE slotId = :slotId ORDER BY sortOrder")
     suspend fun getBySlot(slotId: Long): List<ComboSlotOptionEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert
     suspend fun insertAll(options: List<ComboSlotOptionEntity>)
 
     @Query("DELETE FROM combo_slot_options WHERE slotId IN (SELECT id FROM combo_slots WHERE comboProductId = :comboProductId)")

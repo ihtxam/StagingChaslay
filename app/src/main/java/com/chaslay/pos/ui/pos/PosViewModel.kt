@@ -990,13 +990,15 @@ class PosViewModel @Inject constructor(
             id = itemId,
             productId = product.id,
             productName = product.name,
-            unitPrice = product.price,
+            unitPrice = result.unitPrice,
             quantity = result.quantity,
             taxRate = resolveTaxRate(product.id, product.taxRate, serviceType),
             sku = product.sku,
             categoryId = product.categoryId,
             isCombo = true,
-            comboSelections = result.selections
+            comboSelections = result.selections,
+            modifiers = result.comboModifiers,
+            addons = result.comboExtras
         ).let { it.copy(notes = it.optionNotes()) }
         cartManager.addItem(item)
         playItemClickBeep()
@@ -1013,6 +1015,7 @@ class PosViewModel @Inject constructor(
     fun onBarcodeScanned(rawCode: String) {
         val code = rawCode.trim()
         if (code.isEmpty()) return
+        android.util.Log.i("BARCODE_SCAN", "scanned=$code")
         // Table QR: CHASLAY:T:{slug}:{tableUuid}
         val tableMatch = Regex("^CHASLAY:T:[^:]+:([a-f0-9-]+)$", RegexOption.IGNORE_CASE).find(code)
         if (tableMatch != null) {
@@ -1030,54 +1033,50 @@ class PosViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            val lookup = productRepository.findByBarcode(code)
+            if (lookup != null) {
+                addScannedProduct(lookup)
+                return@launch
+            }
             if (_uiExtras.value.giftCardsEnabled) {
                 giftCardRepository.lookupCode(code, mediaType = null)
                     .onSuccess { card ->
                         attachMembershipCard(giftCardRepository.toAttachedMembership(card))
                         return@launch
                     }
-                    .onFailure { e ->
-                        val msg = e.message.orEmpty()
-                        val notFound = msg.contains("not found", ignoreCase = true)
-                        if (!notFound) {
-                            updateExtras { it.copy(snackbarMessage = msg.ifBlank { "Card lookup failed" }) }
-                            return@launch
-                        }
-                    }
             }
-            val lookup = productRepository.findByBarcode(code)
-            if (lookup == null) {
-                updateExtras { it.copy(snackbarMessage = "No product for barcode $code") }
-                return@launch
+            updateExtras { it.copy(snackbarMessage = "No product for barcode $code") }
+        }
+    }
+
+    private suspend fun addScannedProduct(lookup: com.chaslay.pos.domain.model.BarcodeLookupResult) {
+        val product = productRepository.getProductWithVariants(lookup.productId) ?: return
+        when {
+            product.isWeighed -> updateExtras {
+                it.copy(showWeighedProductDialog = true, selectedProduct = product)
             }
-            val product = productRepository.getProductWithVariants(lookup.productId) ?: return@launch
-            when {
-                product.isWeighed -> updateExtras {
-                    it.copy(showWeighedProductDialog = true, selectedProduct = product)
-                }
-                product.isOpenPrice -> updateExtras {
-                    it.copy(
-                        showOpenPriceDialog = true,
-                        selectedProduct = product
-                    )
-                }
-                lookup.variantName != null -> addProductToCart(
-                    product = product,
-                    variantName = lookup.variantName,
-                    basePrice = lookup.variantPrice ?: product.price
+            product.isOpenPrice -> updateExtras {
+                it.copy(
+                    showOpenPriceDialog = true,
+                    selectedProduct = product
                 )
-                product.isCombo -> onProductClick(product.id)
-                else -> {
-                    val modifierGroups = menuRepository.getModifierGroupsForProduct(product.id)
-                    val addonGroups = menuRepository.getAddonGroupsForProduct(product.id)
-                    val needsCustomize = product.variants.isNotEmpty() ||
-                        modifierGroups.isNotEmpty() ||
-                        addonGroups.isNotEmpty()
-                    if (needsCustomize) {
-                        onProductClick(product.id)
-                    } else {
-                        addProductToCart(product, null, product.price)
-                    }
+            }
+            lookup.variantName != null -> addProductToCart(
+                product = product,
+                variantName = lookup.variantName,
+                basePrice = lookup.variantPrice ?: product.price
+            )
+            product.isCombo -> onProductClick(product.id)
+            else -> {
+                val modifierGroups = menuRepository.getModifierGroupsForProduct(product.id)
+                val addonGroups = menuRepository.getAddonGroupsForProduct(product.id)
+                val needsCustomize = product.variants.isNotEmpty() ||
+                    modifierGroups.isNotEmpty() ||
+                    addonGroups.isNotEmpty()
+                if (needsCustomize) {
+                    onProductClick(product.id)
+                } else {
+                    addProductToCart(product, null, product.price)
                 }
             }
         }
@@ -1272,7 +1271,7 @@ class PosViewModel @Inject constructor(
             it.copy(
                 selectedCartItemId = itemId,
                 keypadExpanded = itemId != null,
-                keypadBuffer = if (itemId == null) "" else it.keypadBuffer
+                keypadBuffer = ""
             )
         }
     }
@@ -1292,12 +1291,14 @@ class PosViewModel @Inject constructor(
             }
             extras.copy(keypadBuffer = next.take(12))
         }
+        applyKeypadBuffer(deselect = false)
     }
 
     fun onKeypadBackspace() {
         updateExtras { extras ->
             extras.copy(keypadBuffer = extras.keypadBuffer.dropLast(1))
         }
+        applyKeypadBuffer(deselect = false)
     }
 
     fun onKeypadClear() {
@@ -1324,15 +1325,25 @@ class PosViewModel @Inject constructor(
     }
 
     fun onKeypadEnter() {
+        applyKeypadBuffer(deselect = true)
+    }
+
+    private fun applyKeypadBuffer(deselect: Boolean) {
         val extras = _uiExtras.value
         val buffer = extras.keypadBuffer
+        // Incomplete while typing (e.g. "", "12.") — keep the line as last applied.
+        if (buffer.isEmpty() || buffer == "." || buffer.endsWith(".")) return
         val value = buffer.toDoubleOrNull() ?: return
         when (extras.keypadMode) {
             KeypadMode.QTY -> {
-                val itemId = extras.selectedCartItemId ?: extras.lastAddedItemId ?: return
+                val itemId = extras.selectedCartItemId
+                    ?: extras.lastAddedItemId.takeIf { deselect }
+                    ?: return
                 val item = cartManager.snapshot().items.find { it.id == itemId } ?: return
                 if (item.sentToKitchen) return
-                updateQuantity(itemId, value.toInt().coerceAtLeast(1))
+                val qty = value.toInt()
+                if (qty <= 0 && !deselect) return
+                updateQuantity(itemId, qty.coerceAtLeast(1))
             }
             KeypadMode.PERCENT -> {
                 val itemId = extras.selectedCartItemId ?: return
@@ -1343,8 +1354,11 @@ class PosViewModel @Inject constructor(
                 val serviceType = cartManager.snapshot().serviceType
                 val taxRate = resolveTaxRate(0L, cachedSettings.takeawayVatRate, serviceType)
                 if (selectedId != null) {
-                    cartManager.overrideItemPrice(selectedId, value)
-                } else {
+                    val item = cartManager.snapshot().items.find { it.id == selectedId } ?: return
+                    if (item.sentToKitchen) return
+                    cartManager.overrideItemPrice(selectedId, value.coerceAtLeast(0.0))
+                    if (!deselect) persistTableOrderAsync()
+                } else if (deselect) {
                     val itemId = UUID.randomUUID().toString()
                     cartManager.addItem(
                         CartItem(
@@ -1357,11 +1371,15 @@ class PosViewModel @Inject constructor(
                         )
                     )
                     updateExtras { it.copy(lastAddedItemId = itemId) }
+                } else {
+                    return
                 }
             }
         }
-        updateExtras { it.copy(keypadBuffer = "", selectedCartItemId = null, keypadExpanded = false) }
-        persistTableOrderAsync()
+        if (deselect) {
+            updateExtras { it.copy(keypadBuffer = "", selectedCartItemId = null, keypadExpanded = false) }
+            persistTableOrderAsync()
+        }
     }
 
     fun addMiscItemQuick() {
@@ -1468,7 +1486,9 @@ class PosViewModel @Inject constructor(
                 }
                 val settings = settingsRepository.getSettings()
                 val previewRound = (tableOrderRepository.getOrder(orderId)?.kitchenRound ?: 0) + 1
-                val meta = buildKitchenMeta(syncedCart)
+                val meta = buildKitchenMeta(syncedCart).let { base ->
+                    if (courseNumber != null) base.copy(fireCourseNumber = courseNumber) else base
+                }
                 deliverKitchenPrint(
                     settings = settings,
                     orderId = orderId,
@@ -1512,6 +1532,35 @@ class PosViewModel @Inject constructor(
         val courseItems = cart.items.filter { it.courseNumber == active }
         if (courseItems.isEmpty()) {
             showError("Kitchen", "No items in course $active")
+            return
+        }
+        if (cart.tableId == null) {
+            val unsent = courseItems.filter { !it.sentToKitchen }
+            if (unsent.isEmpty()) {
+                showError("Kitchen", "No new items in course $active")
+                return
+            }
+            viewModelScope.launch {
+                runCatching {
+                    printWalkInKitchenTicket(cart.copy(items = unsent), fireCourseNumber = active)
+                    cartManager.refreshSentFlags(
+                        cart.items.associate { item ->
+                            item.id to (item.sentToKitchen || unsent.any { it.id == item.id })
+                        }
+                    )
+                }.onSuccess {
+                    updateExtras {
+                        it.copy(
+                            orderCommittedForCancel = true,
+                            snackbarMessage = "Course $active fired to kitchen",
+                            selectedCartItemId = null,
+                            keypadBuffer = ""
+                        )
+                    }
+                }.onFailure { e ->
+                    showError("Kitchen", e.message ?: "Kitchen print failed")
+                }
+            }
             return
         }
         if (courseItems.any { !it.sentToKitchen }) {
@@ -1647,7 +1696,7 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    private suspend fun printWalkInKitchenTicket(cart: CartSummary) {
+    private suspend fun printWalkInKitchenTicket(cart: CartSummary, fireCourseNumber: Int? = null) {
         val settings = settingsRepository.getSettings()
         val categories = productRepository.getAllCategories()
         val products = productRepository.getAllProducts()
@@ -1679,7 +1728,9 @@ class PosViewModel @Inject constructor(
             message = null,
             categories = categories,
             products = products,
-            meta = buildKitchenMeta(cart)
+            meta = buildKitchenMeta(cart).let { base ->
+                if (fireCourseNumber != null) base.copy(fireCourseNumber = fireCourseNumber) else base
+            }
         )
     }
 
@@ -1991,7 +2042,25 @@ class PosViewModel @Inject constructor(
     }
 
     fun updateCheckoutMethod(method: PaymentMethod) {
-        updateExtras { it.copy(checkoutState = it.checkoutState.copy(method = method)) }
+        updateExtras {
+            it.copy(
+                checkoutState = it.checkoutState.copy(
+                    method = method,
+                    tenderAmount = if (method == PaymentMethod.CASH) it.checkoutState.tenderAmount else 0.0
+                )
+            )
+        }
+    }
+
+    fun updateCheckoutTenderAmount(amount: Double) {
+        updateExtras {
+            it.copy(
+                checkoutState = it.checkoutState.copy(
+                    method = PaymentMethod.CASH,
+                    tenderAmount = amount.coerceAtLeast(0.0)
+                )
+            )
+        }
     }
 
     fun updateCheckoutTipAmount(amount: Double) {
@@ -3166,17 +3235,17 @@ class PosViewModel @Inject constructor(
     }
 
     fun initiateCashPayment(activity: Activity? = null) {
-        if (!cachedSettings.cashEnabled) return
+        if (!cachedSettings.expressEnabled || !cachedSettings.cashEnabled) return
         expressPay(PaymentMethod.CASH, activity)
     }
 
     fun initiateCardPayment(activity: Activity? = null) {
-        if (!cachedSettings.cardEnabled) return
+        if (!cachedSettings.expressEnabled || !cachedSettings.cardEnabled) return
         expressPay(PaymentMethod.CARD, activity)
     }
 
     fun initiateTerminalPayment(activity: Activity? = null) {
-        if (!cachedSettings.isAdyenTerminalCheckoutEnabled()) return
+        if (!cachedSettings.expressEnabled || !cachedSettings.isAdyenTerminalCheckoutEnabled()) return
         expressPay(PaymentMethod.ADYEN_TERMINAL, activity)
     }
 
@@ -3980,8 +4049,9 @@ class PosViewModel @Inject constructor(
             },
             onFailure = { e ->
                 Log.w("POS", "Receipt publish failed: ${e.message}", e)
-                transactionRepository.clearReceiptUrl(transaction.id)
-                transaction.copy(receiptUrl = null) to null
+                val fallback = receiptRepository.buildPublicUrl(transaction.id, settings)
+                transactionRepository.updateReceiptUrl(transaction.id, fallback)
+                transaction.copy(receiptUrl = fallback) to fallback
             }
         )
     }

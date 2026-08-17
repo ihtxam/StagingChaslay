@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import com.chaslay.pos.domain.model.FloorConnectionMode
 import com.chaslay.pos.domain.model.FloorDeviceRole
 import com.chaslay.pos.domain.model.PosMode
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -78,6 +80,8 @@ import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocalOffer
+import androidx.compose.material.icons.outlined.MonitorWeight
+import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
 import com.chaslay.pos.ui.license.LicenseSettingsSection
@@ -158,12 +162,30 @@ fun SettingsScreen(
                         .clickable { viewModel.selectSection(section) }
                         .padding(horizontal = 12.dp, vertical = 12.dp)
                 ) {
-                    Text(
-                        stringResource(section.titleRes),
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selected) Color.White else colors.textPrimary,
-                        fontSize = 13.sp
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val sectionIcon = when (section) {
+                            SettingsSection.PRINTERS -> Icons.Outlined.Print
+                            SettingsSection.SCALE -> Icons.Outlined.MonitorWeight
+                            else -> null
+                        }
+                        sectionIcon?.let { icon ->
+                            Icon(
+                                icon,
+                                contentDescription = null,
+                                tint = if (selected) Color.White else colors.textPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Text(
+                            stringResource(section.titleRes),
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selected) Color.White else colors.textPrimary,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             }
         }
@@ -621,19 +643,81 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.PRINTERS) {
-        Text(stringResource(R.string.printers), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(stringResource(R.string.printers), fontWeight = FontWeight.Bold, fontSize = 22.sp)
+        Text(
+            stringResource(R.string.printers_page_help),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF166534),
+            fontWeight = FontWeight.SemiBold
+        )
         Text(stringResource(R.string.printers_help), style = MaterialTheme.typography.bodySmall)
         Text(
-            "Tap Add Printer to scan for Bluetooth, Wi-Fi or USB printers and assign what each one prints.",
-            style = MaterialTheme.typography.bodySmall,
+            stringResource(R.string.app_version_format, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+            fontSize = 11.sp,
             color = Color.Gray
         )
+        Button(onClick = viewModel::showAddPrinterDialog, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.add_printer))
+        }
 
-        if (state.savedPrinters.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(4.dp))
+        val selectedAddress = state.selectedPrinter?.address
+        val connectedPrinter = state.savedPrinters.firstOrNull { printer ->
+            selectedAddress != null && printer.address.equals(selectedAddress, ignoreCase = true)
+        } ?: state.savedPrinters.firstOrNull { it.printOrderReceipts && it.isEnabled }
+            ?: state.savedPrinters.firstOrNull()
+        val otherPrinters = state.savedPrinters.filter { it.id != connectedPrinter?.id }
+
+        connectedPrinter?.let { printer ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(Color(0xFF16A34A))
+                        )
+                        Text(
+                            stringResource(R.string.printer_connected),
+                            color = Color(0xFF166534),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Text(printer.name, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF14532D))
+                    Text(
+                        "${printer.connectionType} · ${viewModel.displayPrinterAddress(printer)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF166534)
+                    )
+                    Text(stringResource(R.string.printer_selected_help), fontSize = 12.sp, color = Color(0xFF166534))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(
+                            onClick = { viewModel.testSavedPrinter(printer) },
+                            enabled = !state.isPrinterBusy,
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))
+                        ) {
+                            Text(stringResource(R.string.test_print), fontSize = 12.sp)
+                        }
+                        OutlinedButton(onClick = { viewModel.editPrinter(printer) }) {
+                            Text(stringResource(R.string.edit), fontSize = 12.sp)
+                        }
+                        TextButton(onClick = { viewModel.deleteSavedPrinter(printer.id) }) {
+                            Text(stringResource(R.string.delete))
+                        }
+                    }
+                }
+            }
+        }
+
+        if (otherPrinters.isNotEmpty()) {
             Text(stringResource(R.string.saved_printers), fontWeight = FontWeight.SemiBold)
         }
-        state.savedPrinters.forEach { printer ->
+        otherPrinters.forEach { printer ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -715,10 +799,22 @@ fun SettingsScreen(
                 }
             }
         }
+        }
 
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(stringResource(R.string.scale_section), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        if (state.selectedSection == SettingsSection.SCALE) {
+        Text(stringResource(R.string.scale_section), fontWeight = FontWeight.Bold, fontSize = 22.sp)
+        Text(
+            stringResource(R.string.scale_page_help),
+            fontSize = 14.sp,
+            color = Color(0xFF1D4ED8),
+            fontWeight = FontWeight.SemiBold
+        )
         Text(stringResource(R.string.scale_help), fontSize = 12.sp, color = Color.Gray)
+        Text(
+            stringResource(R.string.app_version_format, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+            fontSize = 11.sp,
+            color = Color.Gray
+        )
         SettingSwitch(stringResource(R.string.scale_enabled), state.scaleEnabled, viewModel::updateScaleEnabled)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = viewModel::scanScaleUsbDevices) {
@@ -774,10 +870,6 @@ fun SettingsScreen(
                     )
                 }
             }
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        Button(onClick = viewModel::showAddPrinterDialog, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.add_printer))
         }
         }
 
@@ -1057,7 +1149,9 @@ fun SettingsScreen(
         } // end scrollable content
 
         // Sticky Save — always visible (not under system nav / not lost in scroll).
-        if (state.selectedSection != SettingsSection.LICENSE) {
+        if (state.selectedSection != SettingsSection.LICENSE &&
+            state.selectedSection != SettingsSection.PRINTERS
+        ) {
             HorizontalDivider()
             Button(
                 onClick = viewModel::saveSettings,

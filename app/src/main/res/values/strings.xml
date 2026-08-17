@@ -30,6 +30,9 @@
     <string name="settings_section_tables">Tables &amp; Designer</string>
     <string name="settings_section_payments">Payments</string>
     <string name="settings_section_printers">Printers</string>
+    <string name="settings_section_scale">Scale</string>
+    <string name="printer_connected">Connected</string>
+    <string name="printer_selected_help">This printer is used for receipts.</string>
     <string name="settings_section_receipts">Receipts</string>
     <string name="settings_section_floor_devices">Floor &amp; Waiters</string>
     <string name="settings_section_users">Users &amp; Roles</string>
@@ -450,6 +453,14 @@
     <string name="combo_price_format">CHF %.2f</string>
     <string name="combo_deal_price">Combo deal %1$s %2$.2f</string>
     <string name="combo_add_to_order">Add to order</string>
+    <string name="combo_customize_item">Customize</string>
+    <string name="combo_extras">Combo extras</string>
+    <string name="combo_choices_unavailable">Combo choices are not available yet. Sync the menu from the merchant panel, then try again.</string>
+    <string name="combo_slot_empty">No products in this slot. Sync the menu from the merchant panel.</string>
+    <string name="order_complete">Order Complete</string>
+    <string name="total_paid">TOTAL PAID</string>
+    <string name="printers_page_help">Receipt and kitchen printers only. The USB scale is on the Scale page.</string>
+    <string name="scale_page_help">USB weighing scale only — this is not a printer. Printers are on the Printers page.</string>
     <string name="combo_slot_included">%1$d included</string>
     <string name="combo_slot_selected">%1$d/%2$d selected</string>
     <string name="combo_slot_pick_range">Choose %1$d–%2$d</string>
@@ -613,6 +624,12 @@
     <string name="checkout_back">Back</string>
     <string name="checkout_title">Payment</string>
     <string name="checkout_complete">Complete payment</string>
+    <string name="checkout_complete_with_change">Complete · change %1$s</string>
+    <string name="checkout_amount_due">Amount due</string>
+    <string name="checkout_remaining">Remaining: %1$s</string>
+    <string name="checkout_change_due">Change due: %1$s</string>
+    <string name="checkout_entering">Entering: %1$s</string>
+    <string name="checkout_quick_cash">Quick cash</string>
     <string name="specification">Specification</string>
     <string name="choose_one">Choose one</string>
     <string name="add_notes">Add notes</string>

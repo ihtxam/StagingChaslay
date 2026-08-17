@@ -560,6 +560,7 @@ private fun ModifierEditDialog(
             Button(onClick = {
                 val entity = ModifierGroupEntity(
                     id = group?.id ?: 0,
+                    remoteId = group?.remoteId,
                     name = name.trim(),
                     limitQuantity = limitQty.toIntOrNull()?.coerceAtLeast(1) ?: 1,
                     required = required
@@ -703,6 +704,7 @@ private fun AddonEditDialog(
                 }
                 val entity = AddonGroupEntity(
                     id = group?.id ?: 0,
+                    remoteId = group?.remoteId,
                     name = name.trim(),
                     limitQuantity = limitQty.toIntOrNull()?.coerceAtLeast(1) ?: 1,
                     required = required,

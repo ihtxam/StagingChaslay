@@ -76,6 +76,7 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -95,6 +96,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -114,8 +116,8 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.PosMode
-import com.chaslay.pos.ui.components.RfidScanField
 import com.chaslay.pos.ui.scanner.BarcodeScannerDialog
+import com.chaslay.pos.ui.scanner.BarcodeWedgeHub
 import com.chaslay.pos.ui.scanner.BarcodeWedgeListener
 import com.chaslay.pos.domain.model.ProductVariantModel
 import com.chaslay.pos.domain.model.FulfillmentType
@@ -202,23 +204,26 @@ fun PosScreen(
     val isTableServiceEnabled = isRestaurantMode && tablesEnabled
     val showRetailDineInToggle = isRetailMode && retailDineInEnabled
     var showBarcodeScanner by remember { mutableStateOf(false) }
+    val hardwareScanEnabled =
+        !showBarcodeScanner &&
+            !state.showCheckoutScreen &&
+            !state.showOrderComplete &&
+            !state.showMembershipDialog
+
+    DisposableEffect(hardwareScanEnabled) {
+        BarcodeWedgeHub.enabled = hardwareScanEnabled
+        val listener: (String) -> Unit = { code -> viewModel.onBarcodeScanned(code) }
+        BarcodeWedgeHub.addListener(listener)
+        onDispose {
+            BarcodeWedgeHub.removeListener(listener)
+            BarcodeWedgeHub.enabled = false
+        }
+    }
 
     BarcodeWedgeListener(
-        enabled = true,
+        enabled = hardwareScanEnabled,
         onBarcode = viewModel::onBarcodeScanned
     )
-
-    // Compose before main Column so NavHost Box stacking does not put this above the register UI.
-    if (state.giftCardsEnabled && !state.showMembershipDialog && !state.showCheckoutScreen) {
-        var rfidCapture by remember { mutableStateOf("") }
-        RfidScanField(
-            value = rfidCapture,
-            onValueChange = { rfidCapture = it },
-            onScanComplete = viewModel::onRfidScanned,
-            autoFocus = true,
-            invisible = true
-        )
-    }
 
     if (showBarcodeScanner) {
         BarcodeScannerDialog(
@@ -262,13 +267,12 @@ fun PosScreen(
             onTipAmount = viewModel::updateCheckoutTipAmount,
             onTipPercent = viewModel::updateCheckoutTipPercent,
             onDiscountPercent = viewModel::updateCheckoutDiscountPercent,
-            onRoundingStep = viewModel::updateCheckoutRoundingStep,
             onToggleTipPanel = viewModel::toggleCheckoutTipPanel,
             onToggleDiscountPanel = viewModel::toggleCheckoutDiscountPanel,
             onSplitClick = viewModel::openSplitBillScreen,
             onOpenCashDrawer = viewModel::openCashDrawer,
             onPrintReceipt = viewModel::printCheckoutPreview,
-            onQuickCash = { amount -> viewModel.completeCheckoutWithQuickCash(amount, activity) },
+            onTenderAmount = viewModel::updateCheckoutTenderAmount,
             onComplete = { viewModel.completeCheckout(activity) },
             onPrevSplitBill = { viewModel.navigateSplitBill(-1) },
             onNextSplitBill = { viewModel.navigateSplitBill(1) },
@@ -446,7 +450,6 @@ fun PosScreen(
                 activeCourse = state.cart.activeCourse,
                 activeCourseHasItems = state.cart.items.any { it.courseNumber == state.cart.activeCourse },
                 hasUnsentItems = orderingItemsForRail.isNotEmpty(),
-                unsentCourseCount = orderingItemsForRail.map { it.courseNumber }.distinct().size,
                 onPickup = {
                     mainTab = PosMainTab.REGISTER
                     viewModel.showPickupOrderDialog()
@@ -565,10 +568,13 @@ fun PosScreen(
                         cashEnabled = state.settings.cashEnabled,
                         cardEnabled = state.settings.cardEnabled,
                         terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
+                        expressEnabled = state.settings.expressEnabled,
+                        showScanButton = isRetailMode,
                         isGiftCardCategory = state.isGiftCardCategory,
                         highlightedProductId = state.lastClickedProductId,
                         onProductClick = viewModel::onProductClick,
                         onMiscClick = viewModel::addMiscItemQuick,
+                        onScanBarcode = { showBarcodeScanner = true },
                         onCash = { viewModel.initiateCashPayment(activity) },
                         onCard = { viewModel.initiateCardPayment(activity) },
                         onTerminal = { viewModel.initiateTerminalPayment(activity) },
@@ -1537,7 +1543,6 @@ private fun VectronOrderPanel(
                 .fillMaxWidth()
                 .background(Color(0xFFF2F2F2), RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
                 .padding(horizontal = 6.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             CartOrderMenuButton(
@@ -1560,21 +1565,13 @@ private fun VectronOrderPanel(
                 onMoveEntireTable = onMoveEntireTable,
                 onMoveDishes = onMoveDishes
             )
-            if (showRetailDineInToggle) {
-                RetailBistroChannelRow(
-                    serviceType = serviceType,
-                    fulfillmentType = cart.fulfillmentType,
-                    orderNumber = cart.orderNumber,
-                    showDelivery = showRetailDeliveryToggle,
-                    onToggleDineIn = onToggleRetailDineIn,
-                    onDelivery = onDelivery
-                )
-            }
             if (cart.fulfillmentType == FulfillmentType.DELIVERY) {
                 TextButton(
                     onClick = onAddCustomer,
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                    modifier = Modifier.padding(end = 4.dp)
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .padding(end = 4.dp)
                 ) {
                     Icon(
                         Icons.Default.Person,
@@ -1588,12 +1585,23 @@ private fun VectronOrderPanel(
                             ?: stringResource(R.string.choose_customer),
                         color = Color(0xFF333333),
                         fontSize = 11.sp,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
             }
+            Spacer(modifier = Modifier.weight(1f))
             Column(horizontalAlignment = Alignment.End) {
-                Text(stringResource(R.string.receipt), color = Color(0xFF333333), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    text = stringResource(R.string.receipt),
+                    color = Color(0xFF333333),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Visible
+                )
                 cartFulfillmentHeadline(
                     cart = cart,
                     activeTableName = activeTableName,
@@ -1603,14 +1611,23 @@ private fun VectronOrderPanel(
                         text = headline,
                         color = Color(0xFF666666),
                         fontSize = 11.sp,
-                        maxLines = 2,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.End
                     )
                 }
-                cart.deliveryName?.takeIf { it.isNotBlank() && cart.fulfillmentType != FulfillmentType.DELIVERY }?.let { name ->
-                    Text(name, color = Color(0xFF666666), fontSize = 10.sp, maxLines = 1)
-                }
             }
+        }
+        if (showRetailDineInToggle) {
+            RetailBistroChannelRow(
+                serviceType = serviceType,
+                fulfillmentType = cart.fulfillmentType,
+                orderNumber = cart.orderNumber,
+                showDelivery = showRetailDeliveryToggle,
+                onToggleDineIn = onToggleRetailDineIn,
+                onDelivery = onDelivery
+            )
         }
 
         if (showCartTabs) {
@@ -1735,8 +1752,6 @@ private fun VectronOrderPanel(
             }
         }
 
-        FulfillmentDetailsBar(cart = cart)
-
         if (cart.items.isNotEmpty()) {
             if (selectedCartItemId != null) {
                 VectronKeypad(
@@ -1797,34 +1812,6 @@ private fun cartFulfillmentHeadline(
         )
     } else {
         typeLabel
-    }
-}
-
-@Composable
-private fun FulfillmentDetailsBar(cart: com.chaslay.pos.domain.model.CartSummary) {
-    val isDelivery = cart.fulfillmentType == com.chaslay.pos.domain.model.FulfillmentType.DELIVERY ||
-        cart.deliveryName?.isNotBlank() == true
-    if (!isDelivery) return
-
-    val deliveryName = cart.deliveryName?.takeIf { it.isNotBlank() }
-    val addressLine = listOfNotNull(cart.deliveryAddress, cart.deliveryZip)
-        .filter { it.isNotBlank() }
-        .joinToString(", ")
-        .takeIf { it.isNotBlank() }
-    val phone = cart.deliveryPhone?.takeIf { it.isNotBlank() }
-    if (deliveryName == null && addressLine == null && phone == null) return
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFF5F5F5), RoundedCornerShape(6.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        deliveryName?.let {
-            Text(it, color = Color(0xFF111111), fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-        }
-        addressLine?.let { Text(it, color = Color(0xFF555555), fontSize = 11.sp) }
-        phone?.let { Text(it, color = Color(0xFF555555), fontSize = 11.sp) }
     }
 }
 
@@ -2045,7 +2032,6 @@ private fun CartActionSidebar(
     activeCourse: Int,
     activeCourseHasItems: Boolean,
     hasUnsentItems: Boolean,
-    unsentCourseCount: Int,
     onPickup: () -> Unit,
     onDelivery: () -> Unit,
     onSend: () -> Unit,
@@ -2090,7 +2076,7 @@ private fun CartActionSidebar(
         if (isRestaurantMode || showRetailTakeaway || showRetailDelivery) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
         }
-        if (isRestaurantMode && hasUnsentItems) {
+        if (isRestaurantMode && hasUnsentItems && !coursesEnabled && !isTableMode) {
             CartSidebarButton(
                 label = stringResource(R.string.send_to_kitchen),
                 shortLabel = "Send",
@@ -2106,34 +2092,34 @@ private fun CartActionSidebar(
             color = Color(0xFF7D6608),
             onClick = onHold
         )
-        if (isRestaurantMode && isTableMode) {
-            if (coursesEnabled) {
+        if (isRestaurantMode && coursesEnabled) {
+            CartSidebarButton(
+                label = stringResource(R.string.add_course),
+                shortLabel = "C+",
+                icon = Icons.Default.Restaurant,
+                color = Color(0xFF455A64),
+                onClick = onAddCourse
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
+            if (activeCourseHasItems) {
                 CartSidebarButton(
-                    label = stringResource(R.string.add_course),
-                    shortLabel = "C+",
-                    icon = Icons.Default.Restaurant,
-                    color = Color(0xFF455A64),
-                    onClick = onAddCourse
+                    label = stringResource(R.string.fire_course_n, activeCourse),
+                    shortLabel = "Fire",
+                    icon = Icons.Default.Send,
+                    color = VectronColors.CashGreen,
+                    onClick = onSendActiveCourse
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
-                if (activeCourseHasItems) {
-                    CartSidebarButton(
-                        label = stringResource(R.string.fire_course_n, activeCourse),
-                        shortLabel = "Fire",
-                        icon = Icons.Default.Send,
-                        color = VectronColors.CashGreen,
-                        onClick = onSendActiveCourse
-                    )
-                }
-                if (hasUnsentItems && unsentCourseCount > 1) {
-                    CartSidebarButton(
-                        label = stringResource(R.string.send_all_courses),
-                        shortLabel = "All",
-                        color = Color(0xFF2E7D32),
-                        onClick = onSendAllCourses
-                    )
-                }
-            } else if (hasUnsentItems) {
+            }
+            if (isTableMode) {
+                CartSidebarButton(
+                    label = stringResource(R.string.kitchen_message),
+                    shortLabel = "MSG",
+                    color = Color(0xFF7D6608),
+                    onClick = onKitchenMessage
+                )
+            }
+        } else if (isRestaurantMode && isTableMode) {
+            if (hasUnsentItems) {
                 CartSidebarButton(
                     label = stringResource(R.string.send_to_kitchen),
                     shortLabel = "Send",
@@ -2643,12 +2629,15 @@ private fun VectronProductGrid(
     cashEnabled: Boolean = true,
     cardEnabled: Boolean = true,
     terminalEnabled: Boolean = false,
+    expressEnabled: Boolean = false,
+    showScanButton: Boolean = false,
     gridColumns: Int = 5,
     showProductImages: Boolean = false,
     isGiftCardCategory: Boolean = false,
     highlightedProductId: Long? = null,
     onProductClick: (Long) -> Unit,
     onMiscClick: () -> Unit,
+    onScanBarcode: () -> Unit = {},
     onCash: () -> Unit,
     onCard: () -> Unit,
     onTerminal: () -> Unit = {},
@@ -2693,6 +2682,11 @@ private fun VectronProductGrid(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            if (showScanButton) {
+                item(key = "scan") {
+                    VectronScanButton(onClick = onScanBarcode)
+                }
+            }
             item(key = "misc") {
                 VectronMiscButton(onClick = onMiscClick)
             }
@@ -2710,75 +2704,76 @@ private fun VectronProductGrid(
         }
         }
 
-        if (cashEnabled || cardEnabled || terminalEnabled) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(VectronColors.Header)
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (cashEnabled) {
-                    Button(
-                        onClick = onCash,
-                        enabled = paymentEnabled,
-                        modifier = Modifier.weight(1f).height(64.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = VectronColors.CashGreen,
-                            disabledContainerColor = VectronColors.KeypadButton
-                        )
-                    ) {
-                        Text(stringResource(R.string.cash), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                if (cardEnabled) {
-                    Button(
-                        onClick = onCard,
-                        enabled = paymentEnabled,
-                        modifier = Modifier.weight(1f).height(64.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = VectronColors.CardBlue,
-                            disabledContainerColor = VectronColors.KeypadButton
-                        )
-                    ) {
-                        Text(stringResource(R.string.card), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                if (terminalEnabled) {
-                    Button(
-                        onClick = onTerminal,
-                        enabled = paymentEnabled,
-                        modifier = Modifier.weight(1f).height(64.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF8B5CF6),
-                            disabledContainerColor = VectronColors.KeypadButton
-                        )
-                    ) {
-                        Text(stringResource(R.string.terminal), fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
+        val showExpressPay = expressEnabled && (cashEnabled || cardEnabled || terminalEnabled)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(VectronColors.Header)
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (showExpressPay && cashEnabled) {
                 Button(
-                    onClick = onOpenCheckout,
+                    onClick = onCash,
                     enabled = paymentEnabled,
-                    modifier = Modifier.width(64.dp).height(64.dp),
+                    modifier = Modifier.weight(1f).height(64.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = VectronColors.Header,
+                        containerColor = VectronColors.CashGreen,
                         disabledContainerColor = VectronColors.KeypadButton
-                    ),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = stringResource(R.string.open_checkout),
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
                     )
+                ) {
+                    Text(stringResource(R.string.cash), fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
+            }
+            if (showExpressPay && cardEnabled) {
+                Button(
+                    onClick = onCard,
+                    enabled = paymentEnabled,
+                    modifier = Modifier.weight(1f).height(64.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = VectronColors.CardBlue,
+                        disabledContainerColor = VectronColors.KeypadButton
+                    )
+                ) {
+                    Text(stringResource(R.string.card), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            if (showExpressPay && terminalEnabled) {
+                Button(
+                    onClick = onTerminal,
+                    enabled = paymentEnabled,
+                    modifier = Modifier.weight(1f).height(64.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF8B5CF6),
+                        disabledContainerColor = VectronColors.KeypadButton
+                    )
+                ) {
+                    Text(stringResource(R.string.terminal), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Button(
+                onClick = onOpenCheckout,
+                enabled = paymentEnabled,
+                modifier = Modifier
+                    .then(if (showExpressPay) Modifier.width(64.dp) else Modifier.fillMaxWidth())
+                    .height(64.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (showExpressPay) VectronColors.Header else VectronColors.CashGreen,
+                    disabledContainerColor = VectronColors.KeypadButton
+                ),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = stringResource(R.string.open_checkout),
+                    tint = Color.White,
+                    modifier = Modifier.size(36.dp)
+                )
             }
         }
     }

@@ -231,13 +231,23 @@ class MenuRepository @Inject constructor(
         val slots = comboSlotDao.getByComboProduct(comboProductId).map { slot ->
             val options = comboSlotOptionDao.getBySlot(slot.id).mapNotNull { opt ->
                 val p = productDao.getById(opt.productId) ?: return@mapNotNull null
-                ComboSlotOptionModel(opt.id, p.id, p.name, p.imageUri)
+                ComboSlotOptionModel(
+                    id = opt.id,
+                    productId = p.id,
+                    productName = p.name,
+                    imageUri = p.imageUri,
+                    extraPrice = opt.extraPrice,
+                    modifierGroups = getModifierGroupsForProduct(p.id),
+                    addonGroups = getAddonGroupsForProduct(p.id)
+                )
             }
             ComboSlotModel(slot.id, slot.name, slot.minPick, slot.maxPick, options)
         }
         return ComboMealModel(
             product = product.toComboModel(categoryName),
-            slots = slots
+            slots = slots,
+            modifierGroups = getModifierGroupsForProduct(comboProductId),
+            addonGroups = getAddonGroupsForProduct(comboProductId)
         )
     }
 

@@ -83,15 +83,13 @@ object ReceiptVatCalculator {
         val productRows = items.filter { !it.isGiftCardLine && it.taxRate > 0.0 }
             .groupBy { it.taxRate }
             .map { (rate, groupItems) ->
-                val brut = groupItems.sumOf { it.lineTotal } * discountFactor
-                val net = brut / (1.0 + rate / 100.0)
-                val tva = brut - net
-                VatBreakdownRow(
-                    label = "${formatRate(rate)}%",
+                vatRowFromAmounts(
                     rate = rate,
-                    net = net,
-                    tva = tva,
-                    brut = brut
+                    lineSubtotal = groupItems.sumOf { it.lineSubtotal },
+                    lineTax = groupItems.sumOf { it.lineTax },
+                    lineTotal = groupItems.sumOf { it.lineTotal },
+                    discountFactor = discountFactor,
+                    vatIncludedInPrice = vatIncludedInPrice
                 )
             }
         val giftAmount = items.filter { it.isGiftCardLine }.sumOf { it.lineTotal } * discountFactor
@@ -115,15 +113,13 @@ object ReceiptVatCalculator {
         val productRows = items.filter { !isGiftCardProductId(it.productId) && it.taxRate > 0.0 }
             .groupBy { it.taxRate }
             .map { (rate, groupItems) ->
-                val brut = groupItems.sumOf { it.lineTotal } * discountFactor
-                val net = brut / (1.0 + rate / 100.0)
-                val tva = brut - net
-                VatBreakdownRow(
-                    label = "${formatRate(rate)}%",
+                vatRowFromAmounts(
                     rate = rate,
-                    net = net,
-                    tva = tva,
-                    brut = brut
+                    lineSubtotal = groupItems.sumOf { it.lineSubtotal },
+                    lineTax = groupItems.sumOf { it.lineTax },
+                    lineTotal = groupItems.sumOf { it.lineTotal },
+                    discountFactor = discountFactor,
+                    vatIncludedInPrice = vatIncludedInPrice
                 )
             }
         val giftAmount = items.filter { isGiftCardProductId(it.productId) }
@@ -151,6 +147,41 @@ object ReceiptVatCalculator {
 
     fun formatRate(rate: Double): String =
         if (rate % 1.0 == 0.0) rate.toInt().toString() else String.format("%.1f", rate)
+
+    /**
+     * Net / tax / gross for one rate. VAT-included extracts tax from TTC so the tax
+     * column is never the net amount (the 94.80 total / 88.20 "tax" mix-up).
+     */
+    private fun vatRowFromAmounts(
+        rate: Double,
+        lineSubtotal: Double,
+        lineTax: Double,
+        lineTotal: Double,
+        discountFactor: Double,
+        vatIncludedInPrice: Boolean
+    ): VatBreakdownRow {
+        return if (vatIncludedInPrice) {
+            val brut = lineTotal * discountFactor
+            val net = brut / (1.0 + rate / 100.0)
+            VatBreakdownRow(
+                label = "${formatRate(rate)}%",
+                rate = rate,
+                net = net,
+                tva = brut - net,
+                brut = brut
+            )
+        } else {
+            val net = lineSubtotal * discountFactor
+            val tva = lineTax * discountFactor
+            VatBreakdownRow(
+                label = "${formatRate(rate)}%",
+                rate = rate,
+                net = net,
+                tva = tva,
+                brut = net + tva
+            )
+        }
+    }
 }
 
 /** Scale receipt VAT rows when discounts reduce the tax base (gross always; net when vatAfterDiscount). */
