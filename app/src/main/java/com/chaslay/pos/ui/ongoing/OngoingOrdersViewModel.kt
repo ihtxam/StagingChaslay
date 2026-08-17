@@ -41,6 +41,20 @@ enum class OrdersChannelFilter { ALL, DINE_IN, TAKEAWAY, DELIVERY }
 
 enum class OrdersPaymentFilter { ALL, UNPAID }
 
+private fun isUnpaid(card: OngoingOrderCard): Boolean =
+    card.paymentMethod == PaymentMethod.PAY_LATER
+
+private fun matchesChannel(card: OngoingOrderCard, filter: OrdersChannelFilter): Boolean = when (filter) {
+    OrdersChannelFilter.ALL -> true
+    OrdersChannelFilter.DINE_IN ->
+        card.fulfillmentType == FulfillmentType.DINE_IN || card.serviceType == ServiceType.DINE_IN
+    OrdersChannelFilter.TAKEAWAY ->
+        card.fulfillmentType == FulfillmentType.PICKUP ||
+            (card.fulfillmentType == FulfillmentType.WALK_IN && card.serviceType == ServiceType.TAKEAWAY)
+    OrdersChannelFilter.DELIVERY ->
+        card.fulfillmentType == FulfillmentType.DELIVERY
+}
+
 data class OngoingOrdersUiState(
     val orders: List<OngoingOrderCard> = emptyList(),
     val statusFilter: OrdersStatusFilter = OrdersStatusFilter.ACTIVE,
@@ -471,16 +485,5 @@ class OngoingOrdersViewModel @Inject constructor(
     companion object {
         fun isUnpaid(card: OngoingOrderCard): Boolean =
             card.paymentMethod == PaymentMethod.PAY_LATER
-
-        fun matchesChannel(card: OngoingOrderCard, filter: OrdersChannelFilter): Boolean = when (filter) {
-            OrdersChannelFilter.ALL -> true
-            OrdersChannelFilter.DINE_IN ->
-                card.fulfillmentType == FulfillmentType.DINE_IN || card.serviceType == ServiceType.DINE_IN
-            OrdersChannelFilter.TAKEAWAY ->
-                card.fulfillmentType == FulfillmentType.PICKUP ||
-                    (card.fulfillmentType == FulfillmentType.WALK_IN && card.serviceType == ServiceType.TAKEAWAY)
-            OrdersChannelFilter.DELIVERY ->
-                card.fulfillmentType == FulfillmentType.DELIVERY
-        }
     }
 }

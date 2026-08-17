@@ -222,7 +222,7 @@ fun ProductCustomizeDialog(
                                 }
                             }
                             Spacer(Modifier.height(10.dp))
-                            when (val tab = activeCustomizeTab) {
+                            when (val tab = customizeTabs.getOrNull(activeTab.coerceIn(0, customizeTabs.lastIndex))) {
                                 is CustomizeTabKind.Modifier -> {
                                     ModifierAddonGrid(
                                         currencySymbol = currencySymbol,
@@ -234,7 +234,7 @@ fun ProductCustomizeDialog(
                                             modifierQty.clear()
                                             modifierQty[optionId] = 1
                                         },
-                                        onIncrement = { group, optionId ->
+                                        onModifierIncrement = { group, optionId ->
                                             val total = group.options.sumOf { modifierQty[it.id] ?: 0 }
                                             if (total < group.limitQuantity) {
                                                 modifierQty[optionId] = (modifierQty[optionId] ?: 0) + 1
@@ -251,7 +251,7 @@ fun ProductCustomizeDialog(
                                         currencySymbol = currencySymbol,
                                         addonGroup = tab.group,
                                         addonQty = addonQty,
-                                        onIncrement = { group, optionId ->
+                                        onAddonIncrement = { group, optionId ->
                                             val total = group.options.sumOf { addonQty[it.id] ?: 0 }
                                             val current = addonQty[optionId] ?: 0
                                             if (group.allowMultipleSame || current == 0) {
@@ -426,7 +426,8 @@ private fun ModifierAddonGrid(
     modifierQty: Map<Long, Int> = emptyMap(),
     addonQty: Map<Long, Int> = emptyMap(),
     onSelectSingle: (Long, Long) -> Unit = { _, _ -> },
-    onIncrement: (Any, Long) -> Unit = { _, _ -> },
+    onModifierIncrement: (ModifierGroupModel, Long) -> Unit = { _, _ -> },
+    onAddonIncrement: (AddonGroupModel, Long) -> Unit = { _, _ -> },
     onDecrement: (Long) -> Unit = {}
 ) {
     LazyVerticalGrid(
@@ -451,7 +452,7 @@ private fun ModifierAddonGrid(
                     quantity = qty,
                     onClick = {
                         if (group.isSingleSelect) onSelectSingle(group.id, option.id)
-                        else onIncrement(group, option.id)
+                        else onModifierIncrement(group, option.id)
                     },
                     onDecrement = if (!group.isSingleSelect && qty > 0) ({ onDecrement(option.id) }) else null
                 )
@@ -464,7 +465,7 @@ private fun ModifierAddonGrid(
                     priceLabel = "+$currencySymbol ${"%.2f".format(Locale.getDefault(), option.price)}",
                     selected = qty > 0,
                     quantity = qty,
-                    onClick = { onIncrement(addonGroup, option.id) },
+                    onClick = { onAddonIncrement(addonGroup, option.id) },
                     onDecrement = if (qty > 0) ({ onDecrement(option.id) }) else null
                 )
             }
