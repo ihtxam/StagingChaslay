@@ -76,6 +76,7 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -114,8 +115,8 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.PosMode
-import com.chaslay.pos.ui.components.RfidScanField
 import com.chaslay.pos.ui.scanner.BarcodeScannerDialog
+import com.chaslay.pos.ui.scanner.BarcodeWedgeHub
 import com.chaslay.pos.ui.scanner.BarcodeWedgeListener
 import com.chaslay.pos.domain.model.ProductVariantModel
 import com.chaslay.pos.domain.model.FulfillmentType
@@ -202,23 +203,26 @@ fun PosScreen(
     val isTableServiceEnabled = isRestaurantMode && tablesEnabled
     val showRetailDineInToggle = isRetailMode && retailDineInEnabled
     var showBarcodeScanner by remember { mutableStateOf(false) }
+    val hardwareScanEnabled =
+        !showBarcodeScanner &&
+            !state.showCheckoutScreen &&
+            !state.showOrderComplete &&
+            !state.showMembershipDialog
+
+    DisposableEffect(hardwareScanEnabled) {
+        BarcodeWedgeHub.enabled = hardwareScanEnabled
+        val listener: (String) -> Unit = { code -> viewModel.onBarcodeScanned(code) }
+        BarcodeWedgeHub.addListener(listener)
+        onDispose {
+            BarcodeWedgeHub.removeListener(listener)
+            BarcodeWedgeHub.enabled = false
+        }
+    }
 
     BarcodeWedgeListener(
-        enabled = !showBarcodeScanner && !state.isGiftCardCategory,
+        enabled = hardwareScanEnabled,
         onBarcode = viewModel::onBarcodeScanned
     )
-
-    // Compose before main Column so NavHost Box stacking does not put this above the register UI.
-    if (state.giftCardsEnabled && !state.showMembershipDialog && !state.showCheckoutScreen) {
-        var rfidCapture by remember { mutableStateOf("") }
-        RfidScanField(
-            value = rfidCapture,
-            onValueChange = { rfidCapture = it },
-            onScanComplete = viewModel::onRfidScanned,
-            autoFocus = state.isGiftCardCategory,
-            invisible = true
-        )
-    }
 
     if (showBarcodeScanner) {
         BarcodeScannerDialog(

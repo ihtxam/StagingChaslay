@@ -1013,6 +1013,7 @@ class PosViewModel @Inject constructor(
     fun onBarcodeScanned(rawCode: String) {
         val code = rawCode.trim()
         if (code.isEmpty()) return
+        android.util.Log.i("BARCODE_SCAN", "scanned=$code")
         // Table QR: CHASLAY:T:{slug}:{tableUuid}
         val tableMatch = Regex("^CHASLAY:T:[^:]+:([a-f0-9-]+)$", RegexOption.IGNORE_CASE).find(code)
         if (tableMatch != null) {
@@ -1030,54 +1031,50 @@ class PosViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            val lookup = productRepository.findByBarcode(code)
+            if (lookup != null) {
+                addScannedProduct(lookup)
+                return@launch
+            }
             if (_uiExtras.value.giftCardsEnabled) {
                 giftCardRepository.lookupCode(code, mediaType = null)
                     .onSuccess { card ->
                         attachMembershipCard(giftCardRepository.toAttachedMembership(card))
                         return@launch
                     }
-                    .onFailure { e ->
-                        val msg = e.message.orEmpty()
-                        val notFound = msg.contains("not found", ignoreCase = true)
-                        if (!notFound) {
-                            updateExtras { it.copy(snackbarMessage = msg.ifBlank { "Card lookup failed" }) }
-                            return@launch
-                        }
-                    }
             }
-            val lookup = productRepository.findByBarcode(code)
-            if (lookup == null) {
-                updateExtras { it.copy(snackbarMessage = "No product for barcode $code") }
-                return@launch
+            updateExtras { it.copy(snackbarMessage = "No product for barcode $code") }
+        }
+    }
+
+    private suspend fun addScannedProduct(lookup: com.chaslay.pos.domain.model.BarcodeLookupResult) {
+        val product = productRepository.getProductWithVariants(lookup.productId) ?: return
+        when {
+            product.isWeighed -> updateExtras {
+                it.copy(showWeighedProductDialog = true, selectedProduct = product)
             }
-            val product = productRepository.getProductWithVariants(lookup.productId) ?: return@launch
-            when {
-                product.isWeighed -> updateExtras {
-                    it.copy(showWeighedProductDialog = true, selectedProduct = product)
-                }
-                product.isOpenPrice -> updateExtras {
-                    it.copy(
-                        showOpenPriceDialog = true,
-                        selectedProduct = product
-                    )
-                }
-                lookup.variantName != null -> addProductToCart(
-                    product = product,
-                    variantName = lookup.variantName,
-                    basePrice = lookup.variantPrice ?: product.price
+            product.isOpenPrice -> updateExtras {
+                it.copy(
+                    showOpenPriceDialog = true,
+                    selectedProduct = product
                 )
-                product.isCombo -> onProductClick(product.id)
-                else -> {
-                    val modifierGroups = menuRepository.getModifierGroupsForProduct(product.id)
-                    val addonGroups = menuRepository.getAddonGroupsForProduct(product.id)
-                    val needsCustomize = product.variants.isNotEmpty() ||
-                        modifierGroups.isNotEmpty() ||
-                        addonGroups.isNotEmpty()
-                    if (needsCustomize) {
-                        onProductClick(product.id)
-                    } else {
-                        addProductToCart(product, null, product.price)
-                    }
+            }
+            lookup.variantName != null -> addProductToCart(
+                product = product,
+                variantName = lookup.variantName,
+                basePrice = lookup.variantPrice ?: product.price
+            )
+            product.isCombo -> onProductClick(product.id)
+            else -> {
+                val modifierGroups = menuRepository.getModifierGroupsForProduct(product.id)
+                val addonGroups = menuRepository.getAddonGroupsForProduct(product.id)
+                val needsCustomize = product.variants.isNotEmpty() ||
+                    modifierGroups.isNotEmpty() ||
+                    addonGroups.isNotEmpty()
+                if (needsCustomize) {
+                    onProductClick(product.id)
+                } else {
+                    addProductToCart(product, null, product.price)
                 }
             }
         }
