@@ -12,7 +12,6 @@ type Preview = {
   reductionNeeded: number;
   eligibleOrderCount: number;
   adjustableItemCount: number;
-  alreadyAdjustedCount: number;
 };
 
 type Props = {
@@ -166,14 +165,6 @@ export default function SalesAdjustmentModal({ open, onClose, onApplied }: Props
                 <dt className="text-[var(--text-muted)]">{t('salesAdjEligibleOrders')}</dt>
                 <dd className="font-semibold">{preview.eligibleOrderCount}</dd>
               </div>
-              {preview.alreadyAdjustedCount > 0 ? (
-                <p className="pt-1 text-xs text-[var(--text-muted)]">
-                  {t('salesAdjAlreadyAdjusted').replace(
-                    '{n}',
-                    String(preview.alreadyAdjustedCount)
-                  )}
-                </p>
-              ) : null}
             </dl>
           ) : null}
 

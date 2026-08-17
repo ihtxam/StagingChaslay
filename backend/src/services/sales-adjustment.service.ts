@@ -8,7 +8,6 @@ import {
   paymentBreakdownTotals,
 } from "@/lib/payment-breakdown";
 
-const ADJUST_TAG = /\[salesAdj:/i;
 const ALLOWED_PERCENTS = [20, 40] as const;
 
 export type SalesAdjustmentPreview = {
@@ -19,7 +18,6 @@ export type SalesAdjustmentPreview = {
   reductionNeeded: number;
   eligibleOrderCount: number;
   adjustableItemCount: number;
-  alreadyAdjustedCount: number;
 };
 
 export type SalesAdjustmentResult = {
@@ -30,7 +28,6 @@ export type SalesAdjustmentResult = {
   reductionApplied: number;
   ordersAdjusted: number;
   itemsAdjusted: number;
-  runId: string;
 };
 
 function zurichMonthBounds(monthKey?: string): { start: Date; end: Date; monthKey: string } {
@@ -87,13 +84,8 @@ export function isCashOnlyOrder(order: {
   return cash >= net - 0.01;
 }
 
-function isAlreadyAdjusted(notes: string | null | undefined): boolean {
-  return ADJUST_TAG.test(String(notes || ""));
-}
-
 type OrderRow = {
   id: string;
-  notes: string | null;
   subtotal: string;
   taxAmount: string;
   discountAmount: string | null;
@@ -145,12 +137,6 @@ function scaleOrderAmounts(
   };
 }
 
-function appendAdjustNote(notes: string | null, percent: number, monthKey: string): string {
-  const tag = `[salesAdj:${percent}%:${monthKey}]`;
-  const base = String(notes || "").trim();
-  return base ? `${base} ${tag}` : tag;
-}
-
 export class SalesAdjustmentService {
   static allowedPercents(): readonly number[] {
     return ALLOWED_PERCENTS;
@@ -171,17 +157,11 @@ export class SalesAdjustmentService {
     let currentCashTotal = 0;
     let eligibleOrderCount = 0;
     let adjustableItemCount = 0;
-    let alreadyAdjustedCount = 0;
 
     for (const o of orders) {
       if (!isCashOnlyOrder(o)) continue;
       const net = orderNetTotal(o);
       currentCashTotal = roundMoney2(currentCashTotal + net);
-
-      if (isAlreadyAdjusted(o.notes)) {
-        alreadyAdjustedCount += 1;
-        continue;
-      }
 
       eligibleOrderCount += 1;
       for (const item of o.items || []) {
@@ -201,7 +181,6 @@ export class SalesAdjustmentService {
       reductionNeeded,
       eligibleOrderCount,
       adjustableItemCount,
-      alreadyAdjustedCount,
     };
   }
 
@@ -226,7 +205,6 @@ export class SalesAdjustmentService {
     let ordersAdjusted = 0;
     let itemsAdjusted = 0;
     const adjustedOrderIds = new Set<string>();
-    const details: Array<{ orderId: string; itemId: string; fromQty: number; toQty: number }> = [];
 
     type Candidate = {
       order: OrderRow;
@@ -237,7 +215,7 @@ export class SalesAdjustmentService {
     const buildCandidates = (): Candidate[] => {
       const list: Candidate[] = [];
       for (const order of orders) {
-        if (!isCashOnlyOrder(order) || isAlreadyAdjusted(order.notes)) continue;
+        if (!isCashOnlyOrder(order)) continue;
         for (const item of order.items || []) {
           if (item.weightKg != null && Number(item.weightKg) > 0) continue;
           const qty = effectiveQty(item);
@@ -247,7 +225,6 @@ export class SalesAdjustmentService {
           list.push({ order, item, unitValue });
         }
       }
-      // Prefer higher unit value first — fewer line edits to reach the target.
       list.sort((a, b) => b.unitValue - a.unitValue);
       return list;
     };
@@ -299,12 +276,6 @@ export class SalesAdjustmentService {
         ordersAdjusted += 1;
       }
       itemsAdjusted += 1;
-      details.push({
-        orderId: pick.order.id,
-        itemId: pick.item.id,
-        fromQty: oldQty,
-        toQty: newQty,
-      });
 
       const applied = roundMoney2(Math.min(remaining, pick.unitValue));
       remaining = roundMoney2(remaining - applied);
@@ -320,7 +291,6 @@ export class SalesAdjustmentService {
           taxAmount: order.taxAmount,
           discountAmount: order.discountAmount || "0",
           total: order.total,
-          notes: appendAdjustNote(order.notes, targetPercent, key),
           updatedAt: new Date(),
         })
         .where(eq(schema.orders.id, orderId));
@@ -330,20 +300,6 @@ export class SalesAdjustmentService {
     const beforeCashTotal = preview.currentCashTotal;
     const afterCashTotal = afterPreview.currentCashTotal;
 
-    const [run] = await db
-      .insert(schema.salesAdjustmentRuns)
-      .values({
-        merchantId,
-        monthKey: key,
-        targetPercent: String(targetPercent),
-        beforeCashTotal: beforeCashTotal.toFixed(2),
-        afterCashTotal: afterCashTotal.toFixed(2),
-        ordersAdjusted,
-        itemsAdjusted,
-        details,
-      })
-      .returning();
-
     return {
       monthKey: key,
       targetPercent,
@@ -352,7 +308,6 @@ export class SalesAdjustmentService {
       reductionApplied: roundMoney2(beforeCashTotal - afterCashTotal),
       ordersAdjusted,
       itemsAdjusted,
-      runId: run.id,
     };
   }
 
