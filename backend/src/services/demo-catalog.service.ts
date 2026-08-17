@@ -9,42 +9,168 @@ import {
 } from "@/lib/demo-catalog.data";
 import { ModifierService } from "@/services/modifier.service";
 
+export type DemoImportMode = "replace" | "merge";
+
 export type DemoImportResult = {
   success: true;
+  mode: DemoImportMode;
   categoriesCreated: number;
   productsCreated: number;
   modifierGroupsCreated: number;
   combosCreated: number;
+  categoriesSkipped: number;
+  productsSkipped: number;
+  modifierGroupsSkipped: number;
+  combosSkipped: number;
   categoryNames: string[];
 };
+
+type ImportCounters = {
+  categoriesCreated: number;
+  productsCreated: number;
+  modifierGroupsCreated: number;
+  combosCreated: number;
+  categoriesSkipped: number;
+  productsSkipped: number;
+  modifierGroupsSkipped: number;
+  combosSkipped: number;
+};
+
+function norm(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+function productConflictKey(name: string, sku?: string | null): string {
+  const trimmedSku = sku?.trim();
+  if (trimmedSku) return `sku:${norm(trimmedSku)}`;
+  return `name:${norm(name)}`;
+}
 
 export class DemoCatalogService {
   static async importDemo(
     merchantId: string,
-    options: { force?: boolean } = {}
+    options: { mode?: DemoImportMode; force?: boolean } = {}
   ): Promise<DemoImportResult> {
     const db = getDb();
-    const force = options.force === true;
 
     const [{ existing }] = await db
       .select({ existing: count() })
       .from(schema.categories)
       .where(eq(schema.categories.merchantId, merchantId));
 
-    if (Number(existing) > 0 && !force) {
-      throw new Error(
-        "Catalog already has categories. Pass force: true to import demo content anyway."
-      );
-    }
+    const hasExisting = Number(existing) > 0;
+    const mode: DemoImportMode =
+      options.mode === "replace" || options.mode === "merge"
+        ? options.mode
+        : options.force === true
+          ? "replace"
+          : hasExisting
+            ? (() => {
+                throw new Error(
+                  "Catalog already has categories. Pass mode: 'replace' or 'merge'."
+                );
+              })()
+            : "merge";
 
     const categoryIds = new Map<string, string>();
     const groupIds = new Map<string, string>();
     const productIds = new Map<string, string>();
     const linkedProductIds: string[] = [];
+    const counters: ImportCounters = {
+      categoriesCreated: 0,
+      productsCreated: 0,
+      modifierGroupsCreated: 0,
+      combosCreated: 0,
+      categoriesSkipped: 0,
+      productsSkipped: 0,
+      modifierGroupsSkipped: 0,
+      combosSkipped: 0,
+    };
 
     await db.transaction(async (tx) => {
+      if (mode === "replace" && hasExisting) {
+        await tx.delete(schema.products).where(eq(schema.products.merchantId, merchantId));
+        await tx
+          .delete(schema.modifierGroups)
+          .where(eq(schema.modifierGroups.merchantId, merchantId));
+        await tx.delete(schema.categories).where(eq(schema.categories.merchantId, merchantId));
+      }
+
+      const existingCategories =
+        mode === "merge"
+          ? await tx
+              .select({
+                id: schema.categories.id,
+                name: schema.categories.name,
+                sortOrder: schema.categories.sortOrder,
+              })
+              .from(schema.categories)
+              .where(eq(schema.categories.merchantId, merchantId))
+          : [];
+
+      const categoryByName = new Map(
+        existingCategories.map((c) => [norm(c.name), c])
+      );
+      let categorySortBase =
+        existingCategories.reduce((maxSoFar, c) => Math.max(maxSoFar, c.sortOrder ?? 0), -1) + 1;
+
+      const existingProducts =
+        mode === "merge"
+          ? await tx
+              .select({
+                id: schema.products.id,
+                name: schema.products.name,
+                sku: schema.products.sku,
+                clientId: schema.products.clientId,
+                sortOrder: schema.products.sortOrder,
+              })
+              .from(schema.products)
+              .where(eq(schema.products.merchantId, merchantId))
+          : [];
+
+      const productByKey = new Map<string, { id: string; sortOrder: number }>();
+      for (const p of existingProducts) {
+        productByKey.set(productConflictKey(p.name, p.sku), {
+          id: p.id,
+          sortOrder: p.sortOrder ?? 0,
+        });
+        if (p.clientId?.trim()) {
+          productByKey.set(`client:${norm(p.clientId)}`, {
+            id: p.id,
+            sortOrder: p.sortOrder ?? 0,
+          });
+        }
+      }
+      let productSortBase =
+        existingProducts.reduce((maxSoFar, p) => Math.max(maxSoFar, p.sortOrder ?? 0), -1) + 1;
+      let comboSortBase =
+        mode === "merge" ? productSortBase : DEMO_PRODUCTS.length;
+
+      const existingGroups =
+        mode === "merge"
+          ? await tx
+              .select({
+                id: schema.modifierGroups.id,
+                title: schema.modifierGroups.title,
+                sortOrder: schema.modifierGroups.sortOrder,
+              })
+              .from(schema.modifierGroups)
+              .where(eq(schema.modifierGroups.merchantId, merchantId))
+          : [];
+
+      const groupByTitle = new Map(existingGroups.map((g) => [norm(g.title), g]));
+      let groupSortBase =
+        existingGroups.reduce((maxSoFar, g) => Math.max(maxSoFar, g.sortOrder ?? 0), -1) + 1;
+
       for (let i = 0; i < DEMO_CATEGORIES.length; i++) {
         const cat = DEMO_CATEGORIES[i]!;
+        const existing = mode === "merge" ? categoryByName.get(norm(cat.name)) : undefined;
+        if (existing) {
+          categoryIds.set(cat.key, existing.id);
+          counters.categoriesSkipped++;
+          continue;
+        }
+
         const [row] = await tx
           .insert(schema.categories)
           .values({
@@ -52,15 +178,23 @@ export class DemoCatalogService {
             name: cat.name,
             description: cat.description,
             color: cat.color,
-            sortOrder: i,
+            sortOrder: mode === "merge" ? categorySortBase++ : i,
             clientId: `demo-cat-${cat.key}`,
           })
           .returning({ id: schema.categories.id });
         categoryIds.set(cat.key, row!.id);
+        counters.categoriesCreated++;
       }
 
       for (let gi = 0; gi < DEMO_MODIFIER_GROUPS.length; gi++) {
         const g = DEMO_MODIFIER_GROUPS[gi]!;
+        const existing = mode === "merge" ? groupByTitle.get(norm(g.title)) : undefined;
+        if (existing) {
+          groupIds.set(g.key, existing.id);
+          counters.modifierGroupsSkipped++;
+          continue;
+        }
+
         const minSelectable =
           g.selectionType === "required"
             ? Math.max(1, g.minSelectable ?? 1)
@@ -76,11 +210,12 @@ export class DemoCatalogService {
             selectionType: g.selectionType,
             minSelectable,
             maxSelectable,
-            sortOrder: gi,
+            sortOrder: mode === "merge" ? groupSortBase++ : gi,
           })
           .returning({ id: schema.modifierGroups.id });
 
         groupIds.set(g.key, group!.id);
+        counters.modifierGroupsCreated++;
 
         if (g.options.length) {
           await tx.insert(schema.modifierOptions).values(
@@ -100,6 +235,20 @@ export class DemoCatalogService {
         const categoryId = categoryIds.get(p.categoryKey);
         if (!categoryId) continue;
 
+        const demoClientId = `demo-prod-${p.key}`;
+        const conflictKey = productConflictKey(p.name, p.sku);
+        const existing =
+          mode === "merge"
+            ? productByKey.get(conflictKey) ||
+              productByKey.get(`client:${norm(demoClientId)}`)
+            : undefined;
+
+        if (existing) {
+          productIds.set(p.key, existing.id);
+          counters.productsSkipped++;
+          continue;
+        }
+
         const [row] = await tx
           .insert(schema.products)
           .values({
@@ -113,32 +262,57 @@ export class DemoCatalogService {
             isActive: true,
             isTaxable: true,
             productType: "standard",
-            sortOrder: pi,
-            clientId: `demo-prod-${p.key}`,
+            sortOrder: mode === "merge" ? productSortBase++ : pi,
+            clientId: demoClientId,
           })
           .returning({ id: schema.products.id });
 
         productIds.set(p.key, row!.id);
+        counters.productsCreated++;
 
         const groupKeys = p.modifierGroupKeys || [];
         if (groupKeys.length) {
           linkedProductIds.push(row!.id);
           await tx.insert(schema.productModifierGroups).values(
-            groupKeys.map((gk, idx) => ({
-              productId: row!.id,
-              groupId: groupIds.get(gk)!,
-              sortOrder: idx,
-            }))
+            groupKeys
+              .filter((gk) => groupIds.has(gk))
+              .map((gk, idx) => ({
+                productId: row!.id,
+                groupId: groupIds.get(gk)!,
+                sortOrder: idx,
+              }))
           );
         }
       }
 
-      let comboSort = DEMO_PRODUCTS.length;
       for (const combo of DEMO_COMBOS) {
         const categoryId = categoryIds.get(combo.categoryKey);
-        if (!categoryId) continue;
+        if (!categoryId) {
+          counters.combosSkipped++;
+          continue;
+        }
 
-        const comboItems = combo.slots.map((slot, si) => ({
+        const demoClientId = `demo-combo-${combo.key}`;
+        const conflictKey = productConflictKey(combo.name, combo.sku);
+        const existing =
+          mode === "merge"
+            ? productByKey.get(conflictKey) ||
+              productByKey.get(`client:${norm(demoClientId)}`)
+            : undefined;
+
+        if (existing) {
+          productIds.set(combo.key, existing.id);
+          counters.combosSkipped++;
+          continue;
+        }
+
+        const slotProductKeys = combo.slots.flatMap((slot) => slot.productKeys);
+        if (slotProductKeys.some((pk) => !productIds.has(pk))) {
+          counters.combosSkipped++;
+          continue;
+        }
+
+        const comboItems = combo.slots.map((slot) => ({
           id: uuidv4(),
           name: slot.name,
           minPick: slot.minPick,
@@ -163,12 +337,13 @@ export class DemoCatalogService {
             isTaxable: true,
             productType: "combo",
             comboItems,
-            sortOrder: comboSort++,
-            clientId: `demo-combo-${combo.key}`,
+            sortOrder: mode === "merge" ? productSortBase++ : comboSortBase++,
+            clientId: demoClientId,
           })
           .returning({ id: schema.products.id });
 
         productIds.set(combo.key, row!.id);
+        counters.combosCreated++;
       }
     });
 
@@ -178,10 +353,15 @@ export class DemoCatalogService {
 
     return {
       success: true,
-      categoriesCreated: DEMO_CATEGORIES.length,
-      productsCreated: DEMO_PRODUCTS.length + DEMO_COMBOS.length,
-      modifierGroupsCreated: DEMO_MODIFIER_GROUPS.length,
-      combosCreated: DEMO_COMBOS.length,
+      mode,
+      categoriesCreated: counters.categoriesCreated,
+      productsCreated: counters.productsCreated + counters.combosCreated,
+      modifierGroupsCreated: counters.modifierGroupsCreated,
+      combosCreated: counters.combosCreated,
+      categoriesSkipped: counters.categoriesSkipped,
+      productsSkipped: counters.productsSkipped,
+      modifierGroupsSkipped: counters.modifierGroupsSkipped,
+      combosSkipped: counters.combosSkipped,
       categoryNames: DEMO_CATEGORIES.map((c) => c.name),
     };
   }

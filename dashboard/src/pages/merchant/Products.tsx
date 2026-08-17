@@ -242,6 +242,7 @@ export default function Products() {
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importingDemo, setImportingDemo] = useState(false);
+  const [demoImportOpen, setDemoImportOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -653,18 +654,36 @@ export default function Products() {
     }
   };
 
-  const onImportDemo = async (force = false) => {
+  const onImportDemo = async (mode: 'replace' | 'merge') => {
     setImportingDemo(true);
+    setDemoImportOpen(false);
     try {
-      const response = await api.post('/merchant/products/import-demo', { force });
+      const response = await api.post('/merchant/products/import-demo', { mode });
       const r = response.data;
-      toast.success(
-        t('importDemoSuccess')
-          .replace('{categories}', String(r.categoriesCreated))
-          .replace('{products}', String(r.productsCreated))
-          .replace('{modifiers}', String(r.modifierGroupsCreated))
-          .replace('{combos}', String(r.combosCreated))
-      );
+      const totalSkipped =
+        (r.categoriesSkipped ?? 0) +
+        (r.productsSkipped ?? 0) +
+        (r.modifierGroupsSkipped ?? 0) +
+        (r.combosSkipped ?? 0);
+      const totalCreated =
+        (r.categoriesCreated ?? 0) +
+        (r.productsCreated ?? 0) +
+        (r.modifierGroupsCreated ?? 0);
+      if (totalSkipped > 0) {
+        toast.success(
+          t('importDemoSuccessSkipped')
+            .replace('{created}', String(totalCreated))
+            .replace('{skipped}', String(totalSkipped))
+        );
+      } else {
+        toast.success(
+          t('importDemoSuccess')
+            .replace('{categories}', String(r.categoriesCreated))
+            .replace('{products}', String(r.productsCreated))
+            .replace('{modifiers}', String(r.modifierGroupsCreated))
+            .replace('{combos}', String(r.combosCreated))
+        );
+      }
       await load();
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('importDemoFailed'));
@@ -676,12 +695,12 @@ export default function Products() {
   const onImportDemoClick = () => {
     const catalogEmpty = products.length === 0 && categories.length === 0;
     if (catalogEmpty) {
-      void onImportDemo(false);
+      if (confirm(t('importDemoEmptyConfirm'))) {
+        void onImportDemo('merge');
+      }
       return;
     }
-    if (confirm(t('importDemoConfirm'))) {
-      void onImportDemo(true);
-    }
+    setDemoImportOpen(true);
   };
 
   const catalogEmpty = products.length === 0 && categories.length === 0;
@@ -1670,6 +1689,70 @@ export default function Products() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {demoImportOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
+          onClick={() => setDemoImportOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-md rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="demo-import-title"
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
+              <h3 id="demo-import-title" className="text-sm font-semibold">
+                {t('importDemoDialogTitle')}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDemoImportOpen(false)}
+                className="rounded-md p-1.5 hover:bg-[var(--bg-muted)]"
+                aria-label={t('close')}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-3 px-4 py-4">
+              <p className="text-sm muted">{t('importDemoDialogBody')}</p>
+              <button
+                type="button"
+                disabled={importingDemo}
+                onClick={() => void onImportDemo('replace')}
+                className="w-full rounded-md border border-red-200 bg-red-50 px-3 py-3 text-left transition hover:bg-red-100"
+              >
+                <span className="block text-sm font-semibold text-red-900">
+                  {t('importDemoReplaceOption')}
+                </span>
+                <span className="mt-1 block text-xs text-red-800/90">
+                  {t('importDemoReplaceWarning')}
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={importingDemo}
+                onClick={() => void onImportDemo('merge')}
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-3 text-left transition hover:opacity-90"
+              >
+                <span className="block text-sm font-semibold">{t('importDemoMergeOption')}</span>
+                <span className="mt-1 block text-xs muted">{t('importDemoMergeHint')}</span>
+              </button>
+            </div>
+            <div className="flex justify-end border-t border-[var(--border)] px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setDemoImportOpen(false)}
+                className="btn-secondary"
+              >
+                {t('cancel')}
+              </button>
+            </div>
           </div>
         </div>
       )}

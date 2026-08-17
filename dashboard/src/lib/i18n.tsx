@@ -776,10 +776,20 @@ const en: Dict = {
   importDemoLoading: 'Importing demo…',
   importDemoEmptyHint:
     'Start with a ready-made café menu — categories, products, add-ons and combos — to try POS before adding your own items.',
-  importDemoConfirm:
-    'This merchant already has catalog items. Import demo content anyway? Existing items will stay; you may see duplicates.',
+  importDemoEmptyConfirm: 'Import the demo café menu into your empty catalog?',
+  importDemoDialogTitle: 'Import demo content',
+  importDemoDialogBody:
+    'Your catalog already has categories or products. Choose how to import the demo menu.',
+  importDemoReplaceOption: 'Replace current menu',
+  importDemoReplaceWarning:
+    'Replace will delete your current categories, products, modifier groups, and combos, then import the demo catalog.',
+  importDemoMergeOption: 'Merge with existing',
+  importDemoMergeHint:
+    'Add demo categories and products alongside yours. Items with the same category name, product name, or SKU are skipped.',
   importDemoSuccess:
     'Demo catalog imported: {categories} categories, {products} products, {modifiers} modifier groups, {combos} combos',
+  importDemoSuccessSkipped:
+    'Demo import complete: {created} created, {skipped} skipped (duplicates)',
   importDemoFailed: 'Demo import failed',
   failedLoadProducts: 'Failed to load products',
   failedSaveProductOrder: 'Failed to save product order',
@@ -2959,10 +2969,20 @@ const fr: Dict = {
   importDemoLoading: 'Import démo…',
   importDemoEmptyHint:
     'Commencez avec un menu café prêt à l’emploi — catégories, produits, suppléments et combos — pour tester la caisse avant d’ajouter vos articles.',
-  importDemoConfirm:
-    'Ce commerce a déjà des articles. Importer le contenu démo quand même ? Les articles existants restent ; des doublons peuvent apparaître.',
+  importDemoEmptyConfirm: 'Importer le menu café démo dans votre catalogue vide ?',
+  importDemoDialogTitle: 'Importer le contenu démo',
+  importDemoDialogBody:
+    'Votre catalogue contient déjà des catégories ou des produits. Choisissez comment importer le menu démo.',
+  importDemoReplaceOption: 'Remplacer le menu actuel',
+  importDemoReplaceWarning:
+    'Remplacer supprimera vos catégories, produits, groupes de modificateurs et combos actuels, puis importera le catalogue démo.',
+  importDemoMergeOption: 'Fusionner avec l’existant',
+  importDemoMergeHint:
+    'Ajoute les catégories et produits démo à côté des vôtres. Les éléments avec le même nom de catégorie, nom de produit ou SKU sont ignorés.',
   importDemoSuccess:
     'Catalogue démo importé : {categories} catégories, {products} produits, {modifiers} groupes de modificateurs, {combos} combos',
+  importDemoSuccessSkipped:
+    'Import démo terminé : {created} créés, {skipped} ignorés (doublons)',
   importDemoFailed: 'Échec de l’import démo',
   failedLoadProducts: 'Échec du chargement des produits',
   failedSaveProductOrder: 'Échec de l’enregistrement de l’ordre des produits',
@@ -5147,10 +5167,20 @@ const de: Dict = {
   importDemoLoading: 'Demo wird importiert…',
   importDemoEmptyHint:
     'Starten Sie mit einem fertigen Café-Menü — Kategorien, Produkte, Extras und Combos — um die Kasse zu testen, bevor Sie eigene Artikel hinzufügen.',
-  importDemoConfirm:
-    'Dieser Händler hat bereits Katalogeinträge. Demo-Inhalt trotzdem importieren? Bestehende Artikel bleiben; Duplikate sind möglich.',
+  importDemoEmptyConfirm: 'Demo-Café-Menü in Ihren leeren Katalog importieren?',
+  importDemoDialogTitle: 'Demo-Inhalt importieren',
+  importDemoDialogBody:
+    'Ihr Katalog enthält bereits Kategorien oder Produkte. Wählen Sie, wie das Demo-Menü importiert werden soll.',
+  importDemoReplaceOption: 'Aktuelles Menü ersetzen',
+  importDemoReplaceWarning:
+    'Ersetzen löscht Ihre aktuellen Kategorien, Produkte, Modifier-Gruppen und Combos und importiert dann den Demo-Katalog.',
+  importDemoMergeOption: 'Mit Bestehendem zusammenführen',
+  importDemoMergeHint:
+    'Demo-Kategorien und -Produkte werden ergänzt. Einträge mit gleichem Kategorienamen, Produktnamen oder SKU werden übersprungen.',
   importDemoSuccess:
     'Demo-Katalog importiert: {categories} Kategorien, {products} Produkte, {modifiers} Modifier-Gruppen, {combos} Combos',
+  importDemoSuccessSkipped:
+    'Demo-Import abgeschlossen: {created} erstellt, {skipped} übersprungen (Duplikate)',
   importDemoFailed: 'Demo-Import fehlgeschlagen',
   failedLoadProducts: 'Produkte konnten nicht geladen werden',
   failedSaveProductOrder: 'Produktreihenfolge konnte nicht gespeichert werden',

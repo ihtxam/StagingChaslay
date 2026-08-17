@@ -95,8 +95,12 @@ router.post(
       const merchantId = req.merchantId;
       if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
 
+      const mode = req.body?.mode;
       const force = req.body?.force === true;
-      const result = await DemoCatalogService.importDemo(merchantId, { force });
+      const result = await DemoCatalogService.importDemo(merchantId, {
+        mode: mode === "replace" || mode === "merge" ? mode : undefined,
+        force,
+      });
       res.json(result);
     } catch (error) {
       console.error("Demo catalog import failed:", error);
