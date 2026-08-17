@@ -465,20 +465,33 @@ class ProductRepository @Inject constructor(
     }
 
     suspend fun findByBarcode(barcode: String): BarcodeLookupResult? {
-        val trimmed = barcode.trim()
-        if (trimmed.isEmpty()) return null
-        productDao.getByBarcode(trimmed)?.let { product ->
-            return BarcodeLookupResult(productId = product.id)
+        val candidates = barcodeCandidates(barcode)
+        if (candidates.isEmpty()) return null
+        for (code in candidates) {
+            productDao.getByBarcode(code)?.let { product ->
+                return BarcodeLookupResult(productId = product.id)
+            }
         }
-        productVariantDao.getByBarcode(trimmed)?.let { variant ->
-            return BarcodeLookupResult(
-                productId = variant.productId,
-                variantId = variant.id,
-                variantName = variant.name,
-                variantPrice = variant.price
-            )
+        for (code in candidates) {
+            productVariantDao.getByBarcode(code)?.let { variant ->
+                return BarcodeLookupResult(
+                    productId = variant.productId,
+                    variantId = variant.id,
+                    variantName = variant.name,
+                    variantPrice = variant.price
+                )
+            }
         }
         return null
+    }
+
+    private fun barcodeCandidates(raw: String): List<String> {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        val noSpaces = trimmed.replace(" ", "")
+        val strippedZeros = noSpaces.trimStart('0').ifEmpty { "0" }
+        val padded13 = noSpaces.padStart(13, '0')
+        return listOf(trimmed, noSpaces, strippedZeros, padded13).distinct()
     }
 
     private fun ProductEntity.toModel(categoryName: String?, variants: List<ProductVariantModel>) =

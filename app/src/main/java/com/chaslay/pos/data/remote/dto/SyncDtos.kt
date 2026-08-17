@@ -29,10 +29,27 @@ data class SyncProductDto(
     @SerializedName("is_open_price") val isOpenPrice: Boolean? = null,
     @SerializedName("sold_by_weight") val soldByWeight: Boolean? = null,
     @SerializedName("product_type") val productType: String? = null,
+    @SerializedName(value = "combo_items", alternate = ["comboItems"])
+    val comboItems: List<SyncComboSlotDto>? = null,
     val online_visible: Boolean? = null,
     val kiosk_visible: Boolean? = null,
     val updated_at: String? = null,
     val deleted_at: String? = null
+)
+
+data class SyncComboOptionDto(
+    val productId: String? = null,
+    val extraPrice: Double? = null
+)
+
+data class SyncComboSlotDto(
+    val id: String? = null,
+    val name: String? = null,
+    val minPick: Int? = null,
+    val maxPick: Int? = null,
+    val options: List<SyncComboOptionDto>? = null,
+    val productId: String? = null,
+    val quantity: Int? = null
 )
 
 data class SyncBusinessDto(

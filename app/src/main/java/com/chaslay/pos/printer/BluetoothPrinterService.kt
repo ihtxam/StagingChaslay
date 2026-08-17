@@ -956,14 +956,14 @@ class BluetoothPrinterService @Inject constructor(
             }
         }
 
-        // VAT after payment section
+        // VAT after payment section — always use the table so Net is not mistaken for tax.
         if (settings.receiptShowVatTable && vatRows.isNotEmpty()) {
             if (cart.vatIncludedInPrice) {
                 sb.appendLine(labels.vatIncludedNote)
-                appendVatTable(sb, vatRows, labels, lineWidth)
-            } else {
-                appendCompactVatLines(sb, vatRows, labels, lineWidth)
             }
+            appendVatTable(sb, vatRows, labels, lineWidth)
+            val vatTotal = vatRows.sumOf { it.tva }
+            sb.appendLine(leftRight(labels.vatTax, twoDp(vatTotal), lineWidth))
         }
 
         val orderType = labels.fulfillmentLabel(context.fulfillmentType, context.serviceType)
@@ -1110,10 +1110,10 @@ class BluetoothPrinterService @Inject constructor(
         if (settings.receiptShowVatTable && vatRows.isNotEmpty()) {
             if (settings.vatIncludedInPrice) {
                 sb.appendLine(labels.vatIncludedNote)
-                appendVatTable(sb, vatRows, labels, lineWidth)
-            } else {
-                appendCompactVatLines(sb, vatRows, labels, lineWidth)
             }
+            appendVatTable(sb, vatRows, labels, lineWidth)
+            val vatTotal = vatRows.sumOf { it.tva }
+            sb.appendLine(leftRight(labels.vatTax, twoDp(vatTotal), lineWidth))
         }
 
         val serviceType = transaction.serviceType ?: com.chaslay.pos.domain.model.ServiceType.TAKEAWAY

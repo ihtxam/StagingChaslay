@@ -30,6 +30,9 @@
     <string name="settings_section_tables">Tables &amp; Designer</string>
     <string name="settings_section_payments">Payments</string>
     <string name="settings_section_printers">Printers</string>
+    <string name="settings_section_scale">Scale</string>
+    <string name="printer_connected">Connected</string>
+    <string name="printer_selected_help">This printer is used for receipts.</string>
     <string name="settings_section_receipts">Receipts</string>
     <string name="settings_section_floor_devices">Floor &amp; Waiters</string>
     <string name="settings_section_users">Users &amp; Roles</string>

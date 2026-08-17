@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -129,6 +130,13 @@ fun ComboPickDialog(
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        if (combo.slots.isEmpty()) {
+                            Text(
+                                "Combo choices are not available yet. Sync the menu from the merchant panel, then try again.",
+                                color = Color(0xFFFFCC80),
+                                fontSize = 14.sp
+                            )
+                        }
                         combo.slots.forEach { slot ->
                             ComboSlotSection(
                                 slot = slot,
@@ -283,10 +291,12 @@ private fun ComboSlotSection(
             )
         }
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Fixed(3),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.height(((slot.options.size + 1) / 2 * tileHeight.value.toInt()).coerceAtLeast(tileHeight.value.toInt()).dp)
+            modifier = Modifier.height(
+                ((((slot.options.size + 2) / 3) * tileHeight.value.toInt()).coerceAtLeast(tileHeight.value.toInt())).dp
+            )
         ) {
             items(slot.options, key = { it.productId }) { option ->
                 val qty = picks[option.productId] ?: 0

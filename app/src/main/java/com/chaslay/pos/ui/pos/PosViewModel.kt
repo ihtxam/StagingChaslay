@@ -1292,6 +1292,7 @@ class PosViewModel @Inject constructor(
             }
             extras.copy(keypadBuffer = next.take(12))
         }
+        applyKeypadBuffer(deselect = false)
     }
 
     fun onKeypadBackspace() {
@@ -1324,6 +1325,10 @@ class PosViewModel @Inject constructor(
     }
 
     fun onKeypadEnter() {
+        applyKeypadBuffer(deselect = true)
+    }
+
+    private fun applyKeypadBuffer(deselect: Boolean) {
         val extras = _uiExtras.value
         val buffer = extras.keypadBuffer
         val value = buffer.toDoubleOrNull() ?: return
@@ -1344,7 +1349,7 @@ class PosViewModel @Inject constructor(
                 val taxRate = resolveTaxRate(0L, cachedSettings.takeawayVatRate, serviceType)
                 if (selectedId != null) {
                     cartManager.overrideItemPrice(selectedId, value)
-                } else {
+                } else if (deselect) {
                     val itemId = UUID.randomUUID().toString()
                     cartManager.addItem(
                         CartItem(
@@ -1357,11 +1362,15 @@ class PosViewModel @Inject constructor(
                         )
                     )
                     updateExtras { it.copy(lastAddedItemId = itemId) }
+                } else {
+                    return
                 }
             }
         }
-        updateExtras { it.copy(keypadBuffer = "", selectedCartItemId = null, keypadExpanded = false) }
-        persistTableOrderAsync()
+        if (deselect) {
+            updateExtras { it.copy(keypadBuffer = "", selectedCartItemId = null, keypadExpanded = false) }
+            persistTableOrderAsync()
+        }
     }
 
     fun addMiscItemQuick() {
@@ -3166,17 +3175,17 @@ class PosViewModel @Inject constructor(
     }
 
     fun initiateCashPayment(activity: Activity? = null) {
-        if (!cachedSettings.cashEnabled) return
+        if (!cachedSettings.expressEnabled || !cachedSettings.cashEnabled) return
         expressPay(PaymentMethod.CASH, activity)
     }
 
     fun initiateCardPayment(activity: Activity? = null) {
-        if (!cachedSettings.cardEnabled) return
+        if (!cachedSettings.expressEnabled || !cachedSettings.cardEnabled) return
         expressPay(PaymentMethod.CARD, activity)
     }
 
     fun initiateTerminalPayment(activity: Activity? = null) {
-        if (!cachedSettings.isAdyenTerminalCheckoutEnabled()) return
+        if (!cachedSettings.expressEnabled || !cachedSettings.isAdyenTerminalCheckoutEnabled()) return
         expressPay(PaymentMethod.ADYEN_TERMINAL, activity)
     }
 
@@ -3980,8 +3989,9 @@ class PosViewModel @Inject constructor(
             },
             onFailure = { e ->
                 Log.w("POS", "Receipt publish failed: ${e.message}", e)
-                transactionRepository.clearReceiptUrl(transaction.id)
-                transaction.copy(receiptUrl = null) to null
+                val fallback = receiptRepository.buildPublicUrl(transaction.id, settings)
+                transactionRepository.updateReceiptUrl(transaction.id, fallback)
+                transaction.copy(receiptUrl = fallback) to fallback
             }
         )
     }

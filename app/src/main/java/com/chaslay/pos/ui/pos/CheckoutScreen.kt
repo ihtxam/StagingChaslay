@@ -368,19 +368,6 @@ fun CheckoutScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-            Text("ROUNDING", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0.0 to "None", 0.05 to "0.05", 0.10 to "0.10", 0.50 to "0.50", 1.0 to "1.00").forEach { (step, label) ->
-                    FilterChip(
-                        selected = checkoutState.roundingStep == step,
-                        onClick = { onRoundingStep(step) },
-                        label = { Text(label) }
-                    )
-                }
-            }
-
             if (quickCashEnabled) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text("QUICK CASH", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray)

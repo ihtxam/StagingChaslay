@@ -6,6 +6,7 @@ import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { AuthService } from "./auth.service";
 import { MerchantSettingsService } from "./merchant-settings.service";
 import { receiptPublicUrl } from "@/lib/receipt-public-url";
+import { normalizeComboSlots } from "@/lib/combo";
 
 export function normalizeChaslayDeviceId(deviceId: string): string {
   if (!deviceId) return "";
@@ -356,6 +357,9 @@ export class ChaslayCompatService {
     const categoryClientById = new Map(
       categories.map((c) => [c.id, c.clientId || c.id] as const)
     );
+    const productClientById = new Map(
+      products.map((p) => [p.id, p.clientId || p.id] as const)
+    );
     const addressParts = [merchant.address, merchant.city, merchant.country].filter(Boolean);
     const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
     return {
@@ -383,7 +387,7 @@ export class ChaslayCompatService {
         receipt_base_url: receiptPublicBaseUrl(),
       },
       categories: categories.map((c) => this.mapCategory(c)),
-      products: products.map((p) => this.mapProduct(p, false, categoryClientById)),
+      products: products.map((p) => this.mapProduct(p, false, categoryClientById, productClientById)),
       paymentConfig: await this.getPaymentConfigPayload(merchantId),
       floor_plans: floorPlans.map((p) => ({
         id: p.id,
@@ -607,11 +611,17 @@ export class ChaslayCompatService {
     const categoryClientById = new Map(
       allCategories.map((c) => [c.id, c.clientId || c.id] as const)
     );
+    const allProducts = await db.query.products.findMany({
+      where: eq(schema.products.merchantId, merchantId),
+    });
+    const productClientById = new Map(
+      allProducts.map((p) => [p.id, p.clientId || p.id] as const)
+    );
 
     return {
       serverTime: Date.now(),
       categories: categories.map((c) => this.mapCategory(c, true)),
-      products: products.map((p) => this.mapProduct(p, true, categoryClientById)),
+      products: products.map((p) => this.mapProduct(p, true, categoryClientById, productClientById)),
     };
   }
 
@@ -692,11 +702,22 @@ export class ChaslayCompatService {
   static mapProduct(
     p: typeof schema.products.$inferSelect,
     includeDeleted = false,
-    categoryClientById?: Map<string, string>
+    categoryClientById?: Map<string, string>,
+    productClientById?: Map<string, string>
   ) {
     const categoryId = p.categoryId
       ? categoryClientById?.get(p.categoryId) || p.categoryId
       : null;
+    const comboItems = normalizeComboSlots(p.comboItems).map((slot) => ({
+      id: slot.id,
+      name: slot.name,
+      minPick: slot.minPick,
+      maxPick: slot.maxPick,
+      options: slot.options.map((o) => ({
+        productId: productClientById?.get(o.productId) || o.productId,
+        extraPrice: o.extraPrice,
+      })),
+    }));
     // stock defaults to 0 in DB — that means "not tracking inventory", not unavailable.
     // Use isActive for POS/menu availability; only hide when merchant deactivated the item.
     return {
@@ -714,6 +735,7 @@ export class ChaslayCompatService {
       is_open_price: !!p.isOpenPrice,
       sold_by_weight: !!p.soldByWeight,
       product_type: p.productType || "standard",
+      combo_items: comboItems,
       online_visible: p.isActive,
       kiosk_visible: p.isActive,
       updated_at: p.updatedAt?.toISOString(),
