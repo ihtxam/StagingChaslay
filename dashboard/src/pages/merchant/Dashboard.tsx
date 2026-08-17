@@ -79,6 +79,9 @@ function MerchantShell() {
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
   const isWaiterRoute = /^\/merchant\/waiter\/?$/.test(location.pathname);
   const isPosLikeRoute = isPosRoute || isWaiterRoute;
+  const isCatalogRoute = /^\/merchant\/(products|categories|modifiers)\/?$/.test(
+    location.pathname
+  );
   const isPosEmbed =
     typeof window !== 'undefined' &&
     (new URLSearchParams(location.search).get('embed') === '1' ||
@@ -285,7 +288,8 @@ function MerchantShell() {
           <Header
             title={t('merchantDashboard')}
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-            showAcceptingMenu
+            showAcceptingMenu={!isCatalogRoute}
+            compact={isCatalogRoute}
           />
         )}
 
