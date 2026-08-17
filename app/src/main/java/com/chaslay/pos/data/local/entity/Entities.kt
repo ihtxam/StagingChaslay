@@ -555,9 +555,10 @@ data class HeldOrderItemEntity(
     val isWeighed: Boolean = false
 )
 
-@Entity(tableName = "modifier_groups")
+@Entity(tableName = "modifier_groups", indices = [Index("remoteId")])
 data class ModifierGroupEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val remoteId: String? = null,
     val name: String,
     val limitQuantity: Int = 1,
     val required: Boolean = false,
@@ -586,9 +587,10 @@ data class ModifierOptionEntity(
     val isActive: Boolean = true
 )
 
-@Entity(tableName = "addon_groups")
+@Entity(tableName = "addon_groups", indices = [Index("remoteId")])
 data class AddonGroupEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val remoteId: String? = null,
     val name: String,
     val limitQuantity: Int = 1,
     val required: Boolean = false,
@@ -692,5 +694,6 @@ data class ComboSlotOptionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val slotId: Long,
     val productId: Long,
+    val extraPrice: Double = 0.0,
     val sortOrder: Int = 0
 )

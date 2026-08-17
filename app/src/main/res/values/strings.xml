@@ -453,6 +453,14 @@
     <string name="combo_price_format">CHF %.2f</string>
     <string name="combo_deal_price">Combo deal %1$s %2$.2f</string>
     <string name="combo_add_to_order">Add to order</string>
+    <string name="combo_customize_item">Customize</string>
+    <string name="combo_extras">Combo extras</string>
+    <string name="combo_choices_unavailable">Combo choices are not available yet. Sync the menu from the merchant panel, then try again.</string>
+    <string name="combo_slot_empty">No products in this slot. Sync the menu from the merchant panel.</string>
+    <string name="order_complete">Order Complete</string>
+    <string name="total_paid">TOTAL PAID</string>
+    <string name="printers_page_help">Receipt and kitchen printers only. The USB scale is on the Scale page.</string>
+    <string name="scale_page_help">USB weighing scale only — this is not a printer. Printers are on the Printers page.</string>
     <string name="combo_slot_included">%1$d included</string>
     <string name="combo_slot_selected">%1$d/%2$d selected</string>
     <string name="combo_slot_pick_range">Choose %1$d–%2$d</string>

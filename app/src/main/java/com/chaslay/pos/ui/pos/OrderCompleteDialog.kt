@@ -17,9 +17,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material3.Button
@@ -111,13 +112,25 @@ fun OrderCompleteDialog(
                     Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Order Complete", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = OrderCompleteTextPrimary)
                 Text(
-                    "#${transaction.transactionNumber.takeLast(6).uppercase()}  ·  ${paymentLabel(transaction.paymentMethod)}",
-                    fontSize = 15.sp,
+                    stringResource(R.string.order_complete),
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OrderCompleteTextPrimary
+                )
+                Text(
+                    "#${transaction.transactionNumber.takeLast(6).uppercase()}",
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
+                    color = OrderCompleteTextPrimary,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                Text(
+                    paymentLabel(transaction.paymentMethod),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
                     color = OrderCompleteTextSecondary,
-                    modifier = Modifier.padding(top = 6.dp)
+                    modifier = Modifier.padding(top = 2.dp)
                 )
                 if (splitPaymentIndex != null && splitPaymentTotal != null) {
                     Text(
@@ -205,7 +218,7 @@ fun OrderCompleteDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            "TOTAL PAID",
+                            stringResource(R.string.total_paid),
                             fontSize = 12.sp,
                             color = OrderCompleteTextSecondary,
                             fontWeight = FontWeight.SemiBold,
@@ -243,7 +256,7 @@ fun OrderCompleteDialog(
                         onClick = onPrintReceipt
                     )
                     SuccessIconButton(
-                        icon = Icons.Default.Email,
+                        icon = Icons.AutoMirrored.Filled.Send,
                         label = stringResource(R.string.email_receipt),
                         onClick = onShareEmail
                     )
@@ -262,8 +275,8 @@ fun OrderCompleteDialog(
                         )
                     }
                     SuccessIconButton(
-                        icon = Icons.Default.Check,
-                        label = "Done",
+                        icon = Icons.AutoMirrored.Filled.ArrowForward,
+                        label = stringResource(R.string.done),
                         primary = true,
                         onClick = onDone
                     )
@@ -283,11 +296,11 @@ private fun SuccessIconButton(
     Button(
         onClick = onClick,
         modifier = Modifier.size(64.dp),
-        shape = CircleShape,
+        shape = RoundedCornerShape(16.dp),
         contentPadding = PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (primary) Color(0xFF0F172A) else Color(0xFFF1F5F9),
-            contentColor = if (primary) Color.White else OrderCompleteTextPrimary
+            containerColor = if (primary) Color(0xFF5B21B6) else Color(0xFFF5F5F4),
+            contentColor = if (primary) Color.White else Color(0xFF44403C)
         )
     ) {
         Icon(icon, contentDescription = label, modifier = Modifier.size(26.dp))

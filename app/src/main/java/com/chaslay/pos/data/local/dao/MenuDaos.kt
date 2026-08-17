@@ -23,6 +23,9 @@ interface ModifierGroupDao {
     @Query("SELECT * FROM modifier_groups WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): ModifierGroupEntity?
 
+    @Query("SELECT * FROM modifier_groups WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun getByRemoteId(remoteId: String): ModifierGroupEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(group: ModifierGroupEntity): Long
 
@@ -58,6 +61,9 @@ interface AddonGroupDao {
 
     @Query("SELECT * FROM addon_groups WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): AddonGroupEntity?
+
+    @Query("SELECT * FROM addon_groups WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun getByRemoteId(remoteId: String): AddonGroupEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(group: AddonGroupEntity): Long

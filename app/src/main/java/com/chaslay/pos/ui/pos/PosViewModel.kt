@@ -990,13 +990,15 @@ class PosViewModel @Inject constructor(
             id = itemId,
             productId = product.id,
             productName = product.name,
-            unitPrice = product.price,
+            unitPrice = result.unitPrice,
             quantity = result.quantity,
             taxRate = resolveTaxRate(product.id, product.taxRate, serviceType),
             sku = product.sku,
             categoryId = product.categoryId,
             isCombo = true,
-            comboSelections = result.selections
+            comboSelections = result.selections,
+            modifiers = result.comboModifiers,
+            addons = result.comboExtras
         ).let { it.copy(notes = it.optionNotes()) }
         cartManager.addItem(item)
         playItemClickBeep()

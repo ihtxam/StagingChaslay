@@ -1,13 +1,25 @@
 package com.chaslay.pos.sync
 
+import com.chaslay.pos.data.local.dao.AddonGroupDao
+import com.chaslay.pos.data.local.dao.AddonOptionDao
 import com.chaslay.pos.data.local.dao.CategoryDao
 import com.chaslay.pos.data.local.dao.ComboSlotDao
 import com.chaslay.pos.data.local.dao.ComboSlotOptionDao
+import com.chaslay.pos.data.local.dao.ModifierGroupDao
+import com.chaslay.pos.data.local.dao.ModifierOptionDao
+import com.chaslay.pos.data.local.dao.ProductAddonGroupDao
 import com.chaslay.pos.data.local.dao.ProductDao
+import com.chaslay.pos.data.local.dao.ProductModifierGroupDao
+import com.chaslay.pos.data.local.entity.AddonGroupEntity
+import com.chaslay.pos.data.local.entity.AddonOptionEntity
 import com.chaslay.pos.data.local.entity.CategoryEntity
 import com.chaslay.pos.data.local.entity.ComboSlotEntity
 import com.chaslay.pos.data.local.entity.ComboSlotOptionEntity
+import com.chaslay.pos.data.local.entity.ModifierGroupEntity
+import com.chaslay.pos.data.local.entity.ModifierOptionEntity
+import com.chaslay.pos.data.local.entity.ProductAddonGroupEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
+import com.chaslay.pos.data.local.entity.ProductModifierGroupEntity
 import com.chaslay.pos.data.preferences.SyncApiKeyStore
 import com.chaslay.pos.data.preferences.SyncPreferences
 import com.chaslay.pos.util.TextEncoding
@@ -17,6 +29,8 @@ import com.chaslay.pos.data.remote.dto.PushCatalogProductDto
 import com.chaslay.pos.data.remote.dto.PushCatalogRequest
 import com.chaslay.pos.data.remote.dto.SyncBusinessDto
 import com.chaslay.pos.data.remote.dto.SyncCategoryDto
+import com.chaslay.pos.data.remote.dto.SyncExtraDto
+import com.chaslay.pos.data.remote.dto.SyncModifierGroupDto
 import com.chaslay.pos.data.remote.dto.SyncProductDto
 import com.chaslay.pos.data.repository.SettingsRepository
 import com.google.gson.JsonElement
@@ -44,6 +58,12 @@ class MenuSyncRepository @Inject constructor(
     private val productDao: ProductDao,
     private val comboSlotDao: ComboSlotDao,
     private val comboSlotOptionDao: ComboSlotOptionDao,
+    private val modifierGroupDao: ModifierGroupDao,
+    private val modifierOptionDao: ModifierOptionDao,
+    private val addonGroupDao: AddonGroupDao,
+    private val addonOptionDao: AddonOptionDao,
+    private val productModifierGroupDao: ProductModifierGroupDao,
+    private val productAddonGroupDao: ProductAddonGroupDao,
     private val settingsRepository: SettingsRepository
 ) {
     suspend fun syncMenu(mode: MenuSyncMode = MenuSyncMode.MERGE): MenuSyncResult =
@@ -98,6 +118,10 @@ class MenuSyncRepository @Inject constructor(
             persistComboSlotsFromCatalog(
                 catalogProducts = bootstrap?.products ?: products,
                 categoryIdByRemote = categoryIdByRemote,
+                productIdByRemote = productIdByRemote
+            )
+            persistModifiersFromCatalog(
+                catalogProducts = bootstrap?.products ?: products,
                 productIdByRemote = productIdByRemote
             )
 
@@ -319,10 +343,11 @@ class MenuSyncRepository @Inject constructor(
         val slots = parseComboItems(rawSlots)
         if (slots.isEmpty()) return
         slots.forEachIndexed { slotIndex, slot ->
-            val optionIds = slot.optionRemoteIds.mapNotNull { remote ->
-                resolveLocalProductId(remote, productIdByRemote)
-            }.distinct()
-            if (optionIds.isEmpty()) return@forEachIndexed
+            val resolved = slot.options.mapNotNull { opt ->
+                val productId = resolveLocalProductId(opt.remoteId, productIdByRemote) ?: return@mapNotNull null
+                productId to opt.extraPrice
+            }.distinctBy { it.first }
+            if (resolved.isEmpty()) return@forEachIndexed
             val slotId = comboSlotDao.insert(
                 ComboSlotEntity(
                     comboProductId = comboProductId,
@@ -333,11 +358,154 @@ class MenuSyncRepository @Inject constructor(
                 )
             )
             comboSlotOptionDao.insertAll(
-                optionIds.mapIndexed { optIndex, productId ->
-                    ComboSlotOptionEntity(slotId = slotId, productId = productId, sortOrder = optIndex)
+                resolved.mapIndexed { optIndex, (productId, extraPrice) ->
+                    ComboSlotOptionEntity(
+                        slotId = slotId,
+                        productId = productId,
+                        extraPrice = extraPrice,
+                        sortOrder = optIndex
+                    )
                 }
             )
         }
+    }
+
+    private suspend fun persistModifiersFromCatalog(
+        catalogProducts: List<SyncProductDto>,
+        productIdByRemote: Map<String, Long>
+    ) {
+        catalogProducts.forEach { dto ->
+            val localId = productIdByRemote[dto.id] ?: productDao.getByRemoteId(dto.id)?.id ?: return@forEach
+            persistProductModifiers(localId, dto)
+        }
+    }
+
+    private suspend fun persistProductModifiers(localProductId: Long, dto: SyncProductDto) {
+        val groups = dto.modifierGroups
+        val extras = dto.extras
+        if (groups == null && extras == null) return
+        productModifierGroupDao.deleteByProduct(localProductId)
+        productAddonGroupDao.deleteByProduct(localProductId)
+        if (!groups.isNullOrEmpty()) {
+            groups.forEachIndexed { index, group ->
+                val remoteId = group.id?.takeIf { it.isNotBlank() } ?: return@forEachIndexed
+                val priced = group.pricingType != "free" &&
+                    group.options.orEmpty().any { (it.price ?: 0.0) > 0.0 }
+                if (priced) {
+                    val groupId = upsertAddonGroup(remoteId, group)
+                    productAddonGroupDao.insertAll(
+                        listOf(ProductAddonGroupEntity(localProductId, groupId, index))
+                    )
+                } else {
+                    val groupId = upsertModifierGroup(remoteId, group)
+                    productModifierGroupDao.insertAll(
+                        listOf(ProductModifierGroupEntity(localProductId, groupId, index))
+                    )
+                }
+            }
+        } else if (!extras.isNullOrEmpty()) {
+            val groupId = upsertLegacyExtrasGroup(dto.id, extras)
+            productAddonGroupDao.insertAll(
+                listOf(ProductAddonGroupEntity(localProductId, groupId, 0))
+            )
+        }
+    }
+
+    private suspend fun upsertModifierGroup(remoteId: String, group: SyncModifierGroupDto): Long {
+        val existing = modifierGroupDao.getByRemoteId(remoteId)
+        val entity = ModifierGroupEntity(
+            id = existing?.id ?: 0L,
+            remoteId = remoteId,
+            name = TextEncoding.repairCatalogText(group.title ?: group.name ?: "Options"),
+            limitQuantity = (group.maxSelectable ?: 1).coerceAtLeast(1),
+            required = group.selectionType == "required" || (group.minSelectable ?: 0) > 0,
+            sortOrder = group.sortOrder ?: existing?.sortOrder ?: 0,
+            isActive = true
+        )
+        val id = if (existing == null) modifierGroupDao.insert(entity) else {
+            modifierGroupDao.update(entity)
+            existing.id
+        }
+        modifierOptionDao.deleteByGroup(id)
+        val options = group.options.orEmpty().mapIndexedNotNull { index, opt ->
+            val name = opt.name?.trim().orEmpty()
+            if (name.isEmpty()) return@mapIndexedNotNull null
+            ModifierOptionEntity(
+                groupId = id,
+                name = TextEncoding.repairCatalogText(name),
+                sortOrder = opt.sortOrder ?: index,
+                inStock = opt.saleStatus != "out_of_stock",
+                isActive = true
+            )
+        }
+        if (options.isNotEmpty()) modifierOptionDao.insertAll(options)
+        return id
+    }
+
+    private suspend fun upsertAddonGroup(remoteId: String, group: SyncModifierGroupDto): Long {
+        val existing = addonGroupDao.getByRemoteId(remoteId)
+        val entity = AddonGroupEntity(
+            id = existing?.id ?: 0L,
+            remoteId = remoteId,
+            name = TextEncoding.repairCatalogText(group.title ?: group.name ?: "Extras"),
+            limitQuantity = (group.maxSelectable ?: 1).coerceAtLeast(1),
+            required = group.selectionType == "required" || (group.minSelectable ?: 0) > 0,
+            allowMultipleSame = group.allowMultipleSameItem == true,
+            sortOrder = group.sortOrder ?: existing?.sortOrder ?: 0,
+            isActive = true
+        )
+        val id = if (existing == null) addonGroupDao.insert(entity) else {
+            addonGroupDao.update(entity)
+            existing.id
+        }
+        addonOptionDao.deleteByGroup(id)
+        val options = group.options.orEmpty().mapIndexedNotNull { index, opt ->
+            val name = opt.name?.trim().orEmpty()
+            if (name.isEmpty()) return@mapIndexedNotNull null
+            AddonOptionEntity(
+                groupId = id,
+                name = TextEncoding.repairCatalogText(name),
+                price = opt.price ?: 0.0,
+                sortOrder = opt.sortOrder ?: index,
+                inStock = opt.saleStatus != "out_of_stock",
+                isActive = true
+            )
+        }
+        if (options.isNotEmpty()) addonOptionDao.insertAll(options)
+        return id
+    }
+
+    private suspend fun upsertLegacyExtrasGroup(productRemoteId: String, extras: List<SyncExtraDto>): Long {
+        val remoteId = "legacy-extras:$productRemoteId"
+        val existing = addonGroupDao.getByRemoteId(remoteId)
+        val entity = AddonGroupEntity(
+            id = existing?.id ?: 0L,
+            remoteId = remoteId,
+            name = "Extras",
+            limitQuantity = extras.size.coerceAtLeast(1),
+            required = false,
+            allowMultipleSame = false,
+            sortOrder = 0,
+            isActive = true
+        )
+        val id = if (existing == null) addonGroupDao.insert(entity) else {
+            addonGroupDao.update(entity)
+            existing.id
+        }
+        addonOptionDao.deleteByGroup(id)
+        val options = extras.mapIndexedNotNull { index, extra ->
+            val name = extra.name?.trim().orEmpty()
+            if (name.isEmpty()) return@mapIndexedNotNull null
+            AddonOptionEntity(
+                groupId = id,
+                name = TextEncoding.repairCatalogText(name),
+                price = extra.price,
+                sortOrder = index,
+                isActive = true
+            )
+        }
+        if (options.isNotEmpty()) addonOptionDao.insertAll(options)
+        return id
     }
 
     private suspend fun resolveLocalProductId(

@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import com.chaslay.pos.domain.model.FloorConnectionMode
 import com.chaslay.pos.domain.model.FloorDeviceRole
 import com.chaslay.pos.domain.model.PosMode
@@ -79,6 +80,8 @@ import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocalOffer
+import androidx.compose.material.icons.outlined.MonitorWeight
+import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
 import com.chaslay.pos.ui.license.LicenseSettingsSection
@@ -159,12 +162,30 @@ fun SettingsScreen(
                         .clickable { viewModel.selectSection(section) }
                         .padding(horizontal = 12.dp, vertical = 12.dp)
                 ) {
-                    Text(
-                        stringResource(section.titleRes),
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selected) Color.White else colors.textPrimary,
-                        fontSize = 13.sp
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val sectionIcon = when (section) {
+                            SettingsSection.PRINTERS -> Icons.Outlined.Print
+                            SettingsSection.SCALE -> Icons.Outlined.MonitorWeight
+                            else -> null
+                        }
+                        sectionIcon?.let { icon ->
+                            Icon(
+                                icon,
+                                contentDescription = null,
+                                tint = if (selected) Color.White else colors.textPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Text(
+                            stringResource(section.titleRes),
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selected) Color.White else colors.textPrimary,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             }
         }
@@ -622,8 +643,19 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.PRINTERS) {
-        Text(stringResource(R.string.printers), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(stringResource(R.string.printers), fontWeight = FontWeight.Bold, fontSize = 22.sp)
+        Text(
+            stringResource(R.string.printers_page_help),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF166534),
+            fontWeight = FontWeight.SemiBold
+        )
         Text(stringResource(R.string.printers_help), style = MaterialTheme.typography.bodySmall)
+        Text(
+            stringResource(R.string.app_version_format, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+            fontSize = 11.sp,
+            color = Color.Gray
+        )
         Button(onClick = viewModel::showAddPrinterDialog, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.add_printer))
         }
@@ -770,8 +802,19 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.SCALE) {
-        Text(stringResource(R.string.scale_section), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(stringResource(R.string.scale_section), fontWeight = FontWeight.Bold, fontSize = 22.sp)
+        Text(
+            stringResource(R.string.scale_page_help),
+            fontSize = 14.sp,
+            color = Color(0xFF1D4ED8),
+            fontWeight = FontWeight.SemiBold
+        )
         Text(stringResource(R.string.scale_help), fontSize = 12.sp, color = Color.Gray)
+        Text(
+            stringResource(R.string.app_version_format, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+            fontSize = 11.sp,
+            color = Color.Gray
+        )
         SettingSwitch(stringResource(R.string.scale_enabled), state.scaleEnabled, viewModel::updateScaleEnabled)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = viewModel::scanScaleUsbDevices) {

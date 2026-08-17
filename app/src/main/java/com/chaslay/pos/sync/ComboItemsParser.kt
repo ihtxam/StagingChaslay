@@ -3,12 +3,19 @@ package com.chaslay.pos.sync
 import com.google.gson.JsonElement
 import com.google.gson.JsonParser
 
+internal data class ParsedComboOption(
+    val remoteId: String,
+    val extraPrice: Double = 0.0
+)
+
 internal data class ParsedComboSlot(
     val name: String,
     val minPick: Int,
     val maxPick: Int,
-    val optionRemoteIds: List<String>
-)
+    val options: List<ParsedComboOption>
+) {
+    val optionRemoteIds: List<String> get() = options.map { it.remoteId }
+}
 
 internal fun hasComboItemsPayload(raw: JsonElement?): Boolean {
     if (raw == null || raw.isJsonNull) return false
@@ -26,33 +33,42 @@ internal fun parseComboItems(raw: JsonElement?): List<ParsedComboSlot> {
         if (element.isJsonPrimitive) {
             val id = element.asString.trim()
             if (id.isEmpty()) return@mapIndexedNotNull null
-            return@mapIndexedNotNull ParsedComboSlot("Choice ${idx + 1}", 1, 1, listOf(id))
+            return@mapIndexedNotNull ParsedComboSlot(
+                "Choice ${idx + 1}",
+                1,
+                1,
+                listOf(ParsedComboOption(id))
+            )
         }
         if (!element.isJsonObject) return@mapIndexedNotNull null
         val obj = element.asJsonObject
-        val optionIds = linkedSetOf<String>()
+        val options = linkedMapOf<String, ParsedComboOption>()
 
         val optionsEl = firstElement(obj, "options", "products", "items")
         if (optionsEl != null && optionsEl.isJsonArray) {
             optionsEl.asJsonArray.forEach { opt ->
-                optionIds.addAll(optionIdsFrom(opt))
+                optionFrom(opt)?.let { parsed -> options.putIfAbsent(parsed.remoteId, parsed) }
             }
         }
-        if (optionIds.isEmpty()) {
+        if (options.isEmpty()) {
             val idsEl = firstElement(obj, "productIds", "product_ids")
             if (idsEl != null && idsEl.isJsonArray) {
-                idsEl.asJsonArray.forEach { optionIds.addAll(optionIdsFrom(it)) }
+                idsEl.asJsonArray.forEach { el ->
+                    optionFrom(el)?.let { parsed -> options.putIfAbsent(parsed.remoteId, parsed) }
+                }
             }
         }
-        if (optionIds.isEmpty()) {
-            firstString(obj, "productId", "product_id")?.let(optionIds::add)
+        if (options.isEmpty()) {
+            firstString(obj, "productId", "product_id")?.let { id ->
+                options[id] = ParsedComboOption(id, firstDouble(obj, "extraPrice", "extra_price") ?: 0.0)
+            }
         }
-        if (optionIds.isEmpty()) return@mapIndexedNotNull null
+        if (options.isEmpty()) return@mapIndexedNotNull null
 
         val minPick = (firstInt(obj, "minPick", "min_pick") ?: 1).coerceAtLeast(0)
         val maxPick = (firstInt(obj, "maxPick", "max_pick") ?: 1).coerceAtLeast(minPick.coerceAtLeast(1))
         val name = firstString(obj, "name")?.trim().orEmpty().ifEmpty { "Choice ${idx + 1}" }
-        ParsedComboSlot(name, minPick, maxPick, optionIds.toList())
+        ParsedComboSlot(name, minPick, maxPick, options.values.toList())
     }
 }
 
@@ -67,16 +83,25 @@ private fun comboItemsArray(raw: JsonElement?): com.google.gson.JsonArray? {
     return null
 }
 
-private fun optionIdsFrom(element: JsonElement?): List<String> {
-    if (element == null || element.isJsonNull) return emptyList()
+private fun optionFrom(element: JsonElement?): ParsedComboOption? {
+    if (element == null || element.isJsonNull) return null
     if (element.isJsonPrimitive) {
-        return element.asString.trim().takeIf { it.isNotEmpty() }?.let { listOf(it) }.orEmpty()
+        return element.asString.trim().takeIf { it.isNotEmpty() }?.let { ParsedComboOption(it) }
     }
-    if (!element.isJsonObject) return emptyList()
+    if (!element.isJsonObject) return null
     val obj = element.asJsonObject
-    return listOfNotNull(
-        firstString(obj, "productId", "product_id", "sourceProductId", "source_product_id", "id", "clientId", "client_id")
-    )
+    val id = firstString(
+        obj,
+        "productId",
+        "product_id",
+        "sourceProductId",
+        "source_product_id",
+        "id",
+        "clientId",
+        "client_id"
+    ) ?: return null
+    val extraPrice = firstDouble(obj, "extraPrice", "extra_price") ?: 0.0
+    return ParsedComboOption(id, extraPrice)
 }
 
 private fun firstElement(obj: com.google.gson.JsonObject, vararg keys: String): JsonElement? {
@@ -105,6 +130,17 @@ private fun firstInt(obj: com.google.gson.JsonObject, vararg keys: String): Int?
         val primitive = el.asJsonPrimitive
         if (primitive.isNumber) return primitive.asInt
         if (primitive.isString) return primitive.asString.toIntOrNull()
+    }
+    return null
+}
+
+private fun firstDouble(obj: com.google.gson.JsonObject, vararg keys: String): Double? {
+    keys.forEach { key ->
+        val el = obj.get(key) ?: return@forEach
+        if (el.isJsonNull || !el.isJsonPrimitive) return@forEach
+        val primitive = el.asJsonPrimitive
+        if (primitive.isNumber) return primitive.asDouble
+        if (primitive.isString) return primitive.asString.toDoubleOrNull()
     }
     return null
 }
