@@ -96,6 +96,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -1542,7 +1543,6 @@ private fun VectronOrderPanel(
                 .fillMaxWidth()
                 .background(Color(0xFFF2F2F2), RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
                 .padding(horizontal = 6.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             CartOrderMenuButton(
@@ -1569,7 +1569,9 @@ private fun VectronOrderPanel(
                 TextButton(
                     onClick = onAddCustomer,
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                    modifier = Modifier.padding(end = 4.dp)
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .padding(end = 4.dp)
                 ) {
                     Icon(
                         Icons.Default.Person,
@@ -1583,21 +1585,22 @@ private fun VectronOrderPanel(
                             ?: stringResource(R.string.choose_customer),
                         color = Color(0xFF333333),
                         fontSize = 11.sp,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
             }
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.End
-            ) {
+            Spacer(modifier = Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    stringResource(R.string.receipt),
+                    text = stringResource(R.string.receipt),
                     color = Color(0xFF333333),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     maxLines = 1,
-                    softWrap = false
+                    softWrap = false,
+                    overflow = TextOverflow.Visible
                 )
                 cartFulfillmentHeadline(
                     cart = cart,
@@ -1609,6 +1612,8 @@ private fun VectronOrderPanel(
                         color = Color(0xFF666666),
                         fontSize = 11.sp,
                         maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.End
                     )
                 }
@@ -2624,7 +2629,7 @@ private fun VectronProductGrid(
     cashEnabled: Boolean = true,
     cardEnabled: Boolean = true,
     terminalEnabled: Boolean = false,
-    expressEnabled: Boolean = true,
+    expressEnabled: Boolean = false,
     showScanButton: Boolean = false,
     gridColumns: Int = 5,
     showProductImages: Boolean = false,

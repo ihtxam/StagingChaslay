@@ -338,9 +338,10 @@ export class ChaslayCompatService {
       where: eq(schema.categories.merchantId, merchantId),
     });
 
-    const products = await db.query.products.findMany({
-      where: and(eq(schema.products.merchantId, merchantId), eq(schema.products.isActive, true)),
+    const allProducts = await db.query.products.findMany({
+      where: eq(schema.products.merchantId, merchantId),
     });
+    const products = allProducts.filter((p) => p.isActive !== false);
 
     const { FloorPlanService } = await import("@/services/floor-plan.service");
     const { ReservationService } = await import("@/services/reservation.service");
@@ -358,7 +359,7 @@ export class ChaslayCompatService {
       categories.map((c) => [c.id, c.clientId || c.id] as const)
     );
     const productClientById = new Map(
-      products.map((p) => [p.id, p.clientId || p.id] as const)
+      allProducts.map((p) => [p.id, p.clientId || p.id] as const)
     );
     const addressParts = [merchant.address, merchant.city, merchant.country].filter(Boolean);
     const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
@@ -713,10 +714,15 @@ export class ChaslayCompatService {
       name: slot.name,
       minPick: slot.minPick,
       maxPick: slot.maxPick,
-      options: slot.options.map((o) => ({
-        productId: productClientById?.get(o.productId) || o.productId,
-        extraPrice: o.extraPrice,
-      })),
+      options: slot.options.map((o) => {
+        const mapped = productClientById?.get(o.productId) || o.productId;
+        return {
+          productId: mapped,
+          product_id: mapped,
+          sourceProductId: o.productId,
+          extraPrice: o.extraPrice,
+        };
+      }),
     }));
     // stock defaults to 0 in DB — that means "not tracking inventory", not unavailable.
     // Use isActive for POS/menu availability; only hide when merchant deactivated the item.

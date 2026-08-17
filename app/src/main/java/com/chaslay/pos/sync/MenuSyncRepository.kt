@@ -17,9 +17,9 @@ import com.chaslay.pos.data.remote.dto.PushCatalogProductDto
 import com.chaslay.pos.data.remote.dto.PushCatalogRequest
 import com.chaslay.pos.data.remote.dto.SyncBusinessDto
 import com.chaslay.pos.data.remote.dto.SyncCategoryDto
-import com.chaslay.pos.data.remote.dto.SyncComboSlotDto
 import com.chaslay.pos.data.remote.dto.SyncProductDto
 import com.chaslay.pos.data.repository.SettingsRepository
+import com.google.gson.JsonElement
 import com.chaslay.pos.data.repository.ReceiptPublicUrls
 import java.time.Instant
 import java.util.Calendar
@@ -61,24 +61,24 @@ class MenuSyncRepository @Inject constructor(
             val lastSync = syncPreferences.getLastMenuSyncMs()
             val forceBootstrap = mode == MenuSyncMode.REPLACE || lastSync <= 0L
             var businessSynced = false
+            val bootstrap = if (forceBootstrap) {
+                syncApi.bootstrap()
+            } else {
+                // Incremental changes omit unchanged combos, so always refresh slots
+                // from the full catalog. WebPOS reads the same slot options live.
+                runCatching { syncApi.bootstrap() }.getOrNull()
+            }
             val (serverTime, categories, products) = if (forceBootstrap) {
-                val bootstrap = syncApi.bootstrap()
-                if (syncBusinessInfo) {
-                    bootstrap.business?.let { dto ->
-                        applyBusinessInfo(dto)
-                        businessSynced = true
-                    }
-                }
-                Triple(bootstrap.serverTime, bootstrap.categories, bootstrap.products)
+                Triple(bootstrap!!.serverTime, bootstrap.categories, bootstrap.products)
             } else {
                 val changes = syncApi.menuChanges(lastSync)
-                if (syncBusinessInfo) {
-                    runCatching { syncApi.bootstrap().business }.getOrNull()?.let { dto ->
-                        applyBusinessInfo(dto)
-                        businessSynced = true
-                    }
-                }
                 Triple(changes.serverTime, changes.categories, changes.products)
+            }
+            if (syncBusinessInfo) {
+                bootstrap?.business?.let { dto ->
+                    applyBusinessInfo(dto)
+                    businessSynced = true
+                }
             }
 
             val categoryIdByRemote = mutableMapOf<String, Long>()
@@ -86,17 +86,20 @@ class MenuSyncRepository @Inject constructor(
                 val localId = upsertCategory(dto)
                 if (localId != null) categoryIdByRemote[dto.id] = localId
             }
+            categoryDao.getActive().forEach { category ->
+                val remote = category.remoteId
+                if (!remote.isNullOrBlank()) categoryIdByRemote.putIfAbsent(remote, category.id)
+            }
             val productIdByRemote = mutableMapOf<String, Long>()
             products.forEach { dto ->
                 val localId = upsertProduct(dto, categoryIdByRemote)
                 if (localId != null) productIdByRemote[dto.id] = localId
             }
-            products.forEach { dto ->
-                val localId = productIdByRemote[dto.id] ?: return@forEach
-                if (dto.productType == "combo" || !dto.comboItems.isNullOrEmpty()) {
-                    persistComboSlots(localId, dto.comboItems, productIdByRemote)
-                }
-            }
+            persistComboSlotsFromCatalog(
+                catalogProducts = bootstrap?.products ?: products,
+                categoryIdByRemote = categoryIdByRemote,
+                productIdByRemote = productIdByRemote
+            )
 
             syncPreferences.setLastMenuSyncMs(serverTime)
             if (categories.isNotEmpty() || products.isNotEmpty()) {
@@ -284,18 +287,40 @@ class MenuSyncRepository @Inject constructor(
         }
     }
 
+    private suspend fun persistComboSlotsFromCatalog(
+        catalogProducts: List<SyncProductDto>,
+        categoryIdByRemote: Map<String, Long>,
+        productIdByRemote: MutableMap<String, Long>
+    ) {
+        catalogProducts.forEach { dto ->
+            if (productIdByRemote[dto.id] != null) return@forEach
+            val localId = upsertProduct(dto, categoryIdByRemote)
+            if (localId != null) productIdByRemote[dto.id] = localId
+        }
+        productDao.getAllActive().forEach { product ->
+            val remote = product.remoteId
+            if (!remote.isNullOrBlank()) productIdByRemote.putIfAbsent(remote, product.id)
+        }
+        catalogProducts.forEach { dto ->
+            val localId = productIdByRemote[dto.id] ?: productDao.getByRemoteId(dto.id)?.id ?: return@forEach
+            if (dto.productType == "combo" || hasComboItemsPayload(dto.comboItems)) {
+                persistComboSlots(localId, dto.comboItems, productIdByRemote)
+            }
+        }
+    }
+
     private suspend fun persistComboSlots(
         comboProductId: Long,
-        rawSlots: List<SyncComboSlotDto>?,
+        rawSlots: JsonElement?,
         productIdByRemote: Map<String, Long>
     ) {
         comboSlotOptionDao.deleteByComboProduct(comboProductId)
         comboSlotDao.deleteByComboProduct(comboProductId)
-        val slots = normalizeComboSlots(rawSlots)
+        val slots = parseComboItems(rawSlots)
         if (slots.isEmpty()) return
         slots.forEachIndexed { slotIndex, slot ->
             val optionIds = slot.optionRemoteIds.mapNotNull { remote ->
-                productIdByRemote[remote] ?: productDao.getByRemoteId(remote)?.id
+                resolveLocalProductId(remote, productIdByRemote)
             }.distinct()
             if (optionIds.isEmpty()) return@forEachIndexed
             val slotId = comboSlotDao.insert(
@@ -315,32 +340,17 @@ class MenuSyncRepository @Inject constructor(
         }
     }
 
-    private data class NormalizedComboSlot(
-        val name: String,
-        val minPick: Int,
-        val maxPick: Int,
-        val optionRemoteIds: List<String>
-    )
-
-    private fun normalizeComboSlots(raw: List<SyncComboSlotDto>?): List<NormalizedComboSlot> {
-        if (raw.isNullOrEmpty()) return emptyList()
-        return raw.mapIndexedNotNull { idx, row ->
-            val fromOptions = row.options.orEmpty().mapNotNull { it.productId?.takeIf(String::isNotBlank) }
-            val optionIds = if (fromOptions.isNotEmpty()) {
-                fromOptions
-            } else {
-                row.productId?.takeIf { it.isNotBlank() }?.let { listOf(it) }.orEmpty()
-            }
-            if (optionIds.isEmpty()) return@mapIndexedNotNull null
-            val minPick = (row.minPick ?: 1).coerceAtLeast(0)
-            val maxPick = (row.maxPick ?: 1).coerceAtLeast(minPick.coerceAtLeast(1))
-            NormalizedComboSlot(
-                name = row.name?.trim()?.takeIf { it.isNotEmpty() } ?: "Choice ${idx + 1}",
-                minPick = minPick,
-                maxPick = maxPick,
-                optionRemoteIds = optionIds
-            )
+    private suspend fun resolveLocalProductId(
+        remote: String,
+        productIdByRemote: Map<String, Long>
+    ): Long? {
+        if (remote.isBlank()) return null
+        productIdByRemote[remote]?.let { return it }
+        productDao.getByRemoteId(remote)?.id?.let { return it }
+        remote.toLongOrNull()?.let { localId ->
+            if (productDao.getById(localId) != null) return localId
         }
+        return null
     }
 
     private fun parseInstantMs(value: String?): Long {

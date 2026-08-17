@@ -29,8 +29,8 @@ data class SyncProductDto(
     @SerializedName("is_open_price") val isOpenPrice: Boolean? = null,
     @SerializedName("sold_by_weight") val soldByWeight: Boolean? = null,
     @SerializedName("product_type") val productType: String? = null,
-    @SerializedName(value = "combo_items", alternate = ["comboItems"])
-    val comboItems: List<SyncComboSlotDto>? = null,
+    @SerializedName(value = "combo_items", alternate = ["comboItems", "comboSlots"])
+    val comboItems: JsonElement? = null,
     val online_visible: Boolean? = null,
     val kiosk_visible: Boolean? = null,
     val updated_at: String? = null,
@@ -38,16 +38,24 @@ data class SyncProductDto(
 )
 
 data class SyncComboOptionDto(
+    @SerializedName(value = "productId", alternate = ["product_id", "id", "clientId", "client_id"])
     val productId: String? = null,
+    @SerializedName(value = "sourceProductId", alternate = ["source_product_id"])
+    val sourceProductId: String? = null,
+    @SerializedName(value = "extraPrice", alternate = ["extra_price"])
     val extraPrice: Double? = null
 )
 
 data class SyncComboSlotDto(
     val id: String? = null,
     val name: String? = null,
+    @SerializedName(value = "minPick", alternate = ["min_pick"])
     val minPick: Int? = null,
+    @SerializedName(value = "maxPick", alternate = ["max_pick"])
     val maxPick: Int? = null,
+    @SerializedName(value = "options", alternate = ["products", "items"])
     val options: List<SyncComboOptionDto>? = null,
+    @SerializedName(value = "productId", alternate = ["product_id"])
     val productId: String? = null,
     val quantity: Int? = null
 )

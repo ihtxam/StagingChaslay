@@ -524,8 +524,9 @@ class OrderHistoryViewModel @Inject constructor(
                 order.copy(receiptUrl = url)
             },
             onFailure = {
-                transactionRepository.clearReceiptUrl(order.id)
-                order.copy(receiptUrl = null)
+                val fallback = receiptRepository.buildPublicUrl(order.id, settings)
+                transactionRepository.updateReceiptUrl(order.id, fallback)
+                order.copy(receiptUrl = fallback)
             }
         )
     }

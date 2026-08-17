@@ -1269,7 +1269,7 @@ class PosViewModel @Inject constructor(
             it.copy(
                 selectedCartItemId = itemId,
                 keypadExpanded = itemId != null,
-                keypadBuffer = if (itemId == null) "" else it.keypadBuffer
+                keypadBuffer = ""
             )
         }
     }
@@ -1296,6 +1296,7 @@ class PosViewModel @Inject constructor(
         updateExtras { extras ->
             extras.copy(keypadBuffer = extras.keypadBuffer.dropLast(1))
         }
+        applyKeypadBuffer(deselect = false)
     }
 
     fun onKeypadClear() {
@@ -1328,13 +1329,19 @@ class PosViewModel @Inject constructor(
     private fun applyKeypadBuffer(deselect: Boolean) {
         val extras = _uiExtras.value
         val buffer = extras.keypadBuffer
+        // Incomplete while typing (e.g. "", "12.") — keep the line as last applied.
+        if (buffer.isEmpty() || buffer == "." || buffer.endsWith(".")) return
         val value = buffer.toDoubleOrNull() ?: return
         when (extras.keypadMode) {
             KeypadMode.QTY -> {
-                val itemId = extras.selectedCartItemId ?: extras.lastAddedItemId ?: return
+                val itemId = extras.selectedCartItemId
+                    ?: extras.lastAddedItemId.takeIf { deselect }
+                    ?: return
                 val item = cartManager.snapshot().items.find { it.id == itemId } ?: return
                 if (item.sentToKitchen) return
-                updateQuantity(itemId, value.toInt().coerceAtLeast(1))
+                val qty = value.toInt()
+                if (qty <= 0 && !deselect) return
+                updateQuantity(itemId, qty.coerceAtLeast(1))
             }
             KeypadMode.PERCENT -> {
                 val itemId = extras.selectedCartItemId ?: return
@@ -1345,7 +1352,10 @@ class PosViewModel @Inject constructor(
                 val serviceType = cartManager.snapshot().serviceType
                 val taxRate = resolveTaxRate(0L, cachedSettings.takeawayVatRate, serviceType)
                 if (selectedId != null) {
-                    cartManager.overrideItemPrice(selectedId, value)
+                    val item = cartManager.snapshot().items.find { it.id == selectedId } ?: return
+                    if (item.sentToKitchen) return
+                    cartManager.overrideItemPrice(selectedId, value.coerceAtLeast(0.0))
+                    if (!deselect) persistTableOrderAsync()
                 } else if (deselect) {
                     val itemId = UUID.randomUUID().toString()
                     cartManager.addItem(

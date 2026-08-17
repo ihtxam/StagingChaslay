@@ -15,9 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -46,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -74,9 +72,15 @@ fun ComboPickDialog(
     var itemQty by remember { mutableIntStateOf(1) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val picks = remember(combo.product.id) {
-        mutableStateMapOf<Long, MutableMap<Long, Int>>().apply {
-            combo.slots.forEach { slot -> put(slot.id, mutableMapOf()) }
+        mutableStateMapOf<Long, Map<Long, Int>>().apply {
+            combo.slots.forEach { slot -> put(slot.id, emptyMap()) }
         }
+    }
+
+    fun updatePicks(slotId: Long, transform: (MutableMap<Long, Int>) -> Unit) {
+        val next = (picks[slotId] ?: emptyMap()).toMutableMap()
+        transform(next)
+        picks[slotId] = next
     }
 
     val allValid = combo.slots.all { slot ->
@@ -143,31 +147,34 @@ fun ComboPickDialog(
                                 picks = picks[slot.id].orEmpty(),
                                 showProductImages = showProductImages,
                                 onToggle = { productId ->
-                                    val map = picks.getOrPut(slot.id) { mutableMapOf() }
-                                    val current = map.values.sum()
-                                    if (slot.maxPick <= 1) {
-                                        map.clear()
-                                        map[productId] = 1
-                                    } else {
-                                        val qty = map[productId] ?: 0
-                                        if (qty > 0) {
-                                            if (qty == 1) map.remove(productId) else map[productId] = qty - 1
-                                        } else if (current < slot.maxPick) {
+                                    updatePicks(slot.id) { map ->
+                                        val current = map.values.sum()
+                                        if (slot.maxPick <= 1) {
+                                            map.clear()
                                             map[productId] = 1
+                                        } else {
+                                            val qty = map[productId] ?: 0
+                                            if (qty > 0) {
+                                                if (qty == 1) map.remove(productId) else map[productId] = qty - 1
+                                            } else if (current < slot.maxPick) {
+                                                map[productId] = 1
+                                            }
                                         }
                                     }
                                 },
                                 onIncrement = { productId ->
-                                    val map = picks.getOrPut(slot.id) { mutableMapOf() }
-                                    val current = map.values.sum()
-                                    if (current < slot.maxPick) {
-                                        map[productId] = (map[productId] ?: 0) + 1
+                                    updatePicks(slot.id) { map ->
+                                        val current = map.values.sum()
+                                        if (current < slot.maxPick) {
+                                            map[productId] = (map[productId] ?: 0) + 1
+                                        }
                                     }
                                 },
                                 onDecrement = { productId ->
-                                    val map = picks.getOrPut(slot.id) { mutableMapOf() }
-                                    val qty = map[productId] ?: 0
-                                    if (qty > 1) map[productId] = qty - 1 else map.remove(productId)
+                                    updatePicks(slot.id) { map ->
+                                        val qty = map[productId] ?: 0
+                                        if (qty > 1) map[productId] = qty - 1 else map.remove(productId)
+                                    }
                                 }
                             )
                         }
@@ -290,83 +297,119 @@ private fun ComboSlotSection(
                 fontWeight = FontWeight.Medium
             )
         }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.height(
-                ((((slot.options.size + 2) / 3) * tileHeight.value.toInt()).coerceAtLeast(tileHeight.value.toInt())).dp
+        if (slot.options.isEmpty()) {
+            Text(
+                "No products in this slot. Sync the menu from the merchant panel.",
+                color = Color(0xFFFFCC80),
+                fontSize = 13.sp
             )
-        ) {
-            items(slot.options, key = { it.productId }) { option ->
-                val qty = picks[option.productId] ?: 0
-                val selected = qty > 0
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(tileHeight)
-                        .border(
-                            width = if (selected) 2.dp else 1.dp,
-                            color = if (selected) Color(0xFF00897B) else Color(0xFF555555),
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .background(
-                            if (selected) Color(0xFF1B3A38) else Color(0xFF333333),
-                            RoundedCornerShape(8.dp)
-                        )
-                        .clickable { onToggle(option.productId) }
-                        .padding(8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.SpaceBetween
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                slot.options.chunked(3).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (showProductImages && !option.imageUri.isNullOrBlank()) {
-                            coil.compose.AsyncImage(
-                                model = option.imageUri,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
-                                contentScale = ContentScale.Crop
+                        row.forEach { option ->
+                            ComboOptionTile(
+                                optionName = option.productName,
+                                imageUri = option.imageUri,
+                                qty = picks[option.productId] ?: 0,
+                                showQty = slot.maxPick > 1,
+                                showProductImages = showProductImages,
+                                tileHeight = tileHeight,
+                                modifier = Modifier.weight(1f),
+                                onToggle = { onToggle(option.productId) },
+                                onIncrement = { onIncrement(option.productId) },
+                                onDecrement = { onDecrement(option.productId) }
                             )
                         }
-                        Text(
-                            option.productName,
-                            color = Color.White,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 13.sp,
-                            maxLines = 2,
-                            textAlign = TextAlign.Center
-                        )
-                        if (slot.maxPick > 1 && selected) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(
-                                    onClick = { onDecrement(option.productId) },
-                                    modifier = Modifier.height(28.dp)
-                                ) {
-                                    Icon(Icons.Default.Remove, contentDescription = null, tint = Color.White, modifier = Modifier.padding(0.dp))
-                                }
-                                Text(
-                                    qty.toString(),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    modifier = Modifier.padding(horizontal = 4.dp)
-                                )
-                                IconButton(
-                                    onClick = { onIncrement(option.productId) },
-                                    modifier = Modifier.height(28.dp)
-                                ) {
-                                    Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
-                                }
-                            }
+                        repeat(3 - row.size) {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ComboOptionTile(
+    optionName: String,
+    imageUri: String?,
+    qty: Int,
+    showQty: Boolean,
+    showProductImages: Boolean,
+    tileHeight: Dp,
+    modifier: Modifier = Modifier,
+    onToggle: () -> Unit,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit
+) {
+    val selected = qty > 0
+    Box(
+        modifier = modifier
+            .height(tileHeight)
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) Color(0xFF00897B) else Color(0xFF555555),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .background(
+                if (selected) Color(0xFF1B3A38) else Color(0xFF333333),
+                RoundedCornerShape(8.dp)
+            )
+            .clickable(onClick = onToggle)
+            .padding(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            if (showProductImages && !imageUri.isNullOrBlank()) {
+                coil.compose.AsyncImage(
+                    model = imageUri,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            Text(
+                optionName,
+                color = Color.White,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                fontSize = 13.sp,
+                maxLines = 2,
+                textAlign = TextAlign.Center
+            )
+            if (showQty && selected) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onDecrement,
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Icon(Icons.Default.Remove, contentDescription = null, tint = Color.White)
+                    }
+                    Text(
+                        qty.toString(),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                    IconButton(
+                        onClick = onIncrement,
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
                     }
                 }
             }

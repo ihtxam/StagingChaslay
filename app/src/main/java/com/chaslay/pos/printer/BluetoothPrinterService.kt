@@ -23,6 +23,7 @@ import com.chaslay.pos.domain.model.PrintTarget
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.formatMoneyAmount
 import com.chaslay.pos.domain.model.roundMoney
+import com.chaslay.pos.data.repository.ReceiptPublicUrls
 import com.chaslay.pos.receipt.ReceiptQrGenerator
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -519,12 +520,7 @@ class BluetoothPrinterService @Inject constructor(
         }
         if (settings.receiptShowVatTable && vatRow != null && vatRow.tva >= 0.01) {
             sb.appendLine(thin)
-            if (settings.vatIncludedInPrice) {
-                sb.appendLine(labels.vatIncludedNote)
-                appendVatTable(sb, listOf(vatRow), labels, lineWidth)
-            } else {
-                appendCompactVatLines(sb, listOf(vatRow), labels, lineWidth)
-            }
+            appendReceiptVatSection(sb, listOf(vatRow), labels, lineWidth, settings.vatIncludedInPrice)
         }
         sb.appendLine(thin)
         sb.appendLine(center("Scan barcode to redeem", lineWidth))
@@ -981,14 +977,9 @@ class BluetoothPrinterService @Inject constructor(
             }
         }
 
-        // VAT after payment section — always use the table so Net is not mistaken for tax.
+        // VAT after payment — Net / Tax / Gross table plus tax-total (never print Net as tax).
         if (settings.receiptShowVatTable && vatRows.isNotEmpty()) {
-            if (cart.vatIncludedInPrice) {
-                sb.appendLine(labels.vatIncludedNote)
-            }
-            appendVatTable(sb, vatRows, labels, lineWidth)
-            val vatTotal = vatRows.sumOf { it.tva }
-            sb.appendLine(leftRight(labels.vatTax, twoDp(vatTotal), lineWidth))
+            appendReceiptVatSection(sb, vatRows, labels, lineWidth, cart.vatIncludedInPrice)
         }
 
         val orderType = labels.fulfillmentLabel(context.fulfillmentType, context.serviceType)
@@ -1131,14 +1122,9 @@ class BluetoothPrinterService @Inject constructor(
             sb.appendLine(leftRight("Terminal ref:", ref.take(lineWidth - 14), lineWidth))
         }
 
-        // VAT after payment section
+        // VAT after payment — Net / Tax / Gross table plus tax-total (never print Net as tax).
         if (settings.receiptShowVatTable && vatRows.isNotEmpty()) {
-            if (settings.vatIncludedInPrice) {
-                sb.appendLine(labels.vatIncludedNote)
-            }
-            appendVatTable(sb, vatRows, labels, lineWidth)
-            val vatTotal = vatRows.sumOf { it.tva }
-            sb.appendLine(leftRight(labels.vatTax, twoDp(vatTotal), lineWidth))
+            appendReceiptVatSection(sb, vatRows, labels, lineWidth, settings.vatIncludedInPrice)
         }
 
         val serviceType = transaction.serviceType ?: com.chaslay.pos.domain.model.ServiceType.TAKEAWAY
@@ -1163,6 +1149,7 @@ class BluetoothPrinterService @Inject constructor(
         appendFooter(sb, settings.receiptFooter, lineWidth)
         val qrUrl = if (settings.receiptShowQrCode) {
             transaction.receiptUrl?.takeIf { it.isNotBlank() }
+                ?: ReceiptPublicUrls.build(settings.receiptBaseUrl, transaction.id)
         } else null
         if (qrUrl != null) {
             sb.appendLine(center(sepDash(lineWidth), lineWidth))
@@ -1452,15 +1439,20 @@ class BluetoothPrinterService @Inject constructor(
         sb.append(escAlignLeft())
     }
 
-    private fun appendCompactVatLines(
+    private fun appendReceiptVatSection(
         sb: StringBuilder,
         rows: List<com.chaslay.pos.domain.model.VatBreakdownRow>,
         labels: ReceiptLabels,
-        lineWidth: Int
+        lineWidth: Int,
+        vatIncludedInPrice: Boolean
     ) {
-        rows.forEach { row ->
-            sb.appendLine(formatCompactVatLine(row, labels, lineWidth))
+        if (rows.isEmpty()) return
+        if (vatIncludedInPrice) {
+            sb.appendLine(labels.vatIncludedNote)
         }
+        appendVatTable(sb, rows, labels, lineWidth)
+        val vatTotal = rows.sumOf { it.tva }
+        sb.appendLine(leftRight(labels.vatTotal, twoDp(vatTotal), lineWidth))
     }
 
     private fun appendVatTable(
@@ -1476,33 +1468,17 @@ class BluetoothPrinterService @Inject constructor(
                 vatRow(typeLabel, twoDp(row.net), twoDp(row.tva), twoDp(row.brut), lineWidth)
             )
         }
-    }
-
-    /** e.g. "TVA 2.6% Net 19.00 TVA 0.48 TOTAL 19.49" */
-    private fun formatCompactVatLine(
-        row: com.chaslay.pos.domain.model.VatBreakdownRow,
-        labels: ReceiptLabels,
-        lineWidth: Int
-    ): String {
-        val rateLabel = ReceiptVatCalculator.formatRate(row.rate)
-        val text = buildString {
-            append(labels.vatTitle)
-            append(' ')
-            append(rateLabel)
-            append("% ")
-            append(labels.vatNet)
-            append(' ')
-            append(twoDp(row.net))
-            append(' ')
-            append(labels.vatTax)
-            append(' ')
-            append(twoDp(row.tva))
-            append(' ')
-            append(labels.total)
-            append(' ')
-            append(twoDp(row.brut))
+        if (rows.size > 1) {
+            sb.appendLine(
+                vatRow(
+                    labels.total,
+                    twoDp(rows.sumOf { it.net }),
+                    twoDp(rows.sumOf { it.tva }),
+                    twoDp(rows.sumOf { it.brut }),
+                    lineWidth
+                )
+            )
         }
-        return text.take(lineWidth)
     }
 
     private fun appendReceiptMetaFooter(
@@ -1559,10 +1535,13 @@ class BluetoothPrinterService @Inject constructor(
     }
 
     private fun vatRow(type: String, net: String, tva: String, brut: String, lineWidth: Int = LINE_WIDTH_80): String {
-        val numWidth = if (lineWidth <= LINE_WIDTH_58) 5 else 7
+        val numWidth = if (lineWidth <= LINE_WIDTH_58) 6 else 8
         val typeWidth = (lineWidth - numWidth * 3).coerceAtLeast(8)
         val t = type.take(typeWidth).padEnd(typeWidth)
-        return t + net.padStart(numWidth) + tva.padStart(numWidth) + brut.padStart(numWidth)
+        return t +
+            net.takeLast(numWidth).padStart(numWidth) +
+            tva.takeLast(numWidth).padStart(numWidth) +
+            brut.takeLast(numWidth).padStart(numWidth)
     }
 
     private fun payRow(
@@ -1988,10 +1967,10 @@ class BluetoothPrinterService @Inject constructor(
         private const val TAG = "PrinterService"
         private const val LINE_WIDTH_58 = 32
         private const val LINE_WIDTH_80 = 48
-        /** Compact receipt QR raster width (80mm paper) — smaller than success-screen QR. */
-        private const val RECEIPT_QR_RASTER_PX_80 = 72
-        /** Compact receipt QR raster width (58mm paper). */
-        private const val RECEIPT_QR_RASTER_PX_58 = 56
+        /** Thermal digital-receipt QR — matches WebPOS RECEIPT_QR_RASTER_PX_80 (150dp). */
+        private const val RECEIPT_QR_RASTER_PX_80 = 150
+        /** Thermal digital-receipt QR on 58mm paper — matches WebPOS. */
+        private const val RECEIPT_QR_RASTER_PX_58 = 112
         private const val LINE_WIDTH = LINE_WIDTH_80
         private val SPP_UUID = java.util.UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private val ESC_INIT = byteArrayOf(0x1B, 0x40)

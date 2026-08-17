@@ -1384,19 +1384,27 @@ class CartManager @Inject constructor(
     }
 
     fun applyItemDiscountPercent(itemId: String, percent: Double) {
-        if (percent <= 0.0) return
         _cart.update { cart ->
             cart.copy(
                 items = cart.items.map { item ->
                     if (item.id != itemId) return@map item
                     val original = item.originalUnitPrice ?: item.unitPrice
-                    val discounted = (original * (1 - percent / 100.0)).coerceAtLeast(0.0)
-                    item.copy(
-                        unitPrice = discounted,
-                        originalUnitPrice = original,
-                        lineDiscountPerUnit = original - discounted,
-                        notes = "${percent.toInt()}% off"
-                    )
+                    if (percent <= 0.0) {
+                        item.copy(
+                            unitPrice = original,
+                            originalUnitPrice = null,
+                            lineDiscountPerUnit = 0.0,
+                            notes = null
+                        )
+                    } else {
+                        val discounted = (original * (1 - percent / 100.0)).coerceAtLeast(0.0)
+                        item.copy(
+                            unitPrice = discounted,
+                            originalUnitPrice = original,
+                            lineDiscountPerUnit = original - discounted,
+                            notes = "${percent.toInt()}% off"
+                        )
+                    }
                 }
             )
         }

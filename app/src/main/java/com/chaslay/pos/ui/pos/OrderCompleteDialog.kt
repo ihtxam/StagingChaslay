@@ -80,6 +80,7 @@ fun OrderCompleteDialog(
     onDone: () -> Unit
 ) {
     val digitalUrl = receiptPublicUrl?.takeIf { it.isNotBlank() }
+        ?: transaction.receiptUrl?.takeIf { it.isNotBlank() }
     val qrGenerator = remember { ReceiptQrGenerator() }
     val qrBitmap = remember(digitalUrl) {
         digitalUrl?.let { qrGenerator.generateQrBitmap(it, 512) }
@@ -279,28 +280,17 @@ private fun SuccessIconButton(
     onClick: () -> Unit,
     primary: Boolean = false
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Button(
-            onClick = onClick,
-            modifier = Modifier.size(64.dp),
-            shape = CircleShape,
-            contentPadding = PaddingValues(0.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (primary) Color(0xFF0F172A) else Color(0xFFF1F5F9),
-                contentColor = if (primary) Color.White else OrderCompleteTextPrimary
-            )
-        ) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(26.dp))
-        }
-        Text(
-            label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = OrderCompleteTextSecondary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 6.dp).width(72.dp),
-            maxLines = 2
+    Button(
+        onClick = onClick,
+        modifier = Modifier.size(64.dp),
+        shape = CircleShape,
+        contentPadding = PaddingValues(0.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (primary) Color(0xFF0F172A) else Color(0xFFF1F5F9),
+            contentColor = if (primary) Color.White else OrderCompleteTextPrimary
         )
+    ) {
+        Icon(icon, contentDescription = label, modifier = Modifier.size(26.dp))
     }
 }
 
