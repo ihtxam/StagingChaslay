@@ -117,14 +117,22 @@ button {
     overscroll-behavior: none;
   }
 
-  /* Merchant/reseller/superadmin nav — teal accent (matches catalog primary buttons) */
+  /* Merchant/reseller/superadmin nav — cliavo.com hero gradient (teal, no blue) */
   .panel-sidebar {
-    background-color: #0d9488;
-    color: #f0fdfa;
+    --sidebar-active: #134e4a;
+    --sidebar-hover: rgba(19, 78, 74, 0.45);
+    --sidebar-divider: rgba(255, 255, 255, 0.15);
+    background: linear-gradient(135deg, #0f766e 0%, #00bfa6 100%);
+    color: #ecfdf5;
   }
 
   .panel-sidebar-footer {
-    background-color: #0f766e;
+    background: transparent;
+    border-top-color: var(--sidebar-divider);
+  }
+
+  .panel-sidebar-divider {
+    border-color: var(--sidebar-divider);
   }
 
   /* Fallback when dvh is unavailable */

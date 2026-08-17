@@ -174,8 +174,8 @@ export default function Sidebar({
       nested ? 'px-2.5 py-1.5 pl-9' : 'px-2.5 py-2'
     } ${
       active
-        ? 'bg-teal-800 text-white'
-        : 'text-teal-50/90 hover:bg-teal-700/80 hover:text-white'
+        ? 'bg-teal-900 text-white shadow-sm'
+        : 'text-teal-50/95 hover:bg-teal-900/45 hover:text-white'
     }`;
 
   return (
@@ -183,9 +183,9 @@ export default function Sidebar({
       <aside
         className={`panel-sidebar ${
           isOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'
-        } fixed lg:relative lg:translate-x-0 lg:pointer-events-auto w-56 h-dvh max-h-dvh lg:h-full lg:max-h-full bg-secondary text-slate-100 transition-transform duration-200 z-40 flex flex-col shrink-0`}
+        } fixed lg:relative lg:translate-x-0 lg:pointer-events-auto w-56 h-dvh max-h-dvh lg:h-full lg:max-h-full transition-transform duration-200 z-40 flex flex-col shrink-0`}
       >
-        <div className="px-4 py-3 border-b border-teal-700/60 flex items-center justify-between shrink-0">
+        <div className="panel-sidebar-divider px-4 py-3 border-b flex items-center justify-between shrink-0">
           <div>
             <h1 className="text-base font-semibold tracking-tight text-white">{APP_NAME}</h1>
             <p className="text-[11px] text-teal-100/70 mt-0.5">{t('panel')}</p>
@@ -193,7 +193,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={onToggle}
-            className="lg:hidden p-1.5 rounded-md text-teal-50/90 hover:bg-teal-700/80 hover:text-white"
+            className="lg:hidden p-1.5 rounded-md text-teal-50/95 hover:bg-teal-900/45 hover:text-white"
             aria-label="Close menu"
           >
             <X className="w-4 h-4" />
@@ -201,7 +201,7 @@ export default function Sidebar({
         </div>
 
         {quickAction && (
-          <div className="px-3 pt-3 pb-3 border-b border-teal-700/60 shrink-0">
+          <div className="panel-sidebar-divider px-3 pt-3 pb-3 border-b shrink-0">
             <Link
               to={quickAction.path}
               onClick={closeMobile}
@@ -272,8 +272,8 @@ export default function Sidebar({
                   aria-expanded={isOpenGroup}
                   className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
                     parentActive
-                      ? 'bg-teal-800/90 text-white'
-                      : 'text-teal-50/90 hover:bg-teal-700/80 hover:text-white'
+                      ? 'bg-teal-900/90 text-white shadow-sm'
+                      : 'text-teal-50/95 hover:bg-teal-900/45 hover:text-white'
                   }`}
                 >
                   <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
@@ -311,7 +311,7 @@ export default function Sidebar({
           })}
         </nav>
 
-        <div className="panel-sidebar-footer p-3 border-t border-teal-700/60 space-y-2 shrink-0">
+        <div className="panel-sidebar-footer p-3 border-t space-y-2 shrink-0">
           {impersonating && (
             <button
               type="button"
@@ -324,7 +324,7 @@ export default function Sidebar({
           )}
 
           <div className="flex items-center gap-2.5 px-2 py-1.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-800 text-teal-50">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-900 text-teal-50">
               <User className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
@@ -337,7 +337,7 @@ export default function Sidebar({
 
           {onLanguageChange && (
             <select
-              className="w-full rounded-md border border-teal-600 bg-teal-800/50 px-2.5 py-1.5 text-xs text-teal-50"
+              className="w-full rounded-md border border-white/25 bg-teal-900/40 px-2.5 py-1.5 text-xs text-teal-50"
               value={language || 'en'}
               onChange={(e) => onLanguageChange(e.target.value as Locale)}
               aria-label={t('language')}
