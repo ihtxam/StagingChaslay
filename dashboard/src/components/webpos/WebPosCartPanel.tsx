@@ -115,6 +115,13 @@ type Props = {
   isRetail?: boolean;
   /** Record cash in/out when shift is open. */
   onCashMovement?: () => void;
+  /** Lines sent but kitchen print failed. */
+  failedPrintCount?: number;
+  onOpenPrintIssues?: () => void;
+  /** Open reprint chooser for whole order (sent lines). */
+  onOrderPrint?: () => void;
+  /** Open reprint chooser for one sent line. */
+  onLinePrint?: (line: CartLine) => void;
 };
 
 function lineExtrasLabel(l: CartLine) {
@@ -232,6 +239,10 @@ export default function WebPosCartPanel({
   onReleaseTable,
   isRetail = false,
   onCashMovement,
+  failedPrintCount = 0,
+  onOpenPrintIssues,
+  onOrderPrint,
+  onLinePrint,
 }: Props) {
   const { t } = useI18n();
   const hasItems = cart.length > 0;
@@ -240,6 +251,7 @@ export default function WebPosCartPanel({
   const channelOptions =
     channelTabOptions.length > 0 ? channelTabOptions : (['takeaway', 'delivery'] as const);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [lineMenuId, setLineMenuId] = useState<string | null>(null);
   const [cartTab, setCartTab] = useState<CartListTab>('ordering');
   const sideBorder = dockSide === 'right' ? 'border-l' : 'border-r';
 
@@ -263,6 +275,25 @@ export default function WebPosCartPanel({
       window.removeEventListener('orientationchange', close);
     };
   }, [moreOpen]);
+
+  useEffect(() => {
+    if (!lineMenuId) return;
+    const close = () => setLineMenuId(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [lineMenuId]);
 
   const orderedLines = useMemo(() => cart.filter((l) => !!l.sentToKitchen), [cart]);
   const orderingLines = useMemo(() => cart.filter((l) => !l.sentToKitchen), [cart]);
@@ -517,6 +548,19 @@ export default function WebPosCartPanel({
               >
                 <User size={14} className="shrink-0 text-stone-500" />
                 <span className="truncate">{customerLabel || t('webPosAddClient')}</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                disabled={!hasItems || busy || !onOrderPrint}
+                onClick={() => {
+                  setMoreOpen(false);
+                  onOrderPrint?.();
+                }}
+              >
+                <Printer size={14} className="shrink-0 text-stone-500" />
+                {t('webPosPrint')}
               </button>
               <button
                 type="button"
@@ -799,6 +843,19 @@ export default function WebPosCartPanel({
             {cartTab === 'ordered' ? t('webPosCartOrderedEmpty') : t('webPosCartOrderingEmpty')}
           </p>
         ) : (
+          <>
+            {failedPrintCount > 0 && onOpenPrintIssues ? (
+              <button
+                type="button"
+                onClick={onOpenPrintIssues}
+                className="mb-2 flex w-full items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-left text-xs font-semibold text-amber-900 hover:bg-amber-100"
+              >
+                <Printer size={14} className="shrink-0 text-amber-700" aria-hidden />
+                <span className="min-w-0 truncate">
+                  {t('webPosKitchenPrintIssuesBanner').replace('{n}', String(failedPrintCount))}
+                </span>
+              </button>
+            ) : null}
           <ul className="space-y-1">
             {rows.map((row) => {
               if (row.kind === 'course') {
@@ -835,7 +892,7 @@ export default function WebPosCartPanel({
               const sentAtLabel = formatSentAt(l.sentToKitchenAt);
               const lineBody = (
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium leading-snug">
                       {lineName}
                       {l.isWeighed ? (
@@ -846,6 +903,11 @@ export default function WebPosCartPanel({
                       {l.sentToKitchen ? (
                         <span className="ml-1 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
                           {t('webPosSentBadge')}
+                        </span>
+                      ) : null}
+                      {l.kitchenPrintFailed ? (
+                        <span className="ml-1 rounded bg-amber-200 px-1 text-[9px] font-bold uppercase text-amber-900">
+                          !
                         </span>
                       ) : null}
                     </p>
@@ -871,13 +933,63 @@ export default function WebPosCartPanel({
                       </p>
                     ) : null}
                   </div>
-                  <div className="shrink-0 text-right leading-snug">
-                    <span className="block text-sm font-medium tabular-nums text-stone-600">
-                      {lineQtyLabel(l)}
-                    </span>
-                    <span className="block text-sm font-semibold tabular-nums">
-                      {money(l.lineTotal)}
-                    </span>
+                  <div className="flex shrink-0 items-start gap-1">
+                    <div className="text-right leading-snug">
+                      <span className="block text-sm font-medium tabular-nums text-stone-600">
+                        {lineQtyLabel(l)}
+                      </span>
+                      <span className="block text-sm font-semibold tabular-nums">
+                        {money(l.lineTotal)}
+                      </span>
+                    </div>
+                    {l.sentToKitchen && onLinePrint ? (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                          aria-label={t('webPosPrint')}
+                          aria-haspopup="menu"
+                          aria-expanded={lineMenuId === l.lineId}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLineMenuId((cur) => (cur === l.lineId ? null : l.lineId));
+                          }}
+                        >
+                          <MoreHorizontal size={16} aria-hidden />
+                        </button>
+                        {lineMenuId === l.lineId ? (
+                          <>
+                            <button
+                              type="button"
+                              className="fixed inset-0 z-[34] cursor-default border-0 bg-transparent p-0"
+                              aria-label={t('close')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLineMenuId(null);
+                              }}
+                            />
+                            <div
+                              role="menu"
+                              className="absolute right-0 top-full z-[36] mt-1 min-w-[10rem] rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLineMenuId(null);
+                                  onLinePrint(l);
+                                }}
+                              >
+                                <Printer size={14} className="shrink-0 text-stone-500" />
+                                {t('webPosPrint')}
+                              </button>
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               );
@@ -917,6 +1029,7 @@ export default function WebPosCartPanel({
               );
             })}
           </ul>
+          </>
         )}
       </div>
 

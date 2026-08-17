@@ -224,6 +224,9 @@ import WebPosCheckoutView from '@/components/webpos/WebPosCheckoutView';
 import WebPosSuccessView from '@/components/webpos/WebPosSuccessView';
 import WebPosSendReceiptModal from '@/components/webpos/WebPosSendReceiptModal';
 import WebPosPrintChooserModal from '@/components/webpos/WebPosPrintChooserModal';
+import WebPosKitchenPrintIssuesModal from '@/components/webpos/WebPosKitchenPrintIssuesModal';
+import WebPosReprintModal from '@/components/webpos/WebPosReprintModal';
+import { toastPrintError } from '@/lib/webpos-print-toast';
 import WebPosTablesView from '@/components/webpos/WebPosTablesView';
 import WebPosBookingsView from '@/components/webpos/WebPosBookingsView';
 import WebPosKitchenMessageModal from '@/components/webpos/WebPosKitchenMessageModal';
@@ -352,6 +355,8 @@ type CartLine = {
   lineDiscountPercent?: number;
   sentToKitchen?: boolean;
   sentToKitchenAt?: number;
+  /** Kitchen ticket did not print after send. */
+  kitchenPrintFailed?: boolean;
   lineNote?: string;
   giftCard?: GiftCardLineMeta;
 };
@@ -606,6 +611,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [sendReceiptPrefillEmail, setSendReceiptPrefillEmail] = useState('');
   const [printChooserOpen, setPrintChooserOpen] = useState(false);
   const [printChooserBusy, setPrintChooserBusy] = useState(false);
+  const [kitchenPrintIssuesOpen, setKitchenPrintIssuesOpen] = useState(false);
+  const [kitchenPrintRetryBusy, setKitchenPrintRetryBusy] = useState(false);
+  const [reprintModal, setReprintModal] = useState<{
+    lineIds: string[];
+    lineLabel?: string | null;
+  } | null>(null);
+  const [reprintBusy, setReprintBusy] = useState(false);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [ordersRefreshToken, setOrdersRefreshToken] = useState(0);
   const [tablesRefreshToken, setTablesRefreshToken] = useState(0);
@@ -1100,6 +1112,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     coursesBulkSent &&
     activeCourse > 1;
   const hasUnsentItems = cart.some((l) => !l.sentToKitchen);
+  const failedPrintLines = useMemo(
+    () => cart.filter((l) => !!l.kitchenPrintFailed && !!l.sentToKitchen),
+    [cart]
+  );
   // Ongoing order with new (unsent) lines must keep Send — not New.
   const showNewOrderButton = orderSent && !showFireCourseButton && !hasUnsentItems;
   const sendLabel = useMemo(() => {
@@ -2844,6 +2860,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     toast.success(`${t('webPosCourse')} ${next}`);
   };
 
+  const setKitchenPrintFailedForLines = useCallback((lineIds: Iterable<string>, failed: boolean) => {
+    const idSet = new Set(lineIds);
+    setCart((prev) =>
+      prev.map((l) => (idSet.has(l.lineId) ? { ...l, kitchenPrintFailed: failed } : l))
+    );
+  }, []);
+
+  const openOrderReprint = () => {
+    const sentIds = cart.filter((l) => l.sentToKitchen).map((l) => l.lineId);
+    setReprintModal({
+      lineIds: sentIds.length ? sentIds : cart.map((l) => l.lineId),
+    });
+  };
+
+  const openLineReprint = (line: CartLine) => {
+    setReprintModal({
+      lineIds: [line.lineId],
+      lineLabel: repairCatalogText(line.name || ''),
+    });
+  };
+
   const fireCourseLines = async (lines: CartLine[], courseOnly?: number) => {
     const ticket = ensureCartTicket();
     const ids = new Set(lines.map((l) => l.lineId));
@@ -2860,9 +2897,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         orderNumber: kitchenOrderNumber({ ticket }),
         when: fulfillmentWhen,
         courseOnly,
-      }).catch((e: any) => {
-      toast.error(e?.message || t('webPosKitchenPrintFailed'));
-    });
+      })
+      .then(() => setKitchenPrintFailedForLines(ids, false))
+      .catch((e: unknown) => {
+        setKitchenPrintFailedForLines(ids, true);
+        toastPrintError(e, t, 'webPosKitchenPrintFailed');
+      });
   };
 
   /** Clear operator editing UI without deleting table/tab kitchen drafts. */
@@ -2987,8 +3027,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setCoursesBulkSent(true);
       toast.success(t('webPosHeldSentKitchen'));
       releaseOperatorAfterKitchen(sentCart);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error || e.message || t('webPosKitchenPrintFailed'));
+    } catch (e: unknown) {
+      toastPrintError(e, t, 'webPosKitchenPrintFailed');
     } finally {
       setBusy(false);
     }
@@ -3734,11 +3774,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const text = generateWebPosReceiptText(receiptPayload, locale);
       setProvisionalPrinted(true);
       toast.success(t('webPosProvisionalPrinted'));
-      void printEscPosToTargets(text, { role: 'receipt', quiet: true }).catch((e: any) => {
-        toast.error(e?.message || t('webPosPrintFailed'));
+      void printEscPosToTargets(text, { role: 'receipt', quiet: true }).catch((e: unknown) => {
+        toastPrintError(e, t, 'webPosPrintFailed');
       });
-    } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+    } catch (e: unknown) {
+      toastPrintError(e, t, 'webPosPrintFailed');
     }
   };
 
@@ -3767,11 +3807,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         dataBase64: uint8ToBase64(escpos),
         text,
         orderId: orderNumber,
-      }).catch((e: any) => {
-        toast.error(e?.message || t('webPosKitchenPrintFailed'));
+      }).catch((e: unknown) => {
+        toastPrintError(e, t, 'webPosKitchenPrintFailed');
       });
-    } catch (e: any) {
-      toast.error(e.message || t('webPosKitchenPrintFailed'));
+    } catch (e: unknown) {
+      toastPrintError(e, t, 'webPosKitchenPrintFailed');
     }
   };
 
@@ -4854,8 +4894,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     if (lastReceipt) {
-      void printReceipt(lastReceipt, lastReceiptUrl || undefined, lastDeliveryQrUrl || undefined).catch((e: any) =>
-        toast.error(e.message || t('webPosPrintFailed'))
+      void printReceipt(lastReceipt, lastReceiptUrl || undefined, lastDeliveryQrUrl || undefined).catch(
+        (e: unknown) => toastPrintError(e, t, 'webPosPrintFailed')
       );
       return;
     }
@@ -4870,8 +4910,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     try {
       await printReceipt(part.text, part.url, part.deliveryQrUrl);
-    } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+    } catch (e: unknown) {
+      toastPrintError(e, t, 'webPosPrintFailed');
     }
   };
 
@@ -4885,8 +4925,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const firstUrl = lastSplitReceipts[0]?.url;
       const firstDeliveryQr = lastSplitReceipts[0]?.deliveryQrUrl;
       await printReceipt(combined, firstUrl, firstDeliveryQr);
-    } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+    } catch (e: unknown) {
+      toastPrintError(e, t, 'webPosPrintFailed');
     }
   };
 
@@ -5097,6 +5137,32 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       orderId: opts?.orderNumber || null,
     });
     if (mode === 'queued') toast.success(t('webPosPrintQueuedMainTill'));
+  };
+
+  const retryKitchenPrint = async (lines: CartLine[]) => {
+    if (!lines.length || isRetail) return;
+    setKitchenPrintRetryBusy(true);
+    try {
+      const ticket = ensureCartTicket();
+      await printKitchenForCart(lines, effectiveChannel, {
+        orderNumber: kitchenOrderNumber({ ticket }),
+        when: fulfillmentWhen,
+        forcePrint: true,
+      });
+      setKitchenPrintFailedForLines(
+        lines.map((l) => l.lineId),
+        false
+      );
+    } catch (e: unknown) {
+      setKitchenPrintFailedForLines(
+        lines.map((l) => l.lineId),
+        true
+      );
+      toastPrintError(e, t, 'webPosKitchenPrintFailed');
+      throw e;
+    } finally {
+      setKitchenPrintRetryBusy(false);
+    }
   };
 
   const buildSalePayload = (
@@ -5615,8 +5681,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     // Offline sales have no published receipt URL yet — still print text via local Print Agent.
     if (shouldPrintReceipt) {
       // Never hold checkout/busy on the print agent.
-      void printReceipt(receiptText, receiptUrl, deliveryQrUrl).catch((e: any) => {
-        toast.error(e?.message || t('webPosPrintFailed'));
+      void printReceipt(receiptText, receiptUrl, deliveryQrUrl).catch((e: unknown) => {
+        toastPrintError(e, t, 'webPosPrintFailed');
       });
     }
     const kitchenDelta = unsentKitchenLines(cartSnapshot);
@@ -5627,8 +5693,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         when: whenSnapshot,
         tabNumber: tabSnapshot,
         tableLabel: tableLabelSnapshot,
-      }).catch((e: any) => {
-        toast.error(e?.message || t('webPosKitchenPrintFailed'));
+      }).catch((e: unknown) => {
+        toastPrintError(e, t, 'webPosKitchenPrintFailed');
       });
     }
   };
@@ -5771,8 +5837,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             when: whenSnapshot,
             tabNumber: tabSnapshot,
             tableLabel: tableLabelSnapshot,
-          }).catch((e: any) => {
-            toast.error(e?.message || t('webPosKitchenPrintFailed'));
+          }).catch((e: unknown) => {
+            toastPrintError(e, t, 'webPosKitchenPrintFailed');
           });
         }
       }
@@ -6846,6 +6912,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                       }
                     : undefined
                 }
+                failedPrintCount={failedPrintLines.length}
+                onOpenPrintIssues={() => setKitchenPrintIssuesOpen(true)}
+                onOrderPrint={kitchenEnabled ? openOrderReprint : undefined}
+                onLinePrint={kitchenEnabled ? openLineReprint : undefined}
               />
             </div>
             ) : null}
@@ -7061,6 +7131,51 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             toast.error(e.message || t('webPosPrintFailed'));
           } finally {
             setPrintChooserBusy(false);
+          }
+        }}
+      />
+
+      <WebPosKitchenPrintIssuesModal
+        open={kitchenPrintIssuesOpen}
+        lines={failedPrintLines}
+        busy={kitchenPrintRetryBusy}
+        money={money}
+        onClose={() => {
+          if (!kitchenPrintRetryBusy) setKitchenPrintIssuesOpen(false);
+        }}
+        onRetryLine={(line) => void retryKitchenPrint([line])}
+        onRetryAll={() => void retryKitchenPrint(failedPrintLines)}
+      />
+
+      <WebPosReprintModal
+        open={!!reprintModal}
+        busy={reprintBusy}
+        lineLabel={reprintModal?.lineLabel}
+        onClose={() => {
+          if (!reprintBusy) setReprintModal(null);
+        }}
+        onProvisional={async () => {
+          setReprintBusy(true);
+          try {
+            await printProvisionalReceipt();
+            setReprintModal(null);
+          } catch (e: unknown) {
+            toastPrintError(e, t, 'webPosPrintFailed');
+          } finally {
+            setReprintBusy(false);
+          }
+        }}
+        onKitchen={async () => {
+          if (!reprintModal) return;
+          setReprintBusy(true);
+          try {
+            const lines = cart.filter((l) => reprintModal.lineIds.includes(l.lineId));
+            await retryKitchenPrint(lines.length ? lines : cart);
+            setReprintModal(null);
+          } catch {
+            /* retryKitchenPrint already toasts */
+          } finally {
+            setReprintBusy(false);
           }
         }}
       />
