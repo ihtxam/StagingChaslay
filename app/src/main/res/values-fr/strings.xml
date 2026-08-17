@@ -504,6 +504,12 @@
     <string name="checkout_back">Retour</string>
     <string name="checkout_title">Paiement</string>
     <string name="checkout_complete">Finalisez le paiement</string>
+    <string name="checkout_complete_with_change">Valider · monnaie %1$s</string>
+    <string name="checkout_amount_due">Montant dû</string>
+    <string name="checkout_remaining">Reste : %1$s</string>
+    <string name="checkout_change_due">Monnaie : %1$s</string>
+    <string name="checkout_entering">Saisie : %1$s</string>
+    <string name="checkout_quick_cash">Espèces rapides</string>
     <string name="specification">Spécification</string>
     <string name="choose_one">Choisissez-en un</string>
     <string name="add_notes">Ajouter une note</string>

@@ -2033,7 +2033,25 @@ class PosViewModel @Inject constructor(
     }
 
     fun updateCheckoutMethod(method: PaymentMethod) {
-        updateExtras { it.copy(checkoutState = it.checkoutState.copy(method = method)) }
+        updateExtras {
+            it.copy(
+                checkoutState = it.checkoutState.copy(
+                    method = method,
+                    tenderAmount = if (method == PaymentMethod.CASH) it.checkoutState.tenderAmount else 0.0
+                )
+            )
+        }
+    }
+
+    fun updateCheckoutTenderAmount(amount: Double) {
+        updateExtras {
+            it.copy(
+                checkoutState = it.checkoutState.copy(
+                    method = PaymentMethod.CASH,
+                    tenderAmount = amount.coerceAtLeast(0.0)
+                )
+            )
+        }
     }
 
     fun updateCheckoutTipAmount(amount: Double) {

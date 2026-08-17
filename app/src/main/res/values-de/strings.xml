@@ -501,6 +501,12 @@
     <string name="checkout_back">Zurück</string>
     <string name="checkout_title">Zahlung</string>
     <string name="checkout_complete">Zahlung abschliessen</string>
+    <string name="checkout_complete_with_change">Abschliessen · Rückgeld %1$s</string>
+    <string name="checkout_amount_due">Betrag</string>
+    <string name="checkout_remaining">Restbetrag: %1$s</string>
+    <string name="checkout_change_due">Rückgeld: %1$s</string>
+    <string name="checkout_entering">Eingabe: %1$s</string>
+    <string name="checkout_quick_cash">Schnellkasse</string>
     <string name="specification">Spezifikationen</string>
     <string name="choose_one">Eine Option auswählen</string>
     <string name="add_notes">Hinweise hinzufügen</string>

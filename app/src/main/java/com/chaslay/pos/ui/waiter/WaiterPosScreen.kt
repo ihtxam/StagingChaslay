@@ -115,13 +115,12 @@ fun WaiterPosScreen(
             onTipAmount = viewModel::updateCheckoutTipAmount,
             onTipPercent = viewModel::updateCheckoutTipPercent,
             onDiscountPercent = viewModel::updateCheckoutDiscountPercent,
-            onRoundingStep = viewModel::updateCheckoutRoundingStep,
             onToggleTipPanel = viewModel::toggleCheckoutTipPanel,
             onToggleDiscountPanel = viewModel::toggleCheckoutDiscountPanel,
             onSplitClick = {},
             onOpenCashDrawer = {},
             onPrintReceipt = {},
-            onQuickCash = { amount -> viewModel.completeCheckoutWithQuickCash(amount, activity) },
+            onTenderAmount = viewModel::updateCheckoutTenderAmount,
             onComplete = { viewModel.completeCheckout(activity) }
         )
         if (state.showOrderComplete && state.completedTransaction != null) {

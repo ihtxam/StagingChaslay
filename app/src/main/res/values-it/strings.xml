@@ -491,6 +491,12 @@
     <string name="checkout_back">Indietro</string>
     <string name="checkout_title">Pagamento</string>
     <string name="checkout_complete">Completa pagamento</string>
+    <string name="checkout_complete_with_change">Completa · resto %1$s</string>
+    <string name="checkout_amount_due">Importo dovuto</string>
+    <string name="checkout_remaining">Residuo: %1$s</string>
+    <string name="checkout_change_due">Resto: %1$s</string>
+    <string name="checkout_entering">Inserimento: %1$s</string>
+    <string name="checkout_quick_cash">Contanti rapidi</string>
     <string name="specification">Spécification</string>
     <string name="choose_one">Choisissez-en un</string>
     <string name="add_notes">Ajouter une note</string>
