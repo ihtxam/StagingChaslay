@@ -130,7 +130,56 @@ function App() {
     <>
       <BrowserRouter>
         <Routes>
-          {!shopMode && <Route path="/login" element={<LoginPage />} />}
+          {!shopMode && (
+            <Route
+              path="/login"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
+          {!shopMode && (
+            <Route
+              path="/signin"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
+          {!shopMode && (
+            <Route
+              path="/superadmin/login"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
+          {!shopMode && (
+            <Route
+              path="/reseller/login"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
+          {!shopMode && (
+            <Route
+              path="/merchant/login"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
           {!shopMode && <Route path="/set-password" element={<SetPasswordPage />} />}
           {!shopMode && <Route path="/pos-embed" element={<PosEmbedPage />} />}
           <Route

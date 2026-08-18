@@ -13,6 +13,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed.ts",
+    "set-superadmin-password": "tsx src/scripts/set-superadmin-password.ts",
     "lint": "eslint src/**/*.ts",
     "type-check": "tsc --noEmit"
   },

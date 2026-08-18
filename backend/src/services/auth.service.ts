@@ -237,16 +237,78 @@ export class AuthService {
   }
 
   /**
+   * Unified panel login — detect merchant / staff / reseller / superadmin from email + password.
+   * Does not replace PIN WebPOS or waiter PIN.
+   */
+  static async loginAny(email: string, password: string) {
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!normalized || !password) {
+      throw new Error("Email and password are required");
+    }
+
+    try {
+      const merchant = await this.loginMerchant(normalized, password);
+      return {
+        kind: merchant.isOwner === false && merchant.merchant.staffId ? "staff" : "merchant",
+        token: merchant.token,
+        merchant: merchant.merchant,
+        isOwner: merchant.isOwner !== false,
+      } as const;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.startsWith("Merchant account is")) {
+        throw error;
+      }
+    }
+
+    try {
+      const { ResellerService } = await import("@/services/reseller.service");
+      const reseller = await ResellerService.login(normalized, password);
+      return { kind: "reseller" as const, token: reseller.token, reseller: reseller.reseller };
+    } catch {
+      /* try superadmin */
+    }
+
+    const db = getDb();
+    const rows = await db
+      .select()
+      .from(schema.superadmins)
+      .where(sql`lower(${schema.superadmins.email}) = ${normalized}`)
+      .limit(1);
+    const superadmin = rows[0];
+    if (superadmin && superadmin.isActive) {
+      const ok = await this.comparePassword(password, superadmin.passwordHash);
+      if (ok) {
+        const token = this.generateToken({
+          id: superadmin.id,
+          email: superadmin.email,
+          role: "superadmin",
+        });
+        return {
+          kind: "superadmin" as const,
+          token,
+          superadmin: { id: superadmin.id, email: superadmin.email, name: superadmin.name },
+        };
+      }
+    }
+
+    throw new Error("Invalid email or password");
+  }
+
+  /**
    * Login superadmin
    */
   static async loginSuperadmin(email: string, password: string) {
     const db = getDb();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
     try {
-      // Find superadmin
-      const superadmin = await db.query.superadmins.findFirst({
-        where: eq(schema.superadmins.email, email),
-      });
+      const rows = await db
+        .select()
+        .from(schema.superadmins)
+        .where(sql`lower(${schema.superadmins.email}) = ${normalizedEmail}`)
+        .limit(1);
+      const superadmin = rows[0];
 
       if (!superadmin) {
         throw new Error("Invalid email or password");

@@ -1,334 +1,251 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { useAuthStore } from '@/store/auth';
+import { homePathForUser } from '@/lib/auth-home';
+import { APP_NAME, APP_PANEL_TITLE, APP_TAGLINE } from '@/lib/brand';
+import { useI18n, type Locale } from '@/lib/i18n';
 import { clearWebPosStaffSession } from '@/lib/permissions';
-import { APP_NAME, APP_PANEL_TITLE } from '@/lib/brand';
-
-/** Temporary profile picker — remove when ready for production-only login. */
-type ProfileKind = 'merchant' | 'reseller' | 'superadmin' | 'auto';
+import { useAuthStore, type User } from '@/store/auth';
 
 const loginSchema = z.object({
-  email: z.string().email('Invalid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  profile: z.enum(['merchant', 'reseller', 'superadmin', 'auto']),
+  email: z.string().email(),
+  password: z.string().min(6),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-const resetSchema = z.object({
-  email: z.string().email('Invalid email'),
-  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
-  profile: z.enum(['merchant', 'reseller', 'superadmin', 'staff']),
-});
-
-type ResetFormData = z.infer<typeof resetSchema>;
-
-type LoginHit = {
-  kind: 'superadmin' | 'reseller' | 'merchant';
-  token: string;
-  account: any;
+type UnifiedLoginResponse = {
+  token?: string;
+  kind?: 'superadmin' | 'reseller' | 'merchant' | 'staff';
+  superadmin?: { id: string; email: string; name: string };
+  reseller?: { id: string; email: string; name: string };
+  merchant?: {
+    id: string;
+    email: string;
+    name: string;
+    staffId?: string;
+    roleName?: string;
+    permissions?: User['permissions'];
+  };
   isOwner?: boolean;
 };
 
-async function tryLogin(
-  profile: Exclude<ProfileKind, 'auto'>,
-  email: string,
-  password: string
-): Promise<LoginHit | null> {
-  const endpoint =
-    profile === 'superadmin'
-      ? '/auth/superadmin/login'
-      : profile === 'reseller'
-        ? '/auth/reseller/login'
-        : '/auth/merchant/login';
-  try {
-    const response = await api.post(endpoint, { email, password });
-    const { token, merchant, superadmin, reseller, isOwner } = response.data;
-    if (profile === 'superadmin' && token && superadmin) {
-      return { kind: 'superadmin', token, account: superadmin };
+async function legacyLogin(email: string, password: string): Promise<UnifiedLoginResponse> {
+  for (const endpoint of ['/auth/merchant/login', '/auth/reseller/login', '/auth/superadmin/login'] as const) {
+    try {
+      const response = await api.post<UnifiedLoginResponse>(endpoint, { email, password });
+      if (response.data?.token) return response.data;
+    } catch {
+      /* try next account type */
     }
-    if (profile === 'reseller' && token && reseller) {
-      return { kind: 'reseller', token, account: reseller };
-    }
-    if (profile === 'merchant' && token && merchant) {
-      return { kind: 'merchant', token, account: merchant, isOwner };
-    }
-  } catch {
-    /* try next */
   }
-  return null;
+  throw new Error('Invalid email or password');
 }
 
-function panelPath(kind: LoginHit['kind']): string {
-  if (kind === 'superadmin') return '/superadmin';
-  if (kind === 'reseller') return '/reseller';
-  return '/merchant';
+function userFromLogin(data: UnifiedLoginResponse): { user: User; token: string } | null {
+  const token = data.token;
+  if (!token) return null;
+
+  if (data.superadmin) {
+    return {
+      token,
+      user: {
+        id: data.superadmin.id,
+        email: data.superadmin.email,
+        name: data.superadmin.name,
+        role: 'superadmin',
+      },
+    };
+  }
+
+  if (data.reseller) {
+    return {
+      token,
+      user: {
+        id: data.reseller.id,
+        email: data.reseller.email,
+        name: data.reseller.name,
+        role: 'reseller',
+        resellerId: data.reseller.id,
+      },
+    };
+  }
+
+  const merchant = data.merchant;
+  if (!merchant) return null;
+  const isStaff = !!merchant.staffId || data.kind === 'staff';
+  return {
+    token,
+    user: {
+      id: isStaff ? merchant.staffId! : merchant.id,
+      email: merchant.email,
+      name: merchant.name,
+      role: isStaff ? 'staff' : 'merchant',
+      merchantId: merchant.id,
+      staffId: isStaff ? merchant.staffId : undefined,
+      roleName: isStaff ? merchant.roleName : merchant.roleName || 'Owner',
+      permissions: merchant.permissions,
+      isOwner: !isStaff && data.isOwner !== false,
+    },
+  };
 }
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { setUser, setToken } = useAuthStore();
+  const { t, locale, setLocale } = useI18n();
+  const { user, token, setUser, setToken } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
-  const [showReset, setShowReset] = useState(false);
-  const [resetBusy, setResetBusy] = useState(false);
 
   const {
     register,
     handleSubmit,
-    watch,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { profile: 'merchant', email: '', password: '' },
+    defaultValues: { email: '', password: '' },
   });
-
-  const {
-    register: registerReset,
-    handleSubmit: handleResetSubmit,
-    formState: { errors: resetErrors },
-    reset: resetForm,
-  } = useForm<ResetFormData>({
-    resolver: zodResolver(resetSchema),
-    defaultValues: { profile: 'merchant', email: '', newPassword: '' },
-  });
-
-  const profile = watch('profile');
 
   useEffect(() => {
     document.title = APP_PANEL_TITLE;
   }, []);
 
-  const applyLogin = (hit: LoginHit) => {
-    const { kind, token, account, isOwner } = hit;
-    const isStaff = kind === 'merchant' && !!account.staffId;
-    const user = {
-      id: isStaff ? account.staffId : account.id,
-      email: account.email,
-      name: account.name,
-      role: (kind === 'superadmin'
-        ? 'superadmin'
-        : kind === 'reseller'
-          ? 'reseller'
-          : isStaff
-            ? 'staff'
-            : 'merchant') as 'superadmin' | 'merchant' | 'staff' | 'reseller',
-      merchantId: kind === 'merchant' ? account.id : undefined,
-      resellerId: kind === 'reseller' ? account.id : undefined,
-      staffId: isStaff ? account.staffId : undefined,
-      roleName: isStaff
-        ? account.roleName
-        : kind === 'merchant' && isOwner !== false
-          ? account.roleName || 'Owner'
-          : account.roleName,
-      permissions: account.permissions,
-      isOwner: kind === 'merchant' && isOwner !== false && !isStaff,
-    };
+  useEffect(() => {
+    if (user && token) {
+      navigate(homePathForUser(user), { replace: true });
+    }
+  }, [user, token, navigate]);
 
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
-    clearWebPosStaffSession();
-    setToken(token);
-    setUser(user);
-    toast.success(`Signed in — opening ${kind} panel`);
-    navigate(panelPath(kind));
-  };
-
-  const onSubmit = async (data: LoginFormData) => {
+  const onSubmit = async (form: LoginFormData) => {
     setIsLoading(true);
     try {
-      let hit: LoginHit | null = null;
-      if (data.profile === 'auto') {
-        // Prefer merchant/staff, then reseller, then superadmin
-        for (const kind of ['merchant', 'reseller', 'superadmin'] as const) {
-          hit = await tryLogin(kind, data.email, data.password);
-          if (hit) break;
-        }
-      } else {
-        hit = await tryLogin(data.profile, data.email, data.password);
+      let data: UnifiedLoginResponse;
+      try {
+        const response = await api.post<UnifiedLoginResponse>('/auth/login', {
+          email: form.email.trim(),
+          password: form.password,
+        });
+        data = response.data;
+      } catch (unifiedError: unknown) {
+        const status = (unifiedError as { response?: { status?: number } }).response?.status;
+        if (status !== 404) throw unifiedError;
+        data = await legacyLogin(form.email.trim(), form.password);
       }
+      const hit = userFromLogin(data);
       if (!hit) {
-        throw new Error('Login failed. Check profile, email, and password.');
+        throw new Error(t('loginFailed'));
       }
-      applyLogin(hit);
-    } catch (error: any) {
-      const message =
-        error.response?.data?.error ||
-        error.message ||
-        'Login failed. Check profile, email, and password.';
-      toast.error(message);
+
+      localStorage.setItem('token', hit.token);
+      localStorage.setItem('user', JSON.stringify(hit.user));
+      clearWebPosStaffSession();
+      setToken(hit.token);
+      setUser(hit.user);
+      toast.success(t('loginWelcome'));
+      navigate(homePathForUser(hit.user), { replace: true });
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: string } }; message?: string };
+      toast.error(err.response?.data?.error || err.message || t('loginFailed'));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const onReset = async (data: ResetFormData) => {
-    setResetBusy(true);
-    try {
-      await api.post('/auth/reset-login-password', {
-        email: data.email,
-        newPassword: data.newPassword,
-        role: data.profile,
-      });
-      toast.success('Password updated. You can sign in now.');
-      setShowReset(false);
-      resetForm({ profile: data.profile, email: data.email, newPassword: '' });
-    } catch (error: any) {
-      toast.error(
-        error.response?.data?.error || error.message || 'Could not reset password'
-      );
-    } finally {
-      setResetBusy(false);
-    }
-  };
-
-  const profileLabel =
-    profile === 'auto'
-      ? 'Auto'
-      : profile === 'merchant'
-        ? 'User / Merchant'
-        : profile === 'reseller'
-          ? 'Reseller'
-          : 'Superadmin';
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-800 to-slate-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <div className="flex justify-center mb-6">
-            <div className="bg-slate-800 p-3 rounded-xl">
-              <LogIn className="w-6 h-6 text-white" />
-            </div>
-          </div>
+    <div className="min-h-screen bg-[#0b3d3a] flex flex-col items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(15,118,110,0.35),_transparent_55%)] pointer-events-none" />
 
-          <h1 className="text-2xl font-bold text-center mb-2">{APP_NAME}</h1>
-          <p className="text-gray-600 text-center mb-6">Sign in to your panel</p>
+      <div className="relative w-full max-w-[420px]">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg ring-1 ring-white/15">
+            <img
+              src="/favicon.png"
+              alt=""
+              className="h-12 w-12 object-contain"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                if (fallback) fallback.hidden = false;
+              }}
+            />
+            <span hidden className="text-2xl font-bold tracking-tight text-teal-800">
+              C
+            </span>
+          </div>
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-white">{APP_NAME}</h1>
+          <p className="mt-1 text-sm text-teal-100/80">{t('loginTagline')}</p>
+        </div>
+
+        <div className="rounded-2xl bg-white p-8 shadow-2xl">
+          <h2 className="text-lg font-semibold text-slate-900">{t('loginTitle')}</h2>
+          <p className="mt-1 mb-6 text-sm text-slate-500">{t('loginSubtitle')}</p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Profile</label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {(
-                  [
-                    ['merchant', 'User'],
-                    ['reseller', 'Reseller'],
-                    ['superadmin', 'Superadmin'],
-                    ['auto', 'Auto'],
-                  ] as const
-                ).map(([value, label]) => (
-                  <label
-                    key={value}
-                    className={`flex cursor-pointer items-center justify-center rounded-lg border px-2 py-2.5 text-center text-xs font-bold ${
-                      profile === value
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      value={value}
-                      className="sr-only"
-                      {...register('profile')}
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-              <p className="mt-1.5 text-xs text-gray-500">
-                Temporary. Auto tries User → Reseller → Superadmin from email/password.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Email</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="login-email">
+                {t('loginEmail')}
+              </label>
               <input
+                id="login-email"
                 {...register('email')}
                 type="email"
-                placeholder="your@email.com"
-                className="input"
+                placeholder="name@company.com"
+                className="input py-2.5"
                 autoComplete="username"
+                autoFocus
               />
-              {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Password</label>
-              <input
-                {...register('password')}
-                type="password"
-                placeholder="••••••••"
-                className="input"
-                autoComplete="current-password"
-              />
-              {errors.password && (
-                <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>
+              {errors.email && (
+                <p className="text-red-500 text-sm mt-1">{t('loginEmailInvalid')}</p>
               )}
             </div>
 
-            <button type="submit" disabled={isLoading} className="btn-primary w-full">
-              {isLoading ? 'Signing in...' : `Sign in (${profileLabel})`}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="login-password">
+                {t('password')}
+              </label>
+              <input
+                id="login-password"
+                {...register('password')}
+                type="password"
+                placeholder="••••••••"
+                className="input py-2.5"
+                autoComplete="current-password"
+              />
+              {errors.password && (
+                <p className="text-red-500 text-sm mt-1">{t('loginPasswordMin')}</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full rounded-lg bg-teal-800 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+            >
+              {isLoading ? t('loginSigningIn') : t('loginSignIn')}
             </button>
           </form>
-
-          <div className="mt-5 border-t border-stone-100 pt-4">
-            <button
-              type="button"
-              className="text-sm font-semibold text-slate-700 underline-offset-2 hover:underline"
-              onClick={() => setShowReset((v) => !v)}
-            >
-              {showReset ? 'Hide password reset' : 'Reset password'}
-            </button>
-            {showReset ? (
-              <form onSubmit={handleResetSubmit(onReset)} className="mt-3 space-y-3">
-                <p className="text-xs text-stone-500">
-                  Temporary helper for merchants, staff users, resellers, and superadmin.
-                </p>
-                <div>
-                  <label className="block text-xs font-medium mb-1">Account type</label>
-                  <select {...registerReset('profile')} className="input text-sm">
-                    <option value="merchant">Merchant (shop owner)</option>
-                    <option value="staff">Staff user (panel login)</option>
-                    <option value="reseller">Reseller</option>
-                    <option value="superadmin">Superadmin</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">Email</label>
-                  <input
-                    {...registerReset('email')}
-                    type="email"
-                    className="input text-sm"
-                    placeholder="account@email.com"
-                  />
-                  {resetErrors.email && (
-                    <p className="text-red-500 text-xs mt-1">{resetErrors.email.message}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">New password</label>
-                  <input
-                    {...registerReset('newPassword')}
-                    type="password"
-                    className="input text-sm"
-                    placeholder="At least 8 characters"
-                    autoComplete="new-password"
-                  />
-                  {resetErrors.newPassword && (
-                    <p className="text-red-500 text-xs mt-1">{resetErrors.newPassword.message}</p>
-                  )}
-                </div>
-                <button type="submit" disabled={resetBusy} className="btn-secondary w-full text-sm">
-                  {resetBusy ? 'Updating…' : 'Update password'}
-                </button>
-              </form>
-            ) : null}
-          </div>
         </div>
+
+        <div className="mt-6 flex items-center justify-center gap-1" role="group" aria-label={t('language')}>
+          {(['en', 'fr', 'de'] as Locale[]).map((code) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => setLocale(code)}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${
+                locale === code
+                  ? 'bg-white text-teal-900'
+                  : 'text-teal-100/80 hover:text-white'
+              }`}
+            >
+              {code}
+            </button>
+          ))}
+        </div>
+        <p className="mt-4 text-center text-[11px] text-teal-100/50">{APP_TAGLINE}</p>
       </div>
     </div>
   );

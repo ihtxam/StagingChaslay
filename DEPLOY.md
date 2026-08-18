@@ -170,13 +170,23 @@ curl -sI https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe
 
 Skip rebuild: `SKIP_PRINT_AGENT_BUILD=1 bash scripts/deploy-hetzner.sh`
 
-**Superadmin panel:** https://app.chaslay.com (password saved in database after first login)
+**Official login (everyone):** https://app.chaslay.com/login
+
+After sign-in the panel opens by role: superadmin → `/superadmin`, reseller → `/reseller`, merchant owner → `/merchant`, staff → merchant panel or WebPOS/waiter if that is their only permission.
+
+**Read the current superadmin email/password from the server (do not guess):**
+
+```bash
+grep -E '^SEED_SUPERADMIN_' /root/chaslay-secrets/backend.env
+```
 
 **Reset superadmin password anytime:**
 
 ```bash
-cd /root/FoodTruckPOS/backend
-docker compose exec api npm run set-superadmin-password -- 'YourNewPassword123'
+cd /root/FoodTruckPOS
+bash scripts/set-superadmin-password.sh 'YourNewPassword123'
+# or:
+docker compose --env-file .env.production exec api npm run set-superadmin-password -- 'YourNewPassword123'
 ```
 
 After changing `.env`, restart: `docker compose up -d --build`

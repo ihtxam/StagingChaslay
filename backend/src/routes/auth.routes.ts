@@ -5,6 +5,37 @@ import { verifyToken, requireMerchant, requireSuperadmin } from "@/middleware/au
 const router = Router();
 
 /**
+ * POST /api/auth/login
+ * Official unified login — merchant owner, staff, reseller, or superadmin.
+ */
+router.post("/login", async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const result = await AuthService.loginAny(String(email), String(password));
+    if (result.kind === "superadmin") {
+      return res.json({ success: true, kind: "superadmin", token: result.token, superadmin: result.superadmin });
+    }
+    if (result.kind === "reseller") {
+      return res.json({ success: true, kind: "reseller", token: result.token, reseller: result.reseller });
+    }
+    return res.json({
+      success: true,
+      kind: result.kind,
+      token: result.token,
+      merchant: result.merchant,
+      isOwner: result.isOwner !== false,
+    });
+  } catch (error) {
+    console.error("Error logging in:", error);
+    res.status(401).json({ error: error instanceof Error ? error.message : "Failed to login" });
+  }
+});
+
+/**
  * POST /api/auth/merchant/register
  * Register a new merchant account
  */

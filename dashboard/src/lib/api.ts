@@ -63,7 +63,11 @@ api.interceptors.response.use(
         !path.startsWith('/receipt') &&
         !path.startsWith('/receipts') &&
         !path.startsWith('/set-password') &&
-        !path.startsWith('/login')
+        !path.startsWith('/login') &&
+        !path.startsWith('/signin') &&
+        path !== '/superadmin/login' &&
+        path !== '/reseller/login' &&
+        path !== '/merchant/login'
       ) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
