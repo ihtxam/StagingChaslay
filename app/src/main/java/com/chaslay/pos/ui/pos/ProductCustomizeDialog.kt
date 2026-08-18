@@ -10,10 +10,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -201,28 +197,29 @@ fun ProductCustomizeDialog(
                         }
 
                         if (customizeTabs.isNotEmpty()) {
+                            val tabIndex = activeTab.coerceIn(0, (customizeTabs.size - 1).coerceAtLeast(0))
                             ScrollableTabRow(
-                                selectedTabIndex = activeTab.coerceIn(0, customizeTabs.lastIndex),
+                                selectedTabIndex = tabIndex,
                                 containerColor = Color(0xFF252525),
                                 contentColor = Color.White,
                                 edgePadding = 0.dp
                             ) {
                                 customizeTabs.forEachIndexed { index, tab ->
                                     Tab(
-                                        selected = activeTab == index,
+                                        selected = tabIndex == index,
                                         onClick = { activeTab = index },
                                         text = {
                                             Text(
                                                 tab.title,
                                                 fontSize = 12.sp,
-                                                fontWeight = if (activeTab == index) FontWeight.Bold else FontWeight.Normal
+                                                fontWeight = if (tabIndex == index) FontWeight.Bold else FontWeight.Normal
                                             )
                                         }
                                     )
                                 }
                             }
                             Spacer(Modifier.height(10.dp))
-                            when (val tab = customizeTabs.getOrNull(activeTab.coerceIn(0, customizeTabs.lastIndex))) {
+                            when (val tab = customizeTabs.getOrNull(tabIndex)) {
                                 is CustomizeTabKind.Modifier -> {
                                     ModifierAddonGrid(
                                         currencySymbol = currencySymbol,
@@ -430,44 +427,73 @@ private fun ModifierAddonGrid(
     onAddonIncrement: (AddonGroupModel, Long) -> Unit = { _, _ -> },
     onDecrement: (Long) -> Unit = {}
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
+    val inStockModifiers = group?.options.orEmpty().filter { it.inStock }
+    val inStockAddons = addonGroup?.options.orEmpty().filter { it.inStock }
+    if (inStockModifiers.isEmpty() && inStockAddons.isEmpty()) return
+
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (group != null) {
-            items(group.options.filter { it.inStock }, key = { it.id }) { option ->
-                val selected = if (group.isSingleSelect) {
-                    singleModifier[group.id] == option.id
-                } else {
-                    (modifierQty[option.id] ?: 0) > 0
+            inStockModifiers.chunked(3).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    row.forEach { option ->
+                        val qty = modifierQty[option.id] ?: 0
+                        val selected = if (group.isSingleSelect) {
+                            singleModifier[group.id] == option.id
+                        } else {
+                            qty > 0
+                        }
+                        Box(modifier = Modifier.weight(1f)) {
+                            ModifierGridTile(
+                                label = option.name,
+                                priceLabel = null,
+                                selected = selected,
+                                quantity = qty,
+                                onClick = {
+                                    if (group.isSingleSelect) onSelectSingle(group.id, option.id)
+                                    else onModifierIncrement(group, option.id)
+                                },
+                                onDecrement = if (!group.isSingleSelect && qty > 0) {
+                                    { onDecrement(option.id) }
+                                } else {
+                                    null
+                                }
+                            )
+                        }
+                    }
+                    repeat(3 - row.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
-                val qty = modifierQty[option.id] ?: 0
-                ModifierGridTile(
-                    label = option.name,
-                    priceLabel = null,
-                    selected = selected,
-                    quantity = qty,
-                    onClick = {
-                        if (group.isSingleSelect) onSelectSingle(group.id, option.id)
-                        else onModifierIncrement(group, option.id)
-                    },
-                    onDecrement = if (!group.isSingleSelect && qty > 0) ({ onDecrement(option.id) }) else null
-                )
             }
         } else if (addonGroup != null) {
-            items(addonGroup.options.filter { it.inStock }, key = { it.id }) { option ->
-                val qty = addonQty[option.id] ?: 0
-                ModifierGridTile(
-                    label = option.name,
-                    priceLabel = "+$currencySymbol ${"%.2f".format(Locale.getDefault(), option.price)}",
-                    selected = qty > 0,
-                    quantity = qty,
-                    onClick = { onAddonIncrement(addonGroup, option.id) },
-                    onDecrement = if (qty > 0) ({ onDecrement(option.id) }) else null
-                )
+            inStockAddons.chunked(3).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    row.forEach { option ->
+                        val qty = addonQty[option.id] ?: 0
+                        Box(modifier = Modifier.weight(1f)) {
+                            ModifierGridTile(
+                                label = option.name,
+                                priceLabel = "+$currencySymbol ${"%.2f".format(Locale.getDefault(), option.price)}",
+                                selected = qty > 0,
+                                quantity = qty,
+                                onClick = { onAddonIncrement(addonGroup, option.id) },
+                                onDecrement = if (qty > 0) ({ onDecrement(option.id) }) else null
+                            )
+                        }
+                    }
+                    repeat(3 - row.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
     }

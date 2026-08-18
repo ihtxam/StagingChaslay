@@ -113,7 +113,7 @@ fun ComboPickDialog(
 
     val allValid = combo.slots.all { slot ->
         val count = slotQty(slot.id)
-        count >= slot.minPick && count <= slot.maxPick
+        count >= slot.safeMinPick() && count <= slot.safeMaxPick()
     }
 
     Dialog(
@@ -177,51 +177,17 @@ fun ComboPickDialog(
                                 showProductImages = showProductImages,
                                 onToggle = { option ->
                                     errorMessage = null
-                                    if (option.hasCustomize) {
+                                    if (option.canCustomize()) {
                                         nestedOption = slot to option
                                         return@ComboSlotSection
                                     }
-                                    val current = picks[slot.id].orEmpty()
-                                    if (slot.maxPick <= 1) {
-                                        picks[slot.id] = listOf(option.toSimplePick())
-                                    } else {
-                                        val existing = current.find {
-                                            it.productId == option.productId && it.extras.isEmpty() && it.modifiers.isEmpty()
-                                        }
-                                        val total = current.sumOf { it.qty }
-                                        if (existing != null) {
-                                            picks[slot.id] = if (existing.qty > 1) {
-                                                current.map { if (it.pickId == existing.pickId) it.copy(qty = it.qty - 1) else it }
-                                            } else {
-                                                current.filter { it.pickId != existing.pickId }
-                                            }
-                                        } else if (total < slot.maxPick) {
-                                            picks[slot.id] = current + option.toSimplePick()
-                                        }
-                                    }
+                                    applySimpleToggle(picks, slot, option)
                                 },
                                 onIncrement = { option ->
-                                    val current = picks[slot.id].orEmpty()
-                                    if (current.sumOf { it.qty } >= slot.maxPick) return@ComboSlotSection
-                                    val existing = current.find {
-                                        it.productId == option.productId && it.extras.isEmpty() && it.modifiers.isEmpty()
-                                    }
-                                    picks[slot.id] = if (existing != null) {
-                                        current.map { if (it.pickId == existing.pickId) it.copy(qty = it.qty + 1) else it }
-                                    } else {
-                                        current + option.toSimplePick()
-                                    }
+                                    applySimpleIncrement(picks, slot, option)
                                 },
                                 onDecrement = { option ->
-                                    val current = picks[slot.id].orEmpty()
-                                    val existing = current.find {
-                                        it.productId == option.productId && it.extras.isEmpty() && it.modifiers.isEmpty()
-                                    } ?: return@ComboSlotSection
-                                    picks[slot.id] = if (existing.qty > 1) {
-                                        current.map { if (it.pickId == existing.pickId) it.copy(qty = it.qty - 1) else it }
-                                    } else {
-                                        current.filter { it.pickId != existing.pickId }
-                                    }
+                                    applySimpleDecrement(picks, slot, option)
                                 }
                             )
                         }
@@ -317,7 +283,10 @@ fun ComboPickDialog(
                     }
                     Button(
                         onClick = {
-                            val validation = validateComboPicks(combo.slots, picks)
+                            val snapshot = combo.slots.associate { slot ->
+                                slot.id to picks[slot.id].orEmpty().toList()
+                            }
+                            val validation = validateComboPicks(combo.slots, snapshot)
                             if (validation != null) {
                                 errorMessage = validation
                                 return@Button
@@ -325,11 +294,11 @@ fun ComboPickDialog(
                             errorMessage = null
                             onConfirm(
                                 ComboPickResult(
-                                    selections = buildComboSelections(combo.slots, picks),
-                                    quantity = itemQty,
+                                    selections = buildComboSelections(combo.slots, snapshot),
+                                    quantity = itemQty.coerceAtLeast(1),
                                     unitPrice = unitPrice,
-                                    comboExtras = comboAddons,
-                                    comboModifiers = comboModifiers
+                                    comboExtras = comboAddons.toList(),
+                                    comboModifiers = comboModifiers.toList()
                                 )
                             )
                         },
@@ -369,18 +338,19 @@ fun ComboPickDialog(
                 val pick = ComboSlotPick(
                     pickId = UUID.randomUUID().toString(),
                     productId = option.productId,
-                    productName = option.productName,
+                    productName = option.productName.ifBlank { "Item" },
                     extraPrice = option.extraPrice,
-                    extras = result.addons,
-                    modifiers = result.modifiers,
+                    extras = result.addons.orEmpty(),
+                    modifiers = result.modifiers.orEmpty(),
                     qty = 1
                 )
                 val current = picks[slot.id].orEmpty()
-                picks[slot.id] = if (slot.maxPick <= 1) {
+                val maxPick = slot.safeMaxPick()
+                picks[slot.id] = if (maxPick <= 1) {
                     listOf(pick)
                 } else {
                     val total = current.sumOf { it.qty }
-                    if (total >= slot.maxPick) current else current + pick
+                    if (total >= maxPick) current else current + pick
                 }
                 nestedOption = null
                 errorMessage = null
@@ -402,8 +372,8 @@ fun ComboPickDialog(
             currencySymbol = currencySymbol,
             showProductImages = showProductImages,
             onAdd = { result ->
-                comboModifiers = result.modifiers
-                comboAddons = result.addons
+                comboModifiers = result.modifiers.orEmpty()
+                comboAddons = result.addons.orEmpty()
                 showComboExtras = false
             },
             onDismiss = { showComboExtras = false }
@@ -460,10 +430,10 @@ private fun ComboSlotSection(
                                 imageUri = option.imageUri,
                                 extraPrice = option.extraPrice,
                                 currencySymbol = currencySymbol,
-                                customizeHint = option.hasCustomize,
+                                customizeHint = option.canCustomize(),
                                 qty = qty,
                                 selected = selected,
-                                showQty = slot.maxPick > 1 && !option.hasCustomize,
+                                showQty = slot.safeMaxPick() > 1 && !option.canCustomize(),
                                 showProductImages = showProductImages,
                                 tileHeight = tileHeight,
                                 modifier = Modifier.weight(1f),
@@ -594,26 +564,97 @@ private fun ComboOptionTile(
 
 @Composable
 private fun comboSlotHeader(slot: ComboSlotModel, selectedCount: Int): String {
+    val minPick = slot.safeMinPick()
+    val maxPick = slot.safeMaxPick()
     return when {
-        slot.minPick == slot.maxPick ->
-            stringResource(R.string.combo_slot_included, slot.maxPick)
+        minPick == maxPick ->
+            stringResource(R.string.combo_slot_included, maxPick)
         selectedCount > 0 ->
-            stringResource(R.string.combo_slot_selected, selectedCount, slot.maxPick)
+            stringResource(R.string.combo_slot_selected, selectedCount, maxPick)
         else ->
-            stringResource(R.string.combo_slot_pick_range, slot.minPick, slot.maxPick)
+            stringResource(R.string.combo_slot_pick_range, minPick, maxPick)
+    }
+}
+
+private fun ComboSlotOptionModel.canCustomize(): Boolean {
+    val hasInStockModifiers = modifierGroups.any { group -> group.options.any { it.inStock } }
+    val hasInStockAddons = addonGroups.any { group -> group.options.any { it.inStock } }
+    return hasInStockModifiers || hasInStockAddons
+}
+
+private fun ComboSlotModel.safeMaxPick(): Int = maxPick.coerceAtLeast(1)
+
+private fun ComboSlotModel.safeMinPick(): Int = minPick.coerceIn(0, safeMaxPick())
+
+private fun applySimpleToggle(
+    picks: MutableMap<Long, List<ComboSlotPick>>,
+    slot: ComboSlotModel,
+    option: ComboSlotOptionModel
+) {
+    val current = picks[slot.id].orEmpty()
+    val maxPick = slot.safeMaxPick()
+    if (maxPick <= 1) {
+        picks[slot.id] = listOf(option.toSimplePick())
+        return
+    }
+    val existing = current.find {
+        it.productId == option.productId && it.extras.isEmpty() && it.modifiers.isEmpty()
+    }
+    val total = current.sumOf { it.qty }
+    picks[slot.id] = when {
+        existing != null && existing.qty > 1 ->
+            current.map { if (it.pickId == existing.pickId) it.copy(qty = it.qty - 1) else it }
+        existing != null ->
+            current.filter { it.pickId != existing.pickId }
+        total < maxPick ->
+            current + option.toSimplePick()
+        else -> current
+    }
+}
+
+private fun applySimpleIncrement(
+    picks: MutableMap<Long, List<ComboSlotPick>>,
+    slot: ComboSlotModel,
+    option: ComboSlotOptionModel
+) {
+    val current = picks[slot.id].orEmpty()
+    if (current.sumOf { it.qty } >= slot.safeMaxPick()) return
+    val existing = current.find {
+        it.productId == option.productId && it.extras.isEmpty() && it.modifiers.isEmpty()
+    }
+    picks[slot.id] = if (existing != null) {
+        current.map { if (it.pickId == existing.pickId) it.copy(qty = it.qty + 1) else it }
+    } else {
+        current + option.toSimplePick()
+    }
+}
+
+private fun applySimpleDecrement(
+    picks: MutableMap<Long, List<ComboSlotPick>>,
+    slot: ComboSlotModel,
+    option: ComboSlotOptionModel
+) {
+    val current = picks[slot.id].orEmpty()
+    val existing = current.find {
+        it.productId == option.productId && it.extras.isEmpty() && it.modifiers.isEmpty()
+    } ?: return
+    picks[slot.id] = if (existing.qty > 1) {
+        current.map { if (it.pickId == existing.pickId) it.copy(qty = it.qty - 1) else it }
+    } else {
+        current.filter { it.pickId != existing.pickId }
     }
 }
 
 private fun ComboSlotOptionModel.toSimplePick() = ComboSlotPick(
     pickId = UUID.randomUUID().toString(),
     productId = productId,
-    productName = productName,
+    productName = productName.ifBlank { "Item" },
     extraPrice = extraPrice
 )
 
 private fun ComboSlotOptionModel.toCustomizeProduct() = ProductWithVariants(
     id = productId,
-    name = productName,
+    name = productName.ifBlank { "Item" },
     sku = null,
     barcode = null,
     categoryId = null,
@@ -624,6 +665,8 @@ private fun ComboSlotOptionModel.toCustomizeProduct() = ProductWithVariants(
     imageUri = imageUri,
     isActive = true,
     isOpenPrice = false,
+    isWeighed = false,
+    isCombo = false,
     variants = emptyList()
 )
 
@@ -633,8 +676,10 @@ private fun validateComboPicks(
 ): String? {
     slots.forEach { slot ->
         val count = picks[slot.id].orEmpty().sumOf { it.qty }
-        if (count < slot.minPick) return "Please choose ${slot.minPick} for ${slot.name}"
-        if (count > slot.maxPick) return "Too many picks for ${slot.name}"
+        val minPick = slot.safeMinPick()
+        val maxPick = slot.safeMaxPick()
+        if (count < minPick) return "Please choose $minPick for ${slot.name}"
+        if (count > maxPick) return "Too many picks for ${slot.name}"
     }
     return null
 }
@@ -646,7 +691,7 @@ private fun buildComboSelections(
     val result = mutableListOf<ComboSelection>()
     slots.forEach { slot ->
         picks[slot.id].orEmpty().forEach { pick ->
-            repeat(pick.qty) {
+            repeat(pick.qty.coerceAtLeast(0)) {
                 result.add(
                     ComboSelection(
                         slotName = slot.name,
