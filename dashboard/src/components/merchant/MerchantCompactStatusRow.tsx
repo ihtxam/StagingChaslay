@@ -72,7 +72,7 @@ export default function MerchantCompactStatusRow({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-[var(--text-muted)]">
+    <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-x-2 gap-y-1.5 text-xs text-[var(--text-muted)]">
       {showMenuButton && onMenuClick ? (
         <button
           type="button"

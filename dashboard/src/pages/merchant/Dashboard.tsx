@@ -307,7 +307,7 @@ function MerchantShell() {
           }
         >
           {isSalesRoute && !hideChrome ? (
-            <div className="mb-3">
+            <div className="mb-3 flex justify-end">
               <MerchantCompactStatusRow />
             </div>
           ) : null}
