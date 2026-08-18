@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +78,7 @@ fun ProductCustomizeDialog(
     state: ProductCustomizeState,
     currencySymbol: String,
     showProductImages: Boolean = false,
+    autoReturnOnSingleExtra: Boolean = false,
     onAdd: (CustomizedProductResult) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -133,6 +137,38 @@ fun ProductCustomizeDialog(
         group.options.sumOf { opt -> (addonQty[opt.id] ?: 0) * opt.price }
     }
     val lineTotal = (unitBase + addonTotal) * itemQty
+    val onlyOneExtraToChoose = customizeTabs.size == 1 && when (val tab = customizeTabs.firstOrNull()) {
+        is CustomizeTabKind.Modifier -> tab.group.options.count { it.inStock } == 1
+        is CustomizeTabKind.Addon -> tab.group.options.count { it.inStock } == 1
+        null -> false
+    }
+
+    fun confirmCustomize() {
+        val validation = validateSelections(state, singleModifier, modifierQty, addonQty)
+        if (validation != null) {
+            errorMessage = validation
+            return
+        }
+        errorMessage = null
+        val extrasTotal = state.addonGroups.sumOf { group ->
+            group.options.sumOf { opt -> (addonQty[opt.id] ?: 0) * opt.price }
+        }
+        onAdd(
+            CustomizedProductResult(
+                variantName = selectedVariant?.name,
+                unitPrice = unitBase + extrasTotal,
+                sku = selectedVariant?.sku ?: product.sku,
+                quantity = itemQty,
+                modifiers = buildModifiers(state.modifierGroups, singleModifier, modifierQty),
+                addons = buildAddons(state.addonGroups, addonQty),
+                notes = userNotes.trim().ifBlank { null }
+            )
+        )
+    }
+
+    fun maybeAutoReturn() {
+        if (autoReturnOnSingleExtra && onlyOneExtraToChoose) confirmCustomize()
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -230,11 +266,13 @@ fun ProductCustomizeDialog(
                                             singleModifier[groupId] = optionId
                                             modifierQty.clear()
                                             modifierQty[optionId] = 1
+                                            maybeAutoReturn()
                                         },
                                         onModifierIncrement = { group, optionId ->
                                             val total = group.options.sumOf { modifierQty[it.id] ?: 0 }
                                             if (total < group.limitQuantity) {
                                                 modifierQty[optionId] = (modifierQty[optionId] ?: 0) + 1
+                                                maybeAutoReturn()
                                             }
                                         },
                                         onDecrement = { optionId ->
@@ -254,12 +292,14 @@ fun ProductCustomizeDialog(
                                             if (group.allowMultipleSame || current == 0) {
                                                 if (total < group.limitQuantity) {
                                                     addonQty[optionId] = current + 1
+                                                    maybeAutoReturn()
                                                 }
                                             } else {
                                                 addonQty.keys.filter { id ->
                                                     group.options.any { it.id == id }
                                                 }.forEach { addonQty.remove(it) }
                                                 addonQty[optionId] = 1
+                                                maybeAutoReturn()
                                             }
                                         },
                                         onDecrement = { optionId ->
@@ -275,32 +315,61 @@ fun ProductCustomizeDialog(
 
                     Column(
                         modifier = Modifier
-                            .width(68.dp)
+                            .width(132.dp)
                             .fillMaxHeight()
                             .background(Color(0xFF252525))
-                            .padding(vertical = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                            .padding(horizontal = 10.dp, vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        IconButton(
-                            onClick = { itemQty++ },
-                            modifier = Modifier.background(Color(0xFF00897B), RoundedCornerShape(8.dp))
+                        TextButton(
+                            onClick = { showNotes = true },
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF80CBC4), modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                if (userNotes.isBlank()) stringResource(R.string.add_notes) else stringResource(R.string.edit_notes),
+                                color = Color(0xFF80CBC4),
+                                fontSize = 12.sp,
+                                maxLines = 1
+                            )
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF00897B))
+                                .clickable { itemQty++ },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
                         }
                         Text(
                             itemQty.toString(),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 26.sp,
+                            fontSize = 28.sp,
                             modifier = Modifier.padding(vertical = 10.dp)
                         )
-                        IconButton(
-                            onClick = { if (itemQty > 1) itemQty-- },
-                            modifier = Modifier.background(Color(0xFF424242), RoundedCornerShape(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF424242))
+                                .clickable { if (itemQty > 1) itemQty-- },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Remove, contentDescription = null, tint = Color.White)
+                            Icon(Icons.Default.Remove, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
                         }
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(
+                            "$currencySymbol ${"%.2f".format(Locale.getDefault(), lineTotal)}",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
 
@@ -311,63 +380,12 @@ fun ProductCustomizeDialog(
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    TextButton(
-                        onClick = { showNotes = true },
-                        modifier = Modifier.align(Alignment.Start)
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF80CBC4))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            if (userNotes.isBlank()) stringResource(R.string.add_notes) else stringResource(R.string.edit_notes),
-                            color = Color(0xFF80CBC4),
-                            fontSize = 13.sp
-                        )
-                    }
-
                     errorMessage?.let { msg ->
                         Text(msg, color = Color(0xFFE57373), fontSize = 12.sp)
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            stringResource(R.string.total_items, itemQty),
-                            color = Color.Gray,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            "$currencySymbol ${"%.2f".format(Locale.getDefault(), lineTotal)}",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 22.sp
-                        )
-                    }
-
                     Button(
-                        onClick = {
-                            val validation = validateSelections(state, singleModifier, modifierQty, addonQty)
-                            if (validation != null) {
-                                errorMessage = validation
-                                return@Button
-                            }
-                            errorMessage = null
-                            val modifiers = buildModifiers(state.modifierGroups, singleModifier, modifierQty)
-                            val addons = buildAddons(state.addonGroups, addonQty)
-                            onAdd(
-                                CustomizedProductResult(
-                                    variantName = selectedVariant?.name,
-                                    unitPrice = unitBase + addonTotal,
-                                    sku = selectedVariant?.sku ?: product.sku,
-                                    quantity = itemQty,
-                                    modifiers = modifiers,
-                                    addons = addons,
-                                    notes = userNotes.trim().ifBlank { null }
-                                )
-                            )
-                        },
+                        onClick = { confirmCustomize() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
@@ -508,38 +526,58 @@ private fun ModifierGridTile(
     onClick: () -> Unit,
     onDecrement: (() -> Unit)?
 ) {
-    val border = if (selected) Color(0xFF2563EB) else Color(0xFF555555)
-    val bg = if (selected) Color(0xFF1E3A5F) else Color(0xFF333333)
-    Column(
+    val border = if (selected) Color(0xFF0D9488) else Color(0xFF555555)
+    val bg = if (selected) Color(0xFF1B3A38) else Color(0xFF333333)
+    Box(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 72.dp, max = 80.dp)
             .border(2.dp, border, RoundedCornerShape(8.dp))
             .background(bg, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 8.dp, vertical = 8.dp)
     ) {
-        Text(
-            priceLabel ?: "Included",
-            color = if (selected) Color(0xFF93C5FD) else Color(0xFFFCD34D),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            label,
-            color = Color.White,
-            fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            textAlign = TextAlign.Center,
-            maxLines = 3
-        )
-        if (quantity > 1) {
-            Text("?$quantity", color = Color(0xFF93C5FD), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        } else if (selected && onDecrement != null) {
-            TextButton(onClick = onDecrement) {
-                Text("-", color = Color(0xFFE57373), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Column(
+            modifier = Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                priceLabel ?: stringResource(R.string.included),
+                color = if (selected) Color(0xFF80CBC4) else Color(0xFFFCD34D),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+            Text(
+                label,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                textAlign = TextAlign.Center,
+                maxLines = 2
+            )
+        }
+        if (selected && onDecrement != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(22.dp)
+                    .background(Color(0xFF424242), RoundedCornerShape(11.dp))
+                    .clickable(onClick = onDecrement),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("−", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
+        }
+        if (quantity > 1) {
+            Text(
+                "×$quantity",
+                color = Color(0xFF80CBC4),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.BottomEnd)
+            )
         }
     }
 }

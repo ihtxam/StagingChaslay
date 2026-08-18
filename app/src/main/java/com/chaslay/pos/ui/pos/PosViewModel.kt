@@ -999,7 +999,13 @@ class PosViewModel @Inject constructor(
             comboSelections = result.selections,
             modifiers = result.comboModifiers,
             addons = result.comboExtras
-        ).let { it.copy(notes = it.optionNotes()) }
+        ).let {
+            val optionNotes = it.optionNotes()
+            val combined = listOfNotNull(result.notes?.takeIf { n -> n.isNotBlank() }, optionNotes)
+                .joinToString(" · ")
+                .ifBlank { null }
+            it.copy(notes = combined)
+        }
         cartManager.addItem(item)
         playItemClickBeep()
         _comboPick.value = null
@@ -2018,15 +2024,17 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    private fun resolveCheckoutMethod(preferred: PaymentMethod): PaymentMethod {
+    private fun resolveCheckoutMethod(preferred: PaymentMethod?): PaymentMethod {
         val settings = cachedSettings
         val enabled = buildList {
             if (settings.cashEnabled) add(PaymentMethod.CASH)
             if (settings.cardEnabled) add(PaymentMethod.CARD)
             if (settings.isAdyenTerminalCheckoutEnabled()) add(PaymentMethod.ADYEN_TERMINAL)
         }
-        if (enabled.isEmpty()) return preferred
-        if (preferred in enabled) return preferred
+        val fallback = preferred
+            ?: if (_uiExtras.value.checkoutState.cardTenderAmount > 0.001) PaymentMethod.CARD else PaymentMethod.CASH
+        if (enabled.isEmpty()) return fallback
+        if (fallback in enabled) return fallback
         return enabled.first()
     }
 
@@ -2046,7 +2054,24 @@ class PosViewModel @Inject constructor(
             it.copy(
                 checkoutState = it.checkoutState.copy(
                     method = method,
-                    tenderAmount = if (method == PaymentMethod.CASH) it.checkoutState.tenderAmount else 0.0
+                    cardTenderAmount = if (method == PaymentMethod.CASH) 0.0 else it.checkoutState.cardTenderAmount
+                )
+            )
+        }
+    }
+
+    fun deselectCheckoutMethod() {
+        updateExtras {
+            it.copy(checkoutState = it.checkoutState.copy(method = null))
+        }
+    }
+
+    fun applyCheckoutCardRemainder(remaining: Double) {
+        updateExtras {
+            it.copy(
+                checkoutState = it.checkoutState.copy(
+                    method = PaymentMethod.CARD,
+                    cardTenderAmount = remaining.coerceAtLeast(0.0)
                 )
             )
         }
@@ -2057,7 +2082,8 @@ class PosViewModel @Inject constructor(
             it.copy(
                 checkoutState = it.checkoutState.copy(
                     method = PaymentMethod.CASH,
-                    tenderAmount = amount.coerceAtLeast(0.0)
+                    tenderAmount = amount.coerceAtLeast(0.0),
+                    cardTenderAmount = 0.0
                 )
             )
         }
@@ -2072,7 +2098,25 @@ class PosViewModel @Inject constructor(
     }
 
     fun updateCheckoutDiscountPercent(percent: Double) {
-        updateExtras { it.copy(checkoutState = it.checkoutState.copy(discountPercent = percent)) }
+        updateExtras {
+            it.copy(
+                checkoutState = it.checkoutState.copy(
+                    discountPercent = percent.coerceAtLeast(0.0),
+                    discountAmount = if (percent > 0) 0.0 else it.checkoutState.discountAmount
+                )
+            )
+        }
+    }
+
+    fun updateCheckoutDiscountAmount(amount: Double) {
+        updateExtras {
+            it.copy(
+                checkoutState = it.checkoutState.copy(
+                    discountAmount = amount.coerceAtLeast(0.0),
+                    discountPercent = if (amount > 0) 0.0 else it.checkoutState.discountPercent
+                )
+            )
+        }
     }
 
     fun updateCheckoutRoundingStep(step: Double) {
@@ -3012,7 +3056,7 @@ class PosViewModel @Inject constructor(
                 cart.discountValue
             }
             val equalSplitCount = if (cart.splitCount > 1 && !cart.splitByItems) cart.splitCount else 1
-            val merchandiseTotal = cart.merchandiseTotal(checkout.discountPercent)
+            val merchandiseTotal = cart.merchandiseTotal(checkout.discountPercent, checkout.discountAmount)
             val shareTotal = if (equalSplitCount > 1) merchandiseTotal / equalSplitCount else merchandiseTotal
             val rawTotal = shareTotal + checkout.tipAmount
             val roundingStep = checkout.roundingStep.takeIf { it > 0 } ?: settings.roundingStep
@@ -3357,7 +3401,10 @@ class PosViewModel @Inject constructor(
             val paidIds = payable.items.map { it.id }.toSet()
 
             val cartForMerchandise = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart else payable
-            val merchandiseTotal = cartForMerchandise.merchandiseTotal(checkout.discountPercent)
+            val merchandiseTotal = cartForMerchandise.merchandiseTotal(
+                checkout.discountPercent,
+                checkout.discountAmount
+            )
             val rawTotal = when {
                 fullCart.splitCount > 1 && !fullCart.splitByItems ->
                     merchandiseTotal / fullCart.splitCount + checkout.tipAmount
@@ -3489,22 +3536,44 @@ class PosViewModel @Inject constructor(
                     if (!settings.adyenTerminalEnabled) {
                         PaymentResult.Failure("Enable Adyen terminal in Settings")
                     } else {
+                        val cardCharge = if (checkout.cardTenderAmount > 0.001) {
+                            checkout.cardTenderAmount
+                        } else {
+                            roundedTotal
+                        }
                         updateExtras {
                             it.copy(
                                 showTerminalPaymentModal = true,
                                 terminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
-                                terminalPaymentAmount = roundedTotal,
+                                terminalPaymentAmount = cardCharge,
                                 terminalPaymentMessage = null
                             )
                         }
                         paymentOrchestrator.processAdyenTerminalPayment(
-                            roundedTotal,
+                            cardCharge,
                             settings.defaultCurrency,
                             settings
                         )
                     }
                 }
                 method == PaymentMethod.CARD -> {
+                    val cardCharge = if (checkout.cardTenderAmount > 0.001) {
+                        checkout.cardTenderAmount
+                    } else {
+                        roundedTotal
+                    }
+                    updateExtras {
+                        it.copy(
+                            showTerminalPaymentModal = true,
+                            terminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
+                            terminalPaymentAmount = cardCharge,
+                            terminalPaymentMessage = if (settings.tapToPayEnabled) {
+                                appContext.getString(R.string.tap_to_pay)
+                            } else {
+                                null
+                            }
+                        )
+                    }
                     if (settings.tapToPayEnabled) {
                         when {
                             syncPreferences.getDashboardToken().isNullOrBlank() -> {
@@ -3518,12 +3587,9 @@ class PosViewModel @Inject constructor(
                                 )
                             }
                             else -> {
-                                updateExtras {
-                                    it.copy(tapToPayMessage = appContext.getString(R.string.tap_to_pay))
-                                }
                                 paymentOrchestrator.processCardPayment(
                                     activity,
-                                    roundedTotal,
+                                    cardCharge,
                                     settings.defaultCurrency,
                                     settings
                                 )
@@ -3532,7 +3598,7 @@ class PosViewModel @Inject constructor(
                     } else {
                         paymentOrchestrator.processCardPayment(
                             activity,
-                            roundedTotal,
+                            cardCharge,
                             settings.defaultCurrency,
                             settings
                         )
@@ -3549,8 +3615,17 @@ class PosViewModel @Inject constructor(
                         method == PaymentMethod.ADYEN_TERMINAL -> PaymentMethod.ADYEN_TERMINAL
                         else -> paymentResult.method
                     }
-                    val tender = checkout.tenderAmount.takeIf { it > 0 && resolvedMethod == PaymentMethod.CASH }
-                    val changeDue = tender?.let { (it - roundedTotal).coerceAtLeast(0.0) }
+                    val cashTender = checkout.tenderAmount.takeIf { it > 0 }
+                    val tender = when {
+                        checkout.cardTenderAmount > 0.001 -> cashTender
+                        resolvedMethod == PaymentMethod.CASH -> cashTender
+                        else -> null
+                    }
+                    val changeDue = if (checkout.cardTenderAmount > 0.001) {
+                        0.0
+                    } else {
+                        tender?.let { (it - roundedTotal).coerceAtLeast(0.0) }
+                    }
                     val saleCart = saleCartForPayment
                     if (method == PaymentMethod.ADYEN_TERMINAL) {
                         printPendingKitchenForCurrentTable()
@@ -3724,42 +3799,44 @@ class PosViewModel @Inject constructor(
                     it.copy(
                         isProcessingPayment = false,
                         tapToPayMessage = null,
-                        showTerminalPaymentModal = method == PaymentMethod.ADYEN_TERMINAL,
-                        terminalPaymentPhase = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                        showTerminalPaymentModal = method == PaymentMethod.ADYEN_TERMINAL ||
+                            method == PaymentMethod.CARD,
+                        terminalPaymentPhase = if (method == PaymentMethod.ADYEN_TERMINAL || method == PaymentMethod.CARD) {
                             TerminalPaymentPhase.FAILED
                         } else {
                             it.terminalPaymentPhase
                         },
-                        terminalPaymentAmount = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                        terminalPaymentAmount = if (method == PaymentMethod.ADYEN_TERMINAL || method == PaymentMethod.CARD) {
                             roundedTotal
                         } else {
                             it.terminalPaymentAmount
                         },
-                        terminalPaymentMessage = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                        terminalPaymentMessage = if (method == PaymentMethod.ADYEN_TERMINAL || method == PaymentMethod.CARD) {
                             paymentResult.message
                         } else {
                             it.terminalPaymentMessage
                         },
-                        errorMessage = if (method == PaymentMethod.ADYEN_TERMINAL) null else paymentResult.message,
-                        errorTitle = if (method == PaymentMethod.ADYEN_TERMINAL) null else "Payment failed"
+                        errorMessage = if (method == PaymentMethod.ADYEN_TERMINAL || method == PaymentMethod.CARD) null else paymentResult.message,
+                        errorTitle = if (method == PaymentMethod.ADYEN_TERMINAL || method == PaymentMethod.CARD) null else "Payment failed"
                     )
                 }
                 PaymentResult.Cancelled -> updateExtras {
                     it.copy(
                         isProcessingPayment = false,
                         tapToPayMessage = null,
-                        showTerminalPaymentModal = method == PaymentMethod.ADYEN_TERMINAL,
-                        terminalPaymentPhase = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                        showTerminalPaymentModal = method == PaymentMethod.ADYEN_TERMINAL ||
+                            method == PaymentMethod.CARD,
+                        terminalPaymentPhase = if (method == PaymentMethod.ADYEN_TERMINAL || method == PaymentMethod.CARD) {
                             TerminalPaymentPhase.CANCELLED
                         } else {
                             it.terminalPaymentPhase
                         },
-                        terminalPaymentAmount = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                        terminalPaymentAmount = if (method == PaymentMethod.ADYEN_TERMINAL || method == PaymentMethod.CARD) {
                             roundedTotal
                         } else {
                             it.terminalPaymentAmount
                         },
-                        terminalPaymentMessage = if (method == PaymentMethod.ADYEN_TERMINAL) {
+                        terminalPaymentMessage = if (method == PaymentMethod.ADYEN_TERMINAL || method == PaymentMethod.CARD) {
                             appContext.getString(R.string.terminal_pay_cancelled_msg)
                         } else {
                             it.terminalPaymentMessage

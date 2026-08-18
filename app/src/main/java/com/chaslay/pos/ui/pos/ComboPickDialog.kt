@@ -21,13 +21,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -65,7 +69,8 @@ data class ComboPickResult(
     val quantity: Int,
     val unitPrice: Double,
     val comboExtras: List<SelectedAddon> = emptyList(),
-    val comboModifiers: List<SelectedModifier> = emptyList()
+    val comboModifiers: List<SelectedModifier> = emptyList(),
+    val notes: String? = null
 )
 
 private data class ComboSlotPick(
@@ -102,6 +107,8 @@ fun ComboPickDialog(
     var comboAddons by remember { mutableStateOf<List<SelectedAddon>>(emptyList()) }
     var nestedOption by remember { mutableStateOf<Pair<ComboSlotModel, ComboSlotOptionModel>?>(null) }
     var showComboExtras by remember { mutableStateOf(false) }
+    var userNotes by remember { mutableStateOf("") }
+    var showNotes by remember { mutableStateOf(false) }
 
     fun slotQty(slotId: Long) = picks[slotId].orEmpty().sumOf { it.qty }
 
@@ -225,32 +232,61 @@ fun ComboPickDialog(
 
                     Column(
                         modifier = Modifier
-                            .width(68.dp)
+                            .width(132.dp)
                             .fillMaxHeight()
                             .background(Color(0xFF252525))
-                            .padding(vertical = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                            .padding(horizontal = 10.dp, vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        IconButton(
-                            onClick = { itemQty++ },
-                            modifier = Modifier.background(Color(0xFF00897B), RoundedCornerShape(8.dp))
+                        TextButton(
+                            onClick = { showNotes = true },
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF80CBC4), modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                if (userNotes.isBlank()) stringResource(R.string.add_notes) else stringResource(R.string.edit_notes),
+                                color = Color(0xFF80CBC4),
+                                fontSize = 12.sp,
+                                maxLines = 1
+                            )
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF00897B))
+                                .clickable { itemQty++ },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
                         }
                         Text(
                             itemQty.toString(),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 26.sp,
+                            fontSize = 28.sp,
                             modifier = Modifier.padding(vertical = 10.dp)
                         )
-                        IconButton(
-                            onClick = { if (itemQty > 1) itemQty-- },
-                            modifier = Modifier.background(Color(0xFF424242), RoundedCornerShape(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF424242))
+                                .clickable { if (itemQty > 1) itemQty-- },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Remove, contentDescription = null, tint = Color.White)
+                            Icon(Icons.Default.Remove, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
                         }
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(
+                            "$currencySymbol ${"%.2f".format(Locale.getDefault(), lineTotal)}",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
 
@@ -298,7 +334,8 @@ fun ComboPickDialog(
                                     quantity = itemQty.coerceAtLeast(1),
                                     unitPrice = unitPrice,
                                     comboExtras = comboAddons.toList(),
-                                    comboModifiers = comboModifiers.toList()
+                                    comboModifiers = comboModifiers.toList(),
+                                    notes = userNotes.trim().ifBlank { null }
                                 )
                             )
                         },
@@ -334,6 +371,7 @@ fun ComboPickDialog(
             ),
             currencySymbol = currencySymbol,
             showProductImages = showProductImages,
+            autoReturnOnSingleExtra = true,
             onAdd = { result ->
                 val pick = ComboSlotPick(
                     pickId = UUID.randomUUID().toString(),
@@ -371,12 +409,31 @@ fun ComboPickDialog(
             ),
             currencySymbol = currencySymbol,
             showProductImages = showProductImages,
+            autoReturnOnSingleExtra = true,
             onAdd = { result ->
                 comboModifiers = result.modifiers.orEmpty()
                 comboAddons = result.addons.orEmpty()
                 showComboExtras = false
             },
             onDismiss = { showComboExtras = false }
+        )
+    }
+
+    if (showNotes) {
+        AlertDialog(
+            onDismissRequest = { showNotes = false },
+            title = { Text(stringResource(R.string.item_notes)) },
+            text = {
+                OutlinedTextField(
+                    value = userNotes,
+                    onValueChange = { userNotes = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showNotes = false }) { Text(stringResource(R.string.save)) }
+            }
         )
     }
 }

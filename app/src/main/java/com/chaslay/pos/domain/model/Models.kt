@@ -368,11 +368,11 @@ data class CartSummary(
     val isEmpty: Boolean get() = items.isEmpty()
 
     /** Amount due for products before tip and cash rounding. */
-    fun merchandiseTotal(checkoutDiscountPercent: Double = 0.0): Double {
-        val discount = if (checkoutDiscountPercent > 0) {
-            roundMoney(netSubtotal * (checkoutDiscountPercent / 100.0))
-        } else {
-            discountValue
+    fun merchandiseTotal(checkoutDiscountPercent: Double = 0.0, checkoutDiscountAmount: Double = 0.0): Double {
+        val discount = when {
+            checkoutDiscountPercent > 0 -> roundMoney(netSubtotal * (checkoutDiscountPercent / 100.0))
+            checkoutDiscountAmount > 0 -> roundMoney(checkoutDiscountAmount.coerceAtMost(netSubtotal))
+            else -> discountValue
         }
         val tax = adjustTaxForOrderDiscount(
             rawTaxTotal,

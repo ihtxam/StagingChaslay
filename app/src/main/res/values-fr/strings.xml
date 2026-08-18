@@ -561,4 +561,14 @@
     <string name="cash_movement_success">Mouvement de caisse enregistré</string>
     <string name="cash_movement_failed">Impossible d\'enregistrer le mouvement</string>
     <string name="cash_movement_requires_shift">Ouvrez un shift avant une entrée/sortie de caisse</string>
+    <string name="tip_discount_fixed">Montant</string>
+    <string name="tip_discount_percent">Pourcentage</string>
+    <string name="checkout_cash_applied">Espèces : %1$s</string>
+    <string name="checkout_card_applied">Carte : %1$s</string>
+    <string name="search_products">Rechercher un produit</string>
+    <string name="add_new_product">Ajouter un produit</string>
+    <string name="catalog_button_color">Couleur du bouton</string>
+    <string name="included">Inclus</string>
+    <string name="enter_tip_amount">Saisir le pourboire</string>
+    <string name="custom_tip">Montant</string>
 </resources>

@@ -71,6 +71,7 @@ import com.chaslay.pos.ui.pos.OrderCompleteDialog
 import com.chaslay.pos.ui.pos.PosViewModel
 import com.chaslay.pos.ui.pos.ComboPickDialog
 import com.chaslay.pos.ui.pos.ProductCustomizeDialog
+import com.chaslay.pos.ui.pos.TerminalPaymentDialog
 import com.chaslay.pos.ui.theme.VectronColors
 import com.chaslay.pos.ui.theme.vectronColors
 import com.chaslay.pos.ui.tableplan.GuestCountDialog
@@ -112,9 +113,12 @@ fun WaiterPosScreen(
             terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
             onBack = viewModel::dismissCheckout,
             onSelectMethod = viewModel::updateCheckoutMethod,
+            onDeselectMethod = viewModel::deselectCheckoutMethod,
+            onApplyCardRemainder = viewModel::applyCheckoutCardRemainder,
             onTipAmount = viewModel::updateCheckoutTipAmount,
             onTipPercent = viewModel::updateCheckoutTipPercent,
             onDiscountPercent = viewModel::updateCheckoutDiscountPercent,
+            onDiscountAmount = viewModel::updateCheckoutDiscountAmount,
             onToggleTipPanel = viewModel::toggleCheckoutTipPanel,
             onToggleDiscountPanel = viewModel::toggleCheckoutDiscountPanel,
             onSplitClick = {},
@@ -140,6 +144,16 @@ fun WaiterPosScreen(
                     viewModel.dismissOrderComplete()
                     tab = WaiterTab.TABLES
                 }
+            )
+        }
+        if (state.showTerminalPaymentModal) {
+            TerminalPaymentDialog(
+                phase = state.terminalPaymentPhase,
+                amountLabel = String.format(java.util.Locale.getDefault(), "%s %.2f", state.currencySymbol, state.terminalPaymentAmount),
+                message = state.terminalPaymentMessage,
+                onCancel = viewModel::cancelTerminalPayment,
+                onRetry = { viewModel.retryTerminalPayment(activity) },
+                onClose = viewModel::dismissTerminalPaymentModal
             )
         }
         return

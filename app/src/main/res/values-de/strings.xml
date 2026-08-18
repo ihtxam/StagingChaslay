@@ -558,4 +558,14 @@
     <string name="cash_movement_success">Kassenbewegung erfasst</string>
     <string name="cash_movement_failed">Kassenbewegung konnte nicht erfasst werden</string>
     <string name="cash_movement_requires_shift">Schicht öffnen vor Bareinlage/Barentnahme</string>
+    <string name="tip_discount_fixed">Betrag</string>
+    <string name="tip_discount_percent">Prozent</string>
+    <string name="checkout_cash_applied">Bar: %1$s</string>
+    <string name="checkout_card_applied">Karte: %1$s</string>
+    <string name="search_products">Produktname suchen</string>
+    <string name="add_new_product">Neues Produkt</string>
+    <string name="catalog_button_color">Schaltflächenfarbe</string>
+    <string name="included">Inbegriffen</string>
+    <string name="enter_tip_amount">Trinkgeld eingeben</string>
+    <string name="custom_tip">Betrag</string>
 </resources>

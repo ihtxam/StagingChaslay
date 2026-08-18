@@ -264,9 +264,12 @@ fun PosScreen(
             equalSplitPaidCount = state.equalSplitPaidCount,
             onBack = viewModel::dismissCheckout,
             onSelectMethod = viewModel::updateCheckoutMethod,
+            onDeselectMethod = viewModel::deselectCheckoutMethod,
+            onApplyCardRemainder = viewModel::applyCheckoutCardRemainder,
             onTipAmount = viewModel::updateCheckoutTipAmount,
             onTipPercent = viewModel::updateCheckoutTipPercent,
             onDiscountPercent = viewModel::updateCheckoutDiscountPercent,
+            onDiscountAmount = viewModel::updateCheckoutDiscountAmount,
             onToggleTipPanel = viewModel::toggleCheckoutTipPanel,
             onToggleDiscountPanel = viewModel::toggleCheckoutDiscountPanel,
             onSplitClick = viewModel::openSplitBillScreen,
@@ -321,6 +324,16 @@ fun PosScreen(
                         Text(stringResource(R.string.confirm))
                     }
                 }
+            )
+        }
+        if (state.showTerminalPaymentModal) {
+            TerminalPaymentDialog(
+                phase = state.terminalPaymentPhase,
+                amountLabel = formatMoney(state.terminalPaymentAmount, state.currencySymbol),
+                message = state.terminalPaymentMessage,
+                onCancel = viewModel::cancelTerminalPayment,
+                onRetry = { viewModel.retryTerminalPayment(activity) },
+                onClose = viewModel::dismissTerminalPaymentModal
             )
         }
         return

@@ -21,9 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CallSplit
-import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
 import androidx.compose.material.icons.filled.AttachMoney
-import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.LocalAtm
 import androidx.compose.material.icons.filled.Payments
@@ -34,7 +32,6 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -66,13 +63,17 @@ import com.chaslay.pos.ui.theme.vectronColors
 import java.util.Locale
 import kotlin.math.ceil
 
+private val CheckoutTeal = Color(0xFF0D9488)
+
 data class CheckoutState(
-    val method: PaymentMethod = PaymentMethod.CASH,
+    val method: PaymentMethod? = PaymentMethod.CASH,
     val tipAmount: Double = 0.0,
     val tipPercent: Double = 0.0,
     val discountPercent: Double = 0.0,
+    val discountAmount: Double = 0.0,
     val roundingStep: Double = 0.05,
     val tenderAmount: Double = 0.0,
+    val cardTenderAmount: Double = 0.0,
     val printReceipt: Boolean = false,
     val showTipPanel: Boolean = false,
     val showDiscountPanel: Boolean = false,
@@ -109,9 +110,12 @@ fun CheckoutScreen(
     giftCardsEnabled: Boolean = false,
     onBack: () -> Unit,
     onSelectMethod: (PaymentMethod) -> Unit,
+    onDeselectMethod: () -> Unit = {},
+    onApplyCardRemainder: (Double) -> Unit = {},
     onTipAmount: (Double) -> Unit,
     onTipPercent: (Double) -> Unit,
     onDiscountPercent: (Double) -> Unit,
+    onDiscountAmount: (Double) -> Unit = {},
     onToggleTipPanel: () -> Unit,
     onToggleDiscountPanel: () -> Unit,
     onSplitClick: () -> Unit,
@@ -129,25 +133,25 @@ fun CheckoutScreen(
     val totals = rememberCheckoutTotals(cart, checkoutState, equalSplitCount)
     val vc = vectronColors()
     val showSplitNav = splitBillIndex != null && splitBillCount != null && splitBillCount > 1
-    var showTipKeypad by remember { mutableStateOf(false) }
+    var showTipDialog by remember { mutableStateOf(false) }
+    var showDiscountDialog by remember { mutableStateOf(false) }
     var tenderBuffer by remember { mutableStateOf("") }
     val typedTender = tenderBuffer.toDoubleOrNull()
-    val cashTender = when {
-        checkoutState.method != PaymentMethod.CASH -> totals.roundedTotal
+    val cashApplied = when {
         typedTender != null && typedTender > 0 -> typedTender
         checkoutState.tenderAmount > 0 -> checkoutState.tenderAmount
-        else -> totals.roundedTotal
+        else -> 0.0
     }
-    val changeDue = if (checkoutState.method == PaymentMethod.CASH) {
-        (cashTender - totals.roundedTotal).coerceAtLeast(0.0)
+    val cardApplied = checkoutState.cardTenderAmount
+    val covered = cashApplied + cardApplied
+    val remaining = (totals.roundedTotal - covered).coerceAtLeast(0.0)
+    val changeDue = if (cardApplied < 0.001 && cashApplied > totals.roundedTotal) {
+        cashApplied - totals.roundedTotal
     } else {
         0.0
     }
-    val remaining = if (checkoutState.method == PaymentMethod.CASH) {
-        (totals.roundedTotal - cashTender).coerceAtLeast(0.0)
-    } else {
-        0.0
-    }
+    val exactCash = checkoutState.method == PaymentMethod.CASH && cashApplied < 0.001 && cardApplied < 0.001
+    val canComplete = !isProcessing && cart.items.isNotEmpty() && (remaining <= 0.001 || exactCash)
 
     fun applyTender(amount: Double) {
         tenderBuffer = formatTenderBuffer(amount)
@@ -171,23 +175,62 @@ fun CheckoutScreen(
         }
     }
 
-    if (showTipKeypad) {
-        PriceKeypadDialog(
+    fun selectCardOrSplit() {
+        if (cashApplied > 0.001 && remaining > 0.001) {
+            onApplyCardRemainder(remaining)
+        } else {
+            tenderBuffer = ""
+            onTenderAmount(0.0)
+            onSelectMethod(PaymentMethod.CARD)
+        }
+    }
+
+    if (showTipDialog && tipsEnabled) {
+        TipDiscountDialog(
             title = stringResource(R.string.tip),
-            subtitle = stringResource(R.string.enter_tip_amount),
             currencySymbol = currencySymbol,
-            initialValue = if (checkoutState.tipAmount > 0) {
-                String.format(Locale.US, "%.2f", checkoutState.tipAmount)
-            } else {
-                ""
+            baseAmount = totals.preTipTotal,
+            presetsPercent = tipPresetsPercent.filter { it > 0 },
+            allowPercent = true,
+            allowAmount = allowCustomTip,
+            initialMode = if (checkoutState.tipPercent > 0) AmountPercentMode.PERCENT else AmountPercentMode.AMOUNT,
+            initialValue = if (checkoutState.tipPercent > 0) checkoutState.tipPercent else checkoutState.tipAmount,
+            onConfirm = { amount, percent, mode ->
+                if (mode == AmountPercentMode.PERCENT && percent > 0) {
+                    onTipPercent(percent)
+                    onTipAmount(amount)
+                } else {
+                    onTipPercent(if (amount > 0) -1.0 else 0.0)
+                    onTipAmount(amount)
+                }
+                showTipDialog = false
             },
-            confirmLabel = stringResource(R.string.confirm),
-            onConfirm = { amount ->
-                onTipPercent(-1.0)
-                onTipAmount(amount.coerceAtLeast(0.0))
-                showTipKeypad = false
+            onDismiss = { showTipDialog = false }
+        )
+    }
+
+    if (showDiscountDialog && discountsEnabled) {
+        val presetPercents = discountPresets.map { it.percent }.filter { it > 0 }
+        TipDiscountDialog(
+            title = stringResource(R.string.discount),
+            currencySymbol = currencySymbol,
+            baseAmount = totals.subtotal,
+            presetsPercent = presetPercents.ifEmpty { listOf(5.0, 10.0, 15.0) },
+            allowPercent = true,
+            allowAmount = true,
+            initialMode = if (checkoutState.discountPercent > 0) AmountPercentMode.PERCENT else AmountPercentMode.AMOUNT,
+            initialValue = if (checkoutState.discountPercent > 0) checkoutState.discountPercent else checkoutState.discountAmount,
+            onConfirm = { amount, percent, mode ->
+                if (mode == AmountPercentMode.PERCENT && percent > 0) {
+                    onDiscountAmount(0.0)
+                    onDiscountPercent(percent)
+                } else {
+                    onDiscountPercent(0.0)
+                    onDiscountAmount(amount)
+                }
+                showDiscountDialog = false
             },
-            onDismiss = { showTipKeypad = false }
+            onDismiss = { showDiscountDialog = false }
         )
     }
 
@@ -201,32 +244,17 @@ fun CheckoutScreen(
                 .width(360.dp)
                 .fillMaxHeight()
                 .background(vc.panelDark)
+                .clickable { onDeselectMethod() }
                 .padding(12.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onBack,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(48.dp)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(stringResource(R.string.checkout_back), color = vc.textPrimary)
-                }
-                Text(
-                    stringResource(R.string.checkout_title),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = vc.textPrimary,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            Text(
+                stringResource(R.string.checkout_title),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = vc.textPrimary
+            )
 
             if (cashEnabled) {
                 CheckoutMethodButton(
@@ -243,11 +271,7 @@ fun CheckoutScreen(
                     icon = Icons.Default.CreditCard,
                     selected = checkoutState.method == PaymentMethod.CARD,
                     accent = Color(0xFF3B82F6),
-                    onClick = {
-                        tenderBuffer = ""
-                        onTenderAmount(0.0)
-                        onSelectMethod(PaymentMethod.CARD)
-                    }
+                    onClick = { selectCardOrSplit() }
                 )
             }
             if (terminalEnabled) {
@@ -257,9 +281,14 @@ fun CheckoutScreen(
                     selected = checkoutState.method == PaymentMethod.ADYEN_TERMINAL,
                     accent = Color(0xFF8B5CF6),
                     onClick = {
-                        tenderBuffer = ""
-                        onTenderAmount(0.0)
-                        onSelectMethod(PaymentMethod.ADYEN_TERMINAL)
+                        if (cashApplied > 0.001 && remaining > 0.001) {
+                            onApplyCardRemainder(remaining)
+                            onSelectMethod(PaymentMethod.ADYEN_TERMINAL)
+                        } else {
+                            tenderBuffer = ""
+                            onTenderAmount(0.0)
+                            onSelectMethod(PaymentMethod.ADYEN_TERMINAL)
+                        }
                     }
                 )
             }
@@ -280,28 +309,29 @@ fun CheckoutScreen(
                 )
             }
 
+            if (discountsEnabled) {
+                CheckoutActionChip(
+                    icon = Icons.Default.Sell,
+                    label = stringResource(R.string.discount),
+                    selected = checkoutState.discountPercent > 0 || checkoutState.discountAmount > 0,
+                    onClick = { showDiscountDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (tipsEnabled) {
+                CheckoutActionChip(
+                    icon = Icons.Default.Payments,
+                    label = stringResource(R.string.tip),
+                    selected = checkoutState.tipAmount > 0,
+                    onClick = { showTipDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (discountsEnabled) {
-                    CheckoutActionChip(
-                        icon = Icons.Default.Sell,
-                        label = stringResource(R.string.discount),
-                        selected = checkoutState.showDiscountPanel || checkoutState.discountPercent > 0,
-                        onClick = onToggleDiscountPanel,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                if (tipsEnabled) {
-                    CheckoutActionChip(
-                        icon = Icons.Default.Payments,
-                        label = stringResource(R.string.tip),
-                        selected = checkoutState.showTipPanel || checkoutState.tipAmount > 0,
-                        onClick = onToggleTipPanel,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
                 if (splitBillsEnabled) {
                     CheckoutActionChip(
                         icon = Icons.AutoMirrored.Filled.CallSplit,
@@ -316,87 +346,29 @@ fun CheckoutScreen(
                 CheckoutIconChip(icon = Icons.Default.LocalAtm, onClick = onOpenCashDrawer)
             }
 
-            if (tipsEnabled && checkoutState.showTipPanel) {
-                Text(
-                    stringResource(R.string.tip).uppercase(),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = vc.textSecondary
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    tipPresetsPercent.ifEmpty { listOf(0.0, 5.0, 10.0, 15.0) }.forEach { pct ->
-                        FilterChip(
-                            selected = checkoutState.tipPercent == pct,
-                            onClick = {
-                                onTipPercent(pct)
-                                onTipAmount(totals.preTipTotal * (pct / 100.0))
-                            },
-                            label = { Text(if (pct == 0.0) "0%" else "${pct.toInt()}%") }
-                        )
-                    }
-                    if (allowCustomTip) {
-                        FilterChip(
-                            selected = checkoutState.tipPercent < 0 && checkoutState.tipAmount > 0,
-                            onClick = { showTipKeypad = true },
-                            label = { Text(stringResource(R.string.custom_tip)) }
-                        )
-                    }
-                }
-            }
-
-            if (discountsEnabled && checkoutState.showDiscountPanel) {
-                Text(
-                    stringResource(R.string.discount).uppercase(),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = vc.textSecondary
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(
-                        selected = checkoutState.discountPercent == 0.0,
-                        onClick = { onDiscountPercent(0.0) },
-                        label = { Text("0%") }
-                    )
-                    discountPresets.forEach { preset ->
-                        FilterChip(
-                            selected = checkoutState.discountPercent == preset.percent,
-                            onClick = { onDiscountPercent(preset.percent) },
-                            label = { Text("${preset.name} ${preset.percent.toInt()}%") }
-                        )
-                    }
-                }
-            }
-
             if ((membershipPointsBalance ?: 0) >= LoyaltyMath.REDEEM_THRESHOLD_POINTS) {
-                FilterChip(
+                CheckoutActionChip(
+                    icon = Icons.Default.Payments,
+                    label = stringResource(R.string.checkout_pay_with_points, membershipPointsBalance ?: 0),
                     selected = checkoutState.payWithPoints,
                     onClick = { onTogglePayWithPoints(!checkoutState.payWithPoints) },
-                    label = {
-                        Text(
-                            stringResource(
-                                R.string.checkout_pay_with_points,
-                                membershipPointsBalance ?: 0
-                            )
-                        )
-                    }
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
             if (giftCardsEnabled && (membershipGiftBalance ?: 0.0) > 0.0) {
-                FilterChip(
+                CheckoutActionChip(
+                    icon = Icons.Default.CreditCard,
+                    label = stringResource(
+                        R.string.checkout_pay_with_gift_card,
+                        formatMoney(membershipGiftBalance ?: 0.0, currencySymbol)
+                    ),
                     selected = checkoutState.payWithGiftCard,
                     onClick = { onTogglePayWithGiftCard(!checkoutState.payWithGiftCard) },
-                    label = {
-                        Text(
-                            stringResource(
-                                R.string.checkout_pay_with_gift_card,
-                                formatMoney(membershipGiftBalance ?: 0.0, currencySymbol)
-                            )
-                        )
-                    }
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
-            if (quickCashEnabled && checkoutState.method == PaymentMethod.CASH) {
+            if (quickCashEnabled) {
                 Text(
                     stringResource(R.string.checkout_quick_cash),
                     fontSize = 11.sp,
@@ -409,8 +381,9 @@ fun CheckoutScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color(0xFFF4F4F5))
+                                .border(1.dp, Color(0xFFD4D4D8), RoundedCornerShape(12.dp))
                                 .clickable { applyTender(amount) }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
                         ) {
                             Text(
                                 formatMoney(amount, currencySymbol),
@@ -422,19 +395,18 @@ fun CheckoutScreen(
                 }
             }
 
-            if (checkoutState.method == PaymentMethod.CASH) {
+            if (cashEnabled) {
                 CheckoutTenderKeypad(
                     buffer = tenderBuffer,
                     currencySymbol = currencySymbol,
                     onKey = ::appendTenderKey,
-                    onBackspace = {
-                        tenderBuffer = tenderBuffer.dropLast(1)
-                        val amount = tenderBuffer.toDoubleOrNull() ?: 0.0
-                        onTenderAmount(amount)
-                    },
                     onClear = {
                         tenderBuffer = ""
                         onTenderAmount(0.0)
+                    },
+                    onEnter = {
+                        val amount = tenderBuffer.toDoubleOrNull() ?: 0.0
+                        if (amount > 0) applyTender(amount) else onSelectMethod(PaymentMethod.CASH)
                     }
                 )
             }
@@ -444,6 +416,7 @@ fun CheckoutScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
+                .clickable { onDeselectMethod() }
                 .padding(16.dp)
         ) {
             Column(
@@ -466,9 +439,17 @@ fun CheckoutScreen(
                     fontSize = 56.sp,
                     color = vc.textPrimary
                 )
-                if (typedTender != null && checkoutState.method == PaymentMethod.CASH) {
+                if (cashApplied > 0.001) {
                     Text(
-                        stringResource(R.string.checkout_entering, formatMoney(typedTender, currencySymbol)),
+                        stringResource(R.string.checkout_cash_applied, formatMoney(cashApplied, currencySymbol)),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF15803D)
+                    )
+                }
+                if (cardApplied > 0.001) {
+                    Text(
+                        stringResource(R.string.checkout_card_applied, formatMoney(cardApplied, currencySymbol)),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF2563EB)
@@ -591,29 +572,44 @@ fun CheckoutScreen(
                 }
             }
 
-            Button(
-                onClick = {
-                    if (checkoutState.method == PaymentMethod.CASH) {
-                        onTenderAmount(cashTender)
-                    }
-                    onComplete()
-                },
-                enabled = !isProcessing && cart.items.isNotEmpty() && remaining <= 0.001,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = VectronColors.CashGreen)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                val label = if (changeDue > 0.001) {
-                    stringResource(
-                        R.string.checkout_complete_with_change,
-                        formatMoney(changeDue, currencySymbol)
-                    )
-                } else {
-                    stringResource(R.string.checkout_complete)
+                OutlinedButton(
+                    onClick = onBack,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.height(56.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(stringResource(R.string.checkout_back), color = vc.textPrimary, fontWeight = FontWeight.Bold)
                 }
-                Text(label, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                Button(
+                    onClick = {
+                        if (cashApplied > 0.001) {
+                            onTenderAmount(if (exactCash) totals.roundedTotal else cashApplied)
+                        }
+                        onComplete()
+                    },
+                    enabled = canComplete,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = VectronColors.CashGreen)
+                ) {
+                    val label = if (changeDue > 0.001) {
+                        stringResource(
+                            R.string.checkout_complete_with_change,
+                            formatMoney(changeDue, currencySymbol)
+                        )
+                    } else {
+                        stringResource(R.string.checkout_complete)
+                    }
+                    Text(label, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                }
             }
         }
     }
@@ -627,15 +623,15 @@ private fun CheckoutMethodButton(
     accent: Color,
     onClick: () -> Unit
 ) {
-    val border = if (selected) accent else Color(0xFFE5E7EB)
+    val border = if (selected) accent else Color(0xFFD4D4D8)
     val bg = if (selected) accent.copy(alpha = 0.10f) else Color(0xFFF8FAFC)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(56.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(bg)
-            .border(1.dp, border, RoundedCornerShape(12.dp))
+            .border(1.5.dp, border, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -654,29 +650,31 @@ private fun CheckoutActionChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    Row(
         modifier = modifier
             .height(52.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) Color(0xFFEFF6FF) else Color(0xFFF8FAFC))
-            .border(1.dp, if (selected) Color(0xFF3B82F6) else Color(0xFFE5E7EB), RoundedCornerShape(12.dp))
+            .background(if (selected) CheckoutTeal.copy(alpha = 0.12f) else Color(0xFFF8FAFC))
+            .border(1.5.dp, if (selected) CheckoutTeal else Color(0xFFD4D4D8), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             icon,
             contentDescription = label,
-            tint = if (selected) Color(0xFF2563EB) else Color(0xFF64748B),
+            tint = if (selected) CheckoutTeal else Color(0xFF64748B),
             modifier = Modifier.size(18.dp)
         )
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             label,
-            fontSize = 10.sp,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            color = if (selected) Color(0xFF2563EB) else Color(0xFF64748B)
+            color = if (selected) CheckoutTeal else Color(0xFF334155)
         )
     }
 }
@@ -688,7 +686,7 @@ private fun CheckoutIconChip(icon: ImageVector, onClick: () -> Unit) {
             .size(52.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0xFFF8FAFC))
-            .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(12.dp))
+            .border(1.5.dp, Color(0xFFD4D4D8), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -701,64 +699,88 @@ private fun CheckoutTenderKeypad(
     buffer: String,
     currencySymbol: String,
     onKey: (String) -> Unit,
-    onBackspace: () -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    onEnter: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = if (buffer.isEmpty()) "$currencySymbol 0.00" else "$currencySymbol $buffer",
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.End,
-            fontWeight = FontWeight.Bold,
-            fontSize = 22.sp
-        )
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                listOf(listOf("7", "8", "9"), listOf("4", "5", "6"), listOf("1", "2", "3"), listOf("0", "00", ".")).forEach { row ->
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        row.forEach { key ->
-                            CheckoutKey(label = key, modifier = Modifier.weight(1f), onClick = { onKey(key) })
-                        }
-                    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.5.dp, Color(0xFF9CA3AF), RoundedCornerShape(12.dp))
+                .background(Color.White, RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+        ) {
+            Text(
+                text = if (buffer.isEmpty()) "$currencySymbol 0.00" else "$currencySymbol $buffer",
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.End,
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp
+            )
+        }
+        listOf(
+            listOf("1", "2", "3"),
+            listOf("4", "5", "6"),
+            listOf("7", "8", "9")
+        ).forEach { row ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { key ->
+                    CheckoutKey(label = key, modifier = Modifier.weight(1f), onClick = { onKey(key) })
                 }
             }
-            Column(modifier = Modifier.width(64.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                CheckoutKey(label = "", icon = Icons.Default.Backspace, onClick = onBackspace)
-                CheckoutKey(label = stringResource(R.string.keypad_clear), onClick = onClear)
-                CheckoutKey(
-                    label = "",
-                    icon = Icons.AutoMirrored.Filled.KeyboardReturn,
-                    highlight = true,
-                    modifier = Modifier.height(92.dp),
-                    onClick = { /* tender is applied on each key; confirm is the main button */ }
-                )
-            }
         }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CheckoutKey(
+                label = stringResource(R.string.keypad_clear),
+                modifier = Modifier.weight(1f),
+                tone = KeyTone.Clear,
+                onClick = onClear
+            )
+            CheckoutKey(label = "0", modifier = Modifier.weight(1f), onClick = { onKey("0") })
+            CheckoutKey(label = ".", modifier = Modifier.weight(1f), onClick = { onKey(".") })
+        }
+        CheckoutKey(
+            label = stringResource(R.string.keypad_enter),
+            modifier = Modifier.fillMaxWidth(),
+            tone = KeyTone.Enter,
+            onClick = onEnter
+        )
     }
 }
+
+private enum class KeyTone { Normal, Clear, Enter }
 
 @Composable
 private fun CheckoutKey(
     label: String,
     modifier: Modifier = Modifier,
-    icon: ImageVector? = null,
-    highlight: Boolean = false,
+    tone: KeyTone = KeyTone.Normal,
     onClick: () -> Unit
 ) {
-    val bg = if (highlight) VectronColors.CashGreen else VectronColors.KeypadButton
+    val bg = when (tone) {
+        KeyTone.Enter -> CheckoutTeal
+        KeyTone.Clear -> Color(0xFFFEE2E2)
+        KeyTone.Normal -> Color(0xFFF4F4F5)
+    }
+    val fg = when (tone) {
+        KeyTone.Enter -> Color.White
+        KeyTone.Clear -> Color(0xFFB91C1C)
+        KeyTone.Normal -> Color(0xFF18181B)
+    }
     Box(
         modifier = modifier
-            .height(44.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .height(56.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(bg)
+            .border(
+                1.dp,
+                if (tone == KeyTone.Normal) Color(0xFFD4D4D8) else bg,
+                RoundedCornerShape(12.dp)
+            )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, tint = if (highlight) Color.White else VectronColors.TextPrimary)
-        } else {
-            Text(label, fontWeight = FontWeight.Bold, color = if (highlight) Color.White else VectronColors.TextPrimary)
-        }
+        Text(label, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = fg)
     }
 }
 
@@ -791,12 +813,12 @@ private fun rememberCheckoutTotals(
     equalSplitCount: Int = 1
 ): CheckoutTotals {
     val netSubtotal = cart.subtotal - cart.itemDiscountTotal
-    val cartDiscount = if (checkoutState.discountPercent > 0) {
-        netSubtotal * (checkoutState.discountPercent / 100.0)
-    } else {
-        cart.discountValue
+    val cartDiscount = when {
+        checkoutState.discountPercent > 0 -> netSubtotal * (checkoutState.discountPercent / 100.0)
+        checkoutState.discountAmount > 0 -> checkoutState.discountAmount.coerceAtMost(netSubtotal)
+        else -> cart.discountValue
     }
-    val preTipTotal = cart.merchandiseTotal(checkoutState.discountPercent)
+    val preTipTotal = cart.merchandiseTotal(checkoutState.discountPercent, checkoutState.discountAmount)
     val shareTotal = if (equalSplitCount > 1) preTipTotal / equalSplitCount else preTipTotal
     val afterPoints = (shareTotal + checkoutState.tipAmount - checkoutState.pointsDiscount).coerceAtLeast(0.0)
     val giftApplied = if (checkoutState.payWithGiftCard) checkoutState.giftCardRedeemAmount else 0.0
