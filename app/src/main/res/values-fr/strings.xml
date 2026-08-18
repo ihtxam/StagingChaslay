@@ -192,6 +192,7 @@
     <string name="paid">Payant</string>
     <string name="not_paid">Non payé</string>
     <string name="pay_later">Payer plus tard</string>
+    <string name="pay_later_short">Plus tard</string>
     <string name="pay_later_subtitle">Collecter le paiement à la prise en charge</string>
     <string name="pos_register">Caisse</string>
     <string name="pos_orders">Commandes</string>

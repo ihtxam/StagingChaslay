@@ -821,6 +821,21 @@ class BluetoothPrinterService @Inject constructor(
             }
         }
 
+        if (meta.discountAmount > 0.001) {
+            sb.appendLine(
+                leftRight(
+                    labels.discount,
+                    "-${formatMoney(meta.discountAmount, settings.currencySymbol)}",
+                    lineWidth
+                )
+            )
+        }
+        if (meta.tipAmount > 0.001) {
+            sb.appendLine(
+                leftRight(labels.tip, formatMoney(meta.tipAmount, settings.currencySymbol), lineWidth)
+            )
+        }
+
         sb.appendLine(center(sepDash(lineWidth), lineWidth))
         val orderedAt = meta.orderedAtMs ?: System.currentTimeMillis()
         val staff = meta.cashierName?.trim().orEmpty()
@@ -1442,6 +1457,17 @@ class BluetoothPrinterService @Inject constructor(
             }
         } else {
             sb.appendLine(leftRight(labels.payment, labels.paymentMethod(transaction.paymentMethod), lineWidth))
+            splitTenders.singleOrNull()?.let { tender ->
+                if (kotlin.math.abs(tender.amount - transaction.total) > 0.009) {
+                    sb.appendLine(
+                        leftRight(
+                            "  ${labels.paymentMethod(tender.method)}",
+                            formatMoney(tender.amount, currencySymbol),
+                            lineWidth
+                        )
+                    )
+                }
+            }
         }
         sb.appendLine(leftRight(labels.paid, twoDp(transaction.total), lineWidth))
     }

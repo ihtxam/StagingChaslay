@@ -177,7 +177,7 @@ class ReceiptRepository @Inject constructor(
         transactionNumber = transaction.transactionNumber,
         total = transaction.total,
         currency = transaction.currencyCode,
-        paymentMethod = transaction.paymentMethod.name,
+        paymentMethod = PaymentTenderNotes.methodKey(transaction.paymentMethod),
         cardReference = transaction.cardReference,
         businessName = settings.businessName,
         createdAt = transaction.createdAt,
@@ -185,6 +185,7 @@ class ReceiptRepository @Inject constructor(
         taxTotal = transaction.taxTotal,
         discountAmount = transaction.discountAmount,
         itemDiscountTotal = itemDiscountTotal,
+        tipAmount = transaction.tipAmount.takeIf { it > 0.0 },
         items = items.map { item ->
             ReceiptItemDto(
                 productName = item.productName,

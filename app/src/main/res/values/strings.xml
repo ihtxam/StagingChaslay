@@ -209,6 +209,7 @@
     <string name="paid">Paid</string>
     <string name="not_paid">Not paid</string>
     <string name="pay_later">Pay Later</string>
+    <string name="pay_later_short">Later</string>
     <string name="pay_later_subtitle">Collect payment at pickup</string>
     <string name="pos_register">Register</string>
     <string name="pos_orders">Orders</string>

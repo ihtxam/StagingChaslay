@@ -190,6 +190,7 @@
     <string name="paid">Bezahlt .</string>
     <string name="not_paid">Nicht bezahlt</string>
     <string name="pay_later">später bezahlen</string>
+    <string name="pay_later_short">Später</string>
     <string name="pay_later_subtitle">Zahlung bei Abholung einziehen</string>
     <string name="pos_register">Kasse</string>
     <string name="pos_orders">Bestellungen</string>

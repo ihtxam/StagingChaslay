@@ -586,6 +586,7 @@ class TransactionRepository @Inject constructor(
         tipAmount: Double = 0.0,
         roundingAmount: Double = 0.0,
         checkoutDiscountPercent: Double = 0.0,
+        checkoutDiscountAmount: Double = 0.0,
         overrideTotal: Double? = null,
         masterOrderId: String? = null,
         splitCheckNumber: Int? = null,
@@ -612,10 +613,11 @@ class TransactionRepository @Inject constructor(
         } else 0.0
         val discountPercent = when {
             checkoutDiscountPercent > 0 -> checkoutDiscountPercent
-            cart.discountPercent > 0 -> cart.discountPercent
+            checkoutDiscountAmount <= 0.0 && cart.discountPercent > 0 -> cart.discountPercent
             else -> 0.0
         }
         val discountAmount = when {
+            checkoutDiscountAmount > 0 -> checkoutDiscountAmount.coerceAtMost((subtotal - itemDiscount).coerceAtLeast(0.0))
             checkoutDiscountPercent > 0 -> checkoutDiscount
             cart.discountPercent > 0 -> (subtotal - itemDiscount) * (cart.discountPercent / 100.0)
             cart.discountAmount > 0 -> cart.discountAmount
@@ -2403,6 +2405,8 @@ class HeldOrderRepository @Inject constructor(
         userId: Long,
         userName: String,
         checkoutDiscountPercent: Double,
+        checkoutDiscountAmount: Double = 0.0,
+        tipAmount: Double = 0.0,
         finalTotal: Double
     ): HeldOrderEntity {
         val subtotal = cart.subtotal
@@ -2412,10 +2416,11 @@ class HeldOrderRepository @Inject constructor(
         } else 0.0
         val discountPercent = when {
             checkoutDiscountPercent > 0 -> checkoutDiscountPercent
-            cart.discountPercent > 0 -> cart.discountPercent
+            checkoutDiscountAmount <= 0.0 && cart.discountPercent > 0 -> cart.discountPercent
             else -> 0.0
         }
         val discountAmount = when {
+            checkoutDiscountAmount > 0 -> checkoutDiscountAmount.coerceAtMost((subtotal - itemDiscount).coerceAtLeast(0.0))
             checkoutDiscountPercent > 0 -> checkoutDiscount
             cart.discountPercent > 0 -> (subtotal - itemDiscount) * (cart.discountPercent / 100.0)
             cart.discountAmount > 0 -> cart.discountAmount
@@ -2424,6 +2429,11 @@ class HeldOrderRepository @Inject constructor(
         val id = UUID.randomUUID().toString()
         val orderNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() }
             ?: "H-${System.currentTimeMillis().toString().takeLast(6)}"
+        val tipNote = if (tipAmount > 0.001) {
+            String.format(java.util.Locale.US, "Tip: %.2f", tipAmount)
+        } else {
+            null
+        }
         val entity = HeldOrderEntity(
             id = id,
             orderNumber = orderNumber,
@@ -2439,7 +2449,9 @@ class HeldOrderRepository @Inject constructor(
             tableId = cart.tableId,
             tableName = cart.tableName,
             tableOrderId = cart.tableOrderId,
-            notes = cart.cartNotes,
+            notes = listOfNotNull(cart.cartNotes?.trim()?.takeIf { it.isNotBlank() }, tipNote)
+                .joinToString("\n")
+                .ifBlank { null },
             fulfillmentType = cart.fulfillmentType,
             pickupTimeMs = cart.pickupTimeMs,
             deliveryName = cart.deliveryName,

@@ -142,6 +142,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.TableRestaurant
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -473,6 +474,7 @@ fun PosScreen(
                     viewModel.showDeliveryOrderDialog()
                 },
                 onHold = { viewModel.holdOrder(false) },
+                onPayLater = viewModel::beginPayLaterCheckout,
                 onSend = viewModel::sendCurrentOrderToKitchen,
                 onAddCourse = viewModel::addCourse,
                 onSendActiveCourse = viewModel::sendActiveCourseToKitchen,
@@ -592,6 +594,7 @@ fun PosScreen(
                         onCash = { viewModel.initiateCashPayment(activity) },
                         onCard = { viewModel.initiateCardPayment(activity) },
                         onTerminal = { viewModel.initiateTerminalPayment(activity) },
+                        onPayLater = viewModel::beginPayLaterCheckout,
                         onOpenCheckout = { viewModel.openCheckout() },
                         onSellGiftCard = viewModel::showGiftCardOpsMenu,
                         modifier = Modifier
@@ -2050,6 +2053,7 @@ private fun CartActionSidebar(
     onDelivery: () -> Unit,
     onSend: () -> Unit,
     onHold: () -> Unit,
+    onPayLater: () -> Unit = {},
     onAddCourse: () -> Unit,
     onSendActiveCourse: () -> Unit,
     onSendAllCourses: () -> Unit,
@@ -2105,6 +2109,13 @@ private fun CartActionSidebar(
             icon = Icons.Default.Upload,
             color = Color(0xFF7D6608),
             onClick = onHold
+        )
+        CartSidebarButton(
+            label = stringResource(R.string.pay_later),
+            shortLabel = stringResource(R.string.pay_later_short),
+            icon = Icons.Default.Schedule,
+            color = Color(0xFFF59E0B),
+            onClick = onPayLater
         )
         if (isRestaurantMode && coursesEnabled) {
             CartSidebarButton(
@@ -2655,6 +2666,7 @@ private fun VectronProductGrid(
     onCash: () -> Unit,
     onCard: () -> Unit,
     onTerminal: () -> Unit = {},
+    onPayLater: () -> Unit = {},
     onOpenCheckout: () -> Unit = {},
     onSellGiftCard: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -2797,10 +2809,31 @@ private fun VectronProductGrid(
                 }
             }
             Button(
+                onClick = onPayLater,
+                enabled = paymentEnabled,
+                modifier = Modifier.weight(1f).height(64.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFF59E0B),
+                    contentColor = Color.White,
+                    disabledContainerColor = VectronColors.KeypadButton,
+                    disabledContentColor = Color.White
+                ),
+                contentPadding = PaddingValues(horizontal = 6.dp)
+            ) {
+                Text(
+                    stringResource(R.string.pay_later_short),
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+            Button(
                 onClick = onOpenCheckout,
                 enabled = paymentEnabled,
                 modifier = Modifier
-                    .then(if (showExpressPay) Modifier.width(64.dp) else Modifier.fillMaxWidth())
+                    .then(if (showExpressPay) Modifier.width(64.dp) else Modifier.weight(1f))
                     .height(64.dp),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(

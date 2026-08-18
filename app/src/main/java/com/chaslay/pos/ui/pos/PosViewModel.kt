@@ -2022,11 +2022,39 @@ class PosViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            if (cart.fulfillmentType !in setOf(FulfillmentType.PICKUP, FulfillmentType.DELIVERY)) {
-                cartManager.setPickupOrder(suggestOrderNumber(), pickupTimeMs = null)
-            }
+            preparePayLaterFulfillment()
             openCheckout(PaymentMethod.PAY_LATER)
         }
+    }
+
+    fun initiatePayLater() = beginPayLaterCheckout()
+
+    private fun preparePayLaterFulfillment() {
+        val cart = cartManager.snapshot()
+        if (cart.fulfillmentType !in setOf(FulfillmentType.PICKUP, FulfillmentType.DELIVERY)) {
+            cartManager.setPickupOrder(
+                cart.orderNumber?.trim()?.takeIf { it.isNotBlank() } ?: suggestOrderNumber(),
+                pickupTimeMs = cart.pickupTimeMs
+            )
+        }
+    }
+
+    private fun resolveCardCharge(checkout: CheckoutState, roundedTotal: Double): Double {
+        if (checkout.cardTenderAmount > 0.001) return checkout.cardTenderAmount
+        if (checkout.tenderAmount > 0.001) {
+            return (roundedTotal - checkout.tenderAmount).coerceAtLeast(0.0)
+        }
+        return roundedTotal
+    }
+
+    private fun checkoutSaleDiscount(cart: CartSummary, checkout: CheckoutState, equalSplitCount: Int): Double {
+        val netSubtotal = (cart.subtotal - cart.itemDiscountTotal).coerceAtLeast(0.0)
+        val fullDiscount = when {
+            checkout.discountPercent > 0 -> netSubtotal * (checkout.discountPercent / 100.0)
+            checkout.discountAmount > 0 -> checkout.discountAmount.coerceAtMost(netSubtotal)
+            else -> cart.discountValue
+        }
+        return if (equalSplitCount > 1) fullDiscount / equalSplitCount else fullDiscount
     }
 
     private fun buildExpressCheckoutState(method: PaymentMethod): CheckoutState? {
@@ -2080,6 +2108,7 @@ class PosViewModel @Inject constructor(
     }
 
     private fun resolveCheckoutMethod(preferred: PaymentMethod?): PaymentMethod {
+        if (preferred == PaymentMethod.PAY_LATER) return PaymentMethod.PAY_LATER
         val settings = cachedSettings
         val enabled = buildList {
             if (settings.cashEnabled) add(PaymentMethod.CASH)
@@ -2109,7 +2138,12 @@ class PosViewModel @Inject constructor(
             it.copy(
                 checkoutState = it.checkoutState.copy(
                     method = method,
-                    cardTenderAmount = if (method == PaymentMethod.CASH) 0.0 else it.checkoutState.cardTenderAmount
+                    cardTenderAmount = if (method == PaymentMethod.CASH || method == PaymentMethod.PAY_LATER) {
+                        0.0
+                    } else {
+                        it.checkoutState.cardTenderAmount
+                    },
+                    tenderAmount = if (method == PaymentMethod.PAY_LATER) 0.0 else it.checkoutState.tenderAmount
                 )
             )
         }
@@ -3116,10 +3150,10 @@ class PosViewModel @Inject constructor(
             }
             val checkout = _uiExtras.value.checkoutState
             val netSubtotal = cart.subtotal - cart.itemDiscountTotal
-            val discount = if (checkout.discountPercent > 0) {
-                netSubtotal * (checkout.discountPercent / 100.0)
-            } else {
-                cart.discountValue
+            val discount = when {
+                checkout.discountPercent > 0 -> netSubtotal * (checkout.discountPercent / 100.0)
+                checkout.discountAmount > 0 -> checkout.discountAmount.coerceAtMost(netSubtotal)
+                else -> cart.discountValue
             }
             val equalSplitCount = if (cart.splitCount > 1 && !cart.splitByItems) cart.splitCount else 1
             val merchandiseTotal = cart.merchandiseTotal(checkout.discountPercent, checkout.discountAmount)
@@ -3458,7 +3492,7 @@ class PosViewModel @Inject constructor(
         viewModelScope.launch {
             updateExtras { it.copy(isProcessingPayment = true, errorMessage = null) }
             persistTableOrderIfNeeded()
-            if (method != PaymentMethod.ADYEN_TERMINAL) {
+            if (method != PaymentMethod.ADYEN_TERMINAL && method != PaymentMethod.PAY_LATER) {
                 printPendingKitchenForCurrentTable()
             }
             val settings = settingsRepository.getSettings()
@@ -3488,41 +3522,61 @@ class PosViewModel @Inject constructor(
             }
 
             if (method == PaymentMethod.PAY_LATER) {
-                val saleCart = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart else payable
-                if (saleCart.fulfillmentType !in setOf(FulfillmentType.PICKUP, FulfillmentType.DELIVERY)) {
-                    updateExtras {
-                        it.copy(
-                            isProcessingPayment = false,
-                            errorMessage = "Pay Later is only available for takeaway or delivery orders"
-                        )
-                    }
-                    return@launch
-                }
-                if (saleCart.fulfillmentType == FulfillmentType.DELIVERY && saleCart.deliveryName.isNullOrBlank()) {
+                if (fullCart.fulfillmentType == FulfillmentType.DELIVERY && fullCart.deliveryName.isNullOrBlank()) {
                     updateExtras {
                         it.copy(
                             isProcessingPayment = false,
                             errorMessage = "Select a delivery customer before using Pay Later"
                         )
                     }
+                    showAttachCustomerDialog()
                     return@launch
                 }
+                preparePayLaterFulfillment()
+                val saleCart = cartManager.snapshot().let { latest ->
+                    if (latest.splitCount > 1 && !latest.splitByItems) latest else cartManager.paymentSnapshot()
+                }
+                val equalSplitCount = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart.splitCount else 1
+                val saleDiscount = checkoutSaleDiscount(saleCart, checkout, equalSplitCount)
+                runCatching { printPendingKitchenForCurrentTable() }
+                    .onFailure { e -> Log.w("POS", "Pay later kitchen print failed", e) }
                 runCatching {
                     heldOrderRepository.createProgrammedPayLaterOrder(
                         cart = saleCart,
                         userId = userId,
                         userName = userName,
-                        checkoutDiscountPercent = checkout.discountPercent,
+                        checkoutDiscountPercent = if (equalSplitCount > 1) 0.0 else checkout.discountPercent,
+                        checkoutDiscountAmount = saleDiscount,
+                        tipAmount = checkout.tipAmount,
                         finalTotal = roundedTotal
                     )
                 }.onSuccess {
+                    val staffName = sessionManager.currentUserName.first() ?: userName
+                    runCatching {
+                        printerService.routeCartReceipt(
+                            settings = settings,
+                            cart = saleCart,
+                            context = com.chaslay.pos.printer.ReceiptPrintContext(
+                                orderNumber = saleCart.orderNumber,
+                                serviceType = saleCart.serviceType,
+                                fulfillmentType = saleCart.fulfillmentType,
+                                tableName = saleCart.tableName,
+                                paymentMethod = PaymentMethod.PAY_LATER,
+                                staffName = staffName,
+                                isProvisional = false
+                            ),
+                            discountAmount = saleDiscount,
+                            tipAmount = checkout.tipAmount,
+                            total = roundedTotal
+                        )
+                    }.onFailure { e -> Log.w("POS", "Pay later receipt print failed", e) }
                     cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
                     cartManager.resetSplit()
                     updateExtras {
                         it.copy(
                             isProcessingPayment = false,
                             showCheckoutScreen = false,
-                            snackbarMessage = "Order scheduled — pay at pickup",
+                            snackbarMessage = "Order sent — awaiting payment",
                             checkoutState = CheckoutState(roundingStep = checkoutRoundingDefault()),
                             masterOrderId = null,
                             equalSplitPaidCount = 0,
@@ -3602,11 +3656,7 @@ class PosViewModel @Inject constructor(
                     if (!settings.adyenTerminalEnabled) {
                         PaymentResult.Failure("Enable Adyen terminal in Settings")
                     } else {
-                        val cardCharge = if (checkout.cardTenderAmount > 0.001) {
-                            checkout.cardTenderAmount
-                        } else {
-                            roundedTotal
-                        }
+                        val cardCharge = resolveCardCharge(checkout, roundedTotal)
                         updateExtras {
                             it.copy(
                                 showTerminalPaymentModal = true,
@@ -3623,11 +3673,7 @@ class PosViewModel @Inject constructor(
                     }
                 }
                 method == PaymentMethod.CARD -> {
-                    val cardCharge = if (checkout.cardTenderAmount > 0.001) {
-                        checkout.cardTenderAmount
-                    } else {
-                        roundedTotal
-                    }
+                    val cardCharge = resolveCardCharge(checkout, roundedTotal)
                     updateExtras {
                         it.copy(
                             showTerminalPaymentModal = true,
@@ -3681,27 +3727,35 @@ class PosViewModel @Inject constructor(
                         method == PaymentMethod.ADYEN_TERMINAL -> PaymentMethod.ADYEN_TERMINAL
                         else -> paymentResult.method
                     }
-                    val cashTender = checkout.tenderAmount.takeIf { it > 0 }
-                    val tender = when {
-                        checkout.cardTenderAmount > 0.001 -> cashTender
-                        resolvedMethod == PaymentMethod.CASH -> cashTender
-                        else -> null
-                    }
-                    val changeDue = if (checkout.cardTenderAmount > 0.001) {
-                        0.0
-                    } else {
-                        tender?.let { (it - roundedTotal).coerceAtLeast(0.0) }
-                    }
+                    val cashTender = checkout.tenderAmount.takeIf { it > 0.001 }
+                    val isCardMethod = resolvedMethod == PaymentMethod.CARD ||
+                        resolvedMethod == PaymentMethod.ADYEN_TERMINAL ||
+                        resolvedMethod == PaymentMethod.TAP_TO_PAY
                     val cardMethod = when (resolvedMethod) {
                         PaymentMethod.ADYEN_TERMINAL -> PaymentMethod.ADYEN_TERMINAL
                         PaymentMethod.TAP_TO_PAY -> PaymentMethod.TAP_TO_PAY
                         else -> PaymentMethod.CARD
                     }
+                    val cardTender = when {
+                        checkout.cardTenderAmount > 0.001 -> checkout.cardTenderAmount
+                        isCardMethod && cashTender != null ->
+                            (roundedTotal - cashTender).coerceAtLeast(0.0).takeIf { it > 0.001 }
+                        isCardMethod -> roundedTotal
+                        else -> null
+                    }
+                    val tender = when {
+                        cardTender != null -> cashTender
+                        resolvedMethod == PaymentMethod.CASH -> cashTender ?: roundedTotal
+                        else -> null
+                    }
+                    val changeDue = if (cardTender != null) {
+                        0.0
+                    } else {
+                        tender?.let { (it - roundedTotal).coerceAtLeast(0.0) }
+                    }
                     val paymentTenders = buildList {
                         cashTender?.let { add(PaymentTender(PaymentMethod.CASH, it)) }
-                        checkout.cardTenderAmount.takeIf { it > 0.001 }?.let {
-                            add(PaymentTender(cardMethod, it))
-                        }
+                        cardTender?.let { add(PaymentTender(cardMethod, it)) }
                         redeemedGiftCardAmount.takeIf { it > 0.001 }?.let {
                             add(PaymentTender(PaymentMethod.GIFT_CARD, it))
                         }
@@ -3710,6 +3764,8 @@ class PosViewModel @Inject constructor(
                     if (method == PaymentMethod.ADYEN_TERMINAL) {
                         printPendingKitchenForCurrentTable()
                     }
+                    val equalSplitCount = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart.splitCount else 1
+                    val saleDiscount = checkoutSaleDiscount(saleCart, checkout, equalSplitCount)
                     val transactionTotal = roundedTotal + redeemedGiftCardAmount
                     val transaction = transactionRepository.completeSale(
                         cart = saleCart,
@@ -3722,7 +3778,8 @@ class PosViewModel @Inject constructor(
                         },
                         tipAmount = checkout.tipAmount,
                         roundingAmount = roundingAmount,
-                        checkoutDiscountPercent = checkout.discountPercent,
+                        checkoutDiscountPercent = if (equalSplitCount > 1) 0.0 else checkout.discountPercent,
+                        checkoutDiscountAmount = saleDiscount,
                         overrideTotal = transactionTotal,
                         masterOrderId = masterId,
                         splitCheckNumber = if (fullCart.splitByItems) fullCart.activeSplitCheck else null,
@@ -4271,6 +4328,8 @@ class PosViewModel @Inject constructor(
             FloorDeviceRole.WAITER -> "WAITERAPP"
             else -> "POS"
         }
+        val checkout = _uiExtras.value.checkoutState
+        val equalSplitCount = if (cart.splitCount > 1 && !cart.splitByItems) cart.splitCount else 1
         return KitchenPrintMeta(
             orderNumber = orderNum,
             fulfillmentType = cart.fulfillmentType,
@@ -4280,7 +4339,9 @@ class PosViewModel @Inject constructor(
             cashierName = userName,
             deliveryName = cart.deliveryName,
             deliveryAddress = deliveryAddress,
-            deliveryPhone = cart.deliveryPhone
+            deliveryPhone = cart.deliveryPhone,
+            discountAmount = checkoutSaleDiscount(cart, checkout, equalSplitCount),
+            tipAmount = checkout.tipAmount
         )
     }
 

@@ -44,6 +44,7 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
     const taxTotal = Number(body.tax_total ?? 0);
     const total = Number(body.total ?? subtotal + taxTotal);
     const discountAmount = Number(body.discount_amount ?? body.item_discount_total ?? 0);
+    const tipAmount = Number(body.tip_amount ?? body.tipAmount ?? 0);
     const paymentMethod = String(body.payment_method || "cash").toLowerCase();
     const isPending = paymentMethod === "pending" || paymentMethod === "pay_later";
     const paymentBreakdown = Array.isArray(body.payment_breakdown)
@@ -65,6 +66,7 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
         subtotal,
         taxAmount: taxTotal,
         discountAmount,
+        tipAmount,
         total,
         completedAt: body.created_at || Date.now(),
         items: items.map((item: any) => ({

@@ -190,6 +190,7 @@
     <string name="paid">Payant</string>
     <string name="not_paid">No payé</string>
     <string name="pay_later">Paga dopo</string>
+    <string name="pay_later_short">Dopo</string>
     <string name="pay_later_subtitle">Incassa al ritiro</string>
     <string name="pos_register">Cassa</string>
     <string name="pos_orders">Ordini</string>

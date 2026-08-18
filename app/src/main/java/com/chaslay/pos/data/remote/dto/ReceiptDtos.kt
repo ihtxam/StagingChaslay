@@ -16,6 +16,7 @@ data class ReceiptPublishRequest(
     @SerializedName("tax_total") val taxTotal: Double? = null,
     @SerializedName("discount_amount") val discountAmount: Double? = null,
     @SerializedName("item_discount_total") val itemDiscountTotal: Double? = null,
+    @SerializedName("tip_amount") val tipAmount: Double? = null,
     @SerializedName("payment_breakdown") val paymentBreakdown: List<ReceiptTenderDto>? = null
 )
 

@@ -56,7 +56,6 @@ import androidx.compose.ui.unit.sp
 import com.chaslay.pos.R
 import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.DiscountPreset
-import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.LoyaltyMath
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.applyCashRounding
@@ -153,7 +152,12 @@ fun CheckoutScreen(
         0.0
     }
     val exactCash = checkoutState.method == PaymentMethod.CASH && cashApplied < 0.001 && cardApplied < 0.001
-    val canComplete = !isProcessing && cart.items.isNotEmpty() && (remaining <= 0.001 || exactCash)
+    val methodChargesRemaining = checkoutState.method == PaymentMethod.CARD ||
+        checkoutState.method == PaymentMethod.ADYEN_TERMINAL ||
+        checkoutState.method == PaymentMethod.TAP_TO_PAY ||
+        checkoutState.method == PaymentMethod.PAY_LATER
+    val canComplete = !isProcessing && cart.items.isNotEmpty() &&
+        (remaining <= 0.001 || exactCash || methodChargesRemaining)
 
     fun applyTender(amount: Double) {
         tenderBuffer = formatTenderBuffer(amount)
@@ -294,22 +298,17 @@ fun CheckoutScreen(
                     }
                 )
             }
-            if (cart.pickupTimeMs != null ||
-                cart.fulfillmentType == FulfillmentType.PICKUP ||
-                cart.fulfillmentType == FulfillmentType.DELIVERY
-            ) {
-                CheckoutMethodButton(
-                    title = stringResource(R.string.pay_later),
-                    icon = Icons.Default.Schedule,
-                    selected = checkoutState.method == PaymentMethod.PAY_LATER,
-                    accent = Color(0xFFF59E0B),
-                    onClick = {
-                        tenderBuffer = ""
-                        onTenderAmount(0.0)
-                        onSelectMethod(PaymentMethod.PAY_LATER)
-                    }
-                )
-            }
+            CheckoutMethodButton(
+                title = stringResource(R.string.pay_later),
+                icon = Icons.Default.Schedule,
+                selected = checkoutState.method == PaymentMethod.PAY_LATER,
+                accent = Color(0xFFF59E0B),
+                onClick = {
+                    tenderBuffer = ""
+                    onTenderAmount(0.0)
+                    onSelectMethod(PaymentMethod.PAY_LATER)
+                }
+            )
 
             if (discountsEnabled || tipsEnabled) {
                 Row(
@@ -596,12 +595,7 @@ fun CheckoutScreen(
                     Text(stringResource(R.string.checkout_back), color = vc.textPrimary, fontWeight = FontWeight.Bold)
                 }
                 Button(
-                    onClick = {
-                        if (cashApplied > 0.001) {
-                            onTenderAmount(if (exactCash) totals.roundedTotal else cashApplied)
-                        }
-                        onComplete()
-                    },
+                    onClick = onComplete,
                     enabled = canComplete,
                     modifier = Modifier
                         .weight(1f)
