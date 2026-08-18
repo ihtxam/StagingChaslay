@@ -6,6 +6,13 @@ import {
   deriveShortDeviceId,
   normalizeChaslayDeviceId,
 } from "./chaslay-compat.service";
+import { withLicenseSchemaRetry } from "@/lib/ensure-licenses-schema";
+
+function asDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 
 function formatActivationCode(): string {
   const raw = crypto.randomBytes(6).toString("hex").toUpperCase();
@@ -306,35 +313,34 @@ export class LicenseAdminService {
     status?: string,
     merchantId?: string
   ) {
-    const db = getDb();
-
     try {
-      const offset = (page - 1) * limit;
-      let whereConditions: any[] = [];
+      return await withLicenseSchemaRetry(async () => {
+        const db = getDb();
+        const offset = (page - 1) * limit;
+        const whereConditions = [];
 
-      if (status) {
-        whereConditions.push(eq(schema.licenses.status, status));
-      }
+        if (status) {
+          whereConditions.push(eq(schema.licenses.status, status));
+        }
 
-      if (merchantId) {
-        whereConditions.push(eq(schema.licenses.merchantId, merchantId));
-      }
+        if (merchantId) {
+          whereConditions.push(eq(schema.licenses.merchantId, merchantId));
+        }
 
-      const licenses = await db.query.licenses.findMany({
-        where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
-        with: {
-          merchant: true,
-          device: true,
-        },
-        limit,
-        offset,
-        orderBy: desc(schema.licenses.createdAt),
+        return db.query.licenses.findMany({
+          where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
+          with: {
+            merchant: true,
+            device: true,
+          },
+          limit,
+          offset,
+          orderBy: desc(schema.licenses.createdAt),
+        });
       });
-
-      return licenses;
     } catch (error) {
       console.error("Error getting licenses:", error);
-      throw error;
+      return [];
     }
   }
 
@@ -402,7 +408,11 @@ export class LicenseAdminService {
         throw new Error("License not found");
       }
 
-      const newExpiryDate = new Date(license.expiresAt.getTime() + additionalDays * 24 * 60 * 60 * 1000);
+      const expiresAt = asDate(license.expiresAt);
+      if (!expiresAt) {
+        throw new Error("License has an invalid expiry date");
+      }
+      const newExpiryDate = new Date(expiresAt.getTime() + additionalDays * 24 * 60 * 60 * 1000);
 
       const updatedLicense = await db
         .update(schema.licenses)
@@ -424,32 +434,44 @@ export class LicenseAdminService {
    * Get license statistics
    */
   static async getLicenseStatistics() {
-    const db = getDb();
+    const empty = {
+      total: 0,
+      active: 0,
+      expired: 0,
+      suspended: 0,
+      expiringIn30Days: 0,
+      trial: 0,
+      yearly: 0,
+    };
 
     try {
-      const now = new Date();
+      return await withLicenseSchemaRetry(async () => {
+        const db = getDb();
+        const now = new Date();
+        const horizon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const licenses = await db.query.licenses.findMany();
 
-      const licenses = await db.query.licenses.findMany();
-
-      const stats = {
-        total: licenses.length,
-        active: licenses.filter((l) => l.status === "active").length,
-        expired: licenses.filter((l) => l.status === "expired").length,
-        suspended: licenses.filter((l) => l.status === "suspended").length,
-        expiringIn30Days: licenses.filter(
-          (l) =>
-            l.status === "active" &&
-            l.expiresAt > now &&
-            l.expiresAt <= new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-        ).length,
-        trial: licenses.filter((l) => l.licenseType === "trial").length,
-        yearly: licenses.filter((l) => l.licenseType === "yearly").length,
-      };
-
-      return stats;
+        return {
+          total: licenses.length,
+          active: licenses.filter((l) => l.status === "active").length,
+          expired: licenses.filter((l) => l.status === "expired").length,
+          suspended: licenses.filter((l) => l.status === "suspended").length,
+          expiringIn30Days: licenses.filter((l) => {
+            const expiresAt = asDate(l.expiresAt);
+            return (
+              l.status === "active" &&
+              !!expiresAt &&
+              expiresAt > now &&
+              expiresAt <= horizon
+            );
+          }).length,
+          trial: licenses.filter((l) => l.licenseType === "trial").length,
+          yearly: licenses.filter((l) => l.licenseType === "yearly").length,
+        };
+      });
     } catch (error) {
       console.error("Error getting license statistics:", error);
-      throw error;
+      return empty;
     }
   }
 
@@ -498,32 +520,39 @@ export class LicenseAdminService {
    * Get licenses expiring soon
    */
   static async getLicensesExpiringSoon(daysThreshold: number = 35) {
-    const db = getDb();
-
     try {
-      const now = new Date();
-      const thresholdDate = new Date(now.getTime() + daysThreshold * 24 * 60 * 60 * 1000);
+      return await withLicenseSchemaRetry(async () => {
+        const db = getDb();
+        const now = new Date();
+        const thresholdDate = new Date(now.getTime() + daysThreshold * 24 * 60 * 60 * 1000);
 
-      const licenses = await db.query.licenses.findMany({
-        where: and(
-          eq(schema.licenses.status, "active"),
-          lt(schema.licenses.expiresAt, thresholdDate),
-          gt(schema.licenses.expiresAt, now)
-        ),
-        with: {
-          merchant: true,
-          device: true,
-        },
-        orderBy: asc(schema.licenses.expiresAt),
+        const licenses = await db.query.licenses.findMany({
+          where: and(
+            eq(schema.licenses.status, "active"),
+            lt(schema.licenses.expiresAt, thresholdDate),
+            gt(schema.licenses.expiresAt, now)
+          ),
+          with: {
+            merchant: true,
+            device: true,
+          },
+          orderBy: asc(schema.licenses.expiresAt),
+        });
+
+        return licenses
+          .map((l) => {
+            const expiresAt = asDate(l.expiresAt);
+            if (!expiresAt) return null;
+            return {
+              license: l,
+              daysRemaining: Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+            };
+          })
+          .filter((row): row is { license: (typeof licenses)[number]; daysRemaining: number } => row != null);
       });
-
-      return licenses.map((l) => ({
-        license: l,
-        daysRemaining: Math.ceil((l.expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
-      }));
     } catch (error) {
       console.error("Error getting licenses expiring soon:", error);
-      throw error;
+      return [];
     }
   }
 }

@@ -34,6 +34,7 @@ import { MarketingService } from "@/services/marketing.service";
 import { ReservationService } from "@/services/reservation.service";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
 import { ensureMerchantSchemaAtStartup } from "@/lib/ensure-merchant-schema";
+import { ensureLicensesSchemaAtStartup } from "@/lib/ensure-licenses-schema";
 
 // Load environment variables
 dotenv.config();
@@ -196,6 +197,7 @@ app.listen(PORT, () => {
   console.log(`🏥 Health check: /health`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
   ensureMerchantSchemaAtStartup();
+  ensureLicensesSchemaAtStartup();
 
   // Reminder sweeps (~hourly). Lightweight; skips merchants without email.
   const tick = async () => {
