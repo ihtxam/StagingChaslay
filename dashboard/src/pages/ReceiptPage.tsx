@@ -258,7 +258,14 @@ export default function ReceiptPage() {
         ) : null}
         {url && (
           <div className="text-center mt-6">
-            <img src={qrImageUrl(url, 160)} alt="QR" className="mx-auto" width={160} height={160} />
+            <img
+              src={qrImageUrl(url, 180, { ecc: 'M', margin: 8 })}
+              alt="QR"
+              className="mx-auto"
+              width={180}
+              height={180}
+              style={{ imageRendering: 'pixelated' }}
+            />
             <p className="text-xs text-gray-500 mt-2">{t('webPosDigitalReceipt')}</p>
           </div>
         )}

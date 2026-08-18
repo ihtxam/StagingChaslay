@@ -195,7 +195,7 @@ fun OrderCompleteDialog(
                             Image(
                                 bitmap = qrBitmap.asImageBitmap(),
                                 contentDescription = stringResource(R.string.digital_receipt),
-                                modifier = Modifier.size(150.dp)
+                                modifier = Modifier.size(180.dp)
                             )
                             Text(
                                 stringResource(R.string.scan_digital_receipt),

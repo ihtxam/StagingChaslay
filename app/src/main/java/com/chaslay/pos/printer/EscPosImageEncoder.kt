@@ -11,15 +11,18 @@ object EscPosImageEncoder {
     fun encodeRaster(
         bitmap: Bitmap,
         maxWidthPx: Int = 320,
-        maxHeightPx: Int = 160
+        maxHeightPx: Int = 160,
+        filter: Boolean = true,
+        darkThreshold: Int = 160
     ): ByteArray? {
-        val scaled = scaleToFit(bitmap, maxWidthPx, maxHeightPx) ?: return null
+        val scaled = scaleToFit(bitmap, maxWidthPx, maxHeightPx, filter) ?: return null
         val width = scaled.width
         val height = scaled.height
         if (width <= 0 || height <= 0) return null
 
         val bytesPerRow = width / 8
         val raster = ByteArray(bytesPerRow * height)
+        val cutoff = darkThreshold.coerceIn(1, 255)
         for (y in 0 until height) {
             for (xByte in 0 until bytesPerRow) {
                 var value = 0
@@ -29,7 +32,7 @@ object EscPosImageEncoder {
                     val luminance = (Color.red(pixel) * 0.299 +
                         Color.green(pixel) * 0.587 +
                         Color.blue(pixel) * 0.114).roundToInt()
-                    if (luminance < 160) {
+                    if (luminance < cutoff) {
                         value = value or (1 shl (7 - bit))
                     }
                 }
@@ -46,14 +49,23 @@ object EscPosImageEncoder {
         return byteArrayOf(0x1D, 0x76, 0x30, 0x00, xL.toByte(), xH.toByte(), yL.toByte(), yH.toByte()) + raster
     }
 
-    private fun scaleToFit(source: Bitmap, maxWidthPx: Int, maxHeightPx: Int): Bitmap? {
+    private fun scaleToFit(
+        source: Bitmap,
+        maxWidthPx: Int,
+        maxHeightPx: Int,
+        filter: Boolean = true
+    ): Bitmap? {
         if (source.width <= 0 || source.height <= 0) return null
         val widthRatio = maxWidthPx.toDouble() / source.width
         val heightRatio = maxHeightPx.toDouble() / source.height
         val ratio = minOf(widthRatio, heightRatio, 1.0)
         val targetWidth = (source.width * ratio).roundToInt().coerceAtLeast(1)
         val targetHeight = (source.height * ratio).roundToInt().coerceAtLeast(1)
-        val scaled = Bitmap.createScaledBitmap(source, targetWidth, targetHeight, true)
+        val scaled = if (targetWidth == source.width && targetHeight == source.height) {
+            source
+        } else {
+            Bitmap.createScaledBitmap(source, targetWidth, targetHeight, filter)
+        }
         val paddedWidth = ((targetWidth + 7) / 8) * 8
         if (paddedWidth == targetWidth) return scaled
         val padded = Bitmap.createBitmap(paddedWidth, targetHeight, Bitmap.Config.ARGB_8888)

@@ -1633,7 +1633,13 @@ class BluetoothPrinterService @Inject constructor(
         // Compact raster QR — native ESC/POS module size 1 is unreliable on many printers.
         val maxWidthPx = if (lineWidth >= LINE_WIDTH_80) RECEIPT_QR_RASTER_PX_80 else RECEIPT_QR_RASTER_PX_58
         val bitmap = receiptQrGenerator.generateReceiptQrBitmap(url, maxWidthPx)
-        val raster = EscPosImageEncoder.encodeRaster(bitmap, maxWidthPx, maxWidthPx) ?: return byteArrayOf()
+        val raster = EscPosImageEncoder.encodeRaster(
+            bitmap,
+            maxWidthPx,
+            maxWidthPx,
+            filter = false,
+            darkThreshold = 128
+        ) ?: return byteArrayOf()
         if (!bitmap.isRecycled) bitmap.recycle()
         return EscPosEncoder.encode(escAlignCenter()) + raster + EscPosEncoder.encode(escAlignLeft())
     }
@@ -1967,10 +1973,10 @@ class BluetoothPrinterService @Inject constructor(
         private const val TAG = "PrinterService"
         private const val LINE_WIDTH_58 = 32
         private const val LINE_WIDTH_80 = 48
-        /** Thermal digital-receipt QR — matches WebPOS RECEIPT_QR_RASTER_PX_80 (150dp). */
-        private const val RECEIPT_QR_RASTER_PX_80 = 150
+        /** Thermal digital-receipt QR — matches WebPOS RECEIPT_QR_RASTER_PX_80 (180px). */
+        private const val RECEIPT_QR_RASTER_PX_80 = 180
         /** Thermal digital-receipt QR on 58mm paper — matches WebPOS. */
-        private const val RECEIPT_QR_RASTER_PX_58 = 112
+        private const val RECEIPT_QR_RASTER_PX_58 = 136
         private const val LINE_WIDTH = LINE_WIDTH_80
         private val SPP_UUID = java.util.UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private val ESC_INIT = byteArrayOf(0x1B, 0x40)
