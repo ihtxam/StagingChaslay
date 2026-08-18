@@ -98,7 +98,7 @@ Content-Type: application/json
 **Optional Fields:**
 - `categoryId`: Category ID
 - `sku`: Stock keeping unit
-- `barcode`: Product barcode (EAN-13, UPC-A)
+- `barcode`: Product barcode (EAN-13, UPC-A, or 12-digit internal number)
 - `cost`: Cost price
 - `stock`: Initial stock quantity
 - `isTaxable`: Whether product is taxable (default: true)

@@ -2,27 +2,57 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 
 const BATCH_CAP = 200;
-const INTERNAL_PREFIX = "C";
-const INTERNAL_DIGITS = 11;
+
+/** Internal series: 20 + 10 digits (12-digit number, not a GS1 EAN-13). */
+export const INTERNAL_BARCODE_PREFIX = "20";
+const INTERNAL_SEQ_DIGITS = 10;
+export const INTERNAL_BARCODE_LENGTH =
+  INTERNAL_BARCODE_PREFIX.length + INTERNAL_SEQ_DIGITS;
+const INTERNAL_SEQ_MAX = 10 ** INTERNAL_SEQ_DIGITS - 1;
+const INTERNAL_SERIES_RE = /^20\d{10}$/;
 
 function isBlankBarcode(raw?: string | null): boolean {
   return !String(raw || "").trim();
 }
 
-/** Code128-B safe internal / SKU values — never a fake EAN-13. */
-export function isSafeSkuAsBarcode(sku: string): boolean {
-  const s = String(sku || "").trim();
-  if (s.length < 1 || s.length > 20) return false;
-  if (!/^[\x21-\x7E]+$/.test(s)) return false;
-  return true;
+/** Numeric SKU (8–12 digits) may be copied as barcode; never letter prefixes. */
+export function isNumericSkuAsBarcode(sku: string): boolean {
+  return /^\d{8,12}$/.test(String(sku || "").trim());
 }
 
-function randomInternalCode(): string {
-  let digits = "";
-  for (let i = 0; i < INTERNAL_DIGITS; i++) {
-    digits += String(Math.floor(Math.random() * 10));
+/** @deprecated Use isNumericSkuAsBarcode — generated codes are digits only. */
+export function isSafeSkuAsBarcode(sku: string): boolean {
+  return isNumericSkuAsBarcode(sku);
+}
+
+export function formatInternalBarcode(seq: number): string {
+  return `${INTERNAL_BARCODE_PREFIX}${String(seq).padStart(INTERNAL_SEQ_DIGITS, "0")}`;
+}
+
+function maxInternalSeq(taken: Iterable<string>): number {
+  let maxSeq = 0;
+  for (const raw of taken) {
+    const code = String(raw || "").trim();
+    if (!INTERNAL_SERIES_RE.test(code)) continue;
+    const n = Number(code.slice(INTERNAL_BARCODE_PREFIX.length));
+    if (Number.isFinite(n) && n > maxSeq) maxSeq = n;
   }
-  return `${INTERNAL_PREFIX}${digits}`;
+  return maxSeq;
+}
+
+/** Allocate the next merchant-unique 12-digit internal barcode (20 + 10 digits). Mutates `taken`. */
+export function allocateInternalBarcode(taken: Set<string>): string | null {
+  let seq = maxInternalSeq(taken);
+  for (let i = 0; i < 1000; i++) {
+    seq += 1;
+    if (seq > INTERNAL_SEQ_MAX) return null;
+    const candidate = formatInternalBarcode(seq);
+    if (!taken.has(candidate)) {
+      taken.add(candidate);
+      return candidate;
+    }
+  }
+  return null;
 }
 
 function normalizeBarcode(raw?: string | null): string | null {
@@ -67,21 +97,16 @@ export class BarcodeService {
     const updates: Array<{ id: string; barcode: string }> = [];
     for (const product of missing) {
       let code: string | null = null;
-      if (useSku && isSafeSkuAsBarcode(product.sku || "")) {
+      if (useSku && isNumericSkuAsBarcode(product.sku || "")) {
         const sku = String(product.sku).trim();
         if (!taken.has(sku)) code = sku;
       }
       if (!code) {
-        for (let attempt = 0; attempt < 12; attempt++) {
-          const candidate = randomInternalCode();
-          if (!taken.has(candidate)) {
-            code = candidate;
-            break;
-          }
-        }
+        code = allocateInternalBarcode(taken);
+      } else {
+        taken.add(code);
       }
       if (!code) continue;
-      taken.add(code);
       updates.push({ id: product.id, barcode: code });
     }
 

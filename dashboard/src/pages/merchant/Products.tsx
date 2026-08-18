@@ -943,7 +943,7 @@ export default function Products() {
           </button>
           <button
             type="button"
-            onClick={() => void generateMissing(selectedIds.length ? selectedIds : undefined, true)}
+            onClick={() => void generateMissing(selectedIds.length ? selectedIds : undefined)}
             className="btn-secondary"
           >
             <Barcode size={14} />
@@ -1760,7 +1760,7 @@ export default function Products() {
                           <button
                             type="button"
                             className="btn-secondary text-xs"
-                            onClick={() => void generateMissing([editingId], true)}
+                            onClick={() => void generateMissing([editingId])}
                           >
                             {t('barcodeGenerateMissing')}
                           </button>

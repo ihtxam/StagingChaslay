@@ -1351,7 +1351,7 @@ class PosViewModel @Inject constructor(
                 }
                 else -> if (buffer == "0") key else buffer + key
             }
-            extras.copy(keypadBuffer = next.take(12))
+            extras.copy(keypadBuffer = next.take(14))
         }
         applyKeypadBuffer(deselect = false)
     }
@@ -1387,6 +1387,29 @@ class PosViewModel @Inject constructor(
     }
 
     fun onKeypadEnter() {
+        val extras = _uiExtras.value
+        val buffer = extras.keypadBuffer.trim()
+        if (
+            extras.selectedCartItemId == null &&
+            extras.keypadMode == KeypadMode.PRICE &&
+            buffer.matches(Regex("^\\d{8,14}$"))
+        ) {
+            viewModelScope.launch {
+                val lookup = productRepository.findByBarcode(buffer)
+                if (lookup != null) {
+                    addScannedProduct(lookup)
+                    updateExtras { it.copy(keypadBuffer = "") }
+                } else {
+                    updateExtras {
+                        it.copy(
+                            keypadBuffer = "",
+                            snackbarMessage = appContext.getString(R.string.barcode_not_found, buffer)
+                        )
+                    }
+                }
+            }
+            return
+        }
         applyKeypadBuffer(deselect = true)
     }
 

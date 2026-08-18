@@ -160,6 +160,8 @@ type Props = {
   agentOk: boolean;
   search: string;
   onSearchChange: (q: string) => void;
+  /** Enter on the product search: exact barcode/SKU adds the product. */
+  onSearchSubmit?: () => void;
   showSearch: boolean;
   onlinePendingCount: number;
   /** Pulsing ring on bell while unactioned online orders remain */
@@ -213,6 +215,7 @@ export default function WebPosTopBar({
   agentOk,
   search,
   onSearchChange,
+  onSearchSubmit,
   showSearch,
   onlinePendingCount,
   orderAlertRing = false,
@@ -334,6 +337,12 @@ export default function WebPosTopBar({
                   placeholder={t('webPosSearchProducts')}
                   value={search}
                   onChange={(e) => onSearchChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      onSearchSubmit?.();
+                    }
+                  }}
                   autoComplete="off"
                 />
               </label>
@@ -438,6 +447,12 @@ export default function WebPosTopBar({
               placeholder={t('webPosSearchProducts')}
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  onSearchSubmit?.();
+                }
+              }}
               autoComplete="off"
               inputMode="search"
             />

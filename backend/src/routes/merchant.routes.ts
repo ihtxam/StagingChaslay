@@ -67,7 +67,8 @@ router.get("/products/import/template", async (_req: Request, res: Response) => 
 
 /**
  * POST /api/merchant/products/barcodes/generate
- * Assign Code128 values (C + 11 digits, or SKU when safe) to products missing a barcode.
+ * Assign numeric-only barcodes (12-digit 20 + 10 internal series) to products missing a barcode.
+ * Never overwrites existing EAN/UPC or other barcodes. Optional useSku only if SKU is 8–12 digits.
  */
 router.post("/products/barcodes/generate", async (req: Request, res: Response) => {
   try {

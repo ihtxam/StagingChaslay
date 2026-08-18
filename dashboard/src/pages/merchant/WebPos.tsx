@@ -1250,7 +1250,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (categoryId === POS_GIFT_CARDS_CATEGORY) {
         return false;
       } else if (categoryId !== 'all' && p.categoryId !== categoryId) return false;
-      if (q && !p.name.toLowerCase().includes(q)) return false;
+      if (q) {
+        const raw = search.trim();
+        const barcode = String(p.barcode || '').trim();
+        const sku = String(p.sku || '').trim();
+        const nameHit = p.name.toLowerCase().includes(q);
+        const codeHit =
+          (barcode && (barcode === raw || barcode.toLowerCase() === q)) ||
+          (sku && sku.toLowerCase() === q);
+        if (!nameHit && !codeHit) return false;
+      }
       return true;
     });
     const useBestsellerSort = gridSort === 'bestseller';
@@ -6112,12 +6121,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const q = code.trim();
       if (!q) return null;
       const lower = q.toLowerCase();
+      const digits = q.replace(/\s/g, '');
       return (
-        products.find(
-          (p) =>
-            (p.barcode && String(p.barcode).trim() === q) ||
-            (p.sku && String(p.sku).trim().toLowerCase() === lower)
-        ) || null
+        products.find((p) => {
+          const barcode = String(p.barcode || '').trim();
+          const sku = String(p.sku || '').trim();
+          if (barcode && (barcode === q || barcode === digits || barcode.toLowerCase() === lower)) {
+            return true;
+          }
+          if (sku && sku.toLowerCase() === lower) return true;
+          return false;
+        }) || null
       );
     },
     [products]
@@ -6423,6 +6437,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         agentOk={agentOk}
         search={search}
         onSearchChange={setSearch}
+        onSearchSubmit={() => {
+          const product = findProductByScanCode(search);
+          if (product) {
+            onProductClick(product);
+            setSearch('');
+          }
+        }}
         showSearch={posView === 'register'}
         onlinePendingCount={onlinePendingCount}
         orderAlertRing={orderAlertRing}

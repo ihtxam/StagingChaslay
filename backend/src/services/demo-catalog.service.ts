@@ -7,6 +7,7 @@ import {
   DEMO_MODIFIER_GROUPS,
   DEMO_PRODUCTS,
 } from "@/lib/demo-catalog.data";
+import { allocateInternalBarcode } from "@/services/barcode.service";
 import { ModifierService } from "@/services/modifier.service";
 
 export type DemoImportMode = "replace" | "merge";
@@ -121,12 +122,18 @@ export class DemoCatalogService {
                 id: schema.products.id,
                 name: schema.products.name,
                 sku: schema.products.sku,
+                barcode: schema.products.barcode,
                 clientId: schema.products.clientId,
                 sortOrder: schema.products.sortOrder,
               })
               .from(schema.products)
               .where(eq(schema.products.merchantId, merchantId))
           : [];
+      const takenBarcodes = new Set(
+        existingProducts
+          .map((p) => String(p.barcode || "").trim())
+          .filter(Boolean)
+      );
 
       const productByKey = new Map<string, { id: string; sortOrder: number }>();
       for (const p of existingProducts) {
@@ -259,6 +266,7 @@ export class DemoCatalogService {
             price: p.price.toFixed(2),
             stock: p.stock ?? 100,
             sku: p.sku,
+            barcode: allocateInternalBarcode(takenBarcodes),
             isActive: true,
             isTaxable: true,
             productType: "standard",
@@ -333,6 +341,7 @@ export class DemoCatalogService {
             price: combo.price.toFixed(2),
             stock: 100,
             sku: combo.sku,
+            barcode: allocateInternalBarcode(takenBarcodes),
             isActive: true,
             isTaxable: true,
             productType: "combo",
