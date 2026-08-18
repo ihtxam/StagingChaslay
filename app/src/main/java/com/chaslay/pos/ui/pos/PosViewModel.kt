@@ -1795,9 +1795,9 @@ class PosViewModel @Inject constructor(
         )
     }
 
-    private suspend fun printPendingKitchenForCurrentTable() {
+    private suspend fun printPendingKitchenForCurrentTable(cartOverride: CartSummary? = null) {
         if (!isRestaurantMode()) return
-        val cart = cartManager.snapshot()
+        val cart = cartOverride ?: cartManager.snapshot()
         if (cart.tableId == null) {
             // Walk-in / direct order (no table): print the order to the kitchen on sale.
             // Only print items not already sent so split-bill payments don't re-fire the kitchen.
@@ -1816,18 +1816,27 @@ class PosViewModel @Inject constructor(
             return
         }
         tableOrderMutex.withLock {
-            val orderId = flushTableOrderSync() ?: return@withLock
-            printPendingKitchenItems(orderId, cart.tableName.orEmpty(), cart.serviceType)
+            val orderId = cart.tableOrderId ?: flushTableOrderSync() ?: return@withLock
+            printPendingKitchenItems(
+                orderId,
+                cart.tableName.orEmpty(),
+                cart.serviceType,
+                intendedIdsOverride = cart.items.filter { !it.sentToKitchen }.map { it.id }.toSet(),
+                metaCart = cart
+            )
         }
     }
 
     private suspend fun printPendingKitchenItems(
         orderId: String,
         tableName: String,
-        serviceType: ServiceType
+        serviceType: ServiceType,
+        intendedIdsOverride: Set<String>? = null,
+        metaCart: CartSummary? = null
     ) {
-        val syncedCart = cartManager.snapshot()
-        val intendedIds = syncedCart.items.filter { !it.sentToKitchen }.map { it.id }.toSet()
+        val syncedCart = metaCart ?: cartManager.snapshot()
+        val intendedIds = intendedIdsOverride
+            ?: syncedCart.items.filter { !it.sentToKitchen }.map { it.id }.toSet()
         if (intendedIds.isEmpty()) return
         tableOrderRepository.clearSentFlags(orderId, intendedIds)
         val unsent = tableOrderRepository.getOrderItemEntities(orderId)
@@ -3428,7 +3437,6 @@ class PosViewModel @Inject constructor(
         viewModelScope.launch {
             updateExtras { it.copy(isProcessingPayment = true) }
             persistTableOrderIfNeeded()
-            printPendingKitchenForCurrentTable()
             val settings = settingsRepository.getSettings()
             val userId = sessionManager.currentUserId.first() ?: 0L
             val userName = sessionManager.currentUserName.first() ?: "Cashier"
@@ -3436,6 +3444,7 @@ class PosViewModel @Inject constructor(
             val rawTotal = payable.merchandiseTotal()
             val roundedTotal = applyCashRounding(rawTotal, settings.roundingStep)
             val roundingAmount = roundedTotal - rawTotal
+            val kitchenCart = cartManager.snapshot()
             val transaction = transactionRepository.completeSale(
                 cart = payable,
                 paymentMethod = PaymentMethod.CASH,
@@ -3445,7 +3454,7 @@ class PosViewModel @Inject constructor(
                 overrideTotal = roundedTotal
             )
             val receiptItems = transactionRepository.getTransaction(transaction.id)?.second.orEmpty()
-            val (publishedTx, publicReceiptUrl) = publishAndPersistReceipt(transaction, receiptItems, settings)
+            val fallbackUrl = receiptRepository.buildPublicUrl(transaction.id, settings)
             cartManager.removeItemsAfterPayment(paidIds)
             decrementStockForCartItems(payable.items)
             if (cartManager.snapshot().items.isEmpty()) {
@@ -3458,15 +3467,27 @@ class PosViewModel @Inject constructor(
                 it.copy(
                     isProcessingPayment = false,
                     showOrderComplete = true,
-                    completedTransaction = publishedTx,
-                    receiptPublicUrl = publicReceiptUrl,
-                    orderCompleteNotice = receiptUploadNotice(publicReceiptUrl),
+                    completedTransaction = transaction.copy(receiptUrl = fallbackUrl),
+                    receiptPublicUrl = fallbackUrl,
+                    orderCompleteNotice = null,
                     successMessage = "Payment completed",
                     selectedCartItemId = null,
                     keypadBuffer = "",
                     kitchenSentToPrinter = false
                 )
             }
+            queuePostSaleSideEffects(
+                kitchenCart = kitchenCart,
+                transaction = transaction,
+                receiptItems = receiptItems,
+                settings = settings,
+                saleCart = payable,
+                merchandiseTotal = rawTotal,
+                checkout = CheckoutState(),
+                redeemedGiftCardAmount = 0.0,
+                method = PaymentMethod.CASH,
+                membership = _uiExtras.value.attachedMembership
+            )
         }
     }
 
@@ -3492,9 +3513,6 @@ class PosViewModel @Inject constructor(
         viewModelScope.launch {
             updateExtras { it.copy(isProcessingPayment = true, errorMessage = null) }
             persistTableOrderIfNeeded()
-            if (method != PaymentMethod.ADYEN_TERMINAL && method != PaymentMethod.PAY_LATER) {
-                printPendingKitchenForCurrentTable()
-            }
             val settings = settingsRepository.getSettings()
             val userId = sessionManager.currentUserId.first() ?: 0L
             val userName = sessionManager.currentUserName.first() ?: "Cashier"
@@ -3538,8 +3556,6 @@ class PosViewModel @Inject constructor(
                 }
                 val equalSplitCount = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart.splitCount else 1
                 val saleDiscount = checkoutSaleDiscount(saleCart, checkout, equalSplitCount)
-                runCatching { printPendingKitchenForCurrentTable() }
-                    .onFailure { e -> Log.w("POS", "Pay later kitchen print failed", e) }
                 runCatching {
                     heldOrderRepository.createProgrammedPayLaterOrder(
                         cart = saleCart,
@@ -3551,25 +3567,6 @@ class PosViewModel @Inject constructor(
                         finalTotal = roundedTotal
                     )
                 }.onSuccess {
-                    val staffName = sessionManager.currentUserName.first() ?: userName
-                    runCatching {
-                        printerService.routeCartReceipt(
-                            settings = settings,
-                            cart = saleCart,
-                            context = com.chaslay.pos.printer.ReceiptPrintContext(
-                                orderNumber = saleCart.orderNumber,
-                                serviceType = saleCart.serviceType,
-                                fulfillmentType = saleCart.fulfillmentType,
-                                tableName = saleCart.tableName,
-                                paymentMethod = PaymentMethod.PAY_LATER,
-                                staffName = staffName,
-                                isProvisional = false
-                            ),
-                            discountAmount = saleDiscount,
-                            tipAmount = checkout.tipAmount,
-                            total = roundedTotal
-                        )
-                    }.onFailure { e -> Log.w("POS", "Pay later receipt print failed", e) }
                     cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
                     cartManager.resetSplit()
                     updateExtras {
@@ -3586,6 +3583,29 @@ class PosViewModel @Inject constructor(
                             kitchenSentToPrinter = false
                         )
                     }
+                    val staffName = sessionManager.currentUserName.first() ?: userName
+                    viewModelScope.launch {
+                        runCatching { printPendingKitchenForCurrentTable(saleCart) }
+                            .onFailure { e -> Log.w("POS", "Pay later kitchen print failed", e) }
+                        runCatching {
+                            printerService.routeCartReceipt(
+                                settings = settings,
+                                cart = saleCart,
+                                context = com.chaslay.pos.printer.ReceiptPrintContext(
+                                    orderNumber = saleCart.orderNumber,
+                                    serviceType = saleCart.serviceType,
+                                    fulfillmentType = saleCart.fulfillmentType,
+                                    tableName = saleCart.tableName,
+                                    paymentMethod = PaymentMethod.PAY_LATER,
+                                    staffName = staffName,
+                                    isProvisional = false
+                                ),
+                                discountAmount = saleDiscount,
+                                tipAmount = checkout.tipAmount,
+                                total = roundedTotal
+                            )
+                        }.onFailure { e -> Log.w("POS", "Pay later receipt print failed", e) }
+                    }
                 }.onFailure { e ->
                     updateExtras {
                         it.copy(isProcessingPayment = false, errorMessage = e.message ?: "Could not save order")
@@ -3598,14 +3618,16 @@ class PosViewModel @Inject constructor(
             var pendingTransactionId: String? = null
             if (method == PaymentMethod.ADYEN_TERMINAL && settings.adyenTerminalEnabled) {
                 pendingTransactionId = UUID.randomUUID().toString()
-                runCatching {
-                    receiptRepository.publishPendingReceipt(
-                        transactionId = pendingTransactionId!!,
-                        cart = saleCartForPayment,
-                        total = roundedTotal,
-                        currency = settings.defaultCurrency,
-                        settings = settings
-                    )
+                if (isDeviceOnline()) {
+                    runCatching {
+                        receiptRepository.publishPendingReceipt(
+                            transactionId = pendingTransactionId!!,
+                            cart = saleCartForPayment,
+                            total = roundedTotal,
+                            currency = settings.defaultCurrency,
+                            settings = settings
+                        )
+                    }
                 }
             }
 
@@ -3613,6 +3635,15 @@ class PosViewModel @Inject constructor(
             var giftCardRemainingBalance: Double? = null
             if (giftCardRedeem > 0.001) {
                 val membership = _uiExtras.value.attachedMembership
+                if (!isDeviceOnline()) {
+                    updateExtras {
+                        it.copy(
+                            isProcessingPayment = false,
+                            errorMessage = "Gift card redeem requires internet"
+                        )
+                    }
+                    return@launch
+                }
                 if (membership == null) {
                     updateExtras {
                         it.copy(
@@ -3761,9 +3792,8 @@ class PosViewModel @Inject constructor(
                         }
                     }
                     val saleCart = saleCartForPayment
-                    if (method == PaymentMethod.ADYEN_TERMINAL) {
-                        printPendingKitchenForCurrentTable()
-                    }
+                    val kitchenCart = cartManager.snapshot()
+                    val membershipForLoyalty = _uiExtras.value.attachedMembership
                     val equalSplitCount = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart.splitCount else 1
                     val saleDiscount = checkoutSaleDiscount(saleCart, checkout, equalSplitCount)
                     val transactionTotal = roundedTotal + redeemedGiftCardAmount
@@ -3798,43 +3828,7 @@ class PosViewModel @Inject constructor(
                         paymentTenders = paymentTenders
                     )
                     val receiptItems = transactionRepository.getTransaction(transaction.id)?.second.orEmpty()
-                    val (publishedTx, publicReceiptUrl) = publishAndPersistReceipt(
-                        transaction,
-                        receiptItems,
-                        settings
-                    )
-                    _uiExtras.value.attachedMembership?.takeIf { it.membershipEnabled }?.let { membership ->
-                        runCatching {
-                            applyLoyaltyAfterSale(
-                                membership = membership,
-                                transactionId = publishedTx.id,
-                                paidSubtotal = merchandiseTotal - checkout.pointsDiscount - redeemedGiftCardAmount,
-                                pointsRedeemed = checkout.pointsRedeemed
-                            )
-                        }.onFailure { e ->
-                            Log.w("POS", "Loyalty sync failed", e)
-                        }
-                    }
-                    runCatching {
-                        creditGiftCardLinesAfterSale(saleCart.items, publishedTx.id)
-                    }.onFailure { e ->
-                        Log.w("POS", "Gift card credit failed", e)
-                    }
-                    if (method == PaymentMethod.ADYEN_TERMINAL && settings.adyenTerminalEnabled) {
-                        publicReceiptUrl?.let { url ->
-                            runCatching {
-                                adyenTerminalService.showDigitalReceipt(
-                                    settings = settings,
-                                    items = saleCart.items,
-                                    total = publishedTx.total,
-                                    currencySymbol = settings.currencySymbol,
-                                    receiptUrl = url
-                                )
-                            }.onFailure { e ->
-                                Log.w("POS", "Could not show digital receipt on terminal", e)
-                            }
-                        }
-                    }
+                    val fallbackUrl = receiptRepository.buildPublicUrl(transaction.id, settings)
                     if (fullCart.splitByItems) {
                         cartManager.removeItemsAfterPayment(paidIds)
                     } else if (fullCart.splitCount > 1) {
@@ -3864,6 +3858,18 @@ class PosViewModel @Inject constructor(
                         }
                         if (nextCheck != null) {
                             cartManager.setActiveSplitCheck(nextCheck)
+                            queuePostSaleSideEffects(
+                                kitchenCart = kitchenCart,
+                                transaction = transaction,
+                                receiptItems = receiptItems,
+                                settings = settings,
+                                saleCart = saleCart,
+                                merchandiseTotal = merchandiseTotal,
+                                checkout = checkout,
+                                redeemedGiftCardAmount = redeemedGiftCardAmount,
+                                method = method,
+                                membership = membershipForLoyalty
+                            )
                             updateExtras {
                                 it.copy(
                                     isProcessingPayment = false,
@@ -3911,11 +3917,11 @@ class PosViewModel @Inject constructor(
                             terminalPaymentMessage = null,
                             showCheckoutScreen = false,
                             showOrderComplete = true,
-                            completedTransaction = publishedTx,
+                            completedTransaction = transaction.copy(receiptUrl = fallbackUrl),
                             adyenCustomerReceipt = adyenCustomerReceipt,
                             adyenCashierReceipt = adyenCashierReceipt,
-                            receiptPublicUrl = publicReceiptUrl,
-                            orderCompleteNotice = receiptUploadNotice(publicReceiptUrl),
+                            receiptPublicUrl = fallbackUrl,
+                            orderCompleteNotice = null,
                             splitPaymentIndex = splitIndex,
                             splitPaymentTotal = splitTotal,
                             successMessage = if (splitIndex != null && splitTotal != null) {
@@ -3932,6 +3938,18 @@ class PosViewModel @Inject constructor(
                             tapToPayMessage = null
                         )
                     }
+                    queuePostSaleSideEffects(
+                        kitchenCart = kitchenCart,
+                        transaction = transaction,
+                        receiptItems = receiptItems,
+                        settings = settings,
+                        saleCart = saleCart,
+                        merchandiseTotal = merchandiseTotal,
+                        checkout = checkout,
+                        redeemedGiftCardAmount = redeemedGiftCardAmount,
+                        method = method,
+                        membership = membershipForLoyalty
+                    )
                 }
                 is PaymentResult.Failure -> updateExtras {
                     it.copy(
@@ -4252,11 +4270,22 @@ class PosViewModel @Inject constructor(
     private fun checkoutRoundingDefault(): Double =
         cachedSettings.roundingStep.takeIf { it > 0.0 } ?: 0.05
 
+    private fun isDeviceOnline(): Boolean {
+        val cm = appContext.getSystemService(android.net.ConnectivityManager::class.java) ?: return false
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
     private suspend fun publishAndPersistReceipt(
         transaction: TransactionEntity,
         items: List<TransactionItemEntity>,
         settings: BusinessSettingsEntity
     ): Pair<TransactionEntity, String?> {
+        val fallback = receiptRepository.buildPublicUrl(transaction.id, settings)
+        if (!isDeviceOnline()) {
+            return transaction.copy(receiptUrl = fallback) to fallback
+        }
         return receiptRepository.ensureReceiptPublished(transaction, items, settings).fold(
             onSuccess = { url ->
                 transactionRepository.updateReceiptUrl(transaction.id, url)
@@ -4264,7 +4293,6 @@ class PosViewModel @Inject constructor(
             },
             onFailure = { e ->
                 Log.w("POS", "Receipt publish failed: ${e.message}", e)
-                val fallback = receiptRepository.buildPublicUrl(transaction.id, settings)
                 transactionRepository.updateReceiptUrl(transaction.id, fallback)
                 transaction.copy(receiptUrl = fallback) to fallback
             }
@@ -4277,6 +4305,70 @@ class PosViewModel @Inject constructor(
         } else {
             null
         }
+
+    private fun queuePostSaleSideEffects(
+        kitchenCart: CartSummary,
+        transaction: TransactionEntity,
+        receiptItems: List<TransactionItemEntity>,
+        settings: BusinessSettingsEntity,
+        saleCart: CartSummary,
+        merchandiseTotal: Double,
+        checkout: CheckoutState,
+        redeemedGiftCardAmount: Double,
+        method: PaymentMethod,
+        membership: AttachedMembership?
+    ) {
+        viewModelScope.launch {
+            runCatching { printPendingKitchenForCurrentTable(kitchenCart) }
+                .onFailure { e -> Log.w("POS", "Kitchen print after sale failed", e) }
+            val (publishedTx, publicReceiptUrl) = publishAndPersistReceipt(
+                transaction,
+                receiptItems,
+                settings
+            )
+            if (_uiExtras.value.completedTransaction?.id == transaction.id) {
+                updateExtras {
+                    it.copy(
+                        completedTransaction = publishedTx,
+                        receiptPublicUrl = publicReceiptUrl,
+                        orderCompleteNotice = it.orderCompleteNotice ?: receiptUploadNotice(publicReceiptUrl)
+                    )
+                }
+            }
+            membership?.takeIf { it.membershipEnabled }?.let { card ->
+                runCatching {
+                    applyLoyaltyAfterSale(
+                        membership = card,
+                        transactionId = publishedTx.id,
+                        paidSubtotal = merchandiseTotal - checkout.pointsDiscount - redeemedGiftCardAmount,
+                        pointsRedeemed = checkout.pointsRedeemed
+                    )
+                }.onFailure { e ->
+                    Log.w("POS", "Loyalty sync failed", e)
+                }
+            }
+            runCatching {
+                creditGiftCardLinesAfterSale(saleCart.items, publishedTx.id)
+            }.onFailure { e ->
+                Log.w("POS", "Gift card credit failed", e)
+            }
+            if (method == PaymentMethod.ADYEN_TERMINAL && settings.adyenTerminalEnabled) {
+                publicReceiptUrl?.let { url ->
+                    runCatching {
+                        adyenTerminalService.showDigitalReceipt(
+                            settings = settings,
+                            items = saleCart.items,
+                            total = publishedTx.total,
+                            currencySymbol = settings.currencySymbol,
+                            receiptUrl = url
+                        )
+                    }.onFailure { e ->
+                        Log.w("POS", "Could not show digital receipt on terminal", e)
+                    }
+                }
+            }
+        }
+    }
 
     private fun checkLowStockAlert(productId: Long, addedQty: Int) {
         viewModelScope.launch {
@@ -4468,7 +4560,10 @@ class PosViewModel @Inject constructor(
             .associate { it.id to (it.sentToKitchenAt != null) }
         cartManager.refreshSentFlags(sentFlags)
         refreshTables()
-        pushFloorOrder(orderId)
+        viewModelScope.launch {
+            runCatching { pushFloorOrder(orderId) }
+                .onFailure { e -> Log.w("POS", "Floor order push failed", e) }
+        }
         return orderId
     }
 
