@@ -5,13 +5,14 @@ import { useAuthStore } from '@/store/auth';
 import { useTheme } from '@/lib/theme';
 import { useI18n } from '@/lib/i18n';
 import AcceptingMenu from '@/components/AcceptingMenu';
+import MerchantCompactStatusRow from '@/components/merchant/MerchantCompactStatusRow';
 
 interface HeaderProps {
   title: string;
   onMenuClick: () => void;
   /** Show Accepting orders/reservations dropdown (merchant panel only) */
   showAcceptingMenu?: boolean;
-  /** Slim header: no title row chrome (catalog pages use compact status in content) */
+  /** Slim dedicated top bar: merchant name, shift, shop open — no page title */
   compact?: boolean;
 }
 
@@ -38,27 +39,19 @@ export default function Header({
 
   if (compact) {
     return (
-      <header className="panel-header shrink-0 lg:hidden">
-        <div className="px-3 py-1.5 flex items-center justify-between gap-2">
+      <header className="panel-header shrink-0">
+        <div className="h-10 px-3 sm:px-4 flex items-center gap-2">
           <button
             type="button"
             onClick={onMenuClick}
-            className="p-1.5 rounded-md hover:bg-[var(--bg-muted)] shrink-0"
+            className="lg:hidden p-1.5 -ml-1 rounded-md hover:bg-[var(--bg-muted)] shrink-0"
             aria-label="Open menu"
           >
             <Menu className="w-5 h-5" />
           </button>
-          {impersonating ? (
-            <button
-              type="button"
-              onClick={backToSuperadmin}
-              className="text-[11px] font-medium text-amber-800 dark:text-amber-200 truncate"
-            >
-              {user?.name} · {t('backToSuperadmin')}
-            </button>
-          ) : (
-            <span className="text-xs font-medium truncate">{user?.name}</span>
-          )}
+          <div className="min-w-0 flex-1 flex items-center justify-end">
+            <MerchantCompactStatusRow />
+          </div>
         </div>
       </header>
     );

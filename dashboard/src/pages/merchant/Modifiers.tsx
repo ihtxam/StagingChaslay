@@ -12,7 +12,6 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
-import MerchantCompactStatusRow from '@/components/merchant/MerchantCompactStatusRow';
 
 type PricingType = 'free' | 'fixed' | 'toppings_by_size';
 type SelectionType = 'optional' | 'required';
@@ -289,8 +288,6 @@ export default function Modifiers() {
           {t('addNewGroup')}
         </button>
       </div>
-
-      <MerchantCompactStatusRow />
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />

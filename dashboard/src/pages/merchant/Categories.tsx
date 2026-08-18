@@ -3,7 +3,6 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
-import MerchantCompactStatusRow from '@/components/merchant/MerchantCompactStatusRow';
 
 interface Category {
   id: string;
@@ -174,7 +173,6 @@ export default function Categories() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <MerchantCompactStatusRow />
       <div className="card">
         <h1 className="page-title mb-1">{t('categories')}</h1>
         <p className="page-sub mb-3">

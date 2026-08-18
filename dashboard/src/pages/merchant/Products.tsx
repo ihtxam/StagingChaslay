@@ -17,7 +17,6 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
-import MerchantCompactStatusRow from '@/components/merchant/MerchantCompactStatusRow';
 
 interface Extra {
   id: string;
@@ -795,8 +794,6 @@ export default function Products() {
           />
         </div>
       </div>
-
-      <MerchantCompactStatusRow />
 
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 muted" size={14} />

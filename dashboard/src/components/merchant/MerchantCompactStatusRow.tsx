@@ -13,8 +13,8 @@ interface MerchantCompactStatusRowProps {
 }
 
 /**
- * Compact inline merchant context: impersonation, store name, shift + shop status.
- * Sits above catalog search bars to avoid a tall global header.
+ * Slim merchant context chips: impersonation, store name, shift + shop status.
+ * Rendered in the shell top bar, not under page titles.
  */
 export default function MerchantCompactStatusRow({
   onMenuClick,
@@ -72,7 +72,7 @@ export default function MerchantCompactStatusRow({
   };
 
   return (
-    <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-x-2 gap-y-1.5 text-xs text-[var(--text-muted)]">
+    <div className="flex min-w-0 items-center justify-end gap-2 text-xs text-[var(--text-muted)]">
       {showMenuButton && onMenuClick ? (
         <button
           type="button"
