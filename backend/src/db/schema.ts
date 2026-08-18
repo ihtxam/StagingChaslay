@@ -2420,6 +2420,7 @@ export const inventoryItems = pgTable(
     /** Qty to request when at/below par */
     reorderQty: decimal("reorder_qty", { precision: 14, scale: 4 }).default("0").notNull(),
     supplierId: uuid("supplier_id").references(() => inventorySuppliers.id, { onDelete: "set null" }),
+    categoryId: uuid("category_id"),
     perishable: boolean("perishable").default(false).notNull(),
     autoReorderEnabled: boolean("auto_reorder_enabled").default(false).notNull(),
     lastAutoReorderAt: timestamp("last_auto_reorder_at"),
@@ -2429,7 +2430,67 @@ export const inventoryItems = pgTable(
   (table) => ({
     merchantIdx: index("inventory_items_merchant_idx").on(table.merchantId),
     supplierIdx: index("inventory_items_supplier_idx").on(table.supplierId),
+    categoryIdx: index("inventory_items_category_idx").on(table.categoryId),
     merchantNameIdx: index("inventory_items_merchant_name_idx").on(table.merchantId, table.name),
+  })
+);
+
+export const inventoryCategories = pgTable(
+  "inventory_categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_categories_merchant_idx").on(table.merchantId),
+    merchantNameUidx: uniqueIndex("inventory_categories_merchant_name_uidx").on(
+      table.merchantId,
+      table.name
+    ),
+  })
+);
+
+export const inventoryUnits = pgTable(
+  "inventory_units",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    code: varchar("code", { length: 20 }).notNull(),
+    name: varchar("name", { length: 80 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_units_merchant_idx").on(table.merchantId),
+    merchantCodeUidx: uniqueIndex("inventory_units_merchant_code_uidx").on(table.merchantId, table.code),
+  })
+);
+
+export const inventoryUnitRatios = pgTable(
+  "inventory_unit_ratios",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    fromCode: varchar("from_code", { length: 20 }).notNull(),
+    toCode: varchar("to_code", { length: 20 }).notNull(),
+    /** 1 fromCode = factor toCode (1 kg = 1000 g). */
+    factor: decimal("factor", { precision: 16, scale: 6 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_unit_ratios_merchant_idx").on(table.merchantId),
+    pairUidx: uniqueIndex("inventory_unit_ratios_pair_uidx").on(
+      table.merchantId,
+      table.fromCode,
+      table.toCode
+    ),
   })
 );
 
@@ -2499,6 +2560,23 @@ export const inventoryItemsRelations = relations(inventoryItems, ({ one, many })
   }),
   movements: many(inventoryMovements),
   recipes: many(productRecipes),
+  category: one(inventoryCategories, {
+    fields: [inventoryItems.categoryId],
+    references: [inventoryCategories.id],
+  }),
+}));
+
+export const inventoryCategoriesRelations = relations(inventoryCategories, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [inventoryCategories.merchantId], references: [merchants.id] }),
+  items: many(inventoryItems),
+}));
+
+export const inventoryUnitsRelations = relations(inventoryUnits, ({ one }) => ({
+  merchant: one(merchants, { fields: [inventoryUnits.merchantId], references: [merchants.id] }),
+}));
+
+export const inventoryUnitRatiosRelations = relations(inventoryUnitRatios, ({ one }) => ({
+  merchant: one(merchants, { fields: [inventoryUnitRatios.merchantId], references: [merchants.id] }),
 }));
 
 export const inventoryMovementsRelations = relations(inventoryMovements, ({ one }) => ({

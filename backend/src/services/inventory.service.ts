@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { EmailService } from "@/services/email.service";
 import {
@@ -7,8 +7,22 @@ import {
 } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 
-export const INVENTORY_UNITS = ["kg", "L", "piece"] as const;
-export type InventoryUnit = (typeof INVENTORY_UNITS)[number];
+export const INVENTORY_UNITS = ["kg", "g", "L", "ml", "piece", "pack"] as const;
+export type InventoryUnit = string;
+
+const DEFAULT_UNITS: Array<{ code: string; name: string }> = [
+  { code: "kg", name: "Kilogram" },
+  { code: "g", name: "Gram" },
+  { code: "L", name: "Liter" },
+  { code: "ml", name: "Milliliter" },
+  { code: "piece", name: "Piece" },
+  { code: "pack", name: "Pack" },
+];
+
+const DEFAULT_RATIOS: Array<{ fromCode: string; toCode: string; factor: number }> = [
+  { fromCode: "kg", toCode: "g", factor: 1000 },
+  { fromCode: "L", toCode: "ml", factor: 1000 },
+];
 
 const AUTO_REORDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
@@ -26,9 +40,30 @@ function clampWasteFactor(raw: unknown): number {
 
 function normalizeUnit(raw?: string | null): InventoryUnit {
   const u = String(raw || "").trim();
-  if (u === "L" || u === "l" || u === "lt") return "L";
-  if (u === "piece" || u === "pcs" || u === "pc" || u === "unité") return "piece";
-  return "kg";
+  if (!u) return "kg";
+  const key = u.toLowerCase();
+  const aliases: Record<string, string> = {
+    l: "L",
+    lt: "L",
+    liter: "L",
+    litre: "L",
+    ml: "ml",
+    milliliter: "ml",
+    kg: "kg",
+    kilo: "kg",
+    g: "g",
+    gram: "g",
+    grams: "g",
+    piece: "piece",
+    pcs: "piece",
+    pc: "piece",
+    unité: "piece",
+    pack: "pack",
+    can: "can",
+    box: "box",
+  };
+  if (aliases[key]) return aliases[key];
+  return u.slice(0, 20);
 }
 
 function qtyStr(n: number): string {
@@ -292,7 +327,7 @@ export class InventoryService {
     const db = getDb();
     const rows = await db.query.inventoryItems.findMany({
       where: eq(schema.inventoryItems.merchantId, merchantId),
-      with: { supplier: true },
+      with: { supplier: true, category: true },
       orderBy: [asc(schema.inventoryItems.name)],
     });
     return rows.map((row) => this.serializeItem(row));
@@ -300,6 +335,7 @@ export class InventoryService {
 
   static serializeItem(row: typeof schema.inventoryItems.$inferSelect & {
     supplier?: typeof schema.inventorySuppliers.$inferSelect | null;
+    category?: typeof schema.inventoryCategories.$inferSelect | null;
   }) {
     const onHand = num(row.onHand);
     const minStock = num(row.minStock);
@@ -310,6 +346,11 @@ export class InventoryService {
       reorderQty: num(row.reorderQty),
       cost: num(row.cost),
       lowStock: minStock > 0 && onHand <= minStock,
+      outOfStock: onHand <= 0,
+      categoryId: row.categoryId || null,
+      category: row.category
+        ? { id: row.category.id, name: row.category.name }
+        : null,
       supplier: row.supplier
         ? {
             id: row.supplier.id,
@@ -333,6 +374,7 @@ export class InventoryService {
       supplierId?: string | null;
       perishable?: boolean;
       autoReorderEnabled?: boolean;
+      categoryId?: string | null;
     }
   ) {
     await this.assertLicensed(merchantId);
@@ -340,6 +382,7 @@ export class InventoryService {
     if (!name) throw new Error("Item name is required");
     const db = getDb();
     const supplierId = await this.assertSupplier(merchantId, input.supplierId);
+    const categoryId = await this.assertCategory(merchantId, input.categoryId);
     const [row] = await db
       .insert(schema.inventoryItems)
       .values({
@@ -351,6 +394,7 @@ export class InventoryService {
         minStock: qtyStr(Math.max(0, num(input.minStock))),
         reorderQty: qtyStr(Math.max(0, num(input.reorderQty))),
         supplierId,
+        categoryId,
         perishable: !!input.perishable,
         autoReorderEnabled: !!input.autoReorderEnabled,
       })
@@ -381,6 +425,7 @@ export class InventoryService {
       supplierId?: string | null;
       perishable?: boolean;
       autoReorderEnabled?: boolean;
+      categoryId?: string | null;
     }
   ) {
     await this.assertLicensed(merchantId);
@@ -401,6 +446,9 @@ export class InventoryService {
     }
     if (input.perishable !== undefined) patch.perishable = !!input.perishable;
     if (input.autoReorderEnabled !== undefined) patch.autoReorderEnabled = !!input.autoReorderEnabled;
+    if (input.categoryId !== undefined) {
+      patch.categoryId = await this.assertCategory(merchantId, input.categoryId);
+    }
     const [row] = await db
       .update(schema.inventoryItems)
       .set(patch)
@@ -428,10 +476,18 @@ export class InventoryService {
   static async stockIn(
     merchantId: string,
     itemId: string,
-    input: { qty: number; unitCost?: number; note?: string; supplierName?: string; date?: string }
+    input: {
+      qty: number;
+      unit?: string;
+      unitCost?: number;
+      note?: string;
+      supplierName?: string;
+      date?: string;
+    }
   ) {
     await this.assertLicensed(merchantId);
-    const qty = num(input.qty);
+    const item = await this.getOwnedItem(merchantId, itemId);
+    const qty = await this.toBaseQty(merchantId, num(input.qty), input.unit, item.unit);
     if (!(qty > 0)) throw new Error("Quantity must be greater than 0");
     return this.applyMovement(merchantId, itemId, {
       type: "in",
@@ -442,15 +498,45 @@ export class InventoryService {
     });
   }
 
+  static async stockOut(
+    merchantId: string,
+    itemId: string,
+    input: { qty: number; note?: string; reason?: "waste" | "out" }
+  ) {
+    await this.assertLicensed(merchantId);
+    const qty = num(input.qty);
+    if (!(qty > 0)) throw new Error("Quantity must be greater than 0");
+    const type = input.reason === "out" ? "out" : "waste";
+    return this.applyMovement(merchantId, itemId, { type, qty, note: input.note });
+  }
+
   static async waste(
     merchantId: string,
     itemId: string,
     input: { qty: number; note?: string }
   ) {
+    return this.stockOut(merchantId, itemId, { ...input, reason: "waste" });
+  }
+
+  static async countStock(
+    merchantId: string,
+    itemId: string,
+    input: { realQty: number; note?: string }
+  ) {
     await this.assertLicensed(merchantId);
-    const qty = num(input.qty);
-    if (!(qty > 0)) throw new Error("Quantity must be greater than 0");
-    return this.applyMovement(merchantId, itemId, { type: "waste", qty, note: input.note });
+    const item = await this.getOwnedItem(merchantId, itemId);
+    const realQty = Math.max(0, num(input.realQty));
+    const systemQty = num(item.onHand);
+    const delta = Math.round((realQty - systemQty) * 10000) / 10000;
+    if (delta === 0) {
+      return this.serializeItem({ ...item, supplier: null, category: null });
+    }
+    return this.applyMovement(merchantId, itemId, {
+      type: "adjust",
+      qty: Math.abs(delta),
+      note: input.note || `Count: system ${systemQty} → real ${realQty}`,
+      adjustSign: delta > 0 ? 1 : -1,
+    });
   }
 
   static async listMovements(merchantId: string, itemId?: string, limit = 100) {
@@ -907,6 +993,203 @@ export class InventoryService {
   }
 
   // ---------------------------------------------------------------------------
+  // Categories / units
+  // ---------------------------------------------------------------------------
+
+  static async listCategories(merchantId: string) {
+    await this.assertLicensed(merchantId);
+    const db = getDb();
+    return db.query.inventoryCategories.findMany({
+      where: eq(schema.inventoryCategories.merchantId, merchantId),
+      orderBy: [asc(schema.inventoryCategories.name)],
+    });
+  }
+
+  static async createCategory(merchantId: string, name: string) {
+    await this.assertLicensed(merchantId);
+    const clean = String(name || "").trim().slice(0, 100);
+    if (!clean) throw new Error("Category name is required");
+    const db = getDb();
+    const [row] = await db
+      .insert(schema.inventoryCategories)
+      .values({ merchantId, name: clean })
+      .returning();
+    return row;
+  }
+
+  static async deleteCategory(merchantId: string, categoryId: string) {
+    await this.assertLicensed(merchantId);
+    const db = getDb();
+    await db
+      .update(schema.inventoryItems)
+      .set({ categoryId: null, updatedAt: new Date() })
+      .where(
+        and(eq(schema.inventoryItems.merchantId, merchantId), eq(schema.inventoryItems.categoryId, categoryId))
+      );
+    await db
+      .delete(schema.inventoryCategories)
+      .where(
+        and(
+          eq(schema.inventoryCategories.id, categoryId),
+          eq(schema.inventoryCategories.merchantId, merchantId)
+        )
+      );
+    return { ok: true };
+  }
+
+  static async listUnits(merchantId: string) {
+    await this.assertLicensed(merchantId);
+    const db = getDb();
+    let units = await db.query.inventoryUnits.findMany({
+      where: eq(schema.inventoryUnits.merchantId, merchantId),
+      orderBy: [asc(schema.inventoryUnits.code)],
+    });
+    if (!units.length) {
+      await db.insert(schema.inventoryUnits).values(
+        DEFAULT_UNITS.map((u) => ({ merchantId, code: u.code, name: u.name }))
+      );
+      const existing = await db.query.inventoryUnitRatios.findMany({
+        where: eq(schema.inventoryUnitRatios.merchantId, merchantId),
+      });
+      if (!existing.length) {
+        await db.insert(schema.inventoryUnitRatios).values(
+          DEFAULT_RATIOS.map((r) => ({
+            merchantId,
+            fromCode: r.fromCode,
+            toCode: r.toCode,
+            factor: qtyStr(r.factor),
+          }))
+        );
+      }
+      units = await db.query.inventoryUnits.findMany({
+        where: eq(schema.inventoryUnits.merchantId, merchantId),
+        orderBy: [asc(schema.inventoryUnits.code)],
+      });
+    }
+    const ratios = await db.query.inventoryUnitRatios.findMany({
+      where: eq(schema.inventoryUnitRatios.merchantId, merchantId),
+      orderBy: [asc(schema.inventoryUnitRatios.fromCode)],
+    });
+    return {
+      units,
+      ratios: ratios.map((r) => ({ ...r, factor: num(r.factor) })),
+    };
+  }
+
+  static async createUnit(merchantId: string, input: { code: string; name: string }) {
+    await this.assertLicensed(merchantId);
+    const code = normalizeUnit(input.code);
+    const name = String(input.name || "").trim().slice(0, 80) || code;
+    const db = getDb();
+    const [row] = await db
+      .insert(schema.inventoryUnits)
+      .values({ merchantId, code, name })
+      .returning();
+    return row;
+  }
+
+  static async deleteUnit(merchantId: string, unitId: string) {
+    await this.assertLicensed(merchantId);
+    const db = getDb();
+    const unit = await db.query.inventoryUnits.findFirst({
+      where: and(eq(schema.inventoryUnits.id, unitId), eq(schema.inventoryUnits.merchantId, merchantId)),
+    });
+    if (!unit) throw new Error("Unit not found");
+    await db
+      .delete(schema.inventoryUnitRatios)
+      .where(
+        and(
+          eq(schema.inventoryUnitRatios.merchantId, merchantId),
+          or(
+            eq(schema.inventoryUnitRatios.fromCode, unit.code),
+            eq(schema.inventoryUnitRatios.toCode, unit.code)
+          )
+        )
+      );
+    await db
+      .delete(schema.inventoryUnits)
+      .where(eq(schema.inventoryUnits.id, unit.id));
+    return { ok: true };
+  }
+
+  static async createRatio(
+    merchantId: string,
+    input: { fromCode: string; toCode: string; factor: number }
+  ) {
+    await this.assertLicensed(merchantId);
+    const fromCode = normalizeUnit(input.fromCode);
+    const toCode = normalizeUnit(input.toCode);
+    const factor = num(input.factor);
+    if (fromCode === toCode) throw new Error("Units must be different");
+    if (!(factor > 0)) throw new Error("Ratio must be greater than 0");
+    const db = getDb();
+    const [row] = await db
+      .insert(schema.inventoryUnitRatios)
+      .values({ merchantId, fromCode, toCode, factor: qtyStr(factor) })
+      .returning();
+    return { ...row, factor };
+  }
+
+  static async deleteRatio(merchantId: string, ratioId: string) {
+    await this.assertLicensed(merchantId);
+    const db = getDb();
+    await db
+      .delete(schema.inventoryUnitRatios)
+      .where(
+        and(
+          eq(schema.inventoryUnitRatios.id, ratioId),
+          eq(schema.inventoryUnitRatios.merchantId, merchantId)
+        )
+      );
+    return { ok: true };
+  }
+
+  static async purchaseReport(merchantId: string, days = 30) {
+    await this.assertLicensed(merchantId);
+    const db = getDb();
+    const since = new Date(Date.now() - Math.max(1, days) * 24 * 60 * 60 * 1000);
+    const rows = await db.query.inventoryMovements.findMany({
+      where: and(
+        eq(schema.inventoryMovements.merchantId, merchantId),
+        eq(schema.inventoryMovements.type, "in"),
+        gte(schema.inventoryMovements.createdAt, since)
+      ),
+      with: { item: true },
+      orderBy: [desc(schema.inventoryMovements.createdAt)],
+      limit: 500,
+    });
+    const byStock = new Map<string, { name: string; qty: number; cost: number }>();
+    const bySupplier = new Map<string, { name: string; qty: number; cost: number }>();
+    const byDate = new Map<string, { qty: number; cost: number }>();
+    for (const r of rows) {
+      const qty = num(r.qty);
+      const cost = qty * num(r.unitCost);
+      const stockName = r.item?.name || r.itemId;
+      const stock = byStock.get(r.itemId) || { name: stockName, qty: 0, cost: 0 };
+      stock.qty += qty;
+      stock.cost += cost;
+      byStock.set(r.itemId, stock);
+      const supplierName = r.supplierName || "—";
+      const sup = bySupplier.get(supplierName) || { name: supplierName, qty: 0, cost: 0 };
+      sup.qty += qty;
+      sup.cost += cost;
+      bySupplier.set(supplierName, sup);
+      const day = r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "";
+      const date = byDate.get(day) || { qty: 0, cost: 0 };
+      date.qty += qty;
+      date.cost += cost;
+      byDate.set(day, date);
+    }
+    return {
+      byStock: [...byStock.values()].sort((a, b) => b.cost - a.cost),
+      bySupplier: [...bySupplier.values()].sort((a, b) => b.cost - a.cost),
+      byDate: [...byDate.entries()]
+        .map(([date, v]) => ({ date, ...v }))
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------
 
@@ -917,6 +1200,36 @@ export class InventoryService {
     });
     if (!item) throw new Error("Inventory item not found");
     return item;
+  }
+
+  private static async assertCategory(merchantId: string, categoryId?: string | null) {
+    if (!categoryId) return null;
+    const db = getDb();
+    const c = await db.query.inventoryCategories.findFirst({
+      where: and(
+        eq(schema.inventoryCategories.id, categoryId),
+        eq(schema.inventoryCategories.merchantId, merchantId)
+      ),
+    });
+    if (!c) throw new Error("Stock category not found");
+    return c.id;
+  }
+
+  private static async toBaseQty(
+    merchantId: string,
+    qty: number,
+    fromUnit: string | undefined,
+    toUnit: string
+  ) {
+    const from = normalizeUnit(fromUnit || toUnit);
+    const to = normalizeUnit(toUnit);
+    if (from === to) return qty;
+    const { ratios } = await this.listUnits(merchantId);
+    const direct = ratios.find((r) => r.fromCode === from && r.toCode === to);
+    if (direct) return qty * num(direct.factor);
+    const inverse = ratios.find((r) => r.fromCode === to && r.toCode === from);
+    if (inverse && num(inverse.factor) > 0) return qty / num(inverse.factor);
+    throw new Error(`No unit ratio from ${from} to ${to}`);
   }
 
   private static async assertSupplier(merchantId: string, supplierId?: string | null) {
@@ -944,12 +1257,18 @@ export class InventoryService {
       orderId?: string;
       skipLicense?: boolean;
       skipAutoReorder?: boolean;
+      adjustSign?: 1 | -1;
     }
   ) {
     if (!input.skipLicense) await this.assertLicensed(merchantId);
     const item = await this.getOwnedItem(merchantId, itemId);
     const prev = num(item.onHand);
-    const signed = input.type === "in" || input.type === "adjust" ? input.qty : -input.qty;
+    const signed =
+      input.type === "adjust"
+        ? input.qty * (input.adjustSign || 1)
+        : input.type === "in"
+          ? input.qty
+          : -input.qty;
     const next = Math.round((prev + signed) * 10000) / 10000;
     const db = getDb();
     await db.insert(schema.inventoryMovements).values({

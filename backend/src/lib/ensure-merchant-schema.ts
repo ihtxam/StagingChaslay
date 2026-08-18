@@ -86,6 +86,7 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   recipe_yield: "ALTER TABLE products ADD COLUMN IF NOT EXISTS recipe_yield numeric(12,4) NOT NULL DEFAULT 1",
   inventory_item_id: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid",
   inventory_qty: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_qty numeric(14,4) NOT NULL DEFAULT 0",
+  category_id: "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS category_id uuid",
 };
 
 /** Idempotent CREATE TABLE for features added after initial deploy. */
@@ -255,6 +256,35 @@ const TABLE_PATCHES: string[] = [
   `ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid`,
   `ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_qty numeric(14,4) NOT NULL DEFAULT 0`,
   `CREATE INDEX IF NOT EXISTS modifier_options_inventory_item_idx ON modifier_options(inventory_item_id)`,
+  `CREATE TABLE IF NOT EXISTS inventory_categories (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(100) NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS inventory_categories_merchant_idx ON inventory_categories(merchant_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS inventory_categories_merchant_name_uidx ON inventory_categories(merchant_id, name)`,
+  `ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS category_id uuid`,
+  `CREATE INDEX IF NOT EXISTS inventory_items_category_idx ON inventory_items(category_id)`,
+  `CREATE TABLE IF NOT EXISTS inventory_units (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    code varchar(20) NOT NULL,
+    name varchar(80) NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS inventory_units_merchant_idx ON inventory_units(merchant_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS inventory_units_merchant_code_uidx ON inventory_units(merchant_id, code)`,
+  `CREATE TABLE IF NOT EXISTS inventory_unit_ratios (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    from_code varchar(20) NOT NULL,
+    to_code varchar(20) NOT NULL,
+    factor numeric(16, 6) NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS inventory_unit_ratios_merchant_idx ON inventory_unit_ratios(merchant_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS inventory_unit_ratios_pair_uidx ON inventory_unit_ratios(merchant_id, from_code, to_code)`,
 ];
 
 let startupPatchPromise: Promise<void> | null = null;

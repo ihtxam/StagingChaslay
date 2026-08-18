@@ -2014,6 +2014,11 @@ export default function Settings() {
                     <span className="text-xs muted">{t('invAutoReorderMasterHint')}</span>
                   </span>
                 </label>
+                {isInventoryLicensed(settings) && (
+                  <Link to="/merchant/inventory/cookbook" className="btn-secondary mt-3 inline-flex">
+                    {t('invNavCookbook')}
+                  </Link>
+                )}
                 <button
                   type="button"
                   className="btn-primary mt-3"

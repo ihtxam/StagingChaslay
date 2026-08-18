@@ -7,6 +7,22 @@ import Overview from './Overview';
 import Orders from './Orders';
 import Products from './Products';
 import Inventory from './Inventory';
+import InventoryLayout from './inventory/InventoryLayout';
+import {
+  InventoryListPage,
+  InboundStockPage,
+  OutboundStockPage,
+  StockCountingPage,
+  StockHistoryPage,
+} from './inventory/ops-pages';
+import {
+  StockItemsPage,
+  StockCategoriesPage,
+  CookbookPage,
+  SuppliersPage,
+  UnitsPage,
+} from './inventory/settings-pages';
+import { InventoryReportPage, ConsumptionReportPage } from './inventory/report-pages';
 import Categories from './Categories';
 import Modifiers from './Modifiers';
 import Customers from './Customers';
@@ -216,10 +232,33 @@ function MerchantShell() {
       icon: '🛍️',
       children: [
         { label: t('products'), path: '/merchant/products', icon: '🛍️' },
-        { label: t('invTitle'), path: '/merchant/inventory', icon: '📦' },
         { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
       ].filter((item) => allow(item.path)),
+    },
+    {
+      id: 'inventory',
+      label: t('invTitle'),
+      icon: '📦',
+      children: allow('/merchant/inventory')
+        ? [
+            { heading: true, label: t('invNavGroupOps') },
+            { label: t('invNavList'), path: '/merchant/inventory/list', icon: '📋' },
+            { label: t('invNavInbound'), path: '/merchant/inventory/inbound', icon: '⬇️' },
+            { label: t('invNavOutbound'), path: '/merchant/inventory/outbound', icon: '⬆️' },
+            { label: t('invNavCounting'), path: '/merchant/inventory/counting', icon: '🧮' },
+            { label: t('invNavHistory'), path: '/merchant/inventory/history', icon: '🕓' },
+            { heading: true, label: t('invNavGroupSettings') },
+            { label: t('invNavItems'), path: '/merchant/inventory/items', icon: '📦' },
+            { label: t('invNavCategories'), path: '/merchant/inventory/categories', icon: '🗂️' },
+            { label: t('invNavCookbook'), path: '/merchant/inventory/cookbook', icon: '📖' },
+            { label: t('invNavSuppliers'), path: '/merchant/inventory/suppliers', icon: '🚚' },
+            { label: t('invNavUnits'), path: '/merchant/inventory/units', icon: '⚖️' },
+            { heading: true, label: t('invNavGroupReports') },
+            { label: t('invNavReport'), path: '/merchant/inventory/report', icon: '📑' },
+            { label: t('invNavConsumption'), path: '/merchant/inventory/consumption', icon: '🍽️' },
+          ]
+        : [],
     },
     {
       id: 'customers',
@@ -337,10 +376,24 @@ function MerchantShell() {
               path="inventory"
               element={
                 <PanelRouteGuard path="/merchant/inventory" allow={allow}>
-                  <Inventory />
+                  <InventoryLayout />
                 </PanelRouteGuard>
               }
-            />
+            >
+              <Route index element={<Inventory />} />
+              <Route path="list" element={<InventoryListPage />} />
+              <Route path="inbound" element={<InboundStockPage />} />
+              <Route path="outbound" element={<OutboundStockPage />} />
+              <Route path="counting" element={<StockCountingPage />} />
+              <Route path="history" element={<StockHistoryPage />} />
+              <Route path="items" element={<StockItemsPage />} />
+              <Route path="categories" element={<StockCategoriesPage />} />
+              <Route path="cookbook" element={<CookbookPage />} />
+              <Route path="suppliers" element={<SuppliersPage />} />
+              <Route path="units" element={<UnitsPage />} />
+              <Route path="report" element={<InventoryReportPage />} />
+              <Route path="consumption" element={<ConsumptionReportPage />} />
+            </Route>
             <Route
               path="modifiers"
               element={

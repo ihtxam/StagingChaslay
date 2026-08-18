@@ -203,6 +203,128 @@ router.post("/suppliers/:supplierId/reorder-email", async (req: Request, res: Re
   }
 });
 
+router.get("/movements", async (req: Request, res: Response) => {
+  try {
+    const movements = await InventoryService.listMovements(
+      req.merchantId!,
+      typeof req.query.itemId === "string" ? req.query.itemId : undefined,
+      Number(req.query.limit) || 200
+    );
+    res.json({ success: true, movements });
+  } catch (error) {
+    handleError(res, error, "Failed to list movements");
+  }
+});
+
+router.post("/items/:itemId/stock-out", async (req: Request, res: Response) => {
+  try {
+    const item = await InventoryService.stockOut(req.merchantId!, req.params.itemId, {
+      qty: Number(req.body?.qty),
+      note: req.body?.note,
+      reason: req.body?.reason === "out" ? "out" : "waste",
+    });
+    res.json({ success: true, item });
+  } catch (error) {
+    handleError(res, error, "Failed to record outbound");
+  }
+});
+
+router.post("/items/:itemId/count", async (req: Request, res: Response) => {
+  try {
+    const item = await InventoryService.countStock(req.merchantId!, req.params.itemId, {
+      realQty: Number(req.body?.realQty),
+      note: req.body?.note,
+    });
+    res.json({ success: true, item });
+  } catch (error) {
+    handleError(res, error, "Failed to count stock");
+  }
+});
+
+router.get("/categories", async (req: Request, res: Response) => {
+  try {
+    const categories = await InventoryService.listCategories(req.merchantId!);
+    res.json({ success: true, categories });
+  } catch (error) {
+    handleError(res, error, "Failed to list categories");
+  }
+});
+
+router.post("/categories", async (req: Request, res: Response) => {
+  try {
+    const category = await InventoryService.createCategory(req.merchantId!, req.body?.name);
+    res.status(201).json({ success: true, category });
+  } catch (error) {
+    handleError(res, error, "Failed to create category");
+  }
+});
+
+router.delete("/categories/:categoryId", async (req: Request, res: Response) => {
+  try {
+    await InventoryService.deleteCategory(req.merchantId!, req.params.categoryId);
+    res.json({ success: true });
+  } catch (error) {
+    handleError(res, error, "Failed to delete category");
+  }
+});
+
+router.get("/units", async (req: Request, res: Response) => {
+  try {
+    const data = await InventoryService.listUnits(req.merchantId!);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    handleError(res, error, "Failed to list units");
+  }
+});
+
+router.post("/units", async (req: Request, res: Response) => {
+  try {
+    const unit = await InventoryService.createUnit(req.merchantId!, req.body || {});
+    res.status(201).json({ success: true, unit });
+  } catch (error) {
+    handleError(res, error, "Failed to create unit");
+  }
+});
+
+router.delete("/units/:unitId", async (req: Request, res: Response) => {
+  try {
+    await InventoryService.deleteUnit(req.merchantId!, req.params.unitId);
+    res.json({ success: true });
+  } catch (error) {
+    handleError(res, error, "Failed to delete unit");
+  }
+});
+
+router.post("/unit-ratios", async (req: Request, res: Response) => {
+  try {
+    const ratio = await InventoryService.createRatio(req.merchantId!, req.body || {});
+    res.status(201).json({ success: true, ratio });
+  } catch (error) {
+    handleError(res, error, "Failed to create unit ratio");
+  }
+});
+
+router.delete("/unit-ratios/:ratioId", async (req: Request, res: Response) => {
+  try {
+    await InventoryService.deleteRatio(req.merchantId!, req.params.ratioId);
+    res.json({ success: true });
+  } catch (error) {
+    handleError(res, error, "Failed to delete unit ratio");
+  }
+});
+
+router.get("/purchase-report", async (req: Request, res: Response) => {
+  try {
+    const report = await InventoryService.purchaseReport(
+      req.merchantId!,
+      Number(req.query.days) || 30
+    );
+    res.json({ success: true, report });
+  } catch (error) {
+    handleError(res, error, "Failed to load purchase report");
+  }
+});
+
 router.get("/cookbook", async (req: Request, res: Response) => {
   try {
     const entries = await InventoryService.listCookbook(req.merchantId!);

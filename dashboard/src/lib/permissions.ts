@@ -86,6 +86,18 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/settings': ['MANAGE_SETTINGS'],
   '/merchant/users': ['MANAGE_STAFF'],
   '/merchant/inventory': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/list': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/inbound': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/outbound': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/counting': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/history': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/items': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/categories': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/cookbook': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/suppliers': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/units': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/report': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory/consumption': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
 };
 
 export function canAccessRoute(
@@ -96,7 +108,11 @@ export function canAccessRoute(
 ): boolean {
   if (!canAccessEditionRoute(path, editionFeatures ?? null)) return false;
   if (isOwner) return true;
-  const required = PANEL_ROUTE_PERMISSIONS[path];
+  const required =
+    PANEL_ROUTE_PERMISSIONS[path] ||
+    (path.startsWith('/merchant/inventory/')
+      ? PANEL_ROUTE_PERMISSIONS['/merchant/inventory']
+      : undefined);
   if (!required?.length) return true;
   if (!permissions?.length) return false;
   return required.some((p) => permissions.includes(p));

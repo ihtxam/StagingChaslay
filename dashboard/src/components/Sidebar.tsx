@@ -8,8 +8,10 @@ import { useI18n, type Locale } from '@/lib/i18n';
 
 export interface SidebarLeaf {
   label: string;
-  path: string;
-  icon: ReactNode;
+  path?: string;
+  icon?: ReactNode;
+  /** Non-clickable section label inside a group (OrderPin-style). */
+  heading?: boolean;
 }
 
 export interface SidebarNavEntry {
@@ -38,7 +40,8 @@ interface SidebarProps {
 
 const STORAGE_PREFIX = 'sidebar_groups_open:';
 
-function isPathActive(pathname: string, itemPath: string): boolean {
+function isPathActive(pathname: string, itemPath?: string): boolean {
+  if (!itemPath) return false;
   const isRoot = itemPath === '/merchant' || itemPath === '/superadmin' || itemPath === '/reseller';
   if (isRoot) return pathname === itemPath;
   return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
@@ -288,7 +291,17 @@ export default function Sidebar({
                 </button>
                 {isOpenGroup && (
                   <div className="space-y-0.5">
-                    {children.map((child) => {
+                    {children.map((child, idx) => {
+                      if (child.heading || !child.path) {
+                        return (
+                          <p
+                            key={`h-${child.label}-${idx}`}
+                            className="px-2.5 pt-2 pb-0.5 pl-9 text-[10px] font-semibold uppercase tracking-wide text-teal-200/55"
+                          >
+                            {child.label}
+                          </p>
+                        );
+                      }
                       const active = isPathActive(location.pathname, child.path);
                       return (
                         <Link
