@@ -3,6 +3,7 @@ import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-
 import toast from 'react-hot-toast';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import MerchantCompactStatusRow from '@/components/merchant/MerchantCompactStatusRow';
 import Overview from './Overview';
 import Orders from './Orders';
 import Products from './Products';
@@ -82,6 +83,11 @@ function MerchantShell() {
   const isCatalogRoute = /^\/merchant\/(products|categories|modifiers)\/?$/.test(
     location.pathname
   );
+  const isSalesRoute =
+    /^\/merchant\/?$/.test(location.pathname) ||
+    /^\/merchant\/(orders|reports)\/?$/.test(location.pathname) ||
+    /^\/merchant\/sales(\/|$)/.test(location.pathname);
+  const useCompactStatusBar = isCatalogRoute || isSalesRoute;
   const isPosEmbed =
     typeof window !== 'undefined' &&
     (new URLSearchParams(location.search).get('embed') === '1' ||
@@ -288,8 +294,8 @@ function MerchantShell() {
           <Header
             title={t('merchantDashboard')}
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-            showAcceptingMenu={!isCatalogRoute}
-            compact={isCatalogRoute}
+            showAcceptingMenu={!useCompactStatusBar}
+            compact={useCompactStatusBar}
           />
         )}
 
@@ -300,6 +306,11 @@ function MerchantShell() {
               : 'panel-main flex-1 p-3 sm:p-4'
           }
         >
+          {isSalesRoute && !hideChrome ? (
+            <div className="mb-3">
+              <MerchantCompactStatusRow />
+            </div>
+          ) : null}
           <Routes>
             <Route
               index
