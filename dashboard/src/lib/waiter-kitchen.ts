@@ -174,26 +174,6 @@ export async function persistWaiterHeldOrder(opts: {
 
   const api = (await import('@/lib/api')).default;
 
-  try {
-    const res = await api.get('/merchant/pos/held');
-    const list = (res.data?.held || []) as Array<{
-      id: string;
-      cartJson?: Record<string, unknown> | null;
-    }>;
-    for (const h of list) {
-      const cj = h.cartJson;
-      if (!cj || typeof cj !== 'object') continue;
-      const sameTicket =
-        typeof cj.ticketDisplay === 'string' && cj.ticketDisplay === ticketDisplay;
-      const sameTable = !!tableId && cj.tableId === tableId;
-      if (sameTicket || sameTable) {
-        await api.delete(`/merchant/pos/held/${h.id}`);
-      }
-    }
-  } catch {
-    /* best-effort */
-  }
-
   await api.post('/merchant/pos/held', {
     label: heldLabel,
     channel,

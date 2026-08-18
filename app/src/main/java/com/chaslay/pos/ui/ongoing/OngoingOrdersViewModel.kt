@@ -50,9 +50,20 @@ private fun matchesChannel(card: OngoingOrderCard, filter: OrdersChannelFilter):
         card.fulfillmentType == FulfillmentType.DINE_IN || card.serviceType == ServiceType.DINE_IN
     OrdersChannelFilter.TAKEAWAY ->
         card.fulfillmentType == FulfillmentType.PICKUP ||
-            (card.fulfillmentType == FulfillmentType.WALK_IN && card.serviceType == ServiceType.TAKEAWAY)
+            (card.fulfillmentType == FulfillmentType.WALK_IN && card.serviceType != ServiceType.DINE_IN)
     OrdersChannelFilter.DELIVERY ->
         card.fulfillmentType == FulfillmentType.DELIVERY
+}
+
+private fun orderSearchHay(card: OngoingOrderCard): String {
+    val raw = listOfNotNull(
+        card.orderNumber,
+        card.tableName,
+        card.customerLabel,
+        card.statusLabel
+    ).joinToString(" ").lowercase()
+    val digits = raw.replace(Regex("[^0-9]"), "")
+    return "$raw $digits"
 }
 
 data class OngoingOrdersUiState(
@@ -72,13 +83,9 @@ data class OngoingOrdersUiState(
                 if (!matchesChannel(card, channelFilter)) return@filter false
                 if (paymentFilter == OrdersPaymentFilter.UNPAID && !isUnpaid(card)) return@filter false
                 if (q.isBlank()) return@filter true
-                val hay = listOfNotNull(
-                    card.orderNumber,
-                    card.tableName,
-                    card.customerLabel,
-                    card.statusLabel
-                ).joinToString(" ").lowercase()
-                hay.contains(q)
+                val hay = orderSearchHay(card)
+                val qDigits = q.replace(Regex("[^0-9]"), "")
+                hay.contains(q) || (qDigits.length >= 3 && hay.contains(qDigits))
             }
         }
 }

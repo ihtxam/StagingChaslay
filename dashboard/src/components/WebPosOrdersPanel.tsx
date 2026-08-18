@@ -40,6 +40,14 @@ import {
   orderStatusLabel,
 } from '@/lib/order-management';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
+import {
+  localHeldRowsFromSession,
+  parseHeldCartJson,
+  removeLocalHeldDraft,
+  resolveHeldChannel,
+  sameHeldIdentity,
+  ticketQueryMatches,
+} from '@/lib/webpos-held';
 import { hasTerminalPortion, parsePaymentBreakdown } from '@/lib/payment-breakdown';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
@@ -217,10 +225,14 @@ function isOnlineShopOrder(o: PosOrder): boolean {
   return t === 'web_shop' || t === 'online' || isPlatformChannel(o.channel);
 }
 
-function matchesChannelFilter(o: { channel?: string | null; orderType?: string | null }, filter: ChannelFilter) {
+function matchesChannelFilter(
+  o: { channel?: string | null; orderType?: string | null; cartJson?: unknown },
+  filter: ChannelFilter
+) {
   if (filter === 'all') return true;
   if (filter === 'online') return isOnlineShopOrder(o as PosOrder);
-  return (o.channel || 'takeaway') === filter;
+  const ch = o.cartJson != null ? resolveHeldChannel({ channel: o.channel, cartJson: o.cartJson }) : o.channel || 'takeaway';
+  return ch === filter;
 }
 
 function canEditPayment(o: PosOrder): boolean {
@@ -438,21 +450,52 @@ export default function WebPosOrdersPanel({
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const params = new URLSearchParams({ limit: '80', from: todayIso(), to: todayIso() });
-      const [h, o] = await Promise.all([
-        api.get('/merchant/pos/held'),
-        api.get(`/merchant/pos/orders?${params.toString()}`),
-      ]);
-      setHeld(h.data.held || []);
-      setOrders(o.data.orders || []);
-      setReasons(o.data.cancelReasons || []);
-      setRefundReasons(o.data.refundReasons || []);
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('webPosOrdersLoadFailed'));
-    } finally {
-      setLoading(false);
+    const params = new URLSearchParams({ limit: '80', from: todayIso(), to: todayIso() });
+    const heldPromise = api.get('/merchant/pos/held');
+    const ordersPromise = api.get(`/merchant/pos/orders?${params.toString()}`);
+    const [heldRes, ordersRes] = await Promise.allSettled([heldPromise, ordersPromise]);
+    let nextHeld: HeldRow[] = [];
+    let nextOrders: PosOrder[] = [];
+    if (heldRes.status === 'fulfilled') {
+      nextHeld = heldRes.value.data.held || [];
+    } else {
+      toast.error(t('webPosOrdersLoadFailed'));
+      console.warn('[WebPOS][orders] held list failed', heldRes.reason);
     }
+    if (ordersRes.status === 'fulfilled') {
+      nextOrders = ordersRes.value.data.orders || [];
+      setReasons(ordersRes.value.data.cancelReasons || []);
+      setRefundReasons(ordersRes.value.data.refundReasons || []);
+    } else if (heldRes.status === 'fulfilled') {
+      toast.error(t('webPosOrdersLoadFailed'));
+      console.warn('[WebPOS][orders] pos orders list failed', ordersRes.reason);
+    }
+    const localRows = localHeldRowsFromSession().filter((row): row is NonNullable<typeof row> => !!row);
+    for (const local of localRows) {
+      const ident = {
+        ticketDisplay: local.cartJson.ticketDisplay,
+        tableId: local.cartJson.tableId,
+        tabNumber: local.cartJson.tabNumber,
+      };
+      const already = nextHeld.some((h) => {
+        const meta = parseHeldCartJson(h.cartJson);
+        return sameHeldIdentity(ident, {
+          ticketDisplay: meta.ticketDisplay,
+          tableId: meta.tableId,
+          tabNumber: meta.tabNumber,
+        });
+      });
+      if (!already) nextHeld.push(local as HeldRow);
+    }
+    console.info('[WebPOS][orders] loaded', {
+      held: nextHeld.length,
+      localAdded: localRows.length,
+      posOrders: nextOrders.length,
+      openPos: nextOrders.filter((o) => isOpenFulfillmentOrder(o)).length,
+    });
+    setHeld(nextHeld);
+    setOrders(nextOrders);
+    setLoading(false);
   }, [t]);
 
   useEffect(() => {
@@ -505,24 +548,24 @@ export default function WebPosOrdersPanel({
 
     if (statusFilter === 'active' || statusFilter === 'all' || statusFilter === 'held') {
       for (const h of held) {
-        // Held tickets are POS-only; hide when filtering Online shop.
+        // Held / kitchen-sent tickets are POS register work — hide only on Online shop.
         if (channelFilter === 'online') continue;
         if (!matchesChannelFilter(h, channelFilter)) continue;
         if (q) {
-          const label = (h.label || '').toLowerCase();
-          const cj = h.cartJson as
-            | { ticketDisplay?: string | null; tabNumber?: string | null; tableLabel?: string | null }
-            | null;
-          const hay = [
-            label,
-            h.channel || '',
-            cj && !Array.isArray(cj) ? cj.ticketDisplay || '' : '',
-            cj && !Array.isArray(cj) ? cj.tabNumber || '' : '',
-            cj && !Array.isArray(cj) ? cj.tableLabel || '' : '',
-          ]
-            .join(' ')
-            .toLowerCase();
-          if (!hay.includes(q)) continue;
+          const meta = parseHeldCartJson(h.cartJson);
+          if (
+            !ticketQueryMatches(
+              q,
+              h.label,
+              h.channel,
+              meta.ticketDisplay,
+              meta.tabNumber,
+              meta.tableLabel,
+              meta.ticketOrderNumber
+            )
+          ) {
+            continue;
+          }
         }
         heldBucket.push(h);
       }
@@ -532,9 +575,21 @@ export default function WebPosOrdersPanel({
         if (!matchesChannelFilter(o, channelFilter)) continue;
         if (q) {
           const refs = orderPublicRefs(o);
-          const hay =
-            `${formatOrderNumberDisplay(o.orderNumber)} ${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${o.orderType || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
-          if (!hay.includes(q)) continue;
+          if (
+            !ticketQueryMatches(
+              q,
+              formatOrderNumberDisplay(o.orderNumber),
+              o.orderNumber,
+              o.clientId,
+              o.customerName,
+              o.tableLabel,
+              o.orderType,
+              refs.ticketDisplay,
+              refs.tabNumber
+            )
+          ) {
+            continue;
+          }
         }
         activeBucket.push(o);
       }
@@ -547,9 +602,21 @@ export default function WebPosOrdersPanel({
         if (!matchesChannelFilter(o, channelFilter)) continue;
         if (q) {
           const refs = orderPublicRefs(o);
-          const hay =
-            `${formatOrderNumberDisplay(o.orderNumber)} ${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${o.orderType || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
-          if (!hay.includes(q)) continue;
+          if (
+            !ticketQueryMatches(
+              q,
+              formatOrderNumberDisplay(o.orderNumber),
+              o.orderNumber,
+              o.clientId,
+              o.customerName,
+              o.tableLabel,
+              o.orderType,
+              refs.ticketDisplay,
+              refs.tabNumber
+            )
+          ) {
+            continue;
+          }
         }
         doneBucket.push(o);
       }
@@ -570,13 +637,7 @@ export default function WebPosOrdersPanel({
   const rangeEnd = Math.min(listItems.length, (page + 1) * pageSize);
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
 
-  const heldCartLines = (h: HeldRow) => {
-    const data = h.cartJson as
-      | { cart?: Array<{ name: string; quantity: number; lineTotal: number }> }
-      | Array<{ name: string; quantity: number; lineTotal: number }>;
-    if (Array.isArray(data)) return data;
-    return data?.cart || [];
-  };
+  const heldCartLines = (h: HeldRow) => parseHeldCartJson(h.cartJson).cart;
 
   const heldTotal = (h: HeldRow) =>
     heldCartLines(h).reduce((s, l) => s + Number(l.lineTotal || 0), 0);
@@ -605,7 +666,17 @@ export default function WebPosOrdersPanel({
           /* kitchen print is best-effort */
         }
       }
-      await api.post(`/merchant/pos/held/${heldRow.id}/cancel`, { reason });
+      if (String(heldRow.id).startsWith('local:')) {
+        const meta = parseHeldCartJson(heldRow.cartJson);
+        removeLocalHeldDraft({
+          localId: heldRow.id,
+          ticketDisplay: meta.ticketDisplay,
+          tableId: meta.tableId,
+          tabNumber: meta.tabNumber,
+        });
+      } else {
+        await api.post(`/merchant/pos/held/${heldRow.id}/cancel`, { reason });
+      }
       toast.success(t('webPosOrderCancelled'));
       setCancelHeldFor(null);
       if (selectedHeld?.id === heldRow.id) setSelectedHeld(null);
@@ -1123,14 +1194,7 @@ export default function WebPosOrdersPanel({
                     const total = heldTotal(h);
                     const lines = heldCartLines(h);
                     const sentCount = lines.filter((l: any) => l.sentToKitchen).length;
-                    const heldMeta =
-                      h.cartJson && typeof h.cartJson === 'object' && !Array.isArray(h.cartJson)
-                        ? (h.cartJson as {
-                            tabNumber?: string | null;
-                            ticketDisplay?: string | null;
-                            tableLabel?: string | null;
-                          })
-                        : {};
+                    const heldMeta = parseHeldCartJson(h.cartJson);
                     const idLabel =
                       heldMeta.tableLabel ||
                       (heldMeta.tabNumber ? `#${heldMeta.tabNumber}` : null) ||
@@ -1146,11 +1210,11 @@ export default function WebPosOrdersPanel({
                         className="flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border border-stone-200 bg-stone-900 text-left text-white shadow-sm transition hover:ring-2 hover:ring-teal-400"
                       >
                         <div
-                          className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${channelHeaderClass(h.channel)}`}
+                          className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${channelHeaderClass(resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson }))}`}
                         >
                           <span className="inline-flex min-w-0 items-center gap-1">
-                            <ChannelGlyph ch={h.channel} />
-                            <span className="truncate">{channelLabel(h.channel)}</span>
+                            <ChannelGlyph ch={resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson })} />
+                            <span className="truncate">{channelLabel(resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson }))}</span>
                           </span>
                           <span className="shrink-0 tabular-nums">{idLabel}</span>
                         </div>
@@ -1237,14 +1301,7 @@ export default function WebPosOrdersPanel({
                     const h = item.held;
                     const selected = selectedHeld?.id === h.id;
                     const total = heldTotal(h);
-                    const heldMeta =
-                      h.cartJson && typeof h.cartJson === 'object' && !Array.isArray(h.cartJson)
-                        ? (h.cartJson as {
-                            tabNumber?: string | null;
-                            ticketDisplay?: string | null;
-                            tableLabel?: string | null;
-                          })
-                        : {};
+                    const heldMeta = parseHeldCartJson(h.cartJson);
                     return (
                       <li key={`h-${h.id}`}>
                         <button
@@ -1270,9 +1327,9 @@ export default function WebPosOrdersPanel({
                             </div>
                             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                               <span
-                                className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${channelBadgeClass(h.channel)}`}
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${channelBadgeClass(resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson }))}`}
                               >
-                                {channelLabel(h.channel)}
+                                {channelLabel(resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson }))}
                               </span>
                               {heldMeta.ticketDisplay ? (
                                 <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold text-teal-900">

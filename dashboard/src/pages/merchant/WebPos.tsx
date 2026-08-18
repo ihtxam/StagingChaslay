@@ -849,7 +849,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       keypadBuffer,
       billDiscount,
     };
-    const key = openCartDraftKey({ tableId, tabNumber, channel });
+    const key = openCartDraftKey({ tableId, tabNumber, channel, ticketDisplay });
     if (draftOccupiesTable(active)) {
       openCartDraftsRef.current.set(key, active);
     } else {
@@ -2918,26 +2918,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       .sort((a, b) => a - b);
     const draftActiveCourse =
       opts?.draftActiveCourse ?? pendingCourses[0] ?? activeCourse;
-    if (tableId || tabNumber) {
-      const key = openCartDraftKey({ tableId, tabNumber, channel: tableId ? 'dine_in' : channel });
-      openCartDraftsRef.current.set(key, {
-        cart: sentCart,
-        channel: tableId ? 'dine_in' : channel,
-        tableId,
-        tableLabel,
-        tabNumber,
-        ticketDisplay,
-        ticketOrderNumber,
-        orderNote,
-        activeCourse: draftActiveCourse,
-        orderSent: true,
-        coursesBulkSent: true,
-        selectedLineId: null,
-        keypadBuffer: '',
-        billDiscount,
-      });
-      setDraftVersion((n) => n + 1);
-    }
+    // Keep a local draft for every kitchen-sent ticket (including takeaway)
+    // so Orders can recover if /merchant/pos/held is slow or fails.
+    const key = openCartDraftKey({
+      tableId,
+      tabNumber,
+      channel: tableId ? 'dine_in' : effectiveChannel,
+      ticketDisplay,
+    });
+    openCartDraftsRef.current.set(key, {
+      cart: sentCart,
+      channel: tableId ? 'dine_in' : effectiveChannel,
+      tableId,
+      tableLabel,
+      tabNumber,
+      ticketDisplay,
+      ticketOrderNumber,
+      orderNote,
+      activeCourse: draftActiveCourse,
+      orderSent: true,
+      coursesBulkSent: true,
+      selectedLineId: null,
+      keypadBuffer: '',
+      billDiscount,
+    });
+    setDraftVersion((n) => n + 1);
     setCart([]);
     setSelectedLineId(null);
     setKeypadBuffer('');
@@ -3152,19 +3157,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   ) => {
     if (!cartLines.length) return;
     const ticket = opts?.ticket ?? ensureCartTicket();
+    const persistChannel = tableId ? 'dine_in' : effectiveChannel;
     const cartSum = cartLines.reduce((s, l) => s + Number(l.lineTotal || 0), 0);
     const heldLabel = [
       tableLabel || null,
       tabNumber ? `${t('webPosTab')} ${tabNumber}` : null,
       ticket.display,
-      channel,
+      persistChannel,
       money(cartSum),
     ]
       .filter(Boolean)
       .join(' · ');
     const cartJson = {
       cart: cartLines,
-      channel,
+      channel: persistChannel,
       tableId,
       tableLabel,
       tabNumber,
@@ -3174,35 +3180,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       orderNote,
     };
 
-    try {
-      const res = await api.get('/merchant/pos/held');
-      const list = (res.data?.held || []) as Array<{
-        id: string;
-        cartJson?: Record<string, unknown> | null;
-      }>;
-      for (const h of list) {
-        const cj = h.cartJson;
-        if (!cj || typeof cj !== 'object') continue;
-        const sameTicket =
-          typeof cj.ticketDisplay === 'string' && cj.ticketDisplay === ticket.display;
-        const sameTable = !!tableId && cj.tableId === tableId;
-        const sameTab =
-          !!tabNumber && !tableId && cj.tabNumber === tabNumber && !cj.tableId;
-        if (sameTicket || sameTable || sameTab) {
-          await api.delete(`/merchant/pos/held/${h.id}`);
-        }
-      }
-    } catch {
-      /* best-effort upsert cleanup */
-    }
-
-    await api.post('/merchant/pos/held', {
+    // Atomic server upsert — do not delete-then-insert (that lost kitchen tickets
+    // when POST failed after DELETE, e.g. order 5126).
+    const res = await api.post('/merchant/pos/held', {
+      id: resumedHeldIdRef.current || undefined,
       label: heldLabel,
-      channel,
+      channel: persistChannel,
       cartJson,
       staffId: webposStaff?.id,
       staffName: webposStaff?.name,
       sendToKitchen,
+    });
+    const savedId = (res.data?.held as { id?: string } | undefined)?.id;
+    if (savedId) resumedHeldIdRef.current = savedId;
+    console.info('[WebPOS][held] persisted', {
+      id: savedId,
+      ticket: ticket.display,
+      channel: persistChannel,
+      sendToKitchen,
+      lines: cartLines.length,
     });
     setOrdersRefreshToken((n) => n + 1);
   };
@@ -5638,8 +5634,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (shiftsEnabled) void refreshCurrentShift(true);
     const moreSplits = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
     if (!moreSplits) {
-      const paidKey = openCartDraftKey({ tableId, tabNumber, channel });
-      openCartDraftsRef.current.delete(paidKey);
+      const paidKeys = [
+        openCartDraftKey({ tableId, tabNumber, channel }),
+        openCartDraftKey({ ticketDisplay: ticket.display, channel: effectiveChannel }),
+      ];
+      for (const paidKey of paidKeys) openCartDraftsRef.current.delete(paidKey);
+      const heldId = resumedHeldIdRef.current;
+      resumedHeldIdRef.current = null;
+      if (heldId) {
+        void api.delete(`/merchant/pos/held/${heldId}`).catch(() => {});
+      } else {
+        void (async () => {
+          try {
+            const heldRes = await api.get('/merchant/pos/held');
+            const list = (heldRes.data?.held || []) as Array<{
+              id: string;
+              cartJson?: { ticketDisplay?: string | null; tableId?: string | null };
+            }>;
+            for (const h of list) {
+              const cj = h.cartJson;
+              if (cj?.ticketDisplay === ticket.display || (tableId && cj?.tableId === tableId)) {
+                await api.delete(`/merchant/pos/held/${h.id}`);
+              }
+            }
+          } catch {
+            /* sale already recorded */
+          }
+        })();
+      }
       setDraftVersion((n) => n + 1);
       setSendReceiptPrefillEmail(selectedCustomer?.email || '');
       setCart([]);
@@ -6718,7 +6740,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             highlightOrderId={highlightOrderId}
             initialChannelFilter={ordersChannelPref}
             onResumeHeld={(held) => {
-              resumedHeldIdRef.current = held.id;
+              resumedHeldIdRef.current = String(held.id).startsWith('local:') ? null : held.id;
               const data = held.cartJson as
                 | {
                     cart?: CartLine[];
@@ -6748,8 +6770,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               const sent = held.status === 'sent_to_kitchen';
               setOrderSent(sent);
               setCoursesBulkSent(sent);
-              // Remove from held list while editing/paying on the register.
-              void api.post(`/merchant/pos/held/${held.id}/resume`).catch(() => {});
+              // Keep the server held row until payment / cancel so Ongoing still lists it.
               setOrdersRefreshToken((n) => n + 1);
               setPosTab('register');
               setPosView('register');

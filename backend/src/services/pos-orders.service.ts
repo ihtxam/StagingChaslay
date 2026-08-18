@@ -55,15 +55,76 @@ function parseHeldCart(cartJson: unknown): {
   tableLabel: string | null;
   notes: string | null;
 } {
-  const data = cartJson as
-    | { cart?: HeldCartLine[]; channel?: string; tableLabel?: string; orderNote?: string }
-    | HeldCartLine[]
-    | null;
+  const data = normalizeHeldCartJson(cartJson);
   const lines = Array.isArray(data) ? data : data?.cart || [];
   const channel = (!Array.isArray(data) && data?.channel) || "takeaway";
   const tableLabel = (!Array.isArray(data) && data?.tableLabel) || null;
   const notes = (!Array.isArray(data) && data?.orderNote) || null;
   return { lines, channel: String(channel), tableLabel, notes };
+}
+
+function normalizeHeldCartJson(cartJson: unknown): {
+  cart?: HeldCartLine[];
+  channel?: string;
+  tableId?: string | null;
+  tableLabel?: string | null;
+  tabNumber?: string | null;
+  ticketDisplay?: string | null;
+  orderNote?: string;
+} | HeldCartLine[] | null {
+  let data: unknown = cartJson;
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+  if (Array.isArray(data) || (data && typeof data === "object")) {
+    return data as
+      | HeldCartLine[]
+      | {
+          cart?: HeldCartLine[];
+          channel?: string;
+          tableId?: string | null;
+          tableLabel?: string | null;
+          tabNumber?: string | null;
+          ticketDisplay?: string | null;
+          orderNote?: string;
+        };
+  }
+  return null;
+}
+
+function heldIdentity(cartJson: unknown): {
+  ticketDisplay: string | null;
+  tableId: string | null;
+  tabNumber: string | null;
+} {
+  const data = normalizeHeldCartJson(cartJson);
+  if (!data || Array.isArray(data)) {
+    return { ticketDisplay: null, tableId: null, tabNumber: null };
+  }
+  const ticket = typeof data.ticketDisplay === "string" ? data.ticketDisplay.trim() : "";
+  const tableId = typeof data.tableId === "string" ? data.tableId.trim() : "";
+  const tab = data.tabNumber != null ? String(data.tabNumber).trim() : "";
+  return {
+    ticketDisplay: ticket || null,
+    tableId: tableId || null,
+    tabNumber: tab || null,
+  };
+}
+
+function sameHeldIdentity(
+  a: ReturnType<typeof heldIdentity>,
+  b: ReturnType<typeof heldIdentity>
+): boolean {
+  if (a.tableId && b.tableId && a.tableId === b.tableId) return true;
+  if (!a.tableId && !b.tableId && a.tabNumber && b.tabNumber && a.tabNumber === b.tabNumber) {
+    return true;
+  }
+  if (a.ticketDisplay && b.ticketDisplay && a.ticketDisplay === b.ticketDisplay) return true;
+  return false;
 }
 
 export class PosOrdersService {
@@ -547,18 +608,35 @@ export class PosOrdersService {
 
   static async listHeld(merchantId: string) {
     const db = getDb();
-    return db.query.heldOrders.findMany({
+    const rows = await db.query.heldOrders.findMany({
       where: and(
         eq(schema.heldOrders.merchantId, merchantId),
         inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
       ),
       orderBy: [desc(schema.heldOrders.updatedAt)],
     });
+    console.info("[pos-held] list", {
+      merchantId,
+      count: rows.length,
+      tickets: rows.map((r) => {
+        const ident = heldIdentity(r.cartJson);
+        return {
+          id: r.id,
+          status: r.status,
+          channel: r.channel,
+          ticket: ident.ticketDisplay,
+          tableId: ident.tableId,
+          tab: ident.tabNumber,
+        };
+      }),
+    });
+    return rows;
   }
 
   static async holdOrder(
     merchantId: string,
     body: {
+      id?: string;
       label?: string;
       channel?: string;
       cartJson: unknown;
@@ -570,19 +648,68 @@ export class PosOrdersService {
   ) {
     const db = getDb();
     if (body.cartJson == null) throw new Error("cartJson is required");
+    const ident = heldIdentity(body.cartJson);
+    const requested = String(body.channel || "").toLowerCase();
+    const persistChannel =
+      ident.tableId
+        ? "dine_in"
+        : requested === "dine_in" || requested === "delivery" || requested === "takeaway"
+          ? requested
+          : "takeaway";
+    const status = body.sendToKitchen ? "sent_to_kitchen" : "held";
+    const values = {
+      label: (body.label || "").trim().slice(0, 120) || null,
+      status,
+      channel: persistChannel,
+      cartJson: body.cartJson,
+      notes: body.notes || null,
+      staffId: body.staffId || null,
+      staffName: body.staffName || null,
+      updatedAt: new Date(),
+    };
+
+    const open = await db.query.heldOrders.findMany({
+      where: and(
+        eq(schema.heldOrders.merchantId, merchantId),
+        inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
+      ),
+    });
+    const existing =
+      (body.id && open.find((r) => r.id === body.id)) ||
+      open.find((r) => sameHeldIdentity(heldIdentity(r.cartJson), ident));
+
+    if (existing) {
+      const [row] = await db
+        .update(schema.heldOrders)
+        .set(values)
+        .where(eq(schema.heldOrders.id, existing.id))
+        .returning();
+      console.info("[pos-held] upsert-update", {
+        merchantId,
+        id: existing.id,
+        status,
+        channel: persistChannel,
+        ticket: ident.ticketDisplay,
+        tableId: ident.tableId,
+      });
+      return row;
+    }
+
     const [row] = await db
       .insert(schema.heldOrders)
       .values({
         merchantId,
-        label: (body.label || "").trim().slice(0, 120) || null,
-        status: body.sendToKitchen ? "sent_to_kitchen" : "held",
-        channel: body.channel || "takeaway",
-        cartJson: body.cartJson,
-        notes: body.notes || null,
-        staffId: body.staffId || null,
-        staffName: body.staffName || null,
+        ...values,
       })
       .returning();
+    console.info("[pos-held] upsert-insert", {
+      merchantId,
+      id: row.id,
+      status,
+      channel: persistChannel,
+      ticket: ident.ticketDisplay,
+      tableId: ident.tableId,
+    });
     return row;
   }
 

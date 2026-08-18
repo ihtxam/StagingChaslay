@@ -1475,12 +1475,30 @@ class PosViewModel @Inject constructor(
                 showError("Kitchen", "No new items to send")
                 return@launch
             }
+            val userId = sessionManager.currentUserId.first() ?: 0L
+            val userName = sessionManager.currentUserName.first() ?: "Cashier"
+            val numbered = if (!cart.orderNumber.isNullOrBlank()) cart
+            else cart.copy(orderNumber = "P-${System.currentTimeMillis().toString().takeLast(6)}")
+            if (cart.orderNumber.isNullOrBlank()) cartManager.setOrderNumber(numbered.orderNumber!!)
             runCatching {
-                printWalkInKitchenTicket(cart.copy(items = unsent))
+                printWalkInKitchenTicket(numbered.copy(items = unsent))
                 cartManager.refreshSentFlags(
                     cart.items.associate { item ->
                         item.id to (item.sentToKitchen || unsent.any { it.id == item.id })
                     }
+                )
+                val sentCart = cartManager.snapshot().let { snap ->
+                    snap.copy(orderNumber = numbered.orderNumber)
+                }
+                heldOrderRepository.createHeldOrder(
+                    cart = sentCart,
+                    sendToKitchen = true,
+                    userId = userId,
+                    userName = userName
+                )
+                android.util.Log.i(
+                    "KITCHEN_SEND",
+                    "walk-in held ${sentCart.orderNumber} items=${sentCart.items.size}"
                 )
             }.onSuccess {
                 updateExtras {
@@ -1603,12 +1621,23 @@ class PosViewModel @Inject constructor(
                 return
             }
             viewModelScope.launch {
+                val userId = sessionManager.currentUserId.first() ?: 0L
+                val userName = sessionManager.currentUserName.first() ?: "Cashier"
+                val numbered = if (!cart.orderNumber.isNullOrBlank()) cart
+                else cart.copy(orderNumber = "P-${System.currentTimeMillis().toString().takeLast(6)}")
+                if (cart.orderNumber.isNullOrBlank()) cartManager.setOrderNumber(numbered.orderNumber!!)
                 runCatching {
-                    printWalkInKitchenTicket(cart.copy(items = unsent), fireCourseNumber = active)
+                    printWalkInKitchenTicket(numbered.copy(items = unsent), fireCourseNumber = active)
                     cartManager.refreshSentFlags(
                         cart.items.associate { item ->
                             item.id to (item.sentToKitchen || unsent.any { it.id == item.id })
                         }
+                    )
+                    heldOrderRepository.createHeldOrder(
+                        cart = cartManager.snapshot().copy(orderNumber = numbered.orderNumber),
+                        sendToKitchen = true,
+                        userId = userId,
+                        userName = userName
                     )
                 }.onSuccess {
                     updateExtras {

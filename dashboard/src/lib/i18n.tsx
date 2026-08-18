@@ -1209,7 +1209,7 @@ const en: Dict = {
   webPosNoHeld: 'No held orders',
   webPosNoOrders: 'No POS orders yet',
   webPosNoOrdersHint:
-    'Shows today’s POS sales (Zurich). Send/hold tickets appear under Active. Paid checkouts under Completed.',
+    'Kitchen-sent and held tickets stay under Active / Ongoing even if unpaid, with no customer, or dine-in. Paid checkouts are under Completed.',
   webPosHeldOrder: 'Held order',
   webPosResume: 'Resume',
   webPosCancelOrder: 'Cancel',
@@ -3530,7 +3530,7 @@ const fr: Dict = {
   webPosNoHeld: 'Aucune commande en attente',
   webPosNoOrders: 'Aucune commande POS',
   webPosNoOrdersHint:
-    'Affiche les ventes POS du jour (Zurich). Envoi/attente sous Actives, encaissements sous Terminées.',
+    'Les tickets envoyés en cuisine ou en attente restent sous Actives / En cours, même non payés, sans client ou en salle. Les encaissements sont sous Terminées.',
   webPosHeldOrder: 'Commande en attente',
   webPosResume: 'Reprendre',
   webPosCancelOrder: 'Annuler',
@@ -5852,7 +5852,7 @@ const de: Dict = {
   webPosNoHeld: 'Keine gehaltenen Bestellungen',
   webPosNoOrders: 'Noch keine POS-Bestellungen',
   webPosNoOrdersHint:
-    'Zeigt heutige POS-Verkäufe (Zürich). Send/Hold unter Aktiv, bezahlte unter Abgeschlossen.',
+    'An die Küche gesendete und gehaltene Tickets bleiben unter Aktiv / Laufend — auch unbezahlt, ohne Kunde oder im Saal. Bezahlte Kassenbons unter Abgeschlossen.',
   webPosHeldOrder: 'Gehaltene Bestellung',
   webPosResume: 'Fortsetzen',
   webPosCancelOrder: 'Stornieren',

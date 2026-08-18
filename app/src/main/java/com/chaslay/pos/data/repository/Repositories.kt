@@ -1646,6 +1646,10 @@ class CartManager @Inject constructor(
         }
     }
 
+    fun setOrderNumber(orderNumber: String) {
+        _cart.update { it.copy(orderNumber = orderNumber) }
+    }
+
     fun setPickupOrder(orderNumber: String, pickupTimeMs: Long?) {
         _cart.update {
             it.copy(
@@ -2350,9 +2354,10 @@ class HeldOrderRepository @Inject constructor(
         userId: Long,
         userName: String
     ): HeldOrderEntity {
-        val id = UUID.randomUUID().toString()
         val orderNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() }
             ?: "H-${System.currentTimeMillis().toString().takeLast(6)}"
+        val existing = heldOrderDao.getByOrderNumber(orderNumber)
+        val id = existing?.id ?: UUID.randomUUID().toString()
         val entity = HeldOrderEntity(
             id = id,
             orderNumber = orderNumber,
@@ -2370,11 +2375,13 @@ class HeldOrderRepository @Inject constructor(
             tableOrderId = cart.tableOrderId,
             notes = cart.cartNotes,
             fulfillmentType = cart.fulfillmentType,
-            pickupTimeMs = cart.pickupTimeMs,
+            pickupTimeMs = cart.pickupTimeMs ?: existing?.pickupTimeMs,
             deliveryName = cart.deliveryName,
             deliveryAddress = cart.deliveryAddress,
             deliveryZip = cart.deliveryZip,
-            deliveryPhone = cart.deliveryPhone
+            deliveryPhone = cart.deliveryPhone,
+            paymentMethod = existing?.paymentMethod,
+            createdAt = existing?.createdAt ?: System.currentTimeMillis()
         )
         heldOrderDao.upsert(entity)
         val items = cart.items.map { item ->

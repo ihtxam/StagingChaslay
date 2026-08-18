@@ -110,9 +110,11 @@ export function openCartDraftKey(opts: {
   tableId?: string | null;
   tabNumber?: string | null;
   channel?: PosChannel | null;
+  ticketDisplay?: string | null;
 }): string {
   if (opts.tableId) return `table:${opts.tableId}`;
   if (opts.tabNumber) return `tab:${opts.tabNumber}`;
+  if (opts.ticketDisplay) return `ticket:${opts.ticketDisplay}`;
   if (opts.channel === 'delivery') return 'channel:delivery';
   if (opts.channel === 'dine_in') return 'channel:dine_in';
   return 'channel:takeaway';
