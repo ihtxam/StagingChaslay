@@ -568,4 +568,5 @@
     <string name="included">Inbegriffen</string>
     <string name="enter_tip_amount">Trinkgeld eingeben</string>
     <string name="custom_tip">Betrag</string>
+    <string name="membership_lookup_failed">Kartenabfrage fehlgeschlagen</string>
 </resources>

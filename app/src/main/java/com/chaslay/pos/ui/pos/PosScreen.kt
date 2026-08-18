@@ -208,11 +208,12 @@ fun PosScreen(
         !showBarcodeScanner &&
             !state.showCheckoutScreen &&
             !state.showOrderComplete &&
-            !state.showMembershipDialog
+            !state.showMembershipDialog &&
+            !state.showGiftCardOpsDialog
 
     DisposableEffect(hardwareScanEnabled) {
         BarcodeWedgeHub.enabled = hardwareScanEnabled
-        val listener: (String) -> Unit = { code -> viewModel.onBarcodeScanned(code) }
+        val listener: (String) -> Unit = { code -> viewModel.onHardwareScanned(code) }
         BarcodeWedgeHub.addListener(listener)
         onDispose {
             BarcodeWedgeHub.removeListener(listener)
@@ -222,7 +223,7 @@ fun PosScreen(
 
     BarcodeWedgeListener(
         enabled = hardwareScanEnabled,
-        onBarcode = viewModel::onBarcodeScanned
+        onBarcode = viewModel::onHardwareScanned
     )
 
     if (showBarcodeScanner) {

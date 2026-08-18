@@ -87,7 +87,8 @@ data class GiftCardSettingsDto(
     @SerializedName("minAmount") val minAmount: Double = 5.0,
     @SerializedName("maxAmount") val maxAmount: Double = 500.0,
     @SerializedName("reloadEnabled") val reloadEnabled: Boolean = true,
-    @SerializedName("customAmountEnabled") val customAmountEnabled: Boolean = true
+    @SerializedName("customAmountEnabled") val customAmountEnabled: Boolean = true,
+    @SerializedName("membershipEnabled") val membershipEnabled: Boolean = false
 )
 
 data class GiftCardPointsRequest(

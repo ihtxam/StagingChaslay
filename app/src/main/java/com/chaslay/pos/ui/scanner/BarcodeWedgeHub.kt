@@ -21,10 +21,10 @@ object BarcodeWedgeHub {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var lastKeyAtMs = 0L
 
-    private const val BURST_GAP_MS = 160L
-    private const val AUTO_SUBMIT_MS = 90L
+    private const val BURST_GAP_MS = 350L
+    private const val AUTO_SUBMIT_MS = 280L
     private const val MIN_SUBMIT_LEN = 3
-    private const val AUTO_SUBMIT_LEN = 6
+    private const val AUTO_SUBMIT_LEN = 8
 
     private val autoSubmit = Runnable {
         val code = synchronized(buffer) {

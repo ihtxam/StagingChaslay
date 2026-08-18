@@ -1018,10 +1018,20 @@ class PosViewModel @Inject constructor(
         persistTableOrderAsync()
     }
 
+    /** Camera / catalog barcode — product first, then membership / gift card. */
     fun onBarcodeScanned(rawCode: String) {
+        handleScannedCode(rawCode, preferMembership = false)
+    }
+
+    /** HID keyboard-wedge RFID / barcode scanner — membership first (matches WebPOS). */
+    fun onHardwareScanned(rawCode: String) {
+        handleScannedCode(rawCode, preferMembership = true)
+    }
+
+    private fun handleScannedCode(rawCode: String, preferMembership: Boolean) {
         val code = rawCode.trim()
         if (code.isEmpty()) return
-        android.util.Log.i("BARCODE_SCAN", "scanned=$code")
+        Log.i("BARCODE_SCAN", "scanned=$code preferMembership=$preferMembership")
         // Table QR: CHASLAY:T:{slug}:{tableUuid}
         val tableMatch = Regex("^CHASLAY:T:[^:]+:([a-f0-9-]+)$", RegexOption.IGNORE_CASE).find(code)
         if (tableMatch != null) {
@@ -1039,20 +1049,64 @@ class PosViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            if (preferMembership && cardScanEnabled()) {
+                when (tryAttachMembershipFromScan(code)) {
+                    CardScanResult.ATTACHED, CardScanResult.HARD_ERROR -> return@launch
+                    CardScanResult.NOT_FOUND -> Unit
+                }
+            }
             val lookup = productRepository.findByBarcode(code)
             if (lookup != null) {
                 addScannedProduct(lookup)
                 return@launch
             }
-            if (_uiExtras.value.giftCardsEnabled) {
-                giftCardRepository.lookupCode(code, mediaType = null)
-                    .onSuccess { card ->
-                        attachMembershipCard(giftCardRepository.toAttachedMembership(card))
-                        return@launch
-                    }
+            if (!preferMembership && cardScanEnabled()) {
+                when (tryAttachMembershipFromScan(code)) {
+                    CardScanResult.ATTACHED, CardScanResult.HARD_ERROR -> return@launch
+                    CardScanResult.NOT_FOUND -> Unit
+                }
             }
-            updateExtras { it.copy(snackbarMessage = "No product for barcode $code") }
+            updateExtras {
+                it.copy(snackbarMessage = appContext.getString(R.string.barcode_not_found, code))
+            }
         }
+    }
+
+    private enum class CardScanResult { ATTACHED, NOT_FOUND, HARD_ERROR }
+
+    private suspend fun cardScanEnabled(): Boolean {
+        val extras = _uiExtras.value
+        if (extras.giftCardsEnabled) return true
+        extras.giftCardSettings?.let { return it.membershipEnabled }
+        return !syncPreferences.getDashboardToken().isNullOrBlank()
+    }
+
+    private suspend fun tryAttachMembershipFromScan(code: String): CardScanResult {
+        return giftCardRepository.lookupCode(code, mediaType = null).fold(
+            onSuccess = { card ->
+                attachMembershipCard(giftCardRepository.toAttachedMembership(card))
+                CardScanResult.ATTACHED
+            },
+            onFailure = { error ->
+                if (isCardNotFound(error)) {
+                    CardScanResult.NOT_FOUND
+                } else {
+                    updateExtras {
+                        it.copy(
+                            snackbarMessage = error.message
+                                ?: appContext.getString(R.string.membership_lookup_failed)
+                        )
+                    }
+                    CardScanResult.HARD_ERROR
+                }
+            }
+        )
+    }
+
+    private fun isCardNotFound(error: Throwable): Boolean {
+        if (error is retrofit2.HttpException && error.code() == 404) return true
+        val msg = error.message.orEmpty()
+        return msg.contains("not found", ignoreCase = true)
     }
 
     private suspend fun addScannedProduct(lookup: com.chaslay.pos.domain.model.BarcodeLookupResult) {
@@ -2234,7 +2288,17 @@ class PosViewModel @Inject constructor(
                 syncApi.paymentConfig().methods?.giftCard == true && !token.isNullOrBlank()
             }.getOrDefault(false)
             val localEnabled = settingsRepository.getSettings().giftCardsEnabled
-            updateExtras { it.copy(giftCardsEnabled = localEnabled && cloudEnabled) }
+            val settings = if (!token.isNullOrBlank()) {
+                giftCardRepository.fetchSettings().getOrNull()
+            } else {
+                null
+            }
+            updateExtras {
+                it.copy(
+                    giftCardsEnabled = localEnabled && cloudEnabled,
+                    giftCardSettings = settings ?: it.giftCardSettings
+                )
+            }
             if (!localEnabled || !cloudEnabled) {
                 if (_selectedCategoryId.value == PosVirtualCategories.GIFT_CARDS_ID) {
                     _selectedCategoryId.value = PosVirtualCategories.ALL_CATEGORIES_ID
@@ -2655,7 +2719,8 @@ class PosViewModel @Inject constructor(
                     updateExtras {
                         it.copy(
                             membershipBusy = false,
-                            membershipLookupError = e.message ?: "Card not found"
+                            membershipLookupError = e.message
+                                ?: appContext.getString(R.string.membership_lookup_failed)
                         )
                     }
                 }

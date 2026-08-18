@@ -758,6 +758,7 @@
     <string name="membership_gift_cards">Gift cards / Membership</string>
     <string name="membership_scan_hint">Tap RFID card or enter card number</string>
     <string name="membership_lookup">Look up</string>
+    <string name="membership_lookup_failed">Card lookup failed</string>
     <string name="membership_detach">Detach</string>
     <string name="membership_points_balance">Points balance: %1$d</string>
     <string name="membership_gift_balance">Gift balance: %1$s %2$s</string>

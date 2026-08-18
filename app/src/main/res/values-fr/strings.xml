@@ -571,4 +571,5 @@
     <string name="included">Inclus</string>
     <string name="enter_tip_amount">Saisir le pourboire</string>
     <string name="custom_tip">Montant</string>
+    <string name="membership_lookup_failed">Échec de la recherche de carte</string>
 </resources>

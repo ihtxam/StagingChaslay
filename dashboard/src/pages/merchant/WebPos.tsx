@@ -6150,6 +6150,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       findProductByScanCode,
       giftCardsEditionOk,
       paymentConfig?.methods.giftCard,
+      (paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null)?.membershipEnabled,
       canPay,
       tablesUiEnabled,
       switchToTableOrder,

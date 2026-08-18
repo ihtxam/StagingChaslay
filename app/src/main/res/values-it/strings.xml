@@ -548,4 +548,5 @@
     <string name="cash_movement_success">Movimento di cassa registrato</string>
     <string name="cash_movement_failed">Impossibile registrare il movimento</string>
     <string name="cash_movement_requires_shift">Apri un turno prima di registrare entrate/uscite</string>
+    <string name="membership_lookup_failed">Ricerca carta non riuscita</string>
 </resources>
