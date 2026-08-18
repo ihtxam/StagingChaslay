@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock,
   CreditCard,
+  FileText,
   Info,
   LayoutGrid,
   List,
@@ -142,6 +143,7 @@ export type PosOrder = PosOrderForReceipt & {
   /** pos | web_shop */
   orderType?: string | null;
   orderSource?: string | null;
+  invoiceNumber?: string | null;
 };
 export type HeldRow = {
   id: string;
@@ -189,7 +191,7 @@ type Props = {
   onChannelFilterChange?: (filter: ChannelFilter) => void;
 };
 
-const PAYMENT_OPTIONS = ['cash', 'card', 'terminal'] as const;
+const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
 
 function todayIso(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
@@ -246,7 +248,13 @@ function isUnpaidOnline(o: PosOrder): boolean {
   if (isPaidOrder(o)) return false;
   const pay = (o.paymentStatus || '').toLowerCase();
   const method = (o.paymentMethod || '').toLowerCase();
-  return pay === 'awaiting_payment' || method === 'pay_later' || method === 'pay-later' || pay === 'cash';
+  return (
+    pay === 'awaiting_payment' ||
+    method === 'pay_later' ||
+    method === 'pay-later' ||
+    method === 'invoice' ||
+    pay === 'cash'
+  );
 }
 
 function canRefundOrder(o: PosOrder): boolean {
@@ -411,6 +419,8 @@ export default function WebPosOrdersPanel({
     if (m === 'terminal') return t('webPosTerminal');
     if (m === 'express') return t('webPosExpress');
     if (m === 'pay_later' || m === 'pay-later') return t('webPosPayLater');
+    if (m === 'invoice') return t('webPosInvoice');
+    if (m === 'bank_transfer') return t('webPosBankTransfer');
     return method || '—';
   };
 
@@ -1727,8 +1737,37 @@ export default function WebPosOrdersPanel({
                       className="w-full rounded-xl bg-emerald-700 py-3.5 text-sm font-bold text-white hover:bg-emerald-800"
                       onClick={() => startCollectPayment(selectedOrder)}
                     >
-                      {t('webPosTakePayment')} · {money(selectedOrder.total)}
+                      {(selectedOrder.paymentMethod === 'invoice' || selectedOrder.invoiceNumber
+                        ? t('webPosRecordInvoicePayment')
+                        : t('webPosTakePayment'))}{' '}
+                      · {money(selectedOrder.total)}
                     </button>
+                    {selectedOrder.paymentMethod === 'invoice' || selectedOrder.invoiceNumber ? (
+                      <button
+                        type="button"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              const res = await api.get(
+                                `/merchant/orders/${selectedOrder.id}/invoice.pdf`,
+                                { responseType: 'blob' }
+                              );
+                              const url = URL.createObjectURL(
+                                new Blob([res.data], { type: 'application/pdf' })
+                              );
+                              window.open(url, '_blank', 'noopener');
+                            } catch {
+                              toast.error(t('webPosInvoicePdfFailed'));
+                            }
+                          })();
+                        }}
+                      >
+                        <FileText size={16} />
+                        {t('webPosDownloadInvoice')}
+                        {selectedOrder.invoiceNumber ? ` · ${selectedOrder.invoiceNumber}` : ''}
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </>

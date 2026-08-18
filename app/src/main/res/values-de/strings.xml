@@ -192,6 +192,14 @@
     <string name="pay_later">später bezahlen</string>
     <string name="pay_later_short">Später</string>
     <string name="pay_later_subtitle">Zahlung bei Abholung einziehen</string>
+    <string name="invoice">Rechnung</string>
+    <string name="invoice_customer_required">Bitte einen Kunden wählen, bevor Sie eine Rechnung erstellen</string>
+    <string name="invoice_created">Rechnung gespeichert — Zahlung ausstehend</string>
+    <string name="invoice_pdf_failed">Rechnungs-PDF konnte nicht geöffnet werden</string>
+    <string name="invoice_record_payment">Zahlung erfassen</string>
+    <string name="invoice_open_pdf">Rechnung öffnen</string>
+    <string name="invoice_bank_transfer">Überweisung</string>
+    <string name="invoice_offline_queued">Rechnung offline gespeichert. PDF wird online erzeugt.</string>
     <string name="pos_register">Kasse</string>
     <string name="pos_orders">Bestellungen</string>
     <string name="product_grid_images">Img</string>

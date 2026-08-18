@@ -194,6 +194,14 @@
     <string name="pay_later">Payer plus tard</string>
     <string name="pay_later_short">Plus tard</string>
     <string name="pay_later_subtitle">Collecter le paiement à la prise en charge</string>
+    <string name="invoice">Facture</string>
+    <string name="invoice_customer_required">Sélectionnez un client avant de créer une facture</string>
+    <string name="invoice_created">Facture enregistrée — en attente de paiement</string>
+    <string name="invoice_pdf_failed">Impossible d’ouvrir le PDF</string>
+    <string name="invoice_record_payment">Enregistrer le paiement</string>
+    <string name="invoice_open_pdf">Ouvrir la facture</string>
+    <string name="invoice_bank_transfer">Virement</string>
+    <string name="invoice_offline_queued">Facture enregistrée hors ligne. Le PDF sera généré en ligne.</string>
     <string name="pos_register">Caisse</string>
     <string name="pos_orders">Commandes</string>
     <string name="product_grid_images">Img</string>

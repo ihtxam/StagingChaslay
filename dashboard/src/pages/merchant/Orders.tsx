@@ -325,6 +325,7 @@ export default function Orders() {
               <option value="terminal">{t('webPosTerminal')}</option>
               <option value="express">{t('webPosExpress')}</option>
               <option value="pay_later">{t('webPosPayLater')}</option>
+              <option value="invoice">{t('webPosInvoice')}</option>
             </select>
           </SettingsField>
           <SettingsField label={t('ordersFilterChannel')}>

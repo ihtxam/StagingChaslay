@@ -107,7 +107,7 @@ export type OfflineSyncState = {
 };
 
 /** Payment methods allowed when offline (no cloud processor / balance check). */
-export const OFFLINE_SAFE_PAYMENT_METHODS = new Set(['cash', 'card', 'express']);
+export const OFFLINE_SAFE_PAYMENT_METHODS = new Set(['cash', 'card', 'express', 'invoice']);
 
 export function isWebPosOfflineEnabled(): boolean {
   try {

@@ -192,6 +192,14 @@
     <string name="pay_later">Paga dopo</string>
     <string name="pay_later_short">Dopo</string>
     <string name="pay_later_subtitle">Incassa al ritiro</string>
+    <string name="invoice">Fattura</string>
+    <string name="invoice_customer_required">Seleziona un cliente prima di creare una fattura</string>
+    <string name="invoice_created">Fattura salvata — in attesa di pagamento</string>
+    <string name="invoice_pdf_failed">Impossibile aprire il PDF</string>
+    <string name="invoice_record_payment">Registra pagamento</string>
+    <string name="invoice_open_pdf">Apri fattura</string>
+    <string name="invoice_bank_transfer">Bonifico</string>
+    <string name="invoice_offline_queued">Fattura salvata offline. Il PDF verrà generato online.</string>
     <string name="pos_register">Cassa</string>
     <string name="pos_orders">Ordini</string>
     <string name="product_grid_images">Img</string>

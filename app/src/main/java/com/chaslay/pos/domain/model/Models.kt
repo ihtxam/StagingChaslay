@@ -21,6 +21,7 @@ enum class PaymentMethod {
     TAP_TO_PAY,
     ADYEN_TERMINAL,
     PAY_LATER,
+    INVOICE,
     GIFT_CARD
 }
 

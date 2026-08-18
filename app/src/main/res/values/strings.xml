@@ -211,6 +211,14 @@
     <string name="pay_later">Pay Later</string>
     <string name="pay_later_short">Later</string>
     <string name="pay_later_subtitle">Collect payment at pickup</string>
+    <string name="invoice">Invoice</string>
+    <string name="invoice_customer_required">Select a customer before creating an invoice</string>
+    <string name="invoice_created">Invoice saved — awaiting payment</string>
+    <string name="invoice_pdf_failed">Could not open invoice PDF</string>
+    <string name="invoice_record_payment">Record payment</string>
+    <string name="invoice_open_pdf">Open invoice</string>
+    <string name="invoice_bank_transfer">Bank transfer</string>
+    <string name="invoice_offline_queued">Invoice saved offline. PDF will generate when online.</string>
     <string name="pos_register">Register</string>
     <string name="pos_orders">Orders</string>
     <string name="main_floor">Main Floor</string>

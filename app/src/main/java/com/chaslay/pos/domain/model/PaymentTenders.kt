@@ -40,6 +40,7 @@ object PaymentTenderNotes {
         PaymentMethod.TAP_TO_PAY -> "tap_to_pay"
         PaymentMethod.ADYEN_TERMINAL -> "terminal"
         PaymentMethod.PAY_LATER -> "pay_later"
+        PaymentMethod.INVOICE -> "invoice"
         PaymentMethod.GIFT_CARD -> "gift_card"
     }
 
@@ -49,6 +50,7 @@ object PaymentTenderNotes {
         "tap_to_pay" -> PaymentMethod.TAP_TO_PAY
         "terminal", "adyen_terminal" -> PaymentMethod.ADYEN_TERMINAL
         "pay_later" -> PaymentMethod.PAY_LATER
+        "invoice" -> PaymentMethod.INVOICE
         "gift_card", "giftcard" -> PaymentMethod.GIFT_CARD
         else -> null
     }

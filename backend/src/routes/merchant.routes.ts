@@ -982,6 +982,20 @@ router.put("/orders/:orderId/status", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/orders/:orderId/invoice.pdf
+ * POST /api/merchant/orders/:orderId/record-invoice-payment
+ */
+router.get("/orders/:orderId/invoice.pdf", async (req: Request, res: Response) => {
+  const { merchantInvoicePdf } = await import("@/routes/invoice.routes");
+  return merchantInvoicePdf(req, res);
+});
+
+router.post("/orders/:orderId/record-invoice-payment", async (req: Request, res: Response) => {
+  const { merchantRecordInvoicePayment } = await import("@/routes/invoice.routes");
+  return merchantRecordInvoicePayment(req, res);
+});
+
+/**
  * POST /api/merchant/orders/:orderId/action
  * Lifecycle action: accept | start_preparing | mark_ready | out_for_delivery |
  * collect_payment | complete | complete_and_collect | reject
@@ -1254,6 +1268,7 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
           card: merchant.webposCardEnabled !== false,
           terminal: merchant.webposTerminalEnabled !== false && terminalReady,
           giftCard: merchant.webposGiftCardEnabled === true && giftCardSettings.enabled,
+          invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
         },
         giftCardSettings,
         terminalReady,

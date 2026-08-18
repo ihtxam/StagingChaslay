@@ -373,6 +373,7 @@ private fun paymentLabel(method: PaymentMethod): String = when (method) {
     PaymentMethod.TAP_TO_PAY -> "Tap-to-Pay"
     PaymentMethod.ADYEN_TERMINAL -> "Terminal"
     PaymentMethod.PAY_LATER -> "Pay Later"
+    PaymentMethod.INVOICE -> "Invoice"
     PaymentMethod.GIFT_CARD -> "Gift card"
 }
 

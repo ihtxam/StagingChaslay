@@ -9,6 +9,7 @@ import {
   Percent,
   UserCircle2,
   Vault,
+  FileText,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -50,6 +51,7 @@ type Props = {
     terminal: boolean;
     payLater: boolean;
     giftCard?: boolean;
+    invoice?: boolean;
   };
   busy: boolean;
   customerLabel?: string | null;
@@ -113,7 +115,6 @@ export default function WebPosCheckoutView({
   const [buffer, setBuffer] = useState('');
   const [payments, setPayments] = useState<AppliedPayment[]>([]);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
-  const [invoice, setInvoice] = useState(false);
   const [tipAmount, setTipAmount] = useState(0);
   const [tipOpen, setTipOpen] = useState(false);
   const [seeded, setSeeded] = useState(false);
@@ -172,14 +173,16 @@ export default function WebPosCheckoutView({
             ? 'gift_card'
             : methods.payLater
               ? 'pay_later'
-              : null;
+              : methods.invoice
+                ? 'invoice'
+                : null;
     if (defaultMethod && baseTotal > 0 && defaultMethod !== 'gift_card') {
       const id = newPayId();
       setPayments([{ id, method: defaultMethod, amount: roundMoney2(baseTotal) }]);
       setSelectedPaymentId(id);
     }
     setSeeded(true);
-  }, [seeded, methods.cash, methods.card, methods.terminal, methods.giftCard, methods.payLater, baseTotal]);
+  }, [seeded, methods.cash, methods.card, methods.terminal, methods.giftCard, methods.payLater, methods.invoice, baseTotal]);
 
   // Inject gift-card tender from parent RFID/QR modal
   useEffect(() => {
@@ -317,6 +320,12 @@ export default function WebPosCheckoutView({
       icon: <UserCircle2 size={22} />,
       show: methods.payLater,
     },
+    {
+      id: 'invoice',
+      label: t('webPosInvoice'),
+      icon: <FileText size={22} />,
+      show: !!methods.invoice,
+    },
   ];
 
   const methodLabel = (m: PosPaymentMethod) =>
@@ -387,6 +396,14 @@ export default function WebPosCheckoutView({
 
   const applyMethod = (method: PosPaymentMethod) => {
     if (busy) return;
+
+    if (method === 'invoice' || method === 'pay_later') {
+      const id = selectedPaymentId || payments[0]?.id || newPayId();
+      setPayments([{ id, method, amount: total }]);
+      setSelectedPaymentId(id);
+      setBuffer('');
+      return;
+    }
 
     if (method === 'gift_card') {
       const editingSelected = !!selectedPaymentId;
@@ -805,15 +822,6 @@ export default function WebPosCheckoutView({
               ) : null}
             </div>
 
-            <label className="inline-flex w-fit cursor-pointer items-center gap-1.5 px-0.5 text-xs font-semibold text-stone-600">
-              <input
-                type="checkbox"
-                checked={invoice}
-                onChange={() => setInvoice((v) => !v)}
-                className="h-3.5 w-3.5 rounded border-stone-400 text-[var(--webpos-accent)] focus:ring-[var(--webpos-accent-ring)]"
-              />
-              {t('webPosInvoice')}
-            </label>
 
             {canPayWithPoints && onTogglePayWithPoints ? (
               <div className="space-y-2 pt-1 text-left">

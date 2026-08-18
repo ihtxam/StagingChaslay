@@ -247,6 +247,7 @@ class PosViewModel @Inject constructor(
     private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences,
     private val syncService: com.chaslay.pos.sync.SyncService,
     private val onlineOrderAlertCoordinator: com.chaslay.pos.sync.OnlineOrderAlertCoordinator,
+    private val invoiceRepository: com.chaslay.pos.data.repository.InvoiceRepository,
     @ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
@@ -2118,6 +2119,7 @@ class PosViewModel @Inject constructor(
 
     private fun resolveCheckoutMethod(preferred: PaymentMethod?): PaymentMethod {
         if (preferred == PaymentMethod.PAY_LATER) return PaymentMethod.PAY_LATER
+        if (preferred == PaymentMethod.INVOICE) return PaymentMethod.INVOICE
         val settings = cachedSettings
         val enabled = buildList {
             if (settings.cashEnabled) add(PaymentMethod.CASH)
@@ -2147,12 +2149,12 @@ class PosViewModel @Inject constructor(
             it.copy(
                 checkoutState = it.checkoutState.copy(
                     method = method,
-                    cardTenderAmount = if (method == PaymentMethod.CASH || method == PaymentMethod.PAY_LATER) {
+                    cardTenderAmount = if (method == PaymentMethod.CASH || method == PaymentMethod.PAY_LATER || method == PaymentMethod.INVOICE) {
                         0.0
                     } else {
                         it.checkoutState.cardTenderAmount
                     },
-                    tenderAmount = if (method == PaymentMethod.PAY_LATER) 0.0 else it.checkoutState.tenderAmount
+                    tenderAmount = if (method == PaymentMethod.PAY_LATER || method == PaymentMethod.INVOICE) 0.0 else it.checkoutState.tenderAmount
                 )
             )
         }
@@ -3609,6 +3611,107 @@ class PosViewModel @Inject constructor(
                 }.onFailure { e ->
                     updateExtras {
                         it.copy(isProcessingPayment = false, errorMessage = e.message ?: "Could not save order")
+                    }
+                }
+                return@launch
+            }
+
+            if (method == PaymentMethod.INVOICE) {
+                if (fullCart.deliveryName.isNullOrBlank()) {
+                    updateExtras {
+                        it.copy(
+                            isProcessingPayment = false,
+                            errorMessage = appContext.getString(com.chaslay.pos.R.string.invoice_customer_required)
+                        )
+                    }
+                    showAttachCustomerDialog()
+                    return@launch
+                }
+                preparePayLaterFulfillment()
+                val saleCart = cartManager.snapshot().let { latest ->
+                    if (latest.splitCount > 1 && !latest.splitByItems) latest else cartManager.paymentSnapshot()
+                }
+                val equalSplitCount = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart.splitCount else 1
+                val saleDiscount = checkoutSaleDiscount(saleCart, checkout, equalSplitCount)
+                val clientId = UUID.randomUUID().toString()
+                val published = if (isDeviceOnline()) {
+                    runCatching {
+                        receiptRepository.publishInvoiceSale(
+                            clientId = clientId,
+                            orderNumber = saleCart.orderNumber ?: clientId.takeLast(8),
+                            cart = saleCart,
+                            total = roundedTotal,
+                            discountAmount = saleDiscount,
+                            tipAmount = checkout.tipAmount,
+                            currency = settings.defaultCurrency,
+                            settings = settings,
+                            customerName = saleCart.deliveryName,
+                            customerPhone = saleCart.deliveryPhone,
+                            customerAddress = listOfNotNull(
+                                saleCart.deliveryAddress,
+                                saleCart.deliveryZip
+                            ).joinToString(", ").ifBlank { null }
+                        )
+                    }.getOrNull()
+                } else {
+                    null
+                }
+                val extraNotes = published?.id?.takeIf { it.isNotBlank() }?.let { "[invoice-order:$it]" }
+                runCatching {
+                    heldOrderRepository.createProgrammedPayLaterOrder(
+                        cart = saleCart,
+                        userId = userId,
+                        userName = userName,
+                        checkoutDiscountPercent = if (equalSplitCount > 1) 0.0 else checkout.discountPercent,
+                        checkoutDiscountAmount = saleDiscount,
+                        tipAmount = checkout.tipAmount,
+                        finalTotal = roundedTotal,
+                        paymentMethod = PaymentMethod.INVOICE,
+                        extraNotes = extraNotes
+                    )
+                }.onSuccess {
+                    cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
+                    cartManager.resetSplit()
+                    val snack = if (published?.id != null) {
+                        appContext.getString(com.chaslay.pos.R.string.invoice_created)
+                    } else {
+                        appContext.getString(com.chaslay.pos.R.string.invoice_offline_queued)
+                    }
+                    updateExtras {
+                        it.copy(
+                            isProcessingPayment = false,
+                            showCheckoutScreen = false,
+                            snackbarMessage = snack,
+                            checkoutState = CheckoutState(roundingStep = checkoutRoundingDefault()),
+                            masterOrderId = null,
+                            equalSplitPaidCount = 0,
+                            selectedCartItemId = null,
+                            lastAddedItemId = null,
+                            keypadBuffer = "",
+                            kitchenSentToPrinter = false
+                        )
+                    }
+                    published?.id?.let { orderId ->
+                        viewModelScope.launch {
+                            invoiceRepository.downloadAndOpen(
+                                appContext,
+                                orderId,
+                                "${saleCart.orderNumber ?: "invoice"}.pdf"
+                            ).onFailure { e ->
+                                Log.w("POS", "Invoice PDF failed", e)
+                                updateExtras {
+                                    it.copy(snackbarMessage = appContext.getString(com.chaslay.pos.R.string.invoice_pdf_failed))
+                                }
+                            }
+                        }
+                    }
+                    viewModelScope.launch {
+                        runCatching { printPendingKitchenForCurrentTable(saleCart) }
+                            .onFailure { e -> Log.w("POS", "Invoice kitchen print failed", e) }
+                    }
+                }.onFailure { e ->
+                    updateExtras {
+                        it.copy(isProcessingPayment = false, errorMessage = e.message ?: "Could not save invoice")
                     }
                 }
                 return@launch

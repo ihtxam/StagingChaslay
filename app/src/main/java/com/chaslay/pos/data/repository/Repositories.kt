@@ -2407,7 +2407,9 @@ class HeldOrderRepository @Inject constructor(
         checkoutDiscountPercent: Double,
         checkoutDiscountAmount: Double = 0.0,
         tipAmount: Double = 0.0,
-        finalTotal: Double
+        finalTotal: Double,
+        paymentMethod: PaymentMethod = PaymentMethod.PAY_LATER,
+        extraNotes: String? = null
     ): HeldOrderEntity {
         val subtotal = cart.subtotal
         val itemDiscount = cart.itemDiscountTotal
@@ -2449,7 +2451,11 @@ class HeldOrderRepository @Inject constructor(
             tableId = cart.tableId,
             tableName = cart.tableName,
             tableOrderId = cart.tableOrderId,
-            notes = listOfNotNull(cart.cartNotes?.trim()?.takeIf { it.isNotBlank() }, tipNote)
+            notes = listOfNotNull(
+                cart.cartNotes?.trim()?.takeIf { it.isNotBlank() },
+                tipNote,
+                extraNotes?.trim()?.takeIf { it.isNotBlank() }
+            )
                 .joinToString("\n")
                 .ifBlank { null },
             fulfillmentType = cart.fulfillmentType,
@@ -2458,7 +2464,7 @@ class HeldOrderRepository @Inject constructor(
             deliveryAddress = cart.deliveryAddress,
             deliveryZip = cart.deliveryZip,
             deliveryPhone = cart.deliveryPhone,
-            paymentMethod = PaymentMethod.PAY_LATER
+            paymentMethod = paymentMethod
         )
         heldOrderDao.upsert(entity)
         val items = cart.items.map { item ->
@@ -2553,6 +2559,11 @@ class HeldOrderRepository @Inject constructor(
         heldOrderDao.getActive().map { order -> order to heldOrderItemDao.getByOrder(order.id) }
 
     suspend fun countActive(): Int = heldOrderDao.countActive()
+
+    suspend fun deleteHeldOrder(id: String) {
+        heldOrderItemDao.deleteByOrder(id)
+        heldOrderDao.delete(id)
+    }
 
     /** Deletes ALL held orders and their items. Irreversible. */
     suspend fun clearAll() {

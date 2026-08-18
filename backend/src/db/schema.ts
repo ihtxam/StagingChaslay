@@ -199,6 +199,15 @@ export const merchants = pgTable(
     webposTerminalEnabled: boolean("webpos_terminal_enabled").default(true).notNull(),
     /** Allow Gift Card as a WebPOS tender (requires gift card settings enabled) */
     webposGiftCardEnabled: boolean("webpos_gift_card_enabled").default(false).notNull(),
+    /** Allow Invoice as a WebPOS / Android checkout tender */
+    webposInvoiceEnabled: boolean("webpos_invoice_enabled").default(true).notNull(),
+    /** Bank details printed on A4 invoices + Swiss QR-bill */
+    bankIban: varchar("bank_iban", { length: 34 }),
+    bankQrIban: varchar("bank_qr_iban", { length: 34 }),
+    bankName: varchar("bank_name", { length: 255 }),
+    bankAccountHolder: varchar("bank_account_holder", { length: 255 }),
+    /** Per-merchant invoice number sequence (INV-YYYY-NNNNN) */
+    invoiceSequence: integer("invoice_sequence").default(0).notNull(),
     /**
      * Gift card / stored-value settings:
      * { enabled, presetDenominations, minAmount, maxAmount, reloadEnabled, customAmountEnabled }
@@ -861,8 +870,11 @@ export const orders = pgTable(
     pointsEarned: integer("points_earned").default(0),
     pointsRedeemed: integer("points_redeemed").default(0),
     total: decimal("total", { precision: 10, scale: 2 }).notNull(),
-    paymentMethod: varchar("payment_method", { length: 50 }), // cash, card, terminal, loyalty, online
+    paymentMethod: varchar("payment_method", { length: 50 }), // cash, card, terminal, loyalty, online, invoice
     paymentStatus: varchar("payment_status", { length: 50 }), // pending, awaiting_payment, completed, failed
+    invoiceNumber: varchar("invoice_number", { length: 50 }),
+    invoiceIssuedAt: timestamp("invoice_issued_at"),
+    invoiceDueAt: timestamp("invoice_due_at"),
     adyenReference: varchar("adyen_reference", { length: 255 }),
     /** Original Adyen POI transaction timestamp (required for terminal card refunds) */
     adyenPoiTransactionTs: timestamp("adyen_poi_transaction_ts"),

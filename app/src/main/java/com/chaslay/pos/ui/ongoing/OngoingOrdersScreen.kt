@@ -23,9 +23,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import com.chaslay.pos.domain.model.PaymentMethod
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -73,6 +78,7 @@ fun OngoingOrdersScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val orders = state.filteredOrders
     val colors = vectronColors()
+    var recordPaymentFor by remember { mutableStateOf<OngoingOrderCard?>(null) }
     val filterChipColors = FilterChipDefaults.filterChipColors(
         containerColor = Color(0xFFE8E8E8),
         labelColor = Color(0xFF333333),
@@ -233,7 +239,13 @@ fun OngoingOrdersScreen(
                                 }
                             },
                             onPrint = { viewModel.printReceiptForOrder(order) },
-                            onSendKitchen = { viewModel.sendKitchenForOrder(order) }
+                            onSendKitchen = { viewModel.sendKitchenForOrder(order) },
+                            onOpenInvoice = if (order.paymentMethod == PaymentMethod.INVOICE) {
+                                { viewModel.openInvoicePdf(order) }
+                            } else null,
+                            onRecordPayment = if (order.paymentMethod == PaymentMethod.INVOICE) {
+                                { recordPaymentFor = order }
+                            } else null
                         )
                     }
                 }
@@ -259,6 +271,35 @@ fun OngoingOrdersScreen(
             content(Modifier.padding(padding))
         }
     }
+
+    recordPaymentFor?.let { card ->
+        AlertDialog(
+            onDismissRequest = { recordPaymentFor = null },
+            title = { Text(stringResource(R.string.invoice_record_payment)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("#${card.orderNumber}")
+                    listOf(
+                        "cash" to stringResource(R.string.cash),
+                        "card" to stringResource(R.string.card),
+                        "bank_transfer" to stringResource(R.string.invoice_bank_transfer)
+                    ).forEach { (method, label) ->
+                        TextButton(
+                            onClick = {
+                                viewModel.recordInvoicePayment(card, method)
+                                recordPaymentFor = null
+                            }
+                        ) { Text(label) }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { recordPaymentFor = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -267,7 +308,9 @@ private fun OngoingOrderCardView(
     currencySymbol: String,
     onClick: () -> Unit,
     onPrint: () -> Unit,
-    onSendKitchen: () -> Unit
+    onSendKitchen: () -> Unit,
+    onOpenInvoice: (() -> Unit)? = null,
+    onRecordPayment: (() -> Unit)? = null
 ) {
     val headerColor = channelHeaderColor(order)
     val channelLabel = channelLabel(order)
@@ -364,6 +407,12 @@ private fun OngoingOrderCardView(
                 OngoingActionIcon(Icons.Default.Print, onPrint)
                 if (!isCompleted) {
                     OngoingActionIcon(Icons.Default.Restaurant, onSendKitchen)
+                }
+                if (onOpenInvoice != null) {
+                    OngoingActionIcon(Icons.Default.Description, onOpenInvoice)
+                }
+                if (onRecordPayment != null) {
+                    OngoingActionIcon(Icons.Default.Payments, onRecordPayment)
                 }
             }
         }

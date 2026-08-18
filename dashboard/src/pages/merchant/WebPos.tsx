@@ -396,7 +396,7 @@ type SaleRecord = {
   synced: boolean;
 };
 
-type PosPaymentMethod = 'cash' | 'card' | 'terminal' | 'pay_later' | 'gift_card';
+type PosPaymentMethod = 'cash' | 'card' | 'terminal' | 'pay_later' | 'gift_card' | 'invoice';
 
 type WebPosTerminal = {
   id: string;
@@ -412,6 +412,7 @@ type WebPosPaymentConfig = {
     card: boolean;
     terminal: boolean;
     giftCard?: boolean;
+    invoice?: boolean;
   };
   terminalReady: boolean;
   adyenConfigured: boolean;
@@ -4468,8 +4469,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       payments[0];
     if (!primary && due > 0.001) return;
     let payMethod = primary?.method === 'gift_card' ? 'card' : primary?.method || 'cash';
-    if (payMethod === 'pay_later') payMethod = 'cash';
-    if (!['cash', 'card', 'terminal'].includes(payMethod)) payMethod = 'cash';
+    if (payMethod === 'pay_later' || payMethod === 'invoice') payMethod = 'cash';
+    if (!['cash', 'card', 'terminal', 'bank_transfer'].includes(payMethod)) payMethod = 'cash';
     const action = collectPaymentAction(ctx.status);
     setBusy(true);
     try {
@@ -4589,6 +4590,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
+  const openInvoicePdf = async (orderId: string) => {
+    try {
+      const res = await api.get(`/merchant/orders/${orderId}/invoice.pdf`, {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      window.open(url, '_blank', 'noopener');
+    } catch {
+      toast.error(t('webPosInvoicePdfFailed'));
+    }
+  };
+
   const completeMultiTenderCheckout = async (
     payments: AppliedPayment[],
     changeDue: number,
@@ -4675,6 +4688,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await runTerminalPayment(undefined, extras);
       return;
     }
+    if (primary?.method === 'invoice' && !selectedCustomer) {
+      toast.error(t('webPosInvoiceCustomerRequired'));
+      setCustomerOpen(true);
+      return;
+    }
     setBusy(true);
     try {
       const saleMethod: PosPaymentMethod =
@@ -4682,6 +4700,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ? 'cash'
           : primary.method === 'pay_later'
           ? 'pay_later'
+          : primary.method === 'invoice'
+            ? 'invoice'
           : primary.method === 'gift_card'
             ? 'gift_card'
             : primary.method;
@@ -5184,7 +5204,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   ) => {
     const saleTicketDisplay = ticketMeta?.display || ticketDisplay;
     const saleTabNumber = tabNumber;
-    const payLater = method === 'pay_later';
+    const payLater = method === 'pay_later' || method === 'invoice';
     const when = whenOverride !== undefined ? whenOverride : fulfillmentWhen;
     const scheduledRaw = when?.mode === 'later' ? when.scheduledFor : null;
     const scheduledFor =
@@ -5447,7 +5467,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (
         attachedMembership?.membershipEnabled &&
         backendOrderId &&
-        method !== 'pay_later'
+        method !== 'pay_later' &&
+        method !== 'invoice'
       ) {
         const giftCardPaid = roundMoney2(
           (extrasWithDisc?.tenders || [])
@@ -5647,7 +5668,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     setCheckoutExtras(null);
     setCheckoutOpen(false);
-    const payLater = method === 'pay_later';
+    const payLater = method === 'pay_later' || method === 'invoice';
     const paidTotal = sale.total;
     const splitPaidTotal = roundMoney2(
       splitReceiptsRef.current.reduce((s, p) => s + p.amount, 0)
@@ -5661,7 +5682,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setExpressSuccessOpen(false);
     } else if (!showSuccessScreen || payLater || moreSplits) {
       toast.success(
-        payLater
+        method === 'invoice'
+          ? t('webPosInvoiceCreated').replace('{number}', sale.orderNumber || '')
+          : payLater
           ? t('webPosProgrammedSaved')
           : moreSplits
             ? t('webPosSplitNext').replace('{n}', String(splitIndex + 2)).replace('{total}', String(splitQueue.length))
@@ -5696,6 +5719,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }).catch((e: unknown) => {
         toastPrintError(e, t, 'webPosKitchenPrintFailed');
       });
+    }
+    if (method === 'invoice' && backendOrderId) {
+      void openInvoicePdf(backendOrderId);
     }
   };
 
@@ -5739,7 +5765,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       whenForCheckout = asapFulfillment();
       setFulfillmentWhen(whenForCheckout);
     }
-    if (scheduleChannel === 'delivery' && !selectedCustomer) {
+    if ((scheduleChannel === 'delivery' || method === 'invoice') && !selectedCustomer) {
+      if (method === 'invoice' && !selectedCustomer) {
+        toast.error(t('webPosInvoiceCustomerRequired'));
+      }
       setPendingPayMethod(method);
       setCustomerOpen(true);
       return;
@@ -6213,6 +6242,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     terminal: (paymentConfig?.methods.terminal ?? false) && canPay && !offlineNow,
     giftCard:
       (paymentConfig?.methods.giftCard === true) && canPay && giftCardsEditionOk && !offlineNow,
+    invoice: (paymentConfig?.methods.invoice !== false) && canPay,
   };
   const giftCardsFeatureOn =
     giftCardsEditionOk && enabledMethods.giftCard;
@@ -6564,6 +6594,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 (channel === 'takeaway' || channel === 'delivery') &&
                 canPay &&
                 !offlineNow,
+              invoice: !collectOrderRef && enabledMethods.invoice,
             }}
             busy={busy || paymentModalOpen}
             customerLabel={customerLabel}
@@ -7608,6 +7639,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           card: paymentConfig?.methods.card !== false,
           terminal: paymentConfig?.methods.terminal === true,
           payLater: true,
+          invoice: enabledMethods.invoice,
         }}
         initialMethod={checkoutSeedMethod}
         onClose={() => {

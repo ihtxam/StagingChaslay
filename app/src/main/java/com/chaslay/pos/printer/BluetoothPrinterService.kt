@@ -1974,6 +1974,7 @@ class BluetoothPrinterService @Inject constructor(
         PaymentMethod.TAP_TO_PAY -> "Tap-to-Pay"
         PaymentMethod.ADYEN_TERMINAL -> "Adyen"
         PaymentMethod.PAY_LATER -> "Pay Later"
+        PaymentMethod.INVOICE -> "Invoice"
         PaymentMethod.GIFT_CARD -> "Gift card"
     }
 

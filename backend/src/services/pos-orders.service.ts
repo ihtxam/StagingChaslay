@@ -33,6 +33,8 @@ const ALLOWED_PAYMENT_METHODS = new Set([
   "online",
   "loyalty",
   "pay_later",
+  "invoice",
+  "bank_transfer",
 ]);
 
 type HeldCartLine = {
@@ -134,6 +136,9 @@ export class PosOrdersService {
       paymentMethod: o.paymentMethod,
       paymentBreakdown: o.paymentBreakdown ?? null,
       paymentStatus: o.paymentStatus,
+      invoiceNumber: (o as { invoiceNumber?: string | null }).invoiceNumber || null,
+      invoiceIssuedAt: (o as { invoiceIssuedAt?: Date | null }).invoiceIssuedAt || null,
+      invoiceDueAt: (o as { invoiceDueAt?: Date | null }).invoiceDueAt || null,
       subtotal: Number(o.subtotal),
       taxAmount: Number(o.taxAmount),
       discountAmount: Number(o.discountAmount || 0),

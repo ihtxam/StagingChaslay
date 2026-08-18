@@ -108,6 +108,11 @@ interface SettingsData {
   webposCashEnabled?: boolean;
   webposCardEnabled?: boolean;
   webposGiftCardEnabled?: boolean;
+  webposInvoiceEnabled?: boolean;
+  bankIban?: string | null;
+  bankQrIban?: string | null;
+  bankName?: string | null;
+  bankAccountHolder?: string | null;
   webposTerminalEnabled?: boolean;
   adyenLiveEnvironment?: boolean;
   adyenUseLegacyEndpoint?: boolean;
@@ -912,6 +917,11 @@ export default function Settings() {
         webposCardEnabled: settings.webposCardEnabled !== false,
         webposTerminalEnabled: settings.webposTerminalEnabled !== false,
         webposGiftCardEnabled: settings.webposGiftCardEnabled === true,
+        webposInvoiceEnabled: settings.webposInvoiceEnabled !== false,
+        bankIban: settings.bankIban || null,
+        bankQrIban: settings.bankQrIban || null,
+        bankName: settings.bankName || null,
+        bankAccountHolder: settings.bankAccountHolder || null,
         panelLanguage: settings.panelLanguage || locale,
         emailSmtpSettings: {
           enabled: !!settings.emailSmtpSettings?.enabled,
@@ -1025,6 +1035,11 @@ export default function Settings() {
         webposCardEnabled: settings.webposCardEnabled !== false,
         webposTerminalEnabled: settings.webposTerminalEnabled !== false,
         webposGiftCardEnabled: settings.webposGiftCardEnabled === true,
+        webposInvoiceEnabled: settings.webposInvoiceEnabled !== false,
+        bankIban: settings.bankIban || null,
+        bankQrIban: settings.bankQrIban || null,
+        bankName: settings.bankName || null,
+        bankAccountHolder: settings.bankAccountHolder || null,
         adyenLiveEnvironment: !!settings.adyenLiveEnvironment,
         adyenUseLegacyEndpoint: !!settings.adyenUseLegacyEndpoint,
       });
@@ -2047,6 +2062,7 @@ export default function Settings() {
                       ['webposCardEnabled', t('webposCard'), false] as const,
                       ['webposTerminalEnabled', t('webposTerminal'), false] as const,
                       ['webposGiftCardEnabled', t('webposGiftCard'), true] as const,
+                      ['webposInvoiceEnabled', t('webposInvoice'), false] as const,
                     ] as const
                   ).map(([key, label, optIn]) => (
                     <label
@@ -2210,6 +2226,66 @@ export default function Settings() {
                     />
                     {t('adyenLegacyEndpoint')}
                   </label>
+                </Section>
+                <SettingsSaveBar saving={savingWebposPay} />
+              </form>
+
+              <form onSubmit={saveWebposPayments} className="space-y-5">
+                <Section
+                  id="payments-invoice-bank"
+                  icon={Building2}
+                  accent={settingsDash.info}
+                  title={t('invoiceBankDetails')}
+                  description={t('invoiceBankDetailsHint')}
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field label={t('invoiceAccountHolder')}>
+                      <input
+                        className="input"
+                        value={settings?.bankAccountHolder || ''}
+                        onChange={(e) =>
+                          setSettings((prev) =>
+                            prev ? { ...prev, bankAccountHolder: e.target.value } : prev
+                          )
+                        }
+                      />
+                    </Field>
+                    <Field label={t('invoiceBankName')}>
+                      <input
+                        className="input"
+                        value={settings?.bankName || ''}
+                        onChange={(e) =>
+                          setSettings((prev) =>
+                            prev ? { ...prev, bankName: e.target.value } : prev
+                          )
+                        }
+                      />
+                    </Field>
+                    <Field label={t('invoiceIban')}>
+                      <input
+                        className="input font-mono uppercase"
+                        value={settings?.bankIban || ''}
+                        onChange={(e) =>
+                          setSettings((prev) =>
+                            prev ? { ...prev, bankIban: e.target.value.toUpperCase() } : prev
+                          )
+                        }
+                        placeholder="CH93 0076 2011 6238 5295 7"
+                      />
+                    </Field>
+                    <Field label={t('invoiceQrIban')} hint={t('invoiceQrIbanHint')}>
+                      <input
+                        className="input font-mono uppercase"
+                        value={settings?.bankQrIban || ''}
+                        onChange={(e) =>
+                          setSettings((prev) =>
+                            prev ? { ...prev, bankQrIban: e.target.value.toUpperCase() } : prev
+                          )
+                        }
+                        placeholder="CH44 3199 9123 0008 8901 2"
+                      />
+                    </Field>
+                  </div>
                 </Section>
                 <SettingsSaveBar saving={savingWebposPay} />
               </form>

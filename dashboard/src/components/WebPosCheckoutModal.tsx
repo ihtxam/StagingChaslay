@@ -10,7 +10,7 @@ import {
 import type { PosCheckoutSettings } from '@/lib/pos-checkout';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 
-export type CheckoutPayMethod = 'cash' | 'card' | 'terminal' | 'pay_later';
+export type CheckoutPayMethod = 'cash' | 'card' | 'terminal' | 'pay_later' | 'invoice';
 
 export type CheckoutResult = {
   method: CheckoutPayMethod;
@@ -34,6 +34,7 @@ type MethodFlags = {
   card?: boolean;
   terminal?: boolean;
   payLater?: boolean;
+  invoice?: boolean;
 };
 
 type Props = {
@@ -104,6 +105,7 @@ export default function WebPosCheckoutModal({
     { id: 'card', label: t('card'), show: methods.card !== false },
     { id: 'terminal', label: t('terminal'), show: methods.terminal !== false },
     { id: 'pay_later', label: t('webPosPayLater'), show: methods.payLater !== false },
+    { id: 'invoice', label: t('webPosInvoice'), show: methods.invoice !== false },
   ];
 
   return (
@@ -304,7 +306,7 @@ export default function WebPosCheckoutModal({
                 })
               }
             >
-              {t('webPosConfirmPay')} ù CHF {calc.total.toFixed(2)}
+              {t('webPosConfirmPay')} ? CHF {calc.total.toFixed(2)}
             </button>
           </div>
         </div>

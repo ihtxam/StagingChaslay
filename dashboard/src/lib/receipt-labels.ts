@@ -57,6 +57,7 @@ export type ReceiptLabels = {
   deliveryTime: string;
   asap: string;
   payLater: string;
+  invoice: string;
   totalItems: string;
   vatIncludedNote: string;
   tip: string;
@@ -134,6 +135,7 @@ const EN: ReceiptLabels = {
   deliveryTime: 'Delivery:',
   asap: 'ASAP',
   payLater: 'Pay later',
+  invoice: 'Invoice',
   totalItems: 'Items',
   vatIncludedNote: 'VAT included in prices',
   tip: 'Tip',
@@ -212,6 +214,7 @@ const FR: ReceiptLabels = {
   deliveryTime: 'Livraison :',
   asap: 'Des que possible',
   payLater: 'Payer plus tard',
+  invoice: 'Facture',
   totalItems: 'Articles',
   vatIncludedNote: 'TVA incluse dans les prix',
   tip: 'Pourboire',
@@ -290,6 +293,7 @@ const DE: ReceiptLabels = {
   deliveryTime: 'Lieferung:',
   asap: 'Sofort',
   payLater: 'Spaeter zahlen',
+  invoice: 'Rechnung',
   totalItems: 'Artikel',
   vatIncludedNote: 'MwSt. im Preis enthalten',
   tip: 'Trinkgeld',
@@ -332,6 +336,8 @@ export function paymentLabel(labels: ReceiptLabels, method?: string | null): str
   if (m === 'card') return labels.card;
   if (m === 'terminal') return labels.terminal;
   if (m === 'pay_later') return labels.payLater;
+  if (m === 'invoice') return labels.invoice || 'Invoice';
+  if (m === 'bank_transfer') return 'Bank transfer';
   if (m === 'gift_card' || m === 'gift-card') return 'Gift card';
   if (m === 'mixed') return 'Mixed';
   return String(method || '').toUpperCase();

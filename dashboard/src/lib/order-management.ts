@@ -119,7 +119,7 @@ export function isAwaitingPaymentOrder(o: MerchantOrder): boolean {
   if (['cancelled', 'refunded', 'completed'].includes(status)) return false;
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
   if (pay === 'awaiting_payment') return true;
-  if (method === 'pay_later' || method === 'pay-later') return true;
+  if (method === 'pay_later' || method === 'pay-later' || method === 'invoice') return true;
   if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) return true;
   return false;
 }
@@ -194,7 +194,7 @@ export function canCollectPayment(o: MerchantOrder): boolean {
   if (!isReadyForPaymentCollection(o)) return false;
   if (pay === 'awaiting_payment') return true;
   if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) return true;
-  if (method === 'pay_later' || method === 'pay-later') return true;
+  if (method === 'pay_later' || method === 'pay-later' || method === 'invoice') return true;
   return false;
 }
 
@@ -353,5 +353,7 @@ function paymentLabelUi(method: string, t: (k: string) => string): string {
   if (m === 'gift_card') return t('giftCard');
   if (m === 'mixed') return t('webPosMixedPayment');
   if (m === 'pay_later') return t('webPosPayLater');
+  if (m === 'invoice') return t('webPosInvoice');
+  if (m === 'bank_transfer') return t('webPosBankTransfer');
   return receiptPaymentLabel(receiptLabels('en'), method);
 }

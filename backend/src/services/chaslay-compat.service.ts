@@ -483,6 +483,7 @@ export class ChaslayCompatService {
         giftCard:
           merchant.webposGiftCardEnabled === true &&
           !!(merchant.giftCardSettings as { enabled?: boolean } | null)?.enabled,
+        invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
       },
       features: {
         courses_enabled: !!merchant.coursesEnabled,

@@ -12,7 +12,7 @@ export type PosView = PosTab | 'checkout' | 'success';
 
 export type KeypadMode = 'qty' | 'percent' | 'price';
 
-export type PosPaymentMethod = 'cash' | 'card' | 'terminal' | 'pay_later' | 'gift_card';
+export type PosPaymentMethod = 'cash' | 'card' | 'terminal' | 'pay_later' | 'gift_card' | 'invoice';
 
 export type GiftCardLineMeta = {
   op: 'sell' | 'reload';

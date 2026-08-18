@@ -406,6 +406,7 @@ export class OrderService {
       order.paymentMethod === "cash" ||
       order.paymentMethod === "pay_later" ||
       order.paymentMethod === "pay-later" ||
+      order.paymentMethod === "invoice" ||
       order.paymentStatus === "cash" ||
       order.paymentStatus === "awaiting_payment";
 
@@ -476,9 +477,9 @@ export class OrderService {
             .trim()
             .toLowerCase();
           const method =
-            methodRaw === "pay_later" || methodRaw === "pay-later"
+            methodRaw === "pay_later" || methodRaw === "pay-later" || methodRaw === "invoice"
               ? "cash"
-              : ["cash", "card", "terminal"].includes(methodRaw)
+              : ["cash", "card", "terminal", "bank_transfer"].includes(methodRaw)
                 ? methodRaw
                 : "cash";
           const updated = await set({
@@ -517,8 +518,8 @@ export class OrderService {
             .trim()
             .toLowerCase();
           let method = methodRaw;
-          if (method === "pay_later" || method === "pay-later") method = "cash";
-          if (!["cash", "card", "terminal"].includes(method)) method = "cash";
+          if (method === "pay_later" || method === "pay-later" || method === "invoice") method = "cash";
+          if (!["cash", "card", "terminal", "bank_transfer"].includes(method)) method = "cash";
           const updated = await set({
             status: "completed",
             paymentStatus: "completed",

@@ -73,6 +73,7 @@ data class ReceiptLabels(
         PaymentMethod.TAP_TO_PAY -> tapToPay
         PaymentMethod.ADYEN_TERMINAL -> terminal
         PaymentMethod.PAY_LATER -> payLater
+        PaymentMethod.INVOICE -> "Invoice"
         PaymentMethod.GIFT_CARD -> "Gift card"
     }
 

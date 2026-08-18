@@ -6,6 +6,8 @@ import ordersRoutes from "./orders.routes";
 import receiptsRoutes from "./receipts.routes";
 import floorRoutes from "./floor.routes";
 import posSessionsRoutes from "./pos-sessions.routes";
+import { chaslayInvoiceRouter } from "@/routes/invoice.routes";
+import { requireChaslayApiKey } from "@/middleware/chaslay-api-key.middleware";
 
 /**
  * Chaslay / FoodTruck Android POS compatibility routes.
@@ -18,6 +20,7 @@ router.use("/pos/auth", posAuthRoutes);
 router.use("/sync", syncRoutes);
 router.use("/orders", ordersRoutes);
 router.use("/receipts", receiptsRoutes);
+router.use("/invoices", requireChaslayApiKey, chaslayInvoiceRouter());
 router.use("/floor", floorRoutes);
 router.use("/pos/sessions", posSessionsRoutes);
 

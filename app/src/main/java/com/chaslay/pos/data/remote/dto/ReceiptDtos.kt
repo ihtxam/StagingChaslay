@@ -17,7 +17,11 @@ data class ReceiptPublishRequest(
     @SerializedName("discount_amount") val discountAmount: Double? = null,
     @SerializedName("item_discount_total") val itemDiscountTotal: Double? = null,
     @SerializedName("tip_amount") val tipAmount: Double? = null,
-    @SerializedName("payment_breakdown") val paymentBreakdown: List<ReceiptTenderDto>? = null
+    @SerializedName("payment_breakdown") val paymentBreakdown: List<ReceiptTenderDto>? = null,
+    @SerializedName("customer_name") val customerName: String? = null,
+    @SerializedName("customer_phone") val customerPhone: String? = null,
+    @SerializedName("customer_email") val customerEmail: String? = null,
+    @SerializedName("shipping_address") val shippingAddress: String? = null
 )
 
 data class ReceiptTenderDto(
@@ -37,7 +41,9 @@ data class ReceiptItemDto(
 
 data class ReceiptPublishResponse(
     @SerializedName("url") val url: String? = null,
-    @SerializedName("id") val id: String? = null
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("invoiceNumber") val invoiceNumber: String? = null,
+    @SerializedName("invoicePdfPath") val invoicePdfPath: String? = null
 )
 
 data class ReceiptEmailRequest(
@@ -49,4 +55,4 @@ data class ReceiptEmailResponse(
     @SerializedName("success") val success: Boolean = false,
     @SerializedName("message") val message: String? = null
 )
-
+

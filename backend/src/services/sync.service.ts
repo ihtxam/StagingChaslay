@@ -368,6 +368,7 @@ export class SyncService {
       orderId: string;
       created: boolean;
       skipped?: boolean;
+      invoiceNumber?: string | null;
     }> = [];
 
     for (const sale of sales) {
@@ -422,11 +423,15 @@ export class SyncService {
       const payStatus = isCancelled
         ? "cancelled"
         : sale.paymentStatus || "completed";
+      const isInvoice =
+        !isCancelled &&
+        (String(sale.paymentMethod || "").toLowerCase().replace(/-/g, "_") === "invoice");
       const payLater =
         !isCancelled &&
         (payStatus === "awaiting_payment" ||
           sale.paymentMethod === "pay_later" ||
-          sale.paymentMethod === "pay-later");
+          sale.paymentMethod === "pay-later" ||
+          isInvoice);
       let scheduledFor: Date | null = null;
       if (sale.scheduledFor != null && sale.scheduledFor !== "") {
         const d = new Date(sale.scheduledFor);
@@ -469,7 +474,7 @@ export class SyncService {
         paymentMethod: isCancelled
           ? sale.paymentMethod || null
           : resolveSalePaymentMethod(sale.paymentBreakdown || [], sale.paymentMethod),
-        paymentStatus: payStatus,
+        paymentStatus: isInvoice ? "awaiting_payment" : payStatus,
         adyenReference: sale.adyenReference ? String(sale.adyenReference).trim() : null,
         adyenPoiTransactionTs: (() => {
           if (
@@ -596,7 +601,17 @@ export class SyncService {
         }
       }
 
-      results.push({ clientId: sale.clientId, orderId: order.id, created: true });
+      let invoiceNumber: string | null = null;
+      if (isInvoice) {
+        try {
+          const { InvoiceService } = await import("@/services/invoice.service");
+          invoiceNumber = await InvoiceService.ensureInvoiceNumber(merchantId, order.id);
+        } catch (err) {
+          console.warn("[sync] invoice number assign failed:", err);
+        }
+      }
+
+      results.push({ clientId: sale.clientId, orderId: order.id, created: true, invoiceNumber });
     }
 
     return { results };

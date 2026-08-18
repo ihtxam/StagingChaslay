@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.Button
@@ -155,7 +156,8 @@ fun CheckoutScreen(
     val methodChargesRemaining = checkoutState.method == PaymentMethod.CARD ||
         checkoutState.method == PaymentMethod.ADYEN_TERMINAL ||
         checkoutState.method == PaymentMethod.TAP_TO_PAY ||
-        checkoutState.method == PaymentMethod.PAY_LATER
+        checkoutState.method == PaymentMethod.PAY_LATER ||
+        checkoutState.method == PaymentMethod.INVOICE
     val canComplete = !isProcessing && cart.items.isNotEmpty() &&
         (remaining <= 0.001 || exactCash || methodChargesRemaining)
 
@@ -307,6 +309,17 @@ fun CheckoutScreen(
                     tenderBuffer = ""
                     onTenderAmount(0.0)
                     onSelectMethod(PaymentMethod.PAY_LATER)
+                }
+            )
+            CheckoutMethodButton(
+                title = stringResource(R.string.invoice),
+                icon = Icons.Default.Description,
+                selected = checkoutState.method == PaymentMethod.INVOICE,
+                accent = Color(0xFF0EA5E9),
+                onClick = {
+                    tenderBuffer = ""
+                    onTenderAmount(0.0)
+                    onSelectMethod(PaymentMethod.INVOICE)
                 }
             )
 

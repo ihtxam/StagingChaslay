@@ -8,6 +8,7 @@ import com.chaslay.pos.data.remote.ReceiptApi
 import com.chaslay.pos.data.remote.dto.ReceiptEmailRequest
 import com.chaslay.pos.data.remote.dto.ReceiptItemDto
 import com.chaslay.pos.data.remote.dto.ReceiptPublishRequest
+import com.chaslay.pos.data.remote.dto.ReceiptPublishResponse
 import com.chaslay.pos.data.remote.dto.ReceiptTenderDto
 import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.PaymentTenderNotes
@@ -127,6 +128,51 @@ class ReceiptRepository @Inject constructor(
         url
     }.recoverCatching { error ->
         throw Exception(apiErrorMessage(error, "Could not upload receipt to server"), error)
+    }
+
+    suspend fun publishInvoiceSale(
+        clientId: String,
+        orderNumber: String,
+        cart: CartSummary,
+        total: Double,
+        discountAmount: Double,
+        tipAmount: Double,
+        currency: String,
+        settings: BusinessSettingsEntity,
+        customerName: String?,
+        customerPhone: String?,
+        customerAddress: String?
+    ): ReceiptPublishResponse {
+        return receiptApi.publishReceipt(
+            ReceiptPublishRequest(
+                id = clientId,
+                transactionNumber = orderNumber,
+                total = total,
+                currency = currency,
+                paymentMethod = "invoice",
+                businessName = settings.businessName,
+                createdAt = System.currentTimeMillis(),
+                subtotal = cart.subtotal,
+                taxTotal = cart.taxTotal,
+                discountAmount = discountAmount,
+                itemDiscountTotal = cart.itemDiscountTotal,
+                tipAmount = tipAmount.takeIf { it > 0.0 },
+                items = cart.items.map { item ->
+                    ReceiptItemDto(
+                        productName = item.productName,
+                        variantName = item.variantName,
+                        quantity = item.quantity,
+                        lineTotal = item.lineTotal,
+                        lineSubtotal = item.lineSubtotal,
+                        lineDiscount = item.lineDiscount,
+                        unitPrice = item.unitPrice
+                    )
+                },
+                customerName = customerName,
+                customerPhone = customerPhone,
+                shippingAddress = customerAddress
+            )
+        )
     }
 
     suspend fun sendReceiptEmail(

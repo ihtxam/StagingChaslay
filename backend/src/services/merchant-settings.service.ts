@@ -177,6 +177,11 @@ export class MerchantSettingsService {
       webposCardEnabled: merchant.webposCardEnabled !== false,
       webposTerminalEnabled: merchant.webposTerminalEnabled !== false,
       webposGiftCardEnabled: merchant.webposGiftCardEnabled === true,
+      webposInvoiceEnabled: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
+      bankIban: (merchant as { bankIban?: string | null }).bankIban || null,
+      bankQrIban: (merchant as { bankQrIban?: string | null }).bankQrIban || null,
+      bankName: (merchant as { bankName?: string | null }).bankName || null,
+      bankAccountHolder: (merchant as { bankAccountHolder?: string | null }).bankAccountHolder || null,
       onlineCardFeeFixed: merchant.onlineCardFeeFixed ?? "0",
       onlineCardFeePercent: merchant.onlineCardFeePercent ?? "0",
       panelLanguage: merchant.panelLanguage || "en",
@@ -261,6 +266,11 @@ export class MerchantSettingsService {
       webposCardEnabled?: boolean;
       webposTerminalEnabled?: boolean;
       webposGiftCardEnabled?: boolean;
+      webposInvoiceEnabled?: boolean;
+      bankIban?: string | null;
+      bankQrIban?: string | null;
+      bankName?: string | null;
+      bankAccountHolder?: string | null;
       onlineCardFeeFixed?: number;
       onlineCardFeePercent?: number;
       panelLanguage?: string;
@@ -359,6 +369,23 @@ export class MerchantSettingsService {
     if (updates.webposCardEnabled !== undefined) patch.webposCardEnabled = !!updates.webposCardEnabled;
     if (updates.webposTerminalEnabled !== undefined) patch.webposTerminalEnabled = !!updates.webposTerminalEnabled;
     if (updates.webposGiftCardEnabled !== undefined) patch.webposGiftCardEnabled = !!updates.webposGiftCardEnabled;
+    if (updates.webposInvoiceEnabled !== undefined) patch.webposInvoiceEnabled = !!updates.webposInvoiceEnabled;
+    if (updates.bankIban !== undefined) {
+      patch.bankIban = updates.bankIban ? String(updates.bankIban).replace(/\s+/g, "").toUpperCase().slice(0, 34) : null;
+    }
+    if (updates.bankQrIban !== undefined) {
+      patch.bankQrIban = updates.bankQrIban
+        ? String(updates.bankQrIban).replace(/\s+/g, "").toUpperCase().slice(0, 34)
+        : null;
+    }
+    if (updates.bankName !== undefined) {
+      patch.bankName = updates.bankName ? String(updates.bankName).trim().slice(0, 255) : null;
+    }
+    if (updates.bankAccountHolder !== undefined) {
+      patch.bankAccountHolder = updates.bankAccountHolder
+        ? String(updates.bankAccountHolder).trim().slice(0, 255)
+        : null;
+    }
     if (updates.onlineCardFeeFixed !== undefined) {
       const n = Number(updates.onlineCardFeeFixed);
       if (!Number.isFinite(n) || n < 0) throw new Error("onlineCardFeeFixed must be >= 0");

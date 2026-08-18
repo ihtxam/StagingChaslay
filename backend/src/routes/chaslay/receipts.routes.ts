@@ -46,7 +46,10 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
     const discountAmount = Number(body.discount_amount ?? body.item_discount_total ?? 0);
     const tipAmount = Number(body.tip_amount ?? body.tipAmount ?? 0);
     const paymentMethod = String(body.payment_method || "cash").toLowerCase();
-    const isPending = paymentMethod === "pending" || paymentMethod === "pay_later";
+    const isPending =
+      paymentMethod === "pending" ||
+      paymentMethod === "pay_later" ||
+      paymentMethod === "invoice";
     const paymentBreakdown = Array.isArray(body.payment_breakdown)
       ? body.payment_breakdown
           .map((row: { method?: string; amount?: number }) => ({
@@ -69,6 +72,11 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
         tipAmount,
         total,
         completedAt: body.created_at || Date.now(),
+        customerId: body.customer_id || body.customerId || null,
+        customerName: body.customer_name || body.customerName || null,
+        customerPhone: body.customer_phone || body.customerPhone || null,
+        customerEmail: body.customer_email || body.customerEmail || null,
+        shippingAddress: body.shipping_address || body.shippingAddress || null,
         items: items.map((item: any) => ({
           productName: item.product_name || item.productName || "Item",
           quantity: Number(item.quantity || 1),
@@ -99,7 +107,22 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
     }
 
     const url = buildReceiptPublicUrl(order.id);
-    res.status(201).json({ id: order.id, clientId: id, url });
+    let invoiceNumber: string | null = order.invoiceNumber || null;
+    if (paymentMethod === "invoice") {
+      try {
+        const { InvoiceService } = await import("@/services/invoice.service");
+        invoiceNumber = await InvoiceService.ensureInvoiceNumber(req.chaslayMerchantId!, order.id);
+      } catch (err) {
+        console.warn("[receipts] invoice number assign failed:", err);
+      }
+    }
+    res.status(201).json({
+      id: order.id,
+      clientId: id,
+      url,
+      invoiceNumber,
+      invoicePdfPath: paymentMethod === "invoice" ? `/v1/invoices/${order.id}/pdf` : null,
+    });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Receipt publish failed" });
   }
