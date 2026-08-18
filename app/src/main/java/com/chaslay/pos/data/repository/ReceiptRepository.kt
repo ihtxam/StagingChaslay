@@ -8,7 +8,9 @@ import com.chaslay.pos.data.remote.ReceiptApi
 import com.chaslay.pos.data.remote.dto.ReceiptEmailRequest
 import com.chaslay.pos.data.remote.dto.ReceiptItemDto
 import com.chaslay.pos.data.remote.dto.ReceiptPublishRequest
+import com.chaslay.pos.data.remote.dto.ReceiptTenderDto
 import com.chaslay.pos.domain.model.CartSummary
+import com.chaslay.pos.domain.model.PaymentTenderNotes
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import javax.inject.Inject
@@ -193,7 +195,10 @@ class ReceiptRepository @Inject constructor(
                 lineDiscount = item.lineDiscountPerUnit * item.quantity,
                 unitPrice = item.unitPrice
             )
-        }
+        },
+        paymentBreakdown = PaymentTenderNotes.parse(transaction.notes)
+            .takeIf { it.size >= 2 }
+            ?.map { ReceiptTenderDto(PaymentTenderNotes.methodKey(it.method), it.amount) }
     )
 
     companion object {

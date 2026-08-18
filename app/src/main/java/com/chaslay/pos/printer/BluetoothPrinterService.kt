@@ -19,6 +19,7 @@ import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.EndOfDayReport
 import com.chaslay.pos.domain.model.VatBreakdownRow
 import com.chaslay.pos.domain.model.PaymentMethod
+import com.chaslay.pos.domain.model.PaymentTenderNotes
 import com.chaslay.pos.domain.model.PrintTarget
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.formatMoneyAmount
@@ -1116,8 +1117,7 @@ class BluetoothPrinterService @Inject constructor(
             )
         }
 
-        sb.appendLine(leftRight(labels.payment, labels.paymentMethod(transaction.paymentMethod), lineWidth))
-        sb.appendLine(leftRight(labels.paid, twoDp(transaction.total), lineWidth))
+        appendReceiptPaymentLines(sb, labels, transaction, settings.currencySymbol, lineWidth)
         transaction.cardReference?.takeIf { it.isNotBlank() }?.let { ref ->
             sb.appendLine(leftRight("Terminal ref:", ref.take(lineWidth - 14), lineWidth))
         }
@@ -1142,7 +1142,13 @@ class BluetoothPrinterService @Inject constructor(
             orderType = orderType
         )
         transaction.notes?.lines()
-            ?.filter { it.isNotBlank() && !it.startsWith("Gift card payment:") && !it.startsWith("Gift card remaining:") }
+            ?.filter { line ->
+                val trimmed = line.trim()
+                trimmed.isNotBlank() &&
+                    !trimmed.startsWith("Gift card payment:") &&
+                    !trimmed.startsWith("Gift card remaining:") &&
+                    !PaymentTenderNotes.isTenderLine(trimmed)
+            }
             ?.forEach { line ->
             sb.appendLine(line)
         }
@@ -1413,6 +1419,32 @@ class BluetoothPrinterService @Inject constructor(
             ?.trim()
             ?.toDoubleOrNull()
             ?.takeIf { it >= 0.0 }
+
+    private fun appendReceiptPaymentLines(
+        sb: StringBuilder,
+        labels: ReceiptLabels,
+        transaction: TransactionEntity,
+        currencySymbol: String,
+        lineWidth: Int
+    ) {
+        val splitTenders = PaymentTenderNotes.parse(transaction.notes)
+            .filter { it.method != PaymentMethod.GIFT_CARD && it.amount > 0.001 }
+        if (splitTenders.size >= 2) {
+            sb.appendLine(labels.payment)
+            splitTenders.forEach { tender ->
+                sb.appendLine(
+                    leftRight(
+                        "  ${labels.paymentMethod(tender.method)}",
+                        formatMoney(tender.amount, currencySymbol),
+                        lineWidth
+                    )
+                )
+            }
+        } else {
+            sb.appendLine(leftRight(labels.payment, labels.paymentMethod(transaction.paymentMethod), lineWidth))
+        }
+        sb.appendLine(leftRight(labels.paid, twoDp(transaction.total), lineWidth))
+    }
 
     private fun appendReceiptTotal(
         sb: StringBuilder,

@@ -2735,10 +2735,19 @@ private fun VectronProductGrid(
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = VectronColors.CashGreen,
-                        disabledContainerColor = VectronColors.KeypadButton
-                    )
+                        contentColor = Color.White,
+                        disabledContainerColor = VectronColors.KeypadButton,
+                        disabledContentColor = Color.White
+                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Text(stringResource(R.string.cash), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        stringResource(R.string.cash),
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
                 }
             }
             if (showExpressPay && cardEnabled) {
@@ -2749,10 +2758,19 @@ private fun VectronProductGrid(
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = VectronColors.CardBlue,
-                        disabledContainerColor = VectronColors.KeypadButton
-                    )
+                        contentColor = Color.White,
+                        disabledContainerColor = VectronColors.KeypadButton,
+                        disabledContentColor = Color.White
+                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Text(stringResource(R.string.card), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        stringResource(R.string.card),
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
                 }
             }
             if (showExpressPay && terminalEnabled) {
@@ -2763,10 +2781,19 @@ private fun VectronProductGrid(
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF8B5CF6),
-                        disabledContainerColor = VectronColors.KeypadButton
-                    )
+                        contentColor = Color.White,
+                        disabledContainerColor = VectronColors.KeypadButton,
+                        disabledContentColor = Color.White
+                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Text(stringResource(R.string.terminal), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        stringResource(R.string.terminal),
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
                 }
             }
             Button(
@@ -2778,7 +2805,9 @@ private fun VectronProductGrid(
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (showExpressPay) VectronColors.Header else VectronColors.CashGreen,
-                    disabledContainerColor = VectronColors.KeypadButton
+                    contentColor = Color.White,
+                    disabledContainerColor = VectronColors.KeypadButton,
+                    disabledContentColor = Color.White
                 ),
                 contentPadding = PaddingValues(0.dp)
             ) {

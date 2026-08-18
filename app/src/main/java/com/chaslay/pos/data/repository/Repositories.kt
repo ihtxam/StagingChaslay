@@ -38,6 +38,8 @@ import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.HeldOrderStatus
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentStatus
+import com.chaslay.pos.domain.model.PaymentTender
+import com.chaslay.pos.domain.model.PaymentTenderNotes
 import com.chaslay.pos.domain.model.RefundedOrderRow
 import com.chaslay.pos.domain.model.isPaidSale
 import com.chaslay.pos.domain.model.roundMoney
@@ -594,7 +596,8 @@ class TransactionRepository @Inject constructor(
         adyenCustomerReceiptJson: String? = null,
         adyenCashierReceiptJson: String? = null,
         giftCardPaymentAmount: Double? = null,
-        giftCardRemainingBalance: Double? = null
+        giftCardRemainingBalance: Double? = null,
+        paymentTenders: List<PaymentTender> = emptyList()
     ): TransactionEntity {
         val settings = settingsDao.get() ?: BusinessSettingsEntity()
         val resolvedTransactionId = transactionId ?: UUID.randomUUID().toString()
@@ -642,7 +645,7 @@ class TransactionRepository @Inject constructor(
             paymentMethod = paymentMethod,
             paymentStatus = PaymentStatus.COMPLETED,
             currencyCode = settings.defaultCurrency,
-            notes = buildOrderNotes(cart, giftCardPaymentAmount, giftCardRemainingBalance),
+            notes = buildOrderNotes(cart, giftCardPaymentAmount, giftCardRemainingBalance, paymentTenders),
             receiptUrl = resolvedReceiptUrl,
             cardReference = cardReference,
             tableId = cart.tableId,
@@ -2565,13 +2568,15 @@ class HeldOrderRepository @Inject constructor(
 private fun buildOrderNotes(
     cart: CartSummary,
     giftCardPaymentAmount: Double? = null,
-    giftCardRemainingBalance: Double? = null
+    giftCardRemainingBalance: Double? = null,
+    paymentTenders: List<PaymentTender> = emptyList()
 ): String? {
     val lines = mutableListOf<String>()
     cart.cartNotes?.trim()?.takeIf { it.isNotBlank() }?.let { lines.add(it) }
     giftCardPaymentAmount?.takeIf { it > 0.0 }?.let { amount ->
         lines.add(String.format(Locale.US, "Gift card payment: %.2f", amount))
     }
+    lines.addAll(PaymentTenderNotes.encodeLines(paymentTenders))
     giftCardRemainingBalance?.takeIf { it >= 0.0 }?.let { balance ->
         lines.add(String.format(Locale.US, "Gift card remaining: %.2f", balance))
     }

@@ -3,6 +3,7 @@ package com.chaslay.pos.ui.pos
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -244,7 +246,7 @@ fun CheckoutScreen(
                 .width(360.dp)
                 .fillMaxHeight()
                 .background(vc.panelDark)
-                .clickable { onDeselectMethod() }
+                .clickableWithoutRipple { onDeselectMethod() }
                 .padding(12.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -309,23 +311,30 @@ fun CheckoutScreen(
                 )
             }
 
-            if (discountsEnabled) {
-                CheckoutActionChip(
-                    icon = Icons.Default.Sell,
-                    label = stringResource(R.string.discount),
-                    selected = checkoutState.discountPercent > 0 || checkoutState.discountAmount > 0,
-                    onClick = { showDiscountDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            if (tipsEnabled) {
-                CheckoutActionChip(
-                    icon = Icons.Default.Payments,
-                    label = stringResource(R.string.tip),
-                    selected = checkoutState.tipAmount > 0,
-                    onClick = { showTipDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                )
+            if (discountsEnabled || tipsEnabled) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (discountsEnabled) {
+                        CheckoutActionChip(
+                            icon = Icons.Default.Sell,
+                            label = stringResource(R.string.discount),
+                            selected = checkoutState.discountPercent > 0 || checkoutState.discountAmount > 0,
+                            onClick = { showDiscountDialog = true },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (tipsEnabled) {
+                        CheckoutActionChip(
+                            icon = Icons.Default.Payments,
+                            label = stringResource(R.string.tip),
+                            selected = checkoutState.tipAmount > 0,
+                            onClick = { showTipDialog = true },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
 
             Row(
@@ -416,7 +425,7 @@ fun CheckoutScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .clickable { onDeselectMethod() }
+                .clickableWithoutRipple { onDeselectMethod() }
                 .padding(16.dp)
         ) {
             Column(
@@ -845,3 +854,11 @@ private fun formatTenderBuffer(amount: Double): String =
     } else {
         String.format(Locale.US, "%.2f", amount)
     }
+
+private fun Modifier.clickableWithoutRipple(onClick: () -> Unit): Modifier = composed {
+    clickable(
+        interactionSource = remember { MutableInteractionSource() },
+        indication = null,
+        onClick = onClick
+    )
+}

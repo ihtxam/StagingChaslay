@@ -38,6 +38,7 @@ import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.KitchenMessagePreset
 import com.chaslay.pos.domain.model.PaymentMethod
+import com.chaslay.pos.domain.model.PaymentTender
 import com.chaslay.pos.domain.model.AddonGroupModel
 import com.chaslay.pos.domain.model.ModifierGroupModel
 import com.chaslay.pos.domain.model.OptionChoice
@@ -3691,6 +3692,20 @@ class PosViewModel @Inject constructor(
                     } else {
                         tender?.let { (it - roundedTotal).coerceAtLeast(0.0) }
                     }
+                    val cardMethod = when (resolvedMethod) {
+                        PaymentMethod.ADYEN_TERMINAL -> PaymentMethod.ADYEN_TERMINAL
+                        PaymentMethod.TAP_TO_PAY -> PaymentMethod.TAP_TO_PAY
+                        else -> PaymentMethod.CARD
+                    }
+                    val paymentTenders = buildList {
+                        cashTender?.let { add(PaymentTender(PaymentMethod.CASH, it)) }
+                        checkout.cardTenderAmount.takeIf { it > 0.001 }?.let {
+                            add(PaymentTender(cardMethod, it))
+                        }
+                        redeemedGiftCardAmount.takeIf { it > 0.001 }?.let {
+                            add(PaymentTender(PaymentMethod.GIFT_CARD, it))
+                        }
+                    }
                     val saleCart = saleCartForPayment
                     if (method == PaymentMethod.ADYEN_TERMINAL) {
                         printPendingKitchenForCurrentTable()
@@ -3722,7 +3737,8 @@ class PosViewModel @Inject constructor(
                             paymentResult.adyenCashierReceipt
                         ),
                         giftCardPaymentAmount = redeemedGiftCardAmount.takeIf { it > 0.0 },
-                        giftCardRemainingBalance = giftCardRemainingBalance
+                        giftCardRemainingBalance = giftCardRemainingBalance,
+                        paymentTenders = paymentTenders
                     )
                     val receiptItems = transactionRepository.getTransaction(transaction.id)?.second.orEmpty()
                     val (publishedTx, publicReceiptUrl) = publishAndPersistReceipt(

@@ -46,12 +46,21 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
     const discountAmount = Number(body.discount_amount ?? body.item_discount_total ?? 0);
     const paymentMethod = String(body.payment_method || "cash").toLowerCase();
     const isPending = paymentMethod === "pending" || paymentMethod === "pay_later";
+    const paymentBreakdown = Array.isArray(body.payment_breakdown)
+      ? body.payment_breakdown
+          .map((row: { method?: string; amount?: number }) => ({
+            method: String(row?.method || "").trim().toLowerCase(),
+            amount: Number(row?.amount || 0),
+          }))
+          .filter((row: { method: string; amount: number }) => row.method && row.amount > 0)
+      : undefined;
 
     const pushResults = await SyncService.pushSales(req.chaslayMerchantId!, [
       {
         clientId: id,
         orderNumber,
         paymentMethod,
+        paymentBreakdown: paymentBreakdown?.length ? paymentBreakdown : undefined,
         paymentStatus: isPending ? "awaiting_payment" : "completed",
         subtotal,
         taxAmount: taxTotal,
