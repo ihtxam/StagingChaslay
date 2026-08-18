@@ -14,7 +14,19 @@ import api from '@/lib/api';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { useI18n } from '@/lib/i18n';
 
-type Tab = 'items' | 'stockin' | 'waste' | 'suppliers' | 'alerts' | 'usage';
+type Tab = 'items' | 'cookbook' | 'stockin' | 'waste' | 'suppliers' | 'alerts' | 'usage';
+
+type CookbookLine = { itemId: string; qty: string; name?: string; unit?: string };
+
+type CookbookEntry = {
+  productId: string;
+  name: string;
+  sku?: string | null;
+  isActive: boolean;
+  productType?: string;
+  recipeYield: number;
+  lines: Array<{ itemId: string; qty: number; itemName?: string; itemUnit?: string }>;
+};
 
 type Supplier = {
   id: string;
@@ -96,6 +108,11 @@ export default function Inventory() {
   const [moveQty, setMoveQty] = useState('');
   const [moveNote, setMoveNote] = useState('');
   const [moveCost, setMoveCost] = useState('');
+  const [cookbook, setCookbook] = useState<CookbookEntry[]>([]);
+  const [cookbookModal, setCookbookModal] = useState(false);
+  const [cookbookProductId, setCookbookProductId] = useState('');
+  const [cookbookYield, setCookbookYield] = useState('1');
+  const [cookbookLines, setCookbookLines] = useState<CookbookLine[]>([]);
 
   const loadStatus = async () => {
     const res = await api.get('/merchant/inventory/status');
@@ -113,14 +130,16 @@ export default function Inventory() {
     try {
       const on = await loadStatus();
       if (!on) return;
-      const [i, s, u] = await Promise.all([
+      const [i, s, u, c] = await Promise.all([
         api.get('/merchant/inventory/items'),
         api.get('/merchant/inventory/suppliers'),
         api.get('/merchant/inventory/usage', { params: { days: 30 } }).catch(() => ({ data: { rows: [] } })),
+        api.get('/merchant/inventory/cookbook').catch(() => ({ data: { entries: [] } })),
       ]);
       setItems(i.data.items || []);
       setSuppliers(s.data.suppliers || []);
       setUsage(u.data.rows || []);
+      setCookbook(c.data.entries || []);
     } catch (error: any) {
       if (error.response?.data?.code !== 'INVENTORY_ADDON_REQUIRED') {
         toast.error(error.response?.data?.error || t('invLoadFailed'));
@@ -315,8 +334,41 @@ export default function Inventory() {
     );
   }
 
+  const openCookbook = (entry: CookbookEntry) => {
+    setCookbookProductId(entry.productId);
+    setCookbookYield(String(entry.recipeYield || 1));
+    setCookbookLines(
+      entry.lines.map((l) => ({
+        itemId: l.itemId,
+        qty: String(l.qty),
+        name: l.itemName,
+        unit: l.itemUnit,
+      }))
+    );
+    setCookbookModal(true);
+  };
+
+  const saveCookbook = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!cookbookProductId) return;
+    try {
+      await api.put(`/merchant/inventory/products/${cookbookProductId}/recipe`, {
+        recipeYield: Number(cookbookYield) || 1,
+        lines: cookbookLines
+          .filter((l) => l.itemId && Number(l.qty) > 0)
+          .map((l) => ({ itemId: l.itemId, qty: Number(l.qty) })),
+      });
+      toast.success(t('invCookbookSaved'));
+      setCookbookModal(false);
+      await loadAll();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('invSaveFailed'));
+    }
+  };
+
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: 'items', label: t('invTabItems') },
+    { id: 'cookbook', label: t('invTabCookbook') },
     { id: 'stockin', label: t('invTabStockIn') },
     { id: 'waste', label: t('invTabWaste') },
     { id: 'suppliers', label: t('invTabSuppliers') },
@@ -446,6 +498,55 @@ export default function Inventory() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {tab === 'cookbook' && (
+        <div className="space-y-2">
+          <p className="text-xs muted">{t('invCookbookHint')}</p>
+          <div className="card !p-0 table-scroll">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="bg-[var(--bg-muted)] text-left">
+                <tr>
+                  <th className="px-3 py-2">{t('products')}</th>
+                  <th className="px-3 py-2">{t('invRecipeYield')}</th>
+                  <th className="px-3 py-2">{t('invRecipeTab')}</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {cookbook.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-8 text-center muted">
+                      {t('invCookbookEmpty')}
+                    </td>
+                  </tr>
+                )}
+                {cookbook.map((entry) => (
+                  <tr key={entry.productId} className="border-t border-[var(--border)]">
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{entry.name}</div>
+                      <div className="text-[11px] muted">
+                        {entry.sku || entry.productType || ''}
+                        {!entry.isActive ? ` · ${t('invInactive')}` : ''}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 tabular-nums">{entry.recipeYield}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {entry.lines.length
+                        ? entry.lines.map((l) => `${l.qty} ${l.itemUnit || ''} ${l.itemName || ''}`.trim()).join(', ')
+                        : <span className="muted">{t('invNoRecipe')}</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button type="button" className="btn-secondary text-xs" onClick={() => openCookbook(entry)}>
+                        <Pencil size={12} /> {t('edit')}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -727,6 +828,88 @@ export default function Inventory() {
             </label>
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => setItemModal(false)}>
+                {t('cancel')}
+              </button>
+              <button type="submit" className="btn-primary">
+                {t('save')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {cookbookModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-3" onClick={() => setCookbookModal(false)}>
+          <form
+            className="w-full max-w-lg rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => void saveCookbook(e)}
+          >
+            <h2 className="font-semibold">{t('invTabCookbook')}</h2>
+            <p className="text-xs muted">
+              {cookbook.find((c) => c.productId === cookbookProductId)?.name}
+            </p>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium">{t('invRecipeYield')}</span>
+              <input
+                className="input"
+                type="number"
+                min={0.0001}
+                step="any"
+                value={cookbookYield}
+                onChange={(e) => setCookbookYield(e.target.value)}
+              />
+              <span className="text-[11px] muted">{t('invRecipeYieldHint')}</span>
+            </label>
+            {cookbookLines.map((line, idx) => (
+              <div key={`${line.itemId}-${idx}`} className="grid grid-cols-[1fr_90px_auto] gap-2">
+                <select
+                  className="input"
+                  value={line.itemId}
+                  onChange={(e) => {
+                    const next = [...cookbookLines];
+                    const found = items.find((i) => i.id === e.target.value);
+                    next[idx] = { ...line, itemId: e.target.value, unit: found?.unit, name: found?.name };
+                    setCookbookLines(next);
+                  }}
+                >
+                  <option value="">{t('invSelectItem')}</option>
+                  {items.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name} ({i.unit})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={line.qty}
+                  onChange={(e) => {
+                    const next = [...cookbookLines];
+                    next[idx] = { ...line, qty: e.target.value };
+                    setCookbookLines(next);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="rounded-md p-2 text-red-600"
+                  onClick={() => setCookbookLines(cookbookLines.filter((_, i) => i !== idx))}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={() => setCookbookLines([...cookbookLines, { itemId: '', qty: '' }])}
+            >
+              <Plus size={12} /> {t('invAddIngredient')}
+            </button>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setCookbookModal(false)}>
                 {t('cancel')}
               </button>
               <button type="submit" className="btn-primary">

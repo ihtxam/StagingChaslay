@@ -203,6 +203,15 @@ router.post("/suppliers/:supplierId/reorder-email", async (req: Request, res: Re
   }
 });
 
+router.get("/cookbook", async (req: Request, res: Response) => {
+  try {
+    const entries = await InventoryService.listCookbook(req.merchantId!);
+    res.json({ success: true, entries });
+  } catch (error) {
+    handleError(res, error, "Failed to load cookbook");
+  }
+});
+
 router.get("/products/:productId/recipe", async (req: Request, res: Response) => {
   try {
     const recipe = await InventoryService.getRecipe(req.merchantId!, req.params.productId);
@@ -217,7 +226,8 @@ router.put("/products/:productId/recipe", async (req: Request, res: Response) =>
     const recipe = await InventoryService.setRecipe(
       req.merchantId!,
       req.params.productId,
-      req.body?.lines || []
+      req.body?.lines || [],
+      req.body?.recipeYield != null ? Number(req.body.recipeYield) : undefined
     );
     res.json({ success: true, recipe });
   } catch (error) {

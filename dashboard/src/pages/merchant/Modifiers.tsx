@@ -24,6 +24,8 @@ interface ModifierOption {
   saleStatus: SaleStatus;
   isDefault: boolean;
   sortOrder?: number;
+  inventoryItemId?: string | null;
+  inventoryQty?: number;
 }
 
 interface ModifierOptionForm {
@@ -34,6 +36,8 @@ interface ModifierOptionForm {
   saleStatus: SaleStatus;
   isDefault: boolean;
   sortOrder?: number;
+  inventoryItemId?: string;
+  inventoryQty?: string;
 }
 
 interface LinkedProduct {
@@ -83,6 +87,8 @@ const emptyOption = (): ModifierOptionForm => ({
   price: '',
   saleStatus: 'in_stock',
   isDefault: false,
+  inventoryItemId: '',
+  inventoryQty: '',
 });
 
 const emptyForm = (): FormState => ({
@@ -110,14 +116,29 @@ export default function Modifiers() {
   const [otherOpen, setOtherOpen] = useState(true);
   const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
+  const [inventoryOn, setInventoryOn] = useState(false);
+  const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
 
   const load = async () => {
     try {
-      const [g, p] = await Promise.all([
+      const [g, p, inv] = await Promise.all([
         api.get('/merchant/modifiers'),
         api.get('/merchant/products?limit=500'),
+        api.get('/merchant/inventory/status').catch(() => ({ data: { enabled: false } })),
       ]);
       setGroups(g.data.groups || []);
+      const on = !!inv.data?.enabled;
+      setInventoryOn(on);
+      if (on) {
+        try {
+          const items = await api.get('/merchant/inventory/items');
+          setInvItems(items.data.items || []);
+        } catch {
+          setInvItems([]);
+        }
+      } else {
+        setInvItems([]);
+      }
       setProducts(p.data.products || []);
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('failedLoadModifiers'));
@@ -180,6 +201,8 @@ export default function Modifiers() {
             ...o,
             id: o.id || `opt-${group.id}-${i}`,
             price: String(o.price ?? ''),
+            inventoryItemId: o.inventoryItemId || '',
+            inventoryQty: o.inventoryQty ? String(o.inventoryQty) : '',
           }))
         : [emptyOption()],
       productIds: [...(group.productIds || [])],
@@ -219,6 +242,8 @@ export default function Modifiers() {
         name: o.name.trim(),
         price: form.pricingType === 'free' ? 0 : parseMoney(o.price),
         sortOrder: idx,
+        inventoryItemId: o.inventoryItemId || null,
+        inventoryQty: Number(o.inventoryQty) || 0,
       }))
       .filter((o) => o.name);
 
@@ -518,6 +543,7 @@ export default function Modifiers() {
                           className="rounded-lg border border-slate-200 bg-white p-3 sm:p-3.5"
                         >
                           {({ attributes, listeners }) => (
+                            <div className="flex flex-col gap-2.5">
                             <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:gap-3">
                               <div className="flex items-center gap-2 sm:contents">
                                 <div className="shrink-0 sm:pb-2">
@@ -638,6 +664,49 @@ export default function Modifiers() {
                                   <Trash2 size={16} />
                                 </button>
                               </div>
+                            </div>
+                            {inventoryOn && (
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_110px] sm:pl-8">
+                                <label className="block min-w-0">
+                                  <span className="mb-1 block text-xs font-medium text-slate-500">
+                                    {t('invModifierStock')}
+                                  </span>
+                                  <select
+                                    className="field min-w-0"
+                                    value={opt.inventoryItemId || ''}
+                                    onChange={(e) => {
+                                      const options = [...form.options];
+                                      options[idx] = { ...options[idx], inventoryItemId: e.target.value };
+                                      setForm({ ...form, options });
+                                    }}
+                                  >
+                                    <option value="">{t('invNoStockLink')}</option>
+                                    {invItems.map((item) => (
+                                      <option key={item.id} value={item.id}>
+                                        {item.name} ({item.unit})
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="block">
+                                  <span className="mb-1 block text-xs font-medium text-slate-500">
+                                    {t('invQty')}
+                                  </span>
+                                  <input
+                                    className="field min-w-0"
+                                    type="number"
+                                    min={0}
+                                    step="any"
+                                    value={opt.inventoryQty || ''}
+                                    onChange={(e) => {
+                                      const options = [...form.options];
+                                      options[idx] = { ...options[idx], inventoryQty: e.target.value };
+                                      setForm({ ...form, options });
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            )}
                             </div>
                           )}
                         </SortableRow>

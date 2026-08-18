@@ -81,6 +81,13 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_auto_reorder_email_enabled boolean NOT NULL DEFAULT false",
 };
 
+/** Non-merchant columns added with the inventory cookbook v1 follow-up. */
+const EXTRA_COLUMN_PATCHES: Record<string, string> = {
+  recipe_yield: "ALTER TABLE products ADD COLUMN IF NOT EXISTS recipe_yield numeric(12,4) NOT NULL DEFAULT 1",
+  inventory_item_id: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid",
+  inventory_qty: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_qty numeric(14,4) NOT NULL DEFAULT 0",
+};
+
 /** Idempotent CREATE TABLE for features added after initial deploy. */
 const TABLE_PATCHES: string[] = [
   `CREATE TABLE IF NOT EXISTS vouchers (
@@ -255,16 +262,16 @@ let patchedColumns = new Set<string>();
 let patchedTables = false;
 
 async function runPatch(column: string): Promise<boolean> {
-  const statement = MERCHANT_COLUMN_PATCHES[column];
+  const statement = MERCHANT_COLUMN_PATCHES[column] || EXTRA_COLUMN_PATCHES[column];
   if (!statement || patchedColumns.has(column)) return false;
   const db = getDb();
   try {
     await db.execute(sql.raw(statement));
     patchedColumns.add(column);
-    console.info(`[schema] patched merchants.${column}`);
+    console.info(`[schema] patched column ${column}`);
     return true;
   } catch (err) {
-    console.warn(`[schema] failed to patch merchants.${column}:`, err);
+    console.warn(`[schema] failed to patch column ${column}:`, err);
     return false;
   }
 }
@@ -291,13 +298,19 @@ export async function ensureInventoryAddonColumn(): Promise<void> {
   await runPatch("inventory_waste_factor");
   await runPatch("inventory_auto_reorder_email_enabled");
   await ensureMerchantTables();
+  await runPatch("recipe_yield");
+  await runPatch("inventory_item_id");
+  await runPatch("inventory_qty");
 }
 
 /** Apply all known optional merchant columns once at startup (non-blocking). */
 export function ensureMerchantSchemaAtStartup(): void {
   if (startupPatchPromise) return;
   startupPatchPromise = (async () => {
-    for (const column of Object.keys(MERCHANT_COLUMN_PATCHES)) {
+    for (const column of [
+      ...Object.keys(MERCHANT_COLUMN_PATCHES),
+      ...Object.keys(EXTRA_COLUMN_PATCHES),
+    ]) {
       await runPatch(column);
     }
     await ensureMerchantTables();

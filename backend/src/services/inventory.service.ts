@@ -35,6 +35,20 @@ function qtyStr(n: number): string {
   return (Math.round(n * 10000) / 10000).toFixed(4);
 }
 
+function clampRecipeYield(raw: unknown): number {
+  const n = num(raw, 1);
+  if (!(n > 0)) return 1;
+  if (n > 10000) return 10000;
+  return Math.round(n * 10000) / 10000;
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(raw?: string | null): raw is string {
+  return !!raw && UUID_RE.test(raw);
+}
+
 export class InventoryLicenseError extends Error {
   constructor(message = "Restaurant inventory addon is not enabled") {
     super(message);
@@ -506,7 +520,7 @@ export class InventoryService {
     const db = getDb();
     const product = await db.query.products.findFirst({
       where: and(eq(schema.products.id, productId), eq(schema.products.merchantId, merchantId)),
-      columns: { id: true, name: true },
+      columns: { id: true, name: true, sku: true, recipeYield: true, productType: true },
     });
     if (!product) throw new Error("Product not found");
     const lines = await db.query.productRecipes.findMany({
@@ -517,7 +531,11 @@ export class InventoryService {
       with: { item: true },
     });
     return {
-      product,
+      product: {
+        ...product,
+        recipeYield: clampRecipeYield(product.recipeYield),
+      },
+      recipeYield: clampRecipeYield(product.recipeYield),
       lines: lines.map((l) => ({
         id: l.id,
         itemId: l.itemId,
@@ -529,10 +547,54 @@ export class InventoryService {
     };
   }
 
+  static async listCookbook(merchantId: string) {
+    await this.assertLicensed(merchantId);
+    const db = getDb();
+    const products = await db.query.products.findMany({
+      where: eq(schema.products.merchantId, merchantId),
+      columns: {
+        id: true,
+        name: true,
+        sku: true,
+        isActive: true,
+        productType: true,
+        recipeYield: true,
+      },
+      orderBy: [asc(schema.products.name)],
+    });
+    const lines = await db.query.productRecipes.findMany({
+      where: eq(schema.productRecipes.merchantId, merchantId),
+      with: { item: true },
+    });
+    const byProduct = new Map<string, typeof lines>();
+    for (const line of lines) {
+      const list = byProduct.get(line.productId) || [];
+      list.push(line);
+      byProduct.set(line.productId, list);
+    }
+    return products.map((p) => ({
+      productId: p.id,
+      name: p.name,
+      sku: p.sku,
+      isActive: p.isActive !== false,
+      productType: p.productType,
+      recipeYield: clampRecipeYield(p.recipeYield),
+      lines: (byProduct.get(p.id) || []).map((l) => ({
+        id: l.id,
+        itemId: l.itemId,
+        qty: num(l.qty),
+        unit: l.unit,
+        itemName: l.item?.name,
+        itemUnit: l.item?.unit,
+      })),
+    }));
+  }
+
   static async setRecipe(
     merchantId: string,
     productId: string,
-    lines: Array<{ itemId: string; qty: number; unit?: string }>
+    lines: Array<{ itemId: string; qty: number; unit?: string }>,
+    recipeYield?: number
   ) {
     await this.assertLicensed(merchantId);
     const db = getDb();
@@ -586,6 +648,12 @@ export class InventoryService {
         }))
       );
     }
+    if (recipeYield !== undefined) {
+      await db
+        .update(schema.products)
+        .set({ recipeYield: qtyStr(clampRecipeYield(recipeYield)), updatedAt: new Date() })
+        .where(and(eq(schema.products.id, productId), eq(schema.products.merchantId, merchantId)));
+    }
     return this.getRecipe(merchantId, productId);
   }
 
@@ -618,32 +686,113 @@ export class InventoryService {
       });
       if (already) return { deducted: false, reason: "already" };
 
-      const productIds = [
-        ...new Set(
-          (order.items || [])
-            .map((i) => i.productId)
-            .filter((id): id is string => !!id)
-        ),
-      ];
-      if (!productIds.length) return { deducted: false, reason: "no_products" };
+      const extraIds: string[] = [];
+      const candidateIds = new Set<string>();
+      for (const line of order.items || []) {
+        if (line.productId) candidateIds.add(line.productId);
+        const extras = Array.isArray(line.selectedExtras) ? line.selectedExtras : [];
+        for (const extra of extras) {
+          if (extra?.id) extraIds.push(String(extra.id));
+        }
+        const combos = Array.isArray(line.comboSelections) ? line.comboSelections : [];
+        for (const combo of combos) {
+          if (combo?.productId) candidateIds.add(combo.productId);
+          for (const extra of combo.selectedExtras || []) {
+            if (extra?.id) extraIds.push(String(extra.id));
+          }
+        }
+      }
+      const productIds = [...candidateIds];
+      if (!productIds.length && !extraIds.length) {
+        return { deducted: false, reason: "no_products" };
+      }
 
-      const recipes = await db.query.productRecipes.findMany({
-        where: and(
-          eq(schema.productRecipes.merchantId, merchantId),
-          inArray(schema.productRecipes.productId, productIds)
-        ),
-      });
-      if (!recipes.length) return { deducted: false, reason: "no_recipes" };
+      const recipes = productIds.length
+        ? await db.query.productRecipes.findMany({
+            where: and(
+              eq(schema.productRecipes.merchantId, merchantId),
+              inArray(schema.productRecipes.productId, productIds)
+            ),
+          })
+        : [];
+      const yieldRows = productIds.length
+        ? await db.query.products.findMany({
+            where: and(
+              eq(schema.products.merchantId, merchantId),
+              inArray(schema.products.id, productIds)
+            ),
+            columns: { id: true, recipeYield: true },
+          })
+        : [];
+      const yieldByProduct = new Map(
+        yieldRows.map((p) => [p.id, clampRecipeYield(p.recipeYield)])
+      );
+      const recipesByProduct = new Map<string, typeof recipes>();
+      for (const rec of recipes) {
+        const list = recipesByProduct.get(rec.productId) || [];
+        list.push(rec);
+        recipesByProduct.set(rec.productId, list);
+      }
+
+      const uniqueExtraIds = [...new Set(extraIds.filter(isUuid))];
+      const modifierRows = uniqueExtraIds.length
+        ? await db.query.modifierOptions.findMany({
+            where: inArray(schema.modifierOptions.id, uniqueExtraIds),
+            with: { group: true },
+          })
+        : [];
+      const modifierById = new Map(
+        modifierRows
+          .filter((o) => o.group?.merchantId === merchantId && o.inventoryItemId && num(o.inventoryQty) > 0)
+          .map((o) => [o.id, o])
+      );
+
+      if (!recipes.length && !modifierById.size) {
+        return { deducted: false, reason: "no_recipes" };
+      }
 
       const factor = 1 + license.wasteFactor;
       const usage = new Map<string, number>();
+      const addUsage = (itemId: string, qty: number) => {
+        if (!(qty > 0) || !itemId) return;
+        usage.set(itemId, (usage.get(itemId) || 0) + qty);
+      };
+      const consumeProduct = (productId: string, lineQty: number) => {
+        const recs = recipesByProduct.get(productId);
+        if (!recs?.length) return;
+        const yieldQty = yieldByProduct.get(productId) || 1;
+        for (const rec of recs) {
+          addUsage(rec.itemId, (num(rec.qty) * lineQty * factor) / yieldQty);
+        }
+      };
+      const consumeExtras = (
+        extras: Array<{ id?: string }> | null | undefined,
+        lineQty: number
+      ) => {
+        for (const extra of extras || []) {
+          if (!extra?.id) continue;
+          const opt = modifierById.get(extra.id);
+          if (!opt?.inventoryItemId) continue;
+          addUsage(opt.inventoryItemId, num(opt.inventoryQty) * lineQty * factor);
+        }
+      };
+
       for (const line of order.items || []) {
-        if (!line.productId) continue;
         const lineQty = num(line.quantity);
         if (!(lineQty > 0)) continue;
-        for (const rec of recipes.filter((r) => r.productId === line.productId)) {
-          const add = num(rec.qty) * lineQty * factor;
-          usage.set(rec.itemId, (usage.get(rec.itemId) || 0) + add);
+        const parentId = line.productId || "";
+        const combos = Array.isArray(line.comboSelections) ? line.comboSelections : [];
+        const parentHasRecipe = parentId ? recipesByProduct.has(parentId) : false;
+        if (parentHasRecipe) {
+          consumeProduct(parentId, lineQty);
+        } else {
+          for (const combo of combos) {
+            if (combo?.productId) consumeProduct(combo.productId, lineQty);
+          }
+        }
+        consumeExtras(line.selectedExtras, lineQty);
+        for (const combo of combos) {
+          consumeExtras(combo.selectedExtras, lineQty);
         }
       }
 

@@ -282,6 +282,7 @@ export default function Products() {
   });
   const [inventoryOn, setInventoryOn] = useState(false);
   const [recipeLines, setRecipeLines] = useState<Array<{ itemId: string; qty: string; name?: string; unit?: string }>>([]);
+  const [recipeYield, setRecipeYield] = useState('1');
   const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
   const [storeName, setStoreName] = useState('');
 
@@ -436,6 +437,8 @@ export default function Products() {
         emptySlot(t('comboStepDrink')),
       ],
     });
+    setRecipeLines([]);
+    setRecipeYield('1');
     setModalOpen(true);
   };
 
@@ -467,6 +470,7 @@ export default function Products() {
       if (inventoryOn) {
         try {
           const rec = await api.get(`/merchant/inventory/products/${product.id}/recipe`);
+          setRecipeYield(String(rec.data.recipe?.recipeYield || 1));
           setRecipeLines(
             (rec.data.recipe?.lines || []).map((l: { itemId: string; qty: number; itemName?: string; itemUnit?: string }) => ({
               itemId: l.itemId,
@@ -477,9 +481,11 @@ export default function Products() {
           );
         } catch {
           setRecipeLines([]);
+          setRecipeYield('1');
         }
       } else {
         setRecipeLines([]);
+        setRecipeYield('1');
       }
       setForm({
         name: full.name,
@@ -549,6 +555,7 @@ export default function Products() {
     setModifierPickerOpen(false);
     setMoreOpen(false);
     setRecipeLines([]);
+    setRecipeYield('1');
   };
 
   const linkedModifierGroups = useMemo(
@@ -707,6 +714,7 @@ export default function Products() {
       if (inventoryOn && productId) {
         try {
           await api.put(`/merchant/inventory/products/${productId}/recipe`, {
+            recipeYield: Number(recipeYield) || 1,
             lines: recipeLines
               .filter((l) => l.itemId && Number(l.qty) > 0)
               .map((l) => ({ itemId: l.itemId, qty: Number(l.qty) })),
@@ -1917,6 +1925,18 @@ export default function Products() {
                 <div className="space-y-2 rounded-md border border-[var(--border)] p-3">
                   <p className="text-sm font-semibold">{t('invRecipeTab')}</p>
                   <p className="text-xs muted">{t('invRecipeHint')}</p>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium">{t('invRecipeYield')}</span>
+                    <input
+                      className="field-input"
+                      type="number"
+                      min={0.0001}
+                      step="any"
+                      value={recipeYield}
+                      onChange={(e) => setRecipeYield(e.target.value)}
+                    />
+                    <span className="text-[11px] muted">{t('invRecipeYieldHint')}</span>
+                  </label>
                   {recipeLines.map((line, idx) => (
                     <div key={`${line.itemId}-${idx}`} className="grid grid-cols-[1fr_90px_auto] gap-2">
                       <select

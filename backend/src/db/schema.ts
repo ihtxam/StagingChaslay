@@ -687,6 +687,8 @@ export const products = pgTable(
     allowExtras: boolean("allow_extras").default(false).notNull(),
     /** If set (>0), customer can claim this product free by spending this many loyalty points */
     loyaltyRewardPoints: integer("loyalty_reward_points"),
+    /** Portions this recipe produces. Sale consumes line qty / yield (default 1). */
+    recipeYield: decimal("recipe_yield", { precision: 12, scale: 4 }).default("1").notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
     clientId: varchar("client_id", { length: 64 }), // offline sync id from POS device
     isActive: boolean("is_active").default(true).notNull(),
@@ -748,11 +750,15 @@ export const modifierOptions = pgTable(
     saleStatus: varchar("sale_status", { length: 40 }).default("in_stock").notNull(),
     isDefault: boolean("is_default").default(false).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
+    /** Optional ingredient consumed when this extra is selected on a paid sale. */
+    inventoryItemId: uuid("inventory_item_id"),
+    inventoryQty: decimal("inventory_qty", { precision: 14, scale: 4 }).default("0").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
     groupIdIdx: index("modifier_options_group_id_idx").on(table.groupId),
+    inventoryItemIdx: index("modifier_options_inventory_item_idx").on(table.inventoryItemId),
   })
 );
 
