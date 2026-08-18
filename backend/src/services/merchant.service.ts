@@ -1,8 +1,34 @@
 import crypto from "crypto";
 import { getDb, schema } from "@/db";
-import { eq, and, like, desc, or, lt, gt } from "drizzle-orm";
+import { eq, and, like, desc, or, lt, gt, inArray } from "drizzle-orm";
 import { AuthService } from "./auth.service";
 import { generateSyncApiKey } from "./chaslay-compat.service";
+import { withLicenseSchemaRetry } from "@/lib/ensure-licenses-schema";
+
+type AppVersionSighting = {
+  appVersion?: string | null;
+  seenAt?: Date | string | null;
+};
+
+function pickLastAppVersion(rows: AppVersionSighting[]): {
+  lastAppVersion: string | null;
+  lastAppVersionSeenAt: Date | null;
+} {
+  let best: { version: string; seenAt: number } | null = null;
+  for (const row of rows) {
+    const version = String(row.appVersion || "").trim();
+    if (!version) continue;
+    const seenAt = row.seenAt ? new Date(row.seenAt).getTime() : 0;
+    if (!Number.isFinite(seenAt)) continue;
+    if (!best || seenAt >= best.seenAt) {
+      best = { version, seenAt };
+    }
+  }
+  return {
+    lastAppVersion: best?.version ?? null,
+    lastAppVersionSeenAt: best && best.seenAt ? new Date(best.seenAt) : null,
+  };
+}
 
 function slugify(input: string): string {
   return input
@@ -38,38 +64,65 @@ export class MerchantService {
           )
         : undefined;
 
-      const merchants = await db.query.merchants.findMany({
-        where,
-        limit,
-        offset,
-        orderBy: desc(schema.merchants.createdAt),
-        with: {
-          devices: true,
-          licenses: true,
-        },
-      });
+      const merchants = await withLicenseSchemaRetry(() =>
+        db.query.merchants.findMany({
+          where,
+          limit,
+          offset,
+          orderBy: desc(schema.merchants.createdAt),
+          with: {
+            devices: true,
+            licenses: true,
+            edition: true,
+          },
+        })
+      );
 
-      return merchants.map((m) => ({
-        id: m.id,
-        name: m.name,
-        email: m.email,
-        phone: m.phone,
-        address: m.address,
-        city: m.city,
-        country: m.country,
-        slug: m.slug,
-        shopEnabled: m.shopEnabled,
-        status: m.status,
-        subscriptionPlan: m.subscriptionPlan,
-        trialEndsAt: m.trialEndsAt,
-        subscriptionEndsAt: m.subscriptionEndsAt,
-        editionId: m.editionId ?? null,
-        resellerId: m.resellerId ?? null,
-        createdAt: m.createdAt,
-        devices: m.devices?.length ?? 0,
-        licenses: m.licenses?.length ?? 0,
-        activeLicenses: m.licenses?.filter((l) => l.status === "active").length ?? 0,
-      }));
+      const merchantIds = merchants.map((m) => m.id);
+      const floorDevices =
+        merchantIds.length > 0
+          ? await db.query.chaslayFloorDevices.findMany({
+              where: inArray(schema.chaslayFloorDevices.merchantId, merchantIds),
+            })
+          : [];
+      const floorByMerchant = new Map<string, typeof floorDevices>();
+      for (const row of floorDevices) {
+        const list = floorByMerchant.get(row.merchantId) ?? [];
+        list.push(row);
+        floorByMerchant.set(row.merchantId, list);
+      }
+
+      return merchants.map((m) => {
+        const floor = floorByMerchant.get(m.id) ?? [];
+        const lastSeen = pickLastAppVersion([
+          ...(m.devices ?? []).map((d) => ({ appVersion: d.appVersion, seenAt: d.lastSync })),
+          ...floor.map((d) => ({ appVersion: d.appVersion, seenAt: d.lastSeenAt })),
+        ]);
+        return {
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          phone: m.phone,
+          address: m.address,
+          city: m.city,
+          country: m.country,
+          slug: m.slug,
+          shopEnabled: m.shopEnabled,
+          status: m.status,
+          subscriptionPlan: m.subscriptionPlan,
+          trialEndsAt: m.trialEndsAt,
+          subscriptionEndsAt: m.subscriptionEndsAt,
+          editionId: m.editionId ?? null,
+          editionName: m.edition?.name ?? null,
+          lastAppVersion: lastSeen.lastAppVersion,
+          lastAppVersionSeenAt: lastSeen.lastAppVersionSeenAt,
+          resellerId: m.resellerId ?? null,
+          createdAt: m.createdAt,
+          devices: m.devices?.length ?? 0,
+          licenses: m.licenses?.length ?? 0,
+          activeLicenses: m.licenses?.filter((l) => l.status === "active").length ?? 0,
+        };
+      });
     } catch (error) {
       console.error("Error getting merchants:", error);
       throw error;
@@ -88,6 +141,7 @@ export class MerchantService {
         with: {
           devices: true,
           licenses: true,
+          edition: true,
           orders: {
             limit: 10,
             orderBy: desc(schema.orders.createdAt),
@@ -99,7 +153,20 @@ export class MerchantService {
         throw new Error("Merchant not found");
       }
 
-      return merchant;
+      const floorDevices = await db.query.chaslayFloorDevices.findMany({
+        where: eq(schema.chaslayFloorDevices.merchantId, merchantId),
+      });
+      const lastSeen = pickLastAppVersion([
+        ...(merchant.devices ?? []).map((d) => ({ appVersion: d.appVersion, seenAt: d.lastSync })),
+        ...floorDevices.map((d) => ({ appVersion: d.appVersion, seenAt: d.lastSeenAt })),
+      ]);
+
+      return {
+        ...merchant,
+        editionName: merchant.edition?.name ?? null,
+        lastAppVersion: lastSeen.lastAppVersion,
+        lastAppVersionSeenAt: lastSeen.lastAppVersionSeenAt,
+      };
     } catch (error) {
       console.error("Error getting merchant:", error);
       throw error;

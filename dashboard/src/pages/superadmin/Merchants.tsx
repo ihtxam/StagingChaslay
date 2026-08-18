@@ -17,10 +17,35 @@ interface Merchant {
   shopEnabled?: boolean;
   status: 'active' | 'trial' | 'suspended' | 'expired';
   subscriptionPlan?: string;
+  editionId?: string | null;
+  editionName?: string | null;
+  lastAppVersion?: string | null;
+  lastAppVersionSeenAt?: string | null;
   createdAt: string;
   devices: number;
   licenses: number;
   activeLicenses?: number;
+}
+
+function PosVersionBadge({ name }: { name?: string | null }) {
+  if (!name) {
+    return (
+      <span
+        className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600"
+        title="No edition assigned — legacy full access"
+      >
+        Legacy
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex max-w-[12rem] truncate px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-100 text-teal-800"
+      title={name}
+    >
+      {name}
+    </span>
+  );
 }
 
 interface IssuedLicense {
@@ -405,13 +430,14 @@ export default function Merchants() {
         ) : merchants.length === 0 ? (
           <div className="text-center py-12 text-gray-500">No merchants found</div>
         ) : (
-          <table className="w-full min-w-[720px]">
+          <table className="w-full min-w-[860px]">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Name</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Email</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Shop</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Status</th>
+                <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">POS version</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Devices</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Licenses</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Actions</th>
@@ -447,6 +473,23 @@ export default function Merchants() {
                     >
                       {merchant.status}
                     </span>
+                  </td>
+                  <td className="px-3 sm:px-4 py-3">
+                    <div className="flex flex-col gap-0.5 min-w-[8rem]">
+                      <PosVersionBadge name={merchant.editionName} />
+                      <span
+                        className="text-[11px] text-gray-500"
+                        title={
+                          merchant.lastAppVersionSeenAt
+                            ? `Last seen ${new Date(merchant.lastAppVersionSeenAt).toLocaleString()}`
+                            : 'Android app version last reported by a device'
+                        }
+                      >
+                        {merchant.lastAppVersion
+                          ? `Android ${merchant.lastAppVersion}`
+                          : 'No Android seen'}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-3 sm:px-4 py-3">{merchant.devices}</td>
                   <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
@@ -789,6 +832,41 @@ export default function Merchants() {
               <p>
                 <span className="text-gray-500">Status:</span> {showDetail.status}
               </p>
+              <div className="rounded-lg border border-teal-100 bg-teal-50/60 px-3 py-3 space-y-2">
+                <p className="font-semibold text-teal-950">POS version</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <PosVersionBadge
+                    name={detailFull?.editionName ?? detailFull?.edition?.name ?? showDetail.editionName}
+                  />
+                  {(detailFull?.subscriptionPlan || showDetail.subscriptionPlan) && (
+                    <span className="text-xs text-gray-500">
+                      Plan: {detailFull?.subscriptionPlan || showDetail.subscriptionPlan}
+                    </span>
+                  )}
+                </div>
+                <p>
+                  <span className="text-gray-500">Android app:</span>{' '}
+                  {detailFull?.lastAppVersion || showDetail.lastAppVersion ? (
+                    <>
+                      {detailFull?.lastAppVersion || showDetail.lastAppVersion}
+                      {(detailFull?.lastAppVersionSeenAt || showDetail.lastAppVersionSeenAt) && (
+                        <span className="text-gray-400">
+                          {' '}
+                          · last seen{' '}
+                          {new Date(
+                            detailFull?.lastAppVersionSeenAt || showDetail.lastAppVersionSeenAt || ''
+                          ).toLocaleString()}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-gray-400">No device has reported a version yet</span>
+                  )}
+                </p>
+                <p className="text-xs text-gray-500">
+                  WebPOS is the shared platform deploy (same build for every merchant).
+                </p>
+              </div>
               <p>
                 <span className="text-gray-500">Shop:</span>{' '}
                 {showDetail.shopEnabled ? `/${showDetail.slug || '-'}` : 'disabled'}
@@ -804,6 +882,7 @@ export default function Merchants() {
                     {detailFull.devices.map((d: any) => (
                       <li key={d.id} className="font-mono text-xs bg-gray-50 rounded px-2 py-1">
                         {d.deviceName} · {d.deviceId}
+                        {d.appVersion ? ` · Android ${d.appVersion}` : ''}
                       </li>
                     ))}
                   </ul>
