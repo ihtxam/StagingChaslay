@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
@@ -319,8 +320,13 @@ export default function Products() {
       setAllModifierGroups(m.data.groups || []);
       try {
         const st = await api.get('/merchant/inventory/status');
-        setInventoryOn(!!st.data?.enabled);
-        if (st.data?.enabled) {
+        let on = isInventoryLicensed(st.data);
+        if (!on) {
+          const setRes = await api.get('/merchant/settings').catch(() => null);
+          on = isInventoryLicensed(setRes?.data?.settings);
+        }
+        setInventoryOn(on);
+        if (on) {
           const inv = await api.get('/merchant/inventory/items');
           setInvItems((inv.data.items || []).map((i: { id: string; name: string; unit: string }) => ({
             id: i.id,

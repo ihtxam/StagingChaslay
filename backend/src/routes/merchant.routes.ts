@@ -1183,6 +1183,36 @@ router.get("/customers/:customerId", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/me
+ * Current merchant identity + paid addon flags (inventory).
+ */
+router.get("/me", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+    const settings = await MerchantSettingsService.getMerchantSettings(merchantId);
+    const inventoryOn = settings.inventoryAddonEnabled === true;
+    res.json({
+      success: true,
+      merchant: {
+        id: settings.id,
+        email: settings.email,
+        name: settings.name,
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
+        editionFeatures: settings.editionFeatures,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load merchant",
+    });
+  }
+});
+
+/**
  * GET /api/merchant/settings
  * Get merchant settings
  */

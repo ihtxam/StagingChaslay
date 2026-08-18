@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { useI18n } from '@/lib/i18n';
 
 type Tab = 'items' | 'stockin' | 'waste' | 'suppliers' | 'alerts' | 'usage';
@@ -98,8 +99,13 @@ export default function Inventory() {
 
   const loadStatus = async () => {
     const res = await api.get('/merchant/inventory/status');
-    setLicensed(!!res.data?.enabled);
-    return !!res.data?.enabled;
+    let on = isInventoryLicensed(res.data);
+    if (!on) {
+      const setRes = await api.get('/merchant/settings').catch(() => null);
+      on = isInventoryLicensed(setRes?.data?.settings);
+    }
+    setLicensed(on);
+    return on;
   };
 
   const loadAll = async () => {

@@ -216,7 +216,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
  */
 router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Response) => {
   try {
-    const { maxPosPosts, maxWaiterPosts, inventoryAddonEnabled } = req.body || {};
+    const { maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, inventoryEnabled } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
       resellerId(req),
       req.params.merchantId,
@@ -224,7 +224,11 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
         maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
         maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
         inventoryAddonEnabled:
-          inventoryAddonEnabled != null ? !!inventoryAddonEnabled : undefined,
+          inventoryAddonEnabled != null
+            ? !!inventoryAddonEnabled
+            : inventoryEnabled != null
+              ? !!inventoryEnabled
+              : undefined,
       }
     );
     res.json({ success: true, merchant });

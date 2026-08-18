@@ -15,6 +15,7 @@ export interface User {
   permissions?: Permission[];
   isOwner?: boolean;
   impersonatedBy?: string;
+  inventoryAddonEnabled?: boolean;
 }
 
 interface AuthStore {
@@ -123,6 +124,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         permissions: user.permissions as Permission[] | undefined,
         isOwner: role === 'merchant' && user.isOwner !== false,
         impersonatedBy: get().user?.impersonatedBy,
+        inventoryAddonEnabled: !!(user.inventoryAddonEnabled || user.inventoryEnabled),
       };
 
       if (refreshedToken) {

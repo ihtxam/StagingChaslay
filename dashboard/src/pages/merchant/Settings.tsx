@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import PosPostsSection from '@/components/settings/PosPostsSection';
 import api from '@/lib/api';
+import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
   formatScalePortLabel,
@@ -75,6 +76,7 @@ interface SettingsData {
   maxPosPosts?: number;
   maxWaiterPosts?: number;
   inventoryAddonEnabled?: boolean;
+  inventoryEnabled?: boolean;
   inventoryWasteFactor?: number;
   inventoryAutoReorderEmailEnabled?: boolean;
   posColorTheme?: string;
@@ -1974,7 +1976,7 @@ export default function Settings() {
                 dimmed={normalizedQuery ? !isSectionVisible('inventory-addon') : false}
               >
                 <p className="text-sm">
-                  {settings.inventoryAddonEnabled ? t('invAddonOn') : t('invAddonOff')}
+                  {isInventoryLicensed(settings) ? t('invAddonOn') : t('invAddonOff')}
                 </p>
                 <p className="text-xs muted mt-1">{t('invAddonReadOnly')}</p>
                 <SettingsField label={t('invWasteFactor')} hint={t('invWasteFactorHint')}>
@@ -1984,7 +1986,7 @@ export default function Settings() {
                     min={0}
                     max={50}
                     step={1}
-                    disabled={!settings.inventoryAddonEnabled}
+                    disabled={!isInventoryLicensed(settings)}
                     value={Math.round((Number(settings.inventoryWasteFactor) || 0.2) * 100)}
                     onChange={(e) =>
                       setSettings({
@@ -1998,7 +2000,7 @@ export default function Settings() {
                   <input
                     type="checkbox"
                     className="mt-0.5"
-                    disabled={!settings.inventoryAddonEnabled}
+                    disabled={!isInventoryLicensed(settings)}
                     checked={!!settings.inventoryAutoReorderEmailEnabled}
                     onChange={(e) =>
                       setSettings({
@@ -2015,7 +2017,7 @@ export default function Settings() {
                 <button
                   type="button"
                   className="btn-primary mt-3"
-                  disabled={!settings.inventoryAddonEnabled || saving}
+                  disabled={!isInventoryLicensed(settings) || saving}
                   onClick={async () => {
                     try {
                       await api.put('/merchant/settings', {

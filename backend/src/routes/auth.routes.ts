@@ -197,6 +197,8 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           merchantId: merchant.id,
           roleName: "Owner",
           isOwner: true,
+          inventoryAddonEnabled: merchant.inventoryAddonEnabled === true,
+          inventoryEnabled: merchant.inventoryEnabled === true,
         },
         role: "merchant",
       });

@@ -244,6 +244,10 @@ const TABLE_PATCHES: string[] = [
   `CREATE INDEX IF NOT EXISTS product_recipes_product_idx ON product_recipes(product_id)`,
   `CREATE INDEX IF NOT EXISTS product_recipes_item_idx ON product_recipes(item_id)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS product_recipes_product_item_uidx ON product_recipes(product_id, item_id)`,
+  `ALTER TABLE products ADD COLUMN IF NOT EXISTS recipe_yield numeric(12,4) NOT NULL DEFAULT 1`,
+  `ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid`,
+  `ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_qty numeric(14,4) NOT NULL DEFAULT 0`,
+  `CREATE INDEX IF NOT EXISTS modifier_options_inventory_item_idx ON modifier_options(inventory_item_id)`,
 ];
 
 let startupPatchPromise: Promise<void> | null = null;
@@ -265,6 +269,30 @@ async function runPatch(column: string): Promise<boolean> {
   }
 }
 
+async function ensureMerchantTables(): Promise<boolean> {
+  if (patchedTables) return false;
+  const db = getDb();
+  let applied = false;
+  for (const statement of TABLE_PATCHES) {
+    try {
+      await db.execute(sql.raw(statement));
+      applied = true;
+    } catch (err) {
+      console.warn("[schema] table patch failed:", err);
+    }
+  }
+  patchedTables = true;
+  if (applied) console.info("[schema] voucher/inventory tables ensured");
+  return applied;
+}
+
+export async function ensureInventoryAddonColumn(): Promise<void> {
+  await runPatch("inventory_addon_enabled");
+  await runPatch("inventory_waste_factor");
+  await runPatch("inventory_auto_reorder_email_enabled");
+  await ensureMerchantTables();
+}
+
 /** Apply all known optional merchant columns once at startup (non-blocking). */
 export function ensureMerchantSchemaAtStartup(): void {
   if (startupPatchPromise) return;
@@ -272,21 +300,27 @@ export function ensureMerchantSchemaAtStartup(): void {
     for (const column of Object.keys(MERCHANT_COLUMN_PATCHES)) {
       await runPatch(column);
     }
-    if (!patchedTables) {
-      const db = getDb();
-      for (const statement of TABLE_PATCHES) {
-        try {
-          await db.execute(sql.raw(statement));
-        } catch (err) {
-          console.warn("[schema] table patch failed:", err);
-        }
-      }
-      patchedTables = true;
-      console.info("[schema] voucher tables ensured");
-    }
+    await ensureMerchantTables();
   })().catch((err) => {
     console.warn("[schema] merchant startup patch failed:", err);
   });
+}
+
+/** Retry a merchants query after applying missing-column/table patches. */
+export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : String(error ?? "");
+    const patched = await patchMerchantSchemaFromError(error);
+    const inventoryTableMissing = /relation ["']?(inventory_|product_recipes)/i.test(raw);
+    if (inventoryTableMissing) {
+      patchedTables = false;
+      await ensureMerchantTables();
+    }
+    if (!patched && !inventoryTableMissing) throw error;
+    return fn();
+  }
 }
 
 /**

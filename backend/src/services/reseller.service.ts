@@ -427,17 +427,11 @@ export class ResellerService {
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
     const { MerchantService } = await import("./merchant.service");
-    if (limits.maxPosPosts !== undefined || limits.maxWaiterPosts !== undefined) {
-      await MerchantService.updatePosPostLimits(merchantId, {
-        maxPosPosts: limits.maxPosPosts,
-        maxWaiterPosts: limits.maxWaiterPosts,
-      });
-    }
-    if (limits.inventoryAddonEnabled !== undefined) {
-      await MerchantService.updateAddons(merchantId, {
-        inventoryAddonEnabled: limits.inventoryAddonEnabled,
-      });
-    }
+    await MerchantService.updatePosPostLimits(merchantId, {
+      maxPosPosts: limits.maxPosPosts,
+      maxWaiterPosts: limits.maxWaiterPosts,
+      inventoryAddonEnabled: limits.inventoryAddonEnabled,
+    });
     return MerchantService.getMerchantById(merchantId);
   }
 

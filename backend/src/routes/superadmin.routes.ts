@@ -294,19 +294,26 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
     const { merchantId } = req.params;
     const updates = req.body;
 
-    if (updates.maxPosPosts != null || updates.maxWaiterPosts != null) {
+    if (
+      updates.maxPosPosts != null ||
+      updates.maxWaiterPosts != null ||
+      updates.inventoryAddonEnabled != null ||
+      updates.inventoryEnabled != null
+    ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
         maxWaiterPosts: updates.maxWaiterPosts != null ? Number(updates.maxWaiterPosts) : undefined,
+        inventoryAddonEnabled:
+          updates.inventoryAddonEnabled != null
+            ? !!updates.inventoryAddonEnabled
+            : updates.inventoryEnabled != null
+              ? !!updates.inventoryEnabled
+              : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
-    }
-    if (updates.inventoryAddonEnabled != null) {
-      await MerchantService.updateAddons(merchantId, {
-        inventoryAddonEnabled: !!updates.inventoryAddonEnabled,
-      });
       delete updates.inventoryAddonEnabled;
+      delete updates.inventoryEnabled;
     }
 
     const merchant =

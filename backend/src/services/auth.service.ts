@@ -2,6 +2,8 @@ import bcrypt from "bcrypt";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { getDb, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
+import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 
 export interface JWTPayload {
   id: string;
@@ -123,11 +125,13 @@ export class AuthService {
     const db = getDb();
     const normalizedEmail = String(email || "").trim().toLowerCase();
 
-    const merchants = await db
-      .select()
-      .from(schema.merchants)
-      .where(sql`lower(${schema.merchants.email}) = ${normalizedEmail}`)
-      .limit(1);
+    const merchants = await withMerchantSchemaRetry(() =>
+      db
+        .select()
+        .from(schema.merchants)
+        .where(sql`lower(${schema.merchants.email}) = ${normalizedEmail}`)
+        .limit(1)
+    );
     const merchant = merchants[0];
 
     if (!merchant) {
@@ -159,6 +163,8 @@ export class AuthService {
         name: merchant.name,
         status: merchant.status,
         roleName: "Owner",
+        inventoryAddonEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
+        inventoryEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
       },
       isOwner: true,
     };
@@ -392,19 +398,24 @@ export class AuthService {
     const db = getDb();
 
     try {
-      const merchant = await db.query.merchants.findFirst({
-        where: eq(schema.merchants.id, merchantId),
-      });
+      const merchant = await withMerchantSchemaRetry(() =>
+        db.query.merchants.findFirst({
+          where: eq(schema.merchants.id, merchantId),
+        })
+      );
 
       if (!merchant) {
         throw new Error("Merchant not found");
       }
 
+      const inventoryOn = isInventoryAddonEnabled(merchant.inventoryAddonEnabled);
       return {
         id: merchant.id,
         email: merchant.email,
         name: merchant.name,
         status: merchant.status,
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
       };
     } catch (error) {
       console.error("Error getting merchant:", error);

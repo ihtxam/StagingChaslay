@@ -28,6 +28,7 @@ import {
   type DeliveryPlatformSettings,
 } from "@/lib/delivery-platform-settings";
 import { patchMerchantSchemaFromError } from "@/lib/ensure-merchant-schema";
+import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -148,7 +149,8 @@ export class MerchantSettingsService {
         0,
         Number((merchant as { maxWaiterPosts?: number }).maxWaiterPosts ?? 0)
       ),
-      inventoryAddonEnabled: merchant.inventoryAddonEnabled === true,
+      inventoryAddonEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
+      inventoryEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       posColorTheme: (merchant.posColorTheme as string) || "teal",
@@ -197,11 +199,15 @@ export class MerchantSettingsService {
       subscriptionPlan: merchant.subscriptionPlan,
       editionId: (merchant as { editionId?: string | null }).editionId || null,
       resellerId: (merchant as { resellerId?: string | null }).resellerId || null,
-      /** null = legacy full access */
+      /** null = legacy full access. Inventory is a paid merchant addon — inject when licensed. */
       editionFeatures: await (async () => {
         try {
           const { EditionEntitlementsService } = await import("./edition-entitlements.service");
-          return await EditionEntitlementsService.getFeatures(merchantId);
+          const feats = await EditionEntitlementsService.getFeatures(merchantId);
+          if (!isInventoryAddonEnabled(merchant.inventoryAddonEnabled)) return feats;
+          if (feats == null) return null;
+          if (feats.includes("inventory")) return feats;
+          return [...feats, "inventory"];
         } catch {
           return null;
         }

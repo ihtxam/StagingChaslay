@@ -90,6 +90,7 @@ function userFromLogin(data: UnifiedLoginResponse): { user: User; token: string 
       roleName: isStaff ? merchant.roleName : merchant.roleName || 'Owner',
       permissions: merchant.permissions,
       isOwner: !isStaff && data.isOwner !== false,
+      inventoryAddonEnabled: !!(merchant.inventoryAddonEnabled || merchant.inventoryEnabled),
     },
   };
 }

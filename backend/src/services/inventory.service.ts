@@ -1,6 +1,11 @@
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { EmailService } from "@/services/email.service";
+import {
+  ensureInventoryAddonColumn,
+  withMerchantSchemaRetry,
+} from "@/lib/ensure-merchant-schema";
+import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 
 export const INVENTORY_UNITS = ["kg", "L", "piece"] as const;
 export type InventoryUnit = (typeof INVENTORY_UNITS)[number];
@@ -39,20 +44,26 @@ export class InventoryLicenseError extends Error {
 
 export class InventoryService {
   static async getLicense(merchantId: string) {
+    await ensureInventoryAddonColumn();
     const db = getDb();
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-      columns: {
-        id: true,
-        name: true,
-        inventoryAddonEnabled: true,
-        inventoryWasteFactor: true,
-        inventoryAutoReorderEmailEnabled: true,
-      },
-    });
+    const merchant = await withMerchantSchemaRetry(() =>
+      db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: {
+          id: true,
+          name: true,
+          inventoryAddonEnabled: true,
+          inventoryWasteFactor: true,
+          inventoryAutoReorderEmailEnabled: true,
+        },
+      })
+    );
     if (!merchant) throw new Error("Merchant not found");
+    const enabled = isInventoryAddonEnabled(merchant.inventoryAddonEnabled);
     return {
-      enabled: merchant.inventoryAddonEnabled === true,
+      enabled,
+      inventoryAddonEnabled: enabled,
+      inventoryEnabled: enabled,
       wasteFactor: clampWasteFactor(merchant.inventoryWasteFactor),
       autoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       merchantName: merchant.name,

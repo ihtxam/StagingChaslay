@@ -4,6 +4,11 @@ import { eq, and, like, desc, or, lt, gt, inArray } from "drizzle-orm";
 import { AuthService } from "./auth.service";
 import { generateSyncApiKey } from "./chaslay-compat.service";
 import { withLicenseSchemaRetry } from "@/lib/ensure-licenses-schema";
+import {
+  ensureInventoryAddonColumn,
+  withMerchantSchemaRetry,
+} from "@/lib/ensure-merchant-schema";
+import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 
 type AppVersionSighting = {
   appVersion?: string | null;
@@ -136,18 +141,20 @@ export class MerchantService {
     const db = getDb();
 
     try {
-      const merchant = await db.query.merchants.findFirst({
-        where: eq(schema.merchants.id, merchantId),
-        with: {
-          devices: true,
-          licenses: true,
-          edition: true,
-          orders: {
-            limit: 10,
-            orderBy: desc(schema.orders.createdAt),
+      const merchant = await withMerchantSchemaRetry(() =>
+        db.query.merchants.findFirst({
+          where: eq(schema.merchants.id, merchantId),
+          with: {
+            devices: true,
+            licenses: true,
+            edition: true,
+            orders: {
+              limit: 10,
+              orderBy: desc(schema.orders.createdAt),
+            },
           },
-        },
-      });
+        })
+      );
 
       if (!merchant) {
         throw new Error("Merchant not found");
@@ -163,6 +170,8 @@ export class MerchantService {
 
       return {
         ...merchant,
+        inventoryAddonEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
+        inventoryEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
         editionName: merchant.edition?.name ?? null,
         lastAppVersion: lastSeen.lastAppVersion,
         lastAppVersionSeenAt: lastSeen.lastAppVersionSeenAt,
@@ -346,14 +355,20 @@ export class MerchantService {
     const db = getDb();
 
     try {
-      const merchant = await db
-        .update(schema.merchants)
-        .set({
-          ...updates,
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.merchants.id, merchantId))
-        .returning();
+      if (updates.inventoryAddonEnabled !== undefined) {
+        await ensureInventoryAddonColumn();
+        updates.inventoryAddonEnabled = isInventoryAddonEnabled(updates.inventoryAddonEnabled);
+      }
+      const merchant = await withMerchantSchemaRetry(() =>
+        db
+          .update(schema.merchants)
+          .set({
+            ...updates,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.merchants.id, merchantId))
+          .returning()
+      );
 
       return merchant[0];
     } catch (error) {
@@ -362,10 +377,14 @@ export class MerchantService {
     }
   }
 
-  /** POS post limits are agency/reseller-managed — not merchant self-service. */
+  /** POS post limits + paid addons are agency/reseller-managed — not merchant self-service. */
   static async updatePosPostLimits(
     merchantId: string,
-    limits: { maxPosPosts?: number; maxWaiterPosts?: number }
+    limits: {
+      maxPosPosts?: number;
+      maxWaiterPosts?: number;
+      inventoryAddonEnabled?: boolean;
+    }
   ) {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
     if (limits.maxPosPosts !== undefined) {
@@ -374,8 +393,11 @@ export class MerchantService {
     if (limits.maxWaiterPosts !== undefined) {
       patch.maxWaiterPosts = normalizePosPostLimit(limits.maxWaiterPosts);
     }
+    if (limits.inventoryAddonEnabled !== undefined) {
+      patch.inventoryAddonEnabled = isInventoryAddonEnabled(limits.inventoryAddonEnabled);
+    }
     if (Object.keys(patch).length === 0) {
-      throw new Error("At least one of maxPosPosts or maxWaiterPosts is required");
+      throw new Error("At least one of maxPosPosts, maxWaiterPosts, or inventoryAddonEnabled is required");
     }
     return this.updateMerchant(merchantId, patch);
   }
@@ -384,7 +406,7 @@ export class MerchantService {
   static async updateAddons(merchantId: string, addons: { inventoryAddonEnabled?: boolean }) {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
     if (addons.inventoryAddonEnabled !== undefined) {
-      patch.inventoryAddonEnabled = !!addons.inventoryAddonEnabled;
+      patch.inventoryAddonEnabled = isInventoryAddonEnabled(addons.inventoryAddonEnabled);
     }
     if (Object.keys(patch).length === 0) {
       throw new Error("No addon updates provided");
