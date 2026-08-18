@@ -49,6 +49,7 @@ const emptyForm = {
   businessCategory: 'restaurant' as 'retail' | 'restaurant',
   maxPosPosts: 1,
   maxWaiterPosts: 0,
+  inventoryAddonEnabled: false,
 };
 
 export default function Merchants() {
@@ -70,7 +71,11 @@ export default function Merchants() {
   const [purgeConfirm, setPurgeConfirm] = useState('');
   const [deleteCustomersToo, setDeleteCustomersToo] = useState(false);
   const [purgingSales, setPurgingSales] = useState(false);
-  const [posLimits, setPosLimits] = useState({ maxPosPosts: 0, maxWaiterPosts: 0 });
+  const [posLimits, setPosLimits] = useState({
+    maxPosPosts: 0,
+    maxWaiterPosts: 0,
+    inventoryAddonEnabled: false,
+  });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
   const [editions, setEditions] = useState<Array<{ id: string; name: string; businessCategory: string }>>(
     []
@@ -122,6 +127,7 @@ export default function Merchants() {
       setPosLimits({
         maxPosPosts: Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(res.data.merchant?.maxWaiterPosts) || 0),
+        inventoryAddonEnabled: res.data.merchant?.inventoryAddonEnabled === true,
       });
     } catch {
       toast.error('Failed to load merchant details');
@@ -135,8 +141,9 @@ export default function Merchants() {
       await api.put(`/superadmin/merchants/${showDetail.id}`, {
         maxPosPosts: Number(posLimits.maxPosPosts) || 0,
         maxWaiterPosts: Number(posLimits.maxWaiterPosts) || 0,
+        inventoryAddonEnabled: !!posLimits.inventoryAddonEnabled,
       });
-      toast.success('POS station limits updated');
+      toast.success('POS limits & addons updated');
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to update limits');
     } finally {
@@ -229,6 +236,7 @@ export default function Merchants() {
         businessCategory: form.businessCategory,
         maxPosPosts: Number(form.maxPosPosts) || 0,
         maxWaiterPosts: Number(form.maxWaiterPosts) || 0,
+        inventoryAddonEnabled: !!form.inventoryAddonEnabled,
       });
       const issued = res.data.merchant?.issuedLicenses || [];
       setIssuedKeys(issued);
@@ -730,6 +738,20 @@ export default function Merchants() {
                     <span className="text-xs text-gray-500">0 = unlimited</span>
                   </label>
                 </div>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!form.inventoryAddonEnabled}
+                    onChange={(e) => setForm({ ...form, inventoryAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">Restaurant inventory addon</span>
+                    <span className="text-xs text-gray-500">
+                      Ingredients, recipes, suppliers, auto-reorder emails (paid extra).
+                    </span>
+                  </span>
+                </label>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -843,13 +865,29 @@ export default function Merchants() {
                       />
                     </label>
                   </div>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.inventoryAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, inventoryAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Restaurant inventory addon</span>
+                      <span className="text-xs text-gray-500">
+                        Paid extra: recipes, stock, suppliers, low-stock emails.
+                      </span>
+                    </span>
+                  </label>
                   <button
                     type="button"
                     className="btn-secondary mt-2 text-sm"
                     disabled={savingPosLimits}
                     onClick={() => void handleSavePosLimits()}
                   >
-                    {savingPosLimits ? 'Saving…' : 'Save POS limits'}
+                    {savingPosLimits ? 'Saving…' : 'Save POS limits & addons'}
                   </button>
                 </div>
                 <div>

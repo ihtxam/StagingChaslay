@@ -11,12 +11,23 @@ import {
   Sparkles,
   Trash2,
   X,
+  Printer,
+  Barcode,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
+import {
+  barcodeSvg,
+  normalizeLabelOptions,
+  printLabelsHtml,
+  printLabelsViaAgentOrQueue,
+  type LabelHeightMm,
+  type LabelPrintOptions,
+  type LabelWidthMm,
+} from '@/lib/barcode-labels';
 
 interface Extra {
   id: string;
@@ -255,6 +266,23 @@ export default function Products() {
   const [reordering, setReordering] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const imageFileRef = useRef<HTMLInputElement>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printTargets, setPrintTargets] = useState<Product[]>([]);
+  const [labelOpts, setLabelOpts] = useState<LabelPrintOptions>({
+    heightMm: 20,
+    widthMm: 40,
+    showStoreName: true,
+    showProductName: true,
+    showBarcodeNumber: true,
+    showPrice: false,
+    showSku: false,
+    copies: 1,
+  });
+  const [inventoryOn, setInventoryOn] = useState(false);
+  const [recipeLines, setRecipeLines] = useState<Array<{ itemId: string; qty: string; name?: string; unit?: string }>>([]);
+  const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
+  const [storeName, setStoreName] = useState('');
 
   const onUploadProductImage = async (file: File | null) => {
     if (!file) return;
@@ -289,6 +317,39 @@ export default function Products() {
       setProducts(p.data.products || []);
       setCategories(c.data.categories || []);
       setAllModifierGroups(m.data.groups || []);
+      try {
+        const st = await api.get('/merchant/inventory/status');
+        setInventoryOn(!!st.data?.enabled);
+        if (st.data?.enabled) {
+          const inv = await api.get('/merchant/inventory/items');
+          setInvItems((inv.data.items || []).map((i: { id: string; name: string; unit: string }) => ({
+            id: i.id,
+            name: i.name,
+            unit: i.unit,
+          })));
+        }
+      } catch {
+        setInventoryOn(false);
+      }
+      try {
+        const setRes = await api.get('/merchant/settings');
+        const s = setRes.data?.settings;
+        setStoreName(s?.name || '');
+        const ps = s?.posPrintSettings || {};
+        setLabelOpts((prev) => ({
+          ...prev,
+          storeName: s?.name || '',
+          widthMm: ps.labelWidthMm === 58 ? 58 : 40,
+          heightMm: ([20, 25, 30, 40] as const).includes(ps.labelHeightMm) ? ps.labelHeightMm : 20,
+          showStoreName: ps.labelShowStoreName !== false,
+          showProductName: ps.labelShowProductName !== false,
+          showBarcodeNumber: ps.labelShowBarcodeNumber !== false,
+          showPrice: ps.labelShowPrice === true,
+          showSku: ps.labelShowSku === true,
+        }));
+      } catch {
+        /* optional */
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('failedLoadProducts'));
     } finally {
@@ -397,6 +458,23 @@ export default function Products() {
               },
             ];
       const comboSlots = normalizeComboSlotsFromProduct(full.comboItems);
+      if (inventoryOn) {
+        try {
+          const rec = await api.get(`/merchant/inventory/products/${product.id}/recipe`);
+          setRecipeLines(
+            (rec.data.recipe?.lines || []).map((l: { itemId: string; qty: number; itemName?: string; itemUnit?: string }) => ({
+              itemId: l.itemId,
+              qty: String(l.qty),
+              name: l.itemName,
+              unit: l.itemUnit,
+            }))
+          );
+        } catch {
+          setRecipeLines([]);
+        }
+      } else {
+        setRecipeLines([]);
+      }
       setForm({
         name: full.name,
         description: full.description || '',
@@ -464,6 +542,7 @@ export default function Products() {
     setForm(emptyForm());
     setModifierPickerOpen(false);
     setMoreOpen(false);
+    setRecipeLines([]);
   };
 
   const linkedModifierGroups = useMemo(
@@ -610,12 +689,25 @@ export default function Products() {
     setSaving(true);
     try {
       const payload = buildPayload();
+      let productId = editingId;
       if (editingId) {
         await api.put(`/merchant/products/${editingId}`, payload);
         toast.success(t('productUpdated'));
       } else {
-        await api.post('/merchant/products', payload);
+        const created = await api.post('/merchant/products', payload);
+        productId = created.data?.product?.id || null;
         toast.success(t('productCreated'));
+      }
+      if (inventoryOn && productId) {
+        try {
+          await api.put(`/merchant/inventory/products/${productId}/recipe`, {
+            lines: recipeLines
+              .filter((l) => l.itemId && Number(l.qty) > 0)
+              .map((l) => ({ itemId: l.itemId, qty: Number(l.qty) })),
+          });
+        } catch {
+          /* recipe optional */
+        }
       }
       closeModal();
       await load();
@@ -623,6 +715,67 @@ export default function Products() {
       toast.error(error.response?.data?.error || t('failedSaveProduct'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const selectedProducts = products.filter((p) => selectedIds.includes(p.id));
+
+  const generateMissing = async (ids?: string[], useSku = false) => {
+    try {
+      const res = await api.post('/merchant/products/barcodes/generate', {
+        productIds: ids?.length ? ids : undefined,
+        useSku,
+      });
+      toast.success(t('barcodeGeneratedCount').replace('{n}', String(res.data.generated || 0)));
+      const updated = (res.data.products || []) as Array<{ id: string; barcode: string }>;
+      if (editingId) {
+        const mine = updated.find((p) => p.id === editingId);
+        if (mine) setForm((prev) => ({ ...prev, barcode: mine.barcode }));
+      }
+      await load();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('barcodeGenerateFailed'));
+    }
+  };
+
+  const openPrintFor = (list: Product[]) => {
+    const withCodes = list.filter((p) => String(p.barcode || '').trim());
+    if (!withCodes.length) {
+      toast.error(t('barcodePrintNone'));
+      return;
+    }
+    setPrintTargets(withCodes);
+    setPrintOpen(true);
+  };
+
+  const runPrint = async (mode: 'agent' | 'browser') => {
+    const opts = { ...normalizeLabelOptions(labelOpts), storeName: labelOpts.storeName || storeName };
+    const payload = printTargets.map((p) => ({
+      id: p.id,
+      name: p.name,
+      barcode: String(p.barcode || ''),
+      price: p.price,
+      sku: p.sku,
+    }));
+    try {
+      if (mode === 'browser') {
+        printLabelsHtml(payload, opts);
+      } else {
+        const settingsRes = await api.get('/merchant/settings').catch(() => null);
+        const modeUsed = await printLabelsViaAgentOrQueue(
+          payload,
+          opts,
+          settingsRes?.data?.settings?.posPrintSettings
+        );
+        toast.success(modeUsed === 'browser' ? t('barcodePrintedBrowser') : t('barcodePrinted'));
+      }
+      setPrintOpen(false);
+    } catch (error: any) {
+      toast.error(error.message || t('barcodePrintFailed'));
     }
   };
 
@@ -776,6 +929,24 @@ export default function Products() {
           </button>
           <button
             type="button"
+            onClick={() => void generateMissing(selectedIds.length ? selectedIds : undefined, true)}
+            className="btn-secondary"
+          >
+            <Barcode size={14} />
+            {t('barcodeGenerateMissing')}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              openPrintFor(selectedIds.length ? selectedProducts : filteredProducts)
+            }
+            className="btn-secondary"
+          >
+            <Printer size={14} />
+            {t('barcodePrintLabels')}
+          </button>
+          <button
+            type="button"
             onClick={openCreate}
             className="btn-primary"
           >
@@ -912,6 +1083,13 @@ export default function Products() {
               <>
               <div className="flex items-stretch gap-2 p-3">
                 <div className="flex items-center shrink-0">
+                  <input
+                    type="checkbox"
+                    className="mr-1"
+                    checked={selectedIds.includes(product.id)}
+                    onChange={() => toggleSelected(product.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
                   <DragHandle attributes={attributes} listeners={listeners} />
                 </div>
                 <button
@@ -944,6 +1122,15 @@ export default function Products() {
                     )}
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
                       <span className="font-semibold text-emerald-700">{money(product.price)}</span>
+                      {product.barcode ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-slate-600"
+                          dangerouslySetInnerHTML={{
+                            __html: barcodeSvg(String(product.barcode), { height: 18, width: 90 }),
+                          }}
+                          title={product.barcode}
+                        />
+                      ) : null}
                       <span className="text-slate-500">{t('skuColon').replace('{sku}', product.sku || '-')}</span>
                       <span className={stockOk ? 'text-emerald-600' : 'text-amber-600'}>
                         {t('stockColon').replace('{n}', String(product.stock))}
@@ -964,6 +1151,16 @@ export default function Products() {
                 </button>
 
                 <div className="flex items-center gap-1">
+                  {product.barcode ? (
+                    <button
+                      type="button"
+                      onClick={() => openPrintFor([product])}
+                      className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+                      title={t('barcodePrintLabels')}
+                    >
+                      <Printer size={18} />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => void openEdit(product)}
@@ -1536,6 +1733,44 @@ export default function Products() {
                           if (e.key === 'Enter') e.preventDefault();
                         }}
                       />
+                      {form.barcode ? (
+                        <div
+                          className="mt-2"
+                          dangerouslySetInnerHTML={{
+                            __html: barcodeSvg(form.barcode, { height: 36, width: 160 }),
+                          }}
+                        />
+                      ) : null}
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {editingId && !form.barcode.trim() && (
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs"
+                            onClick={() => void generateMissing([editingId], true)}
+                          >
+                            {t('barcodeGenerateMissing')}
+                          </button>
+                        )}
+                        {form.barcode.trim() && (
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs"
+                            onClick={() =>
+                              openPrintFor([
+                                {
+                                  id: editingId || 'draft',
+                                  name: form.name,
+                                  barcode: form.barcode,
+                                  price: form.price,
+                                  sku: form.sku,
+                                },
+                              ])
+                            }
+                          >
+                            {t('barcodePrintLabels')}
+                          </button>
+                        )}
+                      </div>
                     </Field>
                     <Field label={t('stock')}>
                       <input
@@ -1672,6 +1907,65 @@ export default function Products() {
                 </div>
               )}
 
+              {inventoryOn && (
+                <div className="space-y-2 rounded-md border border-[var(--border)] p-3">
+                  <p className="text-sm font-semibold">{t('invRecipeTab')}</p>
+                  <p className="text-xs muted">{t('invRecipeHint')}</p>
+                  {recipeLines.map((line, idx) => (
+                    <div key={`${line.itemId}-${idx}`} className="grid grid-cols-[1fr_90px_auto] gap-2">
+                      <select
+                        className="field-input"
+                        value={line.itemId}
+                        onChange={(e) => {
+                          const next = [...recipeLines];
+                          const found = invItems.find((i) => i.id === e.target.value);
+                          next[idx] = {
+                            ...line,
+                            itemId: e.target.value,
+                            unit: found?.unit,
+                            name: found?.name,
+                          };
+                          setRecipeLines(next);
+                        }}
+                      >
+                        <option value="">{t('invSelectItem')}</option>
+                        {invItems.map((i) => (
+                          <option key={i.id} value={i.id}>
+                            {i.name} ({i.unit})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="field-input"
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={line.qty}
+                        onChange={(e) => {
+                          const next = [...recipeLines];
+                          next[idx] = { ...line, qty: e.target.value };
+                          setRecipeLines(next);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="rounded-md p-2 text-red-600"
+                        onClick={() => setRecipeLines(recipeLines.filter((_, i) => i !== idx))}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs"
+                    onClick={() => setRecipeLines([...recipeLines, { itemId: '', qty: '' }])}
+                  >
+                    <Plus size={12} /> {t('invAddIngredient')}
+                  </button>
+                </div>
+              )}
+
               <div className="flex gap-2 pt-1 sticky bottom-0 bg-[var(--bg-elevated)] pb-1">
                 <button
                   type="button"
@@ -1689,6 +1983,123 @@ export default function Products() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {printOpen && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 p-3" onClick={() => setPrintOpen(false)}>
+          <div
+            className="w-full max-w-lg rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-semibold">{t('barcodePrintLabels')}</h2>
+            <p className="text-xs muted">{t('barcodePrintHint')}</p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={labelOpts.showStoreName !== false}
+                onChange={(e) => setLabelOpts({ ...labelOpts, showStoreName: e.target.checked })}
+              />
+              {t('barcodeShowStore')}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={labelOpts.showProductName !== false}
+                onChange={(e) => setLabelOpts({ ...labelOpts, showProductName: e.target.checked })}
+              />
+              {t('barcodeShowName')}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={labelOpts.showBarcodeNumber !== false}
+                onChange={(e) => setLabelOpts({ ...labelOpts, showBarcodeNumber: e.target.checked })}
+              />
+              {t('barcodeShowNumber')}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={labelOpts.showPrice === true}
+                onChange={(e) => setLabelOpts({ ...labelOpts, showPrice: e.target.checked })}
+              />
+              {t('barcodeShowPrice')}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={labelOpts.showSku === true}
+                onChange={(e) => setLabelOpts({ ...labelOpts, showSku: e.target.checked })}
+              />
+              {t('barcodeShowSku')}
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <select
+                className="input"
+                value={labelOpts.widthMm || 40}
+                onChange={(e) =>
+                  setLabelOpts({ ...labelOpts, widthMm: Number(e.target.value) as LabelWidthMm })
+                }
+              >
+                <option value={40}>40 mm</option>
+                <option value={58}>58 mm</option>
+              </select>
+              <select
+                className="input"
+                value={labelOpts.heightMm || 20}
+                onChange={(e) =>
+                  setLabelOpts({ ...labelOpts, heightMm: Number(e.target.value) as LabelHeightMm })
+                }
+              >
+                <option value={20}>20 mm</option>
+                <option value={25}>25 mm</option>
+                <option value={30}>30 mm</option>
+                <option value={40}>40 mm</option>
+              </select>
+              <input
+                className="input"
+                type="number"
+                min={1}
+                max={20}
+                value={labelOpts.copies || 1}
+                onChange={(e) => setLabelOpts({ ...labelOpts, copies: Number(e.target.value) || 1 })}
+              />
+            </div>
+            {printTargets[0]?.barcode && (
+              <div className="rounded-md border border-[var(--border)] p-3 text-center">
+                {labelOpts.showStoreName !== false && (labelOpts.storeName || storeName) ? (
+                  <div className="text-[11px] font-bold">{labelOpts.storeName || storeName}</div>
+                ) : null}
+                {labelOpts.showProductName !== false ? (
+                  <div className="text-sm font-semibold">{printTargets[0].name}</div>
+                ) : null}
+                <div
+                  className="mt-1 flex justify-center"
+                  dangerouslySetInnerHTML={{
+                    __html: barcodeSvg(String(printTargets[0].barcode), { height: 36, width: 160 }),
+                  }}
+                />
+                {labelOpts.showBarcodeNumber !== false ? (
+                  <div className="text-xs font-mono">{printTargets[0].barcode}</div>
+                ) : null}
+              </div>
+            )}
+            <p className="text-xs muted">
+              {t('barcodePrintCount').replace('{n}', String(printTargets.length))}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-primary" onClick={() => void runPrint('agent')}>
+                {t('barcodePrintThermal')}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => void runPrint('browser')}>
+                {t('barcodePrintBrowser')}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setPrintOpen(false)}>
+                {t('cancel')}
+              </button>
+            </div>
           </div>
         </div>
       )}

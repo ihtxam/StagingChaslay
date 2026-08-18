@@ -25,6 +25,7 @@ export const PERMISSIONS = [
   "MANAGE_ROLES",
   "MANAGE_BILLING",
   "END_OF_DAY",
+  "MANAGE_INVENTORY",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -90,6 +91,7 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "MANAGE_STAFF",
       "MANAGE_BILLING",
       "END_OF_DAY",
+      "MANAGE_INVENTORY",
     ],
   },
   {
@@ -191,4 +193,5 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   "/merchant/billing": ["MANAGE_BILLING"],
   "/merchant/settings": ["MANAGE_SETTINGS"],
   "/merchant/users": ["MANAGE_STAFF"],
+  "/merchant/inventory": ["MANAGE_INVENTORY", "MANAGE_PRODUCTS"],
 };

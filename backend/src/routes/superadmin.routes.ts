@@ -212,6 +212,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       businessCategory,
       maxPosPosts,
       maxWaiterPosts,
+      inventoryAddonEnabled,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -240,6 +241,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
         businessCategory,
         maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
         maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+        inventoryAddonEnabled: inventoryAddonEnabled === true,
       }
     );
 
@@ -299,6 +301,12 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
+    }
+    if (updates.inventoryAddonEnabled != null) {
+      await MerchantService.updateAddons(merchantId, {
+        inventoryAddonEnabled: !!updates.inventoryAddonEnabled,
+      });
+      delete updates.inventoryAddonEnabled;
     }
 
     const merchant =

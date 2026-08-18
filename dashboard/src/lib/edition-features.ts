@@ -1,5 +1,5 @@
 /**
- * SaaS edition feature catalog ù keep in sync with backend/src/lib/edition-features.ts
+ * SaaS edition feature catalog ? keep in sync with backend/src/lib/edition-features.ts
  */
 
 export type EditionFeatureKey =
@@ -23,7 +23,8 @@ export type EditionFeatureKey =
   | 'reports'
   | 'staff_roles'
   | 'reservations'
-  | 'website_cms';
+  | 'website_cms'
+  | 'inventory';
 
 export type EditionFeatureGroup = {
   id: string;
@@ -75,6 +76,7 @@ export const EDITION_FEATURE_GROUPS: EditionFeatureGroup[] = [
       { key: 'staff_roles', label: 'Staff & roles' },
       { key: 'reservations', label: 'Reservations' },
       { key: 'website_cms', label: 'Website / CMS' },
+      { key: 'inventory', label: 'Restaurant inventory (paid addon)' },
     ],
   },
 ];

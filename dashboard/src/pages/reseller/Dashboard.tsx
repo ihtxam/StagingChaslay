@@ -102,12 +102,14 @@ function MerchantsPage() {
     customDays: 365,
     maxPosPosts: 1,
     maxWaiterPosts: 0,
+    inventoryAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
     id: string;
     name: string;
     maxPosPosts: number;
     maxWaiterPosts: number;
+    inventoryAddonEnabled: boolean;
   } | null>(null);
   const [savingLimits, setSavingLimits] = useState(false);
 
@@ -196,6 +198,7 @@ function MerchantsPage() {
       await api.put(`/reseller/merchants/${limitsFor.id}/pos-limits`, {
         maxPosPosts: Number(limitsFor.maxPosPosts) || 0,
         maxWaiterPosts: Number(limitsFor.maxWaiterPosts) || 0,
+        inventoryAddonEnabled: !!limitsFor.inventoryAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
       setLimitsFor(null);
@@ -414,6 +417,20 @@ function MerchantsPage() {
               />
             </label>
             <p className="sm:col-span-2 text-xs text-stone-500">{t('posPostsHint')}</p>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!form.inventoryAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, inventoryAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('invTitle')}</span>
+                <span className="text-xs text-stone-500">{t('invAddonReadOnly')}</span>
+              </span>
+            </label>
           </div>
 
           <div className="sm:col-span-2 flex justify-end gap-2">
@@ -461,6 +478,7 @@ function MerchantsPage() {
                         name: m.name,
                         maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
                         maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
+                        inventoryAddonEnabled: m.inventoryAddonEnabled === true,
                       })
                     }
                   >
@@ -527,6 +545,20 @@ function MerchantsPage() {
               </label>
             </div>
             <p className="text-xs text-stone-500">{t('posPostsHint')}</p>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.inventoryAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, inventoryAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('invTitle')}</span>
+                <span className="text-xs text-stone-500">{t('invSettingsHint')}</span>
+              </span>
+            </label>
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary text-sm" onClick={() => setLimitsFor(null)}>
                 {t('cancel')}

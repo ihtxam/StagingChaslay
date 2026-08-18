@@ -11,6 +11,7 @@ import {
   Languages,
   Mail,
   Monitor,
+  Package,
   Percent,
   Printer,
   RefreshCw,
@@ -73,6 +74,9 @@ interface SettingsData {
   shiftsEnabled?: boolean;
   maxPosPosts?: number;
   maxWaiterPosts?: number;
+  inventoryAddonEnabled?: boolean;
+  inventoryWasteFactor?: number;
+  inventoryAutoReorderEmailEnabled?: boolean;
   posColorTheme?: string;
   posCheckoutSettings?: {
     tipsEnabled?: boolean;
@@ -182,6 +186,13 @@ interface SettingsData {
     scaleComPort?: string | null;
     scaleUsbAddress?: string | null;
     scaleEnabled?: boolean;
+    labelWidthMm?: 40 | 58;
+    labelHeightMm?: 20 | 25 | 30 | 40;
+    labelShowStoreName?: boolean;
+    labelShowProductName?: boolean;
+    labelShowBarcodeNumber?: boolean;
+    labelShowPrice?: boolean;
+    labelShowSku?: boolean;
     printers?: Array<{
       id: string;
       name: string;
@@ -190,6 +201,7 @@ interface SettingsData {
       printReceipts?: boolean;
       printKitchenTickets?: boolean;
       printEndOfDayReports?: boolean;
+      printLabels?: boolean;
       printAllProducts?: boolean;
       linkedCategoryIds?: string[];
       linkedProductIds?: string[];
@@ -682,6 +694,16 @@ export default function Settings() {
         keywords: ['receipt', 'printer', 'kitchen', 'ticket', t('settingsReceipt')],
       },
       {
+        id: 'barcode-labels',
+        tab: 'receipt',
+        keywords: ['barcode', 'label', 'code128', t('barcodeLabelsTitle')],
+      },
+      {
+        id: 'inventory-addon',
+        tab: 'pos',
+        keywords: ['inventory', 'stock', 'recipe', 'supplier', t('invTitle')],
+      },
+      {
         id: 'email-smtp',
         tab: 'email',
         keywords: [
@@ -1088,6 +1110,16 @@ export default function Settings() {
         scaleEnabled:
           !!ps.scaleComPort?.trim() || !!ps.scaleUsbAddress?.trim() || ps.scaleEnabled === true,
         printers,
+        labelWidthMm: ps.labelWidthMm === 58 ? 58 : 40,
+        labelHeightMm:
+          ps.labelHeightMm === 25 || ps.labelHeightMm === 30 || ps.labelHeightMm === 40
+            ? ps.labelHeightMm
+            : 20,
+        labelShowStoreName: ps.labelShowStoreName !== false,
+        labelShowProductName: ps.labelShowProductName !== false,
+        labelShowBarcodeNumber: ps.labelShowBarcodeNumber !== false,
+        labelShowPrice: ps.labelShowPrice === true,
+        labelShowSku: ps.labelShowSku === true,
       };
     },
     []
@@ -1930,6 +1962,74 @@ export default function Settings() {
                   maxPosPosts={Math.max(0, Number(settings.maxPosPosts) || 0)}
                   maxWaiterPosts={Math.max(0, Number(settings.maxWaiterPosts) || 0)}
                 />
+              </Section>
+
+              <Section
+                id="inventory-addon"
+                icon={Package}
+                accent={settingsDash.accent}
+                title={t('invTitle')}
+                description={t('invSettingsHint')}
+                highlight={isSectionHighlight('inventory-addon')}
+                dimmed={normalizedQuery ? !isSectionVisible('inventory-addon') : false}
+              >
+                <p className="text-sm">
+                  {settings.inventoryAddonEnabled ? t('invAddonOn') : t('invAddonOff')}
+                </p>
+                <p className="text-xs muted mt-1">{t('invAddonReadOnly')}</p>
+                <SettingsField label={t('invWasteFactor')} hint={t('invWasteFactorHint')}>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    max={50}
+                    step={1}
+                    disabled={!settings.inventoryAddonEnabled}
+                    value={Math.round((Number(settings.inventoryWasteFactor) || 0.2) * 100)}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        inventoryWasteFactor: Math.min(50, Math.max(0, Number(e.target.value) || 0)) / 100,
+                      })
+                    }
+                  />
+                </SettingsField>
+                <label className="mt-3 flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    disabled={!settings.inventoryAddonEnabled}
+                    checked={!!settings.inventoryAutoReorderEmailEnabled}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        inventoryAutoReorderEmailEnabled: e.target.checked,
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium block">{t('invAutoReorderMaster')}</span>
+                    <span className="text-xs muted">{t('invAutoReorderMasterHint')}</span>
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  className="btn-primary mt-3"
+                  disabled={!settings.inventoryAddonEnabled || saving}
+                  onClick={async () => {
+                    try {
+                      await api.put('/merchant/settings', {
+                        inventoryWasteFactor: Number(settings.inventoryWasteFactor) || 0.2,
+                        inventoryAutoReorderEmailEnabled: !!settings.inventoryAutoReorderEmailEnabled,
+                      });
+                      toast.success(t('saved'));
+                    } catch (error: any) {
+                      toast.error(error.response?.data?.error || t('saveFailed'));
+                    }
+                  }}
+                >
+                  {t('save')}
+                </button>
               </Section>
 
               <Section
@@ -3365,6 +3465,7 @@ export default function Settings() {
                           ['printReceipts', t('printRoleReceipts')],
                           ['printKitchenTickets', t('printRoleKitchen')],
                           ['printEndOfDayReports', t('printRoleEod')],
+                          ['printLabels', t('printRoleLabels')],
                         ] as const
                       ).map(([key, label]) => (
                         <label key={key} className="inline-flex items-center gap-1.5">
@@ -3458,6 +3559,7 @@ export default function Settings() {
                         printReceipts: false,
                         printKitchenTickets: true,
                         printEndOfDayReports: false,
+                        printLabels: false,
                         printAllProducts: true,
                       },
                     ];
@@ -3469,6 +3571,89 @@ export default function Settings() {
                 >
                   {t('addPrinterProfile')}
                 </button>
+              </Section>
+
+              <Section
+                id="barcode-labels"
+                icon={Printer}
+                accent={settingsDash.accent}
+                title={t('barcodeLabelsTitle')}
+                description={t('barcodeLabelsHint')}
+                highlight={isSectionHighlight('barcode-labels')}
+                dimmed={normalizedQuery ? !isSectionVisible('barcode-labels') : false}
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  <SettingsField label={t('barcodeLabelWidth')}>
+                    <select
+                      className="input"
+                      value={settings.posPrintSettings?.labelWidthMm === 58 ? 58 : 40}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            labelWidthMm: Number(e.target.value) === 58 ? 58 : 40,
+                          },
+                        })
+                      }
+                    >
+                      <option value={40}>40 mm</option>
+                      <option value={58}>58 mm</option>
+                    </select>
+                  </SettingsField>
+                  <SettingsField label={t('barcodeLabelHeight')}>
+                    <select
+                      className="input"
+                      value={settings.posPrintSettings?.labelHeightMm || 20}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            labelHeightMm: Number(e.target.value) as 20 | 25 | 30 | 40,
+                          },
+                        })
+                      }
+                    >
+                      <option value={20}>20 mm</option>
+                      <option value={25}>25 mm</option>
+                      <option value={30}>30 mm</option>
+                      <option value={40}>40 mm</option>
+                    </select>
+                  </SettingsField>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-3 text-sm">
+                  {(
+                    [
+                      ['labelShowStoreName', t('barcodeShowStore')],
+                      ['labelShowProductName', t('barcodeShowName')],
+                      ['labelShowBarcodeNumber', t('barcodeShowNumber')],
+                      ['labelShowPrice', t('barcodeShowPrice')],
+                      ['labelShowSku', t('barcodeShowSku')],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key} className="inline-flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={
+                          key === 'labelShowPrice' || key === 'labelShowSku'
+                            ? settings.posPrintSettings?.[key] === true
+                            : settings.posPrintSettings?.[key] !== false
+                        }
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            posPrintSettings: {
+                              ...(settings.posPrintSettings || {}),
+                              [key]: e.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
               </Section>
 
               <SettingsSaveBar saving={savingReceipt} />

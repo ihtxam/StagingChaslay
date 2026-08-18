@@ -196,8 +196,15 @@ export type PosPrintSettingsClient = {
   scaleComPort?: string | null;
   /** Android USB scale address synced from panel. */
   scaleUsbAddress?: string | null;
-  scaleEnabled?: boolean;
-  printers?: Array<{
+    scaleEnabled?: boolean;
+    labelWidthMm?: 40 | 58;
+    labelHeightMm?: 20 | 25 | 30 | 40;
+    labelShowStoreName?: boolean;
+    labelShowProductName?: boolean;
+    labelShowBarcodeNumber?: boolean;
+    labelShowPrice?: boolean;
+    labelShowSku?: boolean;
+    printers?: Array<{
     id: string;
     name: string;
     enabled?: boolean;
@@ -205,6 +212,7 @@ export type PosPrintSettingsClient = {
     printReceipts?: boolean;
     printKitchenTickets?: boolean;
     printEndOfDayReports?: boolean;
+    printLabels?: boolean;
     printAllProducts?: boolean;
     linkedCategoryIds?: string[];
     linkedProductIds?: string[];
@@ -2017,13 +2025,14 @@ export async function logoUrlToEscPos(
 
 export function printersForRole(
   settings: PosPrintSettingsClient | null | undefined,
-  role: 'receipt' | 'kitchen' | 'eod'
+  role: 'receipt' | 'kitchen' | 'eod' | 'labels'
 ): Array<{ name: string; paperWidthMm: 58 | 80 }> {
   const globalPaper: 58 | 80 = settings?.paperWidthMm === 58 ? 58 : 80;
   const list = (settings?.printers || []).filter((p) => p.enabled !== false && p.name);
   const matched = list.filter((p) => {
     if (role === 'receipt') return !!p.printReceipts;
     if (role === 'kitchen') return !!p.printKitchenTickets;
+    if (role === 'labels') return !!(p as { printLabels?: boolean }).printLabels;
     return !!p.printEndOfDayReports;
   });
   if (matched.length) {

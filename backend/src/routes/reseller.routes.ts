@@ -179,6 +179,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       sendInvite,
       maxPosPosts,
       maxWaiterPosts,
+      inventoryAddonEnabled,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
     if (!email || !trimmedBusinessName || !editionId) {
@@ -201,6 +202,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       sendInvite,
       maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
       maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+      inventoryAddonEnabled: inventoryAddonEnabled === true,
     });
     res.status(201).json({ success: true, merchant });
   } catch (error) {
@@ -214,13 +216,15 @@ router.post("/merchants", async (req: Request, res: Response) => {
  */
 router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Response) => {
   try {
-    const { maxPosPosts, maxWaiterPosts } = req.body || {};
+    const { maxPosPosts, maxWaiterPosts, inventoryAddonEnabled } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
       resellerId(req),
       req.params.merchantId,
       {
         maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
         maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+        inventoryAddonEnabled:
+          inventoryAddonEnabled != null ? !!inventoryAddonEnabled : undefined,
       }
     );
     res.json({ success: true, merchant });

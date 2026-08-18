@@ -43,7 +43,7 @@ function serializeReseller(
 export class ResellerService {
   static async countSeatsUsed(resellerId: string): Promise<number> {
     const db = getDb();
-    // Active seats only ù revoked/suspended licenses free pool capacity
+    // Active seats only ? revoked/suspended licenses free pool capacity
     const [{ c }] = await db
       .select({ c: count() })
       .from(schema.licenses)
@@ -343,6 +343,7 @@ export class ResellerService {
         shopEnabled: schema.merchants.shopEnabled,
         maxPosPosts: schema.merchants.maxPosPosts,
         maxWaiterPosts: schema.merchants.maxWaiterPosts,
+        inventoryAddonEnabled: schema.merchants.inventoryAddonEnabled,
         createdAt: schema.merchants.createdAt,
       })
       .from(schema.merchants)
@@ -370,6 +371,7 @@ export class ResellerService {
       sendInvite?: boolean;
       maxPosPosts?: number;
       maxWaiterPosts?: number;
+      inventoryAddonEnabled?: boolean;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -408,6 +410,7 @@ export class ResellerService {
         businessCategory: input.businessCategory,
         maxPosPosts: input.maxPosPosts,
         maxWaiterPosts: input.maxWaiterPosts,
+        inventoryAddonEnabled: input.inventoryAddonEnabled,
       }
     );
     return created;
@@ -416,11 +419,26 @@ export class ResellerService {
   static async updateMerchantPosLimits(
     resellerId: string,
     merchantId: string,
-    limits: { maxPosPosts?: number; maxWaiterPosts?: number }
+    limits: {
+      maxPosPosts?: number;
+      maxWaiterPosts?: number;
+      inventoryAddonEnabled?: boolean;
+    }
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
     const { MerchantService } = await import("./merchant.service");
-    return MerchantService.updatePosPostLimits(merchantId, limits);
+    if (limits.maxPosPosts !== undefined || limits.maxWaiterPosts !== undefined) {
+      await MerchantService.updatePosPostLimits(merchantId, {
+        maxPosPosts: limits.maxPosPosts,
+        maxWaiterPosts: limits.maxWaiterPosts,
+      });
+    }
+    if (limits.inventoryAddonEnabled !== undefined) {
+      await MerchantService.updateAddons(merchantId, {
+        inventoryAddonEnabled: limits.inventoryAddonEnabled,
+      });
+    }
+    return MerchantService.getMerchantById(merchantId);
   }
 
   static async assertOwnsMerchant(resellerId: string, merchantId: string) {

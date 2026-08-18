@@ -611,6 +611,20 @@ export class SyncService {
         }
       }
 
+      const paid =
+        !isCancelled &&
+        !payLater &&
+        (String(orderValuesBase.paymentStatus || "").toLowerCase() === "completed" ||
+          String(orderValuesBase.paymentStatus || "").toLowerCase() === "paid");
+      if (paid) {
+        try {
+          const { InventoryService } = await import("@/services/inventory.service");
+          await InventoryService.deductForPaidOrder(merchantId, order.id);
+        } catch (invErr) {
+          console.warn("[sync] inventory deduct failed:", invErr);
+        }
+      }
+
       results.push({ clientId: sale.clientId, orderId: order.id, created: true, invoiceNumber });
     }
 

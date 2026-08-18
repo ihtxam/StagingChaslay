@@ -66,6 +66,28 @@ router.get("/products/import/template", async (_req: Request, res: Response) => 
 });
 
 /**
+ * POST /api/merchant/products/barcodes/generate
+ * Assign Code128 values (C + 11 digits, or SKU when safe) to products missing a barcode.
+ */
+router.post("/products/barcodes/generate", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { BarcodeService } = await import("@/services/barcode.service");
+    const result = await BarcodeService.generateMissing(merchantId, {
+      productIds: Array.isArray(req.body?.productIds) ? req.body.productIds : undefined,
+      useSku: req.body?.useSku === true,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Error generating barcodes:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to generate barcodes",
+    });
+  }
+});
+
+/**
  * POST /api/merchant/products/import
  * One-click Excel import for categories + products
  */

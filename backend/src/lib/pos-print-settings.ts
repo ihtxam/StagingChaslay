@@ -19,6 +19,8 @@ export type PosPrinterProfile = {
   printReceipts?: boolean;
   printKitchenTickets?: boolean;
   printEndOfDayReports?: boolean;
+  /** Product barcode labels (Code128) */
+  printLabels?: boolean;
   printAllProducts?: boolean;
   linkedCategoryIds?: string[];
   linkedProductIds?: string[];
@@ -66,10 +68,19 @@ export type PosPrintSettings = {
    * Cleared once merchants save printer profiles from the panel.
    */
   kitchenExcludedCategoryIds?: string[];
+  /** Barcode label paper width (thermal / label printer) */
+  labelWidthMm?: 40 | 58;
+  /** Barcode label height presets */
+  labelHeightMm?: 20 | 25 | 30 | 40;
+  labelShowStoreName?: boolean;
+  labelShowProductName?: boolean;
+  labelShowBarcodeNumber?: boolean;
+  labelShowPrice?: boolean;
+  labelShowSku?: boolean;
 };
 
 export const DEFAULT_POS_PRINT_SETTINGS: Required<
-  Omit<PosPrintSettings, "receiptLogoUrl" | "printers">
+  Omit<PosPrintSettings, "receiptLogoUrl" | "printers" | "kitchenPrintRouting" | "kitchenExcludedCategoryIds">
 > & { receiptLogoUrl: string | null; printers: PosPrinterProfile[] } = {
   receiptHeader: "",
   receiptFooter: "Merci / Danke / Thank you",
@@ -92,6 +103,13 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
     scaleUsbAddress: null,
     scaleEnabled: false,
     printers: [],
+    labelWidthMm: 40,
+    labelHeightMm: 20,
+    labelShowStoreName: true,
+    labelShowProductName: true,
+    labelShowBarcodeNumber: true,
+    labelShowPrice: false,
+    labelShowSku: false,
   };
 
 export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
@@ -117,6 +135,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
         printReceipts: !!row.printReceipts,
         printKitchenTickets: !!row.printKitchenTickets,
         printEndOfDayReports: !!row.printEndOfDayReports,
+        printLabels: !!row.printLabels,
         printAllProducts: row.printAllProducts !== false,
         linkedCategoryIds: Array.isArray(row.linkedCategoryIds)
           ? row.linkedCategoryIds.map(String).slice(0, 200)
@@ -154,6 +173,10 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     kitchenPrintRouting,
     kitchenExcludedCategoryIds
   );
+
+  const labelWidthMm = Number(src.labelWidthMm) === 58 ? 58 : 40;
+  const rawH = Number(src.labelHeightMm);
+  const labelHeightMm = (rawH === 25 || rawH === 30 || rawH === 40 ? rawH : 20) as 20 | 25 | 30 | 40;
 
   const itemScale = Number(src.kitchenItemTextScale);
   const headerScale = Number(src.kitchenHeaderTextScale);
@@ -196,6 +219,13 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     printers: migrated.printers,
     kitchenPrintRouting: migrated.routing,
     kitchenExcludedCategoryIds: migrated.excludedCategoryIds,
+    labelWidthMm,
+    labelHeightMm,
+    labelShowStoreName: src.labelShowStoreName !== false,
+    labelShowProductName: src.labelShowProductName !== false,
+    labelShowBarcodeNumber: src.labelShowBarcodeNumber !== false,
+    labelShowPrice: src.labelShowPrice === true,
+    labelShowSku: src.labelShowSku === true,
   };
 }
 

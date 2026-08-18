@@ -487,6 +487,12 @@ export class OrderService {
             paymentMethod: method,
           });
           try {
+            const { InventoryService } = await import("@/services/inventory.service");
+            await InventoryService.deductForPaidOrder(merchantId, orderId);
+          } catch (invErr) {
+            console.warn("Inventory deduct after collect_payment failed:", invErr);
+          }
+          try {
             await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
           } catch (printErr) {
             console.warn("Collect payment receipt print enqueue failed:", printErr);
@@ -526,6 +532,12 @@ export class OrderService {
             paymentMethod: method,
             completedAt: new Date(),
           });
+          try {
+            const { InventoryService } = await import("@/services/inventory.service");
+            await InventoryService.deductForPaidOrder(merchantId, orderId);
+          } catch (invErr) {
+            console.warn("Inventory deduct after complete_and_collect failed:", invErr);
+          }
           try {
             await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
           } catch (printErr) {
@@ -593,6 +605,15 @@ export class OrderService {
 
       if (order.length === 0) {
         throw new Error("Order not found");
+      }
+
+      if (paymentStatus === "completed") {
+        try {
+          const { InventoryService } = await import("@/services/inventory.service");
+          await InventoryService.deductForPaidOrder(merchantId, orderId);
+        } catch (invErr) {
+          console.warn("Inventory deduct after payment status failed:", invErr);
+        }
       }
 
       return order[0];

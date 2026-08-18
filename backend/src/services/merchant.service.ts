@@ -137,6 +137,7 @@ export class MerchantService {
       maxPosPosts?: number;
       /** Concurrent waiter stations. 0 = unlimited. Agency-assigned. */
       maxWaiterPosts?: number;
+      inventoryAddonEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -192,6 +193,7 @@ export class MerchantService {
           resellerId: options?.resellerId || null,
           maxPosPosts: normalizePosPostLimit(options?.maxPosPosts ?? 0),
           maxWaiterPosts: normalizePosPostLimit(options?.maxWaiterPosts ?? 0),
+          inventoryAddonEnabled: options?.inventoryAddonEnabled === true,
         })
         .returning();
 
@@ -307,6 +309,18 @@ export class MerchantService {
     }
     if (Object.keys(patch).length === 0) {
       throw new Error("At least one of maxPosPosts or maxWaiterPosts is required");
+    }
+    return this.updateMerchant(merchantId, patch);
+  }
+
+  /** Paid addons are agency/reseller-managed — merchants cannot self-enable. */
+  static async updateAddons(merchantId: string, addons: { inventoryAddonEnabled?: boolean }) {
+    const patch: Partial<typeof schema.merchants.$inferInsert> = {};
+    if (addons.inventoryAddonEnabled !== undefined) {
+      patch.inventoryAddonEnabled = !!addons.inventoryAddonEnabled;
+    }
+    if (Object.keys(patch).length === 0) {
+      throw new Error("No addon updates provided");
     }
     return this.updateMerchant(merchantId, patch);
   }

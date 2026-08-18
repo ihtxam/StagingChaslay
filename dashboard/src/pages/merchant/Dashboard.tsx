@@ -6,6 +6,7 @@ import Header from '@/components/Header';
 import Overview from './Overview';
 import Orders from './Orders';
 import Products from './Products';
+import Inventory from './Inventory';
 import Categories from './Categories';
 import Modifiers from './Modifiers';
 import Customers from './Customers';
@@ -215,6 +216,7 @@ function MerchantShell() {
       icon: '🛍️',
       children: [
         { label: t('products'), path: '/merchant/products', icon: '🛍️' },
+        { label: t('invTitle'), path: '/merchant/inventory', icon: '📦' },
         { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
       ].filter((item) => allow(item.path)),
@@ -328,6 +330,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/products" allow={allow}>
                   <Products />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="inventory"
+              element={
+                <PanelRouteGuard path="/merchant/inventory" allow={allow}>
+                  <Inventory />
                 </PanelRouteGuard>
               }
             />

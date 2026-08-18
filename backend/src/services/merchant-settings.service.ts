@@ -148,6 +148,9 @@ export class MerchantSettingsService {
         0,
         Number((merchant as { maxWaiterPosts?: number }).maxWaiterPosts ?? 0)
       ),
+      inventoryAddonEnabled: merchant.inventoryAddonEnabled === true,
+      inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
+      inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       posColorTheme: (merchant.posColorTheme as string) || "teal",
       storeHours: merchant.storeHours || {},
       shopLogoUrl: merchant.shopLogoUrl,
@@ -279,6 +282,8 @@ export class MerchantSettingsService {
       tableQrSettings?: TableQrSettings | null;
       posCheckoutSettings?: PosCheckoutSettings | Partial<PosCheckoutSettings> | null;
       deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
+      inventoryWasteFactor?: number;
+      inventoryAutoReorderEmailEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -471,6 +476,16 @@ export class MerchantSettingsService {
     }
     if (updates.marketingSettings !== undefined) {
       patch.marketingSettings = MarketingService.normalizeMarketing(updates.marketingSettings);
+    }
+    if (updates.inventoryWasteFactor !== undefined) {
+      const n = Number(updates.inventoryWasteFactor);
+      if (!Number.isFinite(n) || n < 0 || n > 0.5) {
+        throw new Error("inventoryWasteFactor must be between 0 and 0.50");
+      }
+      patch.inventoryWasteFactor = n.toFixed(4);
+    }
+    if (updates.inventoryAutoReorderEmailEnabled !== undefined) {
+      patch.inventoryAutoReorderEmailEnabled = !!updates.inventoryAutoReorderEmailEnabled;
     }
     if (updates.posPrintSettings !== undefined) {
       patch.posPrintSettings = normalizePosPrintSettings(updates.posPrintSettings);

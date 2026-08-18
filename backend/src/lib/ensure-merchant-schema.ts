@@ -73,6 +73,12 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   bank_account_holder: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS bank_account_holder varchar(255)",
   invoice_sequence:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS invoice_sequence integer NOT NULL DEFAULT 0",
+  inventory_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_addon_enabled boolean NOT NULL DEFAULT false",
+  inventory_waste_factor:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_waste_factor numeric(5,4) NOT NULL DEFAULT 0.20",
+  inventory_auto_reorder_email_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_auto_reorder_email_enabled boolean NOT NULL DEFAULT false",
 };
 
 /** Idempotent CREATE TABLE for features added after initial deploy. */
@@ -163,6 +169,81 @@ const TABLE_PATCHES: string[] = [
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_issued_at timestamptz`,
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_due_at timestamptz`,
   `CREATE UNIQUE INDEX IF NOT EXISTS orders_merchant_invoice_number_idx ON orders (merchant_id, invoice_number) WHERE invoice_number IS NOT NULL`,
+  `UPDATE products SET barcode = NULL WHERE barcode IS NOT NULL AND btrim(barcode) = ''`,
+  `UPDATE products p SET barcode = NULL
+    WHERE p.barcode IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM products o
+        WHERE o.merchant_id = p.merchant_id
+          AND o.barcode = p.barcode
+          AND o.id < p.id
+      )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS products_merchant_barcode_uidx ON products (merchant_id, barcode) WHERE barcode IS NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS inventory_suppliers (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(255) NOT NULL,
+    email varchar(255),
+    phone varchar(40),
+    address text,
+    contact_person varchar(255),
+    notes text,
+    archived_at timestamptz,
+    last_order_email_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS inventory_suppliers_merchant_idx ON inventory_suppliers(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS inventory_suppliers_merchant_name_idx ON inventory_suppliers(merchant_id, name)`,
+  `CREATE TABLE IF NOT EXISTS inventory_items (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(255) NOT NULL,
+    unit varchar(20) NOT NULL DEFAULT 'kg',
+    cost numeric(12, 4) NOT NULL DEFAULT 0,
+    on_hand numeric(14, 4) NOT NULL DEFAULT 0,
+    min_stock numeric(14, 4) NOT NULL DEFAULT 0,
+    reorder_qty numeric(14, 4) NOT NULL DEFAULT 0,
+    supplier_id uuid REFERENCES inventory_suppliers(id) ON DELETE SET NULL,
+    perishable boolean NOT NULL DEFAULT false,
+    auto_reorder_enabled boolean NOT NULL DEFAULT false,
+    last_auto_reorder_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS inventory_items_merchant_idx ON inventory_items(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS inventory_items_supplier_idx ON inventory_items(supplier_id)`,
+  `CREATE INDEX IF NOT EXISTS inventory_items_merchant_name_idx ON inventory_items(merchant_id, name)`,
+  `CREATE TABLE IF NOT EXISTS inventory_movements (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    item_id uuid NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+    type varchar(20) NOT NULL,
+    qty numeric(14, 4) NOT NULL,
+    unit_cost numeric(12, 4),
+    note text,
+    supplier_name varchar(255),
+    order_id uuid REFERENCES orders(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS inventory_movements_merchant_idx ON inventory_movements(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS inventory_movements_item_idx ON inventory_movements(item_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS inventory_movements_order_idx ON inventory_movements(order_id)`,
+  `CREATE INDEX IF NOT EXISTS inventory_movements_type_idx ON inventory_movements(merchant_id, type)`,
+  `CREATE TABLE IF NOT EXISTS product_recipes (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    item_id uuid NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+    qty numeric(14, 4) NOT NULL,
+    unit varchar(20) NOT NULL DEFAULT 'kg',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS product_recipes_merchant_idx ON product_recipes(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS product_recipes_product_idx ON product_recipes(product_id)`,
+  `CREATE INDEX IF NOT EXISTS product_recipes_item_idx ON product_recipes(item_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS product_recipes_product_item_uidx ON product_recipes(product_id, item_id)`,
 ];
 
 let startupPatchPromise: Promise<void> | null = null;

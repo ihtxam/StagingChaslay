@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   foreignKey,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import type { PosPrintSettings } from "../lib/pos-print-settings";
 import type { TableQrSettings } from "../lib/table-qr-settings";
 
@@ -252,6 +252,20 @@ export const merchants = pgTable(
      * Max concurrent waiter stations (waiter web + Android waiter). 0 = unlimited.
      */
     maxWaiterPosts: integer("max_waiter_posts").default(0).notNull(),
+    /**
+     * Paid restaurant inventory + recipes addon. Superadmin/reseller only (like POS seats).
+     */
+    inventoryAddonEnabled: boolean("inventory_addon_enabled").default(false).notNull(),
+    /**
+     * Extra yield / waste factor applied to recipe usage on sale (0–0.50). Default 20%.
+     */
+    inventoryWasteFactor: decimal("inventory_waste_factor", { precision: 5, scale: 4 })
+      .default("0.20")
+      .notNull(),
+    /** Master switch: email preferred supplier when an item hits par / reorder point. */
+    inventoryAutoReorderEmailEnabled: boolean("inventory_auto_reorder_email_enabled")
+      .default(false)
+      .notNull(),
     /** WebPOS / counter accent theme: teal | green | blue | violet */
     posColorTheme: varchar("pos_color_theme", { length: 20 }).default("teal").notNull(),
     /** Online / phone restaurant table reservations */
@@ -682,6 +696,9 @@ export const products = pgTable(
   (table) => ({
     merchantIdIdx: index("products_merchant_id_idx").on(table.merchantId),
     barcodeIdx: index("products_barcode_idx").on(table.barcode),
+    barcodeUniqueIdx: uniqueIndex("products_merchant_barcode_uidx")
+      .on(table.merchantId, table.barcode)
+      .where(sql`${table.barcode} IS NOT NULL`),
     clientIdIdx: index("products_client_id_idx").on(table.clientId),
     typeIdx: index("products_type_idx").on(table.productType),
     sortOrderIdx: index("products_sort_order_idx").on(table.merchantId, table.sortOrder),
@@ -2350,6 +2367,145 @@ export const posCashMovements = pgTable(
     createdIdx: index("pos_cash_movements_created_idx").on(table.merchantId, table.createdAt),
   })
 );
+
+// ============================================================================
+// RESTAURANT INVENTORY (premium addon) — Lightspeed-style items / recipes / suppliers
+// ============================================================================
+
+export const inventorySuppliers = pgTable(
+  "inventory_suppliers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 255 }),
+    phone: varchar("phone", { length: 40 }),
+    address: text("address"),
+    contactPerson: varchar("contact_person", { length: 255 }),
+    notes: text("notes"),
+    /** Soft-delete when items still reference this supplier */
+    archivedAt: timestamp("archived_at"),
+    lastOrderEmailAt: timestamp("last_order_email_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_suppliers_merchant_idx").on(table.merchantId),
+    merchantNameIdx: index("inventory_suppliers_merchant_name_idx").on(table.merchantId, table.name),
+  })
+);
+
+export const inventoryItems = pgTable(
+  "inventory_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    /** kg | L | piece */
+    unit: varchar("unit", { length: 20 }).default("kg").notNull(),
+    cost: decimal("cost", { precision: 12, scale: 4 }).default("0").notNull(),
+    onHand: decimal("on_hand", { precision: 14, scale: 4 }).default("0").notNull(),
+    /** Par / reorder point (Lightspeed par level) */
+    minStock: decimal("min_stock", { precision: 14, scale: 4 }).default("0").notNull(),
+    /** Qty to request when at/below par */
+    reorderQty: decimal("reorder_qty", { precision: 14, scale: 4 }).default("0").notNull(),
+    supplierId: uuid("supplier_id").references(() => inventorySuppliers.id, { onDelete: "set null" }),
+    perishable: boolean("perishable").default(false).notNull(),
+    autoReorderEnabled: boolean("auto_reorder_enabled").default(false).notNull(),
+    lastAutoReorderAt: timestamp("last_auto_reorder_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_items_merchant_idx").on(table.merchantId),
+    supplierIdx: index("inventory_items_supplier_idx").on(table.supplierId),
+    merchantNameIdx: index("inventory_items_merchant_name_idx").on(table.merchantId, table.name),
+  })
+);
+
+export const inventoryMovements = pgTable(
+  "inventory_movements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
+    /** in | out | waste | sale | adjust */
+    type: varchar("type", { length: 20 }).notNull(),
+    qty: decimal("qty", { precision: 14, scale: 4 }).notNull(),
+    unitCost: decimal("unit_cost", { precision: 12, scale: 4 }),
+    note: text("note"),
+    supplierName: varchar("supplier_name", { length: 255 }),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_movements_merchant_idx").on(table.merchantId),
+    itemIdx: index("inventory_movements_item_idx").on(table.itemId, table.createdAt),
+    orderIdx: index("inventory_movements_order_idx").on(table.orderId),
+    typeIdx: index("inventory_movements_type_idx").on(table.merchantId, table.type),
+  })
+);
+
+export const productRecipes = pgTable(
+  "product_recipes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
+    qty: decimal("qty", { precision: 14, scale: 4 }).notNull(),
+    unit: varchar("unit", { length: 20 }).default("kg").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("product_recipes_merchant_idx").on(table.merchantId),
+    productIdx: index("product_recipes_product_idx").on(table.productId),
+    itemIdx: index("product_recipes_item_idx").on(table.itemId),
+    productItemUidx: uniqueIndex("product_recipes_product_item_uidx").on(table.productId, table.itemId),
+  })
+);
+
+export const inventorySuppliersRelations = relations(inventorySuppliers, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [inventorySuppliers.merchantId], references: [merchants.id] }),
+  items: many(inventoryItems),
+}));
+
+export const inventoryItemsRelations = relations(inventoryItems, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [inventoryItems.merchantId], references: [merchants.id] }),
+  supplier: one(inventorySuppliers, {
+    fields: [inventoryItems.supplierId],
+    references: [inventorySuppliers.id],
+  }),
+  movements: many(inventoryMovements),
+  recipes: many(productRecipes),
+}));
+
+export const inventoryMovementsRelations = relations(inventoryMovements, ({ one }) => ({
+  merchant: one(merchants, { fields: [inventoryMovements.merchantId], references: [merchants.id] }),
+  item: one(inventoryItems, { fields: [inventoryMovements.itemId], references: [inventoryItems.id] }),
+  order: one(orders, { fields: [inventoryMovements.orderId], references: [orders.id] }),
+}));
+
+export const productRecipesRelations = relations(productRecipes, ({ one }) => ({
+  merchant: one(merchants, { fields: [productRecipes.merchantId], references: [merchants.id] }),
+  product: one(products, { fields: [productRecipes.productId], references: [products.id] }),
+  item: one(inventoryItems, { fields: [productRecipes.itemId], references: [inventoryItems.id] }),
+}));
 
 export const subscriptionPlansRelations = relations(subscriptionPlans, ({ many }) => ({
   payments: many(subscriptionPayments),

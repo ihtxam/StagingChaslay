@@ -14,7 +14,8 @@ export type BillableFeatureKey =
   | "website_cms"
   | "online_payments"
   | "offers"
-  | "reservations";
+  | "reservations"
+  | "inventory";
 
 export const BILLABLE_FEATURE_KEYS: BillableFeatureKey[] = [
   "online_shop",
@@ -25,6 +26,7 @@ export const BILLABLE_FEATURE_KEYS: BillableFeatureKey[] = [
   "online_payments",
   "offers",
   "reservations",
+  "inventory",
 ];
 
 export type ResellerBillingPrices = {
@@ -46,6 +48,7 @@ const DEFAULT_PRICES: ResellerBillingPrices = {
     online_payments: 10,
     offers: 10,
     reservations: 10,
+    inventory: 29,
   },
 };
 
@@ -69,6 +72,7 @@ export function detectActiveBillableFeatures(merchant: {
   webposGiftCardEnabled?: boolean | null;
   giftCardSettings?: unknown;
   reservationsEnabled?: boolean | null;
+  inventoryAddonEnabled?: boolean | null;
   adyenApiKey?: string | null;
   customDomain?: string | null;
   editionFeatures?: string[] | null;
@@ -92,6 +96,7 @@ export function detectActiveBillableFeatures(merchant: {
   }
   if (features.includes("offers")) out.push("offers");
   if (merchant.reservationsEnabled || features.includes("reservations")) out.push("reservations");
+  if (merchant.inventoryAddonEnabled) out.push("inventory");
 
   return [...new Set(out)];
 }
@@ -249,6 +254,7 @@ export class ResellerBillingService {
       online_payments: 0,
       offers: 0,
       reservations: 0,
+      inventory: 0,
     };
 
     let billableMerchants = 0;
@@ -264,6 +270,7 @@ export class ResellerBillingService {
             webposGiftCardEnabled: m.webposGiftCardEnabled,
             giftCardSettings: m.giftCardSettings,
             reservationsEnabled: m.reservationsEnabled,
+            inventoryAddonEnabled: (m as { inventoryAddonEnabled?: boolean }).inventoryAddonEnabled,
             adyenApiKey: m.adyenApiKey,
             customDomain: m.customDomain,
             editionFeatures,
