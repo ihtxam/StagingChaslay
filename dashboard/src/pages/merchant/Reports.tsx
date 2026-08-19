@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Printer } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import {
   generateEodReportText,
   logoUrlToEscPos,
@@ -19,6 +20,7 @@ import {
   printViaAgent,
   unsuitableRawPrinterMessage,
 } from '@/lib/print-agent';
+import { toastPrintError } from '@/lib/webpos-print-toast';
 import {
   EodIncludeProductsCheckbox,
   useEodIncludeProductsSold,
@@ -214,7 +216,7 @@ export default function ReportsPage() {
       }
       toast.success(t('reportsPrinted'));
     } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+      toastPrintError(e, t, 'webPosPrintFailed');
     }
   };
 
@@ -531,7 +533,7 @@ export default function ReportsPage() {
                       report.paymentRows.map((r) => (
                         <li key={r.method} className="flex justify-between px-3 py-2">
                           <span>
-                            {r.method} � {r.count}
+                            {paymentMethodLabel(r.method, t)} · {r.count}
                           </span>
                           <span className="tabular-nums">{money(r.total)}</span>
                         </li>

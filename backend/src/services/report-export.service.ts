@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { paymentMethodLabelEn } from "@/lib/payment-breakdown";
 import {
   PosReportsService,
   type ReportPreset,
@@ -63,7 +64,11 @@ export class ReportExportService {
       [],
       ["Payment Method Report"],
       ["Payment method", "Amount", "Qty"],
-      ...(eod.paymentRows || []).map((p) => [p.method, money(p.total), p.count]),
+      ...(eod.paymentRows || []).map((p) => [
+        paymentMethodLabelEn(p.method),
+        money(p.total),
+        p.count,
+      ]),
       ["Total", money(eod.grandTotal || eod.revenue), eod.salesCount],
       [],
       ["Tax"],

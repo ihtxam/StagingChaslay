@@ -1,6 +1,5 @@
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
-import { parsePaymentBreakdown } from '@/lib/payment-breakdown';
-import { paymentLabel as receiptPaymentLabel, receiptLabels, type ReceiptLang } from '@/lib/receipt-labels';
+import { parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 
 export type MerchantOrder = PosOrderForReceipt & {
@@ -311,10 +310,8 @@ export function formatOrderPaymentDisplay(
     total?: number;
   },
   t: (k: string) => string,
-  locale = 'en'
+  _locale = 'en'
 ): string {
-  const lang = (locale === 'fr' ? 'fr' : locale === 'de' ? 'de' : 'en') as ReceiptLang;
-  const L = receiptLabels(lang);
   const tenders = parsePaymentBreakdown(
     order.paymentBreakdown,
     order.paymentMethod,
@@ -322,10 +319,10 @@ export function formatOrderPaymentDisplay(
   );
   if (tenders.length <= 1) {
     const method = tenders[0]?.method || order.paymentMethod || 'cash';
-    return paymentLabelUi(method, t);
+    return paymentMethodLabel(method, t);
   }
   return tenders
-    .map((p) => `${paymentLabelUi(p.method, t)} CHF ${Number(p.amount).toFixed(2)}`)
+    .map((p) => `${paymentMethodLabel(p.method, t)} CHF ${Number(p.amount).toFixed(2)}`)
     .join(' + ');
 }
 
@@ -345,15 +342,3 @@ export function orderPaymentLines(order: {
   return total > 0 ? [{ method, amount: total }] : [{ method, amount: 0 }];
 }
 
-function paymentLabelUi(method: string, t: (k: string) => string): string {
-  const m = String(method || '').toLowerCase().replace(/-/g, '_');
-  if (m === 'cash') return t('webPosCash');
-  if (m === 'card') return t('webPosCard');
-  if (m === 'terminal') return t('webPosTerminal');
-  if (m === 'gift_card') return t('giftCard');
-  if (m === 'mixed') return t('webPosMixedPayment');
-  if (m === 'pay_later') return t('webPosPayLater');
-  if (m === 'invoice') return t('webPosInvoice');
-  if (m === 'bank_transfer') return t('webPosBankTransfer');
-  return receiptPaymentLabel(receiptLabels('en'), method);
-}

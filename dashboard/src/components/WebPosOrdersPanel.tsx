@@ -48,7 +48,7 @@ import {
   sameHeldIdentity,
   ticketQueryMatches,
 } from '@/lib/webpos-held';
-import { hasTerminalPortion, parsePaymentBreakdown } from '@/lib/payment-breakdown';
+import { hasTerminalPortion, parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
   type RefundReasonOption,
@@ -424,17 +424,8 @@ export default function WebPosOrdersPanel({
     return () => window.clearInterval(id);
   }, [ordersView]);
 
-  const paymentLabel = (method?: string | null) => {
-    const m = (method || '').toLowerCase();
-    if (m === 'cash') return t('webPosCash');
-    if (m === 'card') return t('webPosCard');
-    if (m === 'terminal') return t('webPosTerminal');
-    if (m === 'express') return t('webPosExpress');
-    if (m === 'pay_later' || m === 'pay-later') return t('webPosPayLater');
-    if (m === 'invoice') return t('webPosInvoice');
-    if (m === 'bank_transfer') return t('webPosBankTransfer');
-    return method || '—';
-  };
+  const paymentLabel = (method?: string | null) =>
+    paymentMethodLabel(method || '', t) || '—';
 
   const statusLabel = (status: string) => orderStatusLabel(status, t);
 

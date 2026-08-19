@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import {
   generateEodReportText,
   logoUrlToEscPos,
@@ -44,6 +45,7 @@ import {
   printViaAgent,
   unsuitableRawPrinterMessage,
 } from '@/lib/print-agent';
+import { toastPrintError } from '@/lib/webpos-print-toast';
 import {
   EodIncludeProductsCheckbox,
   useEodIncludeProductsSold,
@@ -150,6 +152,15 @@ export default function Overview() {
     }
     return params;
   }, [preset, from, to]);
+
+  const paymentMethods = useMemo(
+    () =>
+      (data?.paymentMethods || []).map((p) => ({
+        ...p,
+        label: paymentMethodLabel(p.method, t),
+      })),
+    [data?.paymentMethods, t]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -342,7 +353,7 @@ export default function Overview() {
       }
       toast.success(t('reportsPrinted'));
     } catch (e: any) {
-      toast.error(e.message || t('ovPrintFailed'));
+      toastPrintError(e, t, 'ovPrintFailed');
     }
   };
 
@@ -530,14 +541,14 @@ export default function Overview() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={data?.paymentMethods || []}
+                    data={paymentMethods}
                     dataKey="total"
                     nameKey="label"
                     innerRadius={48}
                     outerRadius={72}
                     paddingAngle={2}
                   >
-                    {(data?.paymentMethods || []).map((_, i) => (
+                    {paymentMethods.map((_, i) => (
                       <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                     ))}
                   </Pie>
@@ -546,7 +557,7 @@ export default function Overview() {
               </ResponsiveContainer>
             </div>
             <ul className="text-sm space-y-1.5 w-full sm:w-1/2">
-              {(data?.paymentMethods || []).map((p, i) => (
+              {paymentMethods.map((p, i) => (
                 <li key={p.method} className="flex justify-between gap-2">
                   <span className="inline-flex items-center gap-1.5 min-w-0">
                     <span
@@ -560,7 +571,7 @@ export default function Overview() {
                   </span>
                 </li>
               ))}
-              {!data?.paymentMethods?.length && <li className="muted">{t('reportsEmpty')}</li>}
+              {!paymentMethods.length && <li className="muted">{t('reportsEmpty')}</li>}
             </ul>
           </div>
         </div>

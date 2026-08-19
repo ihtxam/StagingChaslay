@@ -2,15 +2,98 @@ import { roundMoney2 } from "@/lib/money";
 
 export type PaymentTender = { method: string; amount: number };
 
-const TERMINAL_METHODS = new Set(["terminal", "card", "adyen_terminal", "adyen-terminal"]);
-const GIFT_METHODS = new Set(["gift_card", "gift-card", "giftcard"]);
+const TERMINAL_METHODS = new Set(["terminal", "card"]);
+const GIFT_METHODS = new Set(["gift_card"]);
 const CASH_METHODS = new Set(["cash"]);
 
+/** Canonical report buckets. Mixed stays its own slice (not split into cash+card). */
+export const CANONICAL_PAYMENT_METHODS = [
+  "cash",
+  "card",
+  "terminal",
+  "mixed",
+  "gift_card",
+  "invoice",
+  "pay_later",
+  "bank_transfer",
+] as const;
+
+const PAYMENT_METHOD_ALIASES: Record<string, string> = {
+  cash: "cash",
+  express: "cash",
+  especes: "cash",
+  espece: "cash",
+  bar: "cash",
+  bargeld: "cash",
+  liquide: "cash",
+  card: "card",
+  carte: "card",
+  karte: "card",
+  credit_card: "card",
+  creditcard: "card",
+  debit: "card",
+  debit_card: "card",
+  tap_to_pay: "card",
+  taptopay: "card",
+  terminal: "terminal",
+  adyen: "terminal",
+  adyen_terminal: "terminal",
+  mixed: "mixed",
+  split: "mixed",
+  split_tender: "mixed",
+  paiement_mixte: "mixed",
+  gemischte_zahlung: "mixed",
+  gift_card: "gift_card",
+  giftcard: "gift_card",
+  gift: "gift_card",
+  carte_cadeau: "gift_card",
+  geschenkkarte: "gift_card",
+  invoice: "invoice",
+  facture: "invoice",
+  rechnung: "invoice",
+  pay_later: "pay_later",
+  paylater: "pay_later",
+  bank_transfer: "bank_transfer",
+  virement: "bank_transfer",
+  uberweisung: "bank_transfer",
+};
+
+/** Fold case, diacritics, spaces, and known aliases into one report key. */
 export function normalizePaymentMethod(method: string): string {
-  return String(method || "")
+  const raw = String(method || "")
     .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/-/g, "_");
+    .replace(/[\s-]+/g, "_");
+  if (!raw) return "";
+  return PAYMENT_METHOD_ALIASES[raw] || raw;
+}
+
+export function paymentMethodLabelEn(method: string): string {
+  switch (normalizePaymentMethod(method)) {
+    case "cash":
+      return "Cash";
+    case "card":
+      return "Card";
+    case "terminal":
+      return "Terminal";
+    case "mixed":
+      return "Mixed";
+    case "gift_card":
+      return "Gift card";
+    case "invoice":
+      return "Invoice";
+    case "pay_later":
+      return "Pay later";
+    case "bank_transfer":
+      return "Bank transfer";
+    case "other":
+    case "":
+      return "Other";
+    default:
+      return method || "Other";
+  }
 }
 
 /** Parse stored payment_breakdown JSON or legacy single paymentMethod. */
@@ -97,7 +180,7 @@ export function resolveSalePaymentMethod(
 ): string {
   const active = tenders.filter((t) => t.amount > 0);
   if (active.length > 1) return "mixed";
-  if (active.length === 1) return active[0]!.method;
+  if (active.length === 1) return normalizePaymentMethod(active[0]!.method) || "cash";
   return normalizePaymentMethod(fallback) || "cash";
 }
 

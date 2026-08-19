@@ -1,3 +1,5 @@
+import { normalizePaymentMethod } from '@/lib/payment-breakdown';
+
 export type ReceiptLang = 'en' | 'fr' | 'de';
 
 export type ReceiptLabels = {
@@ -331,14 +333,14 @@ export function channelLabel(labels: ReceiptLabels, channel?: string | null): st
 }
 
 export function paymentLabel(labels: ReceiptLabels, method?: string | null): string {
-  const m = String(method || '').toLowerCase();
-  if (m === 'cash' || m === 'express') return m === 'express' ? labels.express : labels.cash;
+  const m = normalizePaymentMethod(String(method || ''));
+  if (m === 'cash') return labels.cash;
   if (m === 'card') return labels.card;
   if (m === 'terminal') return labels.terminal;
   if (m === 'pay_later') return labels.payLater;
   if (m === 'invoice') return labels.invoice || 'Invoice';
   if (m === 'bank_transfer') return 'Bank transfer';
-  if (m === 'gift_card' || m === 'gift-card') return 'Gift card';
+  if (m === 'gift_card') return 'Gift card';
   if (m === 'mixed') return 'Mixed';
   return String(method || '').toUpperCase();
 }

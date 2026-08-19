@@ -1,5 +1,6 @@
 import { getDb, schema } from "@/db";
 import { and, eq, gte, lte, desc, or, isNull, inArray } from "drizzle-orm";
+import { normalizePaymentMethod, paymentMethodLabelEn } from "@/lib/payment-breakdown";
 
 export type ReportPreset =
   | "today"
@@ -290,8 +291,10 @@ export class PosReportsService {
       refundTotal += refundAmt;
       if (o.guestCount) covers += Number(o.guestCount) || 0;
 
-      // Payment buckets: net money kept after refunds (incl. tips share)
-      const pm = String(o.paymentMethod || "other");
+      // Payment buckets: net money kept after refunds (incl. tips share).
+      // Canonicalize so CASH/cash/Cash/Espèces land in one slice. Mixed stays Mixed
+      // (do not also add those amounts into cash+card).
+      const pm = normalizePaymentMethod(o.paymentMethod || "") || "other";
       payments[pm] = payments[pm] || { count: 0, total: 0 };
       payments[pm].count += 1;
       payments[pm].total += round2(Math.max(0, money(o.total) - refundAmt));
@@ -513,12 +516,14 @@ export class PosReportsService {
       grandTotal,
       coversServed: covers || null,
       vatRows,
-      paymentRows: Object.entries(payments).map(([method, v]) => ({
-        method,
-        count: v.count,
-        total: round2(v.total),
-        percent: grandTotal > 0 ? round2((v.total / grandTotal) * 100) : 0,
-      })),
+      paymentRows: Object.entries(payments)
+        .map(([method, v]) => ({
+          method,
+          count: v.count,
+          total: round2(v.total),
+          percent: grandTotal > 0 ? round2((v.total / grandTotal) * 100) : 0,
+        }))
+        .sort((a, b) => b.total - a.total),
       channelRows: Object.entries(channels).map(([channel, v]) => ({
         channel,
         count: v.count,
@@ -642,7 +647,7 @@ export class PosReportsService {
 
     const paymentMethods = (current.paymentRows || []).map((p) => ({
       method: p.method,
-      label: paymentLabel(p.method),
+      label: paymentMethodLabelEn(p.method),
       total: p.total,
       count: p.count,
       percent: p.percent ?? 0,
@@ -746,20 +751,3 @@ export class PosReportsService {
   }
 }
 
-function paymentLabel(method: string): string {
-  switch (String(method || "").toLowerCase()) {
-    case "cash":
-      return "Cash";
-    case "card":
-      return "Card";
-    case "terminal":
-      return "Terminal";
-    case "adyen":
-      return "Adyen";
-    case "gift_card":
-    case "giftcard":
-      return "Gift card";
-    default:
-      return method || "Other";
-  }
-}
