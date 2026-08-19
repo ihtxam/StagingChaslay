@@ -7,6 +7,7 @@ import {
   concatBytes,
   escposCode128,
   generateReceiptQrRasterEscPos,
+  escposQrCode,
 } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
@@ -726,6 +727,23 @@ function billMerchandiseTtc(tx: WebPosReceipt): number {
   return roundMoney2(tx.total - tip - rounding);
 }
 
+/**
+ * Guest receipt bottom number = kitchen shout / display ticket (#7128).
+ * Never lead with the opaque WP-… / DI-… record id.
+ */
+export function guestReceiptBottomNumber(tx: {
+  orderDisplay?: string | null;
+  orderNumber?: string | null;
+}): string {
+  const shout = String(tx.orderDisplay || '').trim();
+  if (shout && !/^(WP|DI)-/i.test(shout)) {
+    return shout.startsWith('#') ? shout : `#${shout.replace(/^#/, '')}`;
+  }
+  const raw = String(tx.orderNumber || '').trim();
+  if (!raw || /^(WP|DI)-/i.test(raw)) return '';
+  return raw;
+}
+
 function formatReceiptMetaFooter(
   tx: WebPosReceipt,
   L: ReturnType<typeof receiptLabels>,
@@ -733,8 +751,7 @@ function formatReceiptMetaFooter(
   width: number
 ): string {
   const dateStr = formatDateTimeDDMMYYYY(tx.completedAt);
-  const rawRef = (tx.orderDisplay || tx.orderNumber || tx.id.slice(-8)).trim();
-  const orderRef = shortenOrderRef(rawRef, 16);
+  const orderRef = shortenOrderRef(guestReceiptBottomNumber(tx), 16);
   const channel = tx.channel ? channelLabel(L, tx.channel) : '';
   const user = tx.showStaff !== false && tx.staffName?.trim() ? tx.staffName.trim() : '';
   const parts = [dateStr, orderRef, channel, user].filter(Boolean);
@@ -941,14 +958,10 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (tx.splitLabel) r += `${tx.splitLabel}\n`;
   r += thin + '\n';
 
-  for (const group of groupReceiptItemsByCourse(tx.items)) {
-    if (group.course != null) {
-      r += centerLine(formatCourseBanner(group.course, L.courseLabel), width) + '\n';
-    }
-    for (const item of group.items) {
-      for (const line of formatCustomerReceiptItemLines(item, width)) {
-        r += line + '\n';
-      }
+  // Guest receipt: no COURSE banners (those stay on kitchen tickets only).
+  for (const item of tx.items) {
+    for (const line of formatCustomerReceiptItemLines(item, width)) {
+      r += line + '\n';
     }
   }
 
@@ -2165,9 +2178,12 @@ export async function buildReceiptEscPos(
   } = {}
 ): Promise<Uint8Array> {
   const paper = opts.paperWidthMm ?? 80;
-  const qrRaster = opts.qrData
+  let qrRaster = opts.qrData
     ? await generateReceiptQrRasterEscPos(opts.qrData, paper)
     : null;
+  if (!qrRaster?.length && opts.qrData) {
+    qrRaster = escposQrCode(opts.qrData, paper === 58 ? 4 : 5);
+  }
   const deliveryQrRaster = opts.deliveryQrData
     ? await generateReceiptQrRasterEscPos(opts.deliveryQrData, paper)
     : null;

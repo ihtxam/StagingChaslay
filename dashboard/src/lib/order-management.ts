@@ -40,41 +40,69 @@ export function orderChannel(o: MerchantOrder): string {
   return o.channel || o.fulfillmentChannel || 'takeaway';
 }
 
-/** Takeaway / delivery stay in kitchen until staff marks ready / complete. */
+/** Takeaway / delivery channels used by in-store POS (not JustEat / Uber). */
 export function isKitchenFulfillmentChannel(channel?: string | null): boolean {
   const ch = String(channel || '').toLowerCase();
   return ch === 'takeaway' || ch === 'delivery';
 }
 
-/** POS sale fulfillment status — paid takeaway/delivery still go through kitchen. */
+/**
+ * Paid internal POS (dine-in / takeaway / self-delivery) closes immediately.
+ * Unpaid pay-later / invoice stay open until collection. Online / 3P use
+ * their own kitchen lifecycle and never go through this helper.
+ */
 export function posSaleFulfillmentStatus(opts: {
   channel?: string | null;
   payLater: boolean;
   scheduledFor?: string | number | null;
 }): string {
-  const kitchen = isKitchenFulfillmentChannel(opts.channel);
-  if (kitchen || opts.payLater) {
+  if (opts.payLater) {
     return opts.scheduledFor ? 'accepted' : 'preparing';
   }
   return 'completed';
 }
 
+/** Preparing / Accepted / Ready / Out for delivery — online shop & 3P only. */
+export function showsKitchenFulfillmentStages(o: {
+  orderType?: string | null;
+  orderSource?: string | null;
+  channel?: string | null;
+  fulfillmentChannel?: string | null;
+}): boolean {
+  return isOnlineShopOrder(o as MerchantOrder);
+}
+
 /**
- * Kitchen Type on /merchant/orders — kitchen-bound tickets, including paid
- * WebPOS/POS delivery. The old tab only listed online accepted/preparing.
+ * Kitchen Type on /merchant/orders — open online/3P kitchen tickets, plus
+ * unpaid internal pay-later / invoice. Paid internal POS is completed.
  */
 export function isKitchenTypeOrder(o: MerchantOrder): boolean {
   const status = (o.status || '').toLowerCase();
-  if (['cancelled', 'refunded'].includes(status)) return false;
-  const ch = orderChannel(o).toLowerCase();
-  if (ch === 'dine_in' || ch === 'takeaway' || ch === 'delivery') return true;
-  return isOnlineShopOrder(o) && (status === 'accepted' || status === 'preparing');
+  if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) {
+    return false;
+  }
+  if (isOnlineShopOrder(o)) {
+    return [
+      'accepted',
+      'preparing',
+      'ready',
+      'out_for_delivery',
+      'pending',
+      'pending_approval',
+    ].includes(status);
+  }
+  return isAwaitingPaymentOrder(o);
 }
 
-export function isOnlineShopOrder(o: MerchantOrder): boolean {
+export function isOnlineShopOrder(o: {
+  orderType?: string | null;
+  orderSource?: string | null;
+  channel?: string | null;
+  fulfillmentChannel?: string | null;
+}): boolean {
   const t = (o.orderType || '').toLowerCase();
-  const src = String((o as { orderSource?: string | null }).orderSource || '').toLowerCase();
-  const ch = orderChannel(o).toLowerCase();
+  const src = String(o.orderSource || '').toLowerCase();
+  const ch = orderChannel(o as MerchantOrder).toLowerCase();
   return (
     t === 'web_shop' ||
     t === 'online' ||
@@ -256,7 +284,18 @@ export function canMarkReady(o: { status?: string | null }): boolean {
   return status === 'accepted' || status === 'preparing';
 }
 
-export function isPaidOrder(o: MerchantOrder): boolean {
+/** Mark ready / kitchen stages — online shop and third-party only. */
+export function canMarkReadyOrder(o: {
+  status?: string | null;
+  orderType?: string | null;
+  orderSource?: string | null;
+  channel?: string | null;
+  fulfillmentChannel?: string | null;
+}): boolean {
+  return showsKitchenFulfillmentStages(o) && canMarkReady(o);
+}
+
+export function isPaidOrder(o: { paymentStatus?: string | null }): boolean {
   const pay = (o.paymentStatus || '').toLowerCase();
   return pay === 'completed' || pay === 'paid';
 }

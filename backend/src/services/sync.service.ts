@@ -472,10 +472,9 @@ export class SyncService {
           isInvoice);
       const scheduledFor = parseScheduledFor(sale);
       const channel = normalizeFulfillmentChannel(sale);
-      const kitchenBound = channel === "takeaway" || channel === "delivery";
       const status =
         sale.status ||
-        (payLater || kitchenBound ? (scheduledFor ? "accepted" : "preparing") : "completed");
+        (payLater ? (scheduledFor ? "accepted" : "preparing") : "completed");
       const fulfillmentOpen = [
         "accepted",
         "preparing",

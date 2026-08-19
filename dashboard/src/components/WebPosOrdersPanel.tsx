@@ -32,13 +32,14 @@ import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-recei
 import {
   canAdminCollectPayment,
   canCollectPayment,
-  canMarkReady,
+  canMarkReadyOrder,
   canShowAwaitingPaymentBadge,
+  showsKitchenFulfillmentStages,
   formatOrderPaymentDisplay,
   INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
   isInvoiceOrder,
-  isKitchenFulfillmentChannel,
+  isOnlineShopOrder,
   isPaidOrder,
   orderChannelBadgeClass,
   orderChannelHeaderClass,
@@ -222,10 +223,12 @@ function canCancelOrder(o: PosOrder): boolean {
   return true;
 }
 
-/** Still in kitchen / fulfillment — includes paid online shop orders */
+/** Still in kitchen / fulfillment — paid online/3P stay open; paid internal POS does not. */
 function isOpenFulfillmentOrder(o: PosOrder): boolean {
   const status = (o.status || '').toLowerCase();
-  return !['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status);
+  if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) return false;
+  if (!isOnlineShopOrder(o) && isPaidOrder(o)) return false;
+  return true;
 }
 
 /** Paid delivery/takeaway with a future slot — still a kitchen ticket, also in history. */
@@ -237,11 +240,6 @@ function isScheduledKitchenTicket(o: PosOrder): boolean {
   if (o.scheduledFor == null || o.scheduledFor === '') return false;
   const when = new Date(o.scheduledFor as string | number | Date).getTime();
   return Number.isFinite(when) && when > Date.now();
-}
-
-function isOnlineShopOrder(o: PosOrder): boolean {
-  const t = (o.orderType || '').toLowerCase();
-  return t === 'web_shop' || t === 'online' || isPlatformChannel(o.channel || o.fulfillmentChannel);
 }
 
 function isUnpaidInvoice(o: PosOrder): boolean {
@@ -1302,9 +1300,6 @@ export default function WebPosOrdersPanel({
                             <span className="text-stone-300 text-sm font-semibold">CHF </span>
                             <span className="text-amber-300">{Number(total).toFixed(2)}</span>
                           </p>
-                          <p className="text-[11px] font-semibold uppercase text-stone-300">
-                            {statusLabel(h.status)}
-                          </p>
                         </div>
                         <div className="flex items-center justify-between gap-2 border-t border-stone-700 px-2.5 py-1.5 text-[10px] text-stone-400">
                           <span className="inline-flex min-w-0 items-center gap-1 truncate">
@@ -1350,13 +1345,15 @@ export default function WebPosOrdersPanel({
                           <span className="text-stone-300 text-sm font-semibold">CHF </span>
                           <span className="text-amber-300">{Number(o.total).toFixed(2)}</span>
                         </p>
-                        <p className="flex flex-wrap items-center justify-center gap-1">
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(o.status)}`}
-                          >
-                            {statusLabel(o.status)}
-                          </span>
-                        </p>
+                        {showsKitchenFulfillmentStages(o) ? (
+                          <p className="flex flex-wrap items-center justify-center gap-1">
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(o.status)}`}
+                            >
+                              {statusLabel(o.status)}
+                            </span>
+                          </p>
+                        ) : null}
                         {canShowAwaitingPaymentBadge(o) ? (
                           <p className="text-[10px] font-bold uppercase text-amber-300">
                             {t('webPosAwaitingPayment')}
@@ -1429,9 +1426,6 @@ export default function WebPosOrdersPanel({
                                   {t('table')} {heldMeta.tableLabel}
                                 </span>
                               ) : null}
-                              <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-teal-800">
-                                {t('webPosOngoing')}
-                              </span>
                             </div>
                           </div>
                           <Info size={16} className="mt-1 shrink-0 text-stone-400 sm:mt-0" />
@@ -1522,11 +1516,13 @@ export default function WebPosOrdersPanel({
                                 {t('webPosSplitBadge')}
                               </span>
                             ) : null}
-                            <span
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(o.status)}`}
-                            >
-                              {statusLabel(o.status)}
-                            </span>
+                            {showsKitchenFulfillmentStages(o) ? (
+                              <span
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(o.status)}`}
+                              >
+                                {statusLabel(o.status)}
+                              </span>
+                            ) : null}
                             {canShowAwaitingPaymentBadge(o) ? (
                               <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
                                 {t('webPosAwaitingPayment')}
@@ -1625,7 +1621,7 @@ export default function WebPosOrdersPanel({
                   </button>
                   <p className="text-sm font-semibold">{selectedHeld.label || t('webPosHeldOrder')}</p>
                   <p className="mt-1 text-xs text-stone-500">
-                    {channelLabel(selectedHeld.channel)} · {statusLabel(selectedHeld.status)}
+                    {channelLabel(selectedHeld.channel)}
                   </p>
                   <ul className="mt-4 space-y-2 text-sm">
                     {heldCartLines(selectedHeld).map((l, idx) => (
@@ -1689,7 +1685,9 @@ export default function WebPosOrdersPanel({
                         ? `${t('table')} ${selectedOrder.tableLabel}`
                         : null,
                       channelLabel(selectedOrder.channel, selectedOrder),
-                      statusLabel(selectedOrder.status),
+                      showsKitchenFulfillmentStages(selectedOrder)
+                        ? statusLabel(selectedOrder.status)
+                        : null,
                     ].filter(Boolean);
                     return (
                       <>
@@ -1752,11 +1750,13 @@ export default function WebPosOrdersPanel({
                           : formatOrderNumberDisplay(selectedOrder.orderNumber))}
                     </p>
                     <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(selectedOrder.status)}`}
-                      >
-                        {statusLabel(selectedOrder.status)}
-                      </span>
+                      {showsKitchenFulfillmentStages(selectedOrder) ? (
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(selectedOrder.status)}`}
+                        >
+                          {statusLabel(selectedOrder.status)}
+                        </span>
+                      ) : null}
                       {canShowAwaitingPaymentBadge(selectedOrder) ? (
                         <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
                           {t('webPosAwaitingPayment')}
@@ -1811,11 +1811,7 @@ export default function WebPosOrdersPanel({
                   ) : null}
                 </div>
                 {isOpenFulfillmentOrder(selectedOrder) &&
-                (isOnlineShopOrder(selectedOrder) ||
-                  isKitchenFulfillmentChannel(
-                    selectedOrder.fulfillmentChannel || selectedOrder.channel
-                  ) ||
-                  canMarkReady(selectedOrder) ||
+                (showsKitchenFulfillmentStages(selectedOrder) ||
                   canCollectPayment(selectedOrder) ||
                   canAdminCollectPayment(selectedOrder)) ? (
                   <div className="space-y-2 border-t border-stone-200 p-3">
@@ -1849,7 +1845,7 @@ export default function WebPosOrdersPanel({
                         {t('webPosSendToKitchen')}
                       </button>
                     ) : null}
-                    {canMarkReady(selectedOrder) ? (
+                    {canMarkReadyOrder(selectedOrder) ? (
                       <button
                         type="button"
                         className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
@@ -1859,7 +1855,8 @@ export default function WebPosOrdersPanel({
                         {t('webPosMarkReady')}
                       </button>
                     ) : null}
-                    {selectedOrder.status === 'ready' &&
+                    {showsKitchenFulfillmentStages(selectedOrder) &&
+                    selectedOrder.status === 'ready' &&
                     (selectedOrder.fulfillmentChannel || selectedOrder.channel) === 'delivery' ? (
                       <button
                         type="button"
@@ -1870,7 +1867,8 @@ export default function WebPosOrdersPanel({
                         {t('ordersActionSendDelivery')}
                       </button>
                     ) : null}
-                    {(selectedOrder.status === 'ready' ||
+                    {showsKitchenFulfillmentStages(selectedOrder) &&
+                    (selectedOrder.status === 'ready' ||
                       selectedOrder.status === 'out_for_delivery') &&
                     !['completed', 'cancelled'].includes(selectedOrder.status) ? (
                       <button

@@ -2066,7 +2066,7 @@ class PosViewModel @Inject constructor(
                 items = emptyList(),
                 isFollowUp = true,
                 message = message,
-                meta = buildKitchenMeta(cart)
+                meta = buildKitchenMeta(cart, allowGeneratedNumber = false)
             ).onSuccess {
                 updateExtras {
                     it.copy(showKitchenMessageDialog = false)
@@ -4578,12 +4578,15 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    private suspend fun buildKitchenMeta(cart: CartSummary): KitchenPrintMeta {
+    private suspend fun buildKitchenMeta(
+        cart: CartSummary,
+        allowGeneratedNumber: Boolean = true
+    ): KitchenPrintMeta {
         val settings = settingsRepository.getSettings()
         val userName = sessionManager.currentUserName.first() ?: "Cashier"
         val orderNum = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() }
             ?: cart.tableOrderId?.let { "T-${it.takeLast(6).uppercase()}" }
-            ?: "P-${System.currentTimeMillis().toString().takeLast(6)}"
+            ?: if (allowGeneratedNumber) "P-${System.currentTimeMillis().toString().takeLast(6)}" else null
         val deliveryAddress = listOfNotNull(cart.deliveryAddress, cart.deliveryZip)
             .filter { it.isNotBlank() }
             .joinToString(", ")

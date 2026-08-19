@@ -52,6 +52,30 @@ function resolveCollectPaymentMethod(
   return "cash";
 }
 
+function usesExternalKitchenLifecycle(order: {
+  orderType?: string | null;
+  orderSource?: string | null;
+  fulfillmentChannel?: string | null;
+}): boolean {
+  const t = String(order.orderType || "").toLowerCase();
+  const src = String(order.orderSource || "").toLowerCase();
+  const ch = String(order.fulfillmentChannel || "").toLowerCase();
+  return (
+    t === "web_shop" ||
+    t === "online" ||
+    src === "online_shop" ||
+    src === "justeat" ||
+    src === "ubereats" ||
+    ch.includes("uber") ||
+    ch.includes("justeat") ||
+    ch.includes("just-eat") ||
+    ch.includes("doordash") ||
+    ch.includes("deliveroo") ||
+    ch === "web_shop" ||
+    ch === "online"
+  );
+}
+
 async function enqueueOnlineOrderReceiptPrint(
   merchantId: string,
   orderId: string,
@@ -506,9 +530,13 @@ export class OrderService {
         {
           const invoiceOrder = isInvoiceOrderRecord(order);
           const method = resolveCollectPaymentMethod(opts?.paymentMethod, order);
+          const closeInternal = !usesExternalKitchenLifecycle(order);
           const updated = await set({
             paymentStatus: "completed",
             paymentMethod: method,
+            ...(closeInternal
+              ? { status: "completed", completedAt: new Date() }
+              : {}),
             ...(invoiceOrder
               ? {
                   paymentBreakdown: [
@@ -571,8 +599,9 @@ export class OrderService {
                 ],
               }
             : {};
+          const closeNow = readyToHandoff || !usesExternalKitchenLifecycle(order);
           const updated = await set(
-            readyToHandoff
+            closeNow
               ? {
                   status: "completed",
                   paymentStatus: "completed",

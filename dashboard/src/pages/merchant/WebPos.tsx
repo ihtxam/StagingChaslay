@@ -609,6 +609,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [setTabOpen, setSetTabOpen] = useState(false);
   const [newOrderConfirmOpen, setNewOrderConfirmOpen] = useState(false);
   const resumedHeldIdRef = useRef<string | null>(null);
+  /** Last kitchen shout printed for this cart — hurry/follow-up must reuse it. */
+  const lastKitchenTicketRef = useRef<string | null>(bootActive?.ticketDisplay ?? null);
   const [postSuccessTarget, setPostSuccessTarget] = useState<'register' | 'tables'>(() => {
     const stored = localStorage.getItem('manupos_webpos_post_success');
     return stored === 'tables' || stored === 'register' ? stored : 'register';
@@ -3272,6 +3274,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTableLabel(draft.tableLabel);
     setTabNumber(draft.tabNumber);
     setTicketDisplay(draft.ticketDisplay ?? null);
+    if (draft.ticketDisplay) lastKitchenTicketRef.current = draft.ticketDisplay;
     setTicketOrderNumber(draft.ticketOrderNumber ?? null);
     setOrderNote(draft.orderNote);
     setActiveCourse(draft.activeCourse);
@@ -3318,13 +3321,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTicketOrderNumber(null);
   }, []);
 
-  /** Kitchen shout number — after tab assignment use tab #, not a stale pre-tab ticket. */
+  /** Kitchen shout number — ticketDisplay first (7128), never a new random # on follow-up. */
   const kitchenOrderNumber = useCallback(
-    (opts?: { ticket?: { display: string; orderNumber: string } }) => {
+    (opts?: { ticket?: { display: string; orderNumber: string }; allowNew?: boolean }) => {
+      const ticket =
+        opts?.ticket ??
+        (ticketDisplay
+          ? { display: ticketDisplay, orderNumber: ticketOrderNumber || '' }
+          : null);
+      if (ticket?.display?.trim()) {
+        lastKitchenTicketRef.current = ticket.display.trim();
+        return ticket.display.trim();
+      }
+      if (opts?.allowNew === false) {
+        if (lastKitchenTicketRef.current?.trim()) return lastKitchenTicketRef.current.trim();
+        if (tabNumber) return `#${tabNumber}`;
+        return '';
+      }
       if (tabNumber) return `#${tabNumber}`;
-      const ticket = opts?.ticket ?? (ticketDisplay ? { display: ticketDisplay, orderNumber: ticketOrderNumber! } : null);
-      if (ticket?.display) return ticket.display;
-      return ensureCartTicket().display;
+      const created = ensureCartTicket();
+      lastKitchenTicketRef.current = created.display;
+      return created.display;
     },
     [tabNumber, ticketDisplay, ticketOrderNumber, ensureCartTicket]
   );
@@ -3347,6 +3364,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   ) => {
     if (!cartLines.length) return;
     const ticket = opts?.ticket ?? ensureCartTicket();
+    lastKitchenTicketRef.current = ticket.display;
     const persistChannel = tableId ? 'dine_in' : effectiveChannel;
     const cartSum = cartLines.reduce((s, l) => s + Number(l.lineTotal || 0), 0);
     const heldLabel = [
@@ -4000,8 +4018,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const onKitchenMessage = async (message: string) => {
     try {
-      const orderNumber = kitchenOrderNumber();
-      const whenSnapshot = fulfillmentWhen;
+      const orderNumber = kitchenOrderNumber({ allowNew: false });
+      if (!orderNumber) {
+        toast.error(t('webPosKitchenPrintFailed'));
+        return;
+      }
       toast.success(t('webPosKitchenMessageSent'));
       const lang = resolveReceiptLanguage(printSettings, paymentConfig?.panelLanguage || locale);
       const paperWidthMm = resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
@@ -4135,9 +4156,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setBusy(true);
     try {
       if (kitchenLines.length) {
-        const ticket = nextWebPosTicketNumber(merchant?.id);
         await printKitchenForCart(kitchenLines, effectiveChannel, {
-          orderNumber: kitchenOrderNumber(),
+          orderNumber: kitchenOrderNumber({ allowNew: false }) || kitchenOrderNumber(),
           when: fulfillmentWhen,
           cancelled: true,
           cancelReason: reason,
@@ -4645,7 +4665,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTableId((order as { tableId?: string | null }).tableId || null);
     setTableLabel(order.tableLabel || null);
     setTabNumber(order.tabNumber || null);
-    setTicketDisplay(order.ticketDisplay || order.orderNumber);
+    const shout =
+      order.ticketDisplay && !/^(WP|DI)-/i.test(String(order.ticketDisplay))
+        ? order.ticketDisplay
+        : null;
+    setTicketDisplay(shout);
+    if (shout) lastKitchenTicketRef.current = shout;
     setTicketOrderNumber(order.orderNumber);
     setOrderSent(true);
     setCoursesBulkSent(true);
@@ -5369,7 +5394,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const kitchenOpts = {
       channel: saleChannel,
       language: lang,
-      orderNumber: opts?.orderNumber || kitchenOrderNumber(),
+      orderNumber: opts?.orderNumber || kitchenOrderNumber({ allowNew: false }) || kitchenOrderNumber(),
       orderedAt: Date.now(),
       scheduledFor,
       userName,
@@ -5383,6 +5408,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cancelled: !!opts?.cancelled,
       cancelReason: opts?.cancelReason || null,
     };
+    if (kitchenOpts.orderNumber) lastKitchenTicketRef.current = kitchenOpts.orderNumber;
 
     let queuedAny = false;
     const kitchenLabel = [
@@ -5832,9 +5858,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
     const receiptRef = queuedOffline
-      ? null
-      : await resolvePublishedReceiptRef(backendOrderId, clientId);
-    const receiptUrl = receiptRef ? buildReceiptUrl(receiptRef) : undefined;
+      ? clientId
+      : (await resolvePublishedReceiptRef(backendOrderId, clientId)) ||
+        backendOrderId ||
+        clientId;
+    const receiptUrl = buildReceiptUrl(receiptRef);
     const lang = resolveReceiptLanguage(
       printSettings,
       paymentConfig?.panelLanguage || locale
@@ -5913,7 +5941,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       vatAfterDiscount,
       splitLabel: activeSale.label,
       receiptUrl,
-      includeQr: !queuedOffline && printSettings?.receiptShowQrCode !== false,
+      includeQr: printSettings?.receiptShowQrCode !== false,
       deliveryDirectionsQr: printSettings?.receiptDeliveryDirectionsQr !== false,
       staffName: webposStaff?.name,
       language: lang,
@@ -7188,7 +7216,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 if (data.tableId) setTableId(data.tableId);
                 if (data.tableLabel) setTableLabel(data.tableLabel);
                 if (data.tabNumber != null) setTabNumber(data.tabNumber);
-                if (data.ticketDisplay) setTicketDisplay(data.ticketDisplay);
+                if (data.ticketDisplay) {
+                  setTicketDisplay(data.ticketDisplay);
+                  lastKitchenTicketRef.current = data.ticketDisplay;
+                }
                 if (data.ticketOrderNumber) setTicketOrderNumber(data.ticketOrderNumber);
                 if (data.orderNote != null) setOrderNote(data.orderNote);
                 if (data.billDiscount) setBillDiscount(data.billDiscount);

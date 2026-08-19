@@ -8,7 +8,8 @@ import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
   canAdminCollectPayment,
-  canMarkReady,
+  canMarkReadyOrder,
+  showsKitchenFulfillmentStages,
   formatOrderPaymentDisplay,
   INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
@@ -667,11 +668,13 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               </div>
 
               <div className="mt-2 flex flex-wrap gap-1 text-[10px] font-semibold">
-                <span
-                  className={`rounded-md px-1.5 py-0.5 font-bold uppercase ${orderStatusBadgeClass(order.status)}`}
-                >
-                  {statusLabel(order.status, t)}
-                </span>
+                {showsKitchenFulfillmentStages(order) ? (
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 font-bold uppercase ${orderStatusBadgeClass(order.status)}`}
+                  >
+                    {statusLabel(order.status, t)}
+                  </span>
+                ) : null}
                 <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5">
                   {formatOrderPaymentDisplay(order, t, locale)}
                 </span>
@@ -740,11 +743,13 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   {formatOrderNumberDisplay(selected.orderNumber) || selected.id.slice(0, 8)}
                 </h2>
                 <p className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(selected.status)}`}
-                  >
-                    {statusLabel(selected.status, t)}
-                  </span>
+                  {showsKitchenFulfillmentStages(selected) ? (
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(selected.status)}`}
+                    >
+                      {statusLabel(selected.status, t)}
+                    </span>
+                  ) : null}
                   {isAwaitingPaymentOrder(selected) ? (
                     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
                       {t('webPosAwaitingPayment')}
@@ -881,7 +886,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                       {t('webPosAcceptOrder')}
                     </button>
                   ) : null}
-                  {canMarkReady(selected) ? (
+                  {canMarkReadyOrder(selected) ? (
                     <button
                       type="button"
                       disabled={actionBusy}
@@ -891,7 +896,8 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                       {t('webPosMarkReady')}
                     </button>
                   ) : null}
-                  {selected.status === 'ready' &&
+                  {showsKitchenFulfillmentStages(selected) &&
+                  selected.status === 'ready' &&
                   (selected.fulfillmentChannel || selected.channel) === 'delivery' ? (
                     <button
                       type="button"
