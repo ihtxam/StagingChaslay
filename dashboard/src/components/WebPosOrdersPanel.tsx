@@ -41,6 +41,7 @@ import {
   orderStatusLabel,
 } from '@/lib/order-management';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
+import { collectPaymentAction } from '@/lib/order-to-cart';
 import {
   localHeldRowsFromSession,
   parseHeldCartJson,
@@ -794,7 +795,7 @@ export default function WebPosOrdersPanel({
     setCollectBusy(true);
     try {
       const res = await api.post(`/merchant/orders/${collectFor.id}/action`, {
-        action: 'complete_and_collect',
+        action: collectPaymentAction(collectFor.status),
         paymentMethod: paymentMethodDraft,
       });
       toast.success(t('webPosPaymentCollected'));

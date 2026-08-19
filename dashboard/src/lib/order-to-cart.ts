@@ -74,7 +74,9 @@ export function customerFromOrder(order: MerchantOrder): WebPosCustomer | null {
 /** Pick collect_payment vs complete_and_collect for unpaid order checkout. */
 export function collectPaymentAction(status: string): 'collect_payment' | 'complete_and_collect' {
   const s = (status || '').toLowerCase();
-  if (['ready', 'out_for_delivery', 'preparing', 'accepted'].includes(s)) {
+  // complete_and_collect also completes fulfillment — only at handoff.
+  // POS invoice / pay-later still in kitchen must use collect_payment.
+  if (s === 'ready' || s === 'out_for_delivery') {
     return 'complete_and_collect';
   }
   return 'collect_payment';

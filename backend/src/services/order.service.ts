@@ -21,6 +21,35 @@ function computeEstimatedReadyAt(
   return new Date(Date.now() + prepMinutes * 60 * 1000);
 }
 
+function isOnlineShopLifecycleOrder(order: {
+  orderType?: string | null;
+  orderSource?: string | null;
+}): boolean {
+  const t = String(order.orderType || "").toLowerCase();
+  const src = String(order.orderSource || "").toLowerCase();
+  return (
+    t === "web_shop" ||
+    t === "online" ||
+    src === "online_shop" ||
+    src === "justeat" ||
+    src === "ubereats"
+  );
+}
+
+function resolveCollectPaymentMethod(
+  requested: string | null | undefined,
+  existing: string | null | undefined
+): string {
+  const methodRaw = String(requested || existing || "cash")
+    .trim()
+    .toLowerCase();
+  if (methodRaw === "pay_later" || methodRaw === "pay-later" || methodRaw === "invoice") {
+    return "cash";
+  }
+  if (["cash", "card", "terminal", "bank_transfer"].includes(methodRaw)) return methodRaw;
+  return "cash";
+}
+
 async function enqueueOnlineOrderReceiptPrint(
   merchantId: string,
   orderId: string,
@@ -473,15 +502,7 @@ export class OrderService {
       case "collect_payment": {
         if (paymentDone) throw new Error("Payment already completed");
         {
-          const methodRaw = String(opts?.paymentMethod || order.paymentMethod || "cash")
-            .trim()
-            .toLowerCase();
-          const method =
-            methodRaw === "pay_later" || methodRaw === "pay-later" || methodRaw === "invoice"
-              ? "cash"
-              : ["cash", "card", "terminal", "bank_transfer"].includes(methodRaw)
-                ? methodRaw
-                : "cash";
+          const method = resolveCollectPaymentMethod(opts?.paymentMethod, order.paymentMethod);
           const updated = await set({
             paymentStatus: "completed",
             paymentMethod: method,
@@ -515,23 +536,34 @@ export class OrderService {
         return set({ status: "completed", completedAt: new Date() });
       }
       case "complete_and_collect": {
-        // Pay-later / cash on pickup — only after the order is ready for handoff
-        if (status !== "ready" && status !== "out_for_delivery") {
+        // Online shop cash-on-pickup: collect + complete only at handoff.
+        // POS invoice / pay-later / delivery: staff may collect while the ticket
+        // is still in kitchen — mark paid, keep fulfillment status.
+        const readyToHandoff = status === "ready" || status === "out_for_delivery";
+        const posCollectWhileOpen =
+          !isOnlineShopLifecycleOrder(order) &&
+          (status === "preparing" ||
+            status === "accepted" ||
+            status === "sent_to_kitchen" ||
+            status === "completed");
+        if (!readyToHandoff && !posCollectWhileOpen) {
           throw new Error("Order is not ready to collect payment");
         }
         {
-          const methodRaw = String(opts?.paymentMethod || order.paymentMethod || "cash")
-            .trim()
-            .toLowerCase();
-          let method = methodRaw;
-          if (method === "pay_later" || method === "pay-later" || method === "invoice") method = "cash";
-          if (!["cash", "card", "terminal", "bank_transfer"].includes(method)) method = "cash";
-          const updated = await set({
-            status: "completed",
-            paymentStatus: "completed",
-            paymentMethod: method,
-            completedAt: new Date(),
-          });
+          const method = resolveCollectPaymentMethod(opts?.paymentMethod, order.paymentMethod);
+          const updated = await set(
+            readyToHandoff
+              ? {
+                  status: "completed",
+                  paymentStatus: "completed",
+                  paymentMethod: method,
+                  completedAt: new Date(),
+                }
+              : {
+                  paymentStatus: "completed",
+                  paymentMethod: method,
+                }
+          );
           try {
             const { InventoryService } = await import("@/services/inventory.service");
             await InventoryService.deductForPaidOrder(merchantId, orderId);

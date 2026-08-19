@@ -201,8 +201,13 @@ export function canEditPayment(o: MerchantOrder): boolean {
 export function isReadyForPaymentCollection(o: MerchantOrder): boolean {
   const status = (o.status || '').toLowerCase();
   if (status === 'ready' || status === 'out_for_delivery') return true;
-  // Counter POS pay-later: staff can collect while the ticket is still in kitchen.
-  if (['preparing', 'accepted'].includes(status) && isAwaitingPaymentOrder(o) && !isOnlineShopOrder(o)) {
+  // Counter POS pay-later / invoice / delivery: collect while still in kitchen
+  // (or after fulfillment if payment is still outstanding).
+  if (
+    ['preparing', 'accepted', 'sent_to_kitchen', 'completed'].includes(status) &&
+    isAwaitingPaymentOrder(o) &&
+    !isOnlineShopOrder(o)
+  ) {
     return true;
   }
   return false;
