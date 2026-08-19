@@ -2509,7 +2509,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await printEscPosToTargets(text, { role: 'eod' });
       toast.success(t('webPosShiftPrinted'));
     } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+      toastPrintError(e, t, 'webPosPrintFailed');
     }
   };
 
@@ -2549,7 +2549,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await printEscPosToTargets(text, { role: 'eod' });
       toast.success(t('webPosEodPrinted'));
     } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+      toastPrintError(e, t, 'webPosPrintFailed');
     }
   };
 
@@ -2665,7 +2665,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       await printEscPosToTargets(text, { role: 'eod' });
     } catch (e: any) {
-      toast.error(e.response?.data?.error || e.message || t('webPosPrintFailed'));
+      toastPrintError(e, t, 'webPosPrintFailed');
     }
   };
 
@@ -6117,7 +6117,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await openCashDrawerViaAgent({ printerName: printerName || undefined });
       toast.success(t('webPosDrawerOpened'));
     } catch (e: any) {
-      toast.error(e.message || t('webPosDrawerFailed'));
+      toastPrintError(e, t, 'webPosDrawerFailed');
     }
   };
 
@@ -6877,7 +6877,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               try {
                 await printPosOrderReceipt(order, splitLabel);
               } catch (e: any) {
-                toast.error(e.message || t('webPosPrintFailed'));
+                toastPrintError(e, t, 'webPosPrintFailed');
               }
             }}
             onPrintRefund={async (payload) => {
@@ -6885,7 +6885,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 await printPosRefundReceipt(payload);
                 toast.success(t('webPosSentDefaultPrinter'));
               } catch (e: any) {
-                toast.error(e.message || t('webPosPrintFailed'));
+                toastPrintError(e, t, 'webPosPrintFailed');
               }
             }}
             terminalEnabled={enabledMethods.terminal}
@@ -7261,7 +7261,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             await printReceipt(part.text, part.url, part.deliveryQrUrl);
             setPrintChooserOpen(false);
           } catch (e: any) {
-            toast.error(e.message || t('webPosPrintFailed'));
+            toastPrintError(e, t, 'webPosPrintFailed');
           } finally {
             setPrintChooserBusy(false);
           }
@@ -7278,7 +7278,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             await printReceipt(combined, firstUrl, firstDeliveryQr);
             setPrintChooserOpen(false);
           } catch (e: any) {
-            toast.error(e.message || t('webPosPrintFailed'));
+            toastPrintError(e, t, 'webPosPrintFailed');
           } finally {
             setPrintChooserBusy(false);
           }

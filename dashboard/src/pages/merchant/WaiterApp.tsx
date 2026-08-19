@@ -10,6 +10,7 @@ import {
   UtensilsCrossed,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { toastPrintError } from '@/lib/webpos-print-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
@@ -345,7 +346,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       toast.success(t('waiterSentToKitchen'));
       resetOrder();
     } catch (e: any) {
-      toast.error(e?.message || t('webPosKitchenPrintFailed'));
+      toastPrintError(e, t, 'webPosKitchenPrintFailed');
     } finally {
       setSending(false);
     }

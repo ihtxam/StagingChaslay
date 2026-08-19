@@ -48,23 +48,31 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 }
 
 /** Collapse PowerShell / Win32 dumps into a one-line ChaslayReborn message. */
-export function friendlyPrintAgentError(raw: unknown): string {
+export function friendlyPrintAgentError(raw: unknown, printerName?: string): string {
   const msg = String(raw || '').trim();
   if (!msg) return 'Print failed';
   const open = msg.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
   const named = msg.match(/Printer '([^']+)' not found/i);
-  const name = (open?.[1] || named?.[1] || '').trim();
-  const code = open ? Number(open[2]) : Number((msg.match(/Win32=(\d+)/i) || [])[1] || 0);
-  if (code === 1801 || /not found or disconnected|ERROR_INVALID_PRINTER_NAME/i.test(msg)) {
+  const gl = /\bGLPrinter\b/i.test(msg) ? 'GLPrinter' : '';
+  const name = (open?.[1] || named?.[1] || printerName || gl || '').trim();
+  const code = open ? Number(open[2]) : Number((msg.match(/Win32\s*[=:]?\s*(\d+)/i) || [])[1] || 0);
+  if (
+    code === 1801 ||
+    /not found or disconnected|ERROR_INVALID_PRINTER_NAME|OpenPrinter failed|\bGLPrinter\b/i.test(msg)
+  ) {
     return name ? `Printer '${name}' not found or disconnected` : 'Printer not found or disconnected';
   }
-  if (/win-raw-print|CategoryInfo|FullyQualifiedErrorId|chaslayreborn-print-|manupos-print-/i.test(msg)) {
+  if (
+    /command failed|powershell\.exe|-NoProfile|ExecutionPolicy|win-raw-print|win-scale-read|CategoryInfo|FullyQualifiedErrorId|chaslayreborn-print-|manupos-print-|ChaslayPrintAgent|\.ps1\b/i.test(
+      msg
+    )
+  ) {
     return name ? `Printer '${name}' not found or disconnected` : 'Print failed';
   }
-  return msg.length > 220 ? `${msg.slice(0, 217)}…` : msg;
+  return msg.length > 220 ? 'Print failed' : msg;
 }
 
-async function agentFetch(path: string, init?: RequestInit) {
+async function agentFetch(path: string, init?: RequestInit, printerName?: string) {
   const res = await fetch(`${PRINT_AGENT_URL}${path}`, {
     ...init,
     headers: {
@@ -74,7 +82,9 @@ async function agentFetch(path: string, init?: RequestInit) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(friendlyPrintAgentError(err.error || `Print agent HTTP ${res.status}`));
+    throw new Error(
+      friendlyPrintAgentError(err.error || `Print agent HTTP ${res.status}`, printerName)
+    );
   }
   return res.json();
 }
@@ -133,20 +143,26 @@ export async function printViaAgent(opts: {
 
   if (window.manuposDesktop?.printEscPos) {
     const res = await window.manuposDesktop.printEscPos(opts);
-    if (!res.ok) throw new Error(friendlyPrintAgentError(res.error || 'Desktop print failed'));
+    if (!res.ok) {
+      throw new Error(friendlyPrintAgentError(res.error || 'Desktop print failed', name));
+    }
     if (res.printer && isUnsuitableRawPrinter(res.printer)) {
       throw new Error(unsuitableRawPrinterMessage(res.printer));
     }
     return { ok: true, printer: res.printer };
   }
-  const data = await agentFetch('/print', {
-    method: 'POST',
-    body: JSON.stringify({
-      printerName: opts.printerName || undefined,
-      dataBase64: opts.dataBase64,
-      text: opts.text,
-    }),
-  });
+  const data = await agentFetch(
+    '/print',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        printerName: opts.printerName || undefined,
+        dataBase64: opts.dataBase64,
+        text: opts.text,
+      }),
+    },
+    name
+  );
   if (data?.printer && isUnsuitableRawPrinter(data.printer)) {
     throw new Error(unsuitableRawPrinterMessage(data.printer));
   }
@@ -166,10 +182,14 @@ export async function openCashDrawerViaAgent(opts?: { printerName?: string }): P
     throw new Error(unsuitableRawPrinterMessage(printerName));
   }
   try {
-    await agentFetch('/drawer', {
-      method: 'POST',
-      body: JSON.stringify({ printerName }),
-    });
+    await agentFetch(
+      '/drawer',
+      {
+        method: 'POST',
+        body: JSON.stringify({ printerName }),
+      },
+      printerName
+    );
     return;
   } catch (e: any) {
     const msg = String(e?.message || '');

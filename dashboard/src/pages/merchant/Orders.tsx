@@ -18,6 +18,7 @@ import {
 } from '@/lib/order-management';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
+import { toastPrintError } from '@/lib/webpos-print-toast';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import {
   settingsDash,
@@ -211,7 +212,7 @@ export default function Orders() {
       });
       toast.success(t('webPosSentDefaultPrinter'));
     } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+      toastPrintError(e, t, 'webPosPrintFailed');
     } finally {
       setPrinting(false);
     }

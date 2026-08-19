@@ -20,7 +20,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.3.3";
+const VERSION = "1.3.4";
 const APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "chaslay-print-agent.exe";
 const RUN_VALUE_NAME = "ChaslayPrintAgent";
@@ -484,15 +484,29 @@ async function runCli() {
   }
 }
 
-/** Short user-facing print errors — never leak PowerShell stacks or temp paths. */
-function sanitizePrintAgentError(error, printerName) {
+function isShellDump(text) {
+  return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|chaslayreborn-print-|manupos-print-|chaslayprintagent|at c:\\|\.ps1\b/i.test(
+    String(text || "")
+  );
+}
+
+/** Short user-facing print errors — never leak PowerShell stacks, argv, or temp paths. */
+function sanitizePrintAgentError(error, printerName, fallback) {
+  const safeFallback = fallback || "Print failed";
   const raw = [error && error.stderr, error && error.message, error && error.stdout]
     .filter(Boolean)
     .join("\n");
   const open = raw.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
-  const name = (open && open[1]) || printerName || "";
-  const code = open ? Number(open[2]) : Number((raw.match(/Win32=(\d+)/i) || [])[1] || 0);
-  if (code === 1801 || /ERROR_INVALID_PRINTER_NAME/i.test(raw)) {
+  const named = raw.match(/Printer '([^']+)' not found/i);
+  const gl = /\bGLPrinter\b/i.test(raw) ? "GLPrinter" : "";
+  const name = (open && open[1]) || (named && named[1]) || printerName || gl || "";
+  const code = open
+    ? Number(open[2])
+    : Number((raw.match(/Win32\s*[=:]?\s*(\d+)/i) || [])[1] || 0);
+  if (
+    code === 1801 ||
+    /ERROR_INVALID_PRINTER_NAME|OpenPrinter failed|\bGLPrinter\b/i.test(raw)
+  ) {
     return name
       ? `Printer '${name}' not found or disconnected`
       : "Printer not found or disconnected";
@@ -506,15 +520,20 @@ function sanitizePrintAgentError(error, printerName) {
         /Printer '|OpenPrinter|StartDocPrinter|WritePrinter|not found or disconnected|corrupted|Select a receipt|No default printer/i.test(
           l
         ) &&
-        !/win-raw-print|CategoryInfo|FullyQualifiedErrorId|At C:\\|chaslayreborn-print-|manupos-print-/i.test(
-          l
-        )
+        !isShellDump(l)
     );
   if (cleanLine) {
     return cleanLine.replace(/^.*Exception:\s*/i, "").slice(0, 220);
   }
+  if (isShellDump(raw)) {
+    return name ? `Print failed for '${name}'` : safeFallback;
+  }
+  if (name && /print failed/i.test(raw)) return `Print failed for '${name}'`;
+  if (raw && !isShellDump(raw) && raw.length <= 220) {
+    return raw.split(/\r?\n/)[0].slice(0, 220);
+  }
   if (name) return `Print failed for '${name}'`;
-  return "Print failed";
+  return safeFallback;
 }
 
 async function runPowerShell(scriptPath, args, printerName) {
@@ -662,8 +681,9 @@ function startServer() {
       const printers = await listPrinters();
       res.json({ printers });
     } catch (error) {
-      console.error("[print-agent] list printers failed:", error);
-      res.status(500).json({ error: error.message || "Failed to list printers" });
+      const safe = sanitizePrintAgentError(error, undefined, "Failed to list printers");
+      console.error("[print-agent] list printers failed:", safe);
+      res.status(500).json({ error: safe });
     }
   });
 
@@ -718,8 +738,9 @@ function startServer() {
       const parsed = JSON.parse(stdout || "{}");
       res.json({ ok: true, ports: Array.isArray(parsed.ports) ? parsed.ports : [] });
     } catch (error) {
-      console.error("[print-agent] scale ports failed:", error);
-      res.status(500).json({ error: error.message || "Failed to list scale ports" });
+      const safe = sanitizePrintAgentError(error, undefined, "Failed to list scale ports");
+      console.error("[print-agent] scale ports failed:", safe);
+      res.status(500).json({ error: safe });
     }
   });
 
@@ -762,8 +783,9 @@ function startServer() {
         message: reading ? undefined : "No stable frame yet — place item on scale",
       });
     } catch (error) {
-      console.error("[print-agent] scale reading failed:", error);
-      res.status(500).json({ error: error.message || "Scale read failed" });
+      const safe = sanitizePrintAgentError(error, undefined, "Scale read failed");
+      console.error("[print-agent] scale reading failed:", safe);
+      res.status(500).json({ error: safe });
     }
   });
 
