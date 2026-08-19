@@ -61,7 +61,7 @@ export const ALL_PERMISSIONS: Permission[] = [
 export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant': ['VIEW_REPORTS', 'ACCESS_PANEL'],
   '/merchant/orders': ['VIEW_ORDER_HISTORY'],
-  '/merchant/invoices': ['VIEW_ORDER_HISTORY'],
+  '/merchant/invoices': ['VIEW_REPORTS', 'VIEW_ALL_SALES', 'ACCESS_PANEL'],
   '/merchant/pos': ['USE_WEBPOS'],
   '/merchant/waiter': ['USE_WEBPOS'],
   '/merchant/reports': ['VIEW_REPORTS', 'END_OF_DAY'],
@@ -81,8 +81,8 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/tables/settings': ['MANAGE_TABLES'],
   '/merchant/tables/layout': ['MANAGE_TABLES'],
   '/merchant/tables/qr': ['MANAGE_TABLES'],
-  '/merchant/sales/reservations': ['VIEW_ORDER_HISTORY'],
-  '/merchant/reservations': ['VIEW_ORDER_HISTORY'],
+  '/merchant/sales/reservations': ['MANAGE_ONLINE_SHOP', 'VIEW_REPORTS'],
+  '/merchant/reservations': ['MANAGE_ONLINE_SHOP', 'VIEW_REPORTS'],
   '/merchant/billing': ['MANAGE_BILLING'],
   '/merchant/settings': ['MANAGE_SETTINGS'],
   '/merchant/users': ['MANAGE_STAFF'],
@@ -109,6 +109,31 @@ export const CATALOG_PANEL_PATHS = [
 
 export function isCatalogPanelPath(path: string): boolean {
   return CATALOG_PANEL_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+}
+
+export function isOrdersPanelPath(path: string): boolean {
+  return path === '/merchant/orders' || path.startsWith('/merchant/orders/');
+}
+
+/** Catalog and/or orders — not Sales, invoices, or reports. */
+export function isLimitedBackOfficePath(path: string): boolean {
+  return isCatalogPanelPath(path) || isOrdersPanelPath(path);
+}
+
+/**
+ * Where limited staff land when leaving POS.
+ * Menu (catalogue) is preferred when both menu and orders are granted.
+ */
+export function backOfficeHomePath(
+  permissions: Permission[] | undefined,
+  isOwner: boolean
+): string {
+  if (isOwner || hasPermission(permissions, 'ACCESS_PANEL', false)) {
+    return '/merchant';
+  }
+  if (hasPermission(permissions, 'MANAGE_PRODUCTS', false)) return '/merchant/products';
+  if (hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return '/merchant/orders';
+  return '/merchant/pos';
 }
 
 /** Full merchant backend (not catalog-only). MANAGE_PRODUCTS is catalog, not dashboard. */
@@ -345,24 +370,38 @@ export function getEffectivePanelAccess(opts: {
   canOpenPanel: boolean;
   /** Products / categories / modifiers only — not Sales, Settings, Users. */
   canOpenCatalog: boolean;
+  /** Backend Orders list — not invoices, reports, or Sales overview. */
+  canOpenOrders: boolean;
+  /** At least one back-office page (panel, menu, or orders). */
+  canOpenBackOffice: boolean;
   pinActive: boolean;
 } {
   const pinActive = opts.staffConfigured && !!opts.pinSession;
   if (pinActive && opts.pinSession) {
     const permissions = opts.pinSession.permissions || [];
+    const canOpenPanel = hasPermission(permissions, 'ACCESS_PANEL', false);
+    const canOpenCatalog = hasPermission(permissions, 'MANAGE_PRODUCTS', false);
+    const canOpenOrders = hasPermission(permissions, 'VIEW_ORDER_HISTORY', false);
     return {
       permissions,
       isOwner: false,
-      canOpenPanel: hasPermission(permissions, 'ACCESS_PANEL', false),
-      canOpenCatalog: hasPermission(permissions, 'MANAGE_PRODUCTS', false),
+      canOpenPanel,
+      canOpenCatalog,
+      canOpenOrders,
+      canOpenBackOffice: canOpenPanel || canOpenCatalog || canOpenOrders,
       pinActive: true,
     };
   }
+  const canOpenPanel = opts.isOwner || hasPermission(opts.jwtPermissions, 'ACCESS_PANEL', false);
+  const canOpenCatalog = opts.isOwner || hasPermission(opts.jwtPermissions, 'MANAGE_PRODUCTS', false);
+  const canOpenOrders = opts.isOwner || hasPermission(opts.jwtPermissions, 'VIEW_ORDER_HISTORY', false);
   return {
     permissions: opts.jwtPermissions,
     isOwner: opts.isOwner,
-    canOpenPanel: opts.isOwner || hasPermission(opts.jwtPermissions, 'ACCESS_PANEL', false),
-    canOpenCatalog: opts.isOwner || hasPermission(opts.jwtPermissions, 'MANAGE_PRODUCTS', false),
+    canOpenPanel,
+    canOpenCatalog,
+    canOpenOrders,
+    canOpenBackOffice: canOpenPanel || canOpenCatalog || canOpenOrders,
     pinActive: false,
   };
 }

@@ -1415,7 +1415,7 @@ private fun VectronTopBar(
             }
             if (userAccess.canAccessSettings() || userAccess.canManageProducts() || userAccess.canAccessReports()) {
                 IconButton(onClick = { onNavigate(AppRoute.Admin.route) }) {
-                    Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.menu), tint = vc.textPrimary)
+                    Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), tint = vc.textPrimary)
                 }
             }
         }

@@ -1769,6 +1769,7 @@ const en: Dict = {
   webPosNoProductsMatch: 'No products match',
   webPosMenus: 'Menus',
   webPosDashboard: 'Dashboard',
+  webPosBackOffice: 'Back office',
   webPosCartOrdering: 'Ordering',
   webPosCartOrdered: 'Ordered',
   webPosCartOrderingEmpty: 'Add items, then send to kitchen',
@@ -2159,13 +2160,15 @@ const en: Dict = {
   staffPasswordCreateHint:
     'Set this with an email so they can sign in at app.chaslay.com/login. Leave blank for PIN-only POS access.',
   staffWaiterTemplateHint:
-    'Use “Waiter (POS only)” for floor staff, or “Waiter + menu editor” to let them change products, categories, and modifiers.',
+    'On Role profiles, tick Access menu (catalogue) and/or Access orders so floor staff can open the back office. Leave Sales and reports unchecked unless they should see them.',
   staffRoleWaiter: 'Waiter (POS only)',
   staffRoleWaiterMenu: 'Waiter + menu editor',
   staffRoleWaiterHint:
-    'POS and tables only. After /login they enter POS. No Sales, Settings, Customers, or Users.',
+    'Floor POS by default. Tick Access menu and Access orders on this role for a limited back office. Sales stay off unless you grant those permissions.',
   staffRoleWaiterMenuHint:
-    'POS plus catalog: products, categories, and modifiers. After /login they enter POS; use Menu to edit the catalog.',
+    'Includes catalog access. After /login they enter POS; Back office opens Menu and Orders when those permissions are ticked.',
+  staffRoleBackOfficeHint:
+    'Access menu (catalogue) and Access orders open a limited back office. They do not include Sales, invoices, reports, or settings.',
   staffEmailPanel: 'Email (official login)',
   webPosOpenMenu: 'Menu',
   staffPinCol: 'PIN',
@@ -2209,13 +2212,13 @@ const en: Dict = {
   perm_MANAGE_TABLES: 'Manage tables',
   perm_TAKEAWAY_ORDERS: 'Takeaway orders',
   perm_DELIVERY_ORDERS: 'Delivery orders',
-  perm_VIEW_ORDER_HISTORY: 'View order history',
+  perm_VIEW_ORDER_HISTORY: 'Access orders',
   perm_CANCEL_ORDERS: 'Cancel orders',
   perm_REFUND_ORDERS: 'Refund orders',
   perm_VIEW_REPORTS: 'View reports (scoped by “View all sales”)',
   perm_VIEW_ALL_SALES:
     'View all sales — company totals and every employee’s sales (without this: own sales only)',
-  perm_MANAGE_PRODUCTS: 'Manage products',
+  perm_MANAGE_PRODUCTS: 'Access menu (catalogue)',
   perm_MANAGE_CUSTOMERS: 'Manage customers',
   perm_MANAGE_OFFERS: 'Manage offers',
   perm_MANAGE_ONLINE_SHOP: 'Manage online shop',
@@ -4260,6 +4263,7 @@ const fr: Dict = {
   webPosNoProductsMatch: 'Aucun produit correspondant',
   webPosMenus: 'Menus',
   webPosDashboard: 'Dashboard',
+  webPosBackOffice: 'Back-office',
   webPosCartOrdering: 'En commande',
   webPosCartOrdered: 'Commandé',
   webPosCartOrderingEmpty: 'Ajoutez des articles, puis envoyez en cuisine',
@@ -4647,13 +4651,15 @@ const fr: Dict = {
   staffPasswordCreateHint:
     'À renseigner avec un e-mail pour se connecter sur app.chaslay.com/login. Laisser vide pour un accès caisse par PIN uniquement.',
   staffWaiterTemplateHint:
-    'Utilisez « Serveur (caisse uniquement) » pour le service, ou « Serveur + éditeur de menu » pour leur permettre de modifier produits, catégories et modificateurs.',
+    'Dans Profils de rôle, cochez Accès menu (catalogue) et/ou Accès aux commandes pour le back-office. Laissez Ventes et rapports décochés s’ils ne doivent pas les voir.',
   staffRoleWaiter: 'Serveur (caisse uniquement)',
   staffRoleWaiterMenu: 'Serveur + éditeur de menu',
   staffRoleWaiterHint:
-    'Caisse et tables uniquement. Après /login ils arrivent en caisse. Pas de Ventes, Paramètres, Clients ni Utilisateurs.',
+    'Caisse par défaut. Cochez Accès menu et Accès aux commandes pour un back-office limité. Les ventes restent désactivées sauf si vous les accordez.',
   staffRoleWaiterMenuHint:
-    'Caisse plus catalogue : produits, catégories et modificateurs. Après /login ils arrivent en caisse ; Menu ouvre le catalogue.',
+    'Inclut l’accès catalogue. Après /login ils arrivent en caisse ; Back-office ouvre Menu et Commandes si ces permissions sont cochées.',
+  staffRoleBackOfficeHint:
+    'Accès menu (catalogue) et Accès aux commandes ouvrent un back-office limité. Ils n’incluent pas Ventes, factures, rapports ni paramètres.',
   staffEmailPanel: 'E-mail (connexion officielle)',
   webPosOpenMenu: 'Menu',
   staffPinCol: 'PIN',
@@ -4697,13 +4703,13 @@ const fr: Dict = {
   perm_MANAGE_TABLES: 'Gérer les tables',
   perm_TAKEAWAY_ORDERS: 'Commandes à emporter',
   perm_DELIVERY_ORDERS: 'Commandes livraison',
-  perm_VIEW_ORDER_HISTORY: 'Voir l’historique des commandes',
+  perm_VIEW_ORDER_HISTORY: 'Accès aux commandes',
   perm_CANCEL_ORDERS: 'Annuler des commandes',
   perm_REFUND_ORDERS: 'Rembourser des commandes',
   perm_VIEW_REPORTS: 'Voir les rapports (selon « Voir toutes les ventes »)',
   perm_VIEW_ALL_SALES:
     'Voir toutes les ventes — totaux société et ventes de chaque employé (sans cela : ses ventes seulement)',
-  perm_MANAGE_PRODUCTS: 'Gérer les produits',
+  perm_MANAGE_PRODUCTS: 'Accès menu (catalogue)',
   perm_MANAGE_CUSTOMERS: 'Gérer les clients',
   perm_MANAGE_OFFERS: 'Gérer les offres',
   perm_MANAGE_ONLINE_SHOP: 'Gérer la boutique en ligne',
@@ -6753,6 +6759,7 @@ const de: Dict = {
   webPosNoProductsMatch: 'Keine passenden Produkte',
   webPosMenus: 'Menüs',
   webPosDashboard: 'Dashboard',
+  webPosBackOffice: 'Backoffice',
   webPosCartOrdering: 'Bestellen',
   webPosCartOrdered: 'Bestellt',
   webPosCartOrderingEmpty: 'Artikel hinzufügen, dann an Küche senden',
@@ -7140,13 +7147,15 @@ const de: Dict = {
   staffPasswordCreateHint:
     'Zusammen mit einer E-Mail für app.chaslay.com/login setzen. Leer lassen für nur-PIN-Kassenzugang.',
   staffWaiterTemplateHint:
-    '„Kellner (nur Kasse)“ für den Service, oder „Kellner + Menü-Editor“, damit sie Produkte, Kategorien und Modifikatoren ändern können.',
+    'Unter Rollenprofile „Zugang zum Menü (Katalog)“ und/oder „Zugang zu Bestellungen“ ankreuzen für das Backoffice. Verkauf und Berichte nur ankreuzen, wenn sie das sehen dürfen.',
   staffRoleWaiter: 'Kellner (nur Kasse)',
   staffRoleWaiterMenu: 'Kellner + Menü-Editor',
   staffRoleWaiterHint:
-    'Nur Kasse und Tische. Nach /login geht es in die Kasse. Kein Verkauf, keine Einstellungen, Kunden oder Benutzer.',
+    'Standard: nur Kasse. Für ein begrenztes Backoffice „Zugang zum Menü“ und „Zugang zu Bestellungen“ ankreuzen. Verkauf bleibt aus, bis Sie diese Rechte vergeben.',
   staffRoleWaiterMenuHint:
-    'Kasse plus Katalog: Produkte, Kategorien und Modifikatoren. Nach /login zuerst die Kasse; Menü öffnet den Katalog.',
+    'Enthält Katalogzugang. Nach /login zuerst die Kasse; Backoffice öffnet Menü und Bestellungen, wenn diese Rechte gesetzt sind.',
+  staffRoleBackOfficeHint:
+    'Zugang zum Menü (Katalog) und Zugang zu Bestellungen öffnen ein begrenztes Backoffice. Kein Verkauf, keine Rechnungen, Berichte oder Einstellungen.',
   staffEmailPanel: 'E-Mail (offizielles Login)',
   webPosOpenMenu: 'Menü',
   staffPinCol: 'PIN',
@@ -7190,13 +7199,13 @@ const de: Dict = {
   perm_MANAGE_TABLES: 'Tische verwalten',
   perm_TAKEAWAY_ORDERS: 'Mitnahme-Bestellungen',
   perm_DELIVERY_ORDERS: 'Lieferbestellungen',
-  perm_VIEW_ORDER_HISTORY: 'Bestellhistorie ansehen',
+  perm_VIEW_ORDER_HISTORY: 'Zugang zu Bestellungen',
   perm_CANCEL_ORDERS: 'Bestellungen stornieren',
   perm_REFUND_ORDERS: 'Bestellungen erstatten',
   perm_VIEW_REPORTS: 'Berichte ansehen (nach „Alle Verkäufe ansehen“)',
   perm_VIEW_ALL_SALES:
     'Alle Verkäufe ansehen — Firmentotale und Verkäufe aller Mitarbeitenden (ohne: nur eigene)',
-  perm_MANAGE_PRODUCTS: 'Produkte verwalten',
+  perm_MANAGE_PRODUCTS: 'Zugang zum Menü (Katalog)',
   perm_MANAGE_CUSTOMERS: 'Kunden verwalten',
   perm_MANAGE_OFFERS: 'Angebote verwalten',
   perm_MANAGE_ONLINE_SHOP: 'Online-Shop verwalten',

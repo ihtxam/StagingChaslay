@@ -95,7 +95,7 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
     ],
   },
   {
-    // Floor-only: no panel, no drawer, no company sales / EOD.
+    // Floor POS + optional back office (menu + orders). No Sales / reports / panel.
     name: "Waiter",
     isSystem: true,
     sortOrder: 20,
@@ -109,6 +109,7 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "TAKEAWAY_ORDERS",
       "VIEW_ORDER_HISTORY",
       "CANCEL_ORDERS",
+      "MANAGE_PRODUCTS",
     ],
   },
   {
@@ -191,6 +192,7 @@ export function toAndroidPermissions(perms: Permission[] | string[]): string[] {
 export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   "/merchant": ["VIEW_REPORTS", "ACCESS_PANEL"],
   "/merchant/orders": ["VIEW_ORDER_HISTORY"],
+  "/merchant/invoices": ["VIEW_REPORTS", "VIEW_ALL_SALES", "ACCESS_PANEL"],
   "/merchant/pos": ["USE_WEBPOS"],
   "/merchant/reports": ["VIEW_REPORTS", "END_OF_DAY"],
   "/merchant/products": ["MANAGE_PRODUCTS"],
@@ -207,7 +209,8 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   "/merchant/tables/settings": ["MANAGE_TABLES"],
   "/merchant/tables/layout": ["MANAGE_TABLES"],
   "/merchant/tables/qr": ["MANAGE_TABLES"],
-  "/merchant/reservations": ["MANAGE_ONLINE_SHOP"],
+  "/merchant/reservations": ["MANAGE_ONLINE_SHOP", "VIEW_REPORTS"],
+  "/merchant/sales/reservations": ["MANAGE_ONLINE_SHOP", "VIEW_REPORTS"],
   "/merchant/billing": ["MANAGE_BILLING"],
   "/merchant/settings": ["MANAGE_SETTINGS"],
   "/merchant/users": ["MANAGE_STAFF"],
@@ -263,7 +266,7 @@ export function waiterSystemKind(name: string): WaiterSystemKind | null {
   return "pos-only";
 }
 
-export function waiterBlockedPermissions(kind: WaiterSystemKind): Permission[] {
-  if (kind === "menu-editor") return [...WAITER_PRIVILEGED_BLOCKED];
-  return [...WAITER_PRIVILEGED_BLOCKED, "MANAGE_PRODUCTS"];
+export function waiterBlockedPermissions(_kind: WaiterSystemKind): Permission[] {
+  // Menu (MANAGE_PRODUCTS) and Orders (VIEW_ORDER_HISTORY) are assigned in Roles.
+  return [...WAITER_PRIVILEGED_BLOCKED];
 }

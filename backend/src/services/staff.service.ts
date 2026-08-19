@@ -63,7 +63,7 @@ export class StaffService {
     }
     // Existing Manager roles that already see company reports keep VIEW_ALL_SALES.
     await this.ensureManagerViewAllSales(merchantId);
-    // Waiters: floor POS only ù never panel / drawer / company sales aggregates.
+    // Waiters: never panel / drawer / company sales. Menu + orders stay role-assigned.
     await this.enforceWaiterFloorRestrictions(merchantId);
     return db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
@@ -97,8 +97,8 @@ export class StaffService {
   }
 
   /**
-   * Strip privileged permissions from system Waiter templates.
-   * POS-only waiters never get catalog/panel; menu-editor waiters keep MANAGE_PRODUCTS only.
+   * Strip sales / panel / finance from system Waiter templates.
+   * Menu (MANAGE_PRODUCTS) and Orders stay as assigned on the Roles page.
    */
   static async enforceWaiterFloorRestrictions(merchantId: string) {
     const db = getDb();

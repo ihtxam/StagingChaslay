@@ -48,8 +48,10 @@ import { homePathForUser } from '@/lib/auth-home';
 import {
   canAccessRoute,
   canShowWebPosQuickAction,
+  backOfficeHomePath,
   getEffectivePanelAccess,
   isCatalogPanelPath,
+  isOrdersPanelPath,
   loadWebPosStaffSession,
   type Permission,
   type WebPosStaffSession,
@@ -196,14 +198,14 @@ function MerchantShell() {
         staffConfigured: !!loadWebPosStaffSession() || user?.role === 'staff',
         pinSession: loadWebPosStaffSession(),
       });
-      if (!access.canOpenPanel && !access.canOpenCatalog) {
+      if (!access.canOpenBackOffice) {
         toast.error(t('webPosPanelDenied'));
         setPosAppMode(true);
         return;
       }
-      if (!access.canOpenPanel && access.canOpenCatalog) {
+      if (!access.canOpenPanel) {
         setPosAppMode(false);
-        navigate('/merchant/products');
+        navigate(backOfficeHomePath(access.permissions, false));
         return;
       }
       setPosAppMode(false);
@@ -217,10 +219,11 @@ function MerchantShell() {
     };
   }, [user?.permissions, user?.role, jwtIsOwner, t, navigate]);
 
-  // Restricted PIN: stay in POS unless they may open catalog-only pages.
+  // Restricted PIN: stay in POS unless they may open menu / orders pages.
   useEffect(() => {
     if (!effective.pinActive || effective.canOpenPanel) return;
     if (effective.canOpenCatalog && isCatalogPanelPath(location.pathname)) return;
+    if (effective.canOpenOrders && isOrdersPanelPath(location.pathname)) return;
     if (!posAppMode) setPosAppMode(true);
     if (!isPosLikeRoute) {
       navigate('/merchant/pos', { replace: true });
@@ -229,6 +232,7 @@ function MerchantShell() {
     effective.pinActive,
     effective.canOpenPanel,
     effective.canOpenCatalog,
+    effective.canOpenOrders,
     posAppMode,
     isPosLikeRoute,
     location.pathname,
@@ -268,12 +272,12 @@ function MerchantShell() {
 
   const menuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
+    { label: t('orders'), path: '/merchant/orders', icon: '📦' },
     {
       id: 'sales',
       label: t('navSales'),
-      icon: '📦',
+      icon: '📈',
       children: [
-        { label: t('orders'), path: '/merchant/orders', icon: '📦' },
         { label: t('invoicesNav'), path: '/merchant/invoices', icon: '🧾' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
         { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },

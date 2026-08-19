@@ -4,6 +4,7 @@ import {
   Loader2,
   LogOut,
   Minus,
+  PanelLeft,
   Plus,
   ShoppingBag,
   Table2,
@@ -15,6 +16,7 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
 import {
+  backOfficeHomePath,
   hasPermission,
   loadWebPosStaffSession,
   saveWebPosStaffSession,
@@ -372,14 +374,15 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           <p className="font-semibold">{staff?.name || t('waiterAppSubtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
-          {hasPermission(staff?.permissions, 'MANAGE_PRODUCTS') ? (
+          {hasPermission(staff?.permissions, 'MANAGE_PRODUCTS') ||
+          hasPermission(staff?.permissions, 'VIEW_ORDER_HISTORY') ? (
             <button
               type="button"
-              onClick={() => navigate('/merchant/products')}
+              onClick={() => navigate(backOfficeHomePath(staff?.permissions, false))}
               className="inline-flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm"
             >
-              <UtensilsCrossed className="h-4 w-4" aria-hidden />
-              {t('webPosOpenMenu')}
+              <PanelLeft className="h-4 w-4" aria-hidden />
+              {t('webPosBackOffice')}
             </button>
           ) : null}
           <button

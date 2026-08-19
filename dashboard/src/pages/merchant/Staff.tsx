@@ -553,6 +553,7 @@ export default function StaffPage() {
             <h3 className="font-semibold mb-3">
               {t('staffEditRole').replace('{name}', staffRoleDisplayName(editingRole.name, t))}
             </h3>
+            <p className="mb-3 text-xs text-[var(--text-muted)]">{t('staffRoleBackOfficeHint')}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
               {ALL_PERMISSIONS.map((p) => (
                 <label key={p} className="flex items-center gap-2 text-xs">
