@@ -85,20 +85,61 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/billing': ['MANAGE_BILLING'],
   '/merchant/settings': ['MANAGE_SETTINGS'],
   '/merchant/users': ['MANAGE_STAFF'],
-  '/merchant/inventory': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/list': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/inbound': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/outbound': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/counting': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/history': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/items': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/categories': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/cookbook': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/suppliers': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/units': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/report': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
-  '/merchant/inventory/consumption': ['MANAGE_INVENTORY', 'MANAGE_PRODUCTS'],
+  '/merchant/inventory': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/list': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/inbound': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/outbound': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/counting': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/history': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/items': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/categories': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/cookbook': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/suppliers': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/units': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/report': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/consumption': ['MANAGE_INVENTORY'],
 };
+
+export const CATALOG_PANEL_PATHS = [
+  '/merchant/products',
+  '/merchant/categories',
+  '/merchant/modifiers',
+] as const;
+
+export function isCatalogPanelPath(path: string): boolean {
+  return CATALOG_PANEL_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+}
+
+/** Full merchant backend (not catalog-only). MANAGE_PRODUCTS is catalog, not dashboard. */
+export const FULL_PANEL_PERMISSIONS: Permission[] = [
+  'ACCESS_PANEL',
+  'VIEW_REPORTS',
+  'MANAGE_SETTINGS',
+  'MANAGE_STAFF',
+  'MANAGE_BILLING',
+  'MANAGE_CUSTOMERS',
+  'MANAGE_ONLINE_SHOP',
+  'MANAGE_OFFERS',
+  'MANAGE_INVENTORY',
+  'MANAGE_ROLES',
+  'VIEW_ALL_SALES',
+  'END_OF_DAY',
+];
+
+export function hasFullPanelAccess(
+  permissions: Permission[] | undefined,
+  isOwner: boolean
+): boolean {
+  if (isOwner) return true;
+  return FULL_PANEL_PERMISSIONS.some((p) => hasPermission(permissions, p, false));
+}
+
+export function staffRoleDisplayName(name: string, t: (key: string) => string): string {
+  const n = name.trim().toLowerCase();
+  if (n === 'waiter' || n === 'waiter (pos only)') return t('staffRoleWaiter');
+  if (n.includes('menu editor') || n.includes('menu-editor')) return t('staffRoleWaiterMenu');
+  return name;
+}
 
 export function canAccessRoute(
   path: string,
@@ -301,6 +342,8 @@ export function getEffectivePanelAccess(opts: {
   /** Treat as owner for route checks (false when a PIN session is active). */
   isOwner: boolean;
   canOpenPanel: boolean;
+  /** Products / categories / modifiers only — not Sales, Settings, Users. */
+  canOpenCatalog: boolean;
   pinActive: boolean;
 } {
   const pinActive = opts.staffConfigured && !!opts.pinSession;
@@ -310,6 +353,7 @@ export function getEffectivePanelAccess(opts: {
       permissions,
       isOwner: false,
       canOpenPanel: hasPermission(permissions, 'ACCESS_PANEL', false),
+      canOpenCatalog: hasPermission(permissions, 'MANAGE_PRODUCTS', false),
       pinActive: true,
     };
   }
@@ -317,6 +361,7 @@ export function getEffectivePanelAccess(opts: {
     permissions: opts.jwtPermissions,
     isOwner: opts.isOwner,
     canOpenPanel: opts.isOwner || hasPermission(opts.jwtPermissions, 'ACCESS_PANEL', false),
+    canOpenCatalog: opts.isOwner || hasPermission(opts.jwtPermissions, 'MANAGE_PRODUCTS', false),
     pinActive: false,
   };
 }

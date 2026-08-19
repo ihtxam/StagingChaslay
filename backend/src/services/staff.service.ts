@@ -5,8 +5,12 @@ import {
   ALL_PERMISSIONS,
   DEFAULT_ROLE_TEMPLATES,
   encodePermissions,
+  hasAnyPermission,
   parsePermissions,
+  STAFF_MERCHANT_ENTRY_PERMISSIONS,
   toAndroidPermissions,
+  waiterBlockedPermissions,
+  waiterSystemKind,
   type Permission,
 } from "@/lib/permissions";
 
@@ -26,10 +30,24 @@ export class StaffService {
           sortOrder: t.sortOrder,
         }))
       );
+    } else {
+      const have = new Set(existing.map((r) => r.name.trim().toLowerCase()));
+      const missing = DEFAULT_ROLE_TEMPLATES.filter((t) => !have.has(t.name.trim().toLowerCase()));
+      if (missing.length) {
+        await db.insert(schema.merchantRoles).values(
+          missing.map((t) => ({
+            merchantId,
+            name: t.name,
+            permissions: encodePermissions(t.permissions),
+            isSystem: t.isSystem,
+            sortOrder: t.sortOrder,
+          }))
+        );
+      }
     }
     // Existing Manager roles that already see company reports keep VIEW_ALL_SALES.
     await this.ensureManagerViewAllSales(merchantId);
-    // Waiters: floor POS only ó never panel / drawer / company sales aggregates.
+    // Waiters: floor POS only ù never panel / drawer / company sales aggregates.
     await this.enforceWaiterFloorRestrictions(merchantId);
     return db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
@@ -63,29 +81,18 @@ export class StaffService {
   }
 
   /**
-   * Strip privileged permissions from system Waiter role (keep other custom floor perms).
-   * ACCESS_PANEL / OPEN_CASH_DRAWER / reports are never allowed on Waiter.
+   * Strip privileged permissions from system Waiter templates.
+   * POS-only waiters never get catalog/panel; menu-editor waiters keep MANAGE_PRODUCTS only.
    */
   static async enforceWaiterFloorRestrictions(merchantId: string) {
     const db = getDb();
-    const blocked: Permission[] = [
-      "VIEW_REPORTS",
-      "VIEW_ALL_SALES",
-      "END_OF_DAY",
-      "ACCESS_PANEL",
-      "OPEN_CASH_DRAWER",
-      "MANAGE_SETTINGS",
-      "MANAGE_STAFF",
-      "MANAGE_ROLES",
-      "MANAGE_BILLING",
-      "MANAGE_PRODUCTS",
-      "REFUND_ORDERS",
-    ];
     const roles = await db.query.merchantRoles.findMany({
       where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.isSystem, true)),
     });
     for (const role of roles) {
-      if (!role.name.trim().toLowerCase().startsWith("waiter")) continue;
+      const kind = waiterSystemKind(role.name);
+      if (!kind) continue;
+      const blocked = waiterBlockedPermissions(kind);
       const perms = parsePermissions(role.permissions);
       const next = perms.filter((p) => !blocked.includes(p));
       if (next.length === perms.length) continue;
@@ -264,7 +271,7 @@ export class StaffService {
 
     const pin = input.pin?.trim();
     if (pin && (pin.length < 4 || pin.length > 8)) {
-      throw new Error("PIN must be 4ñ8 digits");
+      throw new Error("PIN must be 4ù8 digits");
     }
 
     const canAccessPanel = !!input.canAccessPanel;
@@ -340,7 +347,7 @@ export class StaffService {
         patch.pinHash = null;
       } else {
         const pin = String(input.pin).trim();
-        if (pin.length < 4 || pin.length > 8) throw new Error("PIN must be 4ñ8 digits");
+        if (pin.length < 4 || pin.length > 8) throw new Error("PIN must be 4ù8 digits");
         patch.pinHash = await AuthService.hashPassword(pin);
       }
     }
@@ -486,8 +493,8 @@ export class StaffService {
       where: eq(schema.merchantRoles.id, staff.roleId),
     });
     const permissions = parsePermissions(role?.permissions);
-    if (!permissions.includes("ACCESS_PANEL")) {
-      throw new Error("This account does not have panel access");
+    if (!hasAnyPermission(permissions, STAFF_MERCHANT_ENTRY_PERMISSIONS)) {
+      throw new Error("This account cannot sign in");
     }
 
     return {

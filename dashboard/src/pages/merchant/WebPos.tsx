@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
@@ -463,6 +463,7 @@ function mergeBillDiscounts(
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const { t, locale } = useI18n();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
@@ -949,13 +950,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       staffConfigured,
       pinSession: webposStaff,
     });
-    // When PINs are configured, only staff with ACCESS_PANEL may leave WebPOS chrome.
-    if (staffConfigured && !access.canOpenPanel) {
+    // PIN / staff JWT: full panel, catalog-only, or stay in POS.
+    if (staffConfigured && !access.canOpenPanel && !access.canOpenCatalog) {
       toast.error(t('webPosPanelDenied'));
       return;
     }
+    if (staffConfigured && !access.canOpenPanel && access.canOpenCatalog) {
+      navigate('/merchant/products');
+      return;
+    }
     window.dispatchEvent(new CustomEvent('webpos:show-panel'));
-  }, [authUser?.role, authUser?.isOwner, authUser?.permissions, staffConfigured, webposStaff, t]);
+  }, [authUser?.role, authUser?.isOwner, authUser?.permissions, staffConfigured, webposStaff, t, navigate]);
 
   const enterPosApp = useCallback(() => {
     window.dispatchEvent(new CustomEvent('webpos:enter-app'));
@@ -6079,6 +6084,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         hasPermission(staffPerms, 'END_OF_DAY', false)));
   const canOpenPanel =
     !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'ACCESS_PANEL', false));
+  const jwtIsOwner = authUser?.role === 'merchant' && authUser?.isOwner !== false;
+  const canManageProducts = staffConfigured
+    ? !!webposStaff && hasPermission(staffPerms, 'MANAGE_PRODUCTS', false)
+    : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_PRODUCTS', jwtIsOwner);
+  const openCatalogMenu = () => {
+    setSettingsOpen(false);
+    navigate('/merchant/products');
+  };
   const canViewAllSales =
     !staffConfigured ||
     (!!webposStaff && hasPermission(staffPerms, 'VIEW_ALL_SALES', false));
@@ -6509,6 +6522,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         staffName={webposStaff?.name}
         canDrawer={canDrawer}
         canShowPanel={canOpenPanel}
+        canOpenCatalog={canManageProducts}
+        onOpenCatalog={openCatalogMenu}
         appMode={appMode}
         settingsOpen={settingsOpen}
         onToggleSettings={() => setSettingsOpen((v) => !v)}
@@ -6637,6 +6652,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               void openCashDrawer();
             }}
             canShowPanel={canOpenPanel}
+            canOpenCatalog={canManageProducts}
+            onOpenCatalog={openCatalogMenu}
             appMode={appMode}
             onShowPanel={() => {
               setSettingsOpen(false);

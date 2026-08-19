@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { verifyToken, requireMerchant, setMerchantContext } from "@/middleware/auth.middleware";
+import { verifyToken, requireMerchant, requirePermission, setMerchantContext } from "@/middleware/auth.middleware";
 import { InventoryLicenseError, InventoryService } from "@/services/inventory.service";
 
 const router = Router();
@@ -7,6 +7,7 @@ const router = Router();
 router.use(verifyToken);
 router.use(requireMerchant);
 router.use(setMerchantContext);
+router.use(requirePermission("MANAGE_INVENTORY"));
 
 function handleError(res: Response, error: unknown, fallback: string) {
   if (error instanceof InventoryLicenseError) {

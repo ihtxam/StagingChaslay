@@ -2,7 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { ALL_PERMISSIONS, type Permission } from '@/lib/permissions';
+import { ALL_PERMISSIONS, staffRoleDisplayName, type Permission } from '@/lib/permissions';
 import { useAuthStore } from '@/store/auth';
 
 type RoleRow = {
@@ -196,6 +196,7 @@ export default function StaffPage() {
       <div>
         <h1 className="text-xl font-semibold">{t('staffPageTitle')}</h1>
         <p className="text-sm text-[var(--text-muted)] mt-1">{t('staffPageHint')}</p>
+        <p className="text-sm text-[var(--text-muted)] mt-1">{t('staffWaiterTemplateHint')}</p>
       </div>
 
       <div className="flex gap-2 border-b border-[var(--border)]">
@@ -236,7 +237,7 @@ export default function StaffPage() {
                 >
                   {roles.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {r.name}
+                      {staffRoleDisplayName(r.name, t)}
                     </option>
                   ))}
                 </select>
@@ -258,13 +259,18 @@ export default function StaffPage() {
                   }
                 />
               </label>
-              <label className="flex items-center gap-2 text-sm pt-6">
+              <label className="flex items-center gap-2 text-sm pt-6 sm:col-span-2">
                 <input
                   type="checkbox"
                   checked={staffForm.canAccessPanel}
                   onChange={(e) => setStaffForm({ ...staffForm, canAccessPanel: e.target.checked })}
                 />
-                {t('staffCanAccessPanel')}
+                <span>
+                  {t('staffEmailLogin')}
+                  <span className="block text-xs text-[var(--text-muted)] font-normal">
+                    {t('staffEmailLoginHint')}
+                  </span>
+                </span>
               </label>
               {staffForm.canAccessPanel ? (
                 <>
@@ -327,7 +333,7 @@ export default function StaffPage() {
                         {s.name}
                       </span>
                     </td>
-                    <td className="px-3 py-2">{s.roleName}</td>
+                    <td className="px-3 py-2">{staffRoleDisplayName(s.roleName, t)}</td>
                     <td className="px-3 py-2">{s.pinSet ? t('staffPinSet') : '-'}</td>
                     <td className="px-3 py-2">
                       {s.canAccessPanel ? (
@@ -365,11 +371,18 @@ export default function StaffPage() {
           {roles.map((role) => (
             <div key={role.id} className="card p-4 flex items-center justify-between gap-3">
               <div>
-                <p className="font-medium">{role.name}</p>
+                <p className="font-medium">{staffRoleDisplayName(role.name, t)}</p>
                 <p className="text-xs text-[var(--text-muted)]">
                   {t('staffPermissionsCount').replace('{count}', String(role.permissions.length))}
                   {role.isSystem ? ` - ${t('staffSystemProfile')}` : ''}
                 </p>
+                {role.name.trim().toLowerCase() === 'waiter' ||
+                role.name.trim().toLowerCase() === 'waiter (pos only)' ? (
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleWaiterHint')}</p>
+                ) : null}
+                {role.name.trim().toLowerCase().includes('menu editor') ? (
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleWaiterMenuHint')}</p>
+                ) : null}
               </div>
               <button type="button" className="btn-secondary text-sm" onClick={() => openRoleEdit(role)}>
                 {t('staffEditPermissions')}
@@ -408,7 +421,7 @@ export default function StaffPage() {
                 >
                   {roles.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {r.name}
+                      {staffRoleDisplayName(r.name, t)}
                     </option>
                   ))}
                 </select>
@@ -454,7 +467,12 @@ export default function StaffPage() {
                   checked={editForm.canAccessPanel}
                   onChange={(e) => setEditForm({ ...editForm, canAccessPanel: e.target.checked })}
                 />
-                {t('staffCanAccessPanel')}
+                <span>
+                  {t('staffEmailLogin')}
+                  <span className="block text-xs text-[var(--text-muted)] font-normal">
+                    {t('staffEmailLoginHint')}
+                  </span>
+                </span>
               </label>
               {editForm.canAccessPanel ? (
                 <>
@@ -503,7 +521,7 @@ export default function StaffPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg max-h-[85vh] overflow-auto rounded-xl bg-white dark:bg-stone-900 p-4 shadow-xl">
             <h3 className="font-semibold mb-3">
-              {t('staffEditRole').replace('{name}', editingRole.name)}
+              {t('staffEditRole').replace('{name}', staffRoleDisplayName(editingRole.name, t))}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
               {ALL_PERMISSIONS.map((p) => (

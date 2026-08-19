@@ -44,10 +44,12 @@ import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
 import { APP_PANEL_TITLE } from '@/lib/brand';
 import { useAuthStore } from '@/store/auth';
+import { homePathForUser } from '@/lib/auth-home';
 import {
   canAccessRoute,
   canShowWebPosQuickAction,
   getEffectivePanelAccess,
+  isCatalogPanelPath,
   loadWebPosStaffSession,
   type Permission,
   type WebPosStaffSession,
@@ -82,8 +84,11 @@ function PanelRouteGuard({
   allow: (path: string) => boolean;
   children: React.ReactNode;
 }) {
+  const user = useAuthStore((s) => s.user);
   if (!allow(path)) {
-    return <Navigate to="/merchant/pos" replace />;
+    const dest = user ? homePathForUser(user) : '/merchant/pos';
+    const fallback = dest === path || dest === '/merchant' ? '/merchant/pos' : dest;
+    return <Navigate to={fallback} replace />;
   }
   return <>{children}</>;
 }
@@ -191,9 +196,14 @@ function MerchantShell() {
         staffConfigured: !!loadWebPosStaffSession() || user?.role === 'staff',
         pinSession: loadWebPosStaffSession(),
       });
-      if (!access.canOpenPanel) {
+      if (!access.canOpenPanel && !access.canOpenCatalog) {
         toast.error(t('webPosPanelDenied'));
         setPosAppMode(true);
+        return;
+      }
+      if (!access.canOpenPanel && access.canOpenCatalog) {
+        setPosAppMode(false);
+        navigate('/merchant/products');
         return;
       }
       setPosAppMode(false);
@@ -205,16 +215,25 @@ function MerchantShell() {
       window.removeEventListener('webpos:show-panel', showPanel);
       window.removeEventListener('webpos:enter-app', enterApp);
     };
-  }, [user?.permissions, user?.role, jwtIsOwner, t]);
+  }, [user?.permissions, user?.role, jwtIsOwner, t, navigate]);
 
-  // If a restricted PIN session is active, never leave POS chrome / panel routes.
+  // Restricted PIN: stay in POS unless they may open catalog-only pages.
   useEffect(() => {
     if (!effective.pinActive || effective.canOpenPanel) return;
+    if (effective.canOpenCatalog && isCatalogPanelPath(location.pathname)) return;
     if (!posAppMode) setPosAppMode(true);
-    if (!isPosRoute) {
+    if (!isPosLikeRoute) {
       navigate('/merchant/pos', { replace: true });
     }
-  }, [effective.pinActive, effective.canOpenPanel, posAppMode, isPosRoute, navigate]);
+  }, [
+    effective.pinActive,
+    effective.canOpenPanel,
+    effective.canOpenCatalog,
+    posAppMode,
+    isPosLikeRoute,
+    location.pathname,
+    navigate,
+  ]);
 
   const changeLanguage = useCallback(
     async (lang: Locale) => {

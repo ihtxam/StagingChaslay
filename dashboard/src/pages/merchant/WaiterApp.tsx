@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Loader2,
   LogOut,
@@ -48,6 +49,7 @@ function money(n: number) {
 
 export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const { t, locale } = useI18n();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [pinGateOpen, setPinGateOpen] = useState(false);
@@ -368,14 +370,26 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           <p className="text-xs uppercase tracking-wide text-stone-500">{t('waiterAppTitle')}</p>
           <p className="font-semibold">{staff?.name || t('waiterAppSubtitle')}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleLogout()}
-          className="inline-flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm"
-        >
-          <LogOut className="h-4 w-4" aria-hidden />
-          {t('logout')}
-        </button>
+        <div className="flex items-center gap-2">
+          {hasPermission(staff?.permissions, 'MANAGE_PRODUCTS') ? (
+            <button
+              type="button"
+              onClick={() => navigate('/merchant/products')}
+              className="inline-flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm"
+            >
+              <UtensilsCrossed className="h-4 w-4" aria-hidden />
+              {t('webPosOpenMenu')}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            className="inline-flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm"
+          >
+            <LogOut className="h-4 w-4" aria-hidden />
+            {t('logout')}
+          </button>
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">

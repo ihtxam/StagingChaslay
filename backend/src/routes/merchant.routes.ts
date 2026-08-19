@@ -38,10 +38,45 @@ const imageUpload = multer({
   },
 });
 
+const POS_SAFE_SETTINGS_KEYS = new Set(["posColorTheme", "panelLanguage"]);
+
+/** Staff can use POS/catalog APIs; writes to catalog/settings/billing stay permission-gated. */
+function restrictStaffMerchantWrites(req: Request, res: Response, next: NextFunction) {
+  if (req.user?.role === "merchant") return next();
+  if (req.user?.role !== "staff") return next();
+
+  const method = req.method.toUpperCase();
+  const path = req.path || "";
+
+  if (method === "PUT" && (path === "/settings" || path === "/settings/")) {
+    const keys = Object.keys((req.body || {}) as Record<string, unknown>);
+    if (keys.length && keys.every((k) => POS_SAFE_SETTINGS_KEYS.has(k))) return next();
+    return requirePermission("MANAGE_SETTINGS")(req, res, next);
+  }
+
+  if (path.startsWith("/billing")) {
+    return requirePermission("MANAGE_BILLING")(req, res, next);
+  }
+
+  const catalogWrite =
+    /^(POST|PUT|PATCH|DELETE)$/.test(method) &&
+    (/^\/products(\/|$)/.test(path) ||
+      /^\/categories(\/|$)/.test(path) ||
+      /^\/modifiers(\/|$)/.test(path) ||
+      path === "/demo-menu-photos" ||
+      path === "/media");
+  if (catalogWrite) {
+    return requirePermission("MANAGE_PRODUCTS")(req, res, next);
+  }
+
+  return next();
+}
+
 // Apply merchant middleware to all routes
 router.use(verifyToken);
 router.use(requireMerchant);
 router.use(setMerchantContext);
+router.use(restrictStaffMerchantWrites);
 
 // ============================================================================
 // PRODUCT MANAGEMENT
