@@ -159,6 +159,10 @@ type Props = {
   onTabChange: (tab: PosTab) => void;
   merchantName?: string;
   agentOk: boolean;
+  /** Agent is up but Windows printer name is invalid / Win32 1801. */
+  printerMissing?: boolean;
+  /** Installed agent build is older than MIN_PRINT_AGENT_VERSION. */
+  agentOutdated?: boolean;
   search: string;
   onSearchChange: (q: string) => void;
   /** Enter on the product search: exact barcode/SKU adds the product. */
@@ -217,6 +221,8 @@ export default function WebPosTopBar({
   onTabChange,
   merchantName,
   agentOk,
+  printerMissing = false,
+  agentOutdated = false,
   search,
   onSearchChange,
   onSearchSubmit,
@@ -484,9 +490,24 @@ export default function WebPosTopBar({
           {!agentOk ? (
             <span className="webpos-merchant-subline__warn">
               {' '}
-              - {t('webPosStartPrintAgent')}
+              - {t('webPosAgentNotRunningShort')}
             </span>
-          ) : null}
+          ) : printerMissing ? (
+            <span className="webpos-merchant-subline__warn">
+              {' '}
+              - {t('webPosPrinterDisconnectedShort')}
+            </span>
+          ) : agentOutdated ? (
+            <span className="webpos-merchant-subline__warn">
+              {' '}
+              - {t('webPosPrintAgentUpdateShort')}
+            </span>
+          ) : (
+            <span className="webpos-merchant-subline__ok">
+              {' '}
+              - {t('webPosAgentRunningShort')}
+            </span>
+          )}
           {!syncOnline ? (
             <span className="webpos-merchant-subline__offline">
               {' '}
@@ -520,6 +541,8 @@ export function WebPosSettingsDropdown({
   printerName,
   printers,
   agentOk,
+  printerMissing = false,
+  agentOutdated = false,
   autoPrint,
   postSuccessTarget,
   onPrinterChange,
@@ -560,6 +583,8 @@ export function WebPosSettingsDropdown({
   printerName: string;
   printers: Array<{ name: string; isDefault?: boolean }>;
   agentOk: boolean;
+  printerMissing?: boolean;
+  agentOutdated?: boolean;
   autoPrint: boolean;
   postSuccessTarget: 'register' | 'tables';
   onPrinterChange: (name: string) => void;
@@ -912,9 +937,19 @@ export function WebPosSettingsDropdown({
         </button>
       </div>
       <p
-        className={`text-[10px] leading-snug text-stone-500 ${agentOk ? 'text-center' : ''}`}
+        className={`text-[10px] leading-snug ${
+          !agentOk || printerMissing || agentOutdated
+            ? 'text-amber-800'
+            : 'text-center text-emerald-700'
+        }`}
       >
-        {agentOk ? t('webPosAgentOnline') : t('webPosAgentOffline')}
+        {!agentOk
+          ? t('webPosAgentOffline')
+          : printerMissing
+            ? t('webPosPrinterDisconnectedShort')
+            : agentOutdated
+              ? t('webPosPrintAgentOutdatedHint')
+              : t('webPosAgentRunningShort')}
       </p>
       <p className="border-t border-stone-100 pt-2 text-center text-[10px] text-stone-400">
         {webPosVersionLabel}

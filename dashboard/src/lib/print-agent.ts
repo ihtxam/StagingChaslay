@@ -47,26 +47,97 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
+/** Reinstall prompt: 1.6.0+ uses chaslayreborn-print-* temps and sanitizes Win32 1801. */
+export const MIN_PRINT_AGENT_VERSION = '1.6.0';
+
+function asPrintText(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+/** Flatten Error / agent JSON / stderr so old manupos-print dumps are still detected. */
+export function collectPrintErrorText(raw: unknown): string {
+  if (raw == null) return '';
+  if (typeof raw === 'string') return raw.trim();
+  if (raw instanceof Error) {
+    return [raw.message, (raw as Error & { stderr?: unknown }).stderr].filter(Boolean).join('\n').trim();
+  }
+  const obj = raw as {
+    response?: { data?: { error?: unknown } };
+    message?: unknown;
+    error?: unknown;
+    stderr?: unknown;
+  };
+  return [
+    asPrintText(obj.response?.data?.error),
+    asPrintText(obj.error),
+    asPrintText(obj.message),
+    asPrintText(obj.stderr),
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+}
+
+export function extractPrinterNameFromError(msg: string, fallback?: string): string {
+  const m =
+    msg.match(/OpenPrinter failed for '([^']+)'/i) ||
+    msg.match(/Printer '([^']+)' not found/i) ||
+    msg.match(/failed for '([^']+)'/i) ||
+    msg.match(/GLPrinter\d*/i);
+  return (m?.[1] || m?.[0] || fallback || '').trim();
+}
+
+/** Win32 1801 / invalid name / GLPrinter80 — agent is up, printer is not. */
+export function isPrinterDisconnectedError(raw: unknown): boolean {
+  const msg = collectPrintErrorText(raw);
+  return /win32\s*[=:]?\s*1801|\b1801\b|error_invalid_printer_name|not found or disconnected|openprinter failed|GLPrinter\d*|ERROR_INVALID_PRINTER_NAME/i.test(
+    msg
+  );
+}
+
+export function isNoisyPrintAgentDump(raw: unknown): boolean {
+  const msg = collectPrintErrorText(raw);
+  return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|chaslayreborn-print-|manupos-print-|chaslayprintagent|at c:\\|\\temp\\|-\s*file\s+c:\\|\.ps1\b/i.test(
+    msg
+  );
+}
+
+export function compareAgentVersion(version: string, minimum: string): number {
+  const a = String(version || '')
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
+  const b = String(minimum || '')
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const d = (a[i] || 0) - (b[i] || 0);
+    if (d) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+/** HTTP agents below MIN (or no version) still use manupos-print-* temps. Electron bridge is current. */
+export function isPrintAgentVersionOutdated(version?: string | null): boolean {
+  if (typeof window !== 'undefined' && window.manuposDesktop) return false;
+  if (!version || !String(version).trim()) return true;
+  return compareAgentVersion(String(version).trim(), MIN_PRINT_AGENT_VERSION) < 0;
+}
+
 /** Collapse PowerShell / Win32 dumps into a one-line ChaslayReborn message. */
 export function friendlyPrintAgentError(raw: unknown, printerName?: string): string {
-  const msg = String(raw || '').trim();
+  const msg = collectPrintErrorText(raw);
   if (!msg) return 'Print failed';
   const open = msg.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
-  const named = msg.match(/Printer '([^']+)' not found/i);
-  const gl = /\bGLPrinter\b/i.test(msg) ? 'GLPrinter' : '';
-  const name = (open?.[1] || named?.[1] || printerName || gl || '').trim();
+  const name = extractPrinterNameFromError(msg, printerName);
   const code = open ? Number(open[2]) : Number((msg.match(/Win32\s*[=:]?\s*(\d+)/i) || [])[1] || 0);
-  if (
-    code === 1801 ||
-    /not found or disconnected|ERROR_INVALID_PRINTER_NAME|OpenPrinter failed|\bGLPrinter\b/i.test(msg)
-  ) {
+  if (code === 1801 || isPrinterDisconnectedError(msg)) {
     return name ? `Printer '${name}' not found or disconnected` : 'Printer not found or disconnected';
   }
-  if (
-    /command failed|powershell\.exe|-NoProfile|ExecutionPolicy|win-raw-print|win-scale-read|CategoryInfo|FullyQualifiedErrorId|chaslayreborn-print-|manupos-print-|ChaslayPrintAgent|\.ps1\b/i.test(
-      msg
-    )
-  ) {
+  if (isNoisyPrintAgentDump(msg)) {
     return name ? `Printer '${name}' not found or disconnected` : 'Print failed';
   }
   return msg.length > 220 ? 'Print failed' : msg;
@@ -83,27 +154,43 @@ async function agentFetch(path: string, init?: RequestInit, printerName?: string
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(
-      friendlyPrintAgentError(err.error || `Print agent HTTP ${res.status}`, printerName)
+      friendlyPrintAgentError(
+        collectPrintErrorText(err) || `Print agent HTTP ${res.status}`,
+        printerName
+      )
     );
   }
   return res.json();
 }
 
-export async function isPrintAgentAvailable(): Promise<boolean> {
+export type PrintAgentHealth = {
+  ok: boolean;
+  version?: string;
+};
+
+export async function getPrintAgentHealth(): Promise<PrintAgentHealth> {
   if (window.manuposDesktop) {
     try {
       const s = await window.manuposDesktop.getAgentStatus();
-      return !!s.running;
+      return { ok: !!s.running };
     } catch {
-      return true; // desktop bridge present
+      return { ok: true };
     }
   }
   try {
     const data = await agentFetch('/health');
-    return !!data.ok;
+    return {
+      ok: !!data.ok,
+      version: data.version != null ? String(data.version) : undefined,
+    };
   } catch {
-    return false;
+    return { ok: false };
   }
+}
+
+export async function isPrintAgentAvailable(): Promise<boolean> {
+  const health = await getPrintAgentHealth();
+  return health.ok;
 }
 
 export async function listAgentPrinters(): Promise<AgentPrinter[]> {

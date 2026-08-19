@@ -27,7 +27,9 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
   formatScalePortLabel,
+  getPrintAgentHealth,
   isPrintAgentAvailable,
+  isPrintAgentVersionOutdated,
   isUnsuitableRawPrinter,
   listAgentPrinters,
   listScalePorts,
@@ -444,6 +446,7 @@ export default function Settings() {
   const [savingWebposPay, setSavingWebposPay] = useState(false);
   const [savingReceipt, setSavingReceipt] = useState(false);
   const [printAgentOk, setPrintAgentOk] = useState(false);
+  const [printAgentOutdated, setPrintAgentOutdated] = useState(false);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
   const [scalePorts, setScalePorts] = useState<string[]>([]);
@@ -858,9 +861,10 @@ export default function Settings() {
   const refreshPrintAgentPrinters = useCallback(async () => {
     setRefreshingPrinters(true);
     try {
-      const ok = await isPrintAgentAvailable();
-      setPrintAgentOk(ok);
-      if (!ok) {
+      const health = await getPrintAgentHealth();
+      setPrintAgentOk(health.ok);
+      setPrintAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
+      if (!health.ok) {
         setAgentPrinters([]);
         return;
       }
@@ -868,6 +872,7 @@ export default function Settings() {
       setAgentPrinters(list);
     } catch {
       setPrintAgentOk(false);
+      setPrintAgentOutdated(false);
       setAgentPrinters([]);
     } finally {
       setRefreshingPrinters(false);
@@ -3399,10 +3404,18 @@ export default function Settings() {
                   </button>
                   <p
                     className={`text-sm m-0 ${
-                      printAgentOk ? 'text-emerald-700' : 'text-[var(--text-muted)]'
+                      !printAgentOk
+                        ? 'text-[var(--text-muted)]'
+                        : printAgentOutdated
+                          ? 'text-amber-800'
+                          : 'text-emerald-700'
                     }`}
                   >
-                    {printAgentOk ? t('webPosAgentOnline') : t('webPosAgentOffline')}
+                    {!printAgentOk
+                      ? t('webPosAgentOffline')
+                      : printAgentOutdated
+                        ? t('webPosPrintAgentOutdatedHint')
+                        : t('webPosAgentRunningShort')}
                   </p>
                 </div>
                 {(settings.posPrintSettings?.printers || []).map((p, idx) => {

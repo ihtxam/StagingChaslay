@@ -20,7 +20,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.3.4";
+const VERSION = "1.6.0";
 const APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "chaslay-print-agent.exe";
 const RUN_VALUE_NAME = "ChaslayPrintAgent";
@@ -617,6 +617,7 @@ async function printRaw({ printerName, dataBase64 }) {
   }
 
   const bytes = Buffer.from(dataBase64, "base64");
+  // 1.6.0+: chaslayreborn-print-* (older installed EXEs still used manupos-print-*).
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "chaslayreborn-print-"));
   const tmpFile = path.join(tmpDir, "receipt.bin");
   const nameFile = path.join(tmpDir, "printer-name.txt");

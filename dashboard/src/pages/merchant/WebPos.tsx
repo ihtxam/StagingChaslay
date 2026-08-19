@@ -58,7 +58,9 @@ import WebPosSplitBillModal, {
 import { localDateTimeToIso, type StoreHours } from '@/lib/shop-hours';
 import {
   browserPrintText,
-  isPrintAgentAvailable,
+  getPrintAgentHealth,
+  isPrintAgentVersionOutdated,
+  isPrinterDisconnectedError,
   isUnsuitableRawPrinter,
   listAgentPrinters,
   printViaAgent,
@@ -232,7 +234,7 @@ import WebPosSendReceiptModal from '@/components/webpos/WebPosSendReceiptModal';
 import WebPosPrintChooserModal from '@/components/webpos/WebPosPrintChooserModal';
 import WebPosKitchenPrintIssuesModal from '@/components/webpos/WebPosKitchenPrintIssuesModal';
 import WebPosReprintModal from '@/components/webpos/WebPosReprintModal';
-import { toastPrintError } from '@/lib/webpos-print-toast';
+import { toastPrintError as toastPrintErrorRaw } from '@/lib/webpos-print-toast';
 import WebPosTablesView from '@/components/webpos/WebPosTablesView';
 import WebPosBookingsView from '@/components/webpos/WebPosBookingsView';
 import WebPosKitchenMessageModal from '@/components/webpos/WebPosKitchenMessageModal';
@@ -463,6 +465,10 @@ function mergeBillDiscounts(
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const { t, locale } = useI18n();
+  const notifyPrintError = (raw: unknown, fallbackKey = 'webPosPrintFailed') => {
+    if (isPrinterDisconnectedError(raw)) setPrinterDisconnected(true);
+    toastPrintErrorRaw(raw, t, fallbackKey);
+  };
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -592,6 +598,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [agentOk, setAgentOk] = useState(false);
+  const [agentOutdated, setAgentOutdated] = useState(false);
+  const [printerDisconnected, setPrinterDisconnected] = useState(false);
   const [offlineSync, setOfflineSync] = useState<OfflineSyncState>({
     online: typeof navigator === 'undefined' ? true : navigator.onLine !== false,
     syncing: false,
@@ -1288,9 +1296,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [products, categoryId, search, bestsellerIds, gridSort]);
 
   const refreshAgent = useCallback(async () => {
-    const ok = await isPrintAgentAvailable();
-    setAgentOk(ok);
-    if (!ok) {
+    const health = await getPrintAgentHealth();
+    setAgentOk(health.ok);
+    setAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
+    if (!health.ok) {
       setPrinters([]);
       return;
     }
@@ -1300,6 +1309,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (!printerName && list.length) {
         const def = list.find((p) => p.isDefault) || list[0];
         setPrinterName(def.name);
+      }
+      if (printerName && list.length && !list.some((p) => p.name === printerName)) {
+        setPrinterDisconnected(true);
       }
     } catch {
       setPrinters([]);
@@ -2509,7 +2521,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await printEscPosToTargets(text, { role: 'eod' });
       toast.success(t('webPosShiftPrinted'));
     } catch (e: any) {
-      toastPrintError(e, t, 'webPosPrintFailed');
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
@@ -2549,7 +2561,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await printEscPosToTargets(text, { role: 'eod' });
       toast.success(t('webPosEodPrinted'));
     } catch (e: any) {
-      toastPrintError(e, t, 'webPosPrintFailed');
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
@@ -2665,7 +2677,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       await printEscPosToTargets(text, { role: 'eod' });
     } catch (e: any) {
-      toastPrintError(e, t, 'webPosPrintFailed');
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
@@ -2945,7 +2957,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       .then(() => setKitchenPrintFailedForLines(ids, false))
       .catch((e: unknown) => {
         setKitchenPrintFailedForLines(ids, true);
-        toastPrintError(e, t, 'webPosKitchenPrintFailed');
+        notifyPrintError(e, 'webPosKitchenPrintFailed');
       });
   };
 
@@ -3077,7 +3089,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       toast.success(t('webPosHeldSentKitchen'));
       releaseOperatorAfterKitchen(sentCart);
     } catch (e: unknown) {
-      toastPrintError(e, t, 'webPosKitchenPrintFailed');
+      notifyPrintError(e, 'webPosKitchenPrintFailed');
     } finally {
       setBusy(false);
     }
@@ -3815,10 +3827,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setProvisionalPrinted(true);
       toast.success(t('webPosProvisionalPrinted'));
       void printEscPosToTargets(text, { role: 'receipt', quiet: true }).catch((e: unknown) => {
-        toastPrintError(e, t, 'webPosPrintFailed');
+        notifyPrintError(e, 'webPosPrintFailed');
       });
     } catch (e: unknown) {
-      toastPrintError(e, t, 'webPosPrintFailed');
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
@@ -3850,10 +3862,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         jobKind: 'kitchen',
         jobLabel: orderNumber || t('webPosPrintJobKitchen'),
       }).catch((e: unknown) => {
-        toastPrintError(e, t, 'webPosKitchenPrintFailed');
+        notifyPrintError(e, 'webPosKitchenPrintFailed');
       });
     } catch (e: unknown) {
-      toastPrintError(e, t, 'webPosKitchenPrintFailed');
+      notifyPrintError(e, 'webPosKitchenPrintFailed');
     }
   };
 
@@ -4206,7 +4218,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             balance,
             recipientEmail: gc.ecardEmail,
             holderName: gc.holderName,
-          }).catch((e: any) => toast.error(e?.message || t('webPosPrintFailed')));
+          }).catch((e: unknown) => notifyPrintError(e, 'webPosPrintFailed'));
         }
         if ((delivery === 'email' || delivery === 'both') && gc.ecardEmail) {
           await api.post('/gift-cards/send-ecard-email', {
@@ -4966,7 +4978,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     if (lastReceipt) {
       void printReceipt(lastReceipt, lastReceiptUrl || undefined, lastDeliveryQrUrl || undefined).catch(
-        (e: unknown) => toastPrintError(e, t, 'webPosPrintFailed')
+        (e: unknown) => notifyPrintError(e, 'webPosPrintFailed')
       );
       return;
     }
@@ -4982,7 +4994,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     try {
       await printReceipt(part.text, part.url, part.deliveryQrUrl);
     } catch (e: unknown) {
-      toastPrintError(e, t, 'webPosPrintFailed');
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
@@ -4997,7 +5009,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const firstDeliveryQr = lastSplitReceipts[0]?.deliveryQrUrl;
       await printReceipt(combined, firstUrl, firstDeliveryQr);
     } catch (e: unknown) {
-      toastPrintError(e, t, 'webPosPrintFailed');
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
@@ -5199,6 +5211,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         });
         if (mode === 'queued') queuedAny = true;
       }
+      setPrinterDisconnected(false);
       if (queuedAny) toast.success(t('webPosPrintQueuedMainTill'));
       return;
     }
@@ -5221,6 +5234,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       orderId: opts?.orderNumber || null,
       ...printMeta,
     });
+    setPrinterDisconnected(false);
     if (mode === 'queued') toast.success(t('webPosPrintQueuedMainTill'));
   };
 
@@ -5244,7 +5258,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         lines.map((l) => l.lineId),
         true
       );
-      toastPrintError(e, t, 'webPosKitchenPrintFailed');
+      notifyPrintError(e, 'webPosKitchenPrintFailed');
       throw e;
     } finally {
       setKitchenPrintRetryBusy(false);
@@ -5797,7 +5811,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (shouldPrintReceipt) {
       // Never hold checkout/busy on the print agent.
       void printReceipt(receiptText, receiptUrl, deliveryQrUrl).catch((e: unknown) => {
-        toastPrintError(e, t, 'webPosPrintFailed');
+        notifyPrintError(e, 'webPosPrintFailed');
       });
     }
     const kitchenDelta = unsentKitchenLines(cartSnapshot);
@@ -5810,7 +5824,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         tableLabel: tableLabelSnapshot,
         lineIds: kitchenDelta.map((l) => l.lineId),
       }).catch((e: unknown) => {
-        toastPrintError(e, t, 'webPosKitchenPrintFailed');
+        notifyPrintError(e, 'webPosKitchenPrintFailed');
       });
     }
     if (method === 'invoice' && backendOrderId) {
@@ -5961,7 +5975,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             tableLabel: tableLabelSnapshot,
             lineIds: kitchenDelta.map((l) => l.lineId),
           }).catch((e: unknown) => {
-            toastPrintError(e, t, 'webPosKitchenPrintFailed');
+            notifyPrintError(e, 'webPosKitchenPrintFailed');
           });
         }
       }
@@ -6117,7 +6131,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await openCashDrawerViaAgent({ printerName: printerName || undefined });
       toast.success(t('webPosDrawerOpened'));
     } catch (e: any) {
-      toastPrintError(e, t, 'webPosDrawerFailed');
+      notifyPrintError(e, 'webPosDrawerFailed');
     }
   };
 
@@ -6506,6 +6520,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onTabChange={onPosTabChange}
         merchantName={merchant?.name || t('webPosStore')}
         agentOk={agentOk}
+        printerMissing={
+          printerDisconnected ||
+          (!!printerName.trim() &&
+            agentOk &&
+            printers.length > 0 &&
+            !printers.some((p) => p.name === printerName))
+        }
+        agentOutdated={agentOutdated}
         search={search}
         onSearchChange={setSearch}
         onSearchSubmit={() => {
@@ -6577,6 +6599,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             printerName={printerName}
             printers={printers}
             agentOk={agentOk}
+            printerMissing={
+              printerDisconnected ||
+              (!!printerName.trim() &&
+                agentOk &&
+                printers.length > 0 &&
+                !printers.some((p) => p.name === printerName))
+            }
+            agentOutdated={agentOutdated}
             autoPrint={autoPrint}
             postSuccessTarget={postSuccessTarget}
             onPrinterChange={setPrinterName}
@@ -6877,7 +6907,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               try {
                 await printPosOrderReceipt(order, splitLabel);
               } catch (e: any) {
-                toastPrintError(e, t, 'webPosPrintFailed');
+                notifyPrintError(e, 'webPosPrintFailed');
               }
             }}
             onPrintRefund={async (payload) => {
@@ -6885,7 +6915,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 await printPosRefundReceipt(payload);
                 toast.success(t('webPosSentDefaultPrinter'));
               } catch (e: any) {
-                toastPrintError(e, t, 'webPosPrintFailed');
+                notifyPrintError(e, 'webPosPrintFailed');
               }
             }}
             terminalEnabled={enabledMethods.terminal}
@@ -6902,13 +6932,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 null;
               const ticketDisplay =
                 existingTicket || nextWebPosTicketNumber(merchant?.id).display;
-              await printKitchenForCart(lines, ch, {
-                orderNumber: ticketDisplay,
-                cancelled: true,
-                cancelReason: reason,
-                forcePrint: true,
-                lineIds: lines.map((l) => l.lineId),
-              });
+              try {
+                await printKitchenForCart(lines, ch, {
+                  orderNumber: ticketDisplay,
+                  cancelled: true,
+                  cancelReason: reason,
+                  forcePrint: true,
+                  lineIds: lines.map((l) => l.lineId),
+                });
+              } catch (e: unknown) {
+                notifyPrintError(e, 'webPosKitchenPrintFailed');
+                throw e;
+              }
             }}
             onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
             onOrderActioned={markOnlineOrderActioned}
@@ -7261,7 +7296,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             await printReceipt(part.text, part.url, part.deliveryQrUrl);
             setPrintChooserOpen(false);
           } catch (e: any) {
-            toastPrintError(e, t, 'webPosPrintFailed');
+            notifyPrintError(e, 'webPosPrintFailed');
           } finally {
             setPrintChooserBusy(false);
           }
@@ -7278,7 +7313,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             await printReceipt(combined, firstUrl, firstDeliveryQr);
             setPrintChooserOpen(false);
           } catch (e: any) {
-            toastPrintError(e, t, 'webPosPrintFailed');
+            notifyPrintError(e, 'webPosPrintFailed');
           } finally {
             setPrintChooserBusy(false);
           }
@@ -7300,7 +7335,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           try {
             const result = await reprintPrintJobs(jobIds);
             if (result.ok) toast.success(t('webPosPrintAutoRetryOk'));
-            if (result.failed) toastPrintError(t('webPosPrintFailed'), t, 'webPosPrintFailed');
+            if (result.failed) notifyPrintError(t('webPosPrintFailed'), 'webPosPrintFailed');
           } finally {
             setKitchenPrintRetryBusy(false);
           }
@@ -7315,7 +7350,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             if (pendingPrintJobs.length) {
               const result = await reprintPrintJobs(pendingPrintJobs.map((j) => j.id));
               if (result.ok) toast.success(t('webPosPrintAutoRetryOk'));
-              if (result.failed) toastPrintError(t('webPosPrintFailed'), t, 'webPosPrintFailed');
+              if (result.failed) notifyPrintError(t('webPosPrintFailed'), 'webPosPrintFailed');
             }
             const queuedLines = new Set(pendingPrintJobs.flatMap((j) => j.lineIds || []));
             const extra = failedPrintLines.filter((l) => !queuedLines.has(l.lineId));
@@ -7341,7 +7376,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             await printProvisionalReceipt();
             setReprintModal(null);
           } catch (e: unknown) {
-            toastPrintError(e, t, 'webPosPrintFailed');
+            notifyPrintError(e, 'webPosPrintFailed');
           } finally {
             setReprintBusy(false);
           }

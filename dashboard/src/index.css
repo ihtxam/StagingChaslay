@@ -483,6 +483,10 @@ button {
   .webpos-merchant-subline__warn {
     color: #b45309;
   }
+  .webpos-merchant-subline__ok {
+    color: #047857;
+    font-weight: 600;
+  }
   .webpos-shell[data-appearance='night'] .webpos-merchant-subline__offline {
     color: #fbbf24;
   }
@@ -494,6 +498,9 @@ button {
   }
   .webpos-shell[data-appearance='night'] .webpos-merchant-subline__warn {
     color: #fbbf24;
+  }
+  .webpos-shell[data-appearance='night'] .webpos-merchant-subline__ok {
+    color: #6ee7b7;
   }
 
   /* Product grid — touch scroll inside zoomed .webpos-shell (tablet / kiosk) */

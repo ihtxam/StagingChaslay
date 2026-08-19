@@ -3,7 +3,11 @@
  * Survives cart reset after Send/Pay. Auto-retries every 8s while the page is open.
  */
 import { useEffect, useState } from 'react';
-import { printViaAgent } from '@/lib/print-agent';
+import { friendlyPrintAgentError, printViaAgent } from '@/lib/print-agent';
+
+function safeJobError(error: unknown, printerName?: string): string {
+  return friendlyPrintAgentError(error, printerName);
+}
 
 export type PendingPrintKind = 'kitchen' | 'receipt' | 'eod' | 'other';
 
@@ -44,7 +48,10 @@ function loadJobs(): PendingPrintJob[] {
     return parsed
       .filter((j) => j && typeof j.id === 'string' && typeof j.dataBase64 === 'string')
       .filter((j) => (j.createdAt || 0) >= cutoff)
-      .slice(0, MAX_JOBS);
+      .slice(0, MAX_JOBS)
+      .map((j) =>
+        j.lastError ? { ...j, lastError: safeJobError(j.lastError, j.printerName) } : j
+      );
   } catch {
     return [];
   }
@@ -102,9 +109,7 @@ export function enqueueFailedPrintJob(input: {
   lineIds?: string[];
   error?: unknown;
 }): PendingPrintJob {
-  const lastError = String(
-    (input.error as { message?: string })?.message || input.error || ''
-  ).trim();
+  const lastError = safeJobError(input.error, input.printerName);
   const existing = jobs.find(
     (j) => j.dataBase64 === input.dataBase64 && (j.printerName || '') === (input.printerName || '')
   );
@@ -171,7 +176,7 @@ export async function reprintPrintJobs(ids: Iterable<string>): Promise<{ ok: num
       removePrintJobs([job.id]);
       ok += 1;
     } catch (e: unknown) {
-      job.lastError = String((e as { message?: string })?.message || e || '').trim() || job.lastError;
+      job.lastError = safeJobError(e, job.printerName) || job.lastError;
       job.lastAttemptAt = Date.now();
       job.attempts = (job.attempts || 0) + 1;
       failed += 1;
@@ -197,7 +202,7 @@ async function autoRetryOnce(): Promise<number> {
         removePrintJobs([job.id]);
         printed += 1;
       } catch (e: unknown) {
-        job.lastError = String((e as { message?: string })?.message || e || '').trim() || job.lastError;
+        job.lastError = safeJobError(e, job.printerName) || job.lastError;
         job.lastAttemptAt = Date.now();
         job.attempts = (job.attempts || 0) + 1;
       }
