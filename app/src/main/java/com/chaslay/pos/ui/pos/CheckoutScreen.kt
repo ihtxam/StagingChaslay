@@ -152,6 +152,7 @@ fun CheckoutScreen(
     } else {
         0.0
     }
+    val checkoutOrderRef = formatCheckoutOrderRef(cart.orderNumber, null)
     val exactCash = checkoutState.method == PaymentMethod.CASH && cashApplied < 0.001 && cardApplied < 0.001
     val methodChargesRemaining = checkoutState.method == PaymentMethod.CARD ||
         checkoutState.method == PaymentMethod.ADYEN_TERMINAL ||
@@ -460,6 +461,14 @@ fun CheckoutScreen(
                     fontSize = 56.sp,
                     color = vc.textPrimary
                 )
+                if (checkoutOrderRef.isNotEmpty()) {
+                    Text(
+                        checkoutOrderRef,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = vc.textPrimary
+                    )
+                }
                 if (cashApplied > 0.001) {
                     Text(
                         stringResource(R.string.checkout_cash_applied, formatMoney(cashApplied, currencySymbol)),
@@ -861,6 +870,18 @@ private fun formatTenderBuffer(amount: Double): String =
     } else {
         String.format(Locale.US, "%.2f", amount)
     }
+
+/** Public order number plus kitchen ticket when both exist. */
+private fun formatCheckoutOrderRef(orderNumber: String?, kitchenNumber: String?): String {
+    val order = orderNumber?.trim().orEmpty()
+    val kitchen = kitchenNumber?.trim().orEmpty()
+    return when {
+        order.isNotEmpty() && kitchen.isNotEmpty() && !kitchen.equals(order, ignoreCase = true) ->
+            "$order / $kitchen"
+        order.isNotEmpty() -> order
+        else -> kitchen
+    }
+}
 
 private fun Modifier.clickableWithoutRipple(onClick: () -> Unit): Modifier = composed {
     clickable(

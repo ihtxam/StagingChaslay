@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
 import { repairCatalogText } from '@/lib/text-encoding';
 import { useI18n } from '@/lib/i18n';
+import { formatCheckoutOrderRef } from '@/lib/order-number';
 import { roundMoney2, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
 import {
@@ -3326,6 +3327,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     },
     [tabNumber, ticketDisplay, ticketOrderNumber, ensureCartTicket]
   );
+
+  /** Assign the kitchen/public ticket when checkout opens so AMOUNT DUE can show both. */
+  useEffect(() => {
+    if (posView !== 'checkout' || collectOrderRef) return;
+    if (!cart.length) return;
+    ensureCartTicket();
+  }, [posView, collectOrderRef, cart.length, ensureCartTicket]);
 
   /**
    * Persist cart to /merchant/pos/held so Orders can list kitchen / held tickets.
@@ -6725,6 +6733,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       null
     : null;
   const checkoutDueTotal = collectOrderRef?.total ?? activeSale.totals.total;
+  const checkoutKitchenNumber = tabNumber
+    ? `#${tabNumber}`
+    : ticketDisplay?.trim() || null;
+  const checkoutOrderRef = formatCheckoutOrderRef(
+    collectOrderRef?.orderNumber || ticketOrderNumber,
+    checkoutKitchenNumber
+  );
 
   const onlinePendingCount = unactionedOrderCount;
   const orderAlertRing = unactionedOrderCount > 0;
@@ -6985,7 +7000,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   : 'register-checkout'
             }
             total={checkoutDueTotal}
-            splitLabel={collectOrderRef ? collectOrderRef.orderNumber : activeSale.label}
+            orderRef={checkoutOrderRef || null}
+            splitLabel={collectOrderRef ? null : activeSale.label}
             splitGuestCount={collectOrderRef ? undefined : splitQueue.length || undefined}
             splitTickets={checkoutSplitTickets}
             splitActiveIndex={splitIndex}

@@ -13,3 +13,14 @@ export function formatOrderNumberDisplay(orderNumber: string | null | undefined)
   }
   return n;
 }
+
+/** Checkout AMOUNT DUE line: public order number plus kitchen ticket when both exist. */
+export function formatCheckoutOrderRef(
+  orderNumber?: string | null,
+  kitchenNumber?: string | null
+): string {
+  const order = String(orderNumber || '').trim();
+  const kitchen = String(kitchenNumber || '').trim();
+  if (order && kitchen && kitchen !== order) return `${order} / ${kitchen}`;
+  return order || kitchen;
+}

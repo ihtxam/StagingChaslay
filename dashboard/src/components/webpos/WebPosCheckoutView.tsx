@@ -74,6 +74,8 @@ type Props = {
   onTogglePayWithPoints?: (enabled: boolean) => void;
   pointsRedeemed?: number;
   pointsDiscount?: number;
+  /** Public order number and/or kitchen ticket, e.g. `WP-5M8RGFQHJT / #1658`. */
+  orderRef?: string | null;
 };
 
 function newPayId() {
@@ -110,6 +112,7 @@ export default function WebPosCheckoutView({
   onTogglePayWithPoints,
   pointsRedeemed = 0,
   pointsDiscount = 0,
+  orderRef,
 }: Props) {
   const { t } = useI18n();
   const [buffer, setBuffer] = useState('');
@@ -705,6 +708,9 @@ export default function WebPosCheckoutView({
             <p className="text-3xl font-light tabular-nums tracking-tight text-stone-800 sm:text-4xl">
               CHF {total.toFixed(2)}
             </p>
+            {orderRef ? (
+              <p className="mt-1 text-sm font-medium text-stone-700">{orderRef}</p>
+            ) : null}
             {remaining > 0.001 ? (
               <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--webpos-accent-text)]">
                 {t('webPosRemaining')}: CHF {remaining.toFixed(2)}
@@ -888,6 +894,9 @@ export default function WebPosCheckoutView({
                 <p className="text-5xl font-light tabular-nums tracking-tight text-stone-700 sm:text-6xl">
                   CHF {total.toFixed(2)}
                 </p>
+                {orderRef ? (
+                  <p className="mt-2 text-base font-medium text-stone-700">{orderRef}</p>
+                ) : null}
               </div>
               {liveEntryLabel && !selectedPaymentId ? (
                 <p className="mt-2 text-base font-semibold tabular-nums text-[var(--webpos-accent-text)]">
