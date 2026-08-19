@@ -6489,6 +6489,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     });
   }, [splitQueue, splitIndex, cart]);
 
+  const configuredPrinterNames = useMemo(() => {
+    const names = new Set<string>();
+    if (printerName.trim()) names.add(printerName.trim());
+    for (const p of printSettings?.printers || []) {
+      if (p.enabled === false) continue;
+      const n = (p.name || '').trim();
+      if (n) names.add(n);
+    }
+    return [...names];
+  }, [printerName, printSettings]);
+
+  const printerNameMissing =
+    printersReady &&
+    configuredPrinterNames.some((n) => isConfiguredPrinterMissing(n, printers, { agentOk }));
+
+  const printerMissing = printerDisconnected || printerNameMissing;
+
+  const suggestedPrinters = useMemo(() => {
+    if (!printerMissing) return [];
+    const fromWebPos = findPrinterHealCandidates(printerName, printers);
+    if (fromWebPos.length) return fromWebPos;
+    for (const n of configuredPrinterNames) {
+      const found = findPrinterHealCandidates(n, printers);
+      if (found.length) return found;
+    }
+    return [];
+  }, [printerMissing, printerName, printers, configuredPrinterNames]);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
@@ -6583,34 +6611,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     cartCount === 1
       ? t('webPosCartItemOne')
       : t('webPosCartItems').replace('{n}', String(cartCount));
-
-  const configuredPrinterNames = useMemo(() => {
-    const names = new Set<string>();
-    if (printerName.trim()) names.add(printerName.trim());
-    for (const p of printSettings?.printers || []) {
-      if (p.enabled === false) continue;
-      const n = (p.name || '').trim();
-      if (n) names.add(n);
-    }
-    return [...names];
-  }, [printerName, printSettings]);
-
-  const printerNameMissing =
-    printersReady &&
-    configuredPrinterNames.some((n) => isConfiguredPrinterMissing(n, printers, { agentOk }));
-
-  const printerMissing = printerDisconnected || printerNameMissing;
-
-  const suggestedPrinters = useMemo(() => {
-    if (!printerMissing) return [];
-    const fromWebPos = findPrinterHealCandidates(printerName, printers);
-    if (fromWebPos.length) return fromWebPos;
-    for (const n of configuredPrinterNames) {
-      const found = findPrinterHealCandidates(n, printers);
-      if (found.length) return found;
-    }
-    return [];
-  }, [printerMissing, printerName, printers, configuredPrinterNames]);
 
   return (
     <div
