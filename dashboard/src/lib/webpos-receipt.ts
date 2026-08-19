@@ -1248,10 +1248,6 @@ function kitchenItemCount(items: WebPosReceiptItem[]): number {
   }, 0);
 }
 
-function formatKitchenQtyLabel(item: KitchenTicketItem): string {
-  return formatQtyArticlePrefix(item).trimEnd();
-}
-
 function formatKitchenChannelWhenLines(
   L: ReturnType<typeof receiptLabels>,
   channel: string | undefined,
@@ -2408,6 +2404,8 @@ export type PosOrderForReceipt = {
     unitPrice?: number;
     refundedQuantity?: number;
     productId?: string | null;
+    categoryId?: string | null;
+    product?: { categoryId?: string | null } | null;
     weightKg?: number | null;
     courseNumber?: number | null;
     selectedExtras?: Array<{ name?: string | null }> | null;
@@ -2579,7 +2577,7 @@ export function generateOrderNotificationTicketEscPos(opts: OrderNotificationTic
   const L = receiptLabels(lang);
   const sep = '-'.repeat(width);
   const when = opts.orderedAt ? formatDateTimeDDMMYYYY(new Date(opts.orderedAt)) : formatDateTimeDDMMYYYY(new Date());
-  const channel = channelLabel(opts.channel || 'takeaway', lang);
+  const channel = channelLabel(L, opts.channel || 'takeaway');
   const pickupLine = opts.scheduledFor
     ? `${L.pickupTime}: ${formatTimeHHMM(new Date(opts.scheduledFor))}`
     : L.asap;
