@@ -10,6 +10,7 @@ import { roundMoney2, roundTo005, roundingAdjustment, computeMerchandiseTotals, 
 import { APP_NAME } from '@/lib/brand';
 import {
   buildKitchenPrintJobs,
+  kitchenJobsExcludingReceiptPrinters,
   buildKitchenTicketItemFromLine,
   generateKitchenTicketEscPos,
   generateKitchenTicketText,
@@ -4925,6 +4926,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       amountTendered,
       changeDue: changeDue > 0 ? changeDue : null,
       tenders: payments.map((p) => ({ method: p.method, amount: roundMoney2(p.amount) })),
+      payLaterTender:
+        primary?.method === 'pay_later' ? primary.payLaterTender : undefined,
       pointsRedeemed,
       pointsDiscount,
     };
@@ -5043,13 +5046,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       paperWidthMm?: 58 | 80;
       /** Skip success toast (caller already confirmed to the cashier). */
       quiet?: boolean;
+      /** Pay Later: one guest receipt only (first receipt printer). */
+      singleTarget?: boolean;
     }
   ) => {
     const targets = printersForRole(printSettings, opts.role);
-    const names =
+    const names = (
       targets.length > 0
         ? targets.map((x) => x.name)
-        : [printerName || ''];
+        : [printerName || '']
+    ).slice(0, opts.singleTarget ? 1 : undefined);
     const named = names.map((n) => (n || '').trim()).filter(Boolean);
     const unsuitableNamed = named.filter((n) => isUnsuitableRawPrinter(n));
 
@@ -5156,12 +5162,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const printReceipt = async (receiptText: string, receiptUrl?: string, deliveryQrUrl?: string) => {
+  const printReceipt = async (
+    receiptText: string,
+    receiptUrl?: string,
+    deliveryQrUrl?: string,
+    opts?: { singleTarget?: boolean }
+  ) => {
     await printEscPosToTargets(receiptText, {
       qrUrl: receiptUrl,
       deliveryQrUrl,
       role: 'receipt',
       quiet: true,
+      singleTarget: opts?.singleTarget,
     });
   };
 
@@ -5312,6 +5324,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tabNumber?: string | null;
       tableLabel?: string | null;
       lineIds?: string[];
+      /** Pay Later: kitchen only on dedicated kitchen printers, not the guest-receipt printer. */
+      dedicatedKitchenOnly?: boolean;
     }
   ) => {
     if (isRetail) return;
@@ -5382,7 +5396,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       jobLabel: kitchenLabel || t('webPosPrintJobKitchen'),
       lineIds: opts?.lineIds,
     };
-    const printJobs = buildKitchenPrintJobs(receiptItems, printSettings);
+    const printJobs = opts?.dedicatedKitchenOnly
+      ? kitchenJobsExcludingReceiptPrinters(receiptItems, printSettings)
+      : buildKitchenPrintJobs(receiptItems, printSettings);
     if (printJobs.length) {
       for (const job of printJobs) {
         const paperWidthMm = job.paperWidthMm;
@@ -5409,6 +5425,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (queuedAny) toast.success(t('webPosPrintQueuedMainTill'));
       return;
     }
+
+    if (opts?.dedicatedKitchenOnly) return;
 
     const paperWidthMm = resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
     const escpos = generateKitchenTicketEscPos({
@@ -5845,6 +5863,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       completedAt: Date.now(),
       channel: effectiveChannel,
       paymentMethod: method,
+      payLaterTender: method === 'pay_later' ? extrasWithDisc?.payLaterTender || null : undefined,
       paymentLines: extrasWithDisc?.tenders?.length
         ? extrasWithDisc.tenders.map((p) => ({
             method: p.method,
@@ -6042,13 +6061,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     const shouldPrintReceipt =
       !opts?.skipReceiptPrint &&
-      !payLater &&
+      method !== 'invoice' &&
       autoPrint &&
       printSettings?.autoPrintReceipt !== false;
     // Offline sales have no published receipt URL yet — still print text via local Print Agent.
     if (shouldPrintReceipt) {
       // Never hold checkout/busy on the print agent.
-      void printReceipt(receiptText, receiptUrl, deliveryQrUrl).catch((e: unknown) => {
+      void printReceipt(receiptText, receiptUrl, deliveryQrUrl, {
+        singleTarget: method === 'pay_later',
+      }).catch((e: unknown) => {
         notifyPrintError(e, 'webPosPrintFailed');
       });
     }
@@ -6061,6 +6082,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         tabNumber: tabSnapshot,
         tableLabel: tableLabelSnapshot,
         lineIds: kitchenDelta.map((l) => l.lineId),
+        dedicatedKitchenOnly: method === 'pay_later',
       }).catch((e: unknown) => {
         notifyPrintError(e, 'webPosKitchenPrintFailed');
       });

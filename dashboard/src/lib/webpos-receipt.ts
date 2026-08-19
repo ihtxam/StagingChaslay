@@ -13,6 +13,7 @@ import { localDateTimeToIso } from '@/lib/shop-hours';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
   channelLabel,
+  formatPayLaterPaymentLabel,
   lineWidthForPaper,
   paymentLabel,
   receiptLabels,
@@ -288,6 +289,8 @@ export type WebPosReceipt = {
   paymentMethod: string;
   /** Split tenders printed as separate lines (cash + card, etc.). */
   paymentLines?: Array<{ method: string; amount: number }>;
+  /** Pay Later preferred collection tender: cash | card | terminal. */
+  payLaterTender?: 'cash' | 'card' | 'terminal' | null;
   amountTendered?: number | null;
   changeDue?: number | null;
   /** Delivery / online customer (printed on delivery & online receipts) */
@@ -969,11 +972,15 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   r += padLine(`${L.total}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
   r += sep + '\n';
   if (!tx.isProvisional) {
+    const payMethodRaw = String(tx.paymentMethod || '');
+    const isPayLater = /^pay[_-]?later/i.test(payMethodRaw);
     const tenders =
       tx.paymentLines && tx.paymentLines.length > 0
         ? tx.paymentLines
         : [{ method: tx.paymentMethod, amount: tx.total }];
-    if (tenders.length === 1) {
+    if (isPayLater) {
+      r += `${L.payment}: ${formatPayLaterPaymentLabel(L, tx.payLaterTender)}\n`;
+    } else if (tenders.length === 1) {
       r += `${L.payment}: ${paymentLabel(L, tenders[0]!.method)}\n`;
     } else {
       r += `${L.payment}:\n`;
@@ -986,8 +993,11 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
           ) + '\n';
       }
     }
-    r += padLine(`${L.paid}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
+    if (!isPayLater) {
+      r += padLine(`${L.paid}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
+    }
     if (
+      !isPayLater &&
       tx.amountTendered != null &&
       tx.amountTendered > 0 &&
       roundMoney2(tx.amountTendered) !== roundMoney2(tx.total)
@@ -2339,6 +2349,28 @@ export function buildKitchenPrintJobs(
   }
 
   return jobs;
+}
+
+/**
+ * Kitchen jobs that will not reprint on a guest-receipt printer.
+ * Pay Later prints one customer receipt; kitchen only goes to dedicated kitchen printers.
+ */
+export function kitchenJobsExcludingReceiptPrinters(
+  items: KitchenTicketItem[],
+  settings: PosPrintSettingsClient | null | undefined
+): KitchenPrintJob[] {
+  const jobs = buildKitchenPrintJobs(items, settings);
+  const receiptNames = new Set(
+    (settings?.printers || [])
+      .filter((p) => p.enabled !== false && p.printReceipts && p.name)
+      .map((p) => p.name)
+  );
+  return jobs.filter((j) => {
+    const name = (j.printerName || '').trim();
+    if (!name) return false;
+    if (receiptNames.has(name)) return false;
+    return true;
+  });
 }
 
 export function resolveReceiptLanguage(

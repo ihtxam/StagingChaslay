@@ -24,6 +24,8 @@ export type CheckoutResult = {
   changeDue: number | null;
   /** Multi-tender lines (e.g. half cash + half card) for the receipt. */
   tenders?: Array<{ method: string; amount: number }>;
+  /** Pay Later: intended later collection tender (cash / card / terminal). */
+  payLaterTender?: 'cash' | 'card' | 'terminal';
   /** Membership points redeemed on this sale (physical card). */
   pointsRedeemed?: number;
   pointsDiscount?: number;

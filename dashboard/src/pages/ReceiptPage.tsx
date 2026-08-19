@@ -5,7 +5,7 @@ import { publicApi } from '@/lib/api';
 import { APP_NAME } from '@/lib/brand';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { normalizeReceiptDomain, qrImageUrl } from '@/lib/qr';
-import { receiptLabels } from '@/lib/receipt-labels';
+import { paymentLabel, receiptLabels } from '@/lib/receipt-labels';
 import { buildDigitalReceiptTotals, formatQtyArticlePrefix, splitReceiptArticle } from '@/lib/webpos-receipt';
 
 type Receipt = {
@@ -288,7 +288,7 @@ export default function ReceiptPage() {
           <TotalsRow label={L.total} value={money(totals.total)} bold />
           {receipt.paymentMethod ? (
             <p className="text-gray-500 pt-1">
-              {L.paid}: {receipt.paymentMethod.toUpperCase()}
+              {L.payment}: {paymentLabel(L, receipt.paymentMethod)}
             </p>
           ) : null}
           {Number(receipt.pointsEarned || 0) > 0 || receipt.pointsBalance != null ? (

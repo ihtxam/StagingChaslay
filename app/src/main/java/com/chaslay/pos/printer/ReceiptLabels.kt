@@ -38,6 +38,7 @@ data class ReceiptLabels(
     val tapToPay: String,
     val terminal: String,
     val payLater: String,
+    val orWord: String,
     val kitchenTitle: String,
     val cancelledKitchenTitle: String,
     val kitchenMessageTitle: String,
@@ -72,9 +73,16 @@ data class ReceiptLabels(
         PaymentMethod.CARD -> card
         PaymentMethod.TAP_TO_PAY -> tapToPay
         PaymentMethod.ADYEN_TERMINAL -> terminal
-        PaymentMethod.PAY_LATER -> payLater
+        PaymentMethod.PAY_LATER -> payLaterPaymentLine(null)
         PaymentMethod.INVOICE -> "Invoice"
         PaymentMethod.GIFT_CARD -> "Gift card"
+    }
+
+    fun payLaterPaymentLine(preferred: PaymentMethod?): String = when (preferred) {
+        PaymentMethod.CASH -> "$payLater: $cash"
+        PaymentMethod.CARD -> "$payLater: $card"
+        PaymentMethod.ADYEN_TERMINAL, PaymentMethod.TAP_TO_PAY -> "$payLater: $terminal"
+        else -> "$payLater: $cash $orWord $card $orWord $terminal"
     }
 
     fun orderSourceLabel(source: String?): String {
@@ -127,6 +135,7 @@ data class ReceiptLabels(
             tapToPay = "Tap-to-Pay",
             terminal = "Terminal",
             payLater = "Pay Later",
+            orWord = "or",
             kitchenTitle = "KITCHEN",
             cancelledKitchenTitle = "CANCELLED",
             kitchenMessageTitle = "KITCHEN MESSAGE",
@@ -177,6 +186,7 @@ data class ReceiptLabels(
             tapToPay = "Tap-to-Pay",
             terminal = "Terminal",
             payLater = "Payer plus tard",
+            orWord = "ou",
             kitchenTitle = "CUISINE",
             cancelledKitchenTitle = "ANNULÉ",
             kitchenMessageTitle = "MESSAGE CUISINE",
@@ -227,6 +237,7 @@ data class ReceiptLabels(
             tapToPay = "Tap-to-Pay",
             terminal = "Terminal",
             payLater = "Sp\u00E4ter zahlen",
+            orWord = "oder",
             kitchenTitle = "KUECHE",
             cancelledKitchenTitle = "STORNIERT",
             kitchenMessageTitle = "KUECHEN-NACHRICHT",
@@ -277,6 +288,7 @@ data class ReceiptLabels(
             tapToPay = "Tap-to-Pay",
             terminal = "Terminale",
             payLater = "Paga dopo",
+            orWord = "o",
             kitchenTitle = "CUCINA",
             cancelledKitchenTitle = "ANNULLATO",
             kitchenMessageTitle = "MESSAGGIO CUCINA",

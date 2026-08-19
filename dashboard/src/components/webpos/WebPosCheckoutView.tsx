@@ -28,6 +28,8 @@ export type AppliedPayment = {
   giftCardNumber?: string;
   /** Stored-value balance remaining after this redemption. */
   giftCardRemainingBalance?: number;
+  /** When method is pay_later, intended collection tender. */
+  payLaterTender?: 'cash' | 'card' | 'terminal';
 };
 
 type Props = {
@@ -121,6 +123,10 @@ export default function WebPosCheckoutView({
   const [tipAmount, setTipAmount] = useState(0);
   const [tipOpen, setTipOpen] = useState(false);
   const [seeded, setSeeded] = useState(false);
+  /** Cash/Card/Terminal chosen by the cashier (not the auto-seeded default). */
+  const [explicitTender, setExplicitTender] = useState<'cash' | 'card' | 'terminal' | null>(
+    null
+  );
   /** Previous amount due — used to resize tenders when tip is added/removed. */
   const prevTotalRef = useRef<number | null>(null);
   const prevDiscountRef = useRef(0);
@@ -402,10 +408,27 @@ export default function WebPosCheckoutView({
 
     if (method === 'invoice' || method === 'pay_later') {
       const id = selectedPaymentId || payments[0]?.id || newPayId();
-      setPayments([{ id, method, amount: total }]);
+      setPayments([
+        {
+          id,
+          method,
+          amount: total,
+          payLaterTender: method === 'pay_later' ? explicitTender || undefined : undefined,
+        },
+      ]);
       setSelectedPaymentId(id);
       setBuffer('');
       return;
+    }
+
+    if (method === 'cash' || method === 'card' || method === 'terminal') {
+      setExplicitTender(method);
+      if (payments.length === 1 && payments[0]?.method === 'pay_later') {
+        setPayments([{ ...payments[0], payLaterTender: method }]);
+        setSelectedPaymentId(payments[0].id);
+        setBuffer('');
+        return;
+      }
     }
 
     if (method === 'gift_card') {

@@ -59,6 +59,8 @@ export type ReceiptLabels = {
   deliveryTime: string;
   asap: string;
   payLater: string;
+  /** Conjunction on Pay Later tender list, e.g. Cash or Card or Terminal */
+  or: string;
   invoice: string;
   totalItems: string;
   vatIncludedNote: string;
@@ -143,7 +145,8 @@ const EN: ReceiptLabels = {
   pickupTime: 'Pickup:',
   deliveryTime: 'Delivery:',
   asap: 'ASAP',
-  payLater: 'Pay later',
+  payLater: 'Pay Later',
+  or: 'or',
   invoice: 'Invoice',
   totalItems: 'Items',
   vatIncludedNote: 'VAT included in prices',
@@ -229,6 +232,7 @@ const FR: ReceiptLabels = {
   deliveryTime: 'Livraison :',
   asap: 'Des que possible',
   payLater: 'Payer plus tard',
+  or: 'ou',
   invoice: 'Facture',
   totalItems: 'Articles',
   vatIncludedNote: 'TVA incluse dans les prix',
@@ -314,6 +318,7 @@ const DE: ReceiptLabels = {
   deliveryTime: 'Lieferung:',
   asap: 'Sofort',
   payLater: 'Spaeter zahlen',
+  or: 'oder',
   invoice: 'Rechnung',
   totalItems: 'Artikel',
   vatIncludedNote: 'MwSt. im Preis enthalten',
@@ -357,12 +362,29 @@ export function channelLabel(labels: ReceiptLabels, channel?: string | null): st
   return labels.takeaway;
 }
 
+/** Pay Later line: "Pay Later: Cash" or "Pay Later: Cash or Card or Terminal". */
+export function formatPayLaterPaymentLabel(
+  labels: ReceiptLabels,
+  preferredTender?: string | null
+): string {
+  const intent = normalizePaymentMethod(String(preferredTender || ''));
+  if (intent === 'cash') return `${labels.payLater}: ${labels.cash}`;
+  if (intent === 'card') return `${labels.payLater}: ${labels.card}`;
+  if (intent === 'terminal') return `${labels.payLater}: ${labels.terminal}`;
+  return `${labels.payLater}: ${labels.cash} ${labels.or} ${labels.card} ${labels.or} ${labels.terminal}`;
+}
+
 export function paymentLabel(labels: ReceiptLabels, method?: string | null): string {
-  const m = normalizePaymentMethod(String(method || ''));
+  const raw = String(method || '').trim();
+  const later = raw.match(/^pay[_-]?later(?::|_|\s+)?(.*)$/i);
+  if (later) {
+    return formatPayLaterPaymentLabel(labels, later[1] || '');
+  }
+  const m = normalizePaymentMethod(raw);
   if (m === 'cash') return labels.cash;
   if (m === 'card') return labels.card;
   if (m === 'terminal') return labels.terminal;
-  if (m === 'pay_later') return labels.payLater;
+  if (m === 'pay_later') return formatPayLaterPaymentLabel(labels);
   if (m === 'invoice') return labels.invoice || 'Invoice';
   if (m === 'bank_transfer') return 'Bank transfer';
   if (m === 'gift_card') return 'Gift card';

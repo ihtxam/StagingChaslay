@@ -252,7 +252,8 @@ class BluetoothPrinterService @Inject constructor(
         context: ReceiptPrintContext,
         discountAmount: Double,
         tipAmount: Double,
-        total: Double
+        total: Double,
+        singlePrinter: Boolean = false
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val receiptPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
             .filter { it.isEnabled && it.printOrderReceipts && it.address.isNotBlank() }
@@ -260,8 +261,9 @@ class BluetoothPrinterService @Inject constructor(
             val payload = buildCartReceipt(settings, cart, context, discountAmount, tipAmount, total)
             return@withContext sendBytes(settings.printerMacAddress, settings, payload, "Receipt")
         }
+        val targets = if (singlePrinter) receiptPrinters.take(1) else receiptPrinters
         var last: Result<Unit> = Result.success(Unit)
-        for (printer in receiptPrinters) {
+        for (printer in targets) {
             val lineWidth = lineWidthFor(printer.paperWidthMm)
             val payload = buildCartReceipt(
                 settings, cart, context, discountAmount, tipAmount, total, lineWidth
@@ -270,6 +272,16 @@ class BluetoothPrinterService @Inject constructor(
         }
         last
     }
+
+    suspend fun hasDedicatedKitchenPrinter(settings: BusinessSettingsEntity): Boolean =
+        withContext(Dispatchers.IO) {
+            val printers = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
+                .filter { it.isEnabled && it.address.isNotBlank() }
+            if (printers.any { it.printKitchenTickets && !it.printOrderReceipts }) return@withContext true
+            val kitchenMac = settings.kitchenPrinterMacAddress?.trim().orEmpty()
+            val receiptMac = settings.printerMacAddress?.trim().orEmpty()
+            kitchenMac.isNotBlank() && receiptMac.isNotBlank() && kitchenMac != receiptMac
+        }
 
     fun printCartPreview(
         settings: BusinessSettingsEntity,
@@ -986,9 +998,17 @@ class BluetoothPrinterService @Inject constructor(
 
         if (!context.isProvisional) {
             context.paymentMethod?.let { method ->
-                sb.appendLine(leftRight(labels.payment, labels.paymentMethod(method), lineWidth))
-                context.amountPaid?.let { paid ->
-                    sb.appendLine(leftRight(labels.paid, twoDp(paid), lineWidth))
+                val payText =
+                    if (method == PaymentMethod.PAY_LATER) {
+                        labels.payLaterPaymentLine(context.payLaterTender)
+                    } else {
+                        labels.paymentMethod(method)
+                    }
+                sb.appendLine(leftRight(labels.payment, payText, lineWidth))
+                if (method != PaymentMethod.PAY_LATER) {
+                    context.amountPaid?.let { paid ->
+                        sb.appendLine(leftRight(labels.paid, twoDp(paid), lineWidth))
+                    }
                 }
             }
         }

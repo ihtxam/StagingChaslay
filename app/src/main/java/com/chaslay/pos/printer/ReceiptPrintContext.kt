@@ -13,6 +13,8 @@ data class ReceiptPrintContext(
     val fulfillmentType: FulfillmentType = FulfillmentType.WALK_IN,
     val tableName: String? = null,
     val paymentMethod: PaymentMethod? = null,
+    /** Pay Later intended collection tender (cash / card / terminal). */
+    val payLaterTender: PaymentMethod? = null,
     val amountPaid: Double? = null,
     val staffName: String = "Staff",
     val sourceLabel: String = "POS",

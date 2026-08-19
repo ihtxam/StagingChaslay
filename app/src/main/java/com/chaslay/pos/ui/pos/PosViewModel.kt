@@ -2199,9 +2199,21 @@ class PosViewModel @Inject constructor(
 
     fun updateCheckoutMethod(method: PaymentMethod) {
         updateExtras {
+            val prev = it.checkoutState.method
+            val laterIntent = if (method == PaymentMethod.PAY_LATER) {
+                when (prev) {
+                    PaymentMethod.CARD,
+                    PaymentMethod.ADYEN_TERMINAL,
+                    PaymentMethod.TAP_TO_PAY -> prev
+                    else -> it.checkoutState.payLaterTender
+                }
+            } else {
+                it.checkoutState.payLaterTender
+            }
             it.copy(
                 checkoutState = it.checkoutState.copy(
                     method = method,
+                    payLaterTender = if (method == PaymentMethod.PAY_LATER) laterIntent else null,
                     cardTenderAmount = if (method == PaymentMethod.CASH || method == PaymentMethod.PAY_LATER || method == PaymentMethod.INVOICE) {
                         0.0
                     } else {
@@ -3640,8 +3652,10 @@ class PosViewModel @Inject constructor(
                     }
                     val staffName = sessionManager.currentUserName.first() ?: userName
                     viewModelScope.launch {
-                        runCatching { printPendingKitchenForCurrentTable(saleCart) }
-                            .onFailure { e -> Log.w("POS", "Pay later kitchen print failed", e) }
+                        if (printerService.hasDedicatedKitchenPrinter(settings)) {
+                            runCatching { printPendingKitchenForCurrentTable(saleCart) }
+                                .onFailure { e -> Log.w("POS", "Pay later kitchen print failed", e) }
+                        }
                         runCatching {
                             printerService.routeCartReceipt(
                                 settings = settings,
@@ -3652,12 +3666,14 @@ class PosViewModel @Inject constructor(
                                     fulfillmentType = saleCart.fulfillmentType,
                                     tableName = saleCart.tableName,
                                     paymentMethod = PaymentMethod.PAY_LATER,
+                                    payLaterTender = checkout.payLaterTender,
                                     staffName = staffName,
                                     isProvisional = false
                                 ),
                                 discountAmount = saleDiscount,
                                 tipAmount = checkout.tipAmount,
-                                total = roundedTotal
+                                total = roundedTotal,
+                                singlePrinter = true
                             )
                         }.onFailure { e -> Log.w("POS", "Pay later receipt print failed", e) }
                     }

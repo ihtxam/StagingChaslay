@@ -69,6 +69,8 @@ private val CheckoutTeal = Color(0xFF0D9488)
 
 data class CheckoutState(
     val method: PaymentMethod? = PaymentMethod.CASH,
+    /** Pay Later: intended later collection (cash / card / terminal). */
+    val payLaterTender: PaymentMethod? = null,
     val tipAmount: Double = 0.0,
     val tipPercent: Double = 0.0,
     val discountPercent: Double = 0.0,
