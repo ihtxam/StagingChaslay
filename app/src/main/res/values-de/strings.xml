@@ -197,6 +197,8 @@
     <string name="invoice_created">Rechnung gespeichert — Zahlung ausstehend</string>
     <string name="invoice_pdf_failed">Rechnungs-PDF konnte nicht geöffnet werden</string>
     <string name="invoice_record_payment">Zahlung erfassen</string>
+    <string name="invoice_mark_paid">Rechnung als bezahlt markieren</string>
+    <string name="invoice_mark_paid_hint">Rechnungen werden per Überweisung beglichen. Damit wird die Rechnung als bezahlt markiert — nicht bar oder Karte.</string>
     <string name="invoice_open_pdf">Rechnung öffnen</string>
     <string name="invoice_bank_transfer">Überweisung</string>
     <string name="invoice_offline_queued">Rechnung offline gespeichert. PDF wird online erzeugt.</string>

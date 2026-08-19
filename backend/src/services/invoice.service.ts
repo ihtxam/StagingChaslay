@@ -154,6 +154,14 @@ export function isInvoicePaymentMethod(method?: string | null): boolean {
   return String(method || "").toLowerCase().replace(/-/g, "_") === "invoice";
 }
 
+/** POS invoice sale — unpaid until bank transfer is recorded. */
+export function isInvoiceOrderRecord(order: {
+  paymentMethod?: string | null;
+  invoiceNumber?: string | null;
+}): boolean {
+  return isInvoicePaymentMethod(order.paymentMethod) || !!order.invoiceNumber;
+}
+
 export class InvoiceService {
   static async ensureInvoiceNumber(merchantId: string, orderId: string): Promise<string> {
     const db = getDb();
@@ -319,32 +327,40 @@ export class InvoiceService {
   static async recordPayment(
     merchantId: string,
     orderRef: string,
-    paymentMethod: string
+    _paymentMethod?: string
   ) {
     const db = getDb();
     const order = await this.findOrder(merchantId, orderRef);
     if (!order) throw new Error("Order not found");
     if (order.status === "cancelled") throw new Error("Cannot collect payment on a cancelled order");
+    if (!isInvoiceOrderRecord(order)) {
+      throw new Error("Order is not an invoice");
+    }
     const pay = String(order.paymentStatus || "").toLowerCase();
     if (pay === "completed" || pay === "paid" || pay === "partially_refunded") {
       throw new Error("Payment already completed");
     }
 
-    const methodRaw = String(paymentMethod || "cash").trim().toLowerCase().replace(/-/g, "_");
-    const method = ["cash", "card", "terminal", "bank_transfer"].includes(methodRaw)
-      ? methodRaw
-      : "cash";
+    // Invoice tickets are settled by bank transfer — never cash or card.
+    const method = "invoice";
 
     const [updated] = await db
       .update(schema.orders)
       .set({
         paymentStatus: "completed",
         paymentMethod: method,
-        completedAt: new Date(),
+        completedAt: order.completedAt || new Date(),
         paymentBreakdown: [{ method, amount: roundMoney2(Number(order.total) || 0) }],
       })
       .where(and(eq(schema.orders.id, order.id), eq(schema.orders.merchantId, merchantId)))
       .returning();
+
+    try {
+      const { InventoryService } = await import("@/services/inventory.service");
+      await InventoryService.deductForPaidOrder(merchantId, order.id);
+    } catch (invErr) {
+      console.warn("Inventory deduct after invoice payment failed:", invErr);
+    }
 
     return updated;
   }

@@ -21,17 +21,34 @@ function computeEstimatedReadyAt(
   return new Date(Date.now() + prepMinutes * 60 * 1000);
 }
 
+function isInvoiceOrderRecord(order: {
+  paymentMethod?: string | null;
+  invoiceNumber?: string | null;
+}): boolean {
+  const method = String(order.paymentMethod || "")
+    .toLowerCase()
+    .replace(/-/g, "_");
+  return method === "invoice" || !!order.invoiceNumber;
+}
+
 function resolveCollectPaymentMethod(
   requested: string | null | undefined,
-  existing: string | null | undefined
+  order: { paymentMethod?: string | null; invoiceNumber?: string | null }
 ): string {
-  const methodRaw = String(requested || existing || "cash")
+  if (isInvoiceOrderRecord(order)) return "invoice";
+  const requestedRaw = String(requested || "")
     .trim()
-    .toLowerCase();
-  if (methodRaw === "pay_later" || methodRaw === "pay-later" || methodRaw === "invoice") {
+    .toLowerCase()
+    .replace(/-/g, "_");
+  if (["cash", "card", "terminal", "bank_transfer"].includes(requestedRaw)) return requestedRaw;
+  const existingRaw = String(order.paymentMethod || "cash")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  if (existingRaw === "pay_later" || existingRaw === "pay-later") {
     return "cash";
   }
-  if (["cash", "card", "terminal", "bank_transfer"].includes(methodRaw)) return methodRaw;
+  if (["cash", "card", "terminal", "bank_transfer"].includes(existingRaw)) return existingRaw;
   return "cash";
 }
 
@@ -487,10 +504,18 @@ export class OrderService {
       case "collect_payment": {
         if (paymentDone) throw new Error("Payment already completed");
         {
-          const method = resolveCollectPaymentMethod(opts?.paymentMethod, order.paymentMethod);
+          const invoiceOrder = isInvoiceOrderRecord(order);
+          const method = resolveCollectPaymentMethod(opts?.paymentMethod, order);
           const updated = await set({
             paymentStatus: "completed",
             paymentMethod: method,
+            ...(invoiceOrder
+              ? {
+                  paymentBreakdown: [
+                    { method, amount: roundMoney2(Number(order.total) || 0) },
+                  ],
+                }
+              : {}),
           });
           try {
             const { InventoryService } = await import("@/services/inventory.service");
@@ -498,10 +523,13 @@ export class OrderService {
           } catch (invErr) {
             console.warn("Inventory deduct after collect_payment failed:", invErr);
           }
-          try {
-            await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
-          } catch (printErr) {
-            console.warn("Collect payment receipt print enqueue failed:", printErr);
+          // Invoice A4 was printed at sale — do not print a second receipt/invoice.
+          if (!invoiceOrder) {
+            try {
+              await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
+            } catch (printErr) {
+              console.warn("Collect payment receipt print enqueue failed:", printErr);
+            }
           }
           return updated;
         }
@@ -534,7 +562,15 @@ export class OrderService {
           throw new Error("Order is not ready to collect payment");
         }
         {
-          const method = resolveCollectPaymentMethod(opts?.paymentMethod, order.paymentMethod);
+          const invoiceOrder = isInvoiceOrderRecord(order);
+          const method = resolveCollectPaymentMethod(opts?.paymentMethod, order);
+          const invoiceBreakdown = invoiceOrder
+            ? {
+                paymentBreakdown: [
+                  { method, amount: roundMoney2(Number(order.total) || 0) },
+                ],
+              }
+            : {};
           const updated = await set(
             readyToHandoff
               ? {
@@ -542,10 +578,12 @@ export class OrderService {
                   paymentStatus: "completed",
                   paymentMethod: method,
                   completedAt: new Date(),
+                  ...invoiceBreakdown,
                 }
               : {
                   paymentStatus: "completed",
                   paymentMethod: method,
+                  ...invoiceBreakdown,
                 }
           );
           try {
@@ -554,10 +592,13 @@ export class OrderService {
           } catch (invErr) {
             console.warn("Inventory deduct after complete_and_collect failed:", invErr);
           }
-          try {
-            await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
-          } catch (printErr) {
-            console.warn("Complete-and-collect receipt print enqueue failed:", printErr);
+          // Invoice A4 was printed at sale — do not print a second receipt/invoice.
+          if (!invoiceOrder) {
+            try {
+              await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
+            } catch (printErr) {
+              console.warn("Complete-and-collect receipt print enqueue failed:", printErr);
+            }
           }
           return updated;
         }

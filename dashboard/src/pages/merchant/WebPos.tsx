@@ -269,7 +269,7 @@ import {
   customerFromOrder,
   orderItemsToCartLines,
 } from '@/lib/order-to-cart';
-import type { MerchantOrder } from '@/lib/order-management';
+import { INVOICE_SETTLEMENT_METHOD, isInvoiceOrder, type MerchantOrder } from '@/lib/order-management';
 
 type SplitReceiptPart = {
   id: string;
@@ -287,6 +287,7 @@ type CollectOrderRef = {
   status: string;
   total: number;
   returnView: 'orders' | 'register';
+  isInvoice?: boolean;
 };
 import type {
   BillDiscount,
@@ -4527,10 +4528,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setCheckoutExtras(null);
   };
 
+  const markInvoiceOrderPaid = async (
+    order: { id: string },
+    returnView: 'orders' | 'register' = 'orders'
+  ) => {
+    setBusy(true);
+    try {
+      await api.post(`/merchant/orders/${order.id}/record-invoice-payment`, {
+        paymentMethod: INVOICE_SETTLEMENT_METHOD,
+      });
+      toast.success(t('webPosPaymentCollected'));
+      setOrdersRefreshToken((n) => n + 1);
+      if (returnView === 'orders') setPosTab('orders');
+      setPosView('register');
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openOrderCollectCheckout = (
     order: MerchantOrder,
     returnView: 'orders' | 'register' = 'orders'
   ) => {
+    if (isInvoiceOrder(order)) {
+      void markInvoiceOrderPaid(order, returnView);
+      return;
+    }
     const lines = orderItemsToCartLines(order.items || []);
     if (!lines.length) {
       toast.error(t('webPosNoItems'));
@@ -4569,6 +4594,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       status: order.status,
       total: Number(order.total),
       returnView,
+      isInvoice: isInvoiceOrder(order),
     });
     setHighlightOrderId(null);
     setOrdersChannelPref(null);
@@ -4612,8 +4638,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       payments[0];
     if (!primary && due > 0.001) return;
     let payMethod = primary?.method === 'gift_card' ? 'card' : primary?.method || 'cash';
-    if (payMethod === 'pay_later' || payMethod === 'invoice') payMethod = 'cash';
-    if (!['cash', 'card', 'terminal', 'bank_transfer'].includes(payMethod)) payMethod = 'cash';
+    if (ctx.isInvoice) {
+      payMethod = INVOICE_SETTLEMENT_METHOD;
+    } else {
+      if (payMethod === 'pay_later' || payMethod === 'invoice') payMethod = 'cash';
+      if (!['cash', 'card', 'terminal', 'bank_transfer'].includes(payMethod)) payMethod = 'cash';
+    }
     const action = collectPaymentAction(ctx.status);
     setBusy(true);
     try {
@@ -4710,10 +4740,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         };
         splitReceiptsRef.current = [part];
         setLastSplitReceipts([part]);
-        try {
-          await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl);
-        } catch {
-          /* print is best-effort — manual reprint uses staged lastReceipt */
+        if (!ctx.isInvoice && !isInvoiceOrder(orderForReceipt || {})) {
+          try {
+            await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl);
+          } catch {
+            /* print is best-effort — manual reprint uses staged lastReceipt */
+          }
         }
       } catch {
         /* receipt build is best-effort */

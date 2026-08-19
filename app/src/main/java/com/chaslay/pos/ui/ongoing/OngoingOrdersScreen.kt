@@ -279,21 +279,19 @@ fun OngoingOrdersScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("#${card.orderNumber}")
-                    listOf(
-                        "cash" to stringResource(R.string.cash),
-                        "card" to stringResource(R.string.card),
-                        "bank_transfer" to stringResource(R.string.invoice_bank_transfer)
-                    ).forEach { (method, label) ->
-                        TextButton(
-                            onClick = {
-                                viewModel.recordInvoicePayment(card, method)
-                                recordPaymentFor = null
-                            }
-                        ) { Text(label) }
-                    }
+                    Text(stringResource(R.string.invoice_mark_paid_hint))
+                    Text(stringResource(R.string.invoice_bank_transfer))
                 }
             },
             confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.recordInvoicePayment(card, "invoice")
+                        recordPaymentFor = null
+                    }
+                ) { Text(stringResource(R.string.invoice_mark_paid)) }
+            },
+            dismissButton = {
                 TextButton(onClick = { recordPaymentFor = null }) {
                     Text(stringResource(R.string.cancel))
                 }

@@ -199,6 +199,8 @@
     <string name="invoice_created">Facture enregistrée — en attente de paiement</string>
     <string name="invoice_pdf_failed">Impossible d’ouvrir le PDF</string>
     <string name="invoice_record_payment">Enregistrer le paiement</string>
+    <string name="invoice_mark_paid">Marquer la facture comme payée</string>
+    <string name="invoice_mark_paid_hint">Les factures sont réglées par virement bancaire. Cela marque la facture comme payée — pas d’espèces ni de carte.</string>
     <string name="invoice_open_pdf">Ouvrir la facture</string>
     <string name="invoice_bank_transfer">Virement</string>
     <string name="invoice_offline_queued">Facture enregistrée hors ligne. Le PDF sera généré en ligne.</string>

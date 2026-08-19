@@ -57,7 +57,7 @@ export async function merchantRecordInvoicePayment(req: Request, res: Response) 
     const order = await InvoiceService.recordPayment(
       merchantId,
       String(req.params.orderId),
-      String(req.body?.paymentMethod || "cash")
+      "invoice"
     );
     res.json({ success: true, order });
   } catch (error) {
@@ -90,7 +90,7 @@ export function chaslayInvoiceRouter() {
       const order = await InvoiceService.recordPayment(
         merchantId,
         String(req.params.id),
-        String(req.body?.paymentMethod || "cash")
+        "invoice"
       );
       res.json({
         success: true,

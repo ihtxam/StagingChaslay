@@ -40,6 +40,25 @@ export function orderChannel(o: MerchantOrder): string {
   return o.channel || o.fulfillmentChannel || 'takeaway';
 }
 
+/** Takeaway / delivery stay in kitchen until staff marks ready / complete. */
+export function isKitchenFulfillmentChannel(channel?: string | null): boolean {
+  const ch = String(channel || '').toLowerCase();
+  return ch === 'takeaway' || ch === 'delivery';
+}
+
+/** POS sale fulfillment status — paid takeaway/delivery still go through kitchen. */
+export function posSaleFulfillmentStatus(opts: {
+  channel?: string | null;
+  payLater: boolean;
+  scheduledFor?: string | number | null;
+}): string {
+  const kitchen = isKitchenFulfillmentChannel(opts.channel);
+  if (kitchen || opts.payLater) {
+    return opts.scheduledFor ? 'accepted' : 'preparing';
+  }
+  return 'completed';
+}
+
 /**
  * Kitchen Type on /merchant/orders — kitchen-bound tickets, including paid
  * WebPOS/POS delivery. The old tab only listed online accepted/preparing.
@@ -124,6 +143,9 @@ export function orderPlatformBorderClass(o: MerchantOrder): string {
       return 'border-l-stone-400';
   }
 }
+
+/** Stored method after an invoice is settled by bank transfer. Never cash/card. */
+export const INVOICE_SETTLEMENT_METHOD = 'invoice' as const;
 
 /** POS / WebPOS invoice sale — unpaid until bank transfer is recorded. */
 export function isInvoiceOrder(o: {

@@ -336,9 +336,10 @@ export class PosOrdersService {
     paymentMethod: string
   ) {
     const db = getDb();
-    const method = String(paymentMethod || "")
+    let method = String(paymentMethod || "")
       .trim()
-      .toLowerCase();
+      .toLowerCase()
+      .replace(/-/g, "_");
     if (!ALLOWED_PAYMENT_METHODS.has(method)) {
       throw new Error("Invalid payment method");
     }
@@ -347,6 +348,15 @@ export class PosOrdersService {
       where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
     });
     if (!order) throw new Error("Order not found");
+    const existingMethod = String(order.paymentMethod || "")
+      .toLowerCase()
+      .replace(/-/g, "_");
+    if (existingMethod === "invoice" || order.invoiceNumber) {
+      if (method !== "invoice" && method !== "bank_transfer" && method !== "bank") {
+        throw new Error("Invoice orders can only be paid by invoice / bank transfer");
+      }
+      method = "invoice";
+    }
     if (order.status === "cancelled" || order.paymentStatus === "cancelled") {
       throw new Error("Cannot change payment method on a cancelled order");
     }

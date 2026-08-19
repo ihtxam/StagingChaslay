@@ -10,6 +10,7 @@ import {
   canAdminCollectPayment,
   canMarkReady,
   formatOrderPaymentDisplay,
+  INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
   isAwaitingPaymentOrder,
   isInvoiceOrder,
@@ -272,6 +273,28 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
       setSelected((res.data.order as MerchantOrder) || order);
     } catch {
       setSelected(order);
+    }
+  };
+
+  const recordInvoicePaid = async (order: MerchantOrder) => {
+    setActionBusy(true);
+    try {
+      const res = await api.post(`/merchant/orders/${order.id}/record-invoice-payment`, {
+        paymentMethod: INVOICE_SETTLEMENT_METHOD,
+      });
+      const updated = (res.data?.order as MerchantOrder) || order;
+      setSelected((prev) =>
+        prev && prev.id === order.id
+          ? { ...prev, ...updated, items: prev.items || updated.items }
+          : { ...order, ...updated }
+      );
+      toast.success(t('webPosPaymentCollected'));
+      setCollectOpen(false);
+      void load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
+    } finally {
+      setActionBusy(false);
     }
   };
 
@@ -880,6 +903,21 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                     </button>
                   ) : null}
                   {canAdminCollectPayment(selected) ? (
+                    isInvoiceOrder(selected) ? (
+                      <div className="space-y-1.5">
+                        <button
+                          type="button"
+                          disabled={actionBusy}
+                          onClick={() => void recordInvoicePaid(selected)}
+                          className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                        >
+                          {t('webPosInvoiceMarkPaid')} · CHF {Number(selected.total || 0).toFixed(2)}
+                        </button>
+                        <p className="text-[11px] text-[var(--text-muted)]">
+                          {t('webPosInvoiceMarkPaidHint')}
+                        </p>
+                      </div>
+                    ) : (
                     <>
                       <button
                         type="button"
@@ -920,6 +958,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                         </div>
                       ) : null}
                     </>
+                    )
                   ) : null}
                   <button
                     type="button"

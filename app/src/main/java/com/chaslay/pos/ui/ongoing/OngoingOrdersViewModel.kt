@@ -518,7 +518,6 @@ class OngoingOrdersViewModel @Inject constructor(
             if (card.source == OngoingOrderSource.HELD) {
                 heldOrderRepository.deleteHeldOrder(card.id)
             }
-            printReceiptForOrder(card)
             refresh()
         }
     }
