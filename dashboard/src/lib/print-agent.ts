@@ -37,6 +37,128 @@ export function isUnsuitableRawPrinter(name?: string | null): boolean {
   );
 }
 
+export function normalizePrinterName(name?: string | null): string {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-]+/g, '');
+}
+
+export function printerNameInList(
+  name: string,
+  printers: Array<{ name: string }>
+): boolean {
+  const n = normalizePrinterName(name);
+  if (!n) return false;
+  return printers.some((p) => normalizePrinterName(p.name) === n);
+}
+
+function paperWidthHint(name: string): '58' | '80' | null {
+  const n = String(name || '').toLowerCase();
+  if (/\b58\b|58mm/.test(n)) return '58';
+  if (/\b80\b|80mm|pos80|printer80/.test(n)) return '80';
+  return null;
+}
+
+export function looksLikeThermal80mm(name?: string | null): boolean {
+  const n = String(name || '');
+  if (!n.trim() || isUnsuitableRawPrinter(n)) return false;
+  return /\b80\b|80mm|pos80|printer80|thermal|receipt|escpos|xp-|rp80|tm-|chaslay/i.test(n);
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (a === b) return 0;
+  if (!m) return n;
+  if (!n) return m;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => {
+    const row = new Array<number>(n + 1);
+    row[0] = i;
+    return row;
+  });
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] =
+        a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function scorePrinterSimilarity(configured: string, candidate: string): number {
+  const cfg = normalizePrinterName(configured);
+  const cand = normalizePrinterName(candidate);
+  if (!cfg || !cand || cfg === cand) return 0;
+  let score = 0;
+  const cfgWidth = paperWidthHint(configured);
+  const candWidth = paperWidthHint(candidate);
+  if (cfgWidth && candWidth && cfgWidth === candWidth) score += 3;
+  const cfgDigits = (cfg.match(/\d+$/) || [])[0];
+  const candDigits = (cand.match(/\d+$/) || [])[0];
+  if (cfgDigits && cfgDigits === candDigits) score += 4;
+  if (looksLikeThermal80mm(candidate) && (cfgWidth === '80' || /80/.test(cfg))) score += 2;
+  const dist = levenshtein(cfg, cand);
+  if (dist <= 4) score += 5;
+  else if (dist <= 8) score += 2;
+  if (cand.includes(cfg) || cfg.includes(cand)) score += 3;
+  return score;
+}
+
+/** Agent is up but the stored Windows name is gone (rename / 1801). */
+export function isConfiguredPrinterMissing(
+  configuredName: string,
+  printers: Array<{ name: string }>,
+  opts?: { agentOk?: boolean; printersReady?: boolean }
+): boolean {
+  const name = String(configuredName || '').trim();
+  if (!name) return false;
+  if (opts?.agentOk === false) return false;
+  if (opts?.printersReady === false) return false;
+  return !printerNameInList(name, printers);
+}
+
+/** Close matches for a missing name (e.g. GLPrinter80 → chaslay80). */
+export function findSimilarAgentPrinters(
+  configuredName: string,
+  printers: AgentPrinter[]
+): AgentPrinter[] {
+  const configured = String(configuredName || '').trim();
+  if (!configured) return [];
+  const available = printers.filter((p) => p.name && !isUnsuitableRawPrinter(p.name));
+  if (printerNameInList(configured, available)) return [];
+  return available
+    .map((p) => ({ p, score: scorePrinterSimilarity(configured, p.name) }))
+    .filter((x) => x.score >= 2)
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.p);
+}
+
+/** Prompt candidates: similar names, else any 80mm-looking printer. */
+export function findPrinterHealCandidates(
+  configuredName: string,
+  printers: AgentPrinter[],
+  limit = 3
+): AgentPrinter[] {
+  const similar = findSimilarAgentPrinters(configuredName, printers);
+  if (similar.length) return similar.slice(0, limit);
+  const suitable = printers.filter((p) => p.name && !isUnsuitableRawPrinter(p.name));
+  const eighty = suitable.filter((p) => looksLikeThermal80mm(p.name));
+  return (eighty.length ? eighty : suitable).slice(0, limit);
+}
+
+/** Auto-heal only when the old name is gone and exactly one similar name exists. */
+export function suggestPrinterAutoHeal(
+  configuredName: string,
+  printers: AgentPrinter[]
+): AgentPrinter | null {
+  const similar = findSimilarAgentPrinters(configuredName, printers);
+  return similar.length === 1 ? similar[0] : null;
+}
+
 export function unsuitableRawPrinterMessage(name?: string | null): string {
   const label = (name || '').trim() || 'this printer';
   return `Select a receipt/ESC-POS printer, not OneNote/PDF (${label}). Raw bytes will not print usefully.`;

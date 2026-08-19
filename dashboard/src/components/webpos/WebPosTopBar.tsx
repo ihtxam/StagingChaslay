@@ -542,6 +542,7 @@ export function WebPosSettingsDropdown({
   printers,
   agentOk,
   printerMissing = false,
+  suggestedPrinters = [],
   agentOutdated = false,
   autoPrint,
   postSuccessTarget,
@@ -584,6 +585,7 @@ export function WebPosSettingsDropdown({
   printers: Array<{ name: string; isDefault?: boolean }>;
   agentOk: boolean;
   printerMissing?: boolean;
+  suggestedPrinters?: Array<{ name: string }>;
   agentOutdated?: boolean;
   autoPrint: boolean;
   postSuccessTarget: 'register' | 'tables';
@@ -891,6 +893,11 @@ export function WebPosSettingsDropdown({
           disabled={!agentOk}
         >
           <option value="">{t('webPosDefaultPrinter')}</option>
+          {printerMissing && printerName && !printers.some((p) => p.name === printerName) ? (
+            <option value={printerName}>
+              {printerName} — {t('webPosPrinterDisconnectedShort')}
+            </option>
+          ) : null}
           {printers.map((p) => {
             const bad = isUnsuitableRawPrinter(p.name);
             return (
@@ -903,6 +910,22 @@ export function WebPosSettingsDropdown({
           })}
         </select>
       </label>
+      {printerMissing && agentOk ? (
+        <div className="space-y-1.5">
+          {suggestedPrinters
+            .filter((p) => p.name && p.name !== printerName)
+            .map((p) => (
+              <button
+                key={p.name}
+                type="button"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
+                onClick={() => onPrinterChange(p.name)}
+              >
+                {t('webPosUsePrinter').replace('{name}', p.name)}
+              </button>
+            ))}
+        </div>
+      ) : null}
       {printerName && isUnsuitableRawPrinter(printerName) ? (
         <p className="text-[10px] leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
       ) : null}
@@ -949,8 +972,11 @@ export function WebPosSettingsDropdown({
             ? t('webPosPrinterDisconnectedShort')
             : agentOutdated
               ? t('webPosPrintAgentOutdatedHint')
-              : t('webPosAgentRunningShort')}
+              : t('webPosAgentOnline')}
       </p>
+      {agentOk && printerMissing ? (
+        <p className="text-[10px] leading-snug text-amber-800">{t('webPosPrinterRenamedHint')}</p>
+      ) : null}
       <p className="border-t border-stone-100 pt-2 text-center text-[10px] text-stone-400">
         {webPosVersionLabel}
       </p>

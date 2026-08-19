@@ -26,8 +26,10 @@ import api from '@/lib/api';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
+  findPrinterHealCandidates,
   formatScalePortLabel,
   getPrintAgentHealth,
+  isConfiguredPrinterMissing,
   isPrintAgentAvailable,
   isPrintAgentVersionOutdated,
   isUnsuitableRawPrinter,
@@ -3406,22 +3408,40 @@ export default function Settings() {
                     className={`text-sm m-0 ${
                       !printAgentOk
                         ? 'text-[var(--text-muted)]'
-                        : printAgentOutdated
+                        : printAgentOutdated ||
+                            (settings.posPrintSettings?.printers || []).some(
+                              (p) =>
+                                isConfiguredPrinterMissing(p.name, agentPrinters, {
+                                  agentOk: printAgentOk,
+                                  printersReady: agentPrinters.length > 0,
+                                })
+                            )
                           ? 'text-amber-800'
                           : 'text-emerald-700'
                     }`}
                   >
                     {!printAgentOk
                       ? t('webPosAgentOffline')
-                      : printAgentOutdated
-                        ? t('webPosPrintAgentOutdatedHint')
-                        : t('webPosAgentRunningShort')}
+                      : (settings.posPrintSettings?.printers || []).some((p) =>
+                            isConfiguredPrinterMissing(p.name, agentPrinters, {
+                              agentOk: printAgentOk,
+                              printersReady: agentPrinters.length > 0,
+                            })
+                          )
+                        ? t('webPosPrinterDisconnectedShort')
+                        : printAgentOutdated
+                          ? t('webPosPrintAgentOutdatedHint')
+                          : t('webPosAgentOnline')}
                   </p>
                 </div>
                 {(settings.posPrintSettings?.printers || []).map((p, idx) => {
-                  const printerNames = new Set(agentPrinters.map((ap) => ap.name));
-                  const savedNameMissing =
-                    !!p.name.trim() && printAgentOk && agentPrinters.length > 0 && !printerNames.has(p.name);
+                  const savedNameMissing = isConfiguredPrinterMissing(p.name, agentPrinters, {
+                    agentOk: printAgentOk,
+                    printersReady: agentPrinters.length > 0,
+                  });
+                  const healCandidates = savedNameMissing
+                    ? findPrinterHealCandidates(p.name, agentPrinters)
+                    : [];
                   const useDropdown = printAgentOk && agentPrinters.length > 0;
                   return (
                   <div
@@ -3478,6 +3498,33 @@ export default function Settings() {
                     </Field>
                     {p.name && isUnsuitableRawPrinter(p.name) ? (
                       <p className="text-xs leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
+                    ) : null}
+                    {savedNameMissing ? (
+                      <div className="space-y-1.5">
+                        <p className="text-xs leading-snug text-amber-800 m-0">
+                          {t('webPosPrinterDisconnectedShort')}
+                        </p>
+                        <p className="text-xs leading-snug text-amber-800 m-0">
+                          {t('webPosPrinterRenamedHint')}
+                        </p>
+                        {healCandidates.map((ap) => (
+                          <button
+                            key={ap.name}
+                            type="button"
+                            className="inline-flex items-center rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                            onClick={() => {
+                              const printers = [...(settings.posPrintSettings?.printers || [])];
+                              printers[idx] = { ...p, name: ap.name };
+                              setSettings({
+                                ...settings,
+                                posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                              });
+                            }}
+                          >
+                            {t('webPosUsePrinter').replace('{name}', ap.name)}
+                          </button>
+                        ))}
+                      </div>
                     ) : null}
                     <div className="flex flex-wrap gap-3 text-sm">
                       {(

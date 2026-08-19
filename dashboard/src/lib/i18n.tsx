@@ -1313,6 +1313,10 @@ const en: Dict = {
   webPosAgentRunningShort: 'Print Agent running',
   webPosAgentNotRunningShort: 'Print Agent not running',
   webPosPrinterDisconnectedShort: 'Printer not found',
+  webPosPrinterRenamedHint:
+    'Agent is running. Re-select printer — name may have changed.',
+  webPosUsePrinter: 'Use {name}',
+  webPosPrinterAutoHealed: 'Printer updated to {name}',
   webPosPrintAgentUpdateShort: 'Update Print Agent',
   webPosPrintAgentOutdatedHint:
     'Print Agent is outdated. Download and reinstall from Settings (same folder %LOCALAPPDATA%\\ChaslayPrintAgent).',
@@ -3778,6 +3782,10 @@ const fr: Dict = {
   webPosAgentRunningShort: 'Agent d’impression actif',
   webPosAgentNotRunningShort: 'Agent d’impression arrêté',
   webPosPrinterDisconnectedShort: 'Imprimante introuvable',
+  webPosPrinterRenamedHint:
+    'L’agent fonctionne. Resélectionnez l’imprimante — le nom a peut-être changé.',
+  webPosUsePrinter: 'Utiliser {name}',
+  webPosPrinterAutoHealed: 'Imprimante mise à jour : {name}',
   webPosPrintAgentUpdateShort: 'Mettre à jour l’agent',
   webPosPrintAgentOutdatedHint:
     'Agent d’impression obsolète. Téléchargez et réinstallez depuis Paramètres (dossier %LOCALAPPDATA%\\ChaslayPrintAgent).',
@@ -6243,6 +6251,10 @@ const de: Dict = {
   webPosAgentRunningShort: 'Druckagent aktiv',
   webPosAgentNotRunningShort: 'Druckagent nicht gestartet',
   webPosPrinterDisconnectedShort: 'Drucker nicht gefunden',
+  webPosPrinterRenamedHint:
+    'Agent läuft. Drucker erneut wählen — der Name hat sich möglicherweise geändert.',
+  webPosUsePrinter: '{name} verwenden',
+  webPosPrinterAutoHealed: 'Drucker aktualisiert: {name}',
   webPosPrintAgentUpdateShort: 'Druckagent aktualisieren',
   webPosPrintAgentOutdatedHint:
     'Druckagent veraltet. Unter Einstellungen neu herunterladen und installieren (%LOCALAPPDATA%\\ChaslayPrintAgent).',

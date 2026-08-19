@@ -58,12 +58,15 @@ import WebPosSplitBillModal, {
 import { localDateTimeToIso, type StoreHours } from '@/lib/shop-hours';
 import {
   browserPrintText,
+  findPrinterHealCandidates,
   getPrintAgentHealth,
+  isConfiguredPrinterMissing,
   isPrintAgentVersionOutdated,
   isPrinterDisconnectedError,
   isUnsuitableRawPrinter,
   listAgentPrinters,
   printViaAgent,
+  suggestPrinterAutoHeal,
   unsuitableRawPrinterMessage,
   type AgentPrinter,
 } from '@/lib/print-agent';
@@ -534,6 +537,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     cashSales: number;
     cashIn?: number;
     cashOut?: number;
+    cashRefunds?: number;
     cardSales: number;
     terminalSales: number;
     totalSales: number;
@@ -552,6 +556,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     closingCashCounted: number;
     expectedCash: number;
     cashSales: number;
+    cashIn?: number;
+    cashOut?: number;
+    cashRefunds?: number;
+    movements?: Array<{
+      type: string;
+      amount: number;
+      reason?: string | null;
+      staffName?: string | null;
+      createdAt?: string | null;
+    }>;
     cardSales: number;
     terminalSales: number;
     otherSales: number;
@@ -611,7 +625,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   });
   const [loadedFromOfflineCache, setLoadedFromOfflineCache] = useState(false);
   const [printers, setPrinters] = useState<AgentPrinter[]>([]);
+  const [printersReady, setPrintersReady] = useState(false);
   const [printerName, setPrinterName] = useState(() => localStorage.getItem('manupos_webpos_printer') || '');
+  const printerHealAttemptedRef = useRef<Set<string>>(new Set());
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('manupos_webpos_autoprint') !== '0');
   const [lastReceipt, setLastReceipt] = useState<string>('');
   const [lastReceiptUrl, setLastReceiptUrl] = useState<string>('');
@@ -1301,20 +1317,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
     if (!health.ok) {
       setPrinters([]);
+      setPrintersReady(false);
       return;
     }
     try {
       const list = await listAgentPrinters();
       setPrinters(list);
+      setPrintersReady(true);
       if (!printerName && list.length) {
-        const def = list.find((p) => p.isDefault) || list[0];
+        const def = list.find((p) => p.isDefault && !isUnsuitableRawPrinter(p.name)) ||
+          list.find((p) => !isUnsuitableRawPrinter(p.name)) ||
+          list[0];
         setPrinterName(def.name);
-      }
-      if (printerName && list.length && !list.some((p) => p.name === printerName)) {
-        setPrinterDisconnected(true);
       }
     } catch {
       setPrinters([]);
+      setPrintersReady(false);
     }
   }, [printerName]);
 
@@ -1328,6 +1346,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cashSales: number;
       cashIn?: number;
       cashOut?: number;
+      cashRefunds?: number;
       cardSales: number;
       terminalSales: number;
       totalSales: number;
@@ -1928,6 +1947,45 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [printerName]);
 
   useEffect(() => {
+    if (!agentOk || !printersReady || printers.length === 0) return;
+
+    const configured = printerName.trim();
+    if (configured && isConfiguredPrinterMissing(configured, printers)) {
+      const heal = suggestPrinterAutoHeal(configured, printers);
+      const key = `local:${configured}->${heal?.name || ''}`;
+      if (heal && !printerHealAttemptedRef.current.has(key)) {
+        printerHealAttemptedRef.current.add(key);
+        setPrinterName(heal.name);
+        setPrinterDisconnected(false);
+        toast.success(t('webPosPrinterAutoHealed').replace('{name}', heal.name));
+      } else if (!heal) {
+        setPrinterDisconnected(true);
+      }
+    } else if (configured) {
+      setPrinterDisconnected(false);
+    }
+
+    const profiles = printSettings?.printers;
+    if (!profiles?.length) return;
+    let changed = false;
+    const nextProfiles = profiles.map((p) => {
+      const name = (p.name || '').trim();
+      if (!name || !isConfiguredPrinterMissing(name, printers)) return p;
+      const heal = suggestPrinterAutoHeal(name, printers);
+      if (!heal) return p;
+      const key = `set:${p.id}:${name}->${heal.name}`;
+      if (printerHealAttemptedRef.current.has(key)) return p;
+      printerHealAttemptedRef.current.add(key);
+      changed = true;
+      return { ...p, name: heal.name };
+    });
+    if (!changed) return;
+    const next = { ...printSettings, printers: nextProfiles };
+    setPrintSettings(next);
+    void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
+  }, [agentOk, printersReady, printers, printerName, printSettings, t]);
+
+  useEffect(() => {
     localStorage.setItem('manupos_webpos_autoprint', autoPrint ? '1' : '0');
   }, [autoPrint]);
 
@@ -2330,11 +2388,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       };
       const reportPeriod = res.data.reportPeriod as { from: string; to: string };
       const balanced = !!res.data.balanced;
+      const liveAtClose = shiftLive;
       setLastClosedShift({
         openingCash: Number(shift.openingCash) || 0,
         closingCashCounted: Number(shift.closingCashCounted) || 0,
         expectedCash: Number(shift.expectedCash) || 0,
         cashSales: Number(shift.cashSales) || 0,
+        cashIn: Number(res.data.cashIn ?? liveAtClose?.cashIn) || 0,
+        cashOut: Number(res.data.cashOut ?? liveAtClose?.cashOut) || 0,
+        cashRefunds: Number(res.data.cashRefunds ?? liveAtClose?.cashRefunds) || 0,
+        movements: Array.isArray(res.data.movements) ? res.data.movements : [],
         cardSales: Number(shift.cardSales) || 0,
         terminalSales: Number(shift.terminalSales) || 0,
         otherSales: Number(shift.otherSales) || 0,
@@ -2379,6 +2442,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     shiftCash?: Array<{
       openingFloat: number;
       cashSales: number;
+      cashIn?: number;
+      cashOut?: number;
+      cashRefunds?: number;
+      movements?: Array<{
+        type: string;
+        amount: number;
+        reason?: string | null;
+        staffName?: string | null;
+        createdAt?: string | null;
+      }>;
       expectedCash: number;
       closingCashCounted?: number | null;
       variance?: number | null;
@@ -2469,11 +2542,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       header: printSettings?.receiptHeader,
       footer: printSettings?.receiptFooter,
       shiftCash:
-        reportKind === 'eod' && report?.shiftCash?.length
+        report?.shiftCash?.length
           ? report.shiftCash
           : {
               openingFloat: lastClosedShift.openingCash,
               cashSales: lastClosedShift.cashSales,
+              cashIn: lastClosedShift.cashIn ?? 0,
+              cashOut: lastClosedShift.cashOut ?? 0,
+              cashRefunds: lastClosedShift.cashRefunds ?? 0,
+              movements: lastClosedShift.movements ?? [],
               expectedCash: lastClosedShift.expectedCash,
               closingCashCounted: lastClosedShift.closingCashCounted,
               variance: lastClosedShift.variance,
@@ -2630,6 +2707,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         shiftCash?: Array<{
           openingFloat: number;
           cashSales: number;
+          cashIn?: number;
+          cashOut?: number;
+          cashRefunds?: number;
+          movements?: Array<{
+            type: string;
+            amount: number;
+            reason?: string | null;
+            staffName?: string | null;
+            createdAt?: string | null;
+          }>;
           expectedCash: number;
           closingCashCounted?: number | null;
           variance?: number | null;
@@ -6497,6 +6584,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ? t('webPosCartItemOne')
       : t('webPosCartItems').replace('{n}', String(cartCount));
 
+  const configuredPrinterNames = useMemo(() => {
+    const names = new Set<string>();
+    if (printerName.trim()) names.add(printerName.trim());
+    for (const p of printSettings?.printers || []) {
+      if (p.enabled === false) continue;
+      const n = (p.name || '').trim();
+      if (n) names.add(n);
+    }
+    return [...names];
+  }, [printerName, printSettings]);
+
+  const printerNameMissing =
+    printersReady &&
+    configuredPrinterNames.some((n) => isConfiguredPrinterMissing(n, printers, { agentOk }));
+
+  const printerMissing = printerDisconnected || printerNameMissing;
+
+  const suggestedPrinters = useMemo(() => {
+    if (!printerMissing) return [];
+    const fromWebPos = findPrinterHealCandidates(printerName, printers);
+    if (fromWebPos.length) return fromWebPos;
+    for (const n of configuredPrinterNames) {
+      const found = findPrinterHealCandidates(n, printers);
+      if (found.length) return found;
+    }
+    return [];
+  }, [printerMissing, printerName, printers, configuredPrinterNames]);
+
   return (
     <div
       className={`webpos-shell min-h-0 overflow-hidden flex flex-col ${
@@ -6521,13 +6636,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onTabChange={onPosTabChange}
         merchantName={merchant?.name || t('webPosStore')}
         agentOk={agentOk}
-        printerMissing={
-          printerDisconnected ||
-          (!!printerName.trim() &&
-            agentOk &&
-            printers.length > 0 &&
-            !printers.some((p) => p.name === printerName))
-        }
+        printerMissing={printerMissing}
         agentOutdated={agentOutdated}
         search={search}
         onSearchChange={setSearch}
@@ -6600,17 +6709,28 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             printerName={printerName}
             printers={printers}
             agentOk={agentOk}
-            printerMissing={
-              printerDisconnected ||
-              (!!printerName.trim() &&
-                agentOk &&
-                printers.length > 0 &&
-                !printers.some((p) => p.name === printerName))
-            }
+            printerMissing={printerMissing}
+            suggestedPrinters={suggestedPrinters}
             agentOutdated={agentOutdated}
             autoPrint={autoPrint}
             postSuccessTarget={postSuccessTarget}
-            onPrinterChange={setPrinterName}
+            onPrinterChange={(name) => {
+              setPrinterName(name);
+              setPrinterDisconnected(false);
+              const profiles = printSettings?.printers;
+              if (!name || !profiles?.length) return;
+              let changed = false;
+              const nextProfiles = profiles.map((p) => {
+                const current = (p.name || '').trim();
+                if (!current || !isConfiguredPrinterMissing(current, printers)) return p;
+                changed = true;
+                return { ...p, name };
+              });
+              if (!changed) return;
+              const next = { ...printSettings, printers: nextProfiles };
+              setPrintSettings(next);
+              void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
+            }}
             onAutoPrintChange={setAutoPrint}
             onPostSuccessChange={setPostSuccessTarget}
             onRefreshPrinters={() => {
