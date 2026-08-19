@@ -269,7 +269,12 @@ import {
   customerFromOrder,
   orderItemsToCartLines,
 } from '@/lib/order-to-cart';
-import { INVOICE_SETTLEMENT_METHOD, isInvoiceOrder, type MerchantOrder } from '@/lib/order-management';
+import {
+  INVOICE_SETTLEMENT_METHOD,
+  isInvoiceOrder,
+  posSaleFulfillmentStatus,
+  type MerchantOrder,
+} from '@/lib/order-management';
 
 type SplitReceiptPart = {
   id: string;
@@ -312,6 +317,7 @@ import {
   stopOrderAlertLoop,
 } from '@/lib/order-alert';
 import {
+  backOfficeHomePath,
   getEffectivePanelAccess,
   hasPermission,
   clearWebPosStaffSession,
@@ -965,26 +971,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const showPanelMenus = useCallback(() => {
     const jwtIsOwner = authUser?.role === 'merchant' && authUser?.isOwner !== false;
-    if (jwtIsOwner) {
-      window.dispatchEvent(new CustomEvent('webpos:show-panel'));
-      return;
-    }
     const access = getEffectivePanelAccess({
       jwtPermissions: authUser?.permissions as Permission[] | undefined,
-      isOwner: false,
+      isOwner: jwtIsOwner,
       staffConfigured,
       pinSession: webposStaff,
     });
-    // PIN / staff JWT: full panel, catalog-only, or stay in POS.
-    if (staffConfigured && !access.canOpenPanel && !access.canOpenCatalog) {
+    if (!access.canOpenBackOffice) {
       toast.error(t('webPosPanelDenied'));
       return;
     }
-    if (staffConfigured && !access.canOpenPanel && access.canOpenCatalog) {
-      navigate('/merchant/products');
+    if (access.canOpenPanel) {
+      window.dispatchEvent(new CustomEvent('webpos:show-panel'));
       return;
     }
-    window.dispatchEvent(new CustomEvent('webpos:show-panel'));
+    navigate(backOfficeHomePath(access.permissions, false));
   }, [authUser?.role, authUser?.isOwner, authUser?.permissions, staffConfigured, webposStaff, t, navigate]);
 
   const enterPosApp = useCallback(() => {
@@ -3886,14 +3887,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         paymentMethod: 'cash',
         isProvisional: true,
         tableLabel,
-        items: cart.map((l) => ({
-          name: lineExtrasLabel(l) ? `${l.name} (${lineExtrasLabel(l)})` : l.name,
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          lineTotal: l.lineTotal,
-          productId: l.productId,
-          categoryId: l.categoryId,
-        })),
+        items: cart.map((l) =>
+          buildKitchenTicketItemFromLine({
+            name: l.name,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            lineTotal: l.lineTotal,
+            productId: l.productId,
+            categoryId: l.categoryId,
+            courseNumber: l.courseNumber,
+            selectedExtras: l.selectedExtras,
+            comboSelections: l.comboSelections,
+            lineNote: l.lineNote,
+          })
+        ),
         subtotal: fullTotals.subtotal,
         discount: disc,
         taxAmount: fullTotals.tax,
@@ -3910,6 +3917,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         showStaff: printSettings?.receiptShowStaffLine !== false,
         staffName: webposStaff?.name,
         includeQr: false,
+        memberName: attachedMembership
+          ? attachedMembership.customerName?.trim() || attachedMembership.cardNumber || null
+          : null,
+        loyaltyPointsBalance: attachedMembership?.membershipEnabled
+          ? attachedMembership.pointsBalance
+          : null,
       };
       const text = generateWebPosReceiptText(receiptPayload, locale);
       setProvisionalPrinted(true);
@@ -4672,16 +4685,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (!orderForReceipt.items?.length && cart.length) {
         orderForReceipt = {
           ...orderForReceipt,
-          items: cart.map((l) => {
-            const detail = lineExtrasLabel(l);
-            return {
-              name: detail ? `${l.name} (${detail})` : l.name,
-              quantity: l.quantity,
-              unitPrice: l.unitPrice,
-              totalPrice: l.lineTotal,
-              weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
-            };
-          }),
+          items: cart.map((l) => ({
+            name: l.name,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            totalPrice: l.lineTotal,
+            weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
+            courseNumber: l.courseNumber,
+            selectedExtras: l.selectedExtras,
+            comboSelections: l.comboSelections,
+          })),
         };
       }
       try {
@@ -5410,9 +5423,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       scheduledRaw != null && scheduledRaw !== ''
         ? localDateTimeToIso(String(scheduledRaw)) || scheduledRaw
         : null;
+    const memberName =
+      attachedMembership?.customerName?.trim() || attachedMembership?.cardNumber || null;
     const custName = selectedCustomer
       ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(' ')
-      : undefined;
+      : memberName || undefined;
     const ship = selectedCustomer
       ? [selectedCustomer.defaultAddress, selectedCustomer.defaultZip, selectedCustomer.defaultCity]
           .filter(Boolean)
@@ -5439,13 +5454,32 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       .filter((p) => p.amount > 0);
     const resolvedMethod =
       tenders.length > 1 ? 'mixed' : tenders.length === 1 ? tenders[0]!.method : method;
+    const fulfillmentStatus = posSaleFulfillmentStatus({
+      channel: effectiveChannel,
+      payLater,
+      scheduledFor,
+    });
+    const giftCardPaid = tenders
+      .filter((p) => p.method === 'gift_card')
+      .reduce((s, p) => s + p.amount, 0);
+    const pointsRedeemed = extras?.pointsRedeemed || 0;
+    const pointsDiscount = extras?.pointsDiscount || 0;
+    const paidSubtotal = roundMoney2(
+      Math.max(0, merchandiseGross - discountAmount - pointsDiscount - giftCardPaid)
+    );
+    const pointsEarned =
+      attachedMembership?.membershipEnabled && !payLater ? computeEarnPoints(paidSubtotal) : 0;
+    const pointsBalance =
+      attachedMembership?.membershipEnabled
+        ? Math.max(0, attachedMembership.pointsBalance - pointsRedeemed + pointsEarned)
+        : null;
     return {
       clientId,
       orderNumber,
       paymentMethod: resolvedMethod,
       paymentBreakdown: tenders.length ? tenders : undefined,
       paymentStatus: payLater ? 'awaiting_payment' : 'completed',
-      status: payLater ? (scheduledFor ? 'accepted' : 'preparing') : 'completed',
+      status: fulfillmentStatus,
       subtotal: saleTotals.subtotal,
       taxAmount: saleTotals.tax,
       discountAmount,
@@ -5458,7 +5492,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       total: saleTotal,
       fulfillmentChannel: effectiveChannel,
       channel: effectiveChannel,
-      completedAt: payLater ? undefined : Date.now(),
+      completedAt: fulfillmentStatus === 'completed' ? Date.now() : undefined,
       scheduledFor,
       customerId: selectedCustomer?.id || null,
       customerName: custName || null,
@@ -5485,14 +5519,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       adyenCashierReceiptJson: terminalCapture?.cashierReceipt
         ? JSON.stringify(terminalCapture.cashierReceipt)
         : undefined,
+      pointsEarned,
+      pointsRedeemed,
+      pointsDiscount,
+      pointsBalance,
       notes: encodeOrderMetaNotes({
         existing: [
           roundingAmount
             ? `Rounding ${roundingAmount > 0 ? '+' : ''}${roundingAmount.toFixed(2)}`
             : '',
           tipAmount > 0 ? `Tip CHF ${tipAmount.toFixed(2)}` : '',
-          (extras?.pointsDiscount || 0) > 0
-            ? `Points −CHF ${(extras?.pointsDiscount || 0).toFixed(2)} (${extras?.pointsRedeemed || 0} pts)`
+          pointsDiscount > 0
+            ? `Points −CHF ${pointsDiscount.toFixed(2)} (${pointsRedeemed} pts)`
             : '',
           extras?.amountTendered != null
             ? `Tendered CHF ${extras.amountTendered.toFixed(2)}`
@@ -5504,6 +5542,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           .join(' · '),
         ticketDisplay: saleTicketDisplay,
         tabNumber: saleTabNumber,
+        memberName: attachedMembership ? memberName : null,
+        pointsEarned,
+        pointsBalance,
       }),
       items: saleLines.map((l) => ({
         productClientId: l.productId,
@@ -5751,21 +5792,35 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       amountTendered: extrasWithDisc?.amountTendered ?? null,
       changeDue: extrasWithDisc?.changeDue ?? null,
       customerName: sale.customerName || undefined,
+      memberName: attachedMembership
+        ? attachedMembership.customerName?.trim() ||
+          attachedMembership.cardNumber ||
+          sale.customerName ||
+          null
+        : null,
+      loyaltyPointsEarned: sale.pointsEarned != null && sale.pointsEarned > 0 ? sale.pointsEarned : null,
+      loyaltyPointsBalance:
+        attachedMembership?.membershipEnabled && sale.pointsBalance != null
+          ? sale.pointsBalance
+          : sale.pointsBalance ?? null,
       customerPhone: sale.customerPhone || undefined,
       shippingAddress: effectiveChannel === 'delivery' ? shipAddr : undefined,
       tableLabel,
-      items: saleLines.map((l) => {
-        const detail = lineExtrasLabel(l);
-        return {
-          name: detail ? `${l.name} (${detail})` : l.name,
+      items: saleLines.map((l) =>
+        buildKitchenTicketItemFromLine({
+          name: l.name,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
           lineTotal: l.lineTotal,
           weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
           productId: l.productId,
           categoryId: l.categoryId,
-        };
-      }),
+          courseNumber: l.courseNumber,
+          selectedExtras: l.selectedExtras,
+          comboSelections: l.comboSelections,
+          lineNote: l.lineNote,
+        })
+      ),
       subtotal: saleTotals.subtotal,
       discount: sale.discountAmount || 0,
       taxAmount: saleTotals.tax,
@@ -6222,10 +6277,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const canManageProducts = staffConfigured
     ? !!webposStaff && hasPermission(staffPerms, 'MANAGE_PRODUCTS', false)
     : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_PRODUCTS', jwtIsOwner);
-  const openCatalogMenu = () => {
-    setSettingsOpen(false);
-    navigate('/merchant/products');
-  };
+  const canViewOrders =
+    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'VIEW_ORDER_HISTORY', false));
+  const canShowBackOffice = canOpenPanel || canManageProducts || canViewOrders;
   const canViewAllSales =
     !staffConfigured ||
     (!!webposStaff && hasPermission(staffPerms, 'VIEW_ALL_SALES', false));
@@ -6685,9 +6739,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         reservationPendingCount={reservationPendingCount}
         staffName={webposStaff?.name}
         canDrawer={canDrawer}
-        canShowPanel={canOpenPanel}
-        canOpenCatalog={canManageProducts}
-        onOpenCatalog={openCatalogMenu}
+        canShowPanel={canShowBackOffice}
         appMode={appMode}
         settingsOpen={settingsOpen}
         onToggleSettings={() => setSettingsOpen((v) => !v)}
@@ -6834,9 +6886,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setSettingsOpen(false);
               void openCashDrawer();
             }}
-            canShowPanel={canOpenPanel}
-            canOpenCatalog={canManageProducts}
-            onOpenCatalog={openCatalogMenu}
+            canShowPanel={canShowBackOffice}
             appMode={appMode}
             onShowPanel={() => {
               setSettingsOpen(false);

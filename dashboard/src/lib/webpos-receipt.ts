@@ -91,6 +91,9 @@ export function nextDineInCounterNumber(
 /** Machine markers stored in order.notes so UI/receipts can recover tab + ticket. */
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
+const MEMBER_NOTE_RE = /\[member:([^\]]+)\]/i;
+const PTS_EARN_NOTE_RE = /\[pts_earn:(\d+)\]/i;
+const PTS_BAL_NOTE_RE = /\[pts_bal:(\d+)\]/i;
 const GIFT_CARD_REMAINING_NOTE_RE = /Gift card remaining:\s*([\d.]+)/i;
 
 export function parseGiftCardRemainingFromNotes(notes?: string | null): number | null {
@@ -104,18 +107,32 @@ export function encodeOrderMetaNotes(opts: {
   existing?: string | null;
   ticketDisplay?: string | null;
   tabNumber?: string | null;
+  memberName?: string | null;
+  pointsEarned?: number | null;
+  pointsBalance?: number | null;
 }): string | undefined {
   let base = String(opts.existing || '')
     .replace(TICKET_NOTE_RE, '')
     .replace(TAB_NOTE_RE, '')
+    .replace(MEMBER_NOTE_RE, '')
+    .replace(PTS_EARN_NOTE_RE, '')
+    .replace(PTS_BAL_NOTE_RE, '')
     .replace(/\s{2,}/g, ' ')
     .replace(/^[·\s]+|[·\s]+$/g, '')
     .trim();
   const tags: string[] = [];
   const ticket = opts.ticketDisplay?.trim();
   const tab = opts.tabNumber != null ? String(opts.tabNumber).trim() : '';
+  const member = opts.memberName?.trim();
   if (ticket) tags.push(`[ticket:${ticket.replace(/[\[\]]/g, '')}]`);
   if (tab) tags.push(`[tab:${tab.replace(/[\[\]]/g, '')}]`);
+  if (member) tags.push(`[member:${member.replace(/[\[\]]/g, '').slice(0, 80)}]`);
+  if (opts.pointsEarned != null && Number(opts.pointsEarned) > 0) {
+    tags.push(`[pts_earn:${Math.floor(Number(opts.pointsEarned))}]`);
+  }
+  if (opts.pointsBalance != null && Number.isFinite(Number(opts.pointsBalance))) {
+    tags.push(`[pts_bal:${Math.max(0, Math.floor(Number(opts.pointsBalance)))}]`);
+  }
   const joined = [...tags, base].filter(Boolean).join(' ').trim();
   return joined || undefined;
 }
@@ -123,14 +140,23 @@ export function encodeOrderMetaNotes(opts: {
 export function parseOrderMetaNotes(notes?: string | null): {
   ticketDisplay?: string;
   tabNumber?: string;
+  memberName?: string;
+  pointsEarned?: number;
+  pointsBalance?: number;
   cleanNotes: string;
 } {
   const raw = String(notes || '');
   const ticketMatch = raw.match(TICKET_NOTE_RE);
   const tabMatch = raw.match(TAB_NOTE_RE);
+  const memberMatch = raw.match(MEMBER_NOTE_RE);
+  const earnMatch = raw.match(PTS_EARN_NOTE_RE);
+  const balMatch = raw.match(PTS_BAL_NOTE_RE);
   const cleanNotes = raw
     .replace(TICKET_NOTE_RE, '')
     .replace(TAB_NOTE_RE, '')
+    .replace(MEMBER_NOTE_RE, '')
+    .replace(PTS_EARN_NOTE_RE, '')
+    .replace(PTS_BAL_NOTE_RE, '')
     .replace(/\s{2,}/g, ' ')
     .replace(/^[·\s]+|[·\s]+$/g, '')
     .trim();
@@ -138,9 +164,14 @@ export function parseOrderMetaNotes(notes?: string | null): {
   if (ticketDisplay && !ticketDisplay.startsWith('#')) {
     ticketDisplay = `#${ticketDisplay.replace(/^#/, '')}`;
   }
+  const pointsEarned = earnMatch?.[1] != null ? Number(earnMatch[1]) : undefined;
+  const pointsBalance = balMatch?.[1] != null ? Number(balMatch[1]) : undefined;
   return {
     ticketDisplay,
     tabNumber: tabMatch?.[1]?.trim() || undefined,
+    memberName: memberMatch?.[1]?.trim() || undefined,
+    pointsEarned: Number.isFinite(pointsEarned) ? pointsEarned : undefined,
+    pointsBalance: Number.isFinite(pointsBalance) ? pointsBalance : undefined,
     cleanNotes,
   };
 }
@@ -161,6 +192,12 @@ export function deliveryDirectionsUrlForReceipt(tx: {
   return googleMapsNavigationUrl(address);
 }
 
+export type KitchenComboLine = {
+  slotName?: string;
+  productName: string;
+  modifierLines?: string[];
+};
+
 export type WebPosReceiptItem = {
   name: string;
   quantity: number;
@@ -170,6 +207,10 @@ export type WebPosReceiptItem = {
   seatNumber?: number | null;
   productId?: string | null;
   categoryId?: string | null;
+  courseNumber?: number | null;
+  /** One line per modifier/extra (not mashed into the article name). */
+  modifierLines?: string[];
+  comboLines?: KitchenComboLine[];
 };
 
 export type PosPrintSettingsClient = {
@@ -289,6 +330,12 @@ export type WebPosReceipt = {
   printAdyenReceiptOnTicket?: boolean;
   /** Remaining stored-value balance after gift card redemption on this sale. */
   giftCardRemainingBalance?: number | null;
+  /** Loyalty member printed on the customer receipt. */
+  memberName?: string | null;
+  /** Points earned on this sale. */
+  loyaltyPointsEarned?: number | null;
+  /** Running / lifetime points after this sale. */
+  loyaltyPointsBalance?: number | null;
   /** Provisional / preview receipt — no payment block. */
   isProvisional?: boolean;
 };
@@ -456,10 +503,131 @@ function padLine(left: string, right: string, width: number): string {
   return left + ' '.repeat(gap) + right;
 }
 
+function formatLoyaltyReceiptLines(
+  tx: Pick<WebPosReceipt, 'loyaltyPointsEarned' | 'loyaltyPointsBalance'>,
+  L: ReturnType<typeof receiptLabels>,
+  width: number
+): string {
+  const earned = tx.loyaltyPointsEarned != null ? Math.floor(Number(tx.loyaltyPointsEarned)) : 0;
+  const hasBalance = tx.loyaltyPointsBalance != null && Number.isFinite(Number(tx.loyaltyPointsBalance));
+  if (earned <= 0 && !hasBalance) return '';
+  let r = '-'.repeat(width) + '\n';
+  if (earned > 0) {
+    r += padLine(`${L.pointsEarned}:`, `+${earned}`, width) + '\n';
+  }
+  if (hasBalance) {
+    r += padLine(`${L.pointsBalance}:`, `${Math.max(0, Math.floor(Number(tx.loyaltyPointsBalance)))}`, width) + '\n';
+  }
+  return r;
+}
+
 function centerLine(text: string, width: number): string {
   const t = text.slice(0, width);
   const pad = Math.max(0, Math.floor((width - t.length) / 2));
   return ' '.repeat(pad) + t;
+}
+
+/** Centered course banner: >> COURSE 1 << */
+export function formatCourseBanner(course: number, courseLabel = 'COURSE'): string {
+  const n = Math.max(1, Math.floor(Number(course) || 1));
+  return `>> ${String(courseLabel || 'COURSE').trim() || 'COURSE'} ${n} <<`;
+}
+
+export function formatQtyArticlePrefix(item: {
+  quantity?: number | string | null;
+  weightKg?: number | null;
+}): string {
+  const weightKg = item.weightKg;
+  if (weightKg != null && Number(weightKg) > 0) {
+    return `${Number(weightKg).toFixed(3)} kg `;
+  }
+  return `${Number(item.quantity) || 0} x `;
+}
+
+function stripLeadingDash(text: string): string {
+  return String(text || '')
+    .replace(/^[-–—•]\s*/, '')
+    .trim();
+}
+
+/** Split mashed `Name (extra, extra)` when structured extras are missing. */
+export function splitReceiptArticle(
+  name: string,
+  modifierLines?: string[] | null
+): { product: string; modifiers: string[] } {
+  const existing = (modifierLines || []).map((m) => stripLeadingDash(m)).filter(Boolean);
+  const clean = String(name || '').replace(/\s+/g, ' ').trim();
+  if (existing.length) {
+    const paren = clean.match(/^(.*?)\s*\((.*)\)\s*$/);
+    return { product: paren ? paren[1].trim() : clean, modifiers: existing };
+  }
+  const paren = clean.match(/^(.*?)\s*\((.*)\)\s*$/);
+  if (paren) {
+    return {
+      product: paren[1].trim(),
+      modifiers: paren[2]
+        .split(/,\s*/)
+        .map((m) => stripLeadingDash(m))
+        .filter(Boolean),
+    };
+  }
+  return { product: clean, modifiers: [] };
+}
+
+function extraIndent(prefix: string): string {
+  return ' '.repeat(Math.max(0, prefix.length));
+}
+
+function formatReceiptExtraLine(prefix: string, extra: string): string {
+  return `${extraIndent(prefix)}- ${stripLeadingDash(extra)}`;
+}
+
+function groupReceiptItemsByCourse<T extends { courseNumber?: number | null }>(
+  items: T[]
+): Array<{ course: number | null; items: T[] }> {
+  const hasCourses = items.some((i) => i.courseNumber != null && Number(i.courseNumber) > 0);
+  if (!hasCourses) return [{ course: null, items }];
+  const courses = Array.from(
+    new Set(items.map((i) => Number(i.courseNumber) || 1).filter((n) => n > 0))
+  ).sort((a, b) => a - b);
+  return courses.map((course) => ({
+    course,
+    items: items.filter((i) => (Number(i.courseNumber) || 1) === course),
+  }));
+}
+
+function formatCustomerReceiptItemLines(
+  item: WebPosReceiptItem,
+  width: number
+): string[] {
+  const qtyPrefix = formatQtyArticlePrefix(item);
+  const { product, modifiers } = splitReceiptArticle(item.name, item.modifierLines);
+  const comboLines = (item.comboLines || []).filter((c) => c.productName?.trim());
+  const article = product || item.name || 'Item';
+  const left = `${qtyPrefix}${article}`.trim();
+  const right = Number(item.lineTotal).toFixed(2);
+  const out: string[] = [];
+  if (left.length + 1 + right.length <= width) {
+    out.push(padLine(left, right, width));
+  } else {
+    const maxLeft = Math.max(8, width - right.length - 1);
+    out.push(padLine(left.slice(0, maxLeft), right, width));
+  }
+  for (const combo of comboLines) {
+    const slotLabel = combo.slotName?.trim();
+    const pickName = combo.productName.trim();
+    const head = slotLabel ? `${slotLabel}: ${pickName}` : pickName;
+    out.push(formatReceiptExtraLine(qtyPrefix, head).slice(0, width));
+    for (const mod of combo.modifierLines || []) {
+      const text = stripLeadingDash(mod);
+      if (!text) continue;
+      out.push(formatReceiptExtraLine(qtyPrefix, text).slice(0, width));
+    }
+  }
+  for (const mod of modifiers) {
+    out.push(formatReceiptExtraLine(qtyPrefix, mod).slice(0, width));
+  }
+  return out;
 }
 
 function resolveScheduledDate(scheduledFor?: string | number | null): Date | null {
@@ -748,8 +916,13 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
   const isDelivery = tx.channel === 'delivery';
   const isOnline = isExternalOnlineOrder(tx);
+  const memberName = tx.memberName?.trim() || '';
+  if (memberName) {
+    r += `${L.member}: ${memberName}\n`;
+  } else if ((isDelivery || isOnline) && tx.customerName?.trim()) {
+    r += `${L.customer}: ${tx.customerName.trim()}\n`;
+  }
   if (isDelivery || isOnline) {
-    if (tx.customerName?.trim()) r += `${L.customer}: ${tx.customerName.trim()}\n`;
     if (tx.customerPhone?.trim()) r += `Tel: ${tx.customerPhone.trim()}\n`;
   }
   if (isDelivery && tx.shippingAddress?.trim()) {
@@ -765,18 +938,15 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (tx.splitLabel) r += `${tx.splitLabel}\n`;
   r += thin + '\n';
 
-  for (const item of tx.items) {
-    r += item.name.slice(0, width) + '\n';
-    const qtyLabel =
-      item.weightKg != null && item.weightKg > 0
-        ? `${item.weightKg.toFixed(3)} kg @ ${item.unitPrice.toFixed(2)}/kg`
-        : `  ${item.quantity} x ${item.unitPrice.toFixed(2)}`;
-    r +=
-      padLine(
-        qtyLabel,
-        item.lineTotal.toFixed(2),
-        width
-      ) + '\n';
+  for (const group of groupReceiptItemsByCourse(tx.items)) {
+    if (group.course != null) {
+      r += centerLine(formatCourseBanner(group.course, L.courseLabel), width) + '\n';
+    }
+    for (const item of group.items) {
+      for (const line of formatCustomerReceiptItemLines(item, width)) {
+        r += line + '\n';
+      }
+    }
   }
 
   r += thin + '\n';
@@ -845,6 +1015,8 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
           width
         ) + '\n';
     }
+    const loyaltyBlock = formatLoyaltyReceiptLines(tx, L, width);
+    if (loyaltyBlock) r += loyaltyBlock;
   }
   // VAT calculations below payment section (includes gift-card sell/reload lines)
   const vatTotals = resolveOrderReceiptVat(tx);
@@ -944,12 +1116,6 @@ export function generateRefundReceiptText(tx: RefundReceiptPrint, panelLang?: st
   r += (tx.footer || L.thankYou).trim() + '\n\n\n';
   return r;
 }
-
-export type KitchenComboLine = {
-  slotName?: string;
-  productName: string;
-  modifierLines?: string[];
-};
 
 export type KitchenTicketItem = WebPosReceiptItem & {
   courseNumber?: number | null;
@@ -1083,11 +1249,7 @@ function kitchenItemCount(items: WebPosReceiptItem[]): number {
 }
 
 function formatKitchenQtyLabel(item: KitchenTicketItem): string {
-  const weightKg = item.weightKg;
-  if (weightKg != null && weightKg > 0) {
-    return `${weightKg.toFixed(3)} kg`;
-  }
-  return String(Number(item.quantity) || 0);
+  return formatQtyArticlePrefix(item).trimEnd();
 }
 
 function formatKitchenChannelWhenLines(
@@ -1156,25 +1318,16 @@ function formatKitchenItemLines(
   cancelled: boolean,
   forEscPos: boolean
 ): KitchenLine[] {
-  const qty = formatKitchenQtyLabel(item);
-  const fullName = String(item.name || '').replace(/\s+/g, ' ').trim();
-  let product = fullName;
-  let modifierLines = (item.modifierLines || []).map((m) => m.trim()).filter(Boolean);
+  const qtyPrefix = formatQtyArticlePrefix(item);
+  const { product, modifiers: modifierLines } = splitReceiptArticle(
+    item.name,
+    item.modifierLines
+  );
   const comboLines = (item.comboLines || []).filter((c) => c.productName?.trim());
   const lineNote = String(item.lineNote || '').trim();
-
-  if (!modifierLines.length && !comboLines.length) {
-    const paren = fullName.match(/^(.*?)\s*\((.*)\)\s*$/);
-    if (paren) {
-      product = paren[1].trim();
-      modifierLines = paren[2]
-        .split(/,\s*/)
-        .map((m) => m.trim())
-        .filter(Boolean);
-    }
-  }
-
-  const primary = `${qty} ${product}`.trim();
+  const extraWidth = Math.max(8, width - qtyPrefix.length);
+  const qty = qtyPrefix.trimEnd();
+  const primary = `${qtyPrefix}${product}`.trim();
   const wrappedPrimary = wrapKitchenWords(primary, width);
   const lines: KitchenLine[] = [];
 
@@ -1211,37 +1364,40 @@ function formatKitchenItemLines(
     pushItem(qty, comboLines.length || modifierLines.length || lineNote ? 0 : 1);
   }
 
+  const pushDashed = (text: string, blankAfter = 0) => {
+    const line = formatReceiptExtraLine(qtyPrefix, text);
+    if (line.length <= width) {
+      pushExtra(line, blankAfter);
+      return;
+    }
+    const dashPrefix = `${extraIndent(qtyPrefix)}- `;
+    const wrapped = wrapKitchenWords(stripLeadingDash(text), Math.max(8, width - dashPrefix.length));
+    wrapped.forEach((w, i) => {
+      const row = i === 0 ? `${dashPrefix}${w}` : `${extraIndent(qtyPrefix)}  ${w}`;
+      pushExtra(row, i === wrapped.length - 1 ? blankAfter : 0);
+    });
+  };
+
   for (const combo of comboLines) {
     const slotLabel = combo.slotName?.trim();
     const pickName = combo.productName.trim();
     const head = slotLabel ? `${slotLabel}: ${pickName}` : pickName;
-    const wrappedHead = wrapKitchenWords(head, Math.max(8, width - 2));
-    wrappedHead.forEach((w, i) => {
-      const mods = combo.modifierLines || [];
-      const lastHead = i === wrappedHead.length - 1 && !mods.length;
-      pushExtra(`  ${w}`, lastHead ? 0 : 0);
-    });
+    pushDashed(head);
     for (const mod of combo.modifierLines || []) {
-      for (const w of wrapKitchenWords(mod, Math.max(8, width - 4))) {
-        pushExtra(`    ${w}`);
-      }
+      const text = stripLeadingDash(mod);
+      if (text) pushDashed(text);
     }
   }
 
   if (modifierLines.length) {
-    modifierLines.forEach((mod, i) => {
-      const wrapped = wrapKitchenWords(mod, Math.max(8, width - 2));
-      wrapped.forEach((w, j) => {
-        const last = i === modifierLines.length - 1 && j === wrapped.length - 1 && !lineNote;
-        pushExtra(`  ${w}`, last ? 0 : 0);
-      });
-    });
+    modifierLines.forEach((mod) => pushDashed(mod));
   }
 
   if (lineNote) {
     const noteText = forEscPos ? `*${lineNote}*` : `_${lineNote}_`;
-    for (const w of wrapKitchenWords(noteText, Math.max(8, width - 2))) {
-      pushNote(w, 1);
+    const notePrefix = extraIndent(qtyPrefix);
+    for (const w of wrapKitchenWords(noteText, extraWidth)) {
+      pushNote(`${notePrefix}${w}`, 1);
     }
   } else if (lines.length && (lines[lines.length - 1]?.blankAfter || 0) === 0) {
     lines[lines.length - 1] = { ...lines[lines.length - 1]!, blankAfter: 1 };
@@ -1320,17 +1476,18 @@ function buildKitchenTicketLines(
 
   const items = opts.items;
   const hasCourses =
-    !cancelled &&
-    opts.groupByCourse !== false &&
-    items.some((i) => i.courseNumber != null && i.courseNumber > 0);
+    !cancelled && items.some((i) => i.courseNumber != null && Number(i.courseNumber) > 0);
 
   if (hasCourses) {
-    const courses = Array.from(
-      new Set(items.map((i) => i.courseNumber || 1).filter((n) => n > 0))
-    ).sort((a, b) => a - b);
-    for (const course of courses) {
-      lines.push({ kind: 'header', text: `COURSE ${course}` });
-      for (const item of items.filter((i) => (i.courseNumber || 1) === course)) {
+    for (const group of groupReceiptItemsByCourse(items)) {
+      if (group.course != null) {
+        lines.push({
+          kind: 'center',
+          text: formatCourseBanner(group.course, L.courseLabel),
+          blankAfter: 0,
+        });
+      }
+      for (const item of group.items) {
         lines.push(...formatKitchenItemLines(item, itemWidth, cancelled, forEscPos));
       }
     }
@@ -1350,8 +1507,12 @@ function buildKitchenTicketLines(
 
 /** Plain-text kitchen ticket (fallback / preview). */
 export function generateKitchenTicketText(opts: KitchenTicketOpts): string {
-  return buildKitchenTicketLines(opts, false)
-    .lines.map((l) => `${l.text}\n${'\n'.repeat(l.blankAfter || 0)}`)
+  const { width, lines } = buildKitchenTicketLines(opts, false);
+  return lines
+    .map((l) => {
+      const text = l.kind === 'center' ? centerLine(l.text.trim(), width) : l.text;
+      return `${text}\n${'\n'.repeat(l.blankAfter || 0)}`;
+    })
     .join('');
 }
 
@@ -2234,13 +2395,27 @@ export type PosOrderForReceipt = {
   paymentBreakdown?: Array<{ method: string; amount: number }> | null;
   /** Remaining gift card balance after redemption (from notes or redeem tx). */
   giftCardRemainingBalance?: number | null;
+  pointsEarned?: number | null;
+  pointsRedeemed?: number | null;
+  memberName?: string | null;
+  loyaltyPointsBalance?: number | null;
   items: Array<{
     id?: string;
     name?: string | null;
+    productName?: string | null;
     quantity: number;
     totalPrice: number;
     unitPrice?: number;
     refundedQuantity?: number;
+    productId?: string | null;
+    weightKg?: number | null;
+    courseNumber?: number | null;
+    selectedExtras?: Array<{ name?: string | null }> | null;
+    comboSelections?: Array<{
+      slotName?: string | null;
+      productName?: string | null;
+      selectedExtras?: Array<{ name?: string | null }>;
+    }> | null;
   }>;
   refundReason?: string | null;
 };
@@ -2276,6 +2451,22 @@ export function posOrderToWebPosReceipt(
       : null);
   const meta = parseOrderMetaNotes(order.notes);
   const ticketDisplay = order.ticketDisplay || meta.ticketDisplay || null;
+  const loyaltyPointsEarned =
+    order.pointsEarned != null && Number(order.pointsEarned) > 0
+      ? Math.floor(Number(order.pointsEarned))
+      : meta.pointsEarned != null && meta.pointsEarned > 0
+        ? meta.pointsEarned
+        : null;
+  const loyaltyPointsBalance =
+    order.loyaltyPointsBalance != null && Number.isFinite(Number(order.loyaltyPointsBalance))
+      ? Math.max(0, Math.floor(Number(order.loyaltyPointsBalance)))
+      : meta.pointsBalance != null
+        ? meta.pointsBalance
+        : null;
+  const hasLoyalty =
+    (loyaltyPointsEarned != null && loyaltyPointsEarned > 0) || loyaltyPointsBalance != null;
+  const memberName =
+    order.memberName || meta.memberName || (hasLoyalty ? order.customerName : null) || null;
   const adyen = resolveOrderAdyenReceipts(order);
   const paymentLines = (() => {
     const tenders = parsePaymentBreakdown(
@@ -2303,20 +2494,28 @@ export function posOrderToWebPosReceipt(
     paymentMethod: order.paymentMethod || 'cash',
     paymentLines,
     customerName: order.customerName,
+    memberName,
+    loyaltyPointsEarned,
+    loyaltyPointsBalance,
     customerPhone: order.customerPhone,
     shippingAddress: order.shippingAddress,
     orderSource: order.orderSource,
     orderType: order.orderType,
     tableLabel: order.tableLabel,
     guestCount: order.guestCount,
-    items: (order.items || []).map((i) => ({
-      name: resolveOrderItemName(i.name),
-      quantity: i.quantity,
-      unitPrice: Number(i.unitPrice ?? (i.quantity ? i.totalPrice / i.quantity : i.totalPrice)),
-      lineTotal: Number(i.totalPrice),
-      productId: (i as { productId?: string | null }).productId ?? null,
-      weightKg: (i as { weightKg?: number | null }).weightKg ?? null,
-    })),
+    items: (order.items || []).map((i) =>
+      buildKitchenTicketItemFromLine({
+        name: resolveOrderItemName(i.name, i.productName),
+        quantity: Number(i.quantity) || 0,
+        unitPrice: Number(i.unitPrice ?? (i.quantity ? i.totalPrice / i.quantity : i.totalPrice)),
+        lineTotal: Number(i.totalPrice),
+        productId: i.productId ?? null,
+        weightKg: i.weightKg ?? null,
+        courseNumber: i.courseNumber,
+        selectedExtras: i.selectedExtras || [],
+        comboSelections: i.comboSelections || [],
+      })
+    ),
     subtotal,
     discount: Number(order.discountAmount ?? 0),
     taxAmount,
@@ -2406,9 +2605,12 @@ export function generateOrderNotificationTicketEscPos(opts: OrderNotificationTic
   }
   lines.push(sep);
   for (const item of opts.items.slice(0, 12)) {
-    const qty = Number(item.quantity) || 1;
-    const name = String(item.name || 'Item').replace(/\s+/g, ' ').trim();
-    lines.push(`${qty}x ${name}`.slice(0, width));
+    const qtyPrefix = formatQtyArticlePrefix({ quantity: item.quantity });
+    const { product, modifiers } = splitReceiptArticle(String(item.name || 'Item'));
+    lines.push(`${qtyPrefix}${product}`.slice(0, width));
+    for (const mod of modifiers) {
+      lines.push(formatReceiptExtraLine(qtyPrefix, mod).slice(0, width));
+    }
   }
   if (opts.items.length > 12) {
     lines.push(`+${opts.items.length - 12} ${L.totalItems.toLowerCase()}`);

@@ -82,6 +82,11 @@ export type ReceiptLabels = {
   giftCardBalance: string;
   giftCardRemainingBalance: string;
   giftCardScanRedeem: string;
+  member: string;
+  pointsEarned: string;
+  pointsBalance: string;
+  /** Kitchen / guest receipt course banner, e.g. >> COURSE 1 << */
+  courseLabel: string;
 };
 
 const EN: ReceiptLabels = {
@@ -163,6 +168,10 @@ const EN: ReceiptLabels = {
   giftCardBalance: 'Balance',
   giftCardRemainingBalance: 'Gift card remaining',
   giftCardScanRedeem: 'Scan barcode to redeem',
+  member: 'Member',
+  pointsEarned: 'Points this sale',
+  pointsBalance: 'Points so far',
+  courseLabel: 'COURSE',
 };
 
 const FR: ReceiptLabels = {
@@ -244,6 +253,10 @@ const FR: ReceiptLabels = {
   giftCardBalance: 'Solde',
   giftCardRemainingBalance: 'Solde carte cadeau',
   giftCardScanRedeem: 'Scannez le code-barres pour payer',
+  member: 'Membre',
+  pointsEarned: 'Points cette vente',
+  pointsBalance: 'Points accumulés',
+  courseLabel: 'PLAT',
 };
 
 const DE: ReceiptLabels = {
@@ -325,6 +338,10 @@ const DE: ReceiptLabels = {
   giftCardBalance: 'Guthaben',
   giftCardRemainingBalance: 'Guthaben Geschenkkarte',
   giftCardScanRedeem: 'Barcode an der Kasse scannen',
+  member: 'Mitglied',
+  pointsEarned: 'Punkte dieser Verkauf',
+  pointsBalance: 'Punkte bisher',
+  courseLabel: 'GANG',
 };
 
 export function receiptLabels(lang: string | null | undefined): ReceiptLabels {

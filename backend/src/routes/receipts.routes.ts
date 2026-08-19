@@ -54,6 +54,18 @@ router.get("/:ref", async (req: Request, res: Response) => {
     const taxRate = merchant
       ? MerchantSettingsService.channelTaxRate(merchant, channel)
       : 0;
+    const notes = String(order.notes || "");
+    const memberMatch = notes.match(/\[member:([^\]]+)\]/i);
+    const ptsEarnMatch = notes.match(/\[pts_earn:(\d+)\]/i);
+    const ptsBalMatch = notes.match(/\[pts_bal:(\d+)\]/i);
+    const memberName = memberMatch?.[1]?.trim() || null;
+    const pointsEarned =
+      order.pointsEarned != null && Number(order.pointsEarned) > 0
+        ? Number(order.pointsEarned)
+        : ptsEarnMatch?.[1]
+          ? Number(ptsEarnMatch[1])
+          : 0;
+    const pointsBalance = ptsBalMatch?.[1] != null ? Number(ptsBalMatch[1]) : null;
 
     res.json({
       success: true,
@@ -65,6 +77,10 @@ router.get("/:ref", async (req: Request, res: Response) => {
         address: [merchant?.address, merchant?.city].filter(Boolean).join(", "),
         phone: merchant?.phone,
         vatNumber: merchant?.vatNumber,
+        customerName: order.customerName,
+        memberName,
+        pointsEarned,
+        pointsBalance,
         channel: order.fulfillmentChannel,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
@@ -92,6 +108,8 @@ router.get("/:ref", async (req: Request, res: Response) => {
           unitPrice: i.unitPrice,
           lineTotal: i.totalPrice,
           seatNumber: (i as any).seatNumber ?? null,
+          selectedExtras: i.selectedExtras || [],
+          comboSelections: i.comboSelections || [],
         })),
       },
     });

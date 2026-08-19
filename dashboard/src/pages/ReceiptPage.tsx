@@ -6,7 +6,7 @@ import { APP_NAME } from '@/lib/brand';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { normalizeReceiptDomain, qrImageUrl } from '@/lib/qr';
 import { receiptLabels } from '@/lib/receipt-labels';
-import { buildDigitalReceiptTotals } from '@/lib/webpos-receipt';
+import { buildDigitalReceiptTotals, formatQtyArticlePrefix, splitReceiptArticle } from '@/lib/webpos-receipt';
 
 type Receipt = {
   id: string;
@@ -28,6 +28,10 @@ type Receipt = {
   total: string | number;
   tableLabel?: string | null;
   guestCount?: number | null;
+  customerName?: string | null;
+  memberName?: string | null;
+  pointsEarned?: number | null;
+  pointsBalance?: number | null;
   completedAt?: string;
   adyenPaymentReceiptText?: string | null;
   items: Array<{
@@ -35,6 +39,12 @@ type Receipt = {
     quantity: string | number;
     unitPrice: string | number;
     lineTotal: string | number;
+    selectedExtras?: Array<{ name?: string | null }> | null;
+    comboSelections?: Array<{
+      slotName?: string | null;
+      productName?: string | null;
+      selectedExtras?: Array<{ name?: string | null }>;
+    }> | null;
   }>;
 };
 
@@ -210,16 +220,52 @@ export default function ReceiptPage() {
               {receipt.guestCount ? ` · ${receipt.guestCount} ${L.pax}` : ''}
             </p>
           )}
+          {receipt.memberName ? (
+            <p>
+              <span className="text-gray-500">{t('receiptMember')}:</span> {receipt.memberName}
+            </p>
+          ) : receipt.customerName &&
+            (Number(receipt.pointsEarned || 0) > 0 || receipt.pointsBalance != null) ? (
+            <p>
+              <span className="text-gray-500">{t('receiptMember')}:</span> {receipt.customerName}
+            </p>
+          ) : null}
         </div>
         <ul className="space-y-2 text-sm mb-4">
-          {receipt.items.map((item, idx) => (
-            <li key={idx} className="flex justify-between gap-3">
-              <span>
-                {item.quantity}× {item.name || t('receiptItemFallback')}
-              </span>
-              <span className="font-medium tabular-nums shrink-0">{money(item.lineTotal)}</span>
-            </li>
-          ))}
+          {receipt.items.map((item, idx) => {
+            const extraNames = [
+              ...(item.comboSelections || []).flatMap((c) => {
+                const pick = String(c.productName || '').trim();
+                const comboExtras = (c.selectedExtras || [])
+                  .map((e) => String(e.name || '').trim())
+                  .filter(Boolean);
+                const label = c.slotName?.trim() && pick ? `${c.slotName.trim()}: ${pick}` : pick;
+                return [label, ...comboExtras].filter(Boolean);
+              }),
+              ...(item.selectedExtras || []).map((e) => String(e.name || '').trim()).filter(Boolean),
+            ];
+            const { product, modifiers } = splitReceiptArticle(
+              item.name || t('receiptItemFallback'),
+              extraNames
+            );
+            const qtyPrefix = formatQtyArticlePrefix({ quantity: item.quantity });
+            return (
+              <li key={idx} className="space-y-0.5">
+                <div className="flex justify-between gap-3">
+                  <span>
+                    {qtyPrefix}
+                    {product}
+                  </span>
+                  <span className="font-medium tabular-nums shrink-0">{money(item.lineTotal)}</span>
+                </div>
+                {modifiers.map((mod) => (
+                  <div key={mod} className="pl-[2.25rem] text-stone-600">
+                    - {mod}
+                  </div>
+                ))}
+              </li>
+            );
+          })}
         </ul>
         <div className="text-sm space-y-1 border-t pt-3">
           {totals.discount > 0 ? (
@@ -244,6 +290,23 @@ export default function ReceiptPage() {
             <p className="text-gray-500 pt-1">
               {L.paid}: {receipt.paymentMethod.toUpperCase()}
             </p>
+          ) : null}
+          {Number(receipt.pointsEarned || 0) > 0 || receipt.pointsBalance != null ? (
+            <div className="pt-2 space-y-1">
+              {Number(receipt.pointsEarned || 0) > 0 ? (
+                <TotalsRow
+                  label={t('receiptPointsEarned')}
+                  value={`+${Math.floor(Number(receipt.pointsEarned))}`}
+                  accent
+                />
+              ) : null}
+              {receipt.pointsBalance != null ? (
+                <TotalsRow
+                  label={t('receiptPointsBalance')}
+                  value={String(Math.max(0, Math.floor(Number(receipt.pointsBalance))))}
+                />
+              ) : null}
+            </div>
           ) : null}
         </div>
         {receipt.adyenPaymentReceiptText ? (

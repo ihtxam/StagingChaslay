@@ -2,6 +2,7 @@ import api from '@/lib/api';
 import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
 import {
   buildKitchenPrintJobs,
+  buildKitchenTicketItemFromLine,
   generateKitchenTicketEscPos,
   generateOrderNotificationTicketEscPos,
   generateReservationTicketEscPos,
@@ -133,21 +134,17 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
     !isRetailPosMode(settings.posCheckoutSettings) &&
     printSettings?.autoPrintKitchen !== false
   ) {
-    const receiptItems = (order.items || []).map((i) => {
-      const extras = (i.selectedExtras || [])
-        .map((e) => e.name)
-        .filter(Boolean)
-        .join(', ');
-      const name = String(i.productName || i.name || 'Item');
-      return {
-        name: extras ? `${name} (${extras})` : name,
+    const receiptItems = (order.items || []).map((i) =>
+      buildKitchenTicketItemFromLine({
+        name: String(i.productName || i.name || 'Item'),
         quantity: Number(i.quantity) || 1,
         unitPrice: Number(i.unitPrice) || 0,
         lineTotal: Number(i.totalPrice) || 0,
         productId: i.productId || null,
         categoryId: i.categoryId || i.product?.categoryId || null,
-      };
-    });
+        selectedExtras: i.selectedExtras || [],
+      })
+    );
 
     const kitchenOpts = {
       orderNumber: order.orderNumber || orderId.slice(0, 8),
