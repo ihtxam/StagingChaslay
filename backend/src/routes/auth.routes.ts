@@ -218,6 +218,8 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
         roleName: profile.roleName,
         permissions: profile.permissions,
       });
+      const { readInventoryAddonEnabled } = await import("@/lib/inventory-addon");
+      const inventoryOn = await readInventoryAddonEnabled(req.user.merchantId).catch(() => false);
       res.json({
         user: {
           id: profile.id,
@@ -228,6 +230,8 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           roleName: profile.roleName,
           permissions: profile.permissions,
           isOwner: false,
+          inventoryAddonEnabled: inventoryOn,
+          inventoryEnabled: inventoryOn,
         },
         role: "staff",
         token,

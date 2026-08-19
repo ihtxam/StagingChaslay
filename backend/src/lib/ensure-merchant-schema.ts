@@ -73,6 +73,7 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   bank_account_holder: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS bank_account_holder varchar(255)",
   invoice_sequence:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS invoice_sequence integer NOT NULL DEFAULT 0",
+  /** Paid addon flag — default false for every merchant; Superadmin/reseller toggle it. */
   inventory_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_addon_enabled boolean NOT NULL DEFAULT false",
   inventory_waste_factor:

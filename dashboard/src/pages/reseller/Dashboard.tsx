@@ -183,6 +183,7 @@ function MerchantsPage() {
         merchantId: merchant.id,
         isOwner: true,
         impersonatedBy: 'reseller',
+        inventoryAddonEnabled: !!(merchant.inventoryAddonEnabled || merchant.inventoryEnabled),
       });
       toast.success(t('resellerOpenMerchant'));
       navigate('/merchant');
@@ -451,6 +452,7 @@ function MerchantsPage() {
               <th className="px-3 py-2">{t('resellerStores')}</th>
               <th className="px-3 py-2">{t('email')}</th>
               <th className="px-3 py-2">{t('status')}</th>
+              <th className="px-3 py-2">{t('invTitle')}</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -468,6 +470,17 @@ function MerchantsPage() {
                   </span>
                 </td>
                 <td className="px-3 py-2">{m.status}</td>
+                <td className="px-3 py-2">
+                  {m.inventoryAddonEnabled === true ? (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                      On
+                    </span>
+                  ) : (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">
+                      Off
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-right space-x-3 whitespace-nowrap">
                   <button
                     type="button"

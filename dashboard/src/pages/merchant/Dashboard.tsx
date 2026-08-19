@@ -53,6 +53,7 @@ import {
   type WebPosStaffSession,
 } from '@/lib/permissions';
 import type { EditionFeatureKey } from '@/lib/edition-features';
+import { isInventoryLicensed } from '@/lib/inventory-addon';
 
 const WebsiteCms = lazy(() => import('./WebsiteCms'));
 
@@ -106,6 +107,7 @@ function MerchantShell() {
   /** When true on /merchant/pos, hide sidebar + header so WebPOS feels like its own app. */
   const [posAppMode, setPosAppMode] = useState(true);
   const [editionFeatures, setEditionFeatures] = useState<EditionFeatureKey[] | null>(null);
+  const [inventoryLicensed, setInventoryLicensed] = useState(() => isInventoryLicensed(user));
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
   );
@@ -136,14 +138,37 @@ function MerchantShell() {
   );
 
   useEffect(() => {
-    api
-      .get('/merchant/settings')
-      .then((r) => {
-        const feats = r.data?.settings?.editionFeatures;
-        setEditionFeatures(Array.isArray(feats) ? feats : null);
-      })
-      .catch(() => setEditionFeatures(null));
-  }, []);
+    let cancelled = false;
+    const applySettings = (settings: {
+      editionFeatures?: EditionFeatureKey[] | null;
+      inventoryAddonEnabled?: boolean;
+      inventoryEnabled?: boolean;
+    } | null) => {
+      const feats = settings?.editionFeatures;
+      setEditionFeatures(Array.isArray(feats) ? feats : null);
+      setInventoryLicensed(isInventoryLicensed(settings) || isInventoryLicensed(user));
+    };
+    const load = () => {
+      api
+        .get('/merchant/settings')
+        .then((r) => {
+          if (cancelled) return;
+          applySettings(r.data?.settings ?? null);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setEditionFeatures(null);
+          setInventoryLicensed(isInventoryLicensed(user));
+        });
+    };
+    load();
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [user]);
 
   useEffect(() => {
     if (isPosLikeRoute) setPosAppMode(true);
@@ -209,6 +234,14 @@ function MerchantShell() {
     [effective.permissions, effective.isOwner, editionFeatures]
   );
 
+  /** Inventory is a paid merchant addon — never gate it on edition feature lists. */
+  const allowInventory = useCallback(
+    (path: string) =>
+      inventoryLicensed &&
+      canAccessRoute(path, effective.permissions, effective.isOwner, null),
+    [inventoryLicensed, effective.permissions, effective.isOwner]
+  );
+
   const showWebPosQuickAction = useMemo(
     () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
     [jwtIsOwner, user?.permissions]
@@ -240,7 +273,7 @@ function MerchantShell() {
       id: 'inventory',
       label: t('invTitle'),
       icon: '📦',
-      children: allow('/merchant/inventory')
+      children: allowInventory('/merchant/inventory')
         ? [
             { heading: true, label: t('invNavGroupOps') },
             { label: t('invNavList'), path: '/merchant/inventory/list', icon: '📋' },
@@ -375,7 +408,7 @@ function MerchantShell() {
             <Route
               path="inventory"
               element={
-                <PanelRouteGuard path="/merchant/inventory" allow={allow}>
+                <PanelRouteGuard path="/merchant/inventory" allow={allowInventory}>
                   <InventoryLayout />
                 </PanelRouteGuard>
               }

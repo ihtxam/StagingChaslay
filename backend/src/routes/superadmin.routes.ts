@@ -9,6 +9,7 @@ import { PlatformSettingsService } from "@/services/platform-settings.service";
 import { EditionService } from "@/services/edition.service";
 import { ResellerService } from "@/services/reseller.service";
 import { EDITION_FEATURE_GROUPS, ALL_EDITION_FEATURES } from "@/lib/edition-features";
+import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 
 const router = Router();
 
@@ -241,7 +242,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
         businessCategory,
         maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
         maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
-        inventoryAddonEnabled: inventoryAddonEnabled === true,
+        inventoryAddonEnabled: isInventoryAddonEnabled(inventoryAddonEnabled),
       }
     );
 
@@ -305,9 +306,9 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
         maxWaiterPosts: updates.maxWaiterPosts != null ? Number(updates.maxWaiterPosts) : undefined,
         inventoryAddonEnabled:
           updates.inventoryAddonEnabled != null
-            ? !!updates.inventoryAddonEnabled
+            ? isInventoryAddonEnabled(updates.inventoryAddonEnabled)
             : updates.inventoryEnabled != null
-              ? !!updates.inventoryEnabled
+              ? isInventoryAddonEnabled(updates.inventoryEnabled)
               : undefined,
       });
       delete updates.maxPosPosts;

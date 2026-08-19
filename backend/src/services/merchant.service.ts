@@ -8,7 +8,12 @@ import {
   ensureInventoryAddonColumn,
   withMerchantSchemaRetry,
 } from "@/lib/ensure-merchant-schema";
-import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import {
+  isInventoryAddonEnabled,
+  readInventoryAddonEnabled,
+  readInventoryAddonEnabledMap,
+  writeInventoryAddonEnabled,
+} from "@/lib/inventory-addon";
 
 type AppVersionSighting = {
   appVersion?: string | null;
@@ -97,12 +102,18 @@ export class MerchantService {
         floorByMerchant.set(row.merchantId, list);
       }
 
+      const addonById = await readInventoryAddonEnabledMap(merchantIds).catch(
+        () => new Map<string, boolean>()
+      );
+
       return merchants.map((m) => {
         const floor = floorByMerchant.get(m.id) ?? [];
         const lastSeen = pickLastAppVersion([
           ...(m.devices ?? []).map((d) => ({ appVersion: d.appVersion, seenAt: d.lastSync })),
           ...floor.map((d) => ({ appVersion: d.appVersion, seenAt: d.lastSeenAt })),
         ]);
+        const inventoryOn =
+          addonById.get(m.id) ?? isInventoryAddonEnabled(m.inventoryAddonEnabled);
         return {
           id: m.id,
           name: m.name,
@@ -122,6 +133,8 @@ export class MerchantService {
           lastAppVersion: lastSeen.lastAppVersion,
           lastAppVersionSeenAt: lastSeen.lastAppVersionSeenAt,
           resellerId: m.resellerId ?? null,
+          inventoryAddonEnabled: inventoryOn,
+          inventoryEnabled: inventoryOn,
           createdAt: m.createdAt,
           devices: m.devices?.length ?? 0,
           licenses: m.licenses?.length ?? 0,
@@ -168,10 +181,11 @@ export class MerchantService {
         ...floorDevices.map((d) => ({ appVersion: d.appVersion, seenAt: d.lastSeenAt })),
       ]);
 
+      const inventoryOn = await readInventoryAddonEnabled(merchantId);
       return {
         ...merchant,
-        inventoryAddonEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
-        inventoryEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
         editionName: merchant.edition?.name ?? null,
         lastAppVersion: lastSeen.lastAppVersion,
         lastAppVersionSeenAt: lastSeen.lastAppVersionSeenAt,
@@ -334,6 +348,10 @@ export class MerchantService {
         where: eq(schema.merchants.id, created.id),
       });
       const row = refreshed || created;
+      if (options?.inventoryAddonEnabled === true) {
+        await writeInventoryAddonEnabled(created.id, true);
+      }
+      const inventoryOn = await readInventoryAddonEnabled(created.id).catch(() => false);
 
       // Don't leak password hash to API clients
       const { passwordHash: _ph, inviteTokenHash: _ith, ...safe } = row as typeof row & {
@@ -341,7 +359,14 @@ export class MerchantService {
         inviteTokenHash?: string | null;
       };
 
-      return { ...safe, issuedLicenses, invite, passwordSet: hasPassword };
+      return {
+        ...safe,
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
+        issuedLicenses,
+        invite,
+        passwordSet: hasPassword,
+      };
     } catch (error) {
       console.error("Error creating merchant:", error);
       throw error;
@@ -355,9 +380,10 @@ export class MerchantService {
     const db = getDb();
 
     try {
-      if (updates.inventoryAddonEnabled !== undefined) {
+      const addonRequested = updates.inventoryAddonEnabled;
+      if (addonRequested !== undefined) {
         await ensureInventoryAddonColumn();
-        updates.inventoryAddonEnabled = isInventoryAddonEnabled(updates.inventoryAddonEnabled);
+        updates.inventoryAddonEnabled = isInventoryAddonEnabled(addonRequested);
       }
       const merchant = await withMerchantSchemaRetry(() =>
         db
@@ -370,6 +396,10 @@ export class MerchantService {
           .returning()
       );
 
+      if (addonRequested !== undefined) {
+        const on = await writeInventoryAddonEnabled(merchantId, addonRequested);
+        return { ...merchant[0], inventoryAddonEnabled: on };
+      }
       return merchant[0];
     } catch (error) {
       console.error("Error updating merchant:", error);
@@ -393,25 +423,24 @@ export class MerchantService {
     if (limits.maxWaiterPosts !== undefined) {
       patch.maxWaiterPosts = normalizePosPostLimit(limits.maxWaiterPosts);
     }
-    if (limits.inventoryAddonEnabled !== undefined) {
-      patch.inventoryAddonEnabled = isInventoryAddonEnabled(limits.inventoryAddonEnabled);
+    if (Object.keys(patch).length > 0) {
+      await this.updateMerchant(merchantId, patch);
     }
-    if (Object.keys(patch).length === 0) {
+    if (limits.inventoryAddonEnabled !== undefined) {
+      await writeInventoryAddonEnabled(merchantId, limits.inventoryAddonEnabled);
+    } else if (Object.keys(patch).length === 0) {
       throw new Error("At least one of maxPosPosts, maxWaiterPosts, or inventoryAddonEnabled is required");
     }
-    return this.updateMerchant(merchantId, patch);
+    return this.getMerchantById(merchantId);
   }
 
   /** Paid addons are agency/reseller-managed — merchants cannot self-enable. */
   static async updateAddons(merchantId: string, addons: { inventoryAddonEnabled?: boolean }) {
-    const patch: Partial<typeof schema.merchants.$inferInsert> = {};
-    if (addons.inventoryAddonEnabled !== undefined) {
-      patch.inventoryAddonEnabled = isInventoryAddonEnabled(addons.inventoryAddonEnabled);
-    }
-    if (Object.keys(patch).length === 0) {
+    if (addons.inventoryAddonEnabled === undefined) {
       throw new Error("No addon updates provided");
     }
-    return this.updateMerchant(merchantId, patch);
+    await writeInventoryAddonEnabled(merchantId, addons.inventoryAddonEnabled);
+    return this.getMerchantById(merchantId);
   }
 
   /**

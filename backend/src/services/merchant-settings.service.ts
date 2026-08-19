@@ -27,8 +27,11 @@ import {
   applyProductionCredentialDefaults,
   type DeliveryPlatformSettings,
 } from "@/lib/delivery-platform-settings";
-import { patchMerchantSchemaFromError } from "@/lib/ensure-merchant-schema";
-import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import {
+  ensureInventoryAddonColumn,
+  patchMerchantSchemaFromError,
+} from "@/lib/ensure-merchant-schema";
+import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -92,6 +95,7 @@ export class MerchantSettingsService {
   }
 
   private static async buildMerchantSettings(merchantId: string) {
+    await ensureInventoryAddonColumn();
     const db = getDb();
 
     const merchant = await db.query.merchants.findFirst({
@@ -101,6 +105,10 @@ export class MerchantSettingsService {
     if (!merchant) {
       throw new Error("Merchant not found");
     }
+
+    const inventoryOn = await readInventoryAddonEnabled(merchantId).catch(() =>
+      isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
+    );
 
     const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
     const shopHost =
@@ -149,8 +157,8 @@ export class MerchantSettingsService {
         0,
         Number((merchant as { maxWaiterPosts?: number }).maxWaiterPosts ?? 0)
       ),
-      inventoryAddonEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
-      inventoryEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
+      inventoryAddonEnabled: inventoryOn,
+      inventoryEnabled: inventoryOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       posColorTheme: (merchant.posColorTheme as string) || "teal",
@@ -199,15 +207,19 @@ export class MerchantSettingsService {
       subscriptionPlan: merchant.subscriptionPlan,
       editionId: (merchant as { editionId?: string | null }).editionId || null,
       resellerId: (merchant as { resellerId?: string | null }).resellerId || null,
-      /** null = legacy full access. Inventory is a paid merchant addon — inject when licensed. */
+      /**
+       * null = legacy full access for edition routes.
+       * Inventory is a paid merchant addon — never grant it via edition JSON.
+       * Inject only when the merchant column is true (for any leftover edition checks).
+       */
       editionFeatures: await (async () => {
         try {
           const { EditionEntitlementsService } = await import("./edition-entitlements.service");
           const feats = await EditionEntitlementsService.getFeatures(merchantId);
-          if (!isInventoryAddonEnabled(merchant.inventoryAddonEnabled)) return feats;
           if (feats == null) return null;
-          if (feats.includes("inventory")) return feats;
-          return [...feats, "inventory"];
+          const withoutInv = feats.filter((k) => k !== "inventory");
+          if (!inventoryOn) return withoutInv;
+          return [...withoutInv, "inventory"];
         } catch {
           return null;
         }

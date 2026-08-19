@@ -64,6 +64,14 @@ export function useInventoryLicense() {
         /* keep status */
       }
     }
+    if (!on) {
+      try {
+        const me = await api.get('/merchant/me');
+        on = isInventoryLicensed(me?.data?.merchant);
+      } catch {
+        /* keep status */
+      }
+    }
     setLicensed(on);
     return on;
   };

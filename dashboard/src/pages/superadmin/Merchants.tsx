@@ -21,6 +21,8 @@ interface Merchant {
   editionName?: string | null;
   lastAppVersion?: string | null;
   lastAppVersionSeenAt?: string | null;
+  inventoryAddonEnabled?: boolean;
+  inventoryEnabled?: boolean;
   createdAt: string;
   devices: number;
   licenses: number;
@@ -163,12 +165,23 @@ export default function Merchants() {
     if (!showDetail) return;
     setSavingPosLimits(true);
     try {
-      await api.put(`/superadmin/merchants/${showDetail.id}`, {
+      const res = await api.put(`/superadmin/merchants/${showDetail.id}`, {
         maxPosPosts: Number(posLimits.maxPosPosts) || 0,
         maxWaiterPosts: Number(posLimits.maxWaiterPosts) || 0,
         inventoryAddonEnabled: !!posLimits.inventoryAddonEnabled,
       });
-      toast.success('POS limits & addons updated');
+      const saved = res.data?.merchant;
+      const inventoryOn = saved?.inventoryAddonEnabled === true || saved?.inventoryEnabled === true;
+      setPosLimits({
+        maxPosPosts: Math.max(0, Number(saved?.maxPosPosts ?? posLimits.maxPosPosts) || 0),
+        maxWaiterPosts: Math.max(0, Number(saved?.maxWaiterPosts ?? posLimits.maxWaiterPosts) || 0),
+        inventoryAddonEnabled: inventoryOn,
+      });
+      setShowDetail((prev) =>
+        prev ? { ...prev, inventoryAddonEnabled: inventoryOn, inventoryEnabled: inventoryOn } : prev
+      );
+      await fetchMerchants();
+      toast.success(inventoryOn ? 'Inventory addon enabled' : 'POS limits & addons updated');
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to update limits');
     } finally {
@@ -329,6 +342,7 @@ export default function Merchants() {
         role: 'merchant',
         merchantId: account.id,
         impersonatedBy: res.data.impersonatedBy,
+        inventoryAddonEnabled: !!(account.inventoryAddonEnabled || account.inventoryEnabled),
       });
       toast.success(`Opened ${account.name}`);
       navigate('/merchant');
@@ -438,6 +452,7 @@ export default function Merchants() {
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Shop</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Status</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">POS version</th>
+                <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Inventory</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Devices</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Licenses</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Actions</th>
@@ -490,6 +505,17 @@ export default function Merchants() {
                           : 'No Android seen'}
                       </span>
                     </div>
+                  </td>
+                  <td className="px-3 sm:px-4 py-3">
+                    {merchant.inventoryAddonEnabled === true || merchant.inventoryEnabled === true ? (
+                      <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                        Addon on
+                      </span>
+                    ) : (
+                      <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
+                        Off
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 sm:px-4 py-3">{merchant.devices}</td>
                   <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
@@ -957,6 +983,15 @@ export default function Merchants() {
                       <span className="font-medium block">Restaurant inventory addon</span>
                       <span className="text-xs text-gray-500">
                         Paid extra: recipes, stock, suppliers, low-stock emails.
+                      </span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.inventoryAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.inventoryAddonEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
                   </label>

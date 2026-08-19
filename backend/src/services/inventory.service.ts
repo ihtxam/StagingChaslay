@@ -5,7 +5,7 @@ import {
   ensureInventoryAddonColumn,
   withMerchantSchemaRetry,
 } from "@/lib/ensure-merchant-schema";
-import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
 
 export const INVENTORY_UNITS = ["kg", "g", "L", "ml", "piece", "pack"] as const;
 export type InventoryUnit = string;
@@ -108,7 +108,9 @@ export class InventoryService {
       })
     );
     if (!merchant) throw new Error("Merchant not found");
-    const enabled = isInventoryAddonEnabled(merchant.inventoryAddonEnabled);
+    const enabled = await readInventoryAddonEnabled(merchantId).catch(() =>
+      isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
+    );
     return {
       enabled,
       inventoryAddonEnabled: enabled,

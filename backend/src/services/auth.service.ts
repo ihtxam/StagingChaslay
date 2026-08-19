@@ -3,7 +3,7 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { getDb, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
-import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
 
 export interface JWTPayload {
   id: string;
@@ -155,6 +155,9 @@ export class AuthService {
       name: merchant.name,
     });
 
+    const inventoryOn = await readInventoryAddonEnabled(merchant.id).catch(() =>
+      isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
+    );
     return {
       token,
       merchant: {
@@ -163,8 +166,8 @@ export class AuthService {
         name: merchant.name,
         status: merchant.status,
         roleName: "Owner",
-        inventoryAddonEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
-        inventoryEnabled: isInventoryAddonEnabled(merchant.inventoryAddonEnabled),
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
       },
       isOwner: true,
     };
@@ -185,6 +188,7 @@ export class AuthService {
       permissions,
     });
 
+    const inventoryOn = await readInventoryAddonEnabled(staff.merchantId).catch(() => false);
     return {
       token,
       merchant: {
@@ -195,6 +199,8 @@ export class AuthService {
         staffId: staff.id,
         roleName: role?.name,
         permissions,
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
       },
       isOwner: false,
     };
@@ -379,6 +385,9 @@ export class AuthService {
       impersonatedBy: superadminId,
     });
 
+    const inventoryOn = await readInventoryAddonEnabled(merchant.id).catch(() =>
+      isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
+    );
     return {
       token,
       merchant: {
@@ -386,6 +395,8 @@ export class AuthService {
         email: merchant.email,
         name: merchant.name,
         status: merchant.status,
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
       },
       impersonatedBy: superadminId,
     };
@@ -408,7 +419,9 @@ export class AuthService {
         throw new Error("Merchant not found");
       }
 
-      const inventoryOn = isInventoryAddonEnabled(merchant.inventoryAddonEnabled);
+      const inventoryOn = await readInventoryAddonEnabled(merchantId).catch(() =>
+        isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
+      );
       return {
         id: merchant.id,
         email: merchant.email,

@@ -85,6 +85,10 @@ export const ALL_EDITION_FEATURES: EditionFeatureKey[] = EDITION_FEATURE_GROUPS.
   g.features.map((f) => f.key)
 );
 
+/**
+ * Do not add /merchant/inventory here — inventory is a paid merchant addon
+ * (inventoryAddonEnabled), not an edition entitlement.
+ */
 export const EDITION_ROUTE_FEATURES: Record<string, EditionFeatureKey[]> = {
   '/merchant/floor-plan': ['pos_tables'],
   '/merchant/tables': ['pos_tables'],

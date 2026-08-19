@@ -4,6 +4,7 @@ import { ResellerService } from "@/services/reseller.service";
 import { EditionService } from "@/services/edition.service";
 import { AuthService } from "@/services/auth.service";
 import { EDITION_FEATURE_GROUPS, ALL_EDITION_FEATURES } from "@/lib/edition-features";
+import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 
 const router = Router();
 
@@ -225,9 +226,9 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
         maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
         inventoryAddonEnabled:
           inventoryAddonEnabled != null
-            ? !!inventoryAddonEnabled
+            ? isInventoryAddonEnabled(inventoryAddonEnabled)
             : inventoryEnabled != null
-              ? !!inventoryEnabled
+              ? isInventoryAddonEnabled(inventoryEnabled)
               : undefined,
       }
     );

@@ -5,6 +5,7 @@ import { EditionService } from "@/services/edition.service";
 import { MerchantService } from "@/services/merchant.service";
 import { LicenseAdminService } from "@/services/license-admin.service";
 import { ResellerBillingService } from "@/services/reseller-billing.service";
+import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 
 function serializeReseller(
   row: typeof schema.resellers.$inferSelect,
@@ -349,7 +350,10 @@ export class ResellerService {
       .from(schema.merchants)
       .where(and(...clauses))
       .orderBy(desc(schema.merchants.createdAt));
-    return rows;
+    return rows.map((r) => ({
+      ...r,
+      inventoryAddonEnabled: isInventoryAddonEnabled(r.inventoryAddonEnabled),
+    }));
   }
 
   static async createMerchantForReseller(
