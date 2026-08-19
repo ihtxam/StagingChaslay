@@ -21,7 +21,9 @@ data class ReceiptPublishRequest(
     @SerializedName("customer_name") val customerName: String? = null,
     @SerializedName("customer_phone") val customerPhone: String? = null,
     @SerializedName("customer_email") val customerEmail: String? = null,
-    @SerializedName("shipping_address") val shippingAddress: String? = null
+    @SerializedName("shipping_address") val shippingAddress: String? = null,
+    @SerializedName("fulfillment_channel") val fulfillmentChannel: String? = null,
+    @SerializedName("pickup_time_ms") val pickupTimeMs: Long? = null
 )
 
 data class ReceiptTenderDto(

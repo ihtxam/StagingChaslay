@@ -37,6 +37,18 @@ export function orderChannel(o: MerchantOrder): string {
   return o.channel || o.fulfillmentChannel || 'takeaway';
 }
 
+/**
+ * Kitchen Type on /merchant/orders — kitchen-bound tickets, including paid
+ * WebPOS/POS delivery. The old tab only listed online accepted/preparing.
+ */
+export function isKitchenTypeOrder(o: MerchantOrder): boolean {
+  const status = (o.status || '').toLowerCase();
+  if (['cancelled', 'refunded'].includes(status)) return false;
+  const ch = orderChannel(o).toLowerCase();
+  if (ch === 'dine_in' || ch === 'takeaway' || ch === 'delivery') return true;
+  return isOnlineShopOrder(o) && (status === 'accepted' || status === 'preparing');
+}
+
 export function isOnlineShopOrder(o: MerchantOrder): boolean {
   const t = (o.orderType || '').toLowerCase();
   const src = String((o as { orderSource?: string | null }).orderSource || '').toLowerCase();

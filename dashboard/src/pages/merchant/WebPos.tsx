@@ -5338,6 +5338,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       staffId: webposStaff?.id || null,
       total: saleTotal,
       fulfillmentChannel: effectiveChannel,
+      channel: effectiveChannel,
       completedAt: payLater ? undefined : Date.now(),
       scheduledFor,
       customerId: selectedCustomer?.id || null,

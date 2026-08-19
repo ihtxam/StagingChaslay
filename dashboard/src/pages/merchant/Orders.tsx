@@ -6,6 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
   formatOrderPaymentDisplay,
+  isKitchenTypeOrder,
   isOnlineShopOrder,
   orderSourceLabel,
   orderChannel,
@@ -28,6 +29,7 @@ import {
 } from '@/components/settings/SettingsReportUi';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
+type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online';
 
 const CHANNEL_STYLE: Record<string, string> = {
   takeaway:
@@ -70,6 +72,13 @@ function matchesChannelFilter(o: MerchantOrder, filter: ChannelFilter) {
   return orderChannel(o) === filter;
 }
 
+function matchesTypeFilter(o: MerchantOrder, filter: TypeFilter) {
+  if (filter === 'all') return true;
+  if (filter === 'kitchen') return isKitchenTypeOrder(o);
+  if (filter === 'online') return isOnlineShopOrder(o);
+  return orderChannel(o) === filter;
+}
+
 export default function Orders() {
   const { t, formatDateTime, locale } = useI18n();
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
@@ -81,6 +90,7 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [staffFilter, setStaffFilter] = useState('all');
   const [search, setSearch] = useState('');
 
@@ -177,6 +187,7 @@ export default function Orders() {
         if (paymentFilter !== 'all' && (o.paymentMethod || '').toLowerCase() !== paymentFilter) {
           return false;
         }
+        if (!matchesTypeFilter(o, typeFilter)) return false;
         if (!matchesChannelFilter(o, channelFilter)) return false;
         if (staffFilter !== 'all') {
           const staffRow = staffList.find((s) => s.id === staffFilter);
@@ -187,7 +198,7 @@ export default function Orders() {
         return true;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [orders, paymentFilter, channelFilter, staffFilter, staffList, search]);
+  }, [orders, paymentFilter, typeFilter, channelFilter, staffFilter, staffList, search]);
 
   const openDetail = async (order: MerchantOrder) => {
     try {
@@ -224,12 +235,14 @@ export default function Orders() {
     setStatusFilter('all');
     setPaymentFilter('all');
     setChannelFilter('all');
+    setTypeFilter('all');
     setStaffFilter('all');
     setSearch('');
   };
 
   const hasActiveFilters =
     paymentFilter !== 'all' ||
+    typeFilter !== 'all' ||
     channelFilter !== 'all' ||
     staffFilter !== 'all' ||
     search.trim() !== '' ||
@@ -329,6 +342,20 @@ export default function Orders() {
               <option value="invoice">{t('webPosInvoice')}</option>
             </select>
           </SettingsField>
+          <SettingsField label={t('ordersFilterType')}>
+            <select
+              className="input w-full"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+            >
+              <option value="all">{t('ordersAllTypes')}</option>
+              <option value="kitchen">{t('ordersTabKitchen')}</option>
+              <option value="delivery">{t('delivery')}</option>
+              <option value="takeaway">{t('takeaway')}</option>
+              <option value="dine_in">{t('dineIn')}</option>
+              <option value="online">{t('webPosOnlineOrders')}</option>
+            </select>
+          </SettingsField>
           <SettingsField label={t('ordersFilterChannel')}>
             <select
               className="input w-full"
@@ -375,6 +402,32 @@ export default function Orders() {
           ) : null}
         </div>
       </SettingsReportCard>
+
+      <div className="flex flex-wrap gap-1.5">
+        {(
+          [
+            ['all', t('ordersTabAll')],
+            ['kitchen', t('ordersTabKitchen')],
+            ['delivery', t('delivery')],
+            ['takeaway', t('takeaway')],
+            ['dine_in', t('dineIn')],
+            ['online', t('webPosOnlineOrders')],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTypeFilter(id)}
+            className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              typeFilter === id
+                ? 'border-slate-900 bg-slate-900 text-white'
+                : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-slate-400'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div className="flex flex-wrap gap-2.5 text-[11px] font-medium text-[var(--text-muted)]">
         <span className="inline-flex items-center gap-1">

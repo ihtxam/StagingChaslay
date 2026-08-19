@@ -2173,6 +2173,7 @@ export type PosOrderForReceipt = {
   orderSource?: string | null;
   orderType?: string | null;
   fulfillmentChannel?: string | null;
+  scheduledFor?: string | number | Date | null;
   completedAt?: string | null;
   createdAt: string;
   splitCheckNumber?: number | null;

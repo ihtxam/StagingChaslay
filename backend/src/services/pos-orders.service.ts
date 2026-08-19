@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, lte, inArray, or } from "drizzle-orm";
 import {
   POS_CANCEL_REASONS,
   POS_REFUND_REASONS,
@@ -156,11 +156,20 @@ export class PosOrdersService {
     if (opts.status && opts.status !== "all") {
       conditions.push(eq(schema.orders.status, opts.status));
     }
-    if (opts.from) {
-      conditions.push(gte(schema.orders.createdAt, zurichDayBounds(opts.from).start));
-    }
-    if (opts.to) {
-      conditions.push(lte(schema.orders.createdAt, zurichDayBounds(opts.to).end));
+    // Include orders created in range OR scheduled (pickup/delivery) in range so a
+    // future delivery time does not hide a ticket from today's history.
+    if (opts.from || opts.to) {
+      const start = opts.from ? zurichDayBounds(opts.from).start : new Date(0);
+      const end = opts.to ? zurichDayBounds(opts.to).end : new Date("9999-12-31T23:59:59.999Z");
+      const createdInRange = and(
+        gte(schema.orders.createdAt, start),
+        lte(schema.orders.createdAt, end)
+      );
+      const scheduledInRange = and(
+        gte(schema.orders.scheduledFor, start),
+        lte(schema.orders.scheduledFor, end)
+      );
+      conditions.push(or(createdInRange, scheduledInRange)!);
     }
 
     const rows = await db.query.orders.findMany({

@@ -79,9 +79,15 @@ export interface SyncSalePayload {
   total: number;
   notes?: string;
   fulfillmentChannel?: "takeaway" | "dine_in" | "delivery";
+  /** Alias used by WebPOS / Android receipt publish */
+  channel?: string;
+  fulfillment_type?: string;
+  fulfillmentType?: string;
   completedAt?: string | number;
   /** ISO / epoch — pickup or delivery time (null/omit = ASAP) */
   scheduledFor?: string | number | null;
+  pickup_time_ms?: number | string | null;
+  pickupTimeMs?: number | string | null;
   customerId?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
@@ -111,6 +117,35 @@ export interface SyncSalePayload {
   /** Split tenders for mixed payments */
   paymentBreakdown?: Array<{ method: string; amount: number }> | null;
   items: SyncSaleItem[];
+}
+
+function normalizeFulfillmentChannel(
+  sale: Pick<
+    SyncSalePayload,
+    "fulfillmentChannel" | "channel" | "fulfillment_type" | "fulfillmentType"
+  >
+): "takeaway" | "dine_in" | "delivery" {
+  const raw = String(
+    sale.fulfillmentChannel || sale.channel || sale.fulfillment_type || sale.fulfillmentType || ""
+  )
+    .toLowerCase()
+    .replace(/-/g, "_");
+  if (raw === "dine_in" || raw === "dinein") return "dine_in";
+  if (raw === "delivery") return "delivery";
+  if (raw === "pickup" || raw === "takeaway" || raw === "walk_in" || raw === "walkin") {
+    return "takeaway";
+  }
+  return "takeaway";
+}
+
+function parseScheduledFor(sale: SyncSalePayload): Date | null {
+  if (sale.scheduledFor != null && sale.scheduledFor !== "") {
+    const d = new Date(sale.scheduledFor);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  const ms = Number(sale.pickup_time_ms ?? sale.pickupTimeMs);
+  if (Number.isFinite(ms) && ms > 1_000_000) return new Date(ms);
+  return null;
 }
 
 function asUuidOrNull(v: unknown): string | null {
@@ -432,11 +467,7 @@ export class SyncService {
           sale.paymentMethod === "pay_later" ||
           sale.paymentMethod === "pay-later" ||
           isInvoice);
-      let scheduledFor: Date | null = null;
-      if (sale.scheduledFor != null && sale.scheduledFor !== "") {
-        const d = new Date(sale.scheduledFor);
-        if (!Number.isNaN(d.getTime())) scheduledFor = d;
-      }
+      const scheduledFor = parseScheduledFor(sale);
       const status =
         sale.status ||
         (payLater ? (scheduledFor ? "accepted" : "preparing") : "completed");
@@ -452,7 +483,7 @@ export class SyncService {
       const orderValuesBase = {
         merchantId,
         orderType: "pos" as const,
-        fulfillmentChannel: sale.fulfillmentChannel || "takeaway",
+        fulfillmentChannel: normalizeFulfillmentChannel(sale),
         status,
         subtotal: subtotal.toFixed(2),
         taxAmount: taxAmount.toFixed(2),

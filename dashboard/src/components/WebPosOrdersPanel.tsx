@@ -152,6 +152,7 @@ export type PosOrder = PosOrderForReceipt & {
   orderType?: string | null;
   orderSource?: string | null;
   invoiceNumber?: string | null;
+  scheduledFor?: string | number | Date | null;
 };
 export type HeldRow = {
   id: string;
@@ -218,6 +219,17 @@ function canCancelOrder(o: PosOrder): boolean {
 function isOpenFulfillmentOrder(o: PosOrder): boolean {
   const status = (o.status || '').toLowerCase();
   return !['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status);
+}
+
+/** Paid delivery/takeaway with a future slot — still a kitchen ticket, also in history. */
+function isScheduledKitchenTicket(o: PosOrder): boolean {
+  const status = (o.status || '').toLowerCase();
+  if (status !== 'completed' && status !== 'partially_refunded') return false;
+  const ch = String(o.channel || o.fulfillmentChannel || '').toLowerCase();
+  if (ch !== 'delivery' && ch !== 'takeaway') return false;
+  if (o.scheduledFor == null || o.scheduledFor === '') return false;
+  const when = new Date(o.scheduledFor as string | number | Date).getTime();
+  return Number.isFinite(when) && when > Date.now();
 }
 
 function isOnlineShopOrder(o: PosOrder): boolean {
@@ -562,7 +574,10 @@ export default function WebPosOrdersPanel({
       }
       if (statusFilter !== 'held') {
       for (const o of orders) {
-        if (!isOpenFulfillmentOrder(o)) continue;
+        const showOnActive =
+          isOpenFulfillmentOrder(o) ||
+          (statusFilter === 'active' && isScheduledKitchenTicket(o));
+        if (!showOnActive) continue;
         if (!matchesChannelFilter(o, channelFilter)) continue;
         if (q) {
           const refs = orderPublicRefs(o);
