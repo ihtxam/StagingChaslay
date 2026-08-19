@@ -143,7 +143,6 @@ export class PasswordResetService {
       .where(
         and(
           sql`lower(${schema.merchantStaff.email}) = ${normalized}`,
-          eq(schema.merchantStaff.canAccessPanel, true),
           eq(schema.merchantStaff.isActive, true)
         )
       )
@@ -354,7 +353,7 @@ export class PasswordResetService {
     if (role === "staff") {
       await db
         .update(schema.merchantStaff)
-        .set({ passwordHash, updatedAt: new Date() })
+        .set({ passwordHash, canAccessPanel: true, updatedAt: new Date() })
         .where(eq(schema.merchantStaff.id, accountId));
       return;
     }

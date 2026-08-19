@@ -104,8 +104,21 @@ export default function StaffPage() {
 
   const addStaff = async (e: FormEvent) => {
     e.preventDefault();
+    const email = staffForm.email.trim();
+    const password = staffForm.password.trim();
+    const canAccessPanel = staffForm.canAccessPanel || !!(email && password);
+    if (canAccessPanel) {
+      if (!email) {
+        toast.error(t('staffEmailRequired'));
+        return;
+      }
+      if (!password) {
+        toast.error(t('staffPasswordRequired'));
+        return;
+      }
+    }
     try {
-      await api.post('/merchant/staff', staffForm);
+      await api.post('/merchant/staff', { ...staffForm, email, password, canAccessPanel });
       toast.success(t('staffUserCreated'));
       setStaffForm({ ...emptyCreateForm, roleId: roles[0]?.id || '' });
       void load();
@@ -135,7 +148,9 @@ export default function StaffPage() {
   const saveStaffEdit = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingStaff || !editForm) return;
-    if (editForm.canAccessPanel) {
+    const nextOfficial =
+      editForm.canAccessPanel || !!(editForm.email.trim() && editForm.password.trim());
+    if (nextOfficial) {
       if (!editForm.email.trim()) {
         toast.error(t('staffEmailRequired'));
         return;
@@ -154,8 +169,8 @@ export default function StaffPage() {
       const body: Record<string, unknown> = {
         name: editForm.name.trim(),
         roleId: editForm.roleId,
-        canAccessPanel: editForm.canAccessPanel,
-        email: editForm.canAccessPanel ? editForm.email.trim() : editForm.email.trim() || null,
+        canAccessPanel: nextOfficial,
+        email: editForm.email.trim() || null,
       };
       if (editForm.clearPin) {
         body.pin = null;
@@ -259,7 +274,41 @@ export default function StaffPage() {
                   }
                 />
               </label>
-              <label className="flex items-center gap-2 text-sm pt-6 sm:col-span-2">
+              <label className="block text-sm">
+                {t('staffEmailPanel')}
+                <input
+                  className="input mt-1"
+                  type="email"
+                  autoComplete="off"
+                  value={staffForm.email}
+                  onChange={(e) => {
+                    const email = e.target.value;
+                    const canAccessPanel =
+                      staffForm.canAccessPanel || !!(email.trim() && staffForm.password.trim());
+                    setStaffForm({ ...staffForm, email, canAccessPanel });
+                  }}
+                />
+              </label>
+              <label className="block text-sm">
+                {t('password')}
+                <input
+                  className="input mt-1"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={staffForm.password}
+                  onChange={(e) => {
+                    const password = e.target.value;
+                    const canAccessPanel =
+                      staffForm.canAccessPanel || !!(staffForm.email.trim() && password.trim());
+                    setStaffForm({ ...staffForm, password, canAccessPanel });
+                  }}
+                />
+                <span className="block text-xs text-[var(--text-muted)] font-normal mt-1">
+                  {t('staffPasswordCreateHint')}
+                </span>
+              </label>
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
                 <input
                   type="checkbox"
                   checked={staffForm.canAccessPanel}
@@ -272,31 +321,6 @@ export default function StaffPage() {
                   </span>
                 </span>
               </label>
-              {staffForm.canAccessPanel ? (
-                <>
-                  <label className="block text-sm">
-                    {t('staffEmailPanel')}
-                    <input
-                      className="input mt-1"
-                      type="email"
-                      required
-                      value={staffForm.email}
-                      onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
-                    />
-                  </label>
-                  <label className="block text-sm">
-                    {t('password')}
-                    <input
-                      className="input mt-1"
-                      type="password"
-                      required
-                      minLength={8}
-                      value={staffForm.password}
-                      onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
-                    />
-                  </label>
-                </>
-              ) : null}
             </div>
             <button type="submit" className="btn-primary">
               {t('staffAddUser')}
@@ -336,7 +360,7 @@ export default function StaffPage() {
                     <td className="px-3 py-2">{staffRoleDisplayName(s.roleName, t)}</td>
                     <td className="px-3 py-2">{s.pinSet ? t('staffPinSet') : '-'}</td>
                     <td className="px-3 py-2">
-                      {s.canAccessPanel ? (
+                      {s.canAccessPanel || s.email ? (
                         <span className="cell-truncate block" title={s.email || t('yes')}>
                           {s.email || t('yes')}
                         </span>
@@ -461,6 +485,42 @@ export default function StaffPage() {
                 />
                 {t('staffClearPin')}
               </label>
+              <label className="block text-sm">
+                {t('staffEmailPanel')}
+                <input
+                  className="input mt-1"
+                  type="email"
+                  autoComplete="off"
+                  value={editForm.email}
+                  onChange={(e) => {
+                    const email = e.target.value;
+                    const canAccessPanel =
+                      editForm.canAccessPanel || !!(email.trim() && editForm.password.trim());
+                    setEditForm({ ...editForm, email, canAccessPanel });
+                  }}
+                />
+              </label>
+              <label className="block text-sm">
+                {t('staffNewPassword')}
+                <input
+                  className="input mt-1"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  placeholder={
+                    editingStaff.passwordSet
+                      ? t('staffPasswordKeepPlaceholder')
+                      : t('staffPasswordRequiredPlaceholder')
+                  }
+                  value={editForm.password}
+                  onChange={(e) => {
+                    const password = e.target.value;
+                    const canAccessPanel =
+                      editForm.canAccessPanel || !!(editForm.email.trim() && password.trim());
+                    setEditForm({ ...editForm, password, canAccessPanel });
+                  }}
+                />
+              </label>
               <label className="flex items-center gap-2 text-sm sm:col-span-2">
                 <input
                   type="checkbox"
@@ -474,36 +534,6 @@ export default function StaffPage() {
                   </span>
                 </span>
               </label>
-              {editForm.canAccessPanel ? (
-                <>
-                  <label className="block text-sm">
-                    {t('staffEmailPanel')}
-                    <input
-                      className="input mt-1"
-                      type="email"
-                      required
-                      value={editForm.email}
-                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                    />
-                  </label>
-                  <label className="block text-sm">
-                    {t('staffNewPassword')}
-                    <input
-                      className="input mt-1"
-                      type="password"
-                      minLength={8}
-                      required={!editingStaff.passwordSet}
-                      placeholder={
-                        editingStaff.passwordSet
-                          ? t('staffPasswordKeepPlaceholder')
-                          : t('staffPasswordRequiredPlaceholder')
-                      }
-                      value={editForm.password}
-                      onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
-                    />
-                  </label>
-                </>
-              ) : null}
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" className="btn-secondary" onClick={closeStaffEdit} disabled={editSaving}>

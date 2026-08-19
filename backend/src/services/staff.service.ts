@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { AuthService } from "@/services/auth.service";
 import {
   ALL_PERMISSIONS,
@@ -15,6 +15,22 @@ import {
 } from "@/lib/permissions";
 
 export class StaffService {
+  /** Staff row exists with a POS PIN but no email/password hash for /login. */
+  static readonly PIN_ONLY_LOGIN_MESSAGE =
+    "This account uses a POS PIN. Sign in on the POS with your PIN, or ask the owner to set an official login password in Users & roles.";
+  /** Staff email exists but password was never hashed (must be set again). */
+  static readonly NO_PASSWORD_LOGIN_MESSAGE =
+    "This staff account has no official login password. Ask the owner to set one in Users & roles.";
+  static readonly NO_ENTRY_PERMISSION_MESSAGE = "This account cannot sign in";
+
+  static isLoginGuidanceError(message: string): boolean {
+    return (
+      message === this.PIN_ONLY_LOGIN_MESSAGE ||
+      message === this.NO_PASSWORD_LOGIN_MESSAGE ||
+      message === this.NO_ENTRY_PERMISSION_MESSAGE
+    );
+  }
+
   static async ensureDefaultRoles(merchantId: string) {
     const db = getDb();
     const existing = await db.query.merchantRoles.findMany({
@@ -274,11 +290,13 @@ export class StaffService {
       throw new Error("PIN must be 4ù8 digits");
     }
 
-    const canAccessPanel = !!input.canAccessPanel;
+    const password = input.password?.trim() || "";
+    // Email + password on create always enables official /login (do not require a checkbox).
+    const canAccessPanel = !!input.canAccessPanel || !!(email && password);
     if (canAccessPanel && !email) {
       throw new Error("Email is required for panel access");
     }
-    if (canAccessPanel && !input.password?.trim()) {
+    if (canAccessPanel && !password) {
       throw new Error("Password is required for panel access");
     }
 
@@ -290,7 +308,7 @@ export class StaffService {
         name,
         email,
         pinHash: pin ? await AuthService.hashPassword(pin) : null,
-        passwordHash: input.password?.trim() ? await AuthService.hashPassword(input.password.trim()) : null,
+        passwordHash: password ? await AuthService.hashPassword(password) : null,
         canAccessPanel,
         isActive: true,
       })
@@ -358,15 +376,22 @@ export class StaffService {
         patch.passwordHash = await AuthService.hashPassword(String(input.password).trim());
       }
     }
-    if (input.canAccessPanel !== undefined) patch.canAccessPanel = !!input.canAccessPanel;
     if (input.isActive !== undefined) patch.isActive = !!input.isActive;
 
-    const nextCanAccess =
-      input.canAccessPanel !== undefined ? !!input.canAccessPanel : !!staff.canAccessPanel;
     const nextEmail =
       input.email !== undefined
         ? input.email?.trim().toLowerCase() || null
         : staff.email;
+    const settingPassword = input.password !== undefined && !!String(input.password || "").trim();
+    // Setting email + a new password enables official /login even if the checkbox was off.
+    if (settingPassword && nextEmail) {
+      patch.canAccessPanel = true;
+    } else if (input.canAccessPanel !== undefined) {
+      patch.canAccessPanel = !!input.canAccessPanel;
+    }
+
+    const nextCanAccess =
+      patch.canAccessPanel !== undefined ? !!patch.canAccessPanel : !!staff.canAccessPanel;
     const nextPasswordHash =
       input.password !== undefined
         ? input.password === null || input.password === ""
@@ -478,12 +503,26 @@ export class StaffService {
   static async loginStaff(email: string, password: string) {
     const db = getDb();
     const normalized = email.trim().toLowerCase();
-    const staff = await db.query.merchantStaff.findFirst({
-      where: and(eq(schema.merchantStaff.email, normalized), eq(schema.merchantStaff.isActive, true)),
-    });
+    const rows = await db
+      .select()
+      .from(schema.merchantStaff)
+      .where(
+        and(
+          sql`lower(${schema.merchantStaff.email}) = ${normalized}`,
+          eq(schema.merchantStaff.isActive, true)
+        )
+      )
+      .limit(1);
+    const staff = rows[0];
 
-    if (!staff || !staff.canAccessPanel || !staff.passwordHash) {
+    if (!staff) {
       throw new Error("Invalid email or password");
+    }
+
+    if (!staff.passwordHash) {
+      throw new Error(
+        staff.pinHash ? this.PIN_ONLY_LOGIN_MESSAGE : this.NO_PASSWORD_LOGIN_MESSAGE
+      );
     }
 
     const ok = await AuthService.comparePassword(password, staff.passwordHash);
@@ -494,7 +533,7 @@ export class StaffService {
     });
     const permissions = parsePermissions(role?.permissions);
     if (!hasAnyPermission(permissions, STAFF_MERCHANT_ENTRY_PERMISSIONS)) {
-      throw new Error("This account cannot sign in");
+      throw new Error(this.NO_ENTRY_PERMISSION_MESSAGE);
     }
 
     return {

@@ -113,9 +113,18 @@ export class AuthService {
     try {
       return await this.loginMerchantOwner(email, password);
     } catch (ownerError) {
+      const ownerMessage = ownerError instanceof Error ? ownerError.message : "";
+      if (ownerMessage.startsWith("Merchant account is")) {
+        throw ownerError;
+      }
       try {
         return await this.loginMerchantStaff(email, password);
-      } catch {
+      } catch (staffError) {
+        const staffMessage = staffError instanceof Error ? staffError.message : "";
+        const { StaffService } = await import("@/services/staff.service");
+        if (StaffService.isLoginGuidanceError(staffMessage)) {
+          throw staffError;
+        }
         throw ownerError;
       }
     }
@@ -249,7 +258,7 @@ export class AuthService {
   }
 
   /**
-   * Unified panel login — detect merchant / staff / reseller / superadmin from email + password.
+   * Unified panel login — merchant owner → staff → reseller → superadmin.
    * Does not replace PIN WebPOS or waiter PIN.
    */
   static async loginAny(email: string, password: string) {
@@ -259,16 +268,32 @@ export class AuthService {
     }
 
     try {
-      const merchant = await this.loginMerchant(normalized, password);
+      const merchant = await this.loginMerchantOwner(normalized, password);
       return {
-        kind: merchant.isOwner === false && merchant.merchant.staffId ? "staff" : "merchant",
+        kind: "merchant" as const,
         token: merchant.token,
         merchant: merchant.merchant,
-        isOwner: merchant.isOwner !== false,
-      } as const;
+        isOwner: true,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.startsWith("Merchant account is")) {
+        throw error;
+      }
+    }
+
+    try {
+      const staff = await this.loginMerchantStaff(normalized, password);
+      return {
+        kind: "staff" as const,
+        token: staff.token,
+        merchant: staff.merchant,
+        isOwner: false,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const { StaffService } = await import("@/services/staff.service");
+      if (StaffService.isLoginGuidanceError(message)) {
         throw error;
       }
     }
@@ -491,16 +516,16 @@ export class AuthService {
     }
 
     if (role === "staff") {
-      const staff = await db.query.merchantStaff.findFirst({
-        where: eq(schema.merchantStaff.email, normalized),
-      });
+      const staffRows = await db
+        .select()
+        .from(schema.merchantStaff)
+        .where(sql`lower(${schema.merchantStaff.email}) = ${normalized}`)
+        .limit(1);
+      const staff = staffRows[0];
       if (!staff) throw new Error("Staff user not found");
-      if (!staff.canAccessPanel) {
-        throw new Error("This staff account cannot sign in to the panel");
-      }
       await db
         .update(schema.merchantStaff)
-        .set({ passwordHash, updatedAt: new Date() })
+        .set({ passwordHash, canAccessPanel: true, updatedAt: new Date() })
         .where(eq(schema.merchantStaff.id, staff.id));
       return { success: true, role: "staff" as const, email: staff.email || normalized };
     }

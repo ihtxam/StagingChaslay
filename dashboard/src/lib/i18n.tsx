@@ -292,6 +292,8 @@ const en: Dict = {
   loginSignIn: 'Sign in',
   loginSigningIn: 'Signing in…',
   loginFailed: 'Incorrect email or password.',
+  loginStaffUsePin:
+    'This account uses a POS PIN. Sign in on the POS with your PIN, or ask the owner to set an official login password in Users & roles.',
   loginWelcome: 'Signed in',
   loginEmailInvalid: 'Enter a valid email address',
   loginPasswordMin: 'Password must be at least 6 characters',
@@ -2117,7 +2119,9 @@ const en: Dict = {
   staffCanAccessPanel: 'Can access backend panel',
   staffEmailLogin: 'Official login (email + password)',
   staffEmailLoginHint:
-    'They sign in at the main login page. Waiters go to POS. Menu editors can open Products from POS. They will not see Sales, Settings, or Users unless their role includes those permissions.',
+    'Filling email and password enables official login automatically. They sign in at the main login page. Waiters go to POS. PIN-only users sign in on POS, not this page.',
+  staffPasswordCreateHint:
+    'Set this with an email so they can sign in at app.chaslay.com/login. Leave blank for PIN-only POS access.',
   staffWaiterTemplateHint:
     'Use “Waiter (POS only)” for floor staff, or “Waiter + menu editor” to let them change products, categories, and modifiers.',
   staffRoleWaiter: 'Waiter (POS only)',
@@ -2744,6 +2748,8 @@ const fr: Dict = {
   loginSignIn: 'Se connecter',
   loginSigningIn: 'Connexion…',
   loginFailed: 'E-mail ou mot de passe incorrect.',
+  loginStaffUsePin:
+    'Ce compte utilise un PIN caisse. Connectez-vous à la caisse avec le PIN, ou demandez au propriétaire de définir un mot de passe officiel dans Utilisateurs et rôles.',
   loginWelcome: 'Connecté',
   loginEmailInvalid: 'Saisissez une adresse e-mail valide',
   loginPasswordMin: 'Le mot de passe doit contenir au moins 6 caractères',
@@ -4565,7 +4571,9 @@ const fr: Dict = {
   staffCanAccessPanel: 'Accès au panneau backend',
   staffEmailLogin: 'Connexion officielle (e-mail + mot de passe)',
   staffEmailLoginHint:
-    'Ils se connectent sur la page de connexion principale. Les serveurs arrivent en caisse. Les éditeurs de menu peuvent ouvrir Produits depuis la caisse. Ils ne voient pas Ventes, Paramètres ni Utilisateurs sauf si leur rôle l’autorise.',
+    'Saisir e-mail et mot de passe active automatiquement la connexion officielle. Ils se connectent sur la page principale. Les serveurs arrivent en caisse. Un PIN seul sert uniquement à la caisse.',
+  staffPasswordCreateHint:
+    'À renseigner avec un e-mail pour se connecter sur app.chaslay.com/login. Laisser vide pour un accès caisse par PIN uniquement.',
   staffWaiterTemplateHint:
     'Utilisez « Serveur (caisse uniquement) » pour le service, ou « Serveur + éditeur de menu » pour leur permettre de modifier produits, catégories et modificateurs.',
   staffRoleWaiter: 'Serveur (caisse uniquement)',
@@ -5197,6 +5205,8 @@ const de: Dict = {
   loginSignIn: 'Anmelden',
   loginSigningIn: 'Anmeldung…',
   loginFailed: 'E-Mail oder Passwort ungültig.',
+  loginStaffUsePin:
+    'Dieses Konto nutzt eine Kassen-PIN. Melden Sie sich an der Kasse mit der PIN an, oder bitten Sie den Inhaber, in Benutzer & Rollen ein offizielles Login-Passwort festzulegen.',
   loginWelcome: 'Angemeldet',
   loginEmailInvalid: 'Gültige E-Mail-Adresse eingeben',
   loginPasswordMin: 'Passwort muss mindestens 6 Zeichen haben',
@@ -7018,7 +7028,9 @@ const de: Dict = {
   staffCanAccessPanel: 'Zugang zum Backend-Panel',
   staffEmailLogin: 'Offizielles Login (E-Mail + Passwort)',
   staffEmailLoginHint:
-    'Anmeldung über die Haupt-Login-Seite. Kellner kommen in die Kasse. Menü-Editoren können Produkte von der Kasse aus öffnen. Verkauf, Einstellungen und Benutzer bleiben ausgeblendet, sofern die Rolle das nicht erlaubt.',
+    'E-Mail und Passwort aktivieren das offizielle Login automatisch. Anmeldung über die Haupt-Login-Seite. Kellner kommen in die Kasse. Nur-PIN gilt nur für die Kasse.',
+  staffPasswordCreateHint:
+    'Zusammen mit einer E-Mail für app.chaslay.com/login setzen. Leer lassen für nur-PIN-Kassenzugang.',
   staffWaiterTemplateHint:
     '„Kellner (nur Kasse)“ für den Service, oder „Kellner + Menü-Editor“, damit sie Produkte, Kategorien und Modifikatoren ändern können.',
   staffRoleWaiter: 'Kellner (nur Kasse)',
