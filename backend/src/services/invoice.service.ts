@@ -2,7 +2,6 @@ import fs from "fs";
 import path from "path";
 import { and, desc, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
-import QRCode from "qrcode";
 import { getDb, schema } from "@/db";
 import { roundMoney2 } from "@/lib/money";
 import { getUploadsRoot } from "@/services/media-upload.service";
@@ -13,6 +12,7 @@ import {
   parseAddressFromCustomer,
   parseAddressFromMerchant,
   stripIban,
+  swissQrModuleRuns,
 } from "@/lib/swiss-qr-bill";
 
 const INVOICE_DUE_DAYS = 30;
@@ -59,6 +59,8 @@ const L: Record<InvoiceLang, Record<string, string>> = {
     payableBy: "Payable by",
     payableTo: "Payable to",
     acceptance: "Acceptance point",
+    qrMissingIban: "Swiss QR-bill unavailable. Add an IBAN in Settings → Bank details.",
+    qrFailed: "Swiss QR-bill could not be generated.",
   },
   fr: {
     invoice: "FACTURE",
@@ -95,6 +97,8 @@ const L: Record<InvoiceLang, Record<string, string>> = {
     payableBy: "Payable par",
     payableTo: "Payable à",
     acceptance: "Point de dépôt",
+    qrMissingIban: "QR-bill suisse indisponible. Ajoutez un IBAN dans Paramètres → Coordonnées bancaires.",
+    qrFailed: "Le QR-bill suisse n’a pas pu être généré.",
   },
   de: {
     invoice: "RECHNUNG",
@@ -131,6 +135,8 @@ const L: Record<InvoiceLang, Record<string, string>> = {
     payableBy: "Zahlbar durch",
     payableTo: "Zahlbar an",
     acceptance: "Annahmestelle",
+    qrMissingIban: "Swiss QR-bill nicht verfügbar. IBAN unter Einstellungen → Bankverbindung hinterlegen.",
+    qrFailed: "Swiss QR-bill konnte nicht erzeugt werden.",
   },
 };
 
@@ -418,8 +424,8 @@ export class InvoiceService {
     const seq = Number((invoiceNumber.match(/(\d+)$/) || [])[1] || 1);
     const qrr = useQrIban ? buildQrrReference(seq) : "";
 
-    let qrPng: Buffer | null = null;
     let qrPayload = "";
+    let qrMissingReason = "";
     if (payIban) {
       try {
         qrPayload = buildSwissQrPayload({
@@ -441,10 +447,12 @@ export class InvoiceService {
           reference: qrr || undefined,
           unstructuredMessage: invoiceNumber,
         });
-        qrPng = await swissQrPng(qrPayload);
       } catch (err) {
+        qrMissingReason = "failed";
         console.warn("[invoice] Swiss QR payload failed:", err);
       }
+    } else {
+      qrMissingReason = "missing_iban";
     }
 
     const logoPath = resolveLogoPath(merchant.shopLogoUrl);
@@ -486,7 +494,8 @@ export class InvoiceService {
       tip,
       total,
       paid,
-      qrPng,
+      qrPayload,
+      qrMissingReason,
       qrr,
       payIban,
     });
@@ -496,33 +505,6 @@ export class InvoiceService {
       filename: `${invoiceNumber}.pdf`,
       invoiceNumber,
     };
-  }
-}
-
-/** PDFKit embeds data-URLs more reliably than raw PNG buffers. */
-async function swissQrPng(payload: string): Promise<Buffer | null> {
-  try {
-    const dataUrl = await QRCode.toDataURL(payload, {
-      errorCorrectionLevel: "M",
-      margin: 0,
-      width: 368,
-      type: "image/png",
-    });
-    const b64 = dataUrl.split(",")[1];
-    if (b64) return Buffer.from(b64, "base64");
-  } catch {
-    /* fall through */
-  }
-  try {
-    return await QRCode.toBuffer(payload, {
-      errorCorrectionLevel: "M",
-      margin: 0,
-      width: 368,
-      type: "png",
-    });
-  } catch (err) {
-    console.warn("[invoice] QR image encode failed:", err);
-    return null;
   }
 }
 
@@ -537,7 +519,7 @@ function resolveLogoPath(url?: string | null): string | null {
   return null;
 }
 
-type PdfInput = {
+export type PdfInput = {
   labels: Record<string, string>;
   lang: InvoiceLang;
   merchant: {
@@ -571,7 +553,8 @@ type PdfInput = {
   tip: number;
   total: number;
   paid: boolean;
-  qrPng: Buffer | null;
+  qrPayload: string;
+  qrMissingReason: string;
   qrr: string;
   payIban: string;
 };
@@ -619,7 +602,7 @@ function estimateTotalsH(input: PdfInput): number {
   return 6 + totalsRowsOf(input).reduce((h, [, , bold]) => h + (bold ? 13 : 11), 0);
 }
 
-function renderInvoicePdf(input: PdfInput): Promise<Buffer> {
+export function renderInvoicePdf(input: PdfInput): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
@@ -769,7 +752,7 @@ function renderInvoicePdf(input: PdfInput): Promise<Buffer> {
     drawTotals(y);
 
     const range = doc.bufferedPageRange();
-    const lastPage = Math.min(1, range.count - 1);
+    const lastPage = Math.max(0, range.count - 1);
     drawQrBill(doc, input, lastPage);
     doc.end();
   });
@@ -877,24 +860,56 @@ function drawQrBill(doc: PDFKit.PDFDocument, input: PdfInput, pageIndex: number)
 
   const qrX = payX;
   const qrY = top + 28;
-  if (input.qrPng) {
+  if (input.qrPayload) {
     try {
-      doc.image(input.qrPng, qrX, qrY, { width: qrSize, height: qrSize });
-      drawSwissCross(doc, qrX + qrSize / 2, qrY + qrSize / 2);
+      drawSwissQrCode(doc, input.qrPayload, qrX, qrY, qrSize);
     } catch (err) {
-      console.warn("[invoice] QR image embed failed:", err);
-      drawQrFallback(doc, qrX, qrY, qrSize);
+      console.warn("[invoice] Swiss QR draw failed:", err);
+      drawQrFallback(doc, qrX, qrY, qrSize, T.qrFailed);
     }
-  } else if (input.payIban) {
-    drawQrFallback(doc, qrX, qrY, qrSize);
+  } else {
+    drawQrFallback(
+      doc,
+      qrX,
+      qrY,
+      qrSize,
+      input.qrMissingReason === "missing_iban" ? T.qrMissingIban : T.qrFailed
+    );
   }
 }
 
-function drawQrFallback(doc: PDFKit.PDFDocument, x: number, y: number, size: number) {
+function drawSwissQrCode(
+  doc: PDFKit.PDFDocument,
+  payload: string,
+  x: number,
+  y: number,
+  size: number
+) {
+  const quiet = 4;
+  const { moduleCount, runs } = swissQrModuleRuns(payload);
+  const n = moduleCount + quiet * 2;
+  const mod = size / n;
   doc.save();
-  doc.rect(x, y, size, size).strokeColor("#000").lineWidth(0.8).stroke();
+  doc.rect(x, y, size, size).fill("#fff");
+  doc.fillColor("#000");
+  for (const run of runs) {
+    doc.rect(x + (run.x + quiet) * mod, y + (run.y + quiet) * mod, run.w * mod, mod).fill();
+  }
+  drawSwissCross(doc, x + size / 2, y + size / 2);
+  doc.restore();
+}
+
+function drawQrFallback(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  size: number,
+  message: string
+) {
+  doc.save();
+  doc.rect(x, y, size, size).lineWidth(0.8).fillAndStroke("#fff", "#000");
   doc.font("Helvetica").fontSize(7).fillColor("#000");
-  doc.text("QR", x, y + size / 2 - 6, { width: size, align: "center", lineBreak: false });
+  doc.text(message, x + 8, y + 24, { width: size - 16, align: "center", lineBreak: true });
   doc.restore();
 }
 

@@ -7,6 +7,8 @@
  * banks may still require official certification for production QR-bills.
  */
 
+import QRCode from "qrcode";
+
 const SPC_CRLF = "\r\n";
 
 export type QrAddressType = "K" | "S";
@@ -144,6 +146,32 @@ export function buildSwissQrPayload(input: SwissQrBillInput): string {
     lines.push(clip(input.billingInfo, 140));
   }
   return lines.join(SPC_CRLF);
+}
+
+export type SwissQrRun = { x: number; y: number; w: number };
+
+/**
+ * QR module runs for vector drawing. Avoids PDFKit's broken RGBA-PNG embed
+ * (png-js alpha decode is async and loses the race with doc.end()).
+ */
+export function swissQrModuleRuns(payload: string): { moduleCount: number; runs: SwissQrRun[] } {
+  const qr = QRCode.create(payload, { errorCorrectionLevel: "M" });
+  const n = qr.modules.size;
+  const runs: SwissQrRun[] = [];
+  for (let row = 0; row < n; row++) {
+    let col = 0;
+    while (col < n) {
+      while (col < n && !qr.modules.get(row, col)) col += 1;
+      if (col >= n) break;
+      const start = col;
+      while (col < n && qr.modules.get(row, col)) col += 1;
+      runs.push({ x: start, y: row, w: col - start });
+    }
+  }
+  if (n < 21 || runs.length < 40) {
+    throw new Error("Swiss QR matrix is too small to be valid");
+  }
+  return { moduleCount: n, runs };
 }
 
 export function parseAddressFromMerchant(opts: {
