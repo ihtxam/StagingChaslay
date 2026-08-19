@@ -514,6 +514,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [keypadMode, setKeypadMode] = useState<KeypadMode>('qty');
   const [keypadBuffer, setKeypadBuffer] = useState(() => bootActive?.keypadBuffer || '');
   const [activeCourse, setActiveCourse] = useState(() => bootActive?.activeCourse || 1);
+  const [courseCount, setCourseCount] = useState(() => {
+    let max = bootActive?.activeCourse || 1;
+    if (bootActive?.courseCount && bootActive.courseCount > max) {
+      max = bootActive.courseCount;
+    }
+    for (const line of bootActive?.cart || []) {
+      const n = Number(line.courseNumber) || 0;
+      if (n > max) max = n;
+    }
+    return max;
+  });
   const [orderSent, setOrderSent] = useState(() => !!bootActive?.orderSent);
   const [coursesBulkSent, setCoursesBulkSent] = useState(() => !!bootActive?.coursesBulkSent);
   const [orderNote, setOrderNote] = useState(() => bootActive?.orderNote || '');
@@ -881,6 +892,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ticketOrderNumber,
       orderNote,
       activeCourse,
+      courseCount,
       orderSent,
       coursesBulkSent,
       selectedLineId,
@@ -921,6 +933,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     ticketOrderNumber,
     orderNote,
     activeCourse,
+    courseCount,
     orderSent,
     coursesBulkSent,
     selectedLineId,
@@ -1119,9 +1132,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     for (const l of cart) {
       if (l.courseNumber) set.add(l.courseNumber);
     }
-    if (coursesEnabled && cart.length > 0) set.add(activeCourse);
+    if (coursesEnabled && cart.length > 0) {
+      const max = Math.max(activeCourse, courseCount, ...set, 1);
+      for (let n = 1; n <= max; n++) set.add(n);
+    }
     return Array.from(set).sort((a, b) => a - b);
-  }, [cart, activeCourse, coursesEnabled]);
+  }, [cart, activeCourse, coursesEnabled, courseCount]);
 
   useEffect(() => {
     const fromSettings = checkoutSettings.postSuccessTarget;
@@ -2984,9 +3000,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         l.courseNumber ? l : { ...l, courseNumber: activeCourse }
       )
     );
-    const next = Math.max(activeCourse, ...courseNumbers, 0) + 1;
+    const next = Math.max(activeCourse, courseCount, ...courseNumbers, 0) + 1;
     setActiveCourse(next);
+    setCourseCount(next);
+    setSelectedLineId(null);
+    setKeypadBuffer('');
     toast.success(`${t('webPosCourse')} ${next}`);
+  };
+
+  const handleSelectCourse = (course: number) => {
+    setActiveCourse(course);
+    setSelectedLineId(null);
+    setKeypadBuffer('');
   };
 
   const setKitchenPrintFailedForLines = useCallback((lineIds: Iterable<string>, failed: boolean) => {
@@ -3080,6 +3105,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ticketOrderNumber,
       orderNote,
       activeCourse: draftActiveCourse,
+      courseCount,
       orderSent: true,
       coursesBulkSent: true,
       selectedLineId: null,
@@ -3097,6 +3123,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTabNumber(null);
     clearCartTicket();
     setActiveCourse(1);
+    setCourseCount(1);
     setOrderSent(false);
     setCoursesBulkSent(false);
     setChannel(null);
@@ -3104,6 +3131,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setSelectedCustomer(null);
     setProvisionalPrinted(false);
     if (wasTable) {
+      setTablesRefreshToken((n) => n + 1);
       setPosTab('tables');
       setPosView('tables');
     } else {
@@ -3194,6 +3222,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     ticketOrderNumber,
     orderNote,
     activeCourse,
+    courseCount,
     orderSent,
     coursesBulkSent,
     selectedLineId,
@@ -3244,6 +3273,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTicketOrderNumber(draft.ticketOrderNumber ?? null);
     setOrderNote(draft.orderNote);
     setActiveCourse(draft.activeCourse);
+    {
+      let max = Math.max(draft.activeCourse || 1, draft.courseCount || 1);
+      for (const line of draft.cart) {
+        const n = Number(line.courseNumber) || 0;
+        if (n > max) max = n;
+      }
+      setCourseCount(max);
+    }
     setOrderSent(draft.orderSent);
     setCoursesBulkSent(draft.coursesBulkSent);
     setSelectedLineId(draft.selectedLineId);
@@ -3360,6 +3397,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     let nextOrderSent = orderSent;
     let nextCoursesBulkSent = coursesBulkSent;
     let nextBillDiscount = billDiscount;
+    let nextCourseCount = Math.max(activeCourse, courseCount, 1);
 
     if (existing && (existing.cart.length > 0 || existing.orderSent)) {
       const existingIds = new Set(existing.cart.map((l) => l.lineId));
@@ -3387,6 +3425,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTabNumber(null);
     setOrderNote(nextNote);
     setActiveCourse(nextCourse);
+    nextCourseCount = Math.max(nextCourse, nextCourseCount, existing?.courseCount || 1);
+    for (const line of nextCart) {
+      const n = Number(line.courseNumber) || 0;
+      if (n > nextCourseCount) nextCourseCount = n;
+    }
+    setCourseCount(nextCourseCount);
     setOrderSent(nextOrderSent);
     setCoursesBulkSent(nextCoursesBulkSent);
     setBillDiscount(nextBillDiscount);
@@ -3400,6 +3444,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tabNumber: null,
       orderNote: nextNote,
       activeCourse: nextCourse,
+      courseCount: nextCourseCount,
       orderSent: nextOrderSent,
       coursesBulkSent: nextCoursesBulkSent,
       selectedLineId,
@@ -3427,6 +3472,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setTabNumber(null);
       clearCartTicket();
       setActiveCourse(1);
+      setCourseCount(1);
       setOrderSent(false);
       setCoursesBulkSent(false);
       setFulfillmentWhen(null);
@@ -3466,6 +3512,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTabNumber(null);
     clearCartTicket();
     setActiveCourse(1);
+    setCourseCount(1);
     setOrderSent(false);
     setCoursesBulkSent(false);
     setChannel('takeaway');
@@ -3514,6 +3561,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setTabNumber(null);
       clearCartTicket();
       setActiveCourse(1);
+      setCourseCount(1);
       setOrderSent(false);
       setCoursesBulkSent(false);
       setChannel('takeaway');
@@ -3654,6 +3702,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         tabNumber: null,
         orderNote: nextNote,
         activeCourse: Math.max(tgtDraft.activeCourse || 1, srcDraft.activeCourse || 1),
+        courseCount: Math.max(
+          tgtDraft.courseCount || 1,
+          srcDraft.courseCount || 1,
+          tgtDraft.activeCourse || 1,
+          srcDraft.activeCourse || 1
+        ),
         orderSent: tgtDraft.orderSent || srcDraft.orderSent,
         coursesBulkSent: tgtDraft.coursesBulkSent || srcDraft.coursesBulkSent,
         selectedLineId: null,
@@ -5938,6 +5992,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setTabNumber(null);
       clearCartTicket();
       setActiveCourse(1);
+      setCourseCount(1);
       setOrderSent(false);
       setCoursesBulkSent(false);
       setChannel(null);
@@ -6688,6 +6743,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setSelectedLineId(null);
     setPosTab(tab);
     setPosView(tab);
+    if (tab === 'tables') {
+      setTablesRefreshToken((n) => n + 1);
+    }
     if (tab === 'register') {
       requestAnimationFrame(() => blurPosInputs());
     }
@@ -7039,6 +7097,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setLastSplitReceipts([]);
               splitReceiptsRef.current = [];
               const next = isRetail ? 'register' : postSuccessTarget;
+              if (next === 'tables') setTablesRefreshToken((n) => n + 1);
               setPosTab(next);
               setPosView(next);
             }}
@@ -7195,7 +7254,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 activeCourse={activeCourse}
                 coursesEnabled={coursesEnabled}
                 courseNumbers={courseNumbers}
-                onSelectCourse={setActiveCourse}
+                onSelectCourse={handleSelectCourse}
                 orderNote={orderNote}
                 tableLabel={tableLabel}
                 tabNumber={tabNumber}

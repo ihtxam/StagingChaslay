@@ -893,12 +893,13 @@ class PosViewModel @Inject constructor(
 
     fun setActiveCourse(course: Int) {
         cartManager.setActiveCourse(course)
+        updateExtras { it.copy(keypadExpanded = false, keypadBuffer = "", selectedCartItemId = null) }
     }
 
     fun addCourse() {
         if (!isRestaurantMode()) return
         cartManager.addCourse()
-        updateExtras { it.copy(keypadExpanded = false, keypadBuffer = "") }
+        updateExtras { it.copy(keypadExpanded = false, keypadBuffer = "", selectedCartItemId = null) }
     }
 
     fun setKeypadMode(mode: KeypadMode) {

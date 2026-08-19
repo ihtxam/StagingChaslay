@@ -1452,15 +1452,23 @@ private sealed interface CartRowModel {
 private fun buildCartRows(
     items: List<CartItem>,
     isTableMode: Boolean,
-    activeCourse: Int
+    activeCourse: Int,
+    courseCount: Int = 1
 ): List<CartRowModel> {
     if (!isTableMode) return items.map { CartRowModel.Line(it) }
-    return items.groupBy { it.courseNumber }
-        .toSortedMap()
-        .flatMap { (course, courseItems) ->
-            listOf(CartRowModel.CourseHeader(course, course == activeCourse)) +
-                courseItems.map { CartRowModel.Line(it) }
-        }
+    val grouped = items.groupBy { it.courseNumber }
+    val maxCourse = maxOf(
+        1,
+        courseCount.coerceAtLeast(1),
+        activeCourse.coerceAtLeast(1),
+        grouped.keys.maxOrNull() ?: 1
+    )
+    if (items.isEmpty() && maxCourse <= 1) return emptyList()
+    return (1..maxCourse).flatMap { course ->
+        val courseItems = grouped[course].orEmpty()
+        listOf(CartRowModel.CourseHeader(course, course == activeCourse)) +
+            courseItems.map { CartRowModel.Line(it) }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -1542,7 +1550,7 @@ private fun VectronOrderPanel(
         showCartTabs -> orderingItems
         else -> cart.items
     }
-    val cartRows = buildCartRows(displayItems, showCourses, cart.activeCourse)
+    val cartRows = buildCartRows(displayItems, showCourses, cart.activeCourse, cart.courseCount)
     val unsentCourses = orderingItems.map { it.courseNumber }.distinct().sorted()
     val keypadHint = when (keypadMode) {
         KeypadMode.QTY -> stringResource(R.string.keypad_hint_qty)
@@ -1745,15 +1753,17 @@ private fun VectronOrderPanel(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .background(
-                                            if (row.isActive) Color(0xFFE8F4FD) else Color(0xFFEAEAEA),
+                                            if (row.isActive) Color(0xFF5E35B1) else Color(0xFFEAEAEA),
                                             RoundedCornerShape(4.dp)
                                         )
-                                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .clickable { onSetActiveCourse(row.number) }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
                                 ) {
                                     Text(
-                                        stringResource(R.string.course_n, row.number),
-                                        color = if (row.isActive) Color(0xFF2E6DB4) else Color(0xFF666666),
+                                        ">> ${stringResource(R.string.course_n, row.number)} <<",
+                                        color = if (row.isActive) Color.White else Color(0xFF666666),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp
                                     )

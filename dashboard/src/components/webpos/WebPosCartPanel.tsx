@@ -315,22 +315,39 @@ export default function WebPosCartPanel({
     setCartTab(orderingLines.length === 0 ? 'ordered' : 'ordering');
   }, [showOrderTabs, orderingLines.length]);
 
+  useEffect(() => {
+    if (!coursesEnabled || !showOrderTabs) return;
+    const emptyActive = !cart.some((l) => (l.courseNumber || 1) === activeCourse);
+    if (emptyActive) setCartTab('ordering');
+  }, [activeCourse, coursesEnabled, showOrderTabs, cart]);
+
   const rows = useMemo(() => {
     if (!coursesEnabled || courseNumbers.length === 0) {
       return visibleCart.map((line) => ({ kind: 'line' as const, line }));
     }
     const out: CartRow[] = [];
-    const courses = courseNumbers.filter((course) =>
-      visibleCart.some((l) => (l.courseNumber || 1) === course)
-    );
-    for (const course of courses) {
+    // Keep empty course headers (e.g. Course 2 after Next course) so the
+    // new course is visible and selectable immediately.
+    for (const course of courseNumbers) {
+      const hasVisibleItems = visibleCart.some((l) => (l.courseNumber || 1) === course);
+      if (!hasVisibleItems && course !== activeCourse && onOrderedTab) {
+        continue;
+      }
       out.push({ kind: 'course', course });
       for (const line of visibleCart.filter((l) => (l.courseNumber || 1) === course)) {
         out.push({ kind: 'line', line });
       }
     }
     return out;
-  }, [visibleCart, courseNumbers, coursesEnabled]);
+  }, [visibleCart, courseNumbers, coursesEnabled, activeCourse, onOrderedTab]);
+
+  useEffect(() => {
+    if (!coursesEnabled) return;
+    const el = document.querySelector(`[data-course-header="${activeCourse}"]`);
+    if (el instanceof HTMLElement) {
+      el.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeCourse, coursesEnabled, rows.length]);
 
   const selectedLine = selectedLineId
     ? cart.find((l) => l.lineId === selectedLineId) || null
@@ -850,7 +867,7 @@ export default function WebPosCartPanel({
               </button>
             ) : null}
           </div>
-        ) : visibleCart.length === 0 ? (
+        ) : visibleCart.length === 0 && rows.length === 0 ? (
           <p className="py-8 text-center text-sm text-stone-400">
             {cartTab === 'ordered' ? t('webPosCartOrderedEmpty') : t('webPosCartOrderingEmpty')}
           </p>
@@ -876,18 +893,19 @@ export default function WebPosCartPanel({
                   <li key={`course-${row.course}`}>
                     <button
                       type="button"
+                      data-course-header={row.course}
                       onClick={(e) => {
                         e.stopPropagation();
                         onSelectCourse(row.course);
                       }}
                       aria-pressed={selected}
-                      className={`w-full rounded-md px-2 py-1.5 text-left text-xs font-bold uppercase tracking-wide ${
+                      className={`w-full rounded-md px-2 py-1.5 text-center text-xs font-bold uppercase tracking-wide ${
                         selected
                           ? 'bg-violet-600 text-white ring-2 ring-violet-300 ring-offset-1'
                           : 'bg-violet-50 text-violet-800 hover:bg-violet-100'
                       }`}
                     >
-                      {t('webPosCourse')} {row.course}
+                      {`>> ${t('webPosCourse')} ${row.course} <<`}
                       {selected ? (
                         <span className="ml-2 text-[10px] font-semibold normal-case tracking-normal opacity-90">
                           - {t('webPosCourseActive')}

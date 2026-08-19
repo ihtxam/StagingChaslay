@@ -98,6 +98,8 @@ export type OpenCartDraft = {
   ticketOrderNumber?: string | null;
   orderNote: string;
   activeCourse: number;
+  /** Highest course opened with Next course (empty Course 2 stays visible). */
+  courseCount?: number;
   orderSent: boolean;
   coursesBulkSent: boolean;
   selectedLineId: string | null;

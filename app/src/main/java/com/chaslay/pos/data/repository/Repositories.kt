@@ -1258,10 +1258,10 @@ class CartManager @Inject constructor(
                     }
                 )
             } else {
+                val withCourse = stamped.copy(courseNumber = cart.activeCourse.coerceAtLeast(1))
                 val enriched = when {
-                    cart.tableOrderId != null -> stamped.copy(courseNumber = cart.activeCourse)
-                    cart.splitByItems && cart.splitCount > 1 -> stamped.copy(splitCheck = cart.activeSplitCheck)
-                    else -> stamped
+                    cart.splitByItems && cart.splitCount > 1 -> withCourse.copy(splitCheck = cart.activeSplitCheck)
+                    else -> withCourse
                 }
                 cart.copy(items = cart.items + enriched)
             }
