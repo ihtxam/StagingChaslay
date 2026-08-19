@@ -446,7 +446,13 @@ export function CookbookPage() {
                 <button type="button" className="p-2 text-red-600" onClick={() => setLines(lines.filter((_, i) => i !== idx))}><Trash2 size={14} /></button>
               </div>
             ))}
-            <button type="button" className="btn-secondary text-xs" onClick={() => setLines([...lines, { itemId: '', qty: '' })]}>
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={() => {
+                setLines([...lines, { itemId: '', qty: '' }]);
+              }}
+            >
               <Plus size={12} /> {t('invAddIngredient')}
             </button>
             <div className="flex justify-end gap-2">

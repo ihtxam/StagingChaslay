@@ -1985,7 +1985,9 @@ export default function Products() {
                   <button
                     type="button"
                     className="btn-secondary text-xs"
-                    onClick={() => setRecipeLines([...recipeLines, { itemId: '', qty: '' }])}
+                    onClick={() => {
+                      setRecipeLines([...recipeLines, { itemId: '', qty: '' }]);
+                    }}
                   >
                     <Plus size={12} /> {t('invAddIngredient')}
                   </button>
