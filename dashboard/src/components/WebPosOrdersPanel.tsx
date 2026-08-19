@@ -33,6 +33,7 @@ import {
   canShowAwaitingPaymentBadge,
   formatOrderPaymentDisplay,
   isAwaitingApproval,
+  isInvoiceOrder,
   isOnlineShopOrder,
   isPaidOrder,
   orderChannelBadgeClass,
@@ -165,7 +166,7 @@ export type HeldRow = {
   createdAt?: string | null;
 };
 type StatusFilter = 'active' | 'completed' | 'all' | 'held';
-type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
+type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online' | 'invoice';
 type Props = {
   open: boolean;
   /** Full-width in-tab layout instead of slide-over overlay */
@@ -237,12 +238,19 @@ function isOnlineShopOrder(o: PosOrder): boolean {
   return t === 'web_shop' || t === 'online' || isPlatformChannel(o.channel);
 }
 
+function isUnpaidInvoice(o: PosOrder): boolean {
+  if (!isInvoiceOrder(o)) return false;
+  const pay = (o.paymentStatus || '').toLowerCase();
+  return !['completed', 'paid', 'partially_refunded', 'cancelled'].includes(pay);
+}
+
 function matchesChannelFilter(
-  o: { channel?: string | null; orderType?: string | null; cartJson?: unknown },
+  o: { channel?: string | null; orderType?: string | null; cartJson?: unknown; paymentMethod?: string | null; invoiceNumber?: string | null },
   filter: ChannelFilter
 ) {
   if (filter === 'all') return true;
   if (filter === 'online') return isOnlineShopOrder(o as PosOrder);
+  if (filter === 'invoice') return isInvoiceOrder(o);
   const ch = o.cartJson != null ? resolveHeldChannel({ channel: o.channel, cartJson: o.cartJson }) : o.channel || 'takeaway';
   return ch === filter;
 }
@@ -395,6 +403,7 @@ export default function WebPosOrdersPanel({
     () => initialChannelFilter || 'all'
   );
   const [search, setSearch] = useState('');
+  const [searchQ, setSearchQ] = useState('');
   const [held, setHeld] = useState<HeldRow[]>([]);
   const [orders, setOrders] = useState<PosOrder[]>([]);
   const [reasons, setReasons] = useState<CancelReason[]>([]);
@@ -451,9 +460,15 @@ export default function WebPosOrdersPanel({
     return ch;
   };
 
+  useEffect(() => {
+    const id = window.setTimeout(() => setSearchQ(search.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [search]);
+
   const load = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({ limit: '80', from: todayIso(), to: todayIso() });
+    if (searchQ) params.set('q', searchQ);
     const heldPromise = api.get('/merchant/pos/held');
     const ordersPromise = api.get(`/merchant/pos/orders?${params.toString()}`);
     const [heldRes, ordersRes] = await Promise.allSettled([heldPromise, ordersPromise]);
@@ -499,7 +514,7 @@ export default function WebPosOrdersPanel({
     setHeld(nextHeld);
     setOrders(nextOrders);
     setLoading(false);
-  }, [t]);
+  }, [t, searchQ]);
 
   useEffect(() => {
     if (open) void load();
@@ -545,11 +560,12 @@ export default function WebPosOrdersPanel({
   const listItems = useMemo(() => {
     const items: ListItem[] = [];
     const q = search.trim().toLowerCase();
+    const view = q ? 'all' : statusFilter;
     const heldBucket: HeldRow[] = [];
     const activeBucket: PosOrder[] = [];
     const doneBucket: PosOrder[] = [];
 
-    if (statusFilter === 'active' || statusFilter === 'all' || statusFilter === 'held') {
+    if (view === 'active' || view === 'all' || view === 'held') {
       for (const h of held) {
         // Held / kitchen-sent tickets are POS register work — hide only on Online shop.
         if (channelFilter === 'online') continue;
@@ -572,11 +588,12 @@ export default function WebPosOrdersPanel({
         }
         heldBucket.push(h);
       }
-      if (statusFilter !== 'held') {
+      if (view !== 'held') {
       for (const o of orders) {
         const showOnActive =
           isOpenFulfillmentOrder(o) ||
-          (statusFilter === 'active' && isScheduledKitchenTicket(o));
+          (view === 'active' && isScheduledKitchenTicket(o)) ||
+          (view === 'active' && isUnpaidInvoice(o));
         if (!showOnActive) continue;
         if (!matchesChannelFilter(o, channelFilter)) continue;
         if (q) {
@@ -590,6 +607,8 @@ export default function WebPosOrdersPanel({
               o.customerName,
               o.tableLabel,
               o.orderType,
+              o.paymentMethod,
+              o.invoiceNumber,
               refs.ticketDisplay,
               refs.tabNumber
             )
@@ -601,10 +620,14 @@ export default function WebPosOrdersPanel({
       }
       }
     }
-    if (statusFilter === 'completed' || statusFilter === 'all') {
+    if (view === 'completed' || view === 'all') {
       for (const o of orders) {
         // Ongoing orders already listed under Active; skip them here (including "All").
-        if (isOpenFulfillmentOrder(o)) continue;
+        // Invoice sales stay in history even when unpaid / still "preparing".
+        const listedInActive =
+          isOpenFulfillmentOrder(o) || (view === 'all' && isUnpaidInvoice(o));
+        if (listedInActive && view === 'all') continue;
+        if (isOpenFulfillmentOrder(o) && !isInvoiceOrder(o)) continue;
         if (!matchesChannelFilter(o, channelFilter)) continue;
         if (q) {
           const refs = orderPublicRefs(o);
@@ -617,6 +640,8 @@ export default function WebPosOrdersPanel({
               o.customerName,
               o.tableLabel,
               o.orderType,
+              o.paymentMethod,
+              o.invoiceNumber,
               refs.ticketDisplay,
               refs.tabNumber
             )
@@ -1014,6 +1039,7 @@ export default function WebPosOrdersPanel({
     { id: 'takeaway', label: t('takeaway') },
     { id: 'delivery', label: t('delivery') },
     { id: 'online', label: t('webPosOnlineOrders') },
+    { id: 'invoice', label: t('webPosInvoice') },
   ];
 
   const cancelModalOpen = !!(cancelFor || cancelHeldFor);

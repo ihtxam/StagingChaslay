@@ -6,6 +6,8 @@ import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
   formatOrderPaymentDisplay,
+  isAwaitingPaymentOrder,
+  isInvoiceOrder,
   isKitchenTypeOrder,
   isOnlineShopOrder,
   orderSourceLabel,
@@ -29,7 +31,7 @@ import {
 } from '@/components/settings/SettingsReportUi';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
-type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online';
+type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online' | 'invoice';
 
 const CHANNEL_STYLE: Record<string, string> = {
   takeaway:
@@ -76,6 +78,7 @@ function matchesTypeFilter(o: MerchantOrder, filter: TypeFilter) {
   if (filter === 'all') return true;
   if (filter === 'kitchen') return isKitchenTypeOrder(o);
   if (filter === 'online') return isOnlineShopOrder(o);
+  if (filter === 'invoice') return isInvoiceOrder(o);
   return orderChannel(o) === filter;
 }
 
@@ -93,6 +96,7 @@ export default function Orders() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [staffFilter, setStaffFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [searchQ, setSearchQ] = useState('');
 
   const [staffList, setStaffList] = useState<Array<{ id: string; name: string }>>([]);
   const [merchant, setMerchant] = useState<{
@@ -145,6 +149,7 @@ export default function Orders() {
         to: dateTo,
       });
       if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (searchQ) params.set('q', searchQ);
       const response = await api.get(`/merchant/pos/orders?${params.toString()}`);
       setOrders((response.data.orders || []) as MerchantOrder[]);
     } catch (error: any) {
@@ -152,7 +157,12 @@ export default function Orders() {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, statusFilter, t]);
+  }, [dateFrom, dateTo, statusFilter, searchQ, t]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setSearchQ(search.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [search]);
 
   useEffect(() => {
     void loadMeta();
@@ -354,6 +364,7 @@ export default function Orders() {
               <option value="takeaway">{t('takeaway')}</option>
               <option value="dine_in">{t('dineIn')}</option>
               <option value="online">{t('webPosOnlineOrders')}</option>
+              <option value="invoice">{t('webPosInvoice')}</option>
             </select>
           </SettingsField>
           <SettingsField label={t('ordersFilterChannel')}>
@@ -412,6 +423,7 @@ export default function Orders() {
             ['takeaway', t('takeaway')],
             ['dine_in', t('dineIn')],
             ['online', t('webPosOnlineOrders')],
+            ['invoice', t('webPosInvoice')],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -505,6 +517,17 @@ export default function Orders() {
                 <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5">
                   {formatOrderPaymentDisplay(order, t, locale)}
                 </span>
+                {isInvoiceOrder(order) ? (
+                  <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-indigo-800">
+                    {t('webPosInvoice')}
+                    {order.invoiceNumber ? ` ${order.invoiceNumber}` : ''}
+                  </span>
+                ) : null}
+                {isAwaitingPaymentOrder(order) ? (
+                  <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-amber-900">
+                    {t('webPosAwaitingPayment')}
+                  </span>
+                ) : null}
                 {order.staffName ? (
                   <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5 truncate max-w-[8rem]">
                     {order.staffName}

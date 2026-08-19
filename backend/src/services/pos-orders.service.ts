@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { and, desc, eq, gte, lte, inArray, or } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, lte, inArray, or } from "drizzle-orm";
 import {
   POS_CANCEL_REASONS,
   POS_REFUND_REASONS,
@@ -143,6 +143,7 @@ export class PosOrdersService {
       from?: string;
       to?: string;
       limit?: number;
+      q?: string;
     } = {}
   ) {
     const db = getDb();
@@ -154,10 +155,37 @@ export class PosOrdersService {
     ];
 
     if (opts.status && opts.status !== "all") {
-      conditions.push(eq(schema.orders.status, opts.status));
+      if (opts.status === "completed") {
+        // Unpaid invoice POS sales stay in history (status may still be preparing).
+        conditions.push(
+          or(
+            eq(schema.orders.status, "completed"),
+            and(
+              eq(schema.orders.paymentMethod, "invoice"),
+              eq(schema.orders.paymentStatus, "awaiting_payment")
+            )
+          )!
+        );
+      } else {
+        conditions.push(eq(schema.orders.status, opts.status));
+      }
     }
+
+    const q = String(opts.q || "").trim();
+    const searchCond = q
+      ? or(
+          ilike(schema.orders.orderNumber, `%${q}%`),
+          ilike(schema.orders.clientId, `%${q}%`),
+          ilike(schema.orders.invoiceNumber, `%${q}%`),
+          ilike(schema.orders.customerName, `%${q}%`),
+          ilike(schema.orders.paymentMethod, `%${q}%`)
+        )
+      : null;
+
     // Include orders created in range OR scheduled (pickup/delivery) in range so a
     // future delivery time does not hide a ticket from today's history.
+    // A ref search (WP-… / INV-…) also matches outside the date window — invoice
+    // and awaiting_payment POS sales were otherwise invisible when staff searched.
     if (opts.from || opts.to) {
       const start = opts.from ? zurichDayBounds(opts.from).start : new Date(0);
       const end = opts.to ? zurichDayBounds(opts.to).end : new Date("9999-12-31T23:59:59.999Z");
@@ -169,7 +197,18 @@ export class PosOrdersService {
         gte(schema.orders.scheduledFor, start),
         lte(schema.orders.scheduledFor, end)
       );
-      conditions.push(or(createdInRange, scheduledInRange)!);
+      const inRange = or(createdInRange, scheduledInRange)!;
+      const looksLikeRef =
+        /^(WP-|INV-|ORD-|#)/i.test(q) || q.replace(/[^A-Za-z0-9-]/g, "").length >= 8;
+      if (searchCond && looksLikeRef) {
+        conditions.push(or(inRange, searchCond)!);
+      } else if (searchCond) {
+        conditions.push(and(inRange, searchCond)!);
+      } else {
+        conditions.push(inRange);
+      }
+    } else if (searchCond) {
+      conditions.push(searchCond);
     }
 
     const rows = await db.query.orders.findMany({

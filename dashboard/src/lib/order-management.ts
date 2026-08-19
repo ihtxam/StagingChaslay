@@ -5,6 +5,7 @@ import { formatOrderNumberDisplay } from '@/lib/order-number';
 export type MerchantOrder = PosOrderForReceipt & {
   status: string;
   paymentStatus?: string | null;
+  invoiceNumber?: string | null;
   paymentBreakdown?: Array<{ method: string; amount: number }> | null;
   refundAmount: number;
   cancelReason?: string | null;
@@ -122,15 +123,32 @@ export function orderPlatformBorderClass(o: MerchantOrder): string {
   }
 }
 
+/** POS / WebPOS invoice sale — unpaid until bank transfer is recorded. */
+export function isInvoiceOrder(o: {
+  paymentMethod?: string | null;
+  invoiceNumber?: string | null;
+  paymentStatus?: string | null;
+}): boolean {
+  const method = String(o.paymentMethod || '')
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (method === 'invoice') return true;
+  if (o.invoiceNumber) return true;
+  return false;
+}
+
 /** Unpaid web shop or POS order — pay on pickup / collect at counter. */
 export function isAwaitingPaymentOrder(o: MerchantOrder): boolean {
   const status = (o.status || '').toLowerCase();
   const pay = (o.paymentStatus || '').toLowerCase();
-  const method = (o.paymentMethod || '').toLowerCase();
-  if (['cancelled', 'refunded', 'completed'].includes(status)) return false;
+  const method = (o.paymentMethod || '').toLowerCase().replace(/-/g, '_');
+  if (['cancelled', 'refunded'].includes(status)) return false;
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
-  if (pay === 'awaiting_payment') return true;
-  if (method === 'pay_later' || method === 'pay-later' || method === 'invoice') return true;
+  // Invoice + awaiting_payment stays visible even when fulfillment status is completed
+  // (same class of hide-bug as paid POS delivery vanishing from Kitchen / history).
+  if (isInvoiceOrder(o) || pay === 'awaiting_payment') return true;
+  if (status === 'completed') return false;
+  if (method === 'pay_later' || method === 'pay-later') return true;
   if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) return true;
   return false;
 }
@@ -297,6 +315,8 @@ export function orderSearchHaystack(o: MerchantOrder): string {
     refs.tabNumber,
     ch,
     o.paymentMethod,
+    o.invoiceNumber,
+    o.paymentStatus,
     o.status,
   ]
     .filter(Boolean)

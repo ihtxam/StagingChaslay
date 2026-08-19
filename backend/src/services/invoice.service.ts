@@ -325,12 +325,7 @@ export class InvoiceService {
           reference: qrr || undefined,
           unstructuredMessage: invoiceNumber,
         });
-        qrPng = await QRCode.toBuffer(qrPayload, {
-          errorCorrectionLevel: "M",
-          margin: 0,
-          width: 320,
-          type: "png",
-        });
+        qrPng = await swissQrPng(qrPayload);
       } catch (err) {
         console.warn("[invoice] Swiss QR payload failed:", err);
       }
@@ -388,6 +383,33 @@ export class InvoiceService {
   }
 }
 
+/** PDFKit embeds data-URLs more reliably than raw PNG buffers. */
+async function swissQrPng(payload: string): Promise<Buffer | null> {
+  try {
+    const dataUrl = await QRCode.toDataURL(payload, {
+      errorCorrectionLevel: "M",
+      margin: 0,
+      width: 368,
+      type: "image/png",
+    });
+    const b64 = dataUrl.split(",")[1];
+    if (b64) return Buffer.from(b64, "base64");
+  } catch {
+    /* fall through */
+  }
+  try {
+    return await QRCode.toBuffer(payload, {
+      errorCorrectionLevel: "M",
+      margin: 0,
+      width: 368,
+      type: "png",
+    });
+  } catch (err) {
+    console.warn("[invoice] QR image encode failed:", err);
+    return null;
+  }
+}
+
 function resolveLogoPath(url?: string | null): string | null {
   if (!url) return null;
   const rel = String(url).match(/\/api\/uploads\/(.+)$/);
@@ -438,12 +460,56 @@ type PdfInput = {
   payIban: string;
 };
 
+function merchantLinesOf(input: PdfInput): string[] {
+  const T = input.labels;
+  return [
+    input.merchant.address,
+    [input.merchant.city, input.merchant.country].filter(Boolean).join(", "),
+    input.merchant.phone ? `${T.phone}: ${input.merchant.phone}` : null,
+    input.merchant.email ? `${T.email}: ${input.merchant.email}` : null,
+    input.merchant.vatNumber ? `${T.vatNo}: ${input.merchant.vatNumber}` : null,
+  ].filter(Boolean) as string[];
+}
+
+function clientLinesOf(input: PdfInput): string[] {
+  return [
+    input.customer.name || "—",
+    input.customer.address,
+    input.customer.phone,
+    input.customer.email,
+  ].filter(Boolean) as string[];
+}
+
+function totalsRowsOf(input: PdfInput): Array<[string, string, boolean]> {
+  const T = input.labels;
+  return (
+    [
+      [T.subtotal, money(input.subtotal), false],
+      input.discount > 0.001 ? [T.discount, `−${money(input.discount)}`, false] : null,
+      input.tax > 0.001 ? [T.vat, money(input.tax), false] : null,
+      input.tip > 0.001 ? [T.tip, money(input.tip), false] : null,
+      [T.total, money(input.total), true],
+    ] as Array<[string, string, boolean] | null>
+  ).filter(Boolean) as Array<[string, string, boolean]>;
+}
+
+function estimateHeaderH(input: PdfInput): number {
+  const left = 34 + merchantLinesOf(input).length * 10;
+  const right = 34 + 5 * 11;
+  return Math.max(left, right) + 12 + 11 + clientLinesOf(input).length * 10 + 22;
+}
+
+function estimateTotalsH(input: PdfInput): number {
+  return 6 + totalsRowsOf(input).reduce((h, [, , bold]) => h + (bold ? 13 : 11), 0);
+}
+
 function renderInvoicePdf(input: PdfInput): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
-      margin: MARGIN,
+      margin: 0,
       bufferPages: true,
+      autoFirstPage: true,
       info: { Title: input.invoiceNumber },
     });
     const chunks: Buffer[] = [];
@@ -452,140 +518,169 @@ function renderInvoicePdf(input: PdfInput): Promise<Buffer> {
     doc.on("error", reject);
 
     const T = input.labels;
-    const contentBottom = A4_H - QR_BILL_H - 16;
-    let y = MARGIN;
+    const qrTop = A4_H - QR_BILL_H;
+    const headerH = estimateHeaderH(input);
+    const totalsH = estimateTotalsH(input);
+    const tableHeadH = 16;
+    const items = input.items.length ? input.items : [{ name: "—", qty: 0, unit: 0, total: 0 }];
 
-    if (input.merchant.logoPath) {
-      try {
-        doc.image(input.merchant.logoPath, MARGIN, y, { fit: [120, 48] });
-      } catch {
-        /* ignore bad logo */
-      }
-    }
-    doc.font("Helvetica-Bold").fontSize(22).fillColor("#111").text(T.invoice, MARGIN + 140, y, {
-      width: A4_W - MARGIN * 2 - 140,
-      align: "right",
-    });
-    y += 56;
+    // Fit items + totals above the 105mm QR slip. Typical bills stay on page 1.
+    let itemH = 12;
+    const page1WithQr = qrTop - 8 - MARGIN - headerH - tableHeadH - totalsH;
+    const fitWithQr = Math.max(0, Math.floor(page1WithQr / itemH));
+    const onePage = items.length <= fitWithQr;
 
-    doc.font("Helvetica-Bold").fontSize(11).fillColor("#111").text(input.merchant.name, MARGIN, y);
-    y += 14;
-    doc.font("Helvetica").fontSize(9).fillColor("#444");
-    const merchantLines = [
-      input.merchant.address,
-      [input.merchant.city, input.merchant.country].filter(Boolean).join(", "),
-      input.merchant.phone ? `${T.phone}: ${input.merchant.phone}` : null,
-      input.merchant.email ? `${T.email}: ${input.merchant.email}` : null,
-      input.merchant.vatNumber ? `${T.vatNo}: ${input.merchant.vatNumber}` : null,
-    ].filter(Boolean) as string[];
-    for (const line of merchantLines) {
-      doc.text(line, MARGIN, y);
-      y += 12;
-    }
-
-    const metaX = 340;
-    let my = MARGIN + 56;
-    doc.font("Helvetica").fontSize(9).fillColor("#444");
-    const meta = [
-      [T.invoiceNo, input.invoiceNumber],
-      [T.order, input.orderNumber],
-      [T.date, formatDate(input.issued, input.lang)],
-      [T.due, formatDate(input.due, input.lang)],
-      ["Status", input.paid ? T.paid : T.awaiting],
-    ];
-    for (const [k, v] of meta) {
-      doc.font("Helvetica").fillColor("#666").text(k, metaX, my, { width: 90 });
-      doc.font("Helvetica-Bold").fillColor("#111").text(v, metaX + 90, my, { width: 125 });
-      my += 14;
-    }
-
-    y = Math.max(y, my) + 16;
-    doc.font("Helvetica-Bold").fontSize(10).fillColor("#111").text(T.billTo, MARGIN, y);
-    y += 14;
-    doc.font("Helvetica").fontSize(9).fillColor("#333");
-    const clientLines = [
-      input.customer.name || "—",
-      input.customer.address,
-      input.customer.phone,
-      input.customer.email,
-    ].filter(Boolean) as string[];
-    for (const line of clientLines) {
-      doc.text(line, MARGIN, y);
-      y += 12;
-    }
-
-    y += 16;
-    const tableTop = y;
-    const cols = { desc: MARGIN, qty: 340, unit: 400, amt: 470 };
-    doc.rect(MARGIN, tableTop, A4_W - MARGIN * 2, 18).fill("#111");
-    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(8);
-    doc.text(T.description, cols.desc + 4, tableTop + 5, { width: 280 });
-    doc.text(T.qty, cols.qty, tableTop + 5, { width: 50, align: "right" });
-    doc.text(T.unit, cols.unit, tableTop + 5, { width: 60, align: "right" });
-    doc.text(T.amount, cols.amt, tableTop + 5, { width: 80, align: "right" });
-    y = tableTop + 22;
-    doc.fillColor("#111").font("Helvetica").fontSize(9);
-    for (const item of input.items) {
-      if (y > contentBottom - 120) {
-        doc.addPage();
-        y = MARGIN;
-      }
-      doc.text(item.name, cols.desc + 4, y, { width: 280 });
-      doc.text(String(item.qty), cols.qty, y, { width: 50, align: "right" });
-      doc.text(item.unit.toFixed(2), cols.unit, y, { width: 60, align: "right" });
-      doc.text(item.total.toFixed(2), cols.amt, y, { width: 80, align: "right" });
-      y += 16;
-    }
-
-    y += 8;
-    const totals = [
-      [T.subtotal, money(input.subtotal)],
-      input.discount > 0.001 ? [T.discount, `−${money(input.discount)}`] : null,
-      input.tax > 0.001 ? [T.vat, money(input.tax)] : null,
-      input.tip > 0.001 ? [T.tip, money(input.tip)] : null,
-      [T.total, money(input.total)],
-    ].filter(Boolean) as Array<[string, string]>;
-    for (const [label, value] of totals) {
-      const bold = label === T.total;
-      doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(bold ? 11 : 9);
-      doc.text(label, 360, y, { width: 80 });
-      doc.text(value, 440, y, { width: 115, align: "right" });
-      y += bold ? 16 : 13;
-    }
-
-    y += 10;
-    doc.font("Helvetica-Bold").fontSize(10).text(T.bank, MARGIN, y);
-    y += 14;
-    doc.font("Helvetica").fontSize(9).fillColor("#333");
-    const bankLines = [
-      input.merchant.bankAccountHolder ? `${T.accountHolder}: ${input.merchant.bankAccountHolder}` : null,
-      input.merchant.bankName ? `${T.bankName}: ${input.merchant.bankName}` : null,
-      input.merchant.bankIban ? `${T.iban}: ${input.merchant.bankIban}` : null,
-      input.merchant.bankQrIban ? `${T.qrIban}: ${input.merchant.bankQrIban}` : null,
-    ].filter(Boolean) as string[];
-    if (!bankLines.length) {
-      doc.fillColor("#888").text("—", MARGIN, y);
+    let page1Count: number;
+    if (onePage) {
+      page1Count = items.length;
     } else {
-      for (const line of bankLines) {
-        doc.text(line, MARGIN, y);
-        y += 12;
+      const page1Full = A4_H - MARGIN - 16 - headerH - tableHeadH;
+      page1Count = Math.max(1, Math.min(items.length - 1, Math.floor(page1Full / itemH)));
+      const rest = items.length - page1Count;
+      const page2Limit = qrTop - 8 - MARGIN - tableHeadH - totalsH;
+      if (rest * itemH > page2Limit) {
+        itemH = Math.max(5, page2Limit / rest);
       }
     }
 
-    drawQrBill(doc, input);
+    const cols = { desc: MARGIN, qty: 348, unit: 408, amt: 478 };
+    const textOpts = { lineBreak: false, ellipsis: true } as const;
+
+    const drawHeader = () => {
+      let y = MARGIN;
+      if (input.merchant.logoPath) {
+        try {
+          doc.image(input.merchant.logoPath, MARGIN, y, { fit: [96, 32] });
+        } catch {
+          /* ignore bad logo */
+        }
+      }
+      doc.font("Helvetica-Bold").fontSize(16).fillColor("#111").text(T.invoice, MARGIN + 110, y, {
+        width: A4_W - MARGIN * 2 - 110,
+        align: "right",
+        lineBreak: false,
+      });
+      y += 34;
+
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#111").text(input.merchant.name, MARGIN, y, {
+        width: 280,
+        lineBreak: false,
+        ellipsis: true,
+      });
+      y += 11;
+      doc.font("Helvetica").fontSize(8).fillColor("#444");
+      for (const line of merchantLinesOf(input)) {
+        doc.text(line, MARGIN, y, { width: 280, ...textOpts });
+        y += 10;
+      }
+
+      const metaX = 348;
+      let my = MARGIN + 34;
+      const meta = [
+        [T.invoiceNo, input.invoiceNumber],
+        [T.order, input.orderNumber],
+        [T.date, formatDate(input.issued, input.lang)],
+        [T.due, formatDate(input.due, input.lang)],
+        ["Status", input.paid ? T.paid : T.awaiting],
+      ];
+      for (const [k, v] of meta) {
+        doc.font("Helvetica").fontSize(8).fillColor("#666").text(k, metaX, my, {
+          width: 78,
+          ...textOpts,
+        });
+        doc.font("Helvetica-Bold").fillColor("#111").text(v, metaX + 80, my, {
+          width: 128,
+          ...textOpts,
+        });
+        my += 11;
+      }
+
+      y = Math.max(y, my) + 10;
+      doc.font("Helvetica-Bold").fontSize(8).fillColor("#111").text(T.billTo, MARGIN, y, textOpts);
+      y += 11;
+      doc.font("Helvetica").fontSize(8).fillColor("#333");
+      for (const line of clientLinesOf(input)) {
+        doc.text(line, MARGIN, y, { width: 320, ...textOpts });
+        y += 10;
+      }
+      return y + 8;
+    };
+
+    const drawTableHeader = (y: number) => {
+      doc.rect(MARGIN, y, A4_W - MARGIN * 2, 14).fill("#111");
+      doc.fillColor("#fff").font("Helvetica-Bold").fontSize(7);
+      doc.text(T.description, cols.desc + 4, y + 3.5, { width: 290, ...textOpts });
+      doc.text(T.qty, cols.qty, y + 3.5, { width: 50, align: "right", ...textOpts });
+      doc.text(T.unit, cols.unit, y + 3.5, { width: 60, align: "right", ...textOpts });
+      doc.text(T.amount, cols.amt, y + 3.5, { width: 76, align: "right", ...textOpts });
+      return y + tableHeadH;
+    };
+
+    const drawItems = (rows: typeof items, startY: number, rowH: number) => {
+      let y = startY;
+      doc.fillColor("#111").font("Helvetica").fontSize(8);
+      for (const item of rows) {
+        doc.text(item.name, cols.desc + 4, y, { width: 290, ...textOpts });
+        doc.text(String(item.qty), cols.qty, y, { width: 50, align: "right", ...textOpts });
+        doc.text(item.unit.toFixed(2), cols.unit, y, { width: 60, align: "right", ...textOpts });
+        doc.text(item.total.toFixed(2), cols.amt, y, { width: 76, align: "right", ...textOpts });
+        y += rowH;
+      }
+      return y;
+    };
+
+    const drawTotals = (startY: number) => {
+      let y = startY + 4;
+      for (const [label, value, bold] of totalsRowsOf(input)) {
+        doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(bold ? 10 : 8).fillColor("#111");
+        doc.text(label, 360, y, { width: 80, ...textOpts });
+        doc.text(value, 440, y, { width: 114, align: "right", ...textOpts });
+        y += bold ? 13 : 11;
+      }
+      return y;
+    };
+
+    let y = drawHeader();
+    y = drawTableHeader(y);
+    y = drawItems(items.slice(0, page1Count), y, onePage ? itemH : 12);
+
+    if (!onePage) {
+      doc.addPage({ size: "A4", margin: 0 });
+      y = MARGIN;
+      y = drawTableHeader(y);
+      y = drawItems(items.slice(page1Count), y, itemH);
+    }
+    drawTotals(y);
+
+    const range = doc.bufferedPageRange();
+    const lastPage = Math.min(1, range.count - 1);
+    drawQrBill(doc, input, lastPage);
     doc.end();
   });
 }
 
-function drawQrBill(doc: PDFKit.PDFDocument, input: PdfInput) {
+function drawQrBill(doc: PDFKit.PDFDocument, input: PdfInput, pageIndex: number) {
   const T = input.labels;
   const top = A4_H - QR_BILL_H;
   const receiptW = 175.75; // 62mm
   const qrSize = 130.4; // 46mm
+  const range = doc.bufferedPageRange();
+  const idx = Math.max(0, Math.min(pageIndex, range.count - 1));
+  doc.switchToPage(range.start + idx);
+  // Keep PDFKit from auto-adding a 3rd page while painting the slip.
+  doc.x = 12;
+  doc.y = 40;
+  (doc.page as { margins: { top: number; bottom: number; left: number; right: number } }).margins = {
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+  };
 
-  doc.save();
-  doc.switchToPage(0);
-  // Separator
+  const slipText = (str: string, x: number, y: number, opts?: PDFKit.Mixins.TextOptions) => {
+    doc.text(str, x, y, { lineBreak: false, ...opts });
+  };
+
   doc.save();
   doc.strokeColor("#000").lineWidth(0.6).dash(3, { space: 2 });
   doc.moveTo(0, top).lineTo(A4_W, top).stroke();
@@ -594,8 +689,9 @@ function drawQrBill(doc: PDFKit.PDFDocument, input: PdfInput) {
   doc.restore();
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor("#000");
-  doc.text(T.receipt, 12, top + 8, { width: receiptW - 20 });
-  doc.font("Helvetica").fontSize(6).text(T.account, 12, top + 22, { width: receiptW - 20 });
+  slipText(T.receipt, 12, top + 8, { width: receiptW - 20 });
+  doc.font("Helvetica").fontSize(6);
+  slipText(T.account, 12, top + 22, { width: receiptW - 20 });
   doc.font("Helvetica").fontSize(7);
   const creditor = [
     input.merchant.bankAccountHolder || input.merchant.name,
@@ -605,54 +701,84 @@ function drawQrBill(doc: PDFKit.PDFDocument, input: PdfInput) {
   ]
     .filter(Boolean)
     .join("\n");
-  doc.text(creditor, 12, top + 32, { width: receiptW - 20 });
+  doc.text(creditor, 12, top + 32, { width: receiptW - 20, lineBreak: true, height: 50 });
   if (input.qrr) {
-    doc.font("Helvetica").fontSize(6).text(T.reference, 12, top + 88, { width: receiptW - 20 });
-    doc.font("Helvetica").fontSize(7).text(input.qrr, 12, top + 98, { width: receiptW - 20 });
+    doc.font("Helvetica").fontSize(6);
+    slipText(T.reference, 12, top + 88, { width: receiptW - 20 });
+    doc.font("Helvetica").fontSize(7);
+    slipText(input.qrr, 12, top + 98, { width: receiptW - 20 });
   }
-  doc.font("Helvetica").fontSize(6).text(T.payableBy, 12, top + 130, { width: receiptW - 20 });
-  doc.font("Helvetica").fontSize(7).text(
+  doc.font("Helvetica").fontSize(6);
+  slipText(T.payableBy, 12, top + 130, { width: receiptW - 20 });
+  doc.font("Helvetica").fontSize(7);
+  doc.text(
     [input.customer.name, input.customer.address].filter(Boolean).join("\n") || "—",
     12,
     top + 140,
-    { width: receiptW - 20 }
+    { width: receiptW - 20, lineBreak: true, height: 40 }
   );
-  doc.font("Helvetica-Bold").fontSize(8).text("CHF", 12, top + 220);
-  doc.text(input.total.toFixed(2), 50, top + 220);
-  doc.font("Helvetica").fontSize(6).text(T.acceptance, 12, top + 260, { width: receiptW - 24 });
+  doc.font("Helvetica-Bold").fontSize(8);
+  slipText("CHF", 12, top + 220);
+  slipText(input.total.toFixed(2), 50, top + 220);
+  doc.font("Helvetica").fontSize(6);
+  slipText(T.acceptance, 12, top + 260, { width: receiptW - 24 });
 
   const payX = receiptW + 12;
-  doc.font("Helvetica-Bold").fontSize(8).text(T.payment, payX, top + 8);
-  doc.font("Helvetica").fontSize(6).text(T.account, payX + qrSize + 12, top + 22);
-  doc.font("Helvetica").fontSize(7).text(creditor, payX + qrSize + 12, top + 32, {
+  doc.font("Helvetica-Bold").fontSize(8);
+  slipText(T.payment, payX, top + 8);
+  doc.font("Helvetica").fontSize(6);
+  slipText(T.account, payX + qrSize + 12, top + 22);
+  doc.font("Helvetica").fontSize(7);
+  doc.text(creditor, payX + qrSize + 12, top + 32, {
     width: A4_W - payX - qrSize - 24,
+    lineBreak: true,
+    height: 56,
   });
   if (input.qrr) {
-    doc.font("Helvetica").fontSize(6).text(T.reference, payX + qrSize + 12, top + 100);
-    doc.font("Helvetica").fontSize(8).text(input.qrr, payX + qrSize + 12, top + 110, {
+    doc.font("Helvetica").fontSize(6);
+    slipText(T.reference, payX + qrSize + 12, top + 100);
+    doc.font("Helvetica").fontSize(8);
+    slipText(input.qrr, payX + qrSize + 12, top + 110, {
       width: A4_W - payX - qrSize - 24,
     });
   }
-  doc.font("Helvetica").fontSize(6).text(T.additional, payX + qrSize + 12, top + 140);
-  doc.font("Helvetica").fontSize(7).text(input.invoiceNumber, payX + qrSize + 12, top + 150);
-  doc.font("Helvetica-Bold").fontSize(8).text("CHF", payX, top + 200);
-  doc.text(input.total.toFixed(2), payX + 40, top + 200);
-  doc.font("Helvetica").fontSize(6).text(T.payableBy, payX, top + 230);
-  doc.font("Helvetica").fontSize(7).text(
+  doc.font("Helvetica").fontSize(6);
+  slipText(T.additional, payX + qrSize + 12, top + 140);
+  doc.font("Helvetica").fontSize(7);
+  slipText(input.invoiceNumber, payX + qrSize + 12, top + 150);
+  doc.font("Helvetica-Bold").fontSize(8);
+  slipText("CHF", payX, top + 200);
+  slipText(input.total.toFixed(2), payX + 40, top + 200);
+  doc.font("Helvetica").fontSize(6);
+  slipText(T.payableBy, payX, top + 230);
+  doc.font("Helvetica").fontSize(7);
+  doc.text(
     [input.customer.name, input.customer.address].filter(Boolean).join("\n") || "—",
     payX,
     top + 240,
-    { width: 200 }
+    { width: 200, lineBreak: true, height: 36 }
   );
 
+  const qrX = payX;
+  const qrY = top + 28;
   if (input.qrPng) {
     try {
-      doc.image(input.qrPng, payX, top + 28, { width: qrSize, height: qrSize });
-      drawSwissCross(doc, payX + qrSize / 2, top + 28 + qrSize / 2);
-    } catch {
-      /* ignore */
+      doc.image(input.qrPng, qrX, qrY, { width: qrSize, height: qrSize });
+      drawSwissCross(doc, qrX + qrSize / 2, qrY + qrSize / 2);
+    } catch (err) {
+      console.warn("[invoice] QR image embed failed:", err);
+      drawQrFallback(doc, qrX, qrY, qrSize);
     }
+  } else if (input.payIban) {
+    drawQrFallback(doc, qrX, qrY, qrSize);
   }
+}
+
+function drawQrFallback(doc: PDFKit.PDFDocument, x: number, y: number, size: number) {
+  doc.save();
+  doc.rect(x, y, size, size).strokeColor("#000").lineWidth(0.8).stroke();
+  doc.font("Helvetica").fontSize(7).fillColor("#000");
+  doc.text("QR", x, y + size / 2 - 6, { width: size, align: "center", lineBreak: false });
   doc.restore();
 }
 

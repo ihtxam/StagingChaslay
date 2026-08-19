@@ -2074,6 +2074,7 @@ router.get("/pos/orders", async (req: Request, res: Response) => {
       from: req.query.from ? String(req.query.from) : undefined,
       to: req.query.to ? String(req.query.to) : undefined,
       limit: req.query.limit ? Number(req.query.limit) : 50,
+      q: req.query.q ? String(req.query.q) : undefined,
     });
     res.json({
       success: true,
