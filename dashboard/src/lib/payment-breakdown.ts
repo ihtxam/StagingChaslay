@@ -51,6 +51,10 @@ export function normalizePaymentMethod(method: string): string {
     .toLowerCase()
     .replace(/[\s-]+/g, '_');
   if (!raw) return '';
+  const later = raw.match(/^pay_later[:_](.+)$/);
+  if (later) {
+    return PAYMENT_METHOD_ALIASES[later[1]] || later[1];
+  }
   return PAYMENT_METHOD_ALIASES[raw] || raw;
 }
 
@@ -58,6 +62,15 @@ export function paymentMethodLabel(
   method: string,
   t: (key: string) => string
 ): string {
+  const raw = String(method || '').trim();
+  const later = raw.match(/^pay[_-]?later(?::|_|\s+)?(.*)$/i);
+  if (later) {
+    const tender = normalizePaymentMethod(later[1] || '');
+    if (tender === 'cash') return `${t('webPosPayLater')}: ${t('webPosCash')}`;
+    if (tender === 'card') return `${t('webPosPayLater')}: ${t('webPosCard')}`;
+    if (tender === 'terminal') return `${t('webPosPayLater')}: ${t('webPosTerminal')}`;
+    return t('webPosPayLater');
+  }
   const m = normalizePaymentMethod(method);
   if (m === 'cash') return t('webPosCash');
   if (m === 'card') return t('webPosCard');

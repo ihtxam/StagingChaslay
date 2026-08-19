@@ -3650,32 +3650,11 @@ class PosViewModel @Inject constructor(
                             kitchenSentToPrinter = false
                         )
                     }
-                    val staffName = sessionManager.currentUserName.first() ?: userName
                     viewModelScope.launch {
                         if (printerService.hasDedicatedKitchenPrinter(settings)) {
                             runCatching { printPendingKitchenForCurrentTable(saleCart) }
                                 .onFailure { e -> Log.w("POS", "Pay later kitchen print failed", e) }
                         }
-                        runCatching {
-                            printerService.routeCartReceipt(
-                                settings = settings,
-                                cart = saleCart,
-                                context = com.chaslay.pos.printer.ReceiptPrintContext(
-                                    orderNumber = saleCart.orderNumber,
-                                    serviceType = saleCart.serviceType,
-                                    fulfillmentType = saleCart.fulfillmentType,
-                                    tableName = saleCart.tableName,
-                                    paymentMethod = PaymentMethod.PAY_LATER,
-                                    payLaterTender = checkout.payLaterTender,
-                                    staffName = staffName,
-                                    isProvisional = false
-                                ),
-                                discountAmount = saleDiscount,
-                                tipAmount = checkout.tipAmount,
-                                total = roundedTotal,
-                                singlePrinter = true
-                            )
-                        }.onFailure { e -> Log.w("POS", "Pay later receipt print failed", e) }
                     }
                 }.onFailure { e ->
                     updateExtras {

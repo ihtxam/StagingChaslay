@@ -67,6 +67,10 @@ export function normalizePaymentMethod(method: string): string {
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
   if (!raw) return "";
+  const later = raw.match(/^pay_later[:_](.+)$/);
+  if (later) {
+    return PAYMENT_METHOD_ALIASES[later[1]] || later[1];
+  }
   return PAYMENT_METHOD_ALIASES[raw] || raw;
 }
 

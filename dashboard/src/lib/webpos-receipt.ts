@@ -16,6 +16,7 @@ import {
   channelLabel,
   formatPayLaterPaymentLabel,
   lineWidthForPaper,
+  payLaterCollectedTender,
   paymentLabel,
   receiptLabels,
   type ReceiptLang,
@@ -290,8 +291,10 @@ export type WebPosReceipt = {
   paymentMethod: string;
   /** Split tenders printed as separate lines (cash + card, etc.). */
   paymentLines?: Array<{ method: string; amount: number }>;
-  /** Pay Later preferred collection tender: cash | card | terminal. */
+  /** Pay Later collected tender: cash | card | terminal. */
   payLaterTender?: 'cash' | 'card' | 'terminal' | null;
+  /** True when this receipt is the collect-payment copy (show Paid). */
+  payLaterCollected?: boolean;
   amountTendered?: number | null;
   changeDue?: number | null;
   /** Delivery / online customer (printed on delivery & online receipts) */
@@ -992,7 +995,7 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
         ? tx.paymentLines
         : [{ method: tx.paymentMethod, amount: tx.total }];
     if (isPayLater) {
-      r += `${L.payment}: ${formatPayLaterPaymentLabel(L, tx.payLaterTender)}\n`;
+      r += `${L.payment}: ${formatPayLaterPaymentLabel(L, tx.payLaterTender || payMethodRaw)}\n`;
     } else if (tenders.length === 1) {
       r += `${L.payment}: ${paymentLabel(L, tenders[0]!.method)}\n`;
     } else {
@@ -1006,11 +1009,14 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
           ) + '\n';
       }
     }
-    if (!isPayLater) {
+    const payLaterCollected =
+      tx.payLaterCollected === true ||
+      /pay[_-]?later[:_\s]+(cash|card|terminal)/i.test(payMethodRaw);
+    if (!isPayLater || payLaterCollected) {
       r += padLine(`${L.paid}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
     }
     if (
-      !isPayLater &&
+      (!isPayLater || payLaterCollected) &&
       tx.amountTendered != null &&
       tx.amountTendered > 0 &&
       roundMoney2(tx.amountTendered) !== roundMoney2(tx.total)
@@ -2369,7 +2375,7 @@ export function buildKitchenPrintJobs(
 
 /**
  * Kitchen jobs that will not reprint on a guest-receipt printer.
- * Pay Later prints one customer receipt; kitchen only goes to dedicated kitchen printers.
+ * Kitchen only goes to dedicated kitchen printers (not the guest-receipt printer).
  */
 export function kitchenJobsExcludingReceiptPrinters(
   items: KitchenTicketItem[],
@@ -2538,6 +2544,8 @@ export function posOrderToWebPosReceipt(
     completedAt,
     channel: order.channel || order.fulfillmentChannel || undefined,
     paymentMethod: order.paymentMethod || 'cash',
+    payLaterTender: payLaterCollectedTender(order.paymentMethod),
+    payLaterCollected: !!payLaterCollectedTender(order.paymentMethod),
     paymentLines,
     customerName: order.customerName,
     memberName,

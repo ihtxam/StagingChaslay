@@ -277,6 +277,7 @@ import {
   posSaleFulfillmentStatus,
   type MerchantOrder,
 } from '@/lib/order-management';
+import { isPayLaterPaymentMethod, payLaterCollectedTender } from '@/lib/receipt-labels';
 
 type SplitReceiptPart = {
   id: string;
@@ -295,6 +296,7 @@ type CollectOrderRef = {
   total: number;
   returnView: 'orders' | 'register';
   isInvoice?: boolean;
+  isPayLater?: boolean;
 };
 import type {
   BillDiscount,
@@ -4696,6 +4698,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       total: Number(order.total),
       returnView,
       isInvoice: isInvoiceOrder(order),
+      isPayLater: isPayLaterPaymentMethod(order.paymentMethod),
     });
     setHighlightOrderId(null);
     setOrdersChannelPref(null);
@@ -4800,7 +4803,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const payLines = payments
           .filter((p) => roundMoney2(p.amount) > 0)
           .map((p) => ({ method: p.method, amount: roundMoney2(p.amount) }));
-        if (payLines.length) {
+        if (ctx.isPayLater) {
+          const laterTender =
+            payLaterCollectedTender(payMethod) ||
+            (payMethod === 'card' || payMethod === 'terminal' ? payMethod : 'cash');
+          receiptPayload.paymentMethod = `pay_later:${laterTender}`;
+          receiptPayload.payLaterTender = laterTender;
+          receiptPayload.payLaterCollected = true;
+        } else if (payLines.length) {
           receiptPayload.paymentLines = payLines;
           receiptPayload.paymentMethod =
             payLines.length > 1 ? 'mixed' : payLines[0]!.method;
@@ -5956,30 +5966,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     const receiptText = generateWebPosReceiptText(receiptPayload, locale);
     const deliveryQrUrl = deliveryDirectionsUrlForReceipt(receiptPayload);
-    setLastReceipt(receiptText);
-    setLastReceiptUrl(receiptUrl);
-    setLastDeliveryQrUrl(deliveryQrUrl || '');
-    setLastReceiptOrderId(receiptRef || clientId);
-    setLastReceiptOrderNumber(ticket.orderNumber || ticket.display || '');
-
-    const splitPart: SplitReceiptPart = {
-      id: clientId,
-      label:
-        activeSale.label ||
-        (splitQueue.length > 0
-          ? t('webPosSplitBillN').replace('{n}', String(splitIndex + 1))
-          : t('webPosPrintReceipt')),
-      text: receiptText,
-      url: receiptUrl,
-      deliveryQrUrl,
-      amount: sale.total,
-      orderNumber: ticket.orderNumber || ticket.display,
-    };
-    if (splitQueue.length > 0) {
-      if (splitIndex === 0) splitReceiptsRef.current = [splitPart];
-      else splitReceiptsRef.current = [...splitReceiptsRef.current, splitPart];
-    } else {
-      splitReceiptsRef.current = [splitPart];
+    if (method !== 'pay_later' && method !== 'invoice') {
+      setLastReceipt(receiptText);
+      setLastReceiptUrl(receiptUrl);
+      setLastDeliveryQrUrl(deliveryQrUrl || '');
+      setLastReceiptOrderId(receiptRef || clientId);
+      setLastReceiptOrderNumber(ticket.orderNumber || ticket.display || '');
+      const splitPart: SplitReceiptPart = {
+        id: clientId,
+        label:
+          activeSale.label ||
+          (splitQueue.length > 0
+            ? t('webPosSplitBillN').replace('{n}', String(splitIndex + 1))
+            : t('webPosPrintReceipt')),
+        text: receiptText,
+        url: receiptUrl,
+        deliveryQrUrl,
+        amount: sale.total,
+        orderNumber: ticket.orderNumber || ticket.display,
+      };
+      if (splitQueue.length > 0) {
+        if (splitIndex === 0) splitReceiptsRef.current = [splitPart];
+        else splitReceiptsRef.current = [...splitReceiptsRef.current, splitPart];
+      } else {
+        splitReceiptsRef.current = [splitPart];
+      }
     }
 
     setSales((prev) =>
@@ -6055,7 +6066,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       clearAttachedMembership();
       clearPersistedWebPosCarts();
       terminalPaymentRef.current = null;
-      setLastSplitReceipts([...splitReceiptsRef.current]);
+      if (method !== 'pay_later' && method !== 'invoice') {
+        setLastSplitReceipts([...splitReceiptsRef.current]);
+      } else {
+        splitReceiptsRef.current = [];
+        setLastSplitReceipts([]);
+      }
     }
     setCheckoutExtras(null);
     setCheckoutOpen(false);
@@ -6090,6 +6106,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const shouldPrintReceipt =
       !opts?.skipReceiptPrint &&
       method !== 'invoice' &&
+      method !== 'pay_later' &&
       autoPrint &&
       printSettings?.autoPrintReceipt !== false;
     // Offline sales have no published receipt URL yet — still print text via local Print Agent.

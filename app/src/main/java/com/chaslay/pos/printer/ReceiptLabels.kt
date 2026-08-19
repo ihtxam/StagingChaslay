@@ -82,7 +82,7 @@ data class ReceiptLabels(
         PaymentMethod.CASH -> "$payLater: $cash"
         PaymentMethod.CARD -> "$payLater: $card"
         PaymentMethod.ADYEN_TERMINAL, PaymentMethod.TAP_TO_PAY -> "$payLater: $terminal"
-        else -> "$payLater: $cash $orWord $card $orWord $terminal"
+        else -> payLater
     }
 
     fun orderSourceLabel(source: String?): String {
@@ -185,7 +185,7 @@ data class ReceiptLabels(
             card = "Carte",
             tapToPay = "Tap-to-Pay",
             terminal = "Terminal",
-            payLater = "Payer plus tard",
+            payLater = "Paiement diff\u00E9r\u00E9",
             orWord = "ou",
             kitchenTitle = "CUISINE",
             cancelledKitchenTitle = "ANNULÉ",

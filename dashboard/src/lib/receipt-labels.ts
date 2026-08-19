@@ -59,7 +59,7 @@ export type ReceiptLabels = {
   deliveryTime: string;
   asap: string;
   payLater: string;
-  /** Conjunction on Pay Later tender list, e.g. Cash or Card or Terminal */
+  /** Unused leftover; Pay Later receipts always name one collected tender. */
   or: string;
   invoice: string;
   totalItems: string;
@@ -231,7 +231,7 @@ const FR: ReceiptLabels = {
   pickupTime: 'Retrait :',
   deliveryTime: 'Livraison :',
   asap: 'Des que possible',
-  payLater: 'Payer plus tard',
+  payLater: 'Paiement différé',
   or: 'ou',
   invoice: 'Facture',
   totalItems: 'Articles',
@@ -317,7 +317,7 @@ const DE: ReceiptLabels = {
   pickupTime: 'Abholung:',
   deliveryTime: 'Lieferung:',
   asap: 'Sofort',
-  payLater: 'Spaeter zahlen',
+  payLater: 'Später zahlen',
   or: 'oder',
   invoice: 'Rechnung',
   totalItems: 'Artikel',
@@ -362,16 +362,32 @@ export function channelLabel(labels: ReceiptLabels, channel?: string | null): st
   return labels.takeaway;
 }
 
-/** Pay Later line: "Pay Later: Cash" or "Pay Later: Cash or Card or Terminal". */
+export function isPayLaterPaymentMethod(method?: string | null): boolean {
+  return /^pay[_-]?later/i.test(String(method || ''));
+}
+
+export function payLaterCollectedTender(
+  method?: string | null
+): 'cash' | 'card' | 'terminal' | null {
+  const raw = String(method || '').trim();
+  const later = raw.match(/^pay[_-]?later(?::|_|\s+)(.+)$/i);
+  const intent = normalizePaymentMethod(later?.[1] || raw);
+  if (intent === 'cash') return 'cash';
+  if (intent === 'card') return 'card';
+  if (intent === 'terminal') return 'terminal';
+  return null;
+}
+
+/** Pay Later line: "Pay Later: Cash" (one collected tender, never "Cash or Card or Terminal"). */
 export function formatPayLaterPaymentLabel(
   labels: ReceiptLabels,
   preferredTender?: string | null
 ): string {
-  const intent = normalizePaymentMethod(String(preferredTender || ''));
+  const intent = payLaterCollectedTender(preferredTender) || normalizePaymentMethod(String(preferredTender || ''));
   if (intent === 'cash') return `${labels.payLater}: ${labels.cash}`;
   if (intent === 'card') return `${labels.payLater}: ${labels.card}`;
   if (intent === 'terminal') return `${labels.payLater}: ${labels.terminal}`;
-  return `${labels.payLater}: ${labels.cash} ${labels.or} ${labels.card} ${labels.or} ${labels.terminal}`;
+  return labels.payLater;
 }
 
 export function paymentLabel(labels: ReceiptLabels, method?: string | null): string {

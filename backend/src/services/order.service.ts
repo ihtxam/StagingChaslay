@@ -40,16 +40,24 @@ function resolveCollectPaymentMethod(
     .trim()
     .toLowerCase()
     .replace(/-/g, "_");
-  if (["cash", "card", "terminal", "bank_transfer"].includes(requestedRaw)) return requestedRaw;
+  const requestedLater = requestedRaw.match(/^pay_later[:_](.+)$/);
   const existingRaw = String(order.paymentMethod || "cash")
     .trim()
     .toLowerCase()
     .replace(/-/g, "_");
-  if (existingRaw === "pay_later" || existingRaw === "pay-later") {
-    return "cash";
+  const wasPayLater =
+    existingRaw === "pay_later" ||
+    existingRaw === "pay-later" ||
+    existingRaw.startsWith("pay_later:");
+  const tender = requestedLater?.[1]
+    || (["cash", "card", "terminal", "bank_transfer"].includes(requestedRaw) ? requestedRaw : "")
+    || (wasPayLater ? "cash" : "")
+    || (["cash", "card", "terminal", "bank_transfer"].includes(existingRaw) ? existingRaw : "")
+    || "cash";
+  if (wasPayLater && tender !== "bank_transfer") {
+    return `pay_later:${tender}`;
   }
-  if (["cash", "card", "terminal", "bank_transfer"].includes(existingRaw)) return existingRaw;
-  return "cash";
+  return tender;
 }
 
 function usesExternalKitchenLifecycle(order: {
@@ -552,7 +560,9 @@ export class OrderService {
             console.warn("Inventory deduct after collect_payment failed:", invErr);
           }
           // Invoice A4 was printed at sale — do not print a second receipt/invoice.
-          if (!invoiceOrder) {
+          // POS Pay Later: WebPOS prints the guest receipt on collect (one copy).
+          const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
+          if (!invoiceOrder && !wasPayLater) {
             try {
               await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
             } catch (printErr) {
@@ -622,7 +632,9 @@ export class OrderService {
             console.warn("Inventory deduct after complete_and_collect failed:", invErr);
           }
           // Invoice A4 was printed at sale — do not print a second receipt/invoice.
-          if (!invoiceOrder) {
+          // POS Pay Later: WebPOS prints the guest receipt on collect (one copy).
+          const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
+          if (!invoiceOrder && !wasPayLater) {
             try {
               await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
             } catch (printErr) {
