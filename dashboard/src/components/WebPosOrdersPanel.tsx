@@ -38,6 +38,7 @@ import {
   INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
   isInvoiceOrder,
+  isKitchenFulfillmentChannel,
   isPaidOrder,
   orderChannelBadgeClass,
   orderChannelHeaderClass,
@@ -240,7 +241,7 @@ function isScheduledKitchenTicket(o: PosOrder): boolean {
 
 function isOnlineShopOrder(o: PosOrder): boolean {
   const t = (o.orderType || '').toLowerCase();
-  return t === 'web_shop' || t === 'online' || isPlatformChannel(o.channel);
+  return t === 'web_shop' || t === 'online' || isPlatformChannel(o.channel || o.fulfillmentChannel);
 }
 
 function isUnpaidInvoice(o: PosOrder): boolean {
@@ -256,7 +257,10 @@ function matchesChannelFilter(
   if (filter === 'all') return true;
   if (filter === 'online') return isOnlineShopOrder(o as PosOrder);
   if (filter === 'invoice') return isInvoiceOrder(o);
-  const ch = o.cartJson != null ? resolveHeldChannel({ channel: o.channel, cartJson: o.cartJson }) : o.channel || 'takeaway';
+  const ch =
+    o.cartJson != null
+      ? resolveHeldChannel({ channel: o.channel, cartJson: o.cartJson })
+      : o.channel || (o as { fulfillmentChannel?: string | null }).fulfillmentChannel || 'takeaway';
   return ch === filter;
 }
 
@@ -877,9 +881,6 @@ export default function WebPosOrdersPanel({
           : ({ ...order, ...fresh } as PosOrder)
       );
       void load();
-      if (action === 'mark_ready') {
-        await finalizeOnlineWhenReady({ ...order, ...(updated || {}), status: 'ready' });
-      }
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('actionFailed'));
     } finally {
@@ -1809,9 +1810,16 @@ export default function WebPosOrdersPanel({
                     </p>
                   ) : null}
                 </div>
-                {isOpenOnlineFulfillment(selectedOrder) ? (
+                {isOpenFulfillmentOrder(selectedOrder) &&
+                (isOnlineShopOrder(selectedOrder) ||
+                  isKitchenFulfillmentChannel(
+                    selectedOrder.fulfillmentChannel || selectedOrder.channel
+                  ) ||
+                  canMarkReady(selectedOrder) ||
+                  canCollectPayment(selectedOrder) ||
+                  canAdminCollectPayment(selectedOrder)) ? (
                   <div className="space-y-2 border-t border-stone-200 p-3">
-                    {isAwaitingApproval(selectedOrder.status) ? (
+                    {isOpenOnlineFulfillment(selectedOrder) && isAwaitingApproval(selectedOrder.status) ? (
                       <>
                         <button
                           type="button"
@@ -1831,7 +1839,7 @@ export default function WebPosOrdersPanel({
                         </button>
                       </>
                     ) : null}
-                    {selectedOrder.status === 'accepted' ? (
+                    {isOpenOnlineFulfillment(selectedOrder) && selectedOrder.status === 'accepted' ? (
                       <button
                         type="button"
                         className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
@@ -1871,7 +1879,7 @@ export default function WebPosOrdersPanel({
                         disabled={onlineActionBusy === selectedOrder.id}
                         onClick={() => void finalizeOnlineWhenReady(selectedOrder)}
                       >
-                        {isUnpaidOnline(selectedOrder)
+                        {isUnpaidOnline(selectedOrder) || canCollectPayment(selectedOrder)
                           ? `${t('webPosTakePayment')} · ${money(selectedOrder.total)}`
                           : t('webPosCompleteOrder')}
                       </button>
@@ -1885,35 +1893,11 @@ export default function WebPosOrdersPanel({
                         disabled={onlineActionBusy === selectedOrder.id}
                         onClick={() => startCollectPayment(selectedOrder)}
                       >
-                        {t('webPosCollectNow')} · {money(selectedOrder.total)}
+                        {(selectedOrder.paymentMethod === 'invoice' || selectedOrder.invoiceNumber
+                          ? t('webPosRecordInvoicePayment')
+                          : t('webPosCollectNow'))}{' '}
+                        · {money(selectedOrder.total)}
                       </button>
-                    ) : null}
-                  </div>
-                ) : canMarkReady(selectedOrder) ||
-                  canCollectPayment(selectedOrder) ||
-                  canAdminCollectPayment(selectedOrder) ? (
-                  <div className="space-y-2 border-t border-stone-200 p-3">
-                    {canMarkReady(selectedOrder) ? (
-                      <button
-                        type="button"
-                        className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
-                        disabled={onlineActionBusy === selectedOrder.id}
-                        onClick={() => void runOnlineAction(selectedOrder, 'mark_ready')}
-                      >
-                        {t('webPosMarkReady')}
-                      </button>
-                    ) : null}
-                    {canCollectPayment(selectedOrder) || canAdminCollectPayment(selectedOrder) ? (
-                    <button
-                      type="button"
-                      className="w-full rounded-xl bg-emerald-700 py-3.5 text-sm font-bold text-white hover:bg-emerald-800"
-                      onClick={() => startCollectPayment(selectedOrder)}
-                    >
-                      {(selectedOrder.paymentMethod === 'invoice' || selectedOrder.invoiceNumber
-                        ? t('webPosRecordInvoicePayment')
-                        : t('webPosTakePayment'))}{' '}
-                      · {money(selectedOrder.total)}
-                    </button>
                     ) : null}
                   </div>
                 ) : null}

@@ -63,6 +63,17 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+/** Paid tickets count as sales even while kitchen fulfillment is still open. */
+function isCountableSale(o: { status?: string | null; paymentStatus?: string | null }): boolean {
+  const status = String(o.status || "").toLowerCase();
+  const pay = String(o.paymentStatus || "").toLowerCase();
+  if (["cancelled", "canceled", "refunded"].includes(status)) return false;
+  if (["cancelled", "canceled", "refunded"].includes(pay)) return false;
+  if (["completed", "partially_refunded"].includes(status)) return true;
+  if (["completed", "paid", "partially_refunded"].includes(pay)) return true;
+  return false;
+}
+
 function channelLabel(ch: string): string {
   switch (ch) {
     case "dine_in":
@@ -243,9 +254,7 @@ export class PosReportsService {
       return "Unassigned";
     };
 
-    const completed = rows.filter((o) =>
-      ["completed", "partially_refunded"].includes(String(o.status))
-    );
+    const completed = rows.filter((o) => isCountableSale(o));
     const cancelled = rows.filter((o) => o.status === "cancelled");
     const refunded = rows.filter(
       (o) =>
@@ -652,11 +661,10 @@ export class PosReportsService {
         total: true,
         tipAmount: true,
         status: true,
+        paymentStatus: true,
       },
     });
-    const completed = rows.filter((o) =>
-      ["completed", "partially_refunded"].includes(String(o.status))
-    );
+    const completed = rows.filter((o) => isCountableSale(o));
 
     const singleDay = range.from === range.to;
     const salesOverTime: Array<{ label: string; amount: number }> = [];
@@ -783,7 +791,10 @@ export class PosReportsService {
         gte(schema.orders.createdAt, start),
         or(
           eq(schema.orders.status, "completed"),
-          eq(schema.orders.status, "partially_refunded")
+          eq(schema.orders.status, "partially_refunded"),
+          eq(schema.orders.paymentStatus, "completed"),
+          eq(schema.orders.paymentStatus, "paid"),
+          eq(schema.orders.paymentStatus, "partially_refunded")
         )
       ),
       with: { items: true },

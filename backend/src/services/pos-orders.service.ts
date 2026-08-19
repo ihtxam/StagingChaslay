@@ -268,6 +268,8 @@ export class PosOrdersService {
       masterOrderId: o.masterOrderId,
       splitCheckNumber: o.splitCheckNumber,
       customerName: o.customerName,
+      pointsEarned: o.pointsEarned ?? 0,
+      pointsRedeemed: o.pointsRedeemed ?? 0,
       customerPhone: o.customerPhone,
       shippingAddress: o.shippingAddress,
       scheduledFor: o.scheduledFor,

@@ -116,6 +116,9 @@ export interface SyncSalePayload {
   adyenCashierReceiptJson?: string | null;
   /** Split tenders for mixed payments */
   paymentBreakdown?: Array<{ method: string; amount: number }> | null;
+  pointsEarned?: number | null;
+  pointsRedeemed?: number | null;
+  pointsDiscount?: number | null;
   items: SyncSaleItem[];
 }
 
@@ -468,10 +471,20 @@ export class SyncService {
           sale.paymentMethod === "pay-later" ||
           isInvoice);
       const scheduledFor = parseScheduledFor(sale);
+      const channel = normalizeFulfillmentChannel(sale);
+      const kitchenBound = channel === "takeaway" || channel === "delivery";
       const status =
         sale.status ||
-        (payLater ? (scheduledFor ? "accepted" : "preparing") : "completed");
-      const completedAt = isCancelled || payLater
+        (payLater || kitchenBound ? (scheduledFor ? "accepted" : "preparing") : "completed");
+      const fulfillmentOpen = [
+        "accepted",
+        "preparing",
+        "ready",
+        "out_for_delivery",
+        "pending",
+        "pending_approval",
+      ].includes(String(status).toLowerCase());
+      const completedAt = isCancelled || payLater || fulfillmentOpen
         ? null
         : sale.completedAt
           ? new Date(sale.completedAt)
@@ -483,7 +496,7 @@ export class SyncService {
       const orderValuesBase = {
         merchantId,
         orderType: "pos" as const,
-        fulfillmentChannel: normalizeFulfillmentChannel(sale),
+        fulfillmentChannel: channel,
         status,
         subtotal: subtotal.toFixed(2),
         taxAmount: taxAmount.toFixed(2),
@@ -501,6 +514,18 @@ export class SyncService {
         staffName: sale.staffName ? String(sale.staffName).trim().slice(0, 255) : null,
         staffId: asUuidOrNull(sale.staffId),
         total: total.toFixed(2),
+        pointsEarned:
+          sale.pointsEarned != null && Number.isFinite(Number(sale.pointsEarned))
+            ? Math.max(0, Math.floor(Number(sale.pointsEarned)))
+            : 0,
+        pointsRedeemed:
+          sale.pointsRedeemed != null && Number.isFinite(Number(sale.pointsRedeemed))
+            ? Math.max(0, Math.floor(Number(sale.pointsRedeemed)))
+            : 0,
+        pointsDiscount:
+          sale.pointsDiscount != null && Number.isFinite(Number(sale.pointsDiscount))
+            ? roundMoney2(Number(sale.pointsDiscount)).toFixed(2)
+            : "0",
         paymentBreakdown: sale.paymentBreakdown?.length ? sale.paymentBreakdown : null,
         paymentMethod: isCancelled
           ? sale.paymentMethod || null
