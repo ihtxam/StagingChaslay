@@ -70,7 +70,9 @@ export type ReceiptLabels = {
   cashSalesDuringShift: string;
   cashInDuringShift: string;
   cashOutDuringShift: string;
+  cashRefundsDuringShift: string;
   expectedInDrawer: string;
+  expectedDrawerFormula: string;
   countedClosingCash: string;
   cashVariance: string;
   floatCarriesForward: string;
@@ -148,7 +150,9 @@ const EN: ReceiptLabels = {
   cashSalesDuringShift: 'Cash sales (shift)',
   cashInDuringShift: 'Cash in',
   cashOutDuringShift: 'Cash out',
+  cashRefundsDuringShift: 'Cash refunds',
   expectedInDrawer: 'Expected in drawer',
+  expectedDrawerFormula: 'Expected = float + cash sales + cash in - cash out - refunds',
   countedClosingCash: 'Counted / closing cash',
   cashVariance: 'Variance',
   floatCarriesForward: 'Carries forward as base',
@@ -227,7 +231,9 @@ const FR: ReceiptLabels = {
   cashSalesDuringShift: 'Ventes especes (shift)',
   cashInDuringShift: 'Entree caisse',
   cashOutDuringShift: 'Sortie caisse',
+  cashRefundsDuringShift: 'Remb. especes',
   expectedInDrawer: 'Caisse attendue',
+  expectedDrawerFormula: 'Attendu = fond + ventes + entrees - sorties - remb.',
   countedClosingCash: 'Especes comptees',
   cashVariance: 'Ecart',
   floatCarriesForward: 'Se reporte (fond suivant)',
@@ -306,7 +312,9 @@ const DE: ReceiptLabels = {
   cashSalesDuringShift: 'Barverkaeufe (Schicht)',
   cashInDuringShift: 'Bareinlage',
   cashOutDuringShift: 'Barentnahme',
+  cashRefundsDuringShift: 'Barrueckerstattung',
   expectedInDrawer: 'Erwarteter Bestand',
+  expectedDrawerFormula: 'Erwartet = Anfang + Verkauf + Einlage - Entnahme - Rueck.',
   countedClosingCash: 'Gezaehltes Bargeld',
   cashVariance: 'Differenz',
   floatCarriesForward: 'Bleibt als Wechselgeld',

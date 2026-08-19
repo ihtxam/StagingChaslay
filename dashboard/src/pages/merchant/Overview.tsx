@@ -50,6 +50,10 @@ import {
   EodIncludeProductsCheckbox,
   useEodIncludeProductsSold,
 } from '@/components/EodIncludeProductsCheckbox';
+import {
+  CashDrawerBreakdown,
+  type CashDrawerShift,
+} from '@/components/reports/CashDrawerBreakdown';
 
 type Preset = 'today' | 'yesterday' | 'last_week' | 'custom';
 
@@ -378,6 +382,9 @@ export default function Overview() {
   const kpis = data?.kpis;
   const maxProduct = Math.max(...(data?.products || []).map((p) => p.total), 1);
   const maxStaff = Math.max(...(data?.staff || []).map((s) => s.total), 1);
+  const shiftCash = Array.isArray((data?.eod as { shiftCash?: CashDrawerShift[] } | undefined)?.shiftCash)
+    ? ((data?.eod as { shiftCash?: CashDrawerShift[] }).shiftCash as CashDrawerShift[])
+    : [];
 
   return (
     <div className="space-y-4 max-w-[1400px]">
@@ -689,6 +696,8 @@ export default function Overview() {
           )}
         </div>
       </div>
+
+      {shiftCash.length > 0 && <CashDrawerBreakdown shifts={shiftCash} money={money} />}
 
       <div className="card">
         <h2 className="text-sm font-semibold mb-3">{t('ovCommonOps')}</h2>

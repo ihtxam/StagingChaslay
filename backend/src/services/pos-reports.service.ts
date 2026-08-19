@@ -431,7 +431,17 @@ export class PosReportsService {
     });
 
     const shiftIds = closedShifts.map((s) => s.id);
-    const movementTotals = new Map<string, { cashIn: number; cashOut: number }>();
+    type ShiftMovement = {
+      type: "in" | "out";
+      amount: number;
+      reason: string | null;
+      staffName: string | null;
+      createdAt: string | null;
+    };
+    const movementTotals = new Map<
+      string,
+      { cashIn: number; cashOut: number; movements: ShiftMovement[] }
+    >();
     if (shiftIds.length) {
       try {
         const movementRows = await db
@@ -439,6 +449,9 @@ export class PosReportsService {
             shiftId: schema.posCashMovements.shiftId,
             type: schema.posCashMovements.type,
             amount: schema.posCashMovements.amount,
+            reason: schema.posCashMovements.reason,
+            staffName: schema.posCashMovements.staffName,
+            createdAt: schema.posCashMovements.createdAt,
           })
           .from(schema.posCashMovements)
           .where(
@@ -448,25 +461,68 @@ export class PosReportsService {
             )
           );
         for (const row of movementRows) {
-          const cur = movementTotals.get(row.shiftId) || { cashIn: 0, cashOut: 0 };
+          const cur = movementTotals.get(row.shiftId) || {
+            cashIn: 0,
+            cashOut: 0,
+            movements: [],
+          };
           const amt = money(row.amount);
-          if (String(row.type).toLowerCase() === "out") cur.cashOut = round2(cur.cashOut + amt);
+          const type = String(row.type).toLowerCase() === "out" ? "out" : "in";
+          if (type === "out") cur.cashOut = round2(cur.cashOut + amt);
           else cur.cashIn = round2(cur.cashIn + amt);
+          cur.movements.push({
+            type,
+            amount: round2(amt),
+            reason: row.reason || null,
+            staffName: row.staffName || null,
+            createdAt: row.createdAt?.toISOString?.() ?? null,
+          });
           movementTotals.set(row.shiftId, cur);
+        }
+        for (const cur of movementTotals.values()) {
+          cur.movements.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
         }
       } catch {
         /* table may not exist yet on older DBs */
       }
     }
 
+    const cashRefundForOrder = (o: (typeof rows)[0]) => {
+      const pm = normalizePaymentMethod(o.paymentMethod || "") || String(o.paymentMethod || "").toLowerCase();
+      if (pm !== "cash") return 0;
+      const status = String(o.status || "").toLowerCase();
+      if (status === "cancelled" || status === "canceled") return 0;
+      const refundAmt = money(o.refundAmount);
+      if (status === "refunded") return refundAmt > 0 ? refundAmt : money(o.total);
+      return Math.max(0, refundAmt);
+    };
+
     const shiftCash = closedShifts.map((s) => {
-      const mov = movementTotals.get(s.id) || { cashIn: 0, cashOut: 0 };
+      const mov = movementTotals.get(s.id) || { cashIn: 0, cashOut: 0, movements: [] };
+      const openedAt = s.openedAt ? new Date(s.openedAt).getTime() : 0;
+      const closedAt = s.closedAt ? new Date(s.closedAt).getTime() : Number.POSITIVE_INFINITY;
+      const cashRefunds = round2(
+        rows.reduce((sum, o) => {
+          const t = o.createdAt ? new Date(o.createdAt).getTime() : 0;
+          if (t < openedAt || t > closedAt) return sum;
+          return sum + cashRefundForOrder(o);
+        }, 0)
+      );
+      const openingFloat = round2(money(s.openingCash));
+      const cashSales = round2(money(s.cashSales));
+      const storedExpected = s.expectedCash != null ? round2(money(s.expectedCash)) : null;
+      const expectedCash =
+        storedExpected != null && Number.isFinite(storedExpected)
+          ? storedExpected
+          : round2(openingFloat + cashSales + mov.cashIn - mov.cashOut);
       return {
-        openingFloat: round2(money(s.openingCash)),
-        cashSales: round2(money(s.cashSales)),
+        openingFloat,
+        cashSales,
         cashIn: mov.cashIn,
         cashOut: mov.cashOut,
-        expectedCash: round2(money(s.expectedCash)),
+        cashRefunds,
+        movements: mov.movements,
+        expectedCash,
         closingCashCounted:
           s.closingCashCounted != null ? round2(money(s.closingCashCounted)) : null,
         variance: s.variance != null ? round2(money(s.variance)) : null,

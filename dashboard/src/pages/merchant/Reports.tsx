@@ -25,15 +25,12 @@ import {
   EodIncludeProductsCheckbox,
   useEodIncludeProductsSold,
 } from '@/components/EodIncludeProductsCheckbox';
+import {
+  CashDrawerBreakdown,
+  type CashDrawerShift,
+} from '@/components/reports/CashDrawerBreakdown';
 
-type EodShiftCash = {
-  openingFloat: number;
-  cashSales: number;
-  expectedCash: number;
-  closingCashCounted?: number | null;
-  variance?: number | null;
-  staffName?: string | null;
-};
+type EodShiftCash = CashDrawerShift;
 
 type EodReport = {
   range: { label: string; from: string; to: string; preset: string };
@@ -416,60 +413,7 @@ export default function ReportsPage() {
               )}
 
               {!!report.shiftCash?.length && (
-                <section className="rounded-xl border border-[var(--border)] overflow-hidden">
-                  <h2 className="px-3 py-2 text-sm font-semibold bg-[var(--bg-muted)]">
-                    {t('reportsOpeningFloat')}
-                  </h2>
-                  <div className="divide-y divide-[var(--border)]">
-                    {report.shiftCash.map((s, idx) => (
-                      <div key={idx} className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                        <div>
-                          <p className="text-[11px] uppercase tracking-wide muted">
-                            {t('reportsOpeningFloat')}
-                          </p>
-                          <p className="font-semibold tabular-nums mt-0.5">
-                            {money(s.openingFloat)}
-                          </p>
-                          <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                            {t('reportsFloatCarriesForward')}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[11px] uppercase tracking-wide muted">
-                            {t('webPosShiftCashSales')}
-                          </p>
-                          <p className="font-semibold tabular-nums mt-0.5">{money(s.cashSales)}</p>
-                        </div>
-                        <div>
-                          <p className="text-[11px] uppercase tracking-wide muted">
-                            {t('webPosShiftExpectedDrawer')}
-                          </p>
-                          <p className="font-semibold tabular-nums mt-0.5">
-                            {money(s.expectedCash)}
-                          </p>
-                        </div>
-                        {s.closingCashCounted != null && (
-                          <div>
-                            <p className="text-[11px] uppercase tracking-wide muted">
-                              {t('webPosShiftCountCash')}
-                            </p>
-                            <p className="font-semibold tabular-nums mt-0.5">
-                              {money(s.closingCashCounted)}
-                            </p>
-                          </div>
-                        )}
-                        {s.variance != null && (
-                          <div>
-                            <p className="text-[11px] uppercase tracking-wide muted">
-                              {t('reportsCashVariance')}
-                            </p>
-                            <p className="font-semibold tabular-nums mt-0.5">{money(s.variance)}</p>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </section>
+                <CashDrawerBreakdown shifts={report.shiftCash} money={money} />
               )}
 
               {!!report.vatRows?.length && (

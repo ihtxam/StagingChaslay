@@ -270,6 +270,7 @@ export function WebPosCloseShiftModal({
     cashSales: number;
     cashIn?: number;
     cashOut?: number;
+    cashRefunds?: number;
     cardSales: number;
     terminalSales: number;
     totalSales: number;
@@ -296,9 +297,12 @@ export function WebPosCloseShiftModal({
   const cardTotal = (live?.cardSales ?? 0) + (live?.terminalSales ?? 0);
   const cashIn = live?.cashIn ?? 0;
   const cashOut = live?.cashOut ?? 0;
+  const cashRefunds = live?.cashRefunds ?? 0;
   const expectedFormula = t('webPosShiftExpectedFormula')
     .replace('{float}', openingCash.toFixed(2))
-    .replace('{sales}', (live?.cashSales ?? 0).toFixed(2));
+    .replace('{sales}', (live?.cashSales ?? 0).toFixed(2))
+    .replace('{in}', cashIn.toFixed(2))
+    .replace('{out}', cashOut.toFixed(2));
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4">
@@ -339,16 +343,18 @@ export function WebPosCloseShiftModal({
                 label={t('webPosShiftCashSales')}
                 value={`${(live?.cashSales ?? 0).toFixed(2)} CHF`}
               />
-              {cashIn > 0 ? (
+              <ShiftSummaryStat
+                label={t('webPosShiftCashIn')}
+                value={`${cashIn > 0 ? '+' : ''}${cashIn.toFixed(2)} CHF`}
+              />
+              <ShiftSummaryStat
+                label={t('webPosShiftCashOut')}
+                value={`${cashOut > 0 ? '−' : ''}${cashOut.toFixed(2)} CHF`}
+              />
+              {cashRefunds > 0 ? (
                 <ShiftSummaryStat
-                  label={t('webPosShiftCashIn')}
-                  value={`+${cashIn.toFixed(2)} CHF`}
-                />
-              ) : null}
-              {cashOut > 0 ? (
-                <ShiftSummaryStat
-                  label={t('webPosShiftCashOut')}
-                  value={`−${cashOut.toFixed(2)} CHF`}
+                  label={t('webPosShiftCashRefunds')}
+                  value={`−${cashRefunds.toFixed(2)} CHF`}
                 />
               ) : null}
               <ShiftSummaryStat

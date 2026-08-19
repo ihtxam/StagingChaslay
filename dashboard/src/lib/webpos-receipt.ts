@@ -1593,12 +1593,22 @@ export type EodVatRow = {
   brut: number;
 };
 
+export type EodCashMovement = {
+  type: 'in' | 'out' | string;
+  amount: number;
+  reason?: string | null;
+  staffName?: string | null;
+  createdAt?: string | null;
+};
+
 /** Cash drawer reconciliation for a closed (or closing) shift. */
 export type EodShiftCash = {
   openingFloat: number;
   cashSales: number;
   cashIn?: number;
   cashOut?: number;
+  cashRefunds?: number;
+  movements?: EodCashMovement[];
   expectedCash: number;
   closingCashCounted?: number | null;
   variance?: number | null;
@@ -1844,6 +1854,28 @@ export function generateEodReportText(report: EodReportPrint): string {
     r += thin + '\n';
     r += centerLine(L.cashDrawer, width) + '\n';
     r += thin + '\n';
+    const movementTime = (iso?: string | null) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (!Number.isFinite(d.getTime())) return '';
+      try {
+        return d.toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: 'Europe/Zurich',
+        });
+      } catch {
+        return '';
+      }
+    };
+    const movementLeft = (m: EodCashMovement) => {
+      const time = movementTime(m.createdAt);
+      const reason = (m.reason || m.staffName || '').trim();
+      const label = [time, reason].filter(Boolean).join(' ') || '—';
+      return `  ${label}`.slice(0, Math.max(8, width - 10));
+    };
+
     for (let i = 0; i < shiftRows.length; i++) {
       const s = shiftRows[i]!;
       if (shiftRows.length > 1) {
@@ -1852,16 +1884,33 @@ export function generateEodReportText(report: EodReportPrint): string {
           : `${i + 1}`;
         r += centerLine(label.slice(0, width), width) + '\n';
       }
-      r += padLine(L.openingFloat, money(s.openingFloat), width) + '\n';
-      r += centerLine(`(${L.floatCarriesForward})`, width) + '\n';
-      r += padLine(L.cashSalesDuringShift, money(s.cashSales), width) + '\n';
-      if ((s.cashIn ?? 0) > 0) {
-        r += padLine(L.cashInDuringShift, money(s.cashIn!), width) + '\n';
+      const opening = Number(s.openingFloat || 0);
+      const cashRefunds = Number(s.cashRefunds || 0);
+      const cashSalesNet = Number(s.cashSales || 0);
+      const cashSalesGross = Math.round((cashSalesNet + cashRefunds) * 100) / 100;
+      const cashIn = Number(s.cashIn || 0);
+      const cashOut = Number(s.cashOut || 0);
+      const ins = (s.movements || []).filter((m) => String(m.type).toLowerCase() !== 'out');
+      const outs = (s.movements || []).filter((m) => String(m.type).toLowerCase() === 'out');
+
+      if (opening > 0) {
+        r += padLine(L.openingFloat, money(opening), width) + '\n';
+        r += centerLine(`(${L.floatCarriesForward})`, width) + '\n';
       }
-      if ((s.cashOut ?? 0) > 0) {
-        r += padLine(L.cashOutDuringShift, money(-(s.cashOut ?? 0)), width) + '\n';
+      r += padLine(L.cashSalesDuringShift, money(cashSalesGross), width) + '\n';
+      r += padLine(L.cashInDuringShift, money(cashIn), width) + '\n';
+      for (const m of ins) {
+        r += padLine(movementLeft(m), money(m.amount), width) + '\n';
+      }
+      r += padLine(L.cashOutDuringShift, cashOut > 0 ? money(-cashOut) : money(0), width) + '\n';
+      for (const m of outs) {
+        r += padLine(movementLeft(m), money(-Math.abs(m.amount)), width) + '\n';
+      }
+      if (cashRefunds > 0) {
+        r += padLine(L.cashRefundsDuringShift, money(-cashRefunds), width) + '\n';
       }
       r += padLine(L.expectedInDrawer, money(s.expectedCash), width) + '\n';
+      r += centerLine(L.expectedDrawerFormula, width) + '\n';
       if (s.closingCashCounted != null) {
         r += padLine(L.countedClosingCash, money(s.closingCashCounted), width) + '\n';
       }
