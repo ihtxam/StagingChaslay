@@ -21,21 +21,6 @@ function computeEstimatedReadyAt(
   return new Date(Date.now() + prepMinutes * 60 * 1000);
 }
 
-function isOnlineShopLifecycleOrder(order: {
-  orderType?: string | null;
-  orderSource?: string | null;
-}): boolean {
-  const t = String(order.orderType || "").toLowerCase();
-  const src = String(order.orderSource || "").toLowerCase();
-  return (
-    t === "web_shop" ||
-    t === "online" ||
-    src === "online_shop" ||
-    src === "justeat" ||
-    src === "ubereats"
-  );
-}
-
 function resolveCollectPaymentMethod(
   requested: string | null | undefined,
   existing: string | null | undefined
@@ -536,17 +521,16 @@ export class OrderService {
         return set({ status: "completed", completedAt: new Date() });
       }
       case "complete_and_collect": {
-        // Online shop cash-on-pickup: collect + complete only at handoff.
-        // POS invoice / pay-later / delivery: staff may collect while the ticket
-        // is still in kitchen — mark paid, keep fulfillment status.
+        // Ready / out_for_delivery: collect + complete (handoff).
+        // Earlier kitchen statuses: staff/admin may collect payment now and
+        // leave fulfillment open (POS invoice and online shop pickup).
         const readyToHandoff = status === "ready" || status === "out_for_delivery";
-        const posCollectWhileOpen =
-          !isOnlineShopLifecycleOrder(order) &&
-          (status === "preparing" ||
-            status === "accepted" ||
-            status === "sent_to_kitchen" ||
-            status === "completed");
-        if (!readyToHandoff && !posCollectWhileOpen) {
+        const collectWhileOpen =
+          status === "preparing" ||
+          status === "accepted" ||
+          status === "sent_to_kitchen" ||
+          status === "completed";
+        if (!readyToHandoff && !collectWhileOpen) {
           throw new Error("Order is not ready to collect payment");
         }
         {

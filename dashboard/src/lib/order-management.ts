@@ -197,7 +197,7 @@ export function canEditPayment(o: MerchantOrder): boolean {
   );
 }
 
-/** Pickup / handoff stage — unpaid orders can be collected at the till. */
+/** Pickup / handoff stage — default shop-pickup collect is Ready-first. */
 export function isReadyForPaymentCollection(o: MerchantOrder): boolean {
   const status = (o.status || '').toLowerCase();
   if (status === 'ready' || status === 'out_for_delivery') return true;
@@ -211,6 +211,25 @@ export function isReadyForPaymentCollection(o: MerchantOrder): boolean {
     return true;
   }
   return false;
+}
+
+/** Staff/admin may collect unpaid tickets before Ready (shop pickup stays Ready-first by default). */
+export function canAdminCollectPayment(o: MerchantOrder): boolean {
+  const status = (o.status || '').toLowerCase();
+  const pay = (o.paymentStatus || '').toLowerCase();
+  const method = (o.paymentMethod || '').toLowerCase();
+  if (['cancelled', 'refunded'].includes(status)) return false;
+  if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
+  if (Number(o.total || 0) <= 0.001) return false;
+  if (pay === 'awaiting_payment') return true;
+  if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) return true;
+  if (method === 'pay_later' || method === 'pay-later' || method === 'invoice') return true;
+  return false;
+}
+
+export function canMarkReady(o: { status?: string | null }): boolean {
+  const status = (o.status || '').toLowerCase();
+  return status === 'accepted' || status === 'preparing';
 }
 
 export function isPaidOrder(o: MerchantOrder): boolean {
@@ -255,6 +274,35 @@ export function orderStatusLabel(status: string, t: (k: string) => string): stri
     confirmed: t('orderStatusAccepted'),
   };
   return map[key] || status;
+}
+
+/** Colored kitchen / fulfillment badge (Preparing, Ready, …). */
+export function orderStatusBadgeClass(status: string): string {
+  switch ((status || '').toLowerCase().replace(/-/g, '_')) {
+    case 'pending':
+    case 'pending_approval':
+      return 'bg-violet-100 text-violet-800';
+    case 'accepted':
+    case 'confirmed':
+      return 'bg-sky-100 text-sky-800';
+    case 'preparing':
+    case 'sent_to_kitchen':
+    case 'held':
+      return 'bg-amber-100 text-amber-900';
+    case 'ready':
+      return 'bg-emerald-100 text-emerald-800';
+    case 'out_for_delivery':
+      return 'bg-orange-100 text-orange-900';
+    case 'completed':
+      return 'bg-stone-200 text-stone-700';
+    case 'cancelled':
+    case 'refunded':
+      return 'bg-rose-100 text-rose-800';
+    case 'partially_refunded':
+      return 'bg-rose-50 text-rose-700';
+    default:
+      return 'bg-stone-100 text-stone-600';
+  }
 }
 
 export function orderPublicRefs(o: MerchantOrder) {

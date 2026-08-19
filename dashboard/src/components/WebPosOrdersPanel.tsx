@@ -29,7 +29,9 @@ import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
 import {
+  canAdminCollectPayment,
   canCollectPayment,
+  canMarkReady,
   canShowAwaitingPaymentBadge,
   formatOrderPaymentDisplay,
   isAwaitingApproval,
@@ -38,6 +40,7 @@ import {
   isPaidOrder,
   orderChannelBadgeClass,
   orderChannelHeaderClass,
+  orderStatusBadgeClass,
   orderStatusLabel,
 } from '@/lib/order-management';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
@@ -1307,11 +1310,18 @@ export default function WebPosOrdersPanel({
                           <span className="text-stone-300 text-sm font-semibold">CHF </span>
                           <span className="text-amber-300">{Number(o.total).toFixed(2)}</span>
                         </p>
-                        <p className="text-[11px] font-semibold uppercase text-stone-300">
-                          {canShowAwaitingPaymentBadge(o)
-                            ? t('webPosAwaitingPayment')
-                            : statusLabel(o.status)}
+                        <p className="flex flex-wrap items-center justify-center gap-1">
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(o.status)}`}
+                          >
+                            {statusLabel(o.status)}
+                          </span>
                         </p>
+                        {canShowAwaitingPaymentBadge(o) ? (
+                          <p className="text-[10px] font-bold uppercase text-amber-300">
+                            {t('webPosAwaitingPayment')}
+                          </p>
+                        ) : null}
                       </div>
                       <div className="flex items-center justify-between gap-2 border-t border-stone-700 px-2.5 py-1.5 text-[10px] text-stone-400">
                         <span className="inline-flex min-w-0 items-center gap-1 truncate">
@@ -1473,16 +1483,15 @@ export default function WebPosOrdersPanel({
                               </span>
                             ) : null}
                             <span
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
-                                o.status === 'completed'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : o.status === 'cancelled'
-                                    ? 'bg-rose-100 text-rose-800'
-                                    : 'bg-stone-100 text-stone-600'
-                              }`}
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(o.status)}`}
                             >
                               {statusLabel(o.status)}
                             </span>
+                            {canShowAwaitingPaymentBadge(o) ? (
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                                {t('webPosAwaitingPayment')}
+                              </span>
+                            ) : null}
                           </div>
                           <p className="mt-0.5 text-[11px] text-stone-400">{formatOrderNumberDisplay(o.orderNumber)}</p>
                         </div>
@@ -1702,8 +1711,17 @@ export default function WebPosOrdersPanel({
                           ? `${t('webPosTab')} ${refs.tabNumber}`
                           : formatOrderNumberDisplay(selectedOrder.orderNumber))}
                     </p>
-                    <p className="text-xs text-stone-500">
-                      {statusLabel(selectedOrder.status)}
+                    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(selectedOrder.status)}`}
+                      >
+                        {statusLabel(selectedOrder.status)}
+                      </span>
+                      {canShowAwaitingPaymentBadge(selectedOrder) ? (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                          {t('webPosAwaitingPayment')}
+                        </span>
+                      ) : null}
                       {refs.tabNumber && refs.ticketDisplay
                         ? ` · ${t('webPosTab')} ${refs.tabNumber}`
                         : ''}
@@ -1784,7 +1802,7 @@ export default function WebPosOrdersPanel({
                         {t('webPosSendToKitchen')}
                       </button>
                     ) : null}
-                    {selectedOrder.status === 'preparing' ? (
+                    {canMarkReady(selectedOrder) ? (
                       <button
                         type="button"
                         className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
@@ -1819,9 +1837,34 @@ export default function WebPosOrdersPanel({
                           : t('webPosCompleteOrder')}
                       </button>
                     ) : null}
+                    {canAdminCollectPayment(selectedOrder) &&
+                    selectedOrder.status !== 'ready' &&
+                    selectedOrder.status !== 'out_for_delivery' ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-xl border border-emerald-200 bg-emerald-50 py-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+                        disabled={onlineActionBusy === selectedOrder.id}
+                        onClick={() => startCollectPayment(selectedOrder)}
+                      >
+                        {t('webPosCollectNow')} · {money(selectedOrder.total)}
+                      </button>
+                    ) : null}
                   </div>
-                ) : canCollectPayment(selectedOrder) ? (
+                ) : canMarkReady(selectedOrder) ||
+                  canCollectPayment(selectedOrder) ||
+                  canAdminCollectPayment(selectedOrder) ? (
                   <div className="space-y-2 border-t border-stone-200 p-3">
+                    {canMarkReady(selectedOrder) ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
+                        disabled={onlineActionBusy === selectedOrder.id}
+                        onClick={() => void runOnlineAction(selectedOrder, 'mark_ready')}
+                      >
+                        {t('webPosMarkReady')}
+                      </button>
+                    ) : null}
+                    {canCollectPayment(selectedOrder) || canAdminCollectPayment(selectedOrder) ? (
                     <button
                       type="button"
                       className="w-full rounded-xl bg-emerald-700 py-3.5 text-sm font-bold text-white hover:bg-emerald-800"
@@ -1832,6 +1875,7 @@ export default function WebPosOrdersPanel({
                         : t('webPosTakePayment'))}{' '}
                       · {money(selectedOrder.total)}
                     </button>
+                    ) : null}
                     {selectedOrder.paymentMethod === 'invoice' || selectedOrder.invoiceNumber ? (
                       <button
                         type="button"

@@ -5,7 +5,10 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
+  canAdminCollectPayment,
+  canMarkReady,
   formatOrderPaymentDisplay,
+  isAwaitingApproval,
   isAwaitingPaymentOrder,
   isInvoiceOrder,
   isKitchenTypeOrder,
@@ -16,9 +19,11 @@ import {
   ONLINE_CHANNEL_STYLE,
   orderPublicRefs,
   orderSearchHaystack,
+  orderStatusBadgeClass,
   todayIso,
   type MerchantOrder,
 } from '@/lib/order-management';
+import { collectPaymentAction } from '@/lib/order-to-cart';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
 import { toastPrintError } from '@/lib/webpos-print-toast';
@@ -111,6 +116,8 @@ export default function Orders() {
   } | null>(null);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [collectOpen, setCollectOpen] = useState(false);
 
   const loadMeta = useCallback(async () => {
     try {
@@ -211,11 +218,36 @@ export default function Orders() {
   }, [orders, paymentFilter, typeFilter, channelFilter, staffFilter, staffList, search]);
 
   const openDetail = async (order: MerchantOrder) => {
+    setCollectOpen(false);
     try {
       const res = await api.get(`/merchant/orders/${order.id}`);
       setSelected((res.data.order as MerchantOrder) || order);
     } catch {
       setSelected(order);
+    }
+  };
+
+  const runOrderAction = async (
+    order: MerchantOrder,
+    action: string,
+    extra?: Record<string, unknown>
+  ) => {
+    setActionBusy(true);
+    try {
+      const res = await api.post(`/merchant/orders/${order.id}/action`, { action, ...extra });
+      const updated = (res.data?.order as MerchantOrder) || order;
+      setSelected((prev) =>
+        prev && prev.id === order.id
+          ? { ...prev, ...updated, items: prev.items || updated.items }
+          : { ...order, ...updated }
+      );
+      toast.success(t('updated'));
+      setCollectOpen(false);
+      void load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('actionFailed'));
+    } finally {
+      setActionBusy(false);
     }
   };
 
@@ -511,7 +543,9 @@ export default function Orders() {
               </div>
 
               <div className="mt-2 flex flex-wrap gap-1 text-[10px] font-semibold">
-                <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5">
+                <span
+                  className={`rounded-md px-1.5 py-0.5 font-bold uppercase ${orderStatusBadgeClass(order.status)}`}
+                >
                   {statusLabel(order.status, t)}
                 </span>
                 <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5">
@@ -563,7 +597,18 @@ export default function Orders() {
                 <h2 className="truncate text-base font-extrabold">
                   {formatOrderNumberDisplay(selected.orderNumber) || selected.id.slice(0, 8)}
                 </h2>
-                <p className="text-xs text-[var(--text-muted)]">{statusLabel(selected.status, t)}</p>
+                <p className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(selected.status)}`}
+                  >
+                    {statusLabel(selected.status, t)}
+                  </span>
+                  {isAwaitingPaymentOrder(selected) ? (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                      {t('webPosAwaitingPayment')}
+                    </span>
+                  ) : null}
+                </p>
               </div>
               <button
                 type="button"
@@ -653,15 +698,90 @@ export default function Orders() {
               </p>
 
               <SettingsReportCard icon={ShoppingBag} accent={settingsDash.accent} title={t('ordersActionsTitle')}>
-                <button
-                  type="button"
-                  disabled={printing}
-                  onClick={() => void doPrint(selected)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
-                >
-                  <Printer size={16} />
-                  {t('webPosPrintReceipt')}
-                </button>
+                <div className="space-y-2">
+                  {isAwaitingApproval(selected.status) ? (
+                    <button
+                      type="button"
+                      disabled={actionBusy}
+                      onClick={() => void runOrderAction(selected, 'accept')}
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-violet-800 px-3 py-2.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
+                    >
+                      {t('webPosAcceptOrder')}
+                    </button>
+                  ) : null}
+                  {canMarkReady(selected) ? (
+                    <button
+                      type="button"
+                      disabled={actionBusy}
+                      onClick={() => void runOrderAction(selected, 'mark_ready')}
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-violet-800 px-3 py-2.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
+                    >
+                      {t('webPosMarkReady')}
+                    </button>
+                  ) : null}
+                  {selected.status === 'ready' &&
+                  (selected.fulfillmentChannel || selected.channel) === 'delivery' ? (
+                    <button
+                      type="button"
+                      disabled={actionBusy}
+                      onClick={() => void runOrderAction(selected, 'out_for_delivery')}
+                      className="inline-flex w-full items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                    >
+                      {t('ordersActionSendDelivery')}
+                    </button>
+                  ) : null}
+                  {canAdminCollectPayment(selected) ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={actionBusy}
+                        onClick={() => setCollectOpen((v) => !v)}
+                        className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {t('webPosCollectNow')} · CHF {Number(selected.total || 0).toFixed(2)}
+                      </button>
+                      {collectOpen ? (
+                        <div className="space-y-1.5 rounded-lg border border-[var(--border)] p-2">
+                          <p className="text-[11px] text-[var(--text-muted)]">
+                            {t('webPosCollectNowHint')}
+                          </p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {(['cash', 'card', 'terminal', 'bank_transfer'] as const).map((method) => (
+                              <button
+                                key={method}
+                                type="button"
+                                disabled={actionBusy}
+                                onClick={() =>
+                                  void runOrderAction(selected, collectPaymentAction(selected.status), {
+                                    paymentMethod: method,
+                                  })
+                                }
+                                className="rounded-md border border-[var(--border)] px-2 py-1.5 text-xs font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                              >
+                                {method === 'cash'
+                                  ? t('webPosCash')
+                                  : method === 'card'
+                                    ? t('webPosCard')
+                                    : method === 'terminal'
+                                      ? t('webPosTerminal')
+                                      : t('webPosBankTransfer')}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={printing}
+                    onClick={() => void doPrint(selected)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                  >
+                    <Printer size={16} />
+                    {t('webPosPrintReceipt')}
+                  </button>
+                </div>
               </SettingsReportCard>
             </div>
           </div>
