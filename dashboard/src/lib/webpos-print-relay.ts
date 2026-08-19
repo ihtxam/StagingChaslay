@@ -1,5 +1,6 @@
 import api from '@/lib/api';
 import { isPrintAgentAvailable, printViaAgent } from '@/lib/print-agent';
+import { enqueueFailedPrintJob } from '@/lib/webpos-print-queue';
 import { isBrowserOnline } from '@/lib/webpos-offline/types';
 import {
   processAutoPrintOrderJob,
@@ -54,8 +55,11 @@ export async function enqueueEscPosPrintJob(opts: {
   return { jobId: String(res.data?.jobId || '') };
 }
 
+export type PrintJobKind = 'kitchen' | 'receipt' | 'eod' | 'other';
+
 /**
  * Print via local Print Agent when available; otherwise queue for the main till hub.
+ * On local failure (or agent down with retryLocally), persists the job for 8s auto-retry.
  * Returns `'local' | 'queued'`.
  */
 export async function printViaAgentOrQueue(opts: {
@@ -65,20 +69,53 @@ export async function printViaAgentOrQueue(opts: {
   orderId?: string | null;
   /** Force queue even if agent looks online (tests). */
   forceQueue?: boolean;
+  /**
+   * Persist + auto-retry on this PC when local print fails or the agent is down.
+   * Default true (WebPOS till). Waiter phones pass false so jobs go to the main till.
+   */
+  retryLocally?: boolean;
+  jobKind?: PrintJobKind;
+  jobLabel?: string;
+  lineIds?: string[];
 }): Promise<'local' | 'queued'> {
+  const retryLocally = opts.retryLocally !== false;
+  const persistLocal = (error: unknown) => {
+    if (!opts.dataBase64) return;
+    enqueueFailedPrintJob({
+      kind: opts.jobKind,
+      label: opts.jobLabel,
+      dataBase64: opts.dataBase64,
+      printerName: opts.printerName,
+      text: opts.text,
+      orderId: opts.orderId,
+      lineIds: opts.lineIds,
+      error,
+    });
+  };
+
   const agentReady = !opts.forceQueue && (await isPrintAgentAvailable());
   if (agentReady) {
-    await printViaAgent({
-      printerName: opts.printerName,
-      dataBase64: opts.dataBase64,
-      text: opts.text,
-    });
-    return 'local';
+    try {
+      await printViaAgent({
+        printerName: opts.printerName,
+        dataBase64: opts.dataBase64,
+        text: opts.text,
+      });
+      return 'local';
+    } catch (e) {
+      if (retryLocally) persistLocal(e);
+      throw e;
+    }
   }
-  // Cloud print-job queue needs the merchant API — unavailable while offline.
-  if (!isBrowserOnline()) {
-    throw new Error('Print agent offline — start Chaslay Print Agent on this PC to print.');
+
+  const offlineErr = new Error(
+    'Print agent offline — start Chaslay Print Agent on this PC to print.'
+  );
+  if (retryLocally || !isBrowserOnline()) {
+    persistLocal(offlineErr);
+    throw offlineErr;
   }
+
   await enqueueEscPosPrintJob(opts);
   return 'queued';
 }
@@ -156,7 +193,15 @@ export async function processPendingEscPosPrintJobs(): Promise<number> {
           // Never mark FAILED after a successful physical print — retry DONE ack.
           await ackPrintJob(job.id, 'DONE');
           done += 1;
-        } catch {
+        } catch (e) {
+          enqueueFailedPrintJob({
+            kind: 'other',
+            label: String((job as { orderId?: string }).orderId || p.printerName || 'Print job'),
+            dataBase64: p.dataBase64,
+            printerName: p.printerName,
+            text: p.text,
+            error: e,
+          });
           await ackPrintJob(job.id, 'FAILED').catch(() => {});
         }
       }

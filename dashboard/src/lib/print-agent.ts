@@ -47,6 +47,23 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
+/** Collapse PowerShell / Win32 dumps into a one-line ChaslayReborn message. */
+export function friendlyPrintAgentError(raw: unknown): string {
+  const msg = String(raw || '').trim();
+  if (!msg) return 'Print failed';
+  const open = msg.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
+  const named = msg.match(/Printer '([^']+)' not found/i);
+  const name = (open?.[1] || named?.[1] || '').trim();
+  const code = open ? Number(open[2]) : Number((msg.match(/Win32=(\d+)/i) || [])[1] || 0);
+  if (code === 1801 || /not found or disconnected|ERROR_INVALID_PRINTER_NAME/i.test(msg)) {
+    return name ? `Printer '${name}' not found or disconnected` : 'Printer not found or disconnected';
+  }
+  if (/win-raw-print|CategoryInfo|FullyQualifiedErrorId|chaslayreborn-print-|manupos-print-/i.test(msg)) {
+    return name ? `Printer '${name}' not found or disconnected` : 'Print failed';
+  }
+  return msg.length > 220 ? `${msg.slice(0, 217)}…` : msg;
+}
+
 async function agentFetch(path: string, init?: RequestInit) {
   const res = await fetch(`${PRINT_AGENT_URL}${path}`, {
     ...init,
@@ -57,7 +74,7 @@ async function agentFetch(path: string, init?: RequestInit) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Print agent HTTP ${res.status}`);
+    throw new Error(friendlyPrintAgentError(err.error || `Print agent HTTP ${res.status}`));
   }
   return res.json();
 }
@@ -116,7 +133,7 @@ export async function printViaAgent(opts: {
 
   if (window.manuposDesktop?.printEscPos) {
     const res = await window.manuposDesktop.printEscPos(opts);
-    if (!res.ok) throw new Error(res.error || 'Desktop print failed');
+    if (!res.ok) throw new Error(friendlyPrintAgentError(res.error || 'Desktop print failed'));
     if (res.printer && isUnsuitableRawPrinter(res.printer)) {
       throw new Error(unsuitableRawPrinterMessage(res.printer));
     }

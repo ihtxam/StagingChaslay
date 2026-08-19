@@ -70,6 +70,12 @@ import {
   processPendingEscPosPrintJobs,
 } from '@/lib/webpos-print-relay';
 import {
+  removePrintJobs,
+  reprintPrintJobs,
+  startPrintQueueAutoRetry,
+  usePendingPrintJobs,
+} from '@/lib/webpos-print-queue';
+import {
   POS_SESSION_KICKED_EVENT,
   registerPosSession,
   resumePosSessionHeartbeat,
@@ -1113,10 +1119,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     coursesBulkSent &&
     activeCourse > 1;
   const hasUnsentItems = cart.some((l) => !l.sentToKitchen);
+  const pendingPrintJobs = usePendingPrintJobs();
   const failedPrintLines = useMemo(
     () => cart.filter((l) => !!l.kitchenPrintFailed && !!l.sentToKitchen),
     [cart]
   );
+  const unprintedJobCount = Math.max(pendingPrintJobs.length, failedPrintLines.length);
   // Ongoing order with new (unsent) lines must keep Send — not New.
   const showNewOrderButton = orderSent && !showFireCourseButton && !hasUnsentItems;
   const sendLabel = useMemo(() => {
@@ -1632,6 +1640,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [shiftsEnabled, offlineSync.online, refreshCurrentShift]);
+
+  /** Retry unprinted kitchen/receipt jobs every 8s while WebPOS stays open. */
+  useEffect(() => {
+    startPrintQueueAutoRetry();
+  }, []);
 
   /** Main till hub: Print Agent online → pull waiter/mobile ESC/POS jobs and print locally. */
   useEffect(() => {
@@ -2877,6 +2890,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     );
   }, []);
 
+  useEffect(() => {
+    const pendingLineIds = new Set(pendingPrintJobs.flatMap((j) => j.lineIds || []));
+    setCart((prev) => {
+      let changed = false;
+      const next = prev.map((l) => {
+        if (!l.kitchenPrintFailed) return l;
+        if (pendingLineIds.has(l.lineId)) return l;
+        if (pendingPrintJobs.length > 0 && pendingLineIds.size === 0) return l;
+        changed = true;
+        return { ...l, kitchenPrintFailed: false };
+      });
+      return changed ? next : prev;
+    });
+  }, [pendingPrintJobs]);
+
   const openOrderReprint = () => {
     const sentIds = cart.filter((l) => l.sentToKitchen).map((l) => l.lineId);
     setReprintModal({
@@ -2907,6 +2935,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         orderNumber: kitchenOrderNumber({ ticket }),
         when: fulfillmentWhen,
         courseOnly,
+        lineIds: lines.map((l) => l.lineId),
       })
       .then(() => setKitchenPrintFailedForLines(ids, false))
       .catch((e: unknown) => {
@@ -3813,6 +3842,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         dataBase64: uint8ToBase64(escpos),
         text,
         orderId: orderNumber,
+        jobKind: 'kitchen',
+        jobLabel: orderNumber || t('webPosPrintJobKitchen'),
       }).catch((e: unknown) => {
         toastPrintError(e, t, 'webPosKitchenPrintFailed');
       });
@@ -3930,6 +3961,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           cancelled: true,
           cancelReason: reason,
           forcePrint: true,
+          lineIds: kitchenLines.map((l) => l.lineId),
         });
       }
 
@@ -4125,6 +4157,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           printerName: label || undefined,
           dataBase64,
           text,
+          jobKind: 'receipt',
+          jobLabel: t('webPosPrintJobReceipt'),
         });
         if (mode === 'queued') queuedOk += 1;
         else printedOk += 1;
@@ -4863,6 +4897,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           printerName: label || undefined,
           dataBase64,
           text,
+          jobKind: opts.role === 'kitchen' ? 'kitchen' : opts.role === 'eod' ? 'eod' : 'receipt',
+          jobLabel:
+            opts.role === 'eod'
+              ? t('webPosPrintJobEod')
+              : opts.role === 'kitchen'
+                ? t('webPosPrintJobKitchen')
+                : lastReceiptOrderNumber || t('webPosPrintJobReceipt'),
         });
         if (mode === 'queued') {
           queuedOk += 1;
@@ -5059,6 +5100,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       /** Snapshot tab/table before cart reset (payment path). */
       tabNumber?: string | null;
       tableLabel?: string | null;
+      lineIds?: string[];
     }
   ) => {
     if (isRetail) return;
@@ -5118,6 +5160,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
 
     let queuedAny = false;
+    const kitchenLabel = [
+      kitchenOpts.orderNumber,
+      kitchenOpts.tableLabel || kitchenOpts.tabNumber,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const printMeta = {
+      jobKind: 'kitchen' as const,
+      jobLabel: kitchenLabel || t('webPosPrintJobKitchen'),
+      lineIds: opts?.lineIds,
+    };
     const printJobs = buildKitchenPrintJobs(receiptItems, printSettings);
     if (printJobs.length) {
       for (const job of printJobs) {
@@ -5137,6 +5190,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           dataBase64: uint8ToBase64(escpos),
           text,
           orderId: opts?.orderNumber || null,
+          ...printMeta,
         });
         if (mode === 'queued') queuedAny = true;
       }
@@ -5160,6 +5214,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       dataBase64: uint8ToBase64(escpos),
       text,
       orderId: opts?.orderNumber || null,
+      ...printMeta,
     });
     if (mode === 'queued') toast.success(t('webPosPrintQueuedMainTill'));
   };
@@ -5173,6 +5228,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         orderNumber: kitchenOrderNumber({ ticket }),
         when: fulfillmentWhen,
         forcePrint: true,
+        lineIds: lines.map((l) => l.lineId),
       });
       setKitchenPrintFailedForLines(
         lines.map((l) => l.lineId),
@@ -5747,6 +5803,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         when: whenSnapshot,
         tabNumber: tabSnapshot,
         tableLabel: tableLabelSnapshot,
+        lineIds: kitchenDelta.map((l) => l.lineId),
       }).catch((e: unknown) => {
         toastPrintError(e, t, 'webPosKitchenPrintFailed');
       });
@@ -5897,6 +5954,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             when: whenSnapshot,
             tabNumber: tabSnapshot,
             tableLabel: tableLabelSnapshot,
+            lineIds: kitchenDelta.map((l) => l.lineId),
           }).catch((e: unknown) => {
             toastPrintError(e, t, 'webPosKitchenPrintFailed');
           });
@@ -6832,6 +6890,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 cancelled: true,
                 cancelReason: reason,
                 forcePrint: true,
+                lineIds: lines.map((l) => l.lineId),
               });
             }}
             onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
@@ -6986,7 +7045,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                       }
                     : undefined
                 }
-                failedPrintCount={failedPrintLines.length}
+                failedPrintCount={unprintedJobCount}
                 onOpenPrintIssues={() => setKitchenPrintIssuesOpen(true)}
                 onOrderPrint={kitchenEnabled ? openOrderReprint : undefined}
                 onLinePrint={kitchenEnabled ? openLineReprint : undefined}
@@ -7211,14 +7270,45 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
       <WebPosKitchenPrintIssuesModal
         open={kitchenPrintIssuesOpen}
+        jobs={pendingPrintJobs}
         lines={failedPrintLines}
         busy={kitchenPrintRetryBusy}
         money={money}
         onClose={() => {
           if (!kitchenPrintRetryBusy) setKitchenPrintIssuesOpen(false);
         }}
+        onRetryJobs={async (jobIds) => {
+          if (!jobIds.length) return;
+          setKitchenPrintRetryBusy(true);
+          try {
+            const result = await reprintPrintJobs(jobIds);
+            if (result.ok) toast.success(t('webPosPrintAutoRetryOk'));
+            if (result.failed) toastPrintError(t('webPosPrintFailed'), t, 'webPosPrintFailed');
+          } finally {
+            setKitchenPrintRetryBusy(false);
+          }
+        }}
+        onDismissJobs={(jobIds) => {
+          removePrintJobs(jobIds);
+        }}
         onRetryLine={(line) => void retryKitchenPrint([line])}
-        onRetryAll={() => void retryKitchenPrint(failedPrintLines)}
+        onRetryAll={async () => {
+          setKitchenPrintRetryBusy(true);
+          try {
+            if (pendingPrintJobs.length) {
+              const result = await reprintPrintJobs(pendingPrintJobs.map((j) => j.id));
+              if (result.ok) toast.success(t('webPosPrintAutoRetryOk'));
+              if (result.failed) toastPrintError(t('webPosPrintFailed'), t, 'webPosPrintFailed');
+            }
+            const queuedLines = new Set(pendingPrintJobs.flatMap((j) => j.lineIds || []));
+            const extra = failedPrintLines.filter((l) => !queuedLines.has(l.lineId));
+            if (extra.length) {
+              await retryKitchenPrint(extra);
+            }
+          } finally {
+            setKitchenPrintRetryBusy(false);
+          }
+        }}
       />
 
       <WebPosReprintModal

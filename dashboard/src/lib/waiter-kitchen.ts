@@ -89,6 +89,9 @@ export async function printWaiterKitchen(opts: {
         dataBase64: uint8ToBase64(escpos),
         text,
         orderId: orderNumber,
+        retryLocally: false,
+        jobKind: 'kitchen',
+        jobLabel: orderNumber ? `Kitchen · ${orderNumber}` : 'Kitchen',
       });
       if (mode === 'queued') queuedAny = true;
     }
@@ -111,6 +114,9 @@ export async function printWaiterKitchen(opts: {
     dataBase64: uint8ToBase64(escpos),
     text,
     orderId: orderNumber,
+    retryLocally: false,
+    jobKind: 'kitchen',
+    jobLabel: orderNumber ? `Kitchen · ${orderNumber}` : 'Kitchen',
   });
   if (mode === 'queued') toast.success(t('webPosPrintQueuedMainTill'));
 }

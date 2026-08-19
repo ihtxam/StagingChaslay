@@ -20,7 +20,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.3.2";
+const VERSION = "1.3.3";
 const APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "chaslay-print-agent.exe";
 const RUN_VALUE_NAME = "ChaslayPrintAgent";
@@ -157,6 +157,7 @@ function runtimeDir() {
 }
 
 function installDir() {
+  // Keep %LOCALAPPDATA%\ChaslayPrintAgent so existing installs keep working.
   const base = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
   return path.join(base, APP_NAME);
 }
@@ -483,7 +484,40 @@ async function runCli() {
   }
 }
 
-async function runPowerShell(scriptPath, args) {
+/** Short user-facing print errors — never leak PowerShell stacks or temp paths. */
+function sanitizePrintAgentError(error, printerName) {
+  const raw = [error && error.stderr, error && error.message, error && error.stdout]
+    .filter(Boolean)
+    .join("\n");
+  const open = raw.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
+  const name = (open && open[1]) || printerName || "";
+  const code = open ? Number(open[2]) : Number((raw.match(/Win32=(\d+)/i) || [])[1] || 0);
+  if (code === 1801 || /ERROR_INVALID_PRINTER_NAME/i.test(raw)) {
+    return name
+      ? `Printer '${name}' not found or disconnected`
+      : "Printer not found or disconnected";
+  }
+  const cleanLine = raw
+    .split(/\r?\n/)
+    .map((l) => String(l).trim())
+    .find(
+      (l) =>
+        l &&
+        /Printer '|OpenPrinter|StartDocPrinter|WritePrinter|not found or disconnected|corrupted|Select a receipt|No default printer/i.test(
+          l
+        ) &&
+        !/win-raw-print|CategoryInfo|FullyQualifiedErrorId|At C:\\|chaslayreborn-print-|manupos-print-/i.test(
+          l
+        )
+    );
+  if (cleanLine) {
+    return cleanLine.replace(/^.*Exception:\s*/i, "").slice(0, 220);
+  }
+  if (name) return `Print failed for '${name}'`;
+  return "Print failed";
+}
+
+async function runPowerShell(scriptPath, args, printerName) {
   const psArgs = [
     "-NoProfile",
     "-NonInteractive",
@@ -493,15 +527,19 @@ async function runPowerShell(scriptPath, args) {
     scriptPath,
     ...args,
   ];
-  const { stdout, stderr } = await execFileAsync("powershell.exe", psArgs, {
-    windowsHide: true,
-    maxBuffer: 10 * 1024 * 1024,
-    encoding: "utf8",
-  });
-  if (stderr && stderr.trim()) {
-    console.warn("[print-agent]", stderr.trim());
+  try {
+    const { stdout, stderr } = await execFileAsync("powershell.exe", psArgs, {
+      windowsHide: true,
+      maxBuffer: 10 * 1024 * 1024,
+      encoding: "utf8",
+    });
+    if (stderr && stderr.trim()) {
+      console.warn("[print-agent]", stderr.trim());
+    }
+    return stdout.trim();
+  } catch (error) {
+    throw new Error(sanitizePrintAgentError(error, printerName));
   }
-  return stdout.trim();
 }
 
 async function listPrinters() {
@@ -560,7 +598,7 @@ async function printRaw({ printerName, dataBase64 }) {
   }
 
   const bytes = Buffer.from(dataBase64, "base64");
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "manupos-print-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "chaslayreborn-print-"));
   const tmpFile = path.join(tmpDir, "receipt.bin");
   const nameFile = path.join(tmpDir, "printer-name.txt");
   fs.writeFileSync(tmpFile, bytes);
@@ -578,7 +616,7 @@ async function printRaw({ printerName, dataBase64 }) {
       fs.writeFileSync(nameFile, Buffer.concat([bom, Buffer.from(name, "utf8")]));
       args.push("-PrinterNameFile", nameFile);
     }
-    const usedPrinter = await runPowerShell(scriptPath, args);
+    const usedPrinter = await runPowerShell(scriptPath, args, name || undefined);
     const resolved = usedPrinter || name || "default";
     if (isUnsuitableRawPrinter(resolved)) {
       throw new Error(unsuitablePrinterError(resolved));
@@ -638,8 +676,9 @@ function startServer() {
         unsuitableForRaw: isUnsuitableRawPrinter(usedPrinter),
       });
     } catch (error) {
-      console.error("[print-agent] print failed:", error);
-      res.status(500).json({ error: error.message || "Print failed" });
+      const safe = sanitizePrintAgentError(error, req.body && req.body.printerName);
+      console.error("[print-agent] print failed:", safe);
+      res.status(500).json({ error: safe });
     }
   });
 
@@ -657,8 +696,9 @@ function startServer() {
       });
       res.json({ ok: true, printer: usedPrinter });
     } catch (error) {
-      console.error("[print-agent] drawer failed:", error);
-      res.status(500).json({ error: error.message || "Drawer failed" });
+      const safe = sanitizePrintAgentError(error, req.body && req.body.printerName);
+      console.error("[print-agent] drawer failed:", safe);
+      res.status(500).json({ error: safe });
     }
   });
 

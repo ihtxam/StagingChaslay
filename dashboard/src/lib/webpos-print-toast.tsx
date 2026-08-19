@@ -1,18 +1,37 @@
 import toast from 'react-hot-toast';
 import { useState } from 'react';
 
-export function shortPrintErrorMessage(
-  raw: unknown,
-  t: (key: string) => string,
-  fallbackKey = 'webPosPrintFailed'
-): string {
-  const msg = String(
+function extractPrintErrorText(raw: unknown): string {
+  return String(
     (raw as { response?: { data?: { error?: string } }; message?: string })?.response?.data
       ?.error ||
       (raw as { message?: string })?.message ||
       raw ||
       ''
   ).trim();
+}
+
+function extractPrinterName(msg: string): string {
+  const m =
+    msg.match(/Printer '([^']+)' not found/i) ||
+    msg.match(/OpenPrinter failed for '([^']+)'/i) ||
+    msg.match(/failed for '([^']+)'/i);
+  return (m?.[1] || '').trim();
+}
+
+/** True when the raw agent/PowerShell dump should stay hidden. */
+function isNoisyPrintDump(msg: string): boolean {
+  return /win-raw-print|CategoryInfo|FullyQualifiedErrorId|chaslayreborn-print-|manupos-print-|At C:\\|\\Temp\\/i.test(
+    msg
+  );
+}
+
+export function shortPrintErrorMessage(
+  raw: unknown,
+  t: (key: string) => string,
+  fallbackKey = 'webPosPrintFailed'
+): string {
+  const msg = extractPrintErrorText(raw);
   if (!msg) return t(fallbackKey);
   const lower = msg.toLowerCase();
   if (
@@ -25,21 +44,33 @@ export function shortPrintErrorMessage(
   if (/network required|need network|offline —|no internet/i.test(lower)) {
     return t('webPosOfflineNeedNetwork');
   }
+  if (
+    /win32\s*=\s*1801|error_invalid_printer_name|not found or disconnected|openprinter failed/i.test(
+      lower
+    )
+  ) {
+    const name = extractPrinterName(msg);
+    return name
+      ? t('webPosPrinterNotFound').replace('{name}', name)
+      : t('webPosPrinterNotFoundGeneric');
+  }
   if (/onenote|pdf|xps|unsuitable|esc-pos|virtual|corrupted printer/i.test(lower)) {
     return t('webPosPrintPrinterIssueShort');
+  }
+  if (isNoisyPrintDump(msg)) {
+    const name = extractPrinterName(msg);
+    return name
+      ? t('webPosPrinterNotFound').replace('{name}', name)
+      : t(fallbackKey);
   }
   if (msg.length > 100) return `${msg.slice(0, 97)}…`;
   return msg;
 }
 
 function fullPrintErrorDetail(raw: unknown): string {
-  return String(
-    (raw as { response?: { data?: { error?: string } }; message?: string })?.response?.data
-      ?.error ||
-      (raw as { message?: string })?.message ||
-      raw ||
-      ''
-  ).trim();
+  const msg = extractPrintErrorText(raw);
+  if (!msg || isNoisyPrintDump(msg)) return '';
+  return msg;
 }
 
 function PrintErrorToastBody({
