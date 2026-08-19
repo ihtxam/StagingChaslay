@@ -391,6 +391,7 @@ fun PosScreen(
             .background(vectronColors().background)
     ) {
         var mainTab by remember { mutableStateOf(PosMainTab.REGISTER) }
+        var selectedFloorId by remember { mutableStateOf<Long?>(null) }
 
         LaunchedEffect(state.navigateToOrdersTab) {
             if (state.navigateToOrdersTab) {
@@ -487,6 +488,8 @@ fun PosScreen(
                         floorElementsByFloorId = state.floorElementsByFloorId,
                         currencySymbol = state.currencySymbol,
                         activeTableName = state.activeTableName,
+                        selectedFloorId = selectedFloorId,
+                        onSelectFloor = { selectedFloorId = it },
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         onSelectTable = { tableId ->
                             viewModel.openTable(tableId)
@@ -1199,6 +1202,8 @@ private fun OdooTablesScreen(
     floorElementsByFloorId: Map<Long, List<com.chaslay.pos.data.local.entity.FloorPlanElementEntity>>,
     currencySymbol: String,
     activeTableName: String?,
+    selectedFloorId: Long?,
+    onSelectFloor: (Long) -> Unit,
     modifier: Modifier = Modifier,
     onSelectTable: (Long) -> Unit,
     onWalkIn: () -> Unit
@@ -1220,8 +1225,12 @@ private fun OdooTablesScreen(
             }
         }
     }
-    var selectedFloor by remember(tables) { mutableIntStateOf(0) }
-    val safeFloorIndex = selectedFloor.coerceIn(0, floorGroups.lastIndex.coerceAtLeast(0))
+    val resolvedFloorId = selectedFloorId?.takeIf { id ->
+        floorGroups.any { group -> group.second.firstOrNull()?.floorId == id }
+    } ?: floorGroups.firstOrNull()?.second?.firstOrNull()?.floorId
+    val safeFloorIndex = floorGroups.indexOfFirst { group ->
+        group.second.firstOrNull()?.floorId == resolvedFloorId
+    }.takeIf { it >= 0 } ?: 0
     val floorTables = floorGroups.getOrNull(safeFloorIndex)?.second.orEmpty()
     val floorId = floorTables.firstOrNull()?.floorId ?: 1L
     val planElements = floorElementsByFloorId[floorId].orEmpty().map { element ->
@@ -1249,8 +1258,10 @@ private fun OdooTablesScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             floorGroups.forEachIndexed { index, (name, _) ->
                 FilterChip(
-                    selected = selectedFloor == index,
-                    onClick = { selectedFloor = index },
+                    selected = safeFloorIndex == index,
+                    onClick = {
+                        floorGroups.getOrNull(index)?.second?.firstOrNull()?.floorId?.let(onSelectFloor)
+                    },
                     label = { Text(name, fontSize = 12.sp) }
                 )
             }

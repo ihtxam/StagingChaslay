@@ -88,6 +88,7 @@ fun WaiterPosScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     var tab by remember { mutableStateOf(WaiterTab.TABLES) }
+    var selectedFloorIndex by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(state.snackbarMessage) {
         state.snackbarMessage?.let { msg ->
@@ -176,6 +177,8 @@ fun WaiterPosScreen(
                     tables = state.tables,
                     currencySymbol = state.currencySymbol,
                     activeTableName = state.activeTableName,
+                    selectedFloorIndex = selectedFloorIndex,
+                    onSelectFloor = { selectedFloorIndex = it },
                     onSelectTable = { tableId ->
                         viewModel.openTable(tableId)
                         tab = WaiterTab.ORDER
@@ -297,6 +300,8 @@ private fun WaiterTablesPanel(
     tables: List<TableWithOrderInfo>,
     currencySymbol: String,
     activeTableName: String?,
+    selectedFloorIndex: Int,
+    onSelectFloor: (Int) -> Unit,
     onSelectTable: (Long) -> Unit
 ) {
     val mainFloorLabel = stringResource(R.string.main_floor)
@@ -312,7 +317,7 @@ private fun WaiterTablesPanel(
             )
         }
     }
-    var selectedFloor by remember(tables) { mutableIntStateOf(0) }
+    val selectedFloor = selectedFloorIndex.coerceIn(0, floorPairs.lastIndex.coerceAtLeast(0))
     val floorTables = floorPairs.getOrElse(selectedFloor) { floorPairs.first() }.second
 
     Column(
@@ -324,7 +329,7 @@ private fun WaiterTablesPanel(
             floorPairs.forEachIndexed { index, (name, _) ->
                 FilterChip(
                     selected = selectedFloor == index,
-                    onClick = { selectedFloor = index },
+                    onClick = { onSelectFloor(index) },
                     label = { Text(name, fontSize = 12.sp) }
                 )
             }

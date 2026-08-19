@@ -534,7 +534,10 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           <button
             key={key}
             type="button"
-            onClick={() => setTab(key)}
+            onClick={() => {
+              setTab(key);
+              if (key === 'tables') setOrdersRefresh((n) => n + 1);
+            }}
             className={`flex flex-1 flex-col items-center gap-1 py-3 text-xs ${
               tab === key ? 'text-emerald-400' : 'text-stone-500'
             }`}

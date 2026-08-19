@@ -34,6 +34,26 @@ const STATUS_COLOR: Record<TableStatus, string> = {
   dirty: '#94a3b8',
 };
 
+/** Survives Tables → register → Tables remounts in the same tab session. */
+const SELECTED_FLOOR_KEY = 'manupos_webpos_selected_floor_id';
+
+function readSelectedFloorId(): string | null {
+  try {
+    const value = sessionStorage.getItem(SELECTED_FLOOR_KEY);
+    return value && value.length > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSelectedFloorId(id: string) {
+  try {
+    sessionStorage.setItem(SELECTED_FLOOR_KEY, id);
+  } catch {
+    /* private mode / quota */
+  }
+}
+
 type Props = {
   onSelectTable?: (table: { id: string; label: string }) => void;
   selectedTableId?: string | null;
@@ -58,7 +78,12 @@ export default function WebPosTablesView({
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<FloorPlanData[]>([]);
-  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [activePlanId, setActivePlanId] = useState<string | null>(readSelectedFloorId);
+
+  const selectFloor = useCallback((id: string) => {
+    setActivePlanId(id);
+    writeSelectedFloorId(id);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,7 +92,11 @@ export default function WebPosTablesView({
       const list: FloorPlanData[] = res.data.plans || [];
       setPlans(list);
       if (list.length) {
-        setActivePlanId((prev) => (prev && list.some((p) => p.id === prev) ? prev : list[0]!.id));
+        setActivePlanId((prev) => {
+          const next = prev && list.some((p) => p.id === prev) ? prev : list[0]!.id;
+          writeSelectedFloorId(next);
+          return next;
+        });
       }
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosLoadFailed'));
@@ -109,7 +138,7 @@ export default function WebPosTablesView({
             <button
               key={p.id}
               type="button"
-              onClick={() => setActivePlanId(p.id)}
+              onClick={() => selectFloor(p.id)}
               className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
                 p.id === activePlanId
                   ? 'bg-[var(--webpos-accent)] text-white'
