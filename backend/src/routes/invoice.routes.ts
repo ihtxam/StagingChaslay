@@ -3,11 +3,35 @@ import { InvoiceService, isInvoicePaymentMethod } from "@/services/invoice.servi
 
 const router = Router();
 
-function sendPdf(res: Response, pdf: { buffer: Buffer; filename: string }) {
+function sendPdf(
+  res: Response,
+  pdf: { buffer: Buffer; filename: string },
+  download = false
+) {
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="${pdf.filename}"`);
+  res.setHeader(
+    "Content-Disposition",
+    `${download ? "attachment" : "inline"}; filename="${pdf.filename}"`
+  );
   res.setHeader("Content-Length", String(pdf.buffer.length));
   res.send(pdf.buffer);
+}
+
+/** GET /api/merchant/invoices */
+export async function merchantListInvoices(req: Request, res: Response) {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const invoices = await InvoiceService.list(merchantId, {
+      status: String(req.query.status || "all"),
+      q: String(req.query.q || ""),
+      limit: Number(req.query.limit || 200),
+    });
+    res.json({ success: true, invoices });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to list invoices";
+    res.status(400).json({ error: msg });
+  }
 }
 
 /** GET /api/merchant/orders/:orderId/invoice.pdf */
@@ -16,7 +40,8 @@ export async function merchantInvoicePdf(req: Request, res: Response) {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
     const pdf = await InvoiceService.renderPdf(merchantId, String(req.params.orderId));
-    sendPdf(res, pdf);
+    const download = String(req.query.download || "") === "1";
+    sendPdf(res, pdf, download);
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Failed to generate invoice";
     const code = msg === "Order not found" ? 404 : 400;

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
 import {
@@ -36,7 +37,6 @@ import {
   formatOrderPaymentDisplay,
   isAwaitingApproval,
   isInvoiceOrder,
-  isOnlineShopOrder,
   isPaidOrder,
   orderChannelBadgeClass,
   orderChannelHeaderClass,
@@ -475,7 +475,16 @@ export default function WebPosOrdersPanel({
     if (searchQ) params.set('q', searchQ);
     const heldPromise = api.get('/merchant/pos/held');
     const ordersPromise = api.get(`/merchant/pos/orders?${params.toString()}`);
-    const [heldRes, ordersRes] = await Promise.allSettled([heldPromise, ordersPromise]);
+    const invoiceUrl =
+      channelFilter === 'invoice'
+        ? '/merchant/invoices?limit=200'
+        : '/merchant/invoices?status=unpaid&limit=200';
+    const invoicePromise = api.get(invoiceUrl);
+    const [heldRes, ordersRes, invoiceRes] = await Promise.allSettled([
+      heldPromise,
+      ordersPromise,
+      invoicePromise,
+    ]);
     let nextHeld: HeldRow[] = [];
     let nextOrders: PosOrder[] = [];
     if (heldRes.status === 'fulfilled') {
@@ -491,6 +500,14 @@ export default function WebPosOrdersPanel({
     } else if (heldRes.status === 'fulfilled') {
       toast.error(t('webPosOrdersLoadFailed'));
       console.warn('[WebPOS][orders] pos orders list failed', ordersRes.reason);
+    }
+    if (invoiceRes.status === 'fulfilled') {
+      const extra = (invoiceRes.value.data.invoices || []) as PosOrder[];
+      const map = new Map(nextOrders.map((o) => [o.id, o]));
+      for (const o of extra) {
+        if (o?.id && !map.has(o.id)) map.set(o.id, o);
+      }
+      nextOrders = [...map.values()];
     }
     const localRows = localHeldRowsFromSession().filter((row): row is NonNullable<typeof row> => !!row);
     for (const local of localRows) {
@@ -518,7 +535,7 @@ export default function WebPosOrdersPanel({
     setHeld(nextHeld);
     setOrders(nextOrders);
     setLoading(false);
-  }, [t, searchQ]);
+  }, [t, searchQ, channelFilter]);
 
   useEffect(() => {
     if (open) void load();
@@ -947,7 +964,8 @@ export default function WebPosOrdersPanel({
     const showCancel = !!(canCancel && canCancelOrder(order));
     const showRefund = !!(canRefund && canRefundOrder(order));
     const showEditPay = canEditPayment(order);
-    if (!showPrint && !showCancel && !showRefund && !showEditPay) return null;
+    const showInvoice = isInvoiceOrder(order);
+    if (!showPrint && !showCancel && !showRefund && !showEditPay && !showInvoice) return null;
     if (!opts.anchor) return null;
     return (
       <PortaledActionMenu
@@ -955,6 +973,23 @@ export default function WebPosOrdersPanel({
         align={opts.align}
         onClose={opts.onClose}
       >
+        {showInvoice ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={() => {
+              opts.onClose();
+              void downloadInvoicePdf(order.id, order.invoiceNumber ? `${order.invoiceNumber}.pdf` : undefined).catch(
+                () => toast.error(t('webPosInvoicePdfFailed'))
+              );
+            }}
+          >
+            <FileText size={14} className="shrink-0 text-stone-500" />
+            {t('webPosDownloadInvoice')}
+            {order.invoiceNumber ? ` · ${order.invoiceNumber}` : ''}
+          </button>
+        ) : null}
         {showPrint ? (
           <button
             type="button"
@@ -1876,32 +1911,43 @@ export default function WebPosOrdersPanel({
                       · {money(selectedOrder.total)}
                     </button>
                     ) : null}
-                    {selectedOrder.paymentMethod === 'invoice' || selectedOrder.invoiceNumber ? (
-                      <button
-                        type="button"
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
-                        onClick={() => {
-                          void (async () => {
-                            try {
-                              const res = await api.get(
-                                `/merchant/orders/${selectedOrder.id}/invoice.pdf`,
-                                { responseType: 'blob' }
-                              );
-                              const url = URL.createObjectURL(
-                                new Blob([res.data], { type: 'application/pdf' })
-                              );
-                              window.open(url, '_blank', 'noopener');
-                            } catch {
-                              toast.error(t('webPosInvoicePdfFailed'));
-                            }
-                          })();
-                        }}
-                      >
-                        <FileText size={16} />
-                        {t('webPosDownloadInvoice')}
-                        {selectedOrder.invoiceNumber ? ` · ${selectedOrder.invoiceNumber}` : ''}
-                      </button>
+                  </div>
+                ) : null}
+                {isInvoiceOrder(selectedOrder) ? (
+                  <div className="space-y-2 border-t border-stone-200 p-3">
+                    {selectedOrder.invoiceNumber ? (
+                      <p className="text-xs font-semibold text-stone-600">
+                        {t('invoicesNumber')}: {selectedOrder.invoiceNumber}
+                        {' · '}
+                        {isPaidOrder(selectedOrder) ? t('invoiceStatusPaid') : t('invoiceStatusUnpaid')}
+                      </p>
                     ) : null}
+                    <button
+                      type="button"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+                      onClick={() => {
+                        void viewInvoicePdf(selectedOrder.id).catch(() =>
+                          toast.error(t('webPosInvoicePdfFailed'))
+                        );
+                      }}
+                    >
+                      <FileText size={16} />
+                      {t('webPosViewInvoice')}
+                      {selectedOrder.invoiceNumber ? ` · ${selectedOrder.invoiceNumber}` : ''}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 py-2.5 text-sm font-semibold text-indigo-900 hover:bg-indigo-100"
+                      onClick={() => {
+                        void downloadInvoicePdf(
+                          selectedOrder.id,
+                          selectedOrder.invoiceNumber ? `${selectedOrder.invoiceNumber}.pdf` : undefined
+                        ).catch(() => toast.error(t('webPosInvoicePdfFailed')));
+                      }}
+                    >
+                      <FileText size={16} />
+                      {t('webPosDownloadInvoice')}
+                    </button>
                   </div>
                 ) : null}
               </>

@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { getDb, schema } from "@/db";
@@ -190,6 +190,106 @@ export class InvoiceService {
       .where(eq(schema.orders.id, orderId));
 
     return invoiceNumber;
+  }
+
+  static async list(
+    merchantId: string,
+    opts: { status?: string; q?: string; limit?: number } = {}
+  ) {
+    const db = getDb();
+    const limit = Math.min(Math.max(Number(opts.limit) || 100, 1), 200);
+    const pay = String(opts.status || "all").toLowerCase();
+    const conditions = [
+      eq(schema.orders.merchantId, merchantId),
+      or(isNotNull(schema.orders.invoiceNumber), eq(schema.orders.paymentMethod, "invoice"))!,
+    ];
+
+    if (pay === "unpaid") {
+      conditions.push(
+        and(
+          or(
+            eq(schema.orders.paymentStatus, "awaiting_payment"),
+            eq(schema.orders.paymentStatus, "pending")
+          )!,
+          sql`lower(coalesce(${schema.orders.status}, '')) not in ('cancelled', 'refunded')`
+        )!
+      );
+    } else if (pay === "paid") {
+      conditions.push(
+        or(
+          eq(schema.orders.paymentStatus, "completed"),
+          eq(schema.orders.paymentStatus, "paid"),
+          eq(schema.orders.paymentStatus, "partially_refunded")
+        )!
+      );
+    }
+
+    const q = String(opts.q || "").trim();
+    if (q) {
+      conditions.push(
+        or(
+          ilike(schema.orders.invoiceNumber, `%${q}%`),
+          ilike(schema.orders.orderNumber, `%${q}%`),
+          ilike(schema.orders.customerName, `%${q}%`),
+          ilike(schema.orders.customerPhone, `%${q}%`),
+          ilike(schema.orders.customerEmail, `%${q}%`)
+        )!
+      );
+    }
+
+    const rows = await db.query.orders.findMany({
+      where: and(...conditions),
+      with: { items: { with: { product: true } }, customer: true },
+      orderBy: [desc(schema.orders.invoiceIssuedAt), desc(schema.orders.createdAt)],
+      limit,
+    });
+
+    return rows.map((o) => {
+      const customerName =
+        o.customerName ||
+        [o.customer?.firstName, o.customer?.lastName].filter(Boolean).join(" ") ||
+        null;
+      return {
+        id: o.id,
+        orderNumber: o.orderNumber,
+        orderType: o.orderType,
+        status: o.status,
+        channel: o.fulfillmentChannel,
+        fulfillmentChannel: o.fulfillmentChannel,
+        paymentMethod: o.paymentMethod,
+        paymentBreakdown: o.paymentBreakdown ?? null,
+        paymentStatus: o.paymentStatus,
+        invoiceNumber: o.invoiceNumber || null,
+        invoiceIssuedAt: o.invoiceIssuedAt || null,
+        invoiceDueAt: o.invoiceDueAt || null,
+        total: Number(o.total),
+        subtotal: Number(o.subtotal),
+        taxAmount: Number(o.taxAmount),
+        discountAmount: Number(o.discountAmount || 0),
+        tipAmount: Number(o.tipAmount || 0),
+        refundAmount: Number(o.refundAmount || 0),
+        customerName,
+        customerPhone: o.customerPhone || o.customer?.phone || null,
+        customerEmail: o.customerEmail || o.customer?.email || null,
+        shippingAddress: o.shippingAddress,
+        staffName: o.staffName,
+        notes: o.notes,
+        createdAt: o.createdAt,
+        completedAt: o.completedAt,
+        scheduledFor: o.scheduledFor,
+        items: (o.items || []).map((i) => ({
+          id: i.id,
+          name: i.productName || i.product?.name,
+          productName: i.productName,
+          quantity: Number(i.quantity),
+          unitPrice: Number(i.unitPrice),
+          totalPrice: Number(i.totalPrice),
+          selectedExtras: i.selectedExtras,
+          comboSelections: i.comboSelections,
+          product: i.product,
+        })),
+      };
+    });
   }
 
   static async findOrder(merchantId: string, ref: string) {

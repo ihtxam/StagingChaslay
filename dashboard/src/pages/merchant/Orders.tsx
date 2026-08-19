@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Filter, Printer, RefreshCw, Search, ShoppingBag, X } from 'lucide-react';
+import { Download, FileText, Filter, Printer, RefreshCw, Search, ShoppingBag, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
   canAdminCollectPayment,
@@ -13,6 +15,7 @@ import {
   isInvoiceOrder,
   isKitchenTypeOrder,
   isOnlineShopOrder,
+  isPaidOrder,
   orderSourceLabel,
   orderChannel,
   ONLINE_CHANNEL_BORDER,
@@ -87,21 +90,29 @@ function matchesTypeFilter(o: MerchantOrder, filter: TypeFilter) {
   return orderChannel(o) === filter;
 }
 
-export default function Orders() {
+type InvoicePayFilter = 'all' | 'unpaid' | 'paid';
+
+export default function Orders({ invoiceLedger = false }: { invoiceLedger?: boolean }) {
   const { t, formatDateTime, locale } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<MerchantOrder | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const [dateFrom, setDateFrom] = useState(todayIso);
   const [dateTo, setDateTo] = useState(todayIso);
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(
+    invoiceLedger || searchParams.get('type') === 'invoice' ? 'invoice' : 'all'
+  );
+  const [invoicePayFilter, setInvoicePayFilter] = useState<InvoicePayFilter>('all');
   const [staffFilter, setStaffFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [searchQ, setSearchQ] = useState('');
+  const showingInvoices = invoiceLedger || typeFilter === 'invoice';
 
   const [staffList, setStaffList] = useState<Array<{ id: string; name: string }>>([]);
   const [merchant, setMerchant] = useState<{
@@ -150,21 +161,29 @@ export default function Orders() {
 
   const load = useCallback(async () => {
     try {
-      const params = new URLSearchParams({
-        limit: '200',
-        from: dateFrom,
-        to: dateTo,
-      });
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      if (searchQ) params.set('q', searchQ);
-      const response = await api.get(`/merchant/pos/orders?${params.toString()}`);
-      setOrders((response.data.orders || []) as MerchantOrder[]);
+      if (showingInvoices) {
+        const params = new URLSearchParams({ limit: '200' });
+        if (invoicePayFilter !== 'all') params.set('status', invoicePayFilter);
+        if (searchQ) params.set('q', searchQ);
+        const response = await api.get(`/merchant/invoices?${params.toString()}`);
+        setOrders((response.data.invoices || []) as MerchantOrder[]);
+      } else {
+        const params = new URLSearchParams({
+          limit: '200',
+          from: dateFrom,
+          to: dateTo,
+        });
+        if (statusFilter !== 'all') params.set('status', statusFilter);
+        if (searchQ) params.set('q', searchQ);
+        const response = await api.get(`/merchant/pos/orders?${params.toString()}`);
+        setOrders((response.data.orders || []) as MerchantOrder[]);
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('ordersLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, statusFilter, searchQ, t]);
+  }, [dateFrom, dateTo, statusFilter, searchQ, showingInvoices, invoicePayFilter, t]);
 
   useEffect(() => {
     const id = window.setTimeout(() => setSearchQ(search.trim()), 300);
@@ -201,11 +220,16 @@ export default function Orders() {
     const q = search.trim().toLowerCase();
     return orders
       .filter((o) => {
-        if (paymentFilter !== 'all' && (o.paymentMethod || '').toLowerCase() !== paymentFilter) {
+        if (paymentFilter === 'invoice') {
+          if (!isInvoiceOrder(o)) return false;
+        } else if (
+          paymentFilter !== 'all' &&
+          (o.paymentMethod || '').toLowerCase() !== paymentFilter
+        ) {
           return false;
         }
-        if (!matchesTypeFilter(o, typeFilter)) return false;
-        if (!matchesChannelFilter(o, channelFilter)) return false;
+        if (!showingInvoices && !matchesTypeFilter(o, typeFilter)) return false;
+        if (!showingInvoices && !matchesChannelFilter(o, channelFilter)) return false;
         if (staffFilter !== 'all') {
           const staffRow = staffList.find((s) => s.id === staffFilter);
           const target = staffRow?.name || staffFilter;
@@ -215,7 +239,31 @@ export default function Orders() {
         return true;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [orders, paymentFilter, typeFilter, channelFilter, staffFilter, staffList, search]);
+  }, [
+    orders,
+    paymentFilter,
+    typeFilter,
+    channelFilter,
+    staffFilter,
+    staffList,
+    search,
+    showingInvoices,
+  ]);
+
+  const openInvoice = async (order: MerchantOrder, mode: 'view' | 'download') => {
+    setPdfBusy(true);
+    try {
+      if (mode === 'download') {
+        await downloadInvoicePdf(order.id, order.invoiceNumber ? `${order.invoiceNumber}.pdf` : undefined);
+      } else {
+        await viewInvoicePdf(order.id);
+      }
+    } catch {
+      toast.error(t('webPosInvoicePdfFailed'));
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   const openDetail = async (order: MerchantOrder) => {
     setCollectOpen(false);
@@ -271,25 +319,39 @@ export default function Orders() {
     }
   };
 
+  const setTypeTab = (id: TypeFilter) => {
+    setTypeFilter(id);
+    if (invoiceLedger) return;
+    if (id === 'invoice') {
+      setSearchParams({ type: 'invoice' }, { replace: true });
+    } else if (searchParams.get('type')) {
+      setSearchParams({}, { replace: true });
+    }
+  };
+
   const clearFilters = () => {
     setDateFrom(todayIso());
     setDateTo(todayIso());
     setStatusFilter('all');
     setPaymentFilter('all');
     setChannelFilter('all');
-    setTypeFilter('all');
+    setTypeFilter(invoiceLedger ? 'invoice' : 'all');
+    setInvoicePayFilter('all');
     setStaffFilter('all');
     setSearch('');
+    if (!invoiceLedger && searchParams.get('type')) {
+      setSearchParams({}, { replace: true });
+    }
   };
 
   const hasActiveFilters =
     paymentFilter !== 'all' ||
-    typeFilter !== 'all' ||
+    (!invoiceLedger && typeFilter !== 'all') ||
     channelFilter !== 'all' ||
     staffFilter !== 'all' ||
+    invoicePayFilter !== 'all' ||
     search.trim() !== '' ||
-    dateFrom !== todayIso() ||
-    dateTo !== todayIso();
+    (!showingInvoices && (dateFrom !== todayIso() || dateTo !== todayIso()));
 
   if (loading && orders.length === 0) {
     return <div className="text-center py-10 muted text-sm">{t('ordersLoading')}</div>;
@@ -298,8 +360,8 @@ export default function Orders() {
   return (
     <div className="space-y-4 max-w-6xl">
       <SettingsPageHeader
-        title={t('orders')}
-        subtitle={t('ordersManageHint')}
+        title={showingInvoices ? t('invoicesTitle') : t('orders')}
+        subtitle={showingInvoices ? t('invoicesHint') : t('ordersManageHint')}
         action={
           <button
             type="button"
@@ -320,6 +382,8 @@ export default function Orders() {
         description={t('ordersFilterHint')}
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {showingInvoices ? null : (
+            <>
           <SettingsField label={t('ordersFilterFrom')}>
             <input
               type="date"
@@ -336,6 +400,8 @@ export default function Orders() {
               onChange={(e) => setDateTo(e.target.value)}
             />
           </SettingsField>
+            </>
+          )}
           <SettingsField label={t('webPosSearchOrders')}>
             <div className="relative">
               <Search
@@ -351,6 +417,8 @@ export default function Orders() {
               />
             </div>
           </SettingsField>
+          {showingInvoices ? null : (
+            <>
           <SettingsField label={t('ordersFilterStatus')}>
             <select
               className="input w-full"
@@ -388,7 +456,7 @@ export default function Orders() {
             <select
               className="input w-full"
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+              onChange={(e) => setTypeTab(e.target.value as TypeFilter)}
             >
               <option value="all">{t('ordersAllTypes')}</option>
               <option value="kitchen">{t('ordersTabKitchen')}</option>
@@ -412,6 +480,8 @@ export default function Orders() {
               <option value="online">{t('webPosOnlineOrders')}</option>
             </select>
           </SettingsField>
+            </>
+          )}
           <SettingsField label={t('ordersFilterStaff')}>
             <select
               className="input w-full"
@@ -446,6 +516,7 @@ export default function Orders() {
         </div>
       </SettingsReportCard>
 
+      {invoiceLedger ? null : (
       <div className="flex flex-wrap gap-1.5">
         {(
           [
@@ -461,7 +532,7 @@ export default function Orders() {
           <button
             key={id}
             type="button"
-            onClick={() => setTypeFilter(id)}
+            onClick={() => setTypeTab(id)}
             className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
               typeFilter === id
                 ? 'border-slate-900 bg-slate-900 text-white'
@@ -472,6 +543,32 @@ export default function Orders() {
           </button>
         ))}
       </div>
+      )}
+
+      {showingInvoices ? (
+        <div className="flex flex-wrap gap-1.5">
+          {(
+            [
+              ['all', t('invoicesAll')],
+              ['unpaid', t('invoicesUnpaid')],
+              ['paid', t('invoicesPaid')],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setInvoicePayFilter(id)}
+              className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                invoicePayFilter === id
+                  ? 'border-indigo-700 bg-indigo-700 text-white'
+                  : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-indigo-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-2.5 text-[11px] font-medium text-[var(--text-muted)]">
         <span className="inline-flex items-center gap-1">
@@ -491,18 +588,22 @@ export default function Orders() {
       <div className="grid gap-2.5 sm:grid-cols-2">
         {list.length === 0 && (
           <div className="col-span-full rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-elevated)] py-12 text-center text-sm text-[var(--text-muted)]">
-            {t('ordersEmpty')}
+            {showingInvoices ? t('invoicesEmpty') : t('ordersEmpty')}
           </div>
         )}
         {list.map((order) => {
           const ch = orderChannel(order);
           const refs = orderPublicRefs(order);
           const online = isOnlineShopOrder(order);
-          const title =
-            refs.ticketDisplay ||
-            (refs.tabNumber ? `#${refs.tabNumber}` : null) ||
-            formatOrderNumberDisplay(order.orderNumber) ||
-            order.id.slice(0, 8);
+          const title = showingInvoices
+            ? order.invoiceNumber ||
+              formatOrderNumberDisplay(order.orderNumber) ||
+              order.id.slice(0, 8)
+            : refs.ticketDisplay ||
+              (refs.tabNumber ? `#${refs.tabNumber}` : null) ||
+              formatOrderNumberDisplay(order.orderNumber) ||
+              order.id.slice(0, 8);
+          const invoicePaid = isPaidOrder(order);
           return (
             <article
               key={order.id}
@@ -553,8 +654,12 @@ export default function Orders() {
                 </span>
                 {isInvoiceOrder(order) ? (
                   <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-indigo-800">
-                    {t('webPosInvoice')}
-                    {order.invoiceNumber ? ` ${order.invoiceNumber}` : ''}
+                    {showingInvoices
+                      ? invoicePaid
+                        ? t('invoiceStatusPaid')
+                        : t('invoiceStatusUnpaid')
+                      : t('webPosInvoice')}
+                    {!showingInvoices && order.invoiceNumber ? ` ${order.invoiceNumber}` : ''}
                   </span>
                 ) : null}
                 {isAwaitingPaymentOrder(order) ? (
@@ -578,6 +683,20 @@ export default function Orders() {
                   {order.customerPhone ? ` · ${order.customerPhone}` : ''}
                 </p>
               )}
+              {isInvoiceOrder(order) ? (
+                <button
+                  type="button"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-semibold hover:bg-[var(--bg-muted)]"
+                  disabled={pdfBusy}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void openInvoice(order, 'download');
+                  }}
+                >
+                  <Download size={12} />
+                  {t('webPosDownloadInvoice')}
+                </button>
+              ) : null}
             </article>
           );
         })}
@@ -629,6 +748,14 @@ export default function Orders() {
                   <p>
                     <span className="text-[var(--text-muted)]">{t('ordersAddress')}:</span>{' '}
                     {selected.shippingAddress}
+                  </p>
+                ) : null}
+                {isInvoiceOrder(selected) ? (
+                  <p>
+                    <span className="text-[var(--text-muted)]">{t('invoicesNumber')}:</span>{' '}
+                    {selected.invoiceNumber || '—'}
+                    {' · '}
+                    {isPaidOrder(selected) ? t('invoiceStatusPaid') : t('invoiceStatusUnpaid')}
                   </p>
                 ) : null}
                 <p>
@@ -699,6 +826,28 @@ export default function Orders() {
 
               <SettingsReportCard icon={ShoppingBag} accent={settingsDash.accent} title={t('ordersActionsTitle')}>
                 <div className="space-y-2">
+                  {isInvoiceOrder(selected) ? (
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        disabled={pdfBusy}
+                        onClick={() => void openInvoice(selected, 'view')}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                      >
+                        <FileText size={16} />
+                        {t('webPosViewInvoice')}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pdfBusy}
+                        onClick={() => void openInvoice(selected, 'download')}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-sm font-semibold text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        <Download size={16} />
+                        {t('webPosDownloadInvoice')}
+                      </button>
+                    </div>
+                  ) : null}
                   {isAwaitingApproval(selected.status) ? (
                     <button
                       type="button"

@@ -6,6 +6,8 @@ export type MerchantOrder = PosOrderForReceipt & {
   status: string;
   paymentStatus?: string | null;
   invoiceNumber?: string | null;
+  invoiceIssuedAt?: string | Date | null;
+  invoiceDueAt?: string | Date | null;
   paymentBreakdown?: Array<{ method: string; amount: number }> | null;
   refundAmount: number;
   cancelReason?: string | null;

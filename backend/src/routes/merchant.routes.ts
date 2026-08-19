@@ -1040,9 +1040,15 @@ router.put("/orders/:orderId/status", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/invoices — unpaid + paid invoice orders (all dates)
  * GET /api/merchant/orders/:orderId/invoice.pdf
  * POST /api/merchant/orders/:orderId/record-invoice-payment
  */
+router.get("/invoices", async (req: Request, res: Response) => {
+  const { merchantListInvoices } = await import("@/routes/invoice.routes");
+  return merchantListInvoices(req, res);
+});
+
 router.get("/orders/:orderId/invoice.pdf", async (req: Request, res: Response) => {
   const { merchantInvoicePdf } = await import("@/routes/invoice.routes");
   return merchantInvoicePdf(req, res);
