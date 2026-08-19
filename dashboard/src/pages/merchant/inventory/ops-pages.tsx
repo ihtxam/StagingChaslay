@@ -122,14 +122,21 @@ export function InboundStockPage() {
         ))}
       </select>
       <div className="grid grid-cols-2 gap-2">
-        <input className="input" type="number" min={0.0001} step="any" required placeholder={t('invQty')} value={qty} onChange={(e) => setQty(e.target.value)} />
-        <select className="input" value={unit || selected?.unit || ''} onChange={(e) => setUnit(e.target.value)}>
-          {(units.length ? units : [{ id: 'u', code: selected?.unit || 'kg', name: selected?.unit || 'kg' }]).map((u) => (
-            <option key={u.id} value={u.code}>
-              {u.code}
-            </option>
-          ))}
-        </select>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium">{t('invQty')}</span>
+          <input className="input" type="number" min={0.0001} step="any" required placeholder={t('invOnHandPh')} value={qty} onChange={(e) => setQty(e.target.value)} />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium">{t('invUnit')}</span>
+          <select className="input" value={unit || selected?.unit || ''} onChange={(e) => setUnit(e.target.value)}>
+            {(units.length ? units : [{ id: 'u', code: selected?.unit || 'kg', name: selected?.unit || 'kg' }]).map((u) => (
+              <option key={u.id} value={u.code}>
+                {u.code}
+              </option>
+            ))}
+          </select>
+          <span className="block text-[11px] muted leading-snug">{t('invUnitRatioHint')}</span>
+        </label>
       </div>
       <input className="input" type="number" min={0} step="any" placeholder={t('invUnitCost')} value={cost} onChange={(e) => setCost(e.target.value)} />
       <select className="input" value={supplierName} onChange={(e) => setSupplierName(e.target.value)}>

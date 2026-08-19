@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState, type ReactNode } from 'react';
 import { Mail, Pencil, Plus, Trash2, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -15,13 +15,33 @@ import {
   type UnitRatio,
 } from './shared';
 
+function Field({
+  label,
+  hint,
+  children,
+  className = '',
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`block space-y-1 ${className}`}>
+      <span className="text-xs font-medium">{label}</span>
+      {children}
+      {hint ? <span className="block text-[11px] muted leading-snug">{hint}</span> : null}
+    </label>
+  );
+}
+
 const emptyItem = () => ({
   name: '',
   unit: 'kg',
-  cost: '0',
-  onHand: '0',
-  minStock: '0',
-  reorderQty: '0',
+  cost: '',
+  onHand: '',
+  minStock: '',
+  reorderQty: '',
   supplierId: '',
   categoryId: '',
   perishable: false,
@@ -160,37 +180,116 @@ export function StockItemsPage() {
       </div>
       {modal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-3" onClick={() => setModal(false)}>
-          <form className="w-full max-w-lg rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4 space-y-3" onClick={(e) => e.stopPropagation()} onSubmit={(e) => void save(e)}>
+          <form
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => void save(e)}
+          >
             <h2 className="font-semibold">{editingId ? t('invEditItem') : t('invAddItem')}</h2>
-            <input className="input" required placeholder={t('invItemName')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <div className="grid grid-cols-2 gap-2">
+            <Field label={t('invItemName')}>
+              <input
+                className="input"
+                required
+                placeholder={t('invItemNamePh')}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </Field>
+            <Field label={t('invUnit')} hint={t('invUnitFieldHint')}>
               <select className="input" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}>
                 {(units.length ? units.map((u) => u.code) : ['kg', 'g', 'L', 'ml', 'piece']).map((u) => (
-                  <option key={u} value={u}>{u}</option>
+                  <option key={u} value={u}>
+                    {u === 'piece' ? t('invUnitPiece') : u}
+                  </option>
                 ))}
               </select>
-              <select className="input" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
-                <option value="">{t('invNavCategories')}…</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <input className="input" type="number" min={0} step="any" placeholder={t('invCost')} value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} />
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label={t('invNavCategories')}>
+                <select className="input" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
+                  <option value="">{t('invSelectOptional')}</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t('invPreferredSupplier')}>
+                <select className="input" value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })}>
+                  <option value="">{t('invSelectOptional')}</option>
+                  {suppliers.filter((s) => !s.archivedAt).map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t('invCost')} hint={t('invCostHint')}>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  step="any"
+                  placeholder={t('invCostPh')}
+                  value={form.cost}
+                  onChange={(e) => setForm({ ...form, cost: e.target.value })}
+                />
+              </Field>
               {!editingId && (
-                <input className="input" type="number" min={0} step="any" placeholder={t('invOnHand')} value={form.onHand} onChange={(e) => setForm({ ...form, onHand: e.target.value })} />
+                <Field label={t('invOnHand')} hint={t('invOnHandHint')}>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    step="any"
+                    placeholder={t('invOnHandPh')}
+                    value={form.onHand}
+                    onChange={(e) => setForm({ ...form, onHand: e.target.value })}
+                  />
+                </Field>
               )}
-              <input className="input" type="number" min={0} step="any" placeholder={t('invParLevel')} value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} />
-              <input className="input" type="number" min={0} step="any" placeholder={t('invReorderQty')} value={form.reorderQty} onChange={(e) => setForm({ ...form, reorderQty: e.target.value })} />
+              <Field label={t('invParLevel')} hint={t('invParHint')}>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  step="any"
+                  placeholder={t('invParPh')}
+                  value={form.minStock}
+                  onChange={(e) => setForm({ ...form, minStock: e.target.value })}
+                />
+              </Field>
+              <Field label={t('invReorderQty')} hint={t('invReorderQtyHint')}>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  step="any"
+                  placeholder={t('invReorderQtyPh')}
+                  value={form.reorderQty}
+                  onChange={(e) => setForm({ ...form, reorderQty: e.target.value })}
+                />
+              </Field>
             </div>
-            <select className="input" value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })}>
-              <option value="">{t('invPreferredSupplier')}…</option>
-              {suppliers.filter((s) => !s.archivedAt).map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={form.perishable} onChange={(e) => setForm({ ...form, perishable: e.target.checked })} />
-              {t('invPerishable')}
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={form.perishable}
+                onChange={(e) => setForm({ ...form, perishable: e.target.checked })}
+              />
+              <span>
+                <span className="font-medium">{t('invPerishable')}</span>
+                <span className="block text-[11px] muted">{t('invPerishableHint')}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={form.autoReorderEnabled}
+                onChange={(e) => setForm({ ...form, autoReorderEnabled: e.target.checked })}
+              />
+              <span>
+                <span className="font-medium">{t('invAutoReorderItem')}</span>
+              </span>
             </label>
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => setModal(false)}>{t('cancel')}</button>
@@ -467,13 +566,17 @@ export function UnitsPage() {
       <div className="card space-y-3">
         <h2 className="font-semibold">{t('invNavUnits')}</h2>
         <p className="text-xs muted">{t('invUnitsHint')}</p>
-        <form className="flex gap-2" onSubmit={(e) => {
+        <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => {
           e.preventDefault();
           void api.post('/merchant/inventory/units', { code, name }).then(() => { setCode(''); setName(''); return reload(); });
         }}>
-          <input className="input w-24" required placeholder="kg" value={code} onChange={(e) => setCode(e.target.value)} />
-          <input className="input flex-1" placeholder={t('invUnitName')} value={name} onChange={(e) => setName(e.target.value)} />
-          <button type="submit" className="btn-primary"><Plus size={14} /></button>
+          <Field label={t('invUnitCode')} className="w-24">
+            <input className="input" required placeholder={t('invUnitCodePh')} value={code} onChange={(e) => setCode(e.target.value)} />
+          </Field>
+          <Field label={t('invUnitName')} className="flex-1 min-w-[8rem]">
+            <input className="input" placeholder={t('invUnitNamePh')} value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <button type="submit" className="btn-primary mb-0.5"><Plus size={14} /></button>
         </form>
         {units.map((u) => (
           <div key={u.id} className="flex items-center justify-between text-sm border-t border-[var(--border)] pt-2">
@@ -485,19 +588,24 @@ export function UnitsPage() {
       <div className="card space-y-3">
         <h2 className="font-semibold">{t('invUnitRatio')}</h2>
         <p className="text-xs muted">{t('invUnitRatioHint')}</p>
-        <form className="grid grid-cols-[1fr_auto_1fr_90px_auto] gap-2 items-center" onSubmit={(e) => {
+        <form className="grid grid-cols-2 gap-2" onSubmit={(e) => {
           e.preventDefault();
           void api.post('/merchant/inventory/unit-ratios', { fromCode, toCode, factor: Number(factor) }).then(() => reload());
         }}>
-          <select className="input" value={fromCode} onChange={(e) => setFromCode(e.target.value)}>
-            {units.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
-          </select>
-          <span className="text-xs">=</span>
-          <select className="input" value={toCode} onChange={(e) => setToCode(e.target.value)}>
-            {units.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
-          </select>
-          <input className="input" type="number" min={0.000001} step="any" value={factor} onChange={(e) => setFactor(e.target.value)} />
-          <button type="submit" className="btn-primary"><Plus size={14} /></button>
+          <Field label={t('invFromUnit')}>
+            <select className="input" value={fromCode} onChange={(e) => setFromCode(e.target.value)}>
+              {units.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
+            </select>
+          </Field>
+          <Field label={t('invToUnit')}>
+            <select className="input" value={toCode} onChange={(e) => setToCode(e.target.value)}>
+              {units.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
+            </select>
+          </Field>
+          <Field label={t('invRatioFactor')} hint={t('invRatioFactorHint')} className="col-span-2">
+            <input className="input" type="number" min={0.000001} step="any" placeholder={t('invRatioFactorPh')} value={factor} onChange={(e) => setFactor(e.target.value)} />
+          </Field>
+          <button type="submit" className="btn-primary col-span-2"><Plus size={14} /> {t('invUnitRatio')}</button>
         </form>
         {ratios.map((r) => (
           <div key={r.id} className="flex items-center justify-between text-sm border-t border-[var(--border)] pt-2">
