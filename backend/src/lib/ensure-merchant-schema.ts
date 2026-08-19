@@ -286,6 +286,19 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS inventory_unit_ratios_merchant_idx ON inventory_unit_ratios(merchant_id)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS inventory_unit_ratios_pair_uidx ON inventory_unit_ratios(merchant_id, from_code, to_code)`,
+  `CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    email varchar(255) NOT NULL,
+    role varchar(20) NOT NULL,
+    account_id uuid NOT NULL,
+    token_hash varchar(64) NOT NULL,
+    expires_at timestamptz NOT NULL,
+    used_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS password_reset_tokens_token_hash_idx ON password_reset_tokens(token_hash)`,
+  `CREATE INDEX IF NOT EXISTS password_reset_tokens_email_idx ON password_reset_tokens(email)`,
+  `CREATE INDEX IF NOT EXISTS password_reset_tokens_expires_idx ON password_reset_tokens(expires_at)`,
 ];
 
 let startupPatchPromise: Promise<void> | null = null;

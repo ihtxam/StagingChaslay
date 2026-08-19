@@ -63,6 +63,8 @@ api.interceptors.response.use(
         !path.startsWith('/receipt') &&
         !path.startsWith('/receipts') &&
         !path.startsWith('/set-password') &&
+        !path.startsWith('/reset-password') &&
+        !path.startsWith('/forgot-password') &&
         !path.startsWith('/login') &&
         !path.startsWith('/signin') &&
         path !== '/superadmin/login' &&

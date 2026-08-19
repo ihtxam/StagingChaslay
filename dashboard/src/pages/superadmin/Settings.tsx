@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
 import api from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 
 type Plan = {
   id: string;
@@ -61,7 +62,14 @@ const emptyPlan = {
 };
 
 export default function Settings() {
+  const { t } = useI18n();
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [savingPassword, setSavingPassword] = useState(false);
   const [adyen, setAdyen] = useState<AdyenSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingAdyen, setSavingAdyen] = useState(false);
@@ -184,6 +192,31 @@ export default function Settings() {
     }
   };
 
+  const savePassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (passwordForm.newPassword.length < 8) {
+      toast.error(t('resetPasswordMin'));
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error(t('resetPasswordMismatch'));
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await api.post('/auth/change-own-password', {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      toast.success(t('changePasswordSuccess'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('changePasswordFailed'));
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   const saveAdyen = async (e: FormEvent) => {
     e.preventDefault();
     setSavingAdyen(true);
@@ -211,6 +244,53 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
+      <div className="card">
+        <h1 className="text-2xl font-bold">{t('changePassword')}</h1>
+        <p className="text-gray-600 mt-1 mb-4">{t('changePasswordHint')}</p>
+        <form onSubmit={savePassword} className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl">
+          <label className="block">
+            <span className="text-sm font-medium">{t('changePasswordCurrent')}</span>
+            <input
+              className="input mt-1"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">{t('changePasswordNew')}</span>
+            <input
+              className="input mt-1"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">{t('changePasswordConfirm')}</span>
+            <input
+              className="input mt-1"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+            />
+          </label>
+          <div className="md:col-span-3">
+            <button type="submit" className="btn btn-primary" disabled={savingPassword}>
+              {savingPassword ? t('saving') : t('changePassword')}
+            </button>
+          </div>
+        </form>
+      </div>
+
       <div className="card">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>

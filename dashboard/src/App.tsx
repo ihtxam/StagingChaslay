@@ -8,6 +8,7 @@ import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
 
 import LoginPage from '@/pages/LoginPage';
 import SetPasswordPage from '@/pages/SetPasswordPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import SuperadminDashboard from '@/pages/superadmin/Dashboard';
 import MerchantDashboard from '@/pages/merchant/Dashboard';
 import ResellerDashboard from '@/pages/reseller/Dashboard';
@@ -181,6 +182,26 @@ function App() {
             />
           )}
           {!shopMode && <Route path="/set-password" element={<SetPasswordPage />} />}
+          {!shopMode && (
+            <Route
+              path="/reset-password"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <ResetPasswordPage />
+                </I18nProvider>
+              }
+            />
+          )}
+          {!shopMode && (
+            <Route
+              path="/forgot-password"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
           {!shopMode && <Route path="/pos-embed" element={<PosEmbedPage />} />}
           <Route
             path="/receipt/:saleId"

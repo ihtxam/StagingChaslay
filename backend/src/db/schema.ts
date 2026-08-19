@@ -454,6 +454,26 @@ export const platformSettings = pgTable("platform_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+/** One-time password reset tokens for superadmin / reseller / merchant / staff. */
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: varchar("email", { length: 255 }).notNull(),
+    role: varchar("role", { length: 20 }).notNull(),
+    accountId: uuid("account_id").notNull(),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tokenHashIdx: uniqueIndex("password_reset_tokens_token_hash_idx").on(table.tokenHash),
+    emailIdx: index("password_reset_tokens_email_idx").on(table.email),
+    expiresIdx: index("password_reset_tokens_expires_idx").on(table.expiresAt),
+  })
+);
+
 /** Merchant subscription purchases paid to the platform Adyen account */
 export const subscriptionPayments = pgTable(
   "subscription_payments",

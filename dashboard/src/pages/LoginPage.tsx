@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -97,9 +97,15 @@ function userFromLogin(data: UnifiedLoginResponse): { user: User; token: string 
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t, locale, setLocale } = useI18n();
   const { user, token, setUser, setToken } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
+  const [view, setView] = useState<'login' | 'forgot' | 'sent'>(
+    location.pathname.includes('forgot-password') ? 'forgot' : 'login'
+  );
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   const {
     register,
@@ -155,6 +161,31 @@ export default function LoginPage() {
     }
   };
 
+  const onForgotSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const email = forgotEmail.trim();
+    if (!email || !email.includes('@')) {
+      toast.error(t('loginEmailInvalid'));
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const response = await api.post<{ message?: string }>('/auth/forgot-password', { email });
+      setView('sent');
+      toast.success(response.data?.message || t('forgotPasswordSent'));
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: string }; status?: number } };
+      if (err.response?.status === 429) {
+        toast.error(err.response?.data?.error || t('forgotPasswordRateLimit'));
+      } else {
+        setView('sent');
+        toast.success(t('forgotPasswordSent'));
+      }
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0b3d3a] flex flex-col items-center justify-center p-4">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(15,118,110,0.35),_transparent_55%)] pointer-events-none" />
@@ -181,53 +212,119 @@ export default function LoginPage() {
         </div>
 
         <div className="rounded-2xl bg-white p-8 shadow-2xl">
-          <h2 className="text-lg font-semibold text-slate-900">{t('loginTitle')}</h2>
-          <p className="mt-1 mb-6 text-sm text-slate-500">{t('loginSubtitle')}</p>
+          {view === 'login' && (
+            <>
+              <h2 className="text-lg font-semibold text-slate-900">{t('loginTitle')}</h2>
+              <p className="mt-1 mb-6 text-sm text-slate-500">{t('loginSubtitle')}</p>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="login-email">
-                {t('loginEmail')}
-              </label>
-              <input
-                id="login-email"
-                {...register('email')}
-                type="email"
-                placeholder="name@company.com"
-                className="input py-2.5"
-                autoComplete="username"
-                autoFocus
-              />
-              {errors.email && (
-                <p className="text-red-500 text-sm mt-1">{t('loginEmailInvalid')}</p>
-              )}
-            </div>
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="login-email">
+                    {t('loginEmail')}
+                  </label>
+                  <input
+                    id="login-email"
+                    {...register('email')}
+                    type="email"
+                    placeholder="name@company.com"
+                    className="input py-2.5"
+                    autoComplete="username"
+                    autoFocus
+                  />
+                  {errors.email && (
+                    <p className="text-red-500 text-sm mt-1">{t('loginEmailInvalid')}</p>
+                  )}
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="login-password">
-                {t('password')}
-              </label>
-              <input
-                id="login-password"
-                {...register('password')}
-                type="password"
-                placeholder="••••••••"
-                className="input py-2.5"
-                autoComplete="current-password"
-              />
-              {errors.password && (
-                <p className="text-red-500 text-sm mt-1">{t('loginPasswordMin')}</p>
-              )}
-            </div>
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-3">
+                    <label className="block text-sm font-medium text-slate-700" htmlFor="login-password">
+                      {t('password')}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setView('forgot')}
+                      className="text-sm font-medium text-teal-800 hover:underline"
+                    >
+                      {t('forgotPassword')}
+                    </button>
+                  </div>
+                  <input
+                    id="login-password"
+                    {...register('password')}
+                    type="password"
+                    placeholder="••••••••"
+                    className="input py-2.5"
+                    autoComplete="current-password"
+                  />
+                  {errors.password && (
+                    <p className="text-red-500 text-sm mt-1">{t('loginPasswordMin')}</p>
+                  )}
+                </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full rounded-lg bg-teal-800 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
-            >
-              {isLoading ? t('loginSigningIn') : t('loginSignIn')}
-            </button>
-          </form>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full rounded-lg bg-teal-800 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                >
+                  {isLoading ? t('loginSigningIn') : t('loginSignIn')}
+                </button>
+              </form>
+            </>
+          )}
+
+          {view === 'forgot' && (
+            <>
+              <h2 className="text-lg font-semibold text-slate-900">{t('forgotPasswordTitle')}</h2>
+              <p className="mt-1 mb-6 text-sm text-slate-500">{t('forgotPasswordHint')}</p>
+              <form onSubmit={onForgotSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="forgot-email">
+                    {t('loginEmail')}
+                  </label>
+                  <input
+                    id="forgot-email"
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="name@company.com"
+                    className="input py-2.5"
+                    autoComplete="username"
+                    autoFocus
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full rounded-lg bg-teal-800 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                >
+                  {forgotLoading ? t('forgotPasswordSending') : t('forgotPasswordSubmit')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView('login')}
+                  className="w-full text-sm font-medium text-slate-600 hover:text-slate-900"
+                >
+                  {t('forgotPasswordBack')}
+                </button>
+              </form>
+            </>
+          )}
+
+          {view === 'sent' && (
+            <>
+              <h2 className="text-lg font-semibold text-slate-900">{t('forgotPasswordTitle')}</h2>
+              <p className="mt-3 text-sm text-slate-600">{t('forgotPasswordSent')}</p>
+              <button
+                type="button"
+                onClick={() => setView('login')}
+                className="mt-6 w-full rounded-lg bg-teal-800 py-2.5 text-sm font-semibold text-white hover:bg-teal-700"
+              >
+                {t('forgotPasswordBack')}
+              </button>
+            </>
+          )}
         </div>
 
         <div className="mt-6 flex items-center justify-center gap-1" role="group" aria-label={t('language')}>
