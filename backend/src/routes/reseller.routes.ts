@@ -239,6 +239,49 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
 });
 
 /**
+ * POST /api/reseller/merchants/:merchantId/suspend
+ * Reseller-owned merchants only — same status flag as superadmin suspend.
+ */
+router.post("/merchants/:merchantId/suspend", async (req: Request, res: Response) => {
+  try {
+    const merchant = await ResellerService.suspendOwnedMerchant(
+      resellerId(req),
+      req.params.merchantId,
+      typeof req.body?.reason === "string" ? req.body.reason : undefined
+    );
+    res.json({
+      success: true,
+      message: "Merchant suspended successfully",
+      merchant,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to suspend merchant";
+    res.status(message === "Merchant not found" ? 404 : 400).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/reseller/merchants/:merchantId/reactivate
+ * Unsuspend a reseller-owned merchant.
+ */
+router.post("/merchants/:merchantId/reactivate", async (req: Request, res: Response) => {
+  try {
+    const merchant = await ResellerService.reactivateOwnedMerchant(
+      resellerId(req),
+      req.params.merchantId
+    );
+    res.json({
+      success: true,
+      message: "Merchant reactivated successfully",
+      merchant,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to reactivate merchant";
+    res.status(message === "Merchant not found" ? 404 : 400).json({ error: message });
+  }
+});
+
+/**
  * POST /api/reseller/merchants/:merchantId/impersonate
  */
 router.post("/merchants/:merchantId/impersonate", async (req: Request, res: Response) => {

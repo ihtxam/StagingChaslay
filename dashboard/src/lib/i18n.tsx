@@ -701,6 +701,11 @@ const en: Dict = {
   resellerPurgeFailed: 'Failed to purge sales data',
   resellerPurging: 'Purging…',
   resellerInsufficientSeats: 'Not enough license seats in your pool',
+  resellerSuspendConfirm:
+    'Suspend {name}? They will not be able to log in, use POS, or the online shop until you reactivate them.',
+  resellerReactivateConfirm: 'Reactivate {name} and restore login, POS, and shop access?',
+  resellerMerchantSuspended: 'Merchant suspended',
+  resellerMerchantReactivated: 'Merchant reactivated',
   analytics: 'Analytics',
   navSales: 'Sales',
   navCatalog: 'Catalog',
@@ -3195,6 +3200,12 @@ const fr: Dict = {
   resellerPurgeFailed: 'Échec de la purge des ventes',
   resellerPurging: 'Purge…',
   resellerInsufficientSeats: 'Pas assez de sièges licence dans votre pool',
+  resellerSuspendConfirm:
+    'Suspendre {name} ? Ils ne pourront plus se connecter, utiliser le POS ni la boutique en ligne tant que vous ne les réactiverez pas.',
+  resellerReactivateConfirm:
+    'Réactiver {name} et rétablir l’accès connexion, POS et boutique ?',
+  resellerMerchantSuspended: 'Commerçant suspendu',
+  resellerMerchantReactivated: 'Commerçant réactivé',
   analytics: 'Analytique',
   navSales: 'Ventes',
   navCatalog: 'Catalogue',
@@ -5694,6 +5705,12 @@ const de: Dict = {
   resellerPurgeFailed: 'Verkaufsdaten konnten nicht gelöscht werden',
   resellerPurging: 'Löschen…',
   resellerInsufficientSeats: 'Nicht genug Lizenzplätze in Ihrem Pool',
+  resellerSuspendConfirm:
+    '„{name}“ sperren? Login, POS und Online-Shop sind gesperrt, bis Sie den Händler wieder aktivieren.',
+  resellerReactivateConfirm:
+    '„{name}“ reaktivieren und Login, POS sowie Shop-Zugang wiederherstellen?',
+  resellerMerchantSuspended: 'Händler gesperrt',
+  resellerMerchantReactivated: 'Händler reaktiviert',
   analytics: 'Analysen',
   navSales: 'Verkauf',
   navCatalog: 'Katalog',

@@ -452,7 +452,10 @@ async function resolveShopLineExtras(
 }
 
 async function resolveMerchant(slugOrHost: string) {
-  return MerchantSettingsService.resolveByShopHost(slugOrHost);
+  const merchant = await MerchantSettingsService.resolveByShopHost(slugOrHost);
+  if (!merchant) return null;
+  if (merchant.status === "suspended" || merchant.status === "expired") return null;
+  return merchant;
 }
 
 function channelEnabled(merchant: typeof schema.merchants.$inferSelect, channel: FulfillmentChannel) {

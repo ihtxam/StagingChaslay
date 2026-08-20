@@ -186,6 +186,15 @@ export class AuthService {
     const { StaffService } = await import("@/services/staff.service");
     const { staff, role, permissions } = await StaffService.loginStaff(email, password);
 
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, staff.merchantId),
+      columns: { status: true },
+    });
+    if (!merchant || (merchant.status !== "active" && merchant.status !== "trial")) {
+      throw new Error(`Merchant account is ${merchant?.status || "unavailable"}`);
+    }
+
     const token = this.generateToken({
       id: staff.id,
       email: staff.email || email,

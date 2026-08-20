@@ -112,6 +112,7 @@ function MerchantsPage() {
     inventoryAddonEnabled: boolean;
   } | null>(null);
   const [savingLimits, setSavingLimits] = useState(false);
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -171,7 +172,32 @@ function MerchantsPage() {
     }
   };
 
+  const setMerchantStatus = async (
+    m: { id: string; name: string; status: string },
+    next: 'suspended' | 'active'
+  ) => {
+    const confirmKey = next === 'suspended' ? 'resellerSuspendConfirm' : 'resellerReactivateConfirm';
+    if (!window.confirm(t(confirmKey).replace('{name}', m.name))) return;
+    setStatusBusyId(m.id);
+    try {
+      const path = next === 'suspended' ? 'suspend' : 'reactivate';
+      await api.post(`/reseller/merchants/${m.id}/${path}`);
+      toast.success(
+        next === 'suspended' ? t('resellerMerchantSuspended') : t('resellerMerchantReactivated')
+      );
+      load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setStatusBusyId(null);
+    }
+  };
+
   const openPanel = async (m: any) => {
+    if (m.status === 'suspended' || m.status === 'expired') {
+      toast.error(`Cannot open panel while merchant is ${m.status}`);
+      return;
+    }
     try {
       const res = await api.post(`/reseller/merchants/${m.id}/impersonate`);
       const { token, merchant } = res.data;
@@ -469,7 +495,19 @@ function MerchantsPage() {
                     {m.email}
                   </span>
                 </td>
-                <td className="px-3 py-2">{m.status}</td>
+                <td className="px-3 py-2">
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      m.status === 'suspended'
+                        ? 'bg-red-100 text-red-800'
+                        : m.status === 'expired'
+                          ? 'bg-stone-200 text-stone-700'
+                          : 'bg-emerald-100 text-emerald-800'
+                    }`}
+                  >
+                    {m.status === 'suspended' ? t('suspended') : m.status}
+                  </span>
+                </td>
                 <td className="px-3 py-2">
                   {m.inventoryAddonEnabled === true ? (
                     <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
@@ -499,11 +537,31 @@ function MerchantsPage() {
                   </button>
                   <button
                     type="button"
-                    className="text-teal-700 hover:underline"
-                    onClick={() => openPanel(m)}
+                    className="text-teal-700 hover:underline disabled:opacity-40 disabled:no-underline"
+                    disabled={m.status === 'suspended' || m.status === 'expired'}
+                    onClick={() => void openPanel(m)}
                   >
                     {t('resellerOpenMerchant')}
                   </button>
+                  {m.status === 'suspended' ? (
+                    <button
+                      type="button"
+                      className="text-emerald-700 hover:underline disabled:opacity-40"
+                      disabled={statusBusyId === m.id}
+                      onClick={() => void setMerchantStatus(m, 'active')}
+                    >
+                      {t('reactivate')}
+                    </button>
+                  ) : m.status !== 'expired' ? (
+                    <button
+                      type="button"
+                      className="text-amber-700 hover:underline disabled:opacity-40"
+                      disabled={statusBusyId === m.id}
+                      onClick={() => void setMerchantStatus(m, 'suspended')}
+                    >
+                      {t('suspend')}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="text-rose-700 hover:underline"

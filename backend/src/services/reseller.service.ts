@@ -439,6 +439,29 @@ export class ResellerService {
     return MerchantService.getMerchantById(merchantId);
   }
 
+  /** Suspend a merchant this reseller owns. Same status flag as superadmin suspend. */
+  static async suspendOwnedMerchant(resellerId: string, merchantId: string, reason?: string) {
+    const owned = await this.assertOwnsMerchant(resellerId, merchantId);
+    if (owned.status === "expired") {
+      throw new Error("Cannot suspend an expired merchant");
+    }
+    if (owned.status === "suspended") {
+      return owned;
+    }
+    const { MerchantService } = await import("./merchant.service");
+    return MerchantService.suspendMerchant(merchantId, reason);
+  }
+
+  /** Reactivate a merchant this reseller previously suspended. */
+  static async reactivateOwnedMerchant(resellerId: string, merchantId: string) {
+    const owned = await this.assertOwnsMerchant(resellerId, merchantId);
+    if (owned.status !== "suspended") {
+      throw new Error("Merchant is not suspended");
+    }
+    const { MerchantService } = await import("./merchant.service");
+    return MerchantService.reactivateMerchant(merchantId);
+  }
+
   static async assertOwnsMerchant(resellerId: string, merchantId: string) {
     const db = getDb();
     const m = await db.query.merchants.findFirst({
