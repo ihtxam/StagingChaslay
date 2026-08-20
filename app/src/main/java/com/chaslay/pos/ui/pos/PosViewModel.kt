@@ -23,7 +23,9 @@ import com.chaslay.pos.data.repository.HeldOrderRepository
 import com.chaslay.pos.data.repository.TableOrderRepository
 import com.chaslay.pos.data.repository.TableTransferResult
 import com.chaslay.pos.data.repository.TransactionRepository
+import com.chaslay.pos.domain.model.AttachedGiftCard
 import com.chaslay.pos.domain.model.AttachedMembership
+import com.chaslay.pos.domain.model.LoyaltyProgramSettings
 import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.GiftCardLineMeta
 import com.chaslay.pos.domain.model.GiftCardOp
@@ -186,6 +188,8 @@ data class PosUiState(
     val tableTransferMode: TableTransferMode? = null,
     val tableTransferSelectedIds: Set<String> = emptySet(),
     val attachedMembership: AttachedMembership? = null,
+    val attachedGiftCard: AttachedGiftCard? = null,
+    val loyaltyProgram: LoyaltyProgramSettings = LoyaltyProgramSettings(),
     val showMembershipDialog: Boolean = false,
     val giftCardsEnabled: Boolean = false,
     val shiftsEnabled: Boolean = false,
@@ -389,6 +393,8 @@ class PosViewModel @Inject constructor(
             tableTransferMode = extras.tableTransferMode,
             tableTransferSelectedIds = extras.tableTransferSelectedIds,
             attachedMembership = extras.attachedMembership,
+            attachedGiftCard = extras.attachedGiftCard,
+            loyaltyProgram = extras.loyaltyProgram,
             showMembershipDialog = extras.showMembershipDialog,
             giftCardsEnabled = giftCardsOn,
             membershipBusy = extras.membershipBusy,
@@ -1035,9 +1041,11 @@ class PosViewModel @Inject constructor(
         val code = rawCode.trim()
         if (code.isEmpty()) return
         Log.i("BARCODE_SCAN", "scanned=$code preferMembership=$preferMembership")
+        val checkoutOpen = _uiExtras.value.showCheckoutScreen
         // Table QR: CHASLAY:T:{slug}:{tableUuid}
         val tableMatch = Regex("^CHASLAY:T:[^:]+:([a-f0-9-]+)$", RegexOption.IGNORE_CASE).find(code)
         if (tableMatch != null) {
+            if (checkoutOpen) return
             val tableUuid = tableMatch.groupValues[1]
             viewModelScope.launch {
                 val table = tableOrderRepository.getAllTables().firstOrNull {
@@ -1052,22 +1060,20 @@ class PosViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            if (preferMembership && cardScanEnabled()) {
-                when (tryAttachMembershipFromScan(code)) {
-                    CardScanResult.ATTACHED, CardScanResult.HARD_ERROR -> return@launch
-                    CardScanResult.NOT_FOUND -> Unit
+            when (tryAttachCardFromScan(code)) {
+                CardScanResult.ATTACHED, CardScanResult.HARD_ERROR -> return@launch
+                CardScanResult.NOT_FOUND -> Unit
+            }
+            if (checkoutOpen) {
+                updateExtras {
+                    it.copy(snackbarMessage = appContext.getString(R.string.barcode_not_found, code))
                 }
+                return@launch
             }
             val lookup = productRepository.findByBarcode(code)
             if (lookup != null) {
                 addScannedProduct(lookup)
                 return@launch
-            }
-            if (!preferMembership && cardScanEnabled()) {
-                when (tryAttachMembershipFromScan(code)) {
-                    CardScanResult.ATTACHED, CardScanResult.HARD_ERROR -> return@launch
-                    CardScanResult.NOT_FOUND -> Unit
-                }
             }
             updateExtras {
                 it.copy(snackbarMessage = appContext.getString(R.string.barcode_not_found, code))
@@ -1077,17 +1083,17 @@ class PosViewModel @Inject constructor(
 
     private enum class CardScanResult { ATTACHED, NOT_FOUND, HARD_ERROR }
 
-    private suspend fun cardScanEnabled(): Boolean {
-        val extras = _uiExtras.value
-        if (extras.giftCardsEnabled) return true
-        extras.giftCardSettings?.let { return it.membershipEnabled }
-        return !syncPreferences.getDashboardToken().isNullOrBlank()
-    }
-
-    private suspend fun tryAttachMembershipFromScan(code: String): CardScanResult {
+    private suspend fun tryAttachCardFromScan(code: String): CardScanResult {
         return giftCardRepository.lookupCode(code, mediaType = null).fold(
             onSuccess = { card ->
-                attachMembershipCard(giftCardRepository.toAttachedMembership(card))
+                val membership = giftCardRepository.toAttachedMembership(card)
+                val isMember = card.membershipEnabled ||
+                    card.cardKind.equals("membership", ignoreCase = true)
+                if (isMember) {
+                    attachMembershipCard(membership)
+                } else {
+                    attachGiftCardFromScan(membership)
+                }
                 CardScanResult.ATTACHED
             },
             onFailure = { error ->
@@ -1104,6 +1110,38 @@ class PosViewModel @Inject constructor(
                 }
             }
         )
+    }
+
+    private fun attachGiftCardFromScan(card: AttachedMembership) {
+        val next = AttachedGiftCard(
+            cardId = card.cardId,
+            cardNumber = card.cardNumber,
+            balance = card.giftBalance
+        )
+        val checkoutOpen = _uiExtras.value.showCheckoutScreen
+        updateExtras {
+            val afterPoints = (
+                cartManager.paymentSnapshot().merchandiseTotal() -
+                    it.checkoutState.pointsDiscount
+                ).coerceAtLeast(0.0)
+            val redeem = if (next.balance > 0.01) kotlin.math.min(next.balance, afterPoints) else 0.0
+            it.copy(
+                attachedGiftCard = next,
+                snackbarMessage = if (next.balance <= 0.01) {
+                    appContext.getString(R.string.gift_card_empty)
+                } else {
+                    appContext.getString(R.string.gift_card_attached, next.balance)
+                },
+                checkoutState = if (checkoutOpen && redeem > 0.01) {
+                    it.checkoutState.copy(
+                        payWithGiftCard = true,
+                        giftCardRedeemAmount = redeem
+                    )
+                } else {
+                    it.checkoutState
+                }
+            )
+        }
     }
 
     private fun isCardNotFound(error: Throwable): Boolean {
@@ -2125,21 +2163,27 @@ class PosViewModel @Inject constructor(
         val payable = cartManager.paymentSnapshot()
         if (payable.isEmpty && !(full.splitCount > 1 && !full.splitByItems)) return null
         val resolvedMethod = resolveCheckoutMethod(method)
-        val membership = _uiExtras.value.attachedMembership
+        val extras = _uiExtras.value
+        val membership = extras.attachedMembership
+        val program = extras.loyaltyProgram
         val cartForMerchandise = cartManager.paymentSnapshot()
         val merchandiseTotal = cartForMerchandise.merchandiseTotal()
         val canPayWithPoints = membership?.membershipEnabled == true &&
-            membership.pointsBalance >= LoyaltyMath.REDEEM_THRESHOLD_POINTS
+            membership.pointsBalance >= program.redeemThreshold
         val defaultPayWithPoints = canPayWithPoints
         val maxPoints = membership?.let {
-            LoyaltyMath.maxRedeemablePoints(merchandiseTotal, it.pointsBalance)
+            LoyaltyMath.maxRedeemablePoints(
+                merchandiseTotal,
+                it.pointsBalance,
+                program.redeemPointsPerChf
+            )
         } ?: 0
         val pointsDiscount = if (defaultPayWithPoints && maxPoints > 0) {
-            LoyaltyMath.computeCashDiscount(maxPoints)
+            LoyaltyMath.computeCashDiscount(maxPoints, program.redeemPointsPerChf)
         } else 0.0
         val afterPoints = (merchandiseTotal - pointsDiscount).coerceAtLeast(0.0)
-        val giftBalance = membership?.giftBalance ?: 0.0
-        val canPayWithGiftCard = _uiExtras.value.giftCardsEnabled &&
+        val giftBalance = resolveGiftPayBalance(extras)
+        val canPayWithGiftCard = extras.giftCardsEnabled &&
             giftBalance > 0.01 &&
             cartForMerchandise.items.any { !it.isGiftCardLine }
         val defaultGiftRedeem = if (canPayWithGiftCard) {
@@ -2292,18 +2336,42 @@ class PosViewModel @Inject constructor(
         updateExtras { it.copy(checkoutState = it.checkoutState.copy(printReceipt = print)) }
     }
 
+    private fun resolveGiftPayBalance(extras: PosDialogState = _uiExtras.value): Double {
+        val attached = extras.attachedGiftCard?.balance ?: 0.0
+        if (attached > 0.01) return attached
+        return extras.attachedMembership?.giftBalance ?: 0.0
+    }
+
+    private fun resolveGiftPayCard(extras: PosDialogState = _uiExtras.value): Pair<String, String>? {
+        extras.attachedGiftCard?.let { return it.cardId to it.cardNumber }
+        extras.attachedMembership?.takeIf { it.giftBalance > 0.01 }?.let {
+            return it.cardId to it.cardNumber
+        }
+        return null
+    }
+
     fun updateCheckoutPayWithPoints(enabled: Boolean) {
-        val membership = _uiExtras.value.attachedMembership ?: return
+        val extras = _uiExtras.value
+        val membership = extras.attachedMembership ?: return
+        val program = extras.loyaltyProgram
         val cart = cartManager.paymentSnapshot()
-        val merchandiseTotal = cart.merchandiseTotal(_uiExtras.value.checkoutState.discountPercent)
+        val merchandiseTotal = cart.merchandiseTotal(extras.checkoutState.discountPercent)
         val equalSplit = cart.splitCount > 1 && !cart.splitByItems
         val shareTotal = if (equalSplit) merchandiseTotal / cart.splitCount else merchandiseTotal
-        val payable = (shareTotal + _uiExtras.value.checkoutState.tipAmount).coerceAtLeast(0.0)
-        val maxPoints = LoyaltyMath.maxRedeemablePoints(payable, membership.pointsBalance)
+        val payable = (shareTotal + extras.checkoutState.tipAmount).coerceAtLeast(0.0)
+        val maxPoints = LoyaltyMath.maxRedeemablePoints(
+            payable,
+            membership.pointsBalance,
+            program.redeemPointsPerChf
+        )
         val points = if (enabled) maxPoints else 0
-        val discount = if (enabled) LoyaltyMath.computeCashDiscount(points) else 0.0
+        val discount = if (enabled) LoyaltyMath.computeCashDiscount(points, program.redeemPointsPerChf) else 0.0
         val afterPoints = (payable - discount).coerceAtLeast(0.0)
-        val giftRedeem = recomputeGiftCardRedeem(afterPoints, membership.giftBalance, enabledGiftCard = _uiExtras.value.checkoutState.payWithGiftCard)
+        val giftRedeem = recomputeGiftCardRedeem(
+            afterPoints,
+            resolveGiftPayBalance(extras),
+            enabledGiftCard = extras.checkoutState.payWithGiftCard
+        )
         updateExtras {
             it.copy(
                 checkoutState = it.checkoutState.copy(
@@ -2317,14 +2385,16 @@ class PosViewModel @Inject constructor(
     }
 
     fun updateCheckoutPayWithGiftCard(enabled: Boolean) {
-        val membership = _uiExtras.value.attachedMembership ?: return
+        val extras = _uiExtras.value
         val cart = cartManager.paymentSnapshot()
-        val merchandiseTotal = cart.merchandiseTotal(_uiExtras.value.checkoutState.discountPercent)
+        val merchandiseTotal = cart.merchandiseTotal(extras.checkoutState.discountPercent)
         val equalSplit = cart.splitCount > 1 && !cart.splitByItems
         val shareTotal = if (equalSplit) merchandiseTotal / cart.splitCount else merchandiseTotal
-        val payable = (shareTotal + _uiExtras.value.checkoutState.tipAmount).coerceAtLeast(0.0)
-        val afterPoints = (payable - _uiExtras.value.checkoutState.pointsDiscount).coerceAtLeast(0.0)
-        val giftRedeem = if (enabled) recomputeGiftCardRedeem(afterPoints, membership.giftBalance, enabledGiftCard = true) else 0.0
+        val payable = (shareTotal + extras.checkoutState.tipAmount).coerceAtLeast(0.0)
+        val afterPoints = (payable - extras.checkoutState.pointsDiscount).coerceAtLeast(0.0)
+        val giftRedeem = if (enabled) {
+            recomputeGiftCardRedeem(afterPoints, resolveGiftPayBalance(extras), enabledGiftCard = true)
+        } else 0.0
         updateExtras {
             it.copy(
                 checkoutState = it.checkoutState.copy(
@@ -2485,7 +2555,14 @@ class PosViewModel @Inject constructor(
             updateExtras {
                 it.copy(
                     giftCardsEnabled = merged.giftCardsEnabled,
-                    shiftsEnabled = cfg.features?.shiftsEnabled == true
+                    shiftsEnabled = cfg.features?.shiftsEnabled == true,
+                    loyaltyProgram = cfg.loyalty?.let { loy ->
+                        LoyaltyProgramSettings(
+                            enabled = loy.enabled,
+                            earnPointsPerChf = if (loy.earnPointsPerChf > 0) loy.earnPointsPerChf else 1.0,
+                            redeemPointsPerChf = loy.redeemPointsPerChf.coerceAtLeast(1)
+                        )
+                    } ?: it.loyaltyProgram
                 )
             }
             refreshGiftCardFeature()
@@ -2825,7 +2902,17 @@ class PosViewModel @Inject constructor(
         viewModelScope.launch {
             updateExtras { it.copy(membershipBusy = true, membershipLookupError = null) }
             giftCardRepository.lookupCode(code, mediaType = null)
-                .onSuccess { card -> attachMembershipCard(giftCardRepository.toAttachedMembership(card)) }
+                .onSuccess { card ->
+                    val membership = giftCardRepository.toAttachedMembership(card)
+                    val isMember = card.membershipEnabled ||
+                        card.cardKind.equals("membership", ignoreCase = true)
+                    if (isMember) {
+                        attachMembershipCard(membership)
+                    } else {
+                        attachGiftCardFromScan(membership)
+                        updateExtras { it.copy(membershipBusy = false, showMembershipDialog = false) }
+                    }
+                }
                 .onFailure { e ->
                     updateExtras {
                         it.copy(
@@ -2840,7 +2927,7 @@ class PosViewModel @Inject constructor(
 
     fun onRfidScanned(rawCode: String) {
         if (rawCode.isBlank()) return
-        lookupMembershipCard(rawCode)
+        onHardwareScanned(rawCode)
     }
 
     private fun attachMembershipCard(membership: AttachedMembership) {
@@ -2879,6 +2966,7 @@ class PosViewModel @Inject constructor(
         updateExtras {
             it.copy(
                 attachedMembership = null,
+                attachedGiftCard = null,
                 membershipLookupError = null,
                 lastLoyaltyPointsEarned = null,
                 lastLoyaltyPointsBalance = null
@@ -2895,7 +2983,10 @@ class PosViewModel @Inject constructor(
         if (pointsRedeemed > 0) {
             giftCardRepository.redeemPoints(membership.cardId, pointsRedeemed, transactionId)
         }
-        val earned = LoyaltyMath.computeEarnPoints(paidSubtotal)
+        val earned = LoyaltyMath.computeEarnPoints(
+            paidSubtotal,
+            _uiExtras.value.loyaltyProgram.earnPointsPerChf
+        )
         if (earned > 0) {
             giftCardRepository.earnPoints(membership.cardId, earned, transactionId)
                 .onSuccess { balance ->
@@ -3186,7 +3277,10 @@ class PosViewModel @Inject constructor(
             val staffName = sessionManager.currentUserName.first() ?: "Staff"
             val membership = _uiExtras.value.attachedMembership
             val pointsEarned = membership?.takeIf { it.membershipEnabled }?.let {
-                LoyaltyMath.computeEarnPoints(cart.merchandiseTotal())
+                LoyaltyMath.computeEarnPoints(
+                    cart.merchandiseTotal(),
+                    _uiExtras.value.loyaltyProgram.earnPointsPerChf
+                )
             }
             val context = com.chaslay.pos.printer.ReceiptPrintContext(
                 orderNumber = cart.orderNumber,
@@ -3785,7 +3879,7 @@ class PosViewModel @Inject constructor(
             var redeemedGiftCardAmount = 0.0
             var giftCardRemainingBalance: Double? = null
             if (giftCardRedeem > 0.001) {
-                val membership = _uiExtras.value.attachedMembership
+                val payCard = resolveGiftPayCard()
                 if (!isDeviceOnline()) {
                     updateExtras {
                         it.copy(
@@ -3795,7 +3889,7 @@ class PosViewModel @Inject constructor(
                     }
                     return@launch
                 }
-                if (membership == null) {
+                if (payCard == null) {
                     updateExtras {
                         it.copy(
                             isProcessingPayment = false,
@@ -3805,8 +3899,8 @@ class PosViewModel @Inject constructor(
                     return@launch
                 }
                 val redeemResult = giftCardRepository.redeemBalance(
-                    cardId = membership.cardId,
-                    cardNumber = membership.cardNumber,
+                    cardId = payCard.first,
+                    cardNumber = payCard.second,
                     amount = giftCardRedeem,
                     orderId = masterId,
                     allowPartial = true
@@ -3822,15 +3916,25 @@ class PosViewModel @Inject constructor(
                 }
                 redeemedGiftCardAmount = redeemResult.getOrThrow().amountRedeemed
                 giftCardRemainingBalance = redeemResult.getOrThrow().remainingBalance
-                val updatedMembership = giftCardRepository.toAttachedMembership(redeemResult.getOrThrow().card)
-                updateExtras { it.copy(attachedMembership = updatedMembership) }
+                val updated = giftCardRepository.toAttachedMembership(redeemResult.getOrThrow().card)
+                updateExtras { extras ->
+                    val giftMatch = extras.attachedGiftCard?.cardId == updated.cardId
+                    extras.copy(
+                        attachedGiftCard = if (giftMatch) {
+                            extras.attachedGiftCard?.copy(balance = updated.giftBalance)
+                        } else extras.attachedGiftCard,
+                        attachedMembership = if (!giftMatch && extras.attachedMembership?.cardId == updated.cardId) {
+                            updated
+                        } else extras.attachedMembership
+                    )
+                }
             }
 
             val paymentResult = when {
                 roundedTotal <= 0.001 && redeemedGiftCardAmount > 0 -> {
                     PaymentResult.Success(
                         method = PaymentMethod.GIFT_CARD,
-                        reference = _uiExtras.value.attachedMembership?.cardId
+                        reference = resolveGiftPayCard()?.first
                     )
                 }
                 method == PaymentMethod.CASH -> cashPaymentService.processPayment()
@@ -4864,6 +4968,8 @@ class PosViewModel @Inject constructor(
         val tableTransferMode: TableTransferMode? = null,
         val tableTransferSelectedIds: Set<String> = emptySet(),
         val attachedMembership: AttachedMembership? = null,
+        val attachedGiftCard: AttachedGiftCard? = null,
+        val loyaltyProgram: LoyaltyProgramSettings = LoyaltyProgramSettings(),
         val showMembershipDialog: Boolean = false,
         val giftCardsEnabled: Boolean = false,
     val shiftsEnabled: Boolean = false,

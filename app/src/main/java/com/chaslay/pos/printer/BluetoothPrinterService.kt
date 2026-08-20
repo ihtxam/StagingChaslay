@@ -6,6 +6,7 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
+import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
 import com.chaslay.pos.data.local.entity.CategoryEntity
 import com.chaslay.pos.data.local.entity.PrinterConfigEntity
@@ -1430,10 +1431,12 @@ class BluetoothPrinterService @Inject constructor(
         if ((pointsEarned ?: 0) <= 0 && pointsBalance == null) return
         sb.appendLine(center(sepDash(lineWidth), lineWidth))
         pointsEarned?.takeIf { it > 0 }?.let {
-            sb.appendLine(leftRight("Points earned", "+$it", lineWidth))
+            sb.appendLine(context.getString(R.string.receipt_order_gave_you_points, it))
         }
         pointsBalance?.let {
-            sb.appendLine(leftRight("Points balance", "$it", lineWidth))
+            sb.appendLine(
+                leftRight(context.getString(R.string.receipt_points_so_far), "$it", lineWidth)
+            )
         }
     }
 

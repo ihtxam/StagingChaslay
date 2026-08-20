@@ -276,7 +276,14 @@ data class PaymentConfigResponse(
     val checkout: SyncCheckoutDto? = null,
     @SerializedName("receipt_base_url") val receiptBaseUrl: String? = null,
     val scale: SyncScaleDto? = null,
-    val print: SyncPrintDto? = null
+    val print: SyncPrintDto? = null,
+    val loyalty: SyncLoyaltyDto? = null
+)
+
+data class SyncLoyaltyDto(
+    val enabled: Boolean = false,
+    @SerializedName("earnPointsPerChf") val earnPointsPerChf: Double = 1.0,
+    @SerializedName("redeemPointsPerChf") val redeemPointsPerChf: Int = 100
 )
 
 data class PushTerminalItemDto(

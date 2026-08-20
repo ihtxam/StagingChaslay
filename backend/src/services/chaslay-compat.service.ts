@@ -485,6 +485,9 @@ export class ChaslayCompatService {
           !!(merchant.giftCardSettings as { enabled?: boolean } | null)?.enabled,
         invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
       },
+      loyalty: (await import("@/services/shop-loyalty.service")).ShopLoyaltyService.programFromMerchant(
+        merchant
+      ),
       features: {
         courses_enabled: !!merchant.coursesEnabled,
         floor_plan_enabled: !!merchant.floorPlanEnabled,

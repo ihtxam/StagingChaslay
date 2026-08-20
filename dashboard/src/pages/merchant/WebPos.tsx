@@ -131,6 +131,7 @@ const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
 const WEBPOS_GRID_SHOW_IMAGES_KEY = 'webpos.grid.showImages';
 const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
 const WEBPOS_GRID_SORT_KEY = 'webpos.grid.sort';
+const WEBPOS_SET_PIN_HINT_KEY = 'webpos_set_pin_hint_dismissed';
 
 export type WebPosAppearance = 'light' | 'night';
 
@@ -261,8 +262,10 @@ import {
   computeCashDiscount,
   computeEarnPoints,
   maxRedeemablePoints,
+  normalizeLoyaltyProgram,
   normalizeRfidUid,
-  REDEEM_THRESHOLD_POINTS,
+  redeemThresholdPoints,
+  type AttachedGiftCard,
   type AttachedMembership,
 } from '@/lib/loyalty-math';
 import type { AppliedPayment } from '@/components/webpos/WebPosCheckoutView';
@@ -324,10 +327,12 @@ import {
   backOfficeHomePath,
   getEffectivePanelAccess,
   hasPermission,
+  isMerchantOwnerJwt,
   clearWebPosStaffSession,
   loadWebPosStaffSession,
   resolveWebPosStaffSession,
   saveWebPosStaffSession,
+  webPosPinGateRequired,
   type Permission,
   type StaffRosterRow,
   type WebPosStaffSession,
@@ -443,6 +448,11 @@ type WebPosPaymentConfig = {
   posPrintSettings?: PosPrintSettingsClient | null;
   posCheckoutSettings?: PosCheckoutSettings | null;
   giftCardSettings?: GiftCardSettingsClient | null;
+  loyalty?: {
+    enabled?: boolean;
+    earnPointsPerChf?: number;
+    redeemPointsPerChf?: number;
+  } | null;
   shopLogoUrl?: string | null;
   panelLanguage?: string | null;
   shiftsEnabled?: boolean;
@@ -491,6 +501,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   const authUser = useAuthStore((s) => s.user);
+  const jwtIsOwner = isMerchantOwnerJwt(authUser);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
   if (bootCartRef.current === undefined) {
@@ -717,8 +728,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [giftCardPayDue, setGiftCardPayDue] = useState(0);
   const [giftPayInject, setGiftPayInject] = useState<AppliedPayment | null>(null);
   const [attachedMembership, setAttachedMembership] = useState<AttachedMembership | null>(null);
+  const [attachedGiftCard, setAttachedGiftCard] = useState<AttachedGiftCard | null>(null);
   const [membershipBusy, setMembershipBusy] = useState(false);
   const [payWithPoints, setPayWithPoints] = useState(false);
+  const lastGiftInjectRef = useRef<string | null>(null);
   const [splitOpen, setSplitOpen] = useState(false);
   const [splitQueue, setSplitQueue] = useState<SplitPart[]>([]);
   const [splitIndex, setSplitIndex] = useState(0);
@@ -746,6 +759,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
   const [webposStaff, setWebposStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [staffConfigured, setStaffConfigured] = useState(false);
+  const [setPinHintDismissed, setSetPinHintDismissed] = useState(() => {
+    try {
+      return sessionStorage.getItem(WEBPOS_SET_PIN_HINT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const [staffRoster, setStaffRoster] = useState<StaffRosterRow[]>([]);
   const [panelStaff, setPanelStaff] = useState<Array<{ id: string; name: string }>>([]);
   const [eodPickerOpen, setEodPickerOpen] = useState(false);
@@ -806,10 +826,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const hideTab = !!tableLabel || !!tabNumber;
   // Waiter / staff phone: USE_WEBPOS PIN gate works on mobile Safari; kitchen + receipt
   // print still goes through the print agent / main till printers (not the phone).
-  const pinGateRequired =
-    staffConfigured &&
-    !webposStaff &&
-    !(isWebPosCurrentlyOffline() && loadedFromOfflineCache);
+  const pinGateRequired = webPosPinGateRequired({
+    hasStaffPins: staffConfigured,
+    pinSession: webposStaff,
+    isOwnerJwt: jwtIsOwner,
+    officialStaffLogin: authUser?.role === 'staff',
+    offlineUnlocked: isWebPosCurrentlyOffline() && loadedFromOfflineCache,
+  });
 
   const applyStaffRoster = useCallback(
     (staffList: StaffRosterRow[], opts?: { openPinGate?: boolean }) => {
@@ -833,13 +856,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         window.dispatchEvent(new CustomEvent('webpos:staff-session'));
       }
       const shouldOpenPinGate =
-        opts?.openPinGate !== false && hasPins && !session && authUser?.role !== 'staff';
+        opts?.openPinGate !== false &&
+        hasPins &&
+        !session &&
+        authUser?.role !== 'staff' &&
+        !isMerchantOwnerJwt(authUser);
       if (shouldOpenPinGate) {
         setPinModalMode('gate');
         setPinModalOpen(true);
       }
     },
-    [authUser?.staffId, authUser?.role, authUser?.permissions]
+    [authUser?.staffId, authUser?.role, authUser?.permissions, authUser?.isOwner]
   );
 
   useEffect(() => {
@@ -989,7 +1016,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [settingsOpen]);
 
   const showPanelMenus = useCallback(() => {
-    const jwtIsOwner = authUser?.role === 'merchant' && authUser?.isOwner !== false;
     const access = getEffectivePanelAccess({
       jwtPermissions: authUser?.permissions as Permission[] | undefined,
       isOwner: jwtIsOwner,
@@ -1005,7 +1031,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     navigate(backOfficeHomePath(access.permissions, false));
-  }, [authUser?.role, authUser?.isOwner, authUser?.permissions, staffConfigured, webposStaff, t, navigate]);
+  }, [jwtIsOwner, authUser?.permissions, staffConfigured, webposStaff, t, navigate]);
 
   const enterPosApp = useCallback(() => {
     window.dispatchEvent(new CustomEvent('webpos:enter-app'));
@@ -1083,6 +1109,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     () => normalizePosCheckoutSettings(paymentConfig?.posCheckoutSettings),
     [paymentConfig?.posCheckoutSettings]
   );
+  const loyaltyProgram = useMemo(
+    () =>
+      normalizeLoyaltyProgram(
+        paymentConfig?.loyalty ||
+          (merchant
+            ? {
+                enabled: !!(merchant as { loyaltyEnabled?: boolean }).loyaltyEnabled,
+                earnPointsPerChf: Number(
+                  (merchant as { loyaltyEarnPointsPerChf?: string | number }).loyaltyEarnPointsPerChf
+                ),
+                redeemPointsPerChf: Number(
+                  (merchant as { loyaltyRedeemPointsPerChf?: number }).loyaltyRedeemPointsPerChf
+                ),
+              }
+            : null)
+      ),
+    [paymentConfig?.loyalty, merchant]
+  );
+  const loyaltyRedeemRate = loyaltyProgram.redeemPointsPerChf;
+  const loyaltyEarnRate = loyaltyProgram.earnPointsPerChf;
+  const loyaltyRedeemThreshold = redeemThresholdPoints(loyaltyRedeemRate);
   const editionFeatures = paymentConfig?.editionFeatures;
   const editionAllows = (key: string) =>
     editionFeatures == null || editionFeatures.includes(key);
@@ -1268,7 +1315,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const membershipCheckout = useMemo(() => {
     if (
       !attachedMembership?.membershipEnabled ||
-      attachedMembership.pointsBalance < REDEEM_THRESHOLD_POINTS
+      attachedMembership.pointsBalance < loyaltyRedeemThreshold
     ) {
       return {
         canPayWithPoints: false,
@@ -1277,25 +1324,76 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       };
     }
     const payable = activeSale.totals.total;
-    const maxPoints = maxRedeemablePoints(payable, attachedMembership.pointsBalance);
+    const maxPoints = maxRedeemablePoints(
+      payable,
+      attachedMembership.pointsBalance,
+      loyaltyRedeemRate
+    );
     const pointsRedeemed = payWithPoints ? maxPoints : 0;
     const pointsDiscount =
-      pointsRedeemed > 0 ? computeCashDiscount(pointsRedeemed) : 0;
+      pointsRedeemed > 0 ? computeCashDiscount(pointsRedeemed, loyaltyRedeemRate) : 0;
     return {
       canPayWithPoints: maxPoints > 0,
       pointsRedeemed,
       pointsDiscount,
     };
-  }, [attachedMembership, activeSale.totals.total, payWithPoints]);
+  }, [
+    attachedMembership,
+    activeSale.totals.total,
+    payWithPoints,
+    loyaltyRedeemRate,
+    loyaltyRedeemThreshold,
+  ]);
 
   useEffect(() => {
     if (posView !== 'checkout' || !attachedMembership?.membershipEnabled) return;
     const payable = activeSale.totals.total;
-    const maxPts = maxRedeemablePoints(payable, attachedMembership.pointsBalance);
-    setPayWithPoints(
-      attachedMembership.pointsBalance >= REDEEM_THRESHOLD_POINTS && maxPts > 0
+    const maxPts = maxRedeemablePoints(
+      payable,
+      attachedMembership.pointsBalance,
+      loyaltyRedeemRate
     );
-  }, [posView, splitIndex, attachedMembership?.cardId, activeSale.totals.total]);
+    setPayWithPoints(
+      attachedMembership.pointsBalance >= loyaltyRedeemThreshold && maxPts > 0
+    );
+  }, [
+    posView,
+    splitIndex,
+    attachedMembership?.cardId,
+    activeSale.totals.total,
+    loyaltyRedeemRate,
+    loyaltyRedeemThreshold,
+  ]);
+
+  useEffect(() => {
+    if (posView !== 'checkout') {
+      lastGiftInjectRef.current = null;
+      return;
+    }
+    if (!attachedGiftCard || attachedGiftCard.balance <= 0.001) return;
+    const key = `${attachedGiftCard.cardId}:${splitIndex}`;
+    if (lastGiftInjectRef.current === key) return;
+    const due = roundMoney2(
+      Math.max(0, activeSale.totals.total - membershipCheckout.pointsDiscount)
+    );
+    const amount = roundMoney2(Math.min(attachedGiftCard.balance, due));
+    if (amount <= 0.001) return;
+    lastGiftInjectRef.current = key;
+    setGiftPayInject({
+      id: `gc-pay-${attachedGiftCard.cardId}`,
+      method: 'gift_card',
+      amount,
+      giftCardId: attachedGiftCard.cardId,
+      giftCardNumber: attachedGiftCard.cardNumber,
+      giftCardRemainingBalance: roundMoney2(attachedGiftCard.balance - amount),
+    });
+  }, [
+    posView,
+    attachedGiftCard,
+    splitIndex,
+    activeSale.totals.total,
+    membershipCheckout.pointsDiscount,
+  ]);
 
   const billDiscountLabel =
     billDiscount.percent > 0
@@ -3548,6 +3646,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setFulfillmentWhen(asapFulfillment());
     setSelectedCustomer(null);
     clearAttachedMembership();
+    clearAttachedGiftCard();
     setProvisionalPrinted(false);
     savePersistedWebPosCarts({
       drafts: draftsMapToRecord(openCartDraftsRef.current),
@@ -3597,6 +3696,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setFulfillmentWhen(asapFulfillment());
       setSelectedCustomer(null);
       clearAttachedMembership();
+      clearAttachedGiftCard();
       setProvisionalPrinted(false);
       savePersistedWebPosCarts({
         drafts: draftsMapToRecord(openCartDraftsRef.current),
@@ -4483,6 +4583,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPayWithPoints(false);
   };
 
+  const clearAttachedGiftCard = () => {
+    setAttachedGiftCard(null);
+    lastGiftInjectRef.current = null;
+  };
+
   const attachMembershipCard = (membership: AttachedMembership) => {
     const displayName = membership.customerName?.trim();
     if (displayName) {
@@ -4513,42 +4618,65 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     toast.success(displayName || membership.cardNumber || t('webPosMembershipAttached'));
   };
 
+  const cardFromLookup = (c: Record<string, unknown>, fallbackNumber: string): AttachedMembership => {
+    const customer = c.customer as
+      | { id?: string; firstName?: string; lastName?: string }
+      | null
+      | undefined;
+    const holder =
+      (c.holderName as string) ||
+      [customer?.firstName, customer?.lastName].filter(Boolean).join(' ') ||
+      null;
+    return {
+      cardId: String(c.id),
+      cardNumber: String(c.cardNumber || fallbackNumber),
+      customerName: holder,
+      customerId: (c.customerId as string) || customer?.id || null,
+      pointsBalance: Math.max(0, Math.floor(Number(c.points ?? c.pointsBalance ?? 0))),
+      giftBalance: Number(c.balance ?? c.balanceAmount ?? 0),
+      membershipEnabled: !!c.membershipEnabled,
+      membershipPlanId: (c.membershipPlanId as string) || null,
+      membershipPlan: (c.membershipPlan as MembershipPlan | null) || null,
+      stampCount: Number(c.stampCount ?? 0),
+    };
+  };
+
+  const lookupPosCard = async (
+    rawCode: string
+  ): Promise<{ kind: 'membership' | 'gift'; membership: AttachedMembership } | null> => {
+    const code = rawCode.trim();
+    if (!code) return null;
+    const ecParsed = normalizeScannedPayload(code);
+    const normalized = ecParsed || normalizeRfidUid(code) || code;
+    const mediaType = /^EC/i.test(normalized) ? 'e_card' : 'physical';
+    const res = await api.get(`/gift-cards/lookup/${encodeURIComponent(normalized)}`, {
+      params: { mediaType },
+    });
+    const c = res.data?.card;
+    if (!c?.id) return null;
+    if (c.status && c.status !== 'active') {
+      throw new Error(t('webPosCardBlocked'));
+    }
+    const membership = cardFromLookup(c, normalized);
+    const kind: 'membership' | 'gift' =
+      c.cardKind === 'membership' || membership.membershipEnabled ? 'membership' : 'gift';
+    return { kind, membership };
+  };
+
   const lookupMembershipCard = async (
     rawCode: string,
     opts?: { silentNotFound?: boolean }
   ): Promise<boolean> => {
-    const code = rawCode.trim();
-    if (!code || membershipBusy) return false;
-    const ecParsed = normalizeScannedPayload(code);
-    const normalized = ecParsed || normalizeRfidUid(code) || code;
-    const mediaType = /^EC/i.test(normalized) ? 'e_card' : 'physical';
+    if (!rawCode.trim() || membershipBusy) return false;
     setMembershipBusy(true);
     try {
-      const res = await api.get(
-        `/gift-cards/lookup/${encodeURIComponent(normalized)}`,
-        { params: { mediaType } }
-      );
-      const c = res.data?.card;
-      if (!c?.id) throw new Error(t('webPosMembershipLookupFailed'));
-      if (c.status && c.status !== 'active') {
-        throw new Error(t('webPosCardBlocked'));
+      const found = await lookupPosCard(rawCode);
+      if (!found) throw new Error(t('webPosMembershipLookupFailed'));
+      if (found.kind === 'membership') {
+        attachMembershipCard(found.membership);
+      } else {
+        applyScannedGiftCard(found.membership);
       }
-      const holder =
-        c.holderName ||
-        [c.customer?.firstName, c.customer?.lastName].filter(Boolean).join(' ') ||
-        null;
-      attachMembershipCard({
-        cardId: c.id,
-        cardNumber: c.cardNumber || normalized,
-        customerName: holder,
-        customerId: c.customerId || c.customer?.id || null,
-        pointsBalance: Math.max(0, Math.floor(Number(c.points ?? c.pointsBalance ?? 0))),
-        giftBalance: Number(c.balance ?? c.balanceAmount ?? 0),
-        membershipEnabled: !!c.membershipEnabled,
-        membershipPlanId: c.membershipPlanId || null,
-        membershipPlan: (c.membershipPlan as MembershipPlan | null) || null,
-        stampCount: Number(c.stampCount ?? 0),
-      });
       return true;
     } catch (e: any) {
       const notFound = e.response?.status === 404;
@@ -4559,6 +4687,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     } finally {
       setMembershipBusy(false);
     }
+  };
+
+  const applyScannedGiftCard = (card: AttachedMembership) => {
+    const next: AttachedGiftCard = {
+      cardId: card.cardId,
+      cardNumber: card.cardNumber,
+      balance: roundMoney2(Math.max(0, Number(card.giftBalance) || 0)),
+    };
+    setAttachedGiftCard(next);
+    lastGiftInjectRef.current = null;
+    if (next.balance <= 0.001) {
+      toast.error(t('webPosGiftCardEmpty'));
+      return;
+    }
+    toast.success(
+      t('webPosGiftCardAttached').replace('{amount}', next.balance.toFixed(2))
+    );
   };
 
   const saleMerchandiseTotal = (lines: CartLine[]) => {
@@ -4581,7 +4726,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         orderId,
       });
     }
-    const earned = computeEarnPoints(paidSubtotal);
+    const earned = computeEarnPoints(paidSubtotal, loyaltyEarnRate);
     if (earned > 0) {
       await api.post(`/gift-cards/${membership.cardId}/points/earn`, {
         points: earned,
@@ -4680,6 +4825,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setSplitIndex(0);
     splitMasterIdRef.current = null;
     clearAttachedMembership();
+    clearAttachedGiftCard();
     setPayWithPoints(false);
     setSelectedCustomer(customerFromOrder(order));
     if (order.scheduledFor) {
@@ -5584,7 +5730,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       Math.max(0, merchandiseGross - discountAmount - pointsDiscount - giftCardPaid)
     );
     const pointsEarned =
-      attachedMembership?.membershipEnabled && !payLater ? computeEarnPoints(paidSubtotal) : 0;
+      attachedMembership?.membershipEnabled && !payLater
+        ? computeEarnPoints(paidSubtotal, loyaltyEarnRate)
+        : 0;
     const pointsBalance =
       attachedMembership?.membershipEnabled
         ? Math.max(0, attachedMembership.pointsBalance - pointsRedeemed + pointsEarned)
@@ -6064,6 +6212,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setChannel(null);
       setMobileCartOpen(false);
       clearAttachedMembership();
+      clearAttachedGiftCard();
       clearPersistedWebPosCarts();
       terminalPaymentRef.current = null;
       if (method !== 'pay_later' && method !== 'invoice') {
@@ -6529,7 +6678,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const handlePosScan = useCallback(
     async (code: string) => {
       if (pinGateRequired || pinModalOpen) return;
-      if (posView !== 'register') return;
+      const onCheckout = posView === 'checkout';
+      if (posView !== 'register' && !onCheckout) return;
       if (
         pendingProduct ||
         pendingCombo ||
@@ -6550,16 +6700,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ) {
         return;
       }
-      const membershipEnabledSetting = !!(
-        paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null
-      )?.membershipEnabled;
-      const cardsScanEnabled =
-        giftCardsEditionOk &&
-        !isWebPosCurrentlyOffline() &&
-        (((paymentConfig?.methods.giftCard === true) && canPay) || membershipEnabledSetting);
-      if (cardsScanEnabled) {
-        const attached = await lookupMembershipCard(code, { silentNotFound: true });
-        if (attached) return;
+      if (!isWebPosCurrentlyOffline()) {
+        try {
+          const found = await lookupPosCard(code);
+          if (found) {
+            if (found.kind === 'membership') {
+              attachMembershipCard(found.membership);
+            } else {
+              applyScannedGiftCard(found.membership);
+            }
+            return;
+          }
+        } catch (e: any) {
+          if (e.response?.status !== 404) {
+            toast.error(e.response?.data?.error || e.message || t('webPosMembershipLookupFailed'));
+            return;
+          }
+        }
+      }
+      if (onCheckout) {
+        toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
+        return;
       }
       const product = findProductByScanCode(code);
       if (product) {
@@ -6579,7 +6740,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
     },
-    // onProductClick is stable enough for scan; listed intentionally
+    // onProductClick / attach helpers are stable enough for scan
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       pinGateRequired,
@@ -6602,10 +6763,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cancelModal,
       expressSuccessOpen,
       findProductByScanCode,
-      giftCardsEditionOk,
-      paymentConfig?.methods.giftCard,
-      (paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null)?.membershipEnabled,
-      canPay,
       tablesUiEnabled,
       switchToTableOrder,
       t,
@@ -6621,7 +6778,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (pinGateRequired || pinModalOpen || posView !== 'register') return;
+      if (pinGateRequired || pinModalOpen || (posView !== 'register' && posView !== 'checkout'))
+        return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
       if (
@@ -7361,6 +7519,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onClearMembership={
                   attachedMembership ? clearAttachedMembership : undefined
                 }
+                giftCardLabel={
+                  attachedGiftCard
+                    ? t('webPosGiftCardOnSale').replace(
+                        '{amount}',
+                        attachedGiftCard.balance.toFixed(2)
+                      )
+                    : null
+                }
+                onClearGiftCard={attachedGiftCard ? clearAttachedGiftCard : undefined}
                 fulfillmentLabel={fulfillmentWhen?.label || null}
                 fulfillmentIsLater={fulfillmentWhen?.mode === 'later'}
                 busy={busy || paymentModalOpen}

@@ -801,6 +801,10 @@
     <string name="close">Close</string>
     <string name="checkout_loyalty_points">Loyalty points</string>
     <string name="checkout_pay_with_points">Pay with points (%1$d available)</string>
+    <string name="gift_card_attached">Gift card attached · CHF %1$.2f</string>
+    <string name="gift_card_empty">This gift card has no remaining balance</string>
+    <string name="receipt_order_gave_you_points">This order gave you: %1$d points</string>
+    <string name="receipt_points_so_far">Points so far</string>
     <string name="checkout_points_discount">Redeem %1$d pts → %2$s off</string>
     <string name="checkout_points_applied">Points (%1$d)</string>
     <string name="tip_discount_fixed">Amount</string>

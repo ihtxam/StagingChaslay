@@ -118,6 +118,7 @@ export class GiftCardService {
       ...card,
       membershipPlan: plan,
       stampCount: card.stampCount ?? 0,
+      cardKind: card.membershipEnabled ? "membership" : "gift",
     };
   }
 

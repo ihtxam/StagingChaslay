@@ -294,11 +294,12 @@ export default function ReceiptPage() {
           {Number(receipt.pointsEarned || 0) > 0 || receipt.pointsBalance != null ? (
             <div className="pt-2 space-y-1">
               {Number(receipt.pointsEarned || 0) > 0 ? (
-                <TotalsRow
-                  label={t('receiptPointsEarned')}
-                  value={`+${Math.floor(Number(receipt.pointsEarned))}`}
-                  accent
-                />
+                <p className="font-semibold text-emerald-800">
+                  {t('receiptOrderGaveYouPoints').replace(
+                    '{n}',
+                    String(Math.floor(Number(receipt.pointsEarned)))
+                  )}
+                </p>
               ) : null}
               {receipt.pointsBalance != null ? (
                 <TotalsRow

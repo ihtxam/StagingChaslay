@@ -16,6 +16,7 @@ data class GiftCardDto(
     val balance: String? = null,
     val status: String? = null,
     @SerializedName("membershipEnabled") val membershipEnabled: Boolean = false,
+    @SerializedName("cardKind") val cardKind: String? = null,
     @SerializedName("membershipPlanId") val membershipPlanId: String? = null,
     @SerializedName("membershipPlan") val membershipPlan: GiftCardMembershipPlanDto? = null,
     @SerializedName("stampCount") val stampCount: Int? = null,

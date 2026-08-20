@@ -520,7 +520,7 @@ function formatLoyaltyReceiptLines(
   if (earned <= 0 && !hasBalance) return '';
   let r = '-'.repeat(width) + '\n';
   if (earned > 0) {
-    r += padLine(`${L.pointsEarned}:`, `+${earned}`, width) + '\n';
+    r += String(L.orderGaveYouPoints || '').replace('{n}', String(earned)) + '\n';
   }
   if (hasBalance) {
     r += padLine(`${L.pointsBalance}:`, `${Math.max(0, Math.floor(Number(tx.loyaltyPointsBalance)))}`, width) + '\n';

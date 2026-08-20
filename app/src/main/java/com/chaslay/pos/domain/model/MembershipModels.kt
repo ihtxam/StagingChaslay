@@ -25,6 +25,22 @@ data class AttachedMembership(
     val stampCount: Int = 0
 )
 
+/** Stored-value gift card on the sale (separate from membership identity). */
+data class AttachedGiftCard(
+    val cardId: String,
+    val cardNumber: String,
+    val balance: Double
+)
+
+data class LoyaltyProgramSettings(
+    val enabled: Boolean = false,
+    val earnPointsPerChf: Double = LoyaltyMath.DEFAULT_EARN_POINTS_PER_CHF.toDouble(),
+    val redeemPointsPerChf: Int = LoyaltyMath.DEFAULT_REDEEM_POINTS_PER_CHF
+) {
+    val redeemThreshold: Int
+        get() = redeemPointsPerChf.coerceAtLeast(1)
+}
+
 enum class GiftCardOp {
     SELL,
     RELOAD
@@ -53,8 +69,11 @@ object LoyaltyMath {
     const val DEFAULT_EARN_POINTS_PER_CHF = 1
     const val DEFAULT_REDEEM_POINTS_PER_CHF = 100
 
-    fun computeEarnPoints(paidSubtotalChf: Double, earnRate: Int = DEFAULT_EARN_POINTS_PER_CHF): Int =
-        kotlin.math.floor(paidSubtotalChf.coerceAtLeast(0.0) * earnRate).toInt()
+    fun computeEarnPoints(
+        paidSubtotalChf: Double,
+        earnRate: Double = DEFAULT_EARN_POINTS_PER_CHF.toDouble()
+    ): Int =
+        kotlin.math.floor(paidSubtotalChf.coerceAtLeast(0.0) * earnRate.coerceAtLeast(0.0)).toInt()
 
     fun computeCashDiscount(points: Int, redeemRate: Int = DEFAULT_REDEEM_POINTS_PER_CHF): Double {
         val rate = redeemRate.coerceAtLeast(1)

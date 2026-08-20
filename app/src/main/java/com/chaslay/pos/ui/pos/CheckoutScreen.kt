@@ -112,6 +112,7 @@ fun CheckoutScreen(
     membershipPointsBalance: Int? = null,
     membershipGiftBalance: Double? = null,
     giftCardsEnabled: Boolean = false,
+    redeemThresholdPoints: Int = LoyaltyMath.REDEEM_THRESHOLD_POINTS,
     onBack: () -> Unit,
     onSelectMethod: (PaymentMethod) -> Unit,
     onDeselectMethod: () -> Unit = {},
@@ -370,7 +371,7 @@ fun CheckoutScreen(
                 CheckoutIconChip(icon = Icons.Default.LocalAtm, onClick = onOpenCashDrawer)
             }
 
-            if ((membershipPointsBalance ?: 0) >= LoyaltyMath.REDEEM_THRESHOLD_POINTS) {
+            if ((membershipPointsBalance ?: 0) >= redeemThresholdPoints) {
                 CheckoutActionChip(
                     icon = Icons.Default.Payments,
                     label = stringResource(R.string.checkout_pay_with_points, membershipPointsBalance ?: 0),

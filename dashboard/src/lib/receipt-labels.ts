@@ -87,6 +87,8 @@ export type ReceiptLabels = {
   member: string;
   pointsEarned: string;
   pointsBalance: string;
+  /** Guest line: This order gave you: XXX points */
+  orderGaveYouPoints: string;
   /** Kitchen / guest receipt course banner, e.g. >> COURSE 1 << */
   courseLabel: string;
 };
@@ -174,6 +176,7 @@ const EN: ReceiptLabels = {
   member: 'Member',
   pointsEarned: 'Points this sale',
   pointsBalance: 'Points so far',
+  orderGaveYouPoints: 'This order gave you: {n} points',
   courseLabel: 'COURSE',
 };
 
@@ -260,6 +263,7 @@ const FR: ReceiptLabels = {
   member: 'Membre',
   pointsEarned: 'Points cette vente',
   pointsBalance: 'Points accumulés',
+  orderGaveYouPoints: 'Cette commande vous a rapporté : {n} points',
   courseLabel: 'PLAT',
 };
 
@@ -346,6 +350,7 @@ const DE: ReceiptLabels = {
   member: 'Mitglied',
   pointsEarned: 'Punkte dieser Verkauf',
   pointsBalance: 'Punkte bisher',
+  orderGaveYouPoints: 'Diese Bestellung hat Ihnen {n} Punkte gebracht',
   courseLabel: 'GANG',
 };
 

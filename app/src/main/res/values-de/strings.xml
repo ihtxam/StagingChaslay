@@ -580,4 +580,9 @@
     <string name="enter_tip_amount">Trinkgeld eingeben</string>
     <string name="custom_tip">Betrag</string>
     <string name="membership_lookup_failed">Kartenabfrage fehlgeschlagen</string>
+    <string name="gift_card_attached">Geschenkkarte zugeordnet · CHF %1$.2f</string>
+    <string name="gift_card_empty">Diese Geschenkkarte hat kein Guthaben</string>
+    <string name="receipt_order_gave_you_points">Diese Bestellung hat Ihnen %1$d Punkte gebracht</string>
+    <string name="receipt_points_so_far">Punkte bisher</string>
+    <string name="checkout_pay_with_points">Mit Punkten bezahlen (%1$d verfügbar)</string>
 </resources>

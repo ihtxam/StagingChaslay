@@ -583,4 +583,9 @@
     <string name="enter_tip_amount">Saisir le pourboire</string>
     <string name="custom_tip">Montant</string>
     <string name="membership_lookup_failed">Échec de la recherche de carte</string>
+    <string name="gift_card_attached">Carte cadeau associée · CHF %1$.2f</string>
+    <string name="gift_card_empty">Cette carte cadeau n’a plus de solde</string>
+    <string name="receipt_order_gave_you_points">Cette commande vous a rapporté : %1$d points</string>
+    <string name="receipt_points_so_far">Points accumulés</string>
+    <string name="checkout_pay_with_points">Payer avec points (%1$d disponibles)</string>
 </resources>

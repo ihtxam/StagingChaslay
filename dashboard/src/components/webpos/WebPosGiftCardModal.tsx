@@ -147,7 +147,7 @@ export default function WebPosGiftCardModal({
         setCard(looked);
         setCode(looked.cardNumber || trimmed);
         lastTriedRef.current = lookupKey;
-        if (looked.customer && attachRef.current) {
+        if (looked.customer && looked.membershipEnabled && attachRef.current) {
           attachRef.current(looked.customer);
         }
         if (mode === 'pay' || step === 'pay') {

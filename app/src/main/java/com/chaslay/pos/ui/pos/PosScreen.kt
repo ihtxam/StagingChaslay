@@ -206,7 +206,6 @@ fun PosScreen(
     var showBarcodeScanner by remember { mutableStateOf(false) }
     val hardwareScanEnabled =
         !showBarcodeScanner &&
-            !state.showCheckoutScreen &&
             !state.showOrderComplete &&
             !state.showMembershipDialog &&
             !state.showGiftCardOpsDialog
@@ -281,9 +280,13 @@ fun PosScreen(
             onPrevSplitBill = { viewModel.navigateSplitBill(-1) },
             onNextSplitBill = { viewModel.navigateSplitBill(1) },
             onScanBarcode = { showBarcodeScanner = true },
-            membershipPointsBalance = state.attachedMembership?.pointsBalance,
-            membershipGiftBalance = state.attachedMembership?.giftBalance,
+            membershipPointsBalance = state.attachedMembership
+                ?.takeIf { it.membershipEnabled }
+                ?.pointsBalance,
+            membershipGiftBalance = state.attachedGiftCard?.balance
+                ?: state.attachedMembership?.giftBalance,
             giftCardsEnabled = state.giftCardsEnabled,
+            redeemThresholdPoints = state.loyaltyProgram.redeemThreshold,
             onTogglePayWithPoints = viewModel::updateCheckoutPayWithPoints,
             onTogglePayWithGiftCard = viewModel::updateCheckoutPayWithGiftCard
         )

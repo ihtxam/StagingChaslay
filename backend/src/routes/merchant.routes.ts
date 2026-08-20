@@ -1365,6 +1365,9 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
           invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
         },
         giftCardSettings,
+        loyalty: (await import("@/services/shop-loyalty.service")).ShopLoyaltyService.programFromMerchant(
+          merchant
+        ),
         terminalReady,
         adyenConfigured: !!merchant.adyenApiKey && !!merchant.adyenMerchantAccount,
         adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,

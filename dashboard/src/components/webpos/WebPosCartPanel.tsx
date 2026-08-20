@@ -50,6 +50,8 @@ type Props = {
   membershipName?: string | null;
   membershipPointsBalance?: number | null;
   onClearMembership?: () => void;
+  giftCardLabel?: string | null;
+  onClearGiftCard?: () => void;
   fulfillmentLabel?: string | null;
   fulfillmentIsLater?: boolean;
   busy: boolean;
@@ -195,6 +197,8 @@ export default function WebPosCartPanel({
   membershipName,
   membershipPointsBalance,
   onClearMembership,
+  giftCardLabel,
+  onClearGiftCard,
   fulfillmentLabel,
   fulfillmentIsLater,
   busy,
@@ -358,7 +362,7 @@ export default function WebPosCartPanel({
     isRetail && showChannelTabs && channelTabOptions.includes('dine_in');
   const showFulfillmentTime =
     !!onEditFulfillment && (channel === 'takeaway' || channel === 'delivery');
-  const showMetaStrip = membershipName || orderNote;
+  const showMetaStrip = membershipName || giftCardLabel || orderNote;
   const dineInWhenLabel =
     fulfillmentIsLater && fulfillmentLabel ? fulfillmentLabel : t('webPosAsap');
 
@@ -791,6 +795,22 @@ export default function WebPosCartPanel({
                   title={t('webPosDetachMembership')}
                   aria-label={t('webPosDetachMembership')}
                   onClick={onClearMembership}
+                >
+                  ×
+                </button>
+              ) : null}
+            </span>
+          ) : null}
+          {giftCardLabel ? (
+            <span className="inline-flex max-w-full items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900">
+              <span className="truncate">{giftCardLabel}</span>
+              {onClearGiftCard ? (
+                <button
+                  type="button"
+                  className="shrink-0 rounded px-0.5 text-amber-800 hover:bg-amber-200/80"
+                  title={t('webPosDetachGiftCard')}
+                  aria-label={t('webPosDetachGiftCard')}
+                  onClick={onClearGiftCard}
                 >
                   ×
                 </button>
