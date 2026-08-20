@@ -177,7 +177,7 @@ class AuthRepository @Inject constructor(
 
     suspend fun loginWithEmail(email: String, password: String): LoginResult {
         loginLocalWithEmail(email, password)?.let { session ->
-            return LoginResult.Success(session, needsPinSetup = session.user.pinHash.isNullOrBlank())
+            return LoginResult.Success(session, needsPinSetup = false)
         }
         return loginCloudWithEmail(email, password)
     }
@@ -293,7 +293,7 @@ class AuthRepository @Inject constructor(
                 userDao.update(user)
             }
             val session = AuthSession(user, role)
-            LoginResult.Success(session, needsPinSetup = user.pinHash.isNullOrBlank())
+            LoginResult.Success(session, needsPinSetup = false)
         } catch (_: IOException) {
             LoginResult.Failure("No internet connection. Connect to Wi‑Fi and try again.")
         } catch (e: Exception) {

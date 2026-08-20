@@ -311,6 +311,35 @@ export function isStaleWebPosStaffSession(
  * - drop stale PIN sessions (role changed in portal)
  * - auto-bind panel staff JWT users to their current server role (skip PIN gate)
  */
+/** Merchant owner (or impersonated owner) already signed into the dashboard. */
+export function isMerchantOwnerJwt(user?: {
+  role?: string | null;
+  isOwner?: boolean;
+} | null): boolean {
+  return user?.role === 'merchant' && user?.isOwner !== false;
+}
+
+/**
+ * Hard PIN wall for WebPOS / waiter:
+ * - skip when no staff PINs exist (first-run / new shop)
+ * - skip when the dashboard owner (or impersonator) is already authenticated
+ * - skip when a staff PIN session is already active
+ * - skip when official staff login already bound a session
+ * Do not invent a PIN the merchant never set.
+ */
+export function webPosPinGateRequired(opts: {
+  hasStaffPins: boolean;
+  pinSession: WebPosStaffSession | null;
+  isOwnerJwt: boolean;
+  offlineUnlocked?: boolean;
+}): boolean {
+  if (opts.offlineUnlocked) return false;
+  if (opts.pinSession) return false;
+  if (!opts.hasStaffPins) return false;
+  if (opts.isOwnerJwt) return false;
+  return true;
+}
+
 export function resolveWebPosStaffSession(opts: {
   staffList: StaffRosterRow[];
   authStaffId?: string | null;

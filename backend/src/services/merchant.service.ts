@@ -325,14 +325,6 @@ export class MerchantService {
         issuedLicenses = issued;
       }
 
-      // Seed default Manager staff with PIN 1234 so WebPOS PIN gate works for new merchants.
-      try {
-        const { StaffService } = await import("./staff.service");
-        await StaffService.ensureDefaultPosStaff(created.id, businessName);
-      } catch (staffErr) {
-        console.error("Failed to seed default POS staff:", staffErr);
-      }
-
       // Default: send invite when no password was set; admin can also force sendInvite: true
       const sendInvite = options?.sendInvite ?? !hasPassword;
       let invite: Awaited<

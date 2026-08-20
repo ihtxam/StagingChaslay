@@ -18,11 +18,14 @@ import { roundMoney2 } from '@/lib/money';
 import {
   backOfficeHomePath,
   hasPermission,
+  isMerchantOwnerJwt,
   loadWebPosStaffSession,
   saveWebPosStaffSession,
   clearWebPosStaffSession,
+  webPosPinGateRequired,
   type WebPosStaffSession,
 } from '@/lib/permissions';
+import { useAuthStore } from '@/store/auth';
 import {
   POS_SESSION_KICKED_EVENT,
   registerPosSession,
@@ -53,6 +56,8 @@ function money(n: number) {
 export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
+  const authUser = useAuthStore((s) => s.user);
+  const jwtIsOwner = isMerchantOwnerJwt(authUser);
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [pinGateOpen, setPinGateOpen] = useState(false);
@@ -74,7 +79,11 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [heldTableIds, setHeldTableIds] = useState<string[]>([]);
   const [ordersRefresh, setOrdersRefresh] = useState(0);
 
-  const pinRequired = staffConfigured && !staff;
+  const pinRequired = webPosPinGateRequired({
+    hasStaffPins: staffConfigured,
+    pinSession: staff,
+    isOwnerJwt: jwtIsOwner,
+  });
 
   useEffect(() => {
     resumePosSessionHeartbeat();

@@ -196,41 +196,8 @@ export class StaffService {
     await db.delete(schema.merchantRoles).where(eq(schema.merchantRoles.id, roleId));
   }
 
-  /**
-   * Ensure at least one active POS staff with a PIN exists (default PIN 1234).
-   * New merchants otherwise cannot complete the WebPOS PIN gate.
-   */
-  static async ensureDefaultPosStaff(merchantId: string, displayName?: string) {
-    const db = getDb();
-    await this.ensureDefaultRoles(merchantId);
-    const existing = await db.query.merchantStaff.findMany({
-      where: and(eq(schema.merchantStaff.merchantId, merchantId), eq(schema.merchantStaff.isActive, true)),
-    });
-    if (existing.some((s) => !!s.pinHash)) return;
-
-    const roles = await db.query.merchantRoles.findMany({
-      where: eq(schema.merchantRoles.merchantId, merchantId),
-    });
-    const manager =
-      roles.find((r) => r.name.trim().toLowerCase() === "manager") ||
-      roles.find((r) => r.isSystem) ||
-      roles[0];
-    if (!manager) return;
-
-    const name = (displayName || "Manager").trim().slice(0, 255) || "Manager";
-    await db.insert(schema.merchantStaff).values({
-      merchantId,
-      roleId: manager.id,
-      name,
-      pinHash: await AuthService.hashPassword("1234"),
-      canAccessPanel: false,
-      isActive: true,
-    });
-  }
-
   static async listStaff(merchantId: string) {
     await this.ensureDefaultRoles(merchantId);
-    await this.ensureDefaultPosStaff(merchantId);
     const db = getDb();
     const staff = await db.query.merchantStaff.findMany({
       where: eq(schema.merchantStaff.merchantId, merchantId),

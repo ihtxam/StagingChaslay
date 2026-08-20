@@ -7,6 +7,7 @@
     <string name="biometric_login">Biometrische Daten verwenden</string>
     <string name="enter_pin">PIN eingeben</string>
     <string name="login_enter_pin_to_continue">Geben Sie Ihre PIN EIN, um sich anzumelden oder das Personal zu wechseln</string>
+    <string name="setup_pin_skip">Vorerst überspringen</string>
     <string name="email">Email</string>
     <string name="password">Kennwort</string>
     <string name="login">Login</string>

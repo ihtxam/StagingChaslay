@@ -830,9 +830,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     hasStaffPins: staffConfigured,
     pinSession: webposStaff,
     isOwnerJwt: jwtIsOwner,
-    officialStaffLogin: authUser?.role === 'staff',
     offlineUnlocked: isWebPosCurrentlyOffline() && loadedFromOfflineCache,
   });
+  /** Owner on the till without a clock-in keeps owner/manager perms. */
+  const ownerOnRegister = jwtIsOwner && !webposStaff;
 
   const applyStaffRoster = useCallback(
     (staffList: StaffRosterRow[], opts?: { openPinGate?: boolean }) => {
@@ -2598,6 +2599,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   /** Whole-day EOD: END_OF_DAY/VIEW_REPORTS plus VIEW_ALL_SALES (managers). */
   const mayPrintWholeDayEod =
+    ownerOnRegister ||
     !staffConfigured ||
     (!!webposStaff &&
       (hasPermission(webposStaff.permissions, 'VIEW_REPORTS') ||
@@ -2795,6 +2797,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       const params: Record<string, string> = { preset: 'today' };
       const adminViewAll =
+        ownerOnRegister ||
         !staffConfigured ||
         (!!webposStaff && hasPermission(webposStaff.permissions, 'VIEW_ALL_SALES', false));
       if (adminViewAll && scopeStaffId) {
@@ -6534,32 +6537,49 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const staffPerms = webposStaff?.permissions;
-  /** Never treat merchant-owner JWT as a bypass while a PIN session is required. */
+  /** A staff PIN session still overrides owner JWT. Owner on the till without clock-in keeps manager perms. */
   const canPay =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'PROCESS_PAYMENTS', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'PROCESS_PAYMENTS', false));
   const canDrawer =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'OPEN_CASH_DRAWER', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'OPEN_CASH_DRAWER', false));
   const canCancelOrders =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'CANCEL_ORDERS', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'CANCEL_ORDERS', false));
   const canRefundOrders =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'REFUND_ORDERS', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'REFUND_ORDERS', false));
   const canApplyDiscounts =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'APPLY_DISCOUNTS', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'APPLY_DISCOUNTS', false));
   const canViewReports =
+    ownerOnRegister ||
     !staffConfigured ||
     (!!webposStaff &&
       (hasPermission(staffPerms, 'VIEW_REPORTS', false) ||
         hasPermission(staffPerms, 'END_OF_DAY', false)));
   const canOpenPanel =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'ACCESS_PANEL', false));
-  const jwtIsOwner = authUser?.role === 'merchant' && authUser?.isOwner !== false;
-  const canManageProducts = staffConfigured
-    ? !!webposStaff && hasPermission(staffPerms, 'MANAGE_PRODUCTS', false)
-    : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_PRODUCTS', jwtIsOwner);
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'ACCESS_PANEL', false));
+  const canManageProducts = ownerOnRegister
+    ? hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_PRODUCTS', true)
+    : staffConfigured
+      ? !!webposStaff && hasPermission(staffPerms, 'MANAGE_PRODUCTS', false)
+      : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_PRODUCTS', jwtIsOwner);
   const canViewOrders =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'VIEW_ORDER_HISTORY', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'VIEW_ORDER_HISTORY', false));
   const canShowBackOffice = canOpenPanel || canManageProducts || canViewOrders;
   const canViewAllSales =
+    ownerOnRegister ||
     !staffConfigured ||
     (!!webposStaff && hasPermission(staffPerms, 'VIEW_ALL_SALES', false));
   /** Whole-day EOD: report permission + company-wide sales visibility. */
@@ -6650,8 +6670,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const openSwitchUserPin = () => {
+    if (!staffConfigured) return;
     setPinModalMode('switch');
     setPinModalOpen(true);
+  };
+
+  const dismissSetPinHint = () => {
+    setSetPinHintDismissed(true);
+    try {
+      sessionStorage.setItem(WEBPOS_SET_PIN_HINT_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const openSetStaffPin = () => {
+    dismissSetPinHint();
+    window.dispatchEvent(new CustomEvent('webpos:show-panel'));
+    navigate('/merchant/users');
   };
 
   const findProductByScanCode = useCallback(
@@ -7014,6 +7050,30 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           {t('webPosNewReservationAlert')}
         </div>
       ) : null}
+      {!staffConfigured && !setPinHintDismissed ? (
+        <div
+          className="shrink-0 flex items-center justify-between gap-3 border-b border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-950"
+          role="status"
+        >
+          <p>{t('webPosSetPinHint')}</p>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              className="rounded-md bg-teal-700 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-800"
+              onClick={openSetStaffPin}
+            >
+              {t('webPosSetPinAction')}
+            </button>
+            <button
+              type="button"
+              className="text-xs font-medium text-teal-800 underline"
+              onClick={dismissSetPinHint}
+            >
+              {t('webPosSetPinDismiss')}
+            </button>
+          </div>
+        </div>
+      ) : null}
       <WebPosTopBar
         activeTab={posTab}
         posView={posView}
@@ -7035,7 +7095,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onlinePendingCount={onlinePendingCount}
         orderAlertRing={orderAlertRing}
         reservationPendingCount={reservationPendingCount}
-        staffName={webposStaff?.name}
+        staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
         canDrawer={canDrawer}
         canShowPanel={canShowBackOffice}
         appMode={appMode}
@@ -7151,7 +7211,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setSettingsOpen(false);
               openSwitchUserPin();
             }}
-            staffName={webposStaff?.name}
+            staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
             colorTheme={posColorTheme}
             onColorThemeChange={(theme) => void changePosColorTheme(theme)}
             appearance={posAppearance}
@@ -8452,7 +8512,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         open={cashMovementOpen}
         shiftId={openShift?.id ?? null}
         staffId={webposStaff?.id}
-        staffName={webposStaff?.name}
+        staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
         onClose={() => setCashMovementOpen(false)}
         onSuccess={(live) => {
           setShiftLive((prev) => ({ ...(prev || {}), ...live } as NonNullable<typeof shiftLive>));
