@@ -23,6 +23,8 @@ import ReservationsPage from '@/pages/shop/ReservationsPage';
 import ReceiptPage from '@/pages/ReceiptPage';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import PosEmbedPage from '@/pages/PosEmbedPage';
+import PosViewportManager from '@/components/PosViewportManager';
+import KdsDisplayPage from '@/pages/KdsDisplayPage';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 
@@ -33,7 +35,7 @@ function LegacyReceiptRedirect() {
 }
 
 function isWebPosRoute(pathname: string): boolean {
-  return /\/merchant\/(?:pos|waiter)(?:\/|$)/.test(pathname);
+  return /\/merchant\/(?:pos|waiter)(?:\/|$)/.test(pathname) || /^\/kds(?:\/|$)/.test(pathname);
 }
 
 /** WebPOS uses center-top toasts so they do not cover the right-side menu. */
@@ -130,6 +132,7 @@ function App() {
   return (
     <>
       <BrowserRouter>
+        <PosViewportManager />
         <Routes>
           {!shopMode && (
             <Route
@@ -212,6 +215,14 @@ function App() {
             }
           />
           <Route path="/receipts/:saleId" element={<LegacyReceiptRedirect />} />
+          <Route
+            path="/kds/:token"
+            element={
+              <I18nProvider storageKey={PANEL_LANG_KEY}>
+                <KdsDisplayPage />
+              </I18nProvider>
+            }
+          />
           <Route
             path="/shop/:merchantSlug"
             element={

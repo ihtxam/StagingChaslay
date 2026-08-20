@@ -107,13 +107,19 @@ export function buildGiftCardBarcodePayload(code: string): string {
 /** Return the first ref that exists on the public receipt API (backend UUID preferred). */
 export async function resolvePublishedReceiptRef(
   backendOrderId: string | null | undefined,
-  clientId: string
+  clientId: string,
+  orderNumber?: string | null
 ): Promise<string | null> {
-  const candidates = [...new Set([backendOrderId, clientId].filter(Boolean))] as string[];
+  const candidates = [
+    ...new Set([backendOrderId, orderNumber, clientId].filter(Boolean)),
+  ] as string[];
   for (const ref of candidates) {
     try {
-      await publicApi.get(`/receipts/${encodeURIComponent(ref)}`);
-      return ref;
+      const res = await publicApi.get(`/receipts/${encodeURIComponent(ref)}`);
+      if (res.data?.success && res.data?.receipt?.id) {
+        return String(res.data.receipt.id);
+      }
+      if (res.status === 200 && res.data?.receipt) return ref;
     } catch {
       /* try next candidate */
     }
@@ -356,4 +362,28 @@ export function buildTableShopUrl(
   const slug = encodeURIComponent(merchantSlug);
   const table = encodeURIComponent(tableId);
   return `${base}/shop/${slug}/menu?channel=dine_in&table=${table}`;
+}
+
+/** Waiter ordering URL — opens waiter app on a specific table (not customer menu). */
+export function buildWaiterTableUrl(tableId: string, origin?: string): string {
+  const base = String(origin || (typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com')).replace(/\/$/, '');
+  return `${base}/merchant/waiter?table=${encodeURIComponent(tableId)}`;
+}
+
+/** Parse waiter table deep link (?table=uuid). */
+export function parseWaiterTableUrl(raw: string): { tableId: string } | null {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return null;
+  try {
+    if (/^https?:\/\//i.test(trimmed)) {
+      const url = new URL(trimmed);
+      const table = url.searchParams.get('table');
+      if (table) return { tableId: table };
+    }
+  } catch {
+    /* not a URL */
+  }
+  const inline = trimmed.match(/[?&]table=([a-f0-9-]+)/i);
+  if (inline?.[1]) return { tableId: inline[1]! };
+  return null;
 }

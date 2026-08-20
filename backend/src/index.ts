@@ -20,6 +20,7 @@ import deliveryZonesRoutes from "@/routes/delivery-zones.routes";
 import floorPlansRoutes from "@/routes/floor-plans.routes";
 import reservationsRoutes from "@/routes/reservations.routes";
 import receiptsRoutes from "@/routes/receipts.routes";
+import kdsRoutes, { kdsMerchantRoutes } from "@/routes/kds.routes";
 import chaslayRoutes from "@/routes/chaslay";
 import webhooksRoutes from "@/routes/webhooks.routes";
 import deliveryPlatformRoutes from "@/routes/delivery-platform.routes";
@@ -170,6 +171,8 @@ app.use("/api/merchant/vouchers", vouchersRoutes);
 app.use("/api/merchant/marketing", marketingRoutes);
 app.use("/api/merchant/inventory", inventoryRoutes);
 app.use("/api/receipts", receiptsRoutes);
+app.use("/api/kds", kdsRoutes);
+app.use("/api/merchant/kds", kdsMerchantRoutes);
 app.use("/api/webhooks", webhooksRoutes);
 app.use("/api/webhooks", deliveryPlatformRoutes);
 /** Chaslay / FoodTruck Android POS (Retrofit /v1/* contract) */

@@ -1059,6 +1059,80 @@ export const posSessions = pgTable(
 );
 
 // ============================================================================
+// KITCHEN DISPLAY (browser KDS)
+// ============================================================================
+
+export const kdsStations = pgTable(
+  "kds_stations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    token: varchar("token", { length: 128 }).notNull(),
+    orderTypes: json("order_types").$type<string[]>().default([]).notNull(),
+    categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
+    productIds: json("product_ids").$type<string[]>().default([]).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("kds_stations_merchant_id_idx").on(table.merchantId),
+    tokenIdx: index("kds_stations_token_idx").on(table.token),
+  })
+);
+
+export const kdsTickets = pgTable(
+  "kds_tickets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    ticketKey: varchar("ticket_key", { length: 255 }).notNull(),
+    orderNumber: varchar("order_number", { length: 64 }),
+    tableLabel: varchar("table_label", { length: 120 }),
+    tabNumber: varchar("tab_number", { length: 64 }),
+    channel: varchar("channel", { length: 50 }),
+    status: varchar("status", { length: 30 }).default("pending").notNull(),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("kds_tickets_merchant_id_idx").on(table.merchantId),
+    ticketKeyIdx: index("kds_tickets_merchant_ticket_key_idx").on(table.merchantId, table.ticketKey),
+  })
+);
+
+export const kdsTicketItems = pgTable(
+  "kds_ticket_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ticketId: uuid("ticket_id")
+      .notNull()
+      .references(() => kdsTickets.id, { onDelete: "cascade" }),
+    lineId: varchar("line_id", { length: 128 }).notNull(),
+    productId: uuid("product_id"),
+    categoryId: uuid("category_id"),
+    name: varchar("name", { length: 255 }).notNull(),
+    quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
+    lineNote: text("line_note"),
+    courseNumber: integer("course_number"),
+    modifiersJson: json("modifiers_json").$type<Record<string, unknown>>().default({}),
+    status: varchar("status", { length: 30 }).default("pending").notNull(),
+    readyAt: timestamp("ready_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    ticketIdx: index("kds_ticket_items_ticket_id_idx").on(table.ticketId),
+    lineIdx: index("kds_ticket_items_line_id_idx").on(table.ticketId, table.lineId),
+  })
+);
+
+// ============================================================================
 // ORDER ITEMS
 // ============================================================================
 
@@ -2201,6 +2275,19 @@ export const paymentTransactionsRelations = relations(paymentTransactions, ({ on
 
 export const heldOrdersRelations = relations(heldOrders, ({ one }) => ({
   merchant: one(merchants, { fields: [heldOrders.merchantId], references: [merchants.id] }),
+}));
+
+export const kdsStationsRelations = relations(kdsStations, ({ one }) => ({
+  merchant: one(merchants, { fields: [kdsStations.merchantId], references: [merchants.id] }),
+}));
+
+export const kdsTicketsRelations = relations(kdsTickets, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [kdsTickets.merchantId], references: [merchants.id] }),
+  items: many(kdsTicketItems),
+}));
+
+export const kdsTicketItemsRelations = relations(kdsTicketItems, ({ one }) => ({
+  ticket: one(kdsTickets, { fields: [kdsTicketItems.ticketId], references: [kdsTickets.id] }),
 }));
 
 export const customerAddressesRelations = relations(customerAddresses, ({ one }) => ({

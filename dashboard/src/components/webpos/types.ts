@@ -49,6 +49,8 @@ export type CartLine = {
   sentToKitchenAt?: number;
   /** Kitchen ticket print failed after send — show retry UI. */
   kitchenPrintFailed?: boolean;
+  /** Set when KDS marks line ready. */
+  kitchenReadyAt?: number;
   /** Per-line kitchen note from modifier modal */
   lineNote?: string;
   /** Gift card sell/reload  - credited after successful payment */

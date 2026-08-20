@@ -10,6 +10,7 @@ import { roundMoney2, roundTo005, roundingAdjustment, computeMerchandiseTotals, 
 import { APP_NAME } from '@/lib/brand';
 import {
   buildKitchenPrintJobs,
+  buildKitchenCrossStationFooters,
   kitchenJobsExcludingReceiptPrinters,
   buildKitchenTicketItemFromLine,
   generateKitchenTicketEscPos,
@@ -108,6 +109,8 @@ import WebPosComboModal, {
 } from '@/components/webpos/WebPosComboModal';
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
+import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
+import { pushCartLinesToKds, fetchKdsReadyLineIds } from '@/lib/kds-push';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
@@ -757,6 +760,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [recentOpen, setRecentOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
+  const [posAuthAlert, setPosAuthAlert] = useState<{ title?: string; message: string } | null>(
+    null
+  );
   const [webposStaff, setWebposStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [staffConfigured, setStaffConfigured] = useState(false);
   const [setPinHintDismissed, setSetPinHintDismissed] = useState(() => {
@@ -878,7 +884,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const onKicked = () => {
       clearWebPosStaffSession();
       setWebposStaff(null);
-      toast.error(t('webPosSessionKicked'));
+      setPosAuthAlert({
+        title: t('webPosSessionKickedTitle'),
+        message: t('webPosSessionKicked'),
+      });
       if (!staffConfigured) {
         void registerPosSession({
           sessionKind: 'main',
@@ -3449,6 +3458,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [tabNumber, ticketDisplay, ticketOrderNumber, ensureCartTicket]
   );
 
+  const kdsTicketKey =
+    ticketDisplay?.trim() ||
+    kitchenOrderNumber({ allowNew: false }) ||
+    (tabNumber ? `#${tabNumber}` : '');
+
+  useEffect(() => {
+    if (!kdsTicketKey || isRetail) return;
+    if (!cart.some((l) => l.sentToKitchen)) return;
+    let cancelled = false;
+    const syncReady = async () => {
+      const readyIds = await fetchKdsReadyLineIds(kdsTicketKey);
+      if (cancelled || !readyIds.length) return;
+      setCart((prev) =>
+        prev.map((l) =>
+          readyIds.includes(l.lineId) && !l.kitchenReadyAt
+            ? { ...l, kitchenReadyAt: Date.now() }
+            : l
+        )
+      );
+    };
+    void syncReady();
+    const timer = window.setInterval(() => void syncReady(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [kdsTicketKey, isRetail, cart.filter((l) => l.sentToKitchen).length]);
+
   /** Assign the kitchen/public ticket when checkout opens so AMOUNT DUE can show both. */
   useEffect(() => {
     if (posView !== 'checkout' || collectOrderRef) return;
@@ -5584,19 +5621,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const printJobs = opts?.dedicatedKitchenOnly
       ? kitchenJobsExcludingReceiptPrinters(receiptItems, printSettings)
       : buildKitchenPrintJobs(receiptItems, printSettings);
+    const crossFooters = buildKitchenCrossStationFooters(printJobs);
+    const otherStationLabel = t('kitchenOtherStationFooter');
     if (printJobs.length) {
       for (const job of printJobs) {
         const paperWidthMm = job.paperWidthMm;
-        const escpos = generateKitchenTicketEscPos({
+        const otherItems = crossFooters.get((job.printerName || '').trim()) || [];
+        const ticketOpts = {
           ...kitchenOpts,
           items: job.items,
           paperWidthMm,
-        });
-        const text = generateKitchenTicketText({
-          ...kitchenOpts,
-          items: job.items,
-          paperWidthMm,
-        });
+          otherStationItems: otherItems.length ? otherItems : undefined,
+          otherStationLabel: otherItems.length ? otherStationLabel : undefined,
+        };
+        const escpos = generateKitchenTicketEscPos(ticketOpts);
+        const text = generateKitchenTicketText(ticketOpts);
         const mode = await printViaAgentOrQueue({
           printerName: job.printerName || printerName || undefined,
           dataBase64: uint8ToBase64(escpos),
@@ -5608,6 +5647,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       setPrinterDisconnected(false);
       if (queuedAny) toast.success(t('webPosPrintQueuedMainTill'));
+      void pushCartLinesToKds({
+        ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
+        orderNumber: kitchenOpts.orderNumber,
+        tableLabel: kitchenOpts.tableLabel,
+        tabNumber: kitchenOpts.tabNumber,
+        channel: saleChannel,
+        lines: filteredLines,
+      });
       return;
     }
 
@@ -5633,6 +5680,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     });
     setPrinterDisconnected(false);
     if (mode === 'queued') toast.success(t('webPosPrintQueuedMainTill'));
+    void pushCartLinesToKds({
+      ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
+      orderNumber: kitchenOpts.orderNumber,
+      tableLabel: kitchenOpts.tableLabel,
+      tabNumber: kitchenOpts.tabNumber,
+      channel: saleChannel,
+      lines: filteredLines,
+    });
   };
 
   const retryKitchenPrint = async (lines: CartLine[]) => {
@@ -6020,7 +6075,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     const receiptRef = queuedOffline
       ? clientId
-      : (await resolvePublishedReceiptRef(backendOrderId, clientId)) ||
+      : (await resolvePublishedReceiptRef(
+          backendOrderId,
+          clientId,
+          ticket.orderNumber || lastReceiptOrderNumber
+        )) ||
         backendOrderId ||
         clientId;
     const receiptUrl = buildReceiptUrl(receiptRef);
@@ -6658,6 +6717,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setWebposStaff(session);
     saveWebPosStaffSession(session);
     window.dispatchEvent(new CustomEvent('webpos:staff-session'));
+    setPosAuthAlert(null);
     void registerPosSession({
       sessionKind: 'main',
       platform: 'webpos',
@@ -6975,14 +7035,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             </button>
           </div>
         ) : (
-          <WebPosPinModal
-            open
-            mode="gate"
-            onClose={() => {
-              /* gate cannot be dismissed without PIN */
-            }}
-            onSuccess={onStaffPinSuccess}
-          />
+          <>
+            <WebPosBlockingAlert
+              open={!!posAuthAlert}
+              title={posAuthAlert?.title}
+              message={posAuthAlert?.message || ''}
+              onDismiss={() => setPosAuthAlert(null)}
+              minMs={8000}
+            />
+            <WebPosPinModal
+              open
+              mode="gate"
+              onClose={() => {
+                /* gate cannot be dismissed without PIN */
+              }}
+              onSuccess={onStaffPinSuccess}
+            />
+          </>
         )}
       </div>
     );

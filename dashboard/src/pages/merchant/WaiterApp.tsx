@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Loader2,
   LogOut,
@@ -38,6 +38,7 @@ import {
   printWaiterKitchen,
 } from '@/lib/waiter-kitchen';
 import WebPosPinModal from '@/components/WebPosPinModal';
+import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 import WebPosTablesView from '@/components/webpos/WebPosTablesView';
 import WebPosProductArea from '@/components/webpos/WebPosProductArea';
 import WebPosProductModifiersModal, {
@@ -56,11 +57,15 @@ function money(n: number) {
 export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const authUser = useAuthStore((s) => s.user);
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [pinGateOpen, setPinGateOpen] = useState(false);
+  const [posAuthAlert, setPosAuthAlert] = useState<{ title?: string; message: string } | null>(
+    null
+  );
   const [staffConfigured, setStaffConfigured] = useState(false);
   const [tab, setTab] = useState<WaiterTab>('tables');
   const [categories, setCategories] = useState<Category[]>([]);
@@ -248,6 +253,35 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     setTab('order');
   };
 
+  useEffect(() => {
+    if (loading || pinRequired) return;
+    const tableParam = searchParams.get('table');
+    if (!tableParam || tableId === tableParam) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await api.get('/merchant/floor-plans/tables');
+        if (cancelled) return;
+        const rows = (res.data?.tables || []) as Array<{ id: string; label: string }>;
+        const row = rows.find((tbl) => tbl.id === tableParam);
+        selectTable({
+          id: tableParam,
+          label: row?.label || tableParam.slice(0, 6).toUpperCase(),
+        });
+      } catch {
+        if (!cancelled) {
+          selectTable({
+            id: tableParam,
+            label: tableParam.slice(0, 6).toUpperCase(),
+          });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, pinRequired, searchParams, tableId]);
+
   const resetOrder = () => {
     setCart([]);
     setTableId(null);
@@ -264,7 +298,10 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       clearWebPosStaffSession();
       setStaff(null);
       resetOrder();
-      toast.error(t('webPosSessionKicked'));
+      setPosAuthAlert({
+        title: t('webPosSessionKickedTitle'),
+        message: t('webPosSessionKicked'),
+      });
       setPinGateOpen(true);
     };
     window.addEventListener(POS_SESSION_KICKED_EVENT, onKicked);
@@ -294,6 +331,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     saveWebPosStaffSession(session);
     setStaff(session);
     setPinGateOpen(false);
+    setPosAuthAlert(null);
     await registerPosSession({
       sessionKind: 'waiter',
       platform: 'waiter_web',
@@ -373,7 +411,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
 
   return (
     <div
-      className={`flex h-full min-h-0 flex-col bg-stone-950 text-stone-100 ${
+      className={`waiter-shell flex h-full min-h-0 flex-col bg-stone-950 text-stone-100 ${
         appMode ? 'waiter-app-mode' : ''
       }`}
     >
@@ -557,6 +595,13 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         ))}
       </nav>
 
+      <WebPosBlockingAlert
+        open={!!posAuthAlert}
+        title={posAuthAlert?.title}
+        message={posAuthAlert?.message || ''}
+        onDismiss={() => setPosAuthAlert(null)}
+        minMs={8000}
+      />
       <WebPosPinModal
         open={pinGateOpen}
         mode="gate"

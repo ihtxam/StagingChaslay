@@ -18,7 +18,7 @@ import {
   renderTableQrPng,
   tableQrDownloadFilename,
 } from '@/lib/table-qr-download';
-import { buildTableQrPayload, buildTableShopUrl, qrImageUrl } from '@/lib/qr';
+import { buildTableQrPayload, buildTableShopUrl, buildWaiterTableUrl, qrImageUrl } from '@/lib/qr';
 
 type TableQrView = {
   id: string;
@@ -27,6 +27,7 @@ type TableQrView = {
   sectionName: string;
   payload: string;
   shopUrl: string;
+  waiterUrl: string;
   qrUrl: string;
   codes: TableQrCodeRow[];
 };
@@ -93,6 +94,7 @@ export default function TableQrCodes() {
         sectionName: sectionNameById.get(table.floorPlanId) || table.floorPlanName || '',
         payload,
         shopUrl: buildTableShopUrl(merchantSlug, table.id),
+        waiterUrl: buildWaiterTableUrl(table.id),
         qrUrl: qrImageUrl(payload, 200),
         codes: tableCodes,
       };
@@ -306,6 +308,23 @@ export default function TableQrCodes() {
               </div>
               <p className="break-all text-xs text-[var(--text-muted)]">{selected.payload}</p>
               <p className="break-all text-xs text-[var(--text-muted)]">{selected.shopUrl}</p>
+              <div className="rounded-lg border border-violet-200 bg-violet-50/80 p-3">
+                <p className="text-xs font-semibold text-violet-900">{t('tableQrWaiterTitle')}</p>
+                <p className="mt-1 break-all text-xs text-violet-800">{selected.waiterUrl}</p>
+                <button
+                  type="button"
+                  className="btn-secondary mt-2 inline-flex items-center gap-2 text-sm"
+                  onClick={() =>
+                    void downloadOne(
+                      { ...selected, payload: selected.waiterUrl, qrUrl: qrImageUrl(selected.waiterUrl, 200) },
+                      'medium'
+                    )
+                  }
+                >
+                  <Download className="h-4 w-4" />
+                  {t('tableQrWaiterDownload')}
+                </button>
+              </div>
 
               <form onSubmit={saveCode} className="space-y-3 border-t border-[var(--border)] pt-3">
                 <div className="flex gap-2">

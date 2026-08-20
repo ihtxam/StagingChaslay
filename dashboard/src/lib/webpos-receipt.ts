@@ -1234,6 +1234,9 @@ export type KitchenTicketOpts = {
   /** Void ticket: title CANCELLED + strikethrough item lines */
   cancelled?: boolean;
   cancelReason?: string | null;
+  /** Items routed to another kitchen printer (cross-station footer). */
+  otherStationItems?: KitchenTicketItem[];
+  otherStationLabel?: string | null;
 };
 
 export type KitchenMessageTicketOpts = {
@@ -1519,6 +1522,17 @@ function buildKitchenTicketLines(
   } else {
     for (const item of items) {
       lines.push(...formatKitchenItemLines(item, itemWidth, cancelled, forEscPos));
+    }
+  }
+
+  if (opts.otherStationItems?.length) {
+    lines.push({ kind: 'normal', text: thin });
+    lines.push({
+      kind: 'center',
+      text: (opts.otherStationLabel || '>>> OTHER STATION <<<').slice(0, footWidth),
+    });
+    for (const item of opts.otherStationItems) {
+      lines.push(...formatKitchenItemLines(item, itemWidth, false, forEscPos));
     }
   }
 
@@ -2371,6 +2385,24 @@ export function buildKitchenPrintJobs(
   }
 
   return jobs;
+}
+
+/** When multiple kitchen printers share one order, map printer name → items on other stations. */
+export function buildKitchenCrossStationFooters(
+  jobs: KitchenPrintJob[]
+): Map<string, KitchenTicketItem[]> {
+  const map = new Map<string, KitchenTicketItem[]>();
+  if (jobs.length < 2) return map;
+  for (const job of jobs) {
+    const key = (job.printerName || '').trim();
+    const others: KitchenTicketItem[] = [];
+    for (const other of jobs) {
+      if ((other.printerName || '').trim() === key) continue;
+      others.push(...other.items);
+    }
+    if (others.length) map.set(key, others);
+  }
+  return map;
 }
 
 /**

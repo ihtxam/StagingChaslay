@@ -301,6 +301,10 @@ export default function WebPosCartPanel({
 
   const orderedLines = useMemo(() => cart.filter((l) => !!l.sentToKitchen), [cart]);
   const orderingLines = useMemo(() => cart.filter((l) => !l.sentToKitchen), [cart]);
+  const kdsReadyCount = useMemo(
+    () => orderedLines.filter((l) => !!l.kitchenReadyAt).length,
+    [orderedLines]
+  );
   const showOrderTabs = kitchenEnabled && orderedLines.length > 0;
   const onOrderedTab = showOrderTabs && cartTab === 'ordered';
   /** Keypad only while a cart line is selected on Ordering (not Ordered history). */
@@ -848,7 +852,10 @@ export default function WebPosCartPanel({
           >
             {t('webPosCartOrdered')}
             {orderedLines.length ? (
-              <span className="ml-1 tabular-nums opacity-80">({orderedLines.length})</span>
+              <span className="ml-1 tabular-nums opacity-80">
+                ({kdsReadyCount > 0 ? `${kdsReadyCount}/` : ''}
+                {orderedLines.length})
+              </span>
             ) : null}
           </button>
         </div>
@@ -952,7 +959,7 @@ export default function WebPosCartPanel({
                       ) : null}
                       {l.sentToKitchen ? (
                         <span className="ml-1 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
-                          {t('webPosSentBadge')}
+                          {l.kitchenReadyAt ? t('webPosReadyBadge') : t('webPosSentBadge')}
                         </span>
                       ) : null}
                       {l.kitchenPrintFailed ? (
