@@ -26,6 +26,7 @@ import PosPostsSection from '@/components/settings/PosPostsSection';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import api from '@/lib/api';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
+import { isSignageLicensed } from '@/lib/signage-addon';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
   findPrinterHealCandidates,
@@ -83,6 +84,9 @@ interface SettingsData {
   maxWaiterPosts?: number;
   inventoryAddonEnabled?: boolean;
   inventoryEnabled?: boolean;
+  signageAddonEnabled?: boolean;
+  signageEnabled?: boolean;
+  signageScreenLimit?: number;
   inventoryWasteFactor?: number;
   inventoryAutoReorderEmailEnabled?: boolean;
   posColorTheme?: string;
@@ -712,6 +716,11 @@ export default function Settings() {
         id: 'inventory-addon',
         tab: 'pos',
         keywords: ['inventory', 'stock', 'recipe', 'supplier', t('invTitle')],
+      },
+      {
+        id: 'signage-addon',
+        tab: 'pos',
+        keywords: ['signage', 'tv', 'menu board', 'screens', t('signageTitle')],
       },
       {
         id: 'email-smtp',
@@ -2047,6 +2056,26 @@ export default function Settings() {
                 >
                   {t('save')}
                 </button>
+              </Section>
+
+              <Section
+                id="signage-addon"
+                icon={Monitor}
+                accent={settingsDash.accent}
+                title={t('signageTitle')}
+                description={t('signageAddonReadOnly')}
+                highlight={isSectionHighlight('signage-addon')}
+                dimmed={normalizedQuery ? !isSectionVisible('signage-addon') : false}
+              >
+                <p className="text-sm">
+                  {isSignageLicensed(settings) ? t('signageAddonOn') : t('signageAddonOff')}
+                </p>
+                <p className="text-xs muted mt-1">{t('signageAddonReadOnly')}</p>
+                {isSignageLicensed(settings) ? (
+                  <Link to="/merchant/signage" className="btn-secondary mt-3 inline-flex">
+                    {t('signageNav')}
+                  </Link>
+                ) : null}
               </Section>
 
               <Section

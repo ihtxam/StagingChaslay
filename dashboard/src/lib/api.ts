@@ -67,6 +67,8 @@ api.interceptors.response.use(
         !path.startsWith('/forgot-password') &&
         !path.startsWith('/login') &&
         !path.startsWith('/signin') &&
+        !path.startsWith('/kds') &&
+        !path.startsWith('/tv') &&
         path !== '/superadmin/login' &&
         path !== '/reseller/login' &&
         path !== '/merchant/login'

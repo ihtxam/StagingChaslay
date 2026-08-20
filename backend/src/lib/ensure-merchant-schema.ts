@@ -80,6 +80,10 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_waste_factor numeric(5,4) NOT NULL DEFAULT 0.20",
   inventory_auto_reorder_email_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_auto_reorder_email_enabled boolean NOT NULL DEFAULT false",
+  signage_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS signage_addon_enabled boolean NOT NULL DEFAULT false",
+  signage_screen_limit:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS signage_screen_limit integer NOT NULL DEFAULT 2",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
@@ -345,6 +349,45 @@ const TABLE_PATCHES: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS password_reset_tokens_token_hash_idx ON password_reset_tokens(token_hash)`,
   `CREATE INDEX IF NOT EXISTS password_reset_tokens_email_idx ON password_reset_tokens(email)`,
   `CREATE INDEX IF NOT EXISTS password_reset_tokens_expires_idx ON password_reset_tokens(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS signage_playlists (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(255) NOT NULL,
+    template varchar(40) NOT NULL DEFAULT 'dark_pizza',
+    schedule jsonb NOT NULL DEFAULT '{"type":"always"}',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS signage_playlists_merchant_id_idx ON signage_playlists(merchant_id)`,
+  `CREATE TABLE IF NOT EXISTS signage_screens (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(255) NOT NULL,
+    token varchar(128) NOT NULL,
+    orientation varchar(20) NOT NULL DEFAULT 'landscape',
+    template varchar(40) NOT NULL DEFAULT 'dark_pizza',
+    playlist_id uuid REFERENCES signage_playlists(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS signage_screens_token_uidx ON signage_screens(token)`,
+  `CREATE INDEX IF NOT EXISTS signage_screens_merchant_id_idx ON signage_screens(merchant_id)`,
+  `CREATE TABLE IF NOT EXISTS signage_slides (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    playlist_id uuid NOT NULL REFERENCES signage_playlists(id) ON DELETE CASCADE,
+    type varchar(30) NOT NULL DEFAULT 'menu',
+    duration_sec integer NOT NULL DEFAULT 10,
+    sort_order integer NOT NULL DEFAULT 0,
+    category_ids jsonb NOT NULL DEFAULT '[]',
+    headline varchar(255),
+    body text,
+    image_url varchar(500),
+    show_prices boolean NOT NULL DEFAULT true,
+    show_photos boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS signage_slides_playlist_id_idx ON signage_slides(playlist_id)`,
 ];
 
 let startupPatchPromise: Promise<void> | null = null;
@@ -393,6 +436,12 @@ export async function ensureInventoryAddonColumn(): Promise<void> {
   await runPatch("inventory_qty");
 }
 
+export async function ensureSignageAddonColumn(): Promise<void> {
+  await runPatch("signage_addon_enabled");
+  await runPatch("signage_screen_limit");
+  await ensureMerchantTables();
+}
+
 /** Apply all known optional merchant columns once at startup (non-blocking). */
 export function ensureMerchantSchemaAtStartup(): void {
   if (startupPatchPromise) return;
@@ -416,7 +465,7 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error ?? "");
     const patched = await patchMerchantSchemaFromError(error);
-    const inventoryTableMissing = /relation ["']?(inventory_|product_recipes)/i.test(raw);
+    const inventoryTableMissing = /relation ["']?(inventory_|product_recipes|signage_)/i.test(raw);
     if (inventoryTableMissing) {
       patchedTables = false;
       await ensureMerchantTables();

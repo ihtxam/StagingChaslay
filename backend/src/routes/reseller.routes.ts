@@ -5,6 +5,7 @@ import { EditionService } from "@/services/edition.service";
 import { AuthService } from "@/services/auth.service";
 import { EDITION_FEATURE_GROUPS, ALL_EDITION_FEATURES } from "@/lib/edition-features";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
 
 const router = Router();
 
@@ -181,6 +182,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
       maxPosPosts,
       maxWaiterPosts,
       inventoryAddonEnabled,
+      signageAddonEnabled,
+      signageScreenLimit,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
     if (!email || !trimmedBusinessName || !editionId) {
@@ -204,6 +207,9 @@ router.post("/merchants", async (req: Request, res: Response) => {
       maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
       maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
       inventoryAddonEnabled: inventoryAddonEnabled === true,
+      signageAddonEnabled: signageAddonEnabled === true,
+      signageScreenLimit:
+        signageScreenLimit != null ? Number(signageScreenLimit) : undefined,
     });
     res.status(201).json({ success: true, merchant });
   } catch (error) {
@@ -217,7 +223,15 @@ router.post("/merchants", async (req: Request, res: Response) => {
  */
 router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Response) => {
   try {
-    const { maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, inventoryEnabled } = req.body || {};
+    const {
+      maxPosPosts,
+      maxWaiterPosts,
+      inventoryAddonEnabled,
+      inventoryEnabled,
+      signageAddonEnabled,
+      signageEnabled,
+      signageScreenLimit,
+    } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
       resellerId(req),
       req.params.merchantId,
@@ -230,6 +244,14 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
             : inventoryEnabled != null
               ? isInventoryAddonEnabled(inventoryEnabled)
               : undefined,
+        signageAddonEnabled:
+          signageAddonEnabled != null
+            ? isSignageAddonEnabled(signageAddonEnabled)
+            : signageEnabled != null
+              ? isSignageAddonEnabled(signageEnabled)
+              : undefined,
+        signageScreenLimit:
+          signageScreenLimit != null ? normalizeSignageScreenLimit(signageScreenLimit) : undefined,
       }
     );
     res.json({ success: true, merchant });

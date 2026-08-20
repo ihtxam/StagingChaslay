@@ -284,6 +284,9 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           isOwner: true,
           inventoryAddonEnabled: merchant.inventoryAddonEnabled === true,
           inventoryEnabled: merchant.inventoryEnabled === true,
+          signageAddonEnabled: merchant.signageAddonEnabled === true,
+          signageEnabled: merchant.signageEnabled === true,
+          signageScreenLimit: merchant.signageScreenLimit ?? 2,
         },
         role: "merchant",
       });
@@ -304,7 +307,12 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
         permissions: profile.permissions,
       });
       const { readInventoryAddonEnabled } = await import("@/lib/inventory-addon");
+      const { readSignageAddon } = await import("@/lib/signage-addon");
       const inventoryOn = await readInventoryAddonEnabled(req.user.merchantId).catch(() => false);
+      const signage = await readSignageAddon(req.user.merchantId).catch(() => ({
+        enabled: false,
+        screenLimit: 2,
+      }));
       res.json({
         user: {
           id: profile.id,
@@ -317,6 +325,9 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           isOwner: false,
           inventoryAddonEnabled: inventoryOn,
           inventoryEnabled: inventoryOn,
+          signageAddonEnabled: signage.enabled,
+          signageEnabled: signage.enabled,
+          signageScreenLimit: signage.screenLimit,
         },
         role: "staff",
         token,

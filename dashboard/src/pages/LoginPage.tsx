@@ -91,6 +91,7 @@ function userFromLogin(data: UnifiedLoginResponse): { user: User; token: string 
       permissions: merchant.permissions,
       isOwner: !isStaff && data.isOwner !== false,
       inventoryAddonEnabled: !!(merchant.inventoryAddonEnabled || merchant.inventoryEnabled),
+      signageAddonEnabled: !!(merchant.signageAddonEnabled || merchant.signageEnabled),
     },
   };
 }

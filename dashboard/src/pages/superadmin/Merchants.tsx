@@ -23,6 +23,9 @@ interface Merchant {
   lastAppVersionSeenAt?: string | null;
   inventoryAddonEnabled?: boolean;
   inventoryEnabled?: boolean;
+  signageAddonEnabled?: boolean;
+  signageEnabled?: boolean;
+  signageScreenLimit?: number;
   createdAt: string;
   devices: number;
   licenses: number;
@@ -77,6 +80,8 @@ const emptyForm = {
   maxPosPosts: 1,
   maxWaiterPosts: 0,
   inventoryAddonEnabled: false,
+  signageAddonEnabled: false,
+  signageScreenLimit: 2,
 };
 
 export default function Merchants() {
@@ -102,6 +107,8 @@ export default function Merchants() {
     maxPosPosts: 0,
     maxWaiterPosts: 0,
     inventoryAddonEnabled: false,
+    signageAddonEnabled: false,
+    signageScreenLimit: 2,
   });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
   const [editions, setEditions] = useState<Array<{ id: string; name: string; businessCategory: string }>>(
@@ -155,6 +162,8 @@ export default function Merchants() {
         maxPosPosts: Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(res.data.merchant?.maxWaiterPosts) || 0),
         inventoryAddonEnabled: res.data.merchant?.inventoryAddonEnabled === true,
+        signageAddonEnabled: res.data.merchant?.signageAddonEnabled === true,
+        signageScreenLimit: Math.max(1, Number(res.data.merchant?.signageScreenLimit) || 2),
       });
     } catch {
       toast.error('Failed to load merchant details');
@@ -169,19 +178,33 @@ export default function Merchants() {
         maxPosPosts: Number(posLimits.maxPosPosts) || 0,
         maxWaiterPosts: Number(posLimits.maxWaiterPosts) || 0,
         inventoryAddonEnabled: !!posLimits.inventoryAddonEnabled,
+        signageAddonEnabled: !!posLimits.signageAddonEnabled,
+        signageScreenLimit: Number(posLimits.signageScreenLimit) || 2,
       });
       const saved = res.data?.merchant;
       const inventoryOn = saved?.inventoryAddonEnabled === true || saved?.inventoryEnabled === true;
+      const signageOn = saved?.signageAddonEnabled === true || saved?.signageEnabled === true;
       setPosLimits({
         maxPosPosts: Math.max(0, Number(saved?.maxPosPosts ?? posLimits.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(saved?.maxWaiterPosts ?? posLimits.maxWaiterPosts) || 0),
         inventoryAddonEnabled: inventoryOn,
+        signageAddonEnabled: signageOn,
+        signageScreenLimit: Math.max(1, Number(saved?.signageScreenLimit ?? posLimits.signageScreenLimit) || 2),
       });
       setShowDetail((prev) =>
-        prev ? { ...prev, inventoryAddonEnabled: inventoryOn, inventoryEnabled: inventoryOn } : prev
+        prev
+          ? {
+              ...prev,
+              inventoryAddonEnabled: inventoryOn,
+              inventoryEnabled: inventoryOn,
+              signageAddonEnabled: signageOn,
+              signageEnabled: signageOn,
+              signageScreenLimit: Number(saved?.signageScreenLimit) || 2,
+            }
+          : prev
       );
       await fetchMerchants();
-      toast.success(inventoryOn ? 'Inventory addon enabled' : 'POS limits & addons updated');
+      toast.success('POS limits & addons updated');
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to update limits');
     } finally {
@@ -275,6 +298,8 @@ export default function Merchants() {
         maxPosPosts: Number(form.maxPosPosts) || 0,
         maxWaiterPosts: Number(form.maxWaiterPosts) || 0,
         inventoryAddonEnabled: !!form.inventoryAddonEnabled,
+        signageAddonEnabled: !!form.signageAddonEnabled,
+        signageScreenLimit: Number(form.signageScreenLimit) || 2,
       });
       const issued = res.data.merchant?.issuedLicenses || [];
       setIssuedKeys(issued);
@@ -343,6 +368,7 @@ export default function Merchants() {
         merchantId: account.id,
         impersonatedBy: res.data.impersonatedBy,
         inventoryAddonEnabled: !!(account.inventoryAddonEnabled || account.inventoryEnabled),
+        signageAddonEnabled: !!(account.signageAddonEnabled || account.signageEnabled),
       });
       toast.success(`Opened ${account.name}`);
       navigate('/merchant');
@@ -821,6 +847,32 @@ export default function Merchants() {
                     </span>
                   </span>
                 </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!form.signageAddonEnabled}
+                    onChange={(e) => setForm({ ...form, signageAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">Chaslay Screens (digital signage)</span>
+                    <span className="text-xs text-gray-500">
+                      TV menu boards and promo playlists. Does not consume POS seats.
+                    </span>
+                  </span>
+                </label>
+                <label className="block text-sm pt-1">
+                  <span className="font-medium">Screen limit</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    className="input mt-1"
+                    value={form.signageScreenLimit}
+                    onChange={(e) => setForm({ ...form, signageScreenLimit: Number(e.target.value) || 2 })}
+                  />
+                  <span className="text-xs text-gray-500">Default 2. TVs are not POS stations.</span>
+                </label>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -994,6 +1046,47 @@ export default function Merchants() {
                         {posLimits.inventoryAddonEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.signageAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, signageAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Chaslay Screens (digital signage)</span>
+                      <span className="text-xs text-gray-500">
+                        Paid extra: live menu boards on restaurant TVs. Does not use POS seats.
+                      </span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.signageAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.signageAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="block text-sm mt-2">
+                    <span className="font-medium">Screen limit</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      className="input mt-1"
+                      value={posLimits.signageScreenLimit}
+                      onChange={(e) =>
+                        setPosLimits({
+                          ...posLimits,
+                          signageScreenLimit: Number(e.target.value) || 2,
+                        })
+                      }
+                    />
                   </label>
                   <button
                     type="button"

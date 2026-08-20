@@ -99,6 +99,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/inventory/units': ['MANAGE_INVENTORY'],
   '/merchant/inventory/report': ['MANAGE_INVENTORY'],
   '/merchant/inventory/consumption': ['MANAGE_INVENTORY'],
+  '/merchant/signage': ['MANAGE_SETTINGS', 'MANAGE_PRODUCTS', 'ACCESS_PANEL'],
 };
 
 export const CATALOG_PANEL_PATHS = [

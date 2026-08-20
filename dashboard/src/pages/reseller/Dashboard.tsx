@@ -103,6 +103,8 @@ function MerchantsPage() {
     maxPosPosts: 1,
     maxWaiterPosts: 0,
     inventoryAddonEnabled: false,
+    signageAddonEnabled: false,
+    signageScreenLimit: 2,
   });
   const [limitsFor, setLimitsFor] = useState<{
     id: string;
@@ -110,6 +112,8 @@ function MerchantsPage() {
     maxPosPosts: number;
     maxWaiterPosts: number;
     inventoryAddonEnabled: boolean;
+    signageAddonEnabled: boolean;
+    signageScreenLimit: number;
   } | null>(null);
   const [savingLimits, setSavingLimits] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
@@ -210,6 +214,7 @@ function MerchantsPage() {
         isOwner: true,
         impersonatedBy: 'reseller',
         inventoryAddonEnabled: !!(merchant.inventoryAddonEnabled || merchant.inventoryEnabled),
+        signageAddonEnabled: !!(merchant.signageAddonEnabled || merchant.signageEnabled),
       });
       toast.success(t('resellerOpenMerchant'));
       navigate('/merchant');
@@ -226,6 +231,8 @@ function MerchantsPage() {
         maxPosPosts: Number(limitsFor.maxPosPosts) || 0,
         maxWaiterPosts: Number(limitsFor.maxWaiterPosts) || 0,
         inventoryAddonEnabled: !!limitsFor.inventoryAddonEnabled,
+        signageAddonEnabled: !!limitsFor.signageAddonEnabled,
+        signageScreenLimit: Number(limitsFor.signageScreenLimit) || 2,
       });
       toast.success(t('posPostsLimitsSaved'));
       setLimitsFor(null);
@@ -458,6 +465,33 @@ function MerchantsPage() {
                 <span className="text-xs text-stone-500">{t('invAddonReadOnly')}</span>
               </span>
             </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!form.signageAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, signageAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('signageTitle')}</span>
+                <span className="text-xs text-stone-500">{t('signageAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="text-sm">
+              {t('signageScreenLimit')}
+              <input
+                type="number"
+                min={1}
+                max={99}
+                className="input mt-1"
+                value={form.signageScreenLimit}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, signageScreenLimit: Number(e.target.value) || 2 }))
+                }
+              />
+            </label>
           </div>
 
           <div className="sm:col-span-2 flex justify-end gap-2">
@@ -530,6 +564,8 @@ function MerchantsPage() {
                         maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
                         maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
                         inventoryAddonEnabled: m.inventoryAddonEnabled === true,
+                        signageAddonEnabled: m.signageAddonEnabled === true,
+                        signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
                       })
                     }
                   >
@@ -629,6 +665,36 @@ function MerchantsPage() {
                 <span className="font-medium block">{t('invTitle')}</span>
                 <span className="text-xs text-stone-500">{t('invSettingsHint')}</span>
               </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.signageAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, signageAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('signageTitle')}</span>
+                <span className="text-xs text-stone-500">{t('signageAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="text-sm">
+              {t('signageScreenLimit')}
+              <input
+                type="number"
+                min={1}
+                max={99}
+                className="input mt-1"
+                value={limitsFor.signageScreenLimit}
+                onChange={(e) =>
+                  setLimitsFor({
+                    ...limitsFor,
+                    signageScreenLimit: Number(e.target.value) || 2,
+                  })
+                }
+              />
             </label>
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary text-sm" onClick={() => setLimitsFor(null)}>

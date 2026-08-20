@@ -6,6 +6,7 @@ import { MerchantService } from "@/services/merchant.service";
 import { LicenseAdminService } from "@/services/license-admin.service";
 import { ResellerBillingService } from "@/services/reseller-billing.service";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
 
 function serializeReseller(
   row: typeof schema.resellers.$inferSelect,
@@ -345,6 +346,8 @@ export class ResellerService {
         maxPosPosts: schema.merchants.maxPosPosts,
         maxWaiterPosts: schema.merchants.maxWaiterPosts,
         inventoryAddonEnabled: schema.merchants.inventoryAddonEnabled,
+        signageAddonEnabled: schema.merchants.signageAddonEnabled,
+        signageScreenLimit: schema.merchants.signageScreenLimit,
         createdAt: schema.merchants.createdAt,
       })
       .from(schema.merchants)
@@ -353,6 +356,8 @@ export class ResellerService {
     return rows.map((r) => ({
       ...r,
       inventoryAddonEnabled: isInventoryAddonEnabled(r.inventoryAddonEnabled),
+      signageAddonEnabled: isSignageAddonEnabled(r.signageAddonEnabled),
+      signageScreenLimit: normalizeSignageScreenLimit(r.signageScreenLimit),
     }));
   }
 
@@ -376,6 +381,8 @@ export class ResellerService {
       maxPosPosts?: number;
       maxWaiterPosts?: number;
       inventoryAddonEnabled?: boolean;
+      signageAddonEnabled?: boolean;
+      signageScreenLimit?: number;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -415,6 +422,8 @@ export class ResellerService {
         maxPosPosts: input.maxPosPosts,
         maxWaiterPosts: input.maxWaiterPosts,
         inventoryAddonEnabled: input.inventoryAddonEnabled,
+        signageAddonEnabled: input.signageAddonEnabled,
+        signageScreenLimit: input.signageScreenLimit,
       }
     );
     return created;
@@ -427,6 +436,8 @@ export class ResellerService {
       maxPosPosts?: number;
       maxWaiterPosts?: number;
       inventoryAddonEnabled?: boolean;
+      signageAddonEnabled?: boolean;
+      signageScreenLimit?: number;
     }
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
@@ -435,6 +446,8 @@ export class ResellerService {
       maxPosPosts: limits.maxPosPosts,
       maxWaiterPosts: limits.maxWaiterPosts,
       inventoryAddonEnabled: limits.inventoryAddonEnabled,
+      signageAddonEnabled: limits.signageAddonEnabled,
+      signageScreenLimit: limits.signageScreenLimit,
     });
     return MerchantService.getMerchantById(merchantId);
   }

@@ -14,6 +14,14 @@ import {
   readInventoryAddonEnabledMap,
   writeInventoryAddonEnabled,
 } from "@/lib/inventory-addon";
+import {
+  isSignageAddonEnabled,
+  normalizeSignageScreenLimit,
+  readSignageAddon,
+  readSignageAddonMap,
+  writeSignageAddonEnabled,
+  writeSignageScreenLimit,
+} from "@/lib/signage-addon";
 
 type AppVersionSighting = {
   appVersion?: string | null;
@@ -105,6 +113,9 @@ export class MerchantService {
       const addonById = await readInventoryAddonEnabledMap(merchantIds).catch(
         () => new Map<string, boolean>()
       );
+      const signageById = await readSignageAddonMap(merchantIds).catch(
+        () => new Map<string, { enabled: boolean; screenLimit: number }>()
+      );
 
       return merchants.map((m) => {
         const floor = floorByMerchant.get(m.id) ?? [];
@@ -114,6 +125,8 @@ export class MerchantService {
         ]);
         const inventoryOn =
           addonById.get(m.id) ?? isInventoryAddonEnabled(m.inventoryAddonEnabled);
+        const signage = signageById.get(m.id);
+        const signageOn = signage?.enabled ?? isSignageAddonEnabled(m.signageAddonEnabled);
         return {
           id: m.id,
           name: m.name,
@@ -135,6 +148,9 @@ export class MerchantService {
           resellerId: m.resellerId ?? null,
           inventoryAddonEnabled: inventoryOn,
           inventoryEnabled: inventoryOn,
+          signageAddonEnabled: signageOn,
+          signageEnabled: signageOn,
+          signageScreenLimit: signage?.screenLimit ?? normalizeSignageScreenLimit(m.signageScreenLimit),
           createdAt: m.createdAt,
           devices: m.devices?.length ?? 0,
           licenses: m.licenses?.length ?? 0,
@@ -182,10 +198,17 @@ export class MerchantService {
       ]);
 
       const inventoryOn = await readInventoryAddonEnabled(merchantId);
+      const signage = await readSignageAddon(merchantId).catch(() => ({
+        enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
+        screenLimit: normalizeSignageScreenLimit(merchant.signageScreenLimit),
+      }));
       return {
         ...merchant,
         inventoryAddonEnabled: inventoryOn,
         inventoryEnabled: inventoryOn,
+        signageAddonEnabled: signage.enabled,
+        signageEnabled: signage.enabled,
+        signageScreenLimit: signage.screenLimit,
         editionName: merchant.edition?.name ?? null,
         lastAppVersion: lastSeen.lastAppVersion,
         lastAppVersionSeenAt: lastSeen.lastAppVersionSeenAt,
@@ -228,6 +251,8 @@ export class MerchantService {
       /** Concurrent waiter stations. 0 = unlimited. Agency-assigned. */
       maxWaiterPosts?: number;
       inventoryAddonEnabled?: boolean;
+      signageAddonEnabled?: boolean;
+      signageScreenLimit?: number;
     }
   ) {
     const db = getDb();
@@ -284,6 +309,8 @@ export class MerchantService {
           maxPosPosts: normalizePosPostLimit(options?.maxPosPosts ?? 0),
           maxWaiterPosts: normalizePosPostLimit(options?.maxWaiterPosts ?? 0),
           inventoryAddonEnabled: options?.inventoryAddonEnabled === true,
+          signageAddonEnabled: options?.signageAddonEnabled === true,
+          signageScreenLimit: normalizeSignageScreenLimit(options?.signageScreenLimit ?? 2),
         })
         .returning();
 
@@ -343,7 +370,17 @@ export class MerchantService {
       if (options?.inventoryAddonEnabled === true) {
         await writeInventoryAddonEnabled(created.id, true);
       }
+      if (options?.signageAddonEnabled === true) {
+        await writeSignageAddonEnabled(created.id, true);
+      }
+      if (options?.signageScreenLimit != null) {
+        await writeSignageScreenLimit(created.id, options.signageScreenLimit);
+      }
       const inventoryOn = await readInventoryAddonEnabled(created.id).catch(() => false);
+      const signage = await readSignageAddon(created.id).catch(() => ({
+        enabled: false,
+        screenLimit: 2,
+      }));
 
       // Don't leak password hash to API clients
       const { passwordHash: _ph, inviteTokenHash: _ith, ...safe } = row as typeof row & {
@@ -355,6 +392,9 @@ export class MerchantService {
         ...safe,
         inventoryAddonEnabled: inventoryOn,
         inventoryEnabled: inventoryOn,
+        signageAddonEnabled: signage.enabled,
+        signageEnabled: signage.enabled,
+        signageScreenLimit: signage.screenLimit,
         issuedLicenses,
         invite,
         passwordSet: hasPassword,
@@ -373,9 +413,13 @@ export class MerchantService {
 
     try {
       const addonRequested = updates.inventoryAddonEnabled;
+      const signageRequested = updates.signageAddonEnabled;
       if (addonRequested !== undefined) {
         await ensureInventoryAddonColumn();
         updates.inventoryAddonEnabled = isInventoryAddonEnabled(addonRequested);
+      }
+      if (signageRequested !== undefined) {
+        updates.signageAddonEnabled = isSignageAddonEnabled(signageRequested);
       }
       const merchant = await withMerchantSchemaRetry(() =>
         db
@@ -390,7 +434,11 @@ export class MerchantService {
 
       if (addonRequested !== undefined) {
         const on = await writeInventoryAddonEnabled(merchantId, addonRequested);
-        return { ...merchant[0], inventoryAddonEnabled: on };
+        Object.assign(merchant[0], { inventoryAddonEnabled: on });
+      }
+      if (signageRequested !== undefined) {
+        const on = await writeSignageAddonEnabled(merchantId, signageRequested);
+        Object.assign(merchant[0], { signageAddonEnabled: on, signageEnabled: on });
       }
       return merchant[0];
     } catch (error) {
@@ -406,6 +454,8 @@ export class MerchantService {
       maxPosPosts?: number;
       maxWaiterPosts?: number;
       inventoryAddonEnabled?: boolean;
+      signageAddonEnabled?: boolean;
+      signageScreenLimit?: number;
     }
   ) {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
@@ -418,20 +468,48 @@ export class MerchantService {
     if (Object.keys(patch).length > 0) {
       await this.updateMerchant(merchantId, patch);
     }
+    let wroteAddon = false;
     if (limits.inventoryAddonEnabled !== undefined) {
       await writeInventoryAddonEnabled(merchantId, limits.inventoryAddonEnabled);
-    } else if (Object.keys(patch).length === 0) {
-      throw new Error("At least one of maxPosPosts, maxWaiterPosts, or inventoryAddonEnabled is required");
+      wroteAddon = true;
+    }
+    if (limits.signageAddonEnabled !== undefined) {
+      await writeSignageAddonEnabled(merchantId, limits.signageAddonEnabled);
+      wroteAddon = true;
+    }
+    if (limits.signageScreenLimit !== undefined) {
+      await writeSignageScreenLimit(merchantId, limits.signageScreenLimit);
+      wroteAddon = true;
+    }
+    if (!wroteAddon && Object.keys(patch).length === 0) {
+      throw new Error(
+        "At least one of maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, or signageScreenLimit is required"
+      );
     }
     return this.getMerchantById(merchantId);
   }
 
   /** Paid addons are agency/reseller-managed — merchants cannot self-enable. */
-  static async updateAddons(merchantId: string, addons: { inventoryAddonEnabled?: boolean }) {
-    if (addons.inventoryAddonEnabled === undefined) {
+  static async updateAddons(
+    merchantId: string,
+    addons: { inventoryAddonEnabled?: boolean; signageAddonEnabled?: boolean; signageScreenLimit?: number }
+  ) {
+    if (
+      addons.inventoryAddonEnabled === undefined &&
+      addons.signageAddonEnabled === undefined &&
+      addons.signageScreenLimit === undefined
+    ) {
       throw new Error("No addon updates provided");
     }
-    await writeInventoryAddonEnabled(merchantId, addons.inventoryAddonEnabled);
+    if (addons.inventoryAddonEnabled !== undefined) {
+      await writeInventoryAddonEnabled(merchantId, addons.inventoryAddonEnabled);
+    }
+    if (addons.signageAddonEnabled !== undefined) {
+      await writeSignageAddonEnabled(merchantId, addons.signageAddonEnabled);
+    }
+    if (addons.signageScreenLimit !== undefined) {
+      await writeSignageScreenLimit(merchantId, addons.signageScreenLimit);
+    }
     return this.getMerchantById(merchantId);
   }
 

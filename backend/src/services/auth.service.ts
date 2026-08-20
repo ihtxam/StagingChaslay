@@ -4,6 +4,7 @@ import { getDb, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 
 export interface JWTPayload {
   id: string;
@@ -167,6 +168,10 @@ export class AuthService {
     const inventoryOn = await readInventoryAddonEnabled(merchant.id).catch(() =>
       isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
     );
+    const signage = await readSignageAddon(merchant.id).catch(() => ({
+      enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
+      screenLimit: 2,
+    }));
     return {
       token,
       merchant: {
@@ -177,6 +182,9 @@ export class AuthService {
         roleName: "Owner",
         inventoryAddonEnabled: inventoryOn,
         inventoryEnabled: inventoryOn,
+        signageAddonEnabled: signage.enabled,
+        signageEnabled: signage.enabled,
+        signageScreenLimit: signage.screenLimit,
       },
       isOwner: true,
     };
@@ -207,6 +215,10 @@ export class AuthService {
     });
 
     const inventoryOn = await readInventoryAddonEnabled(staff.merchantId).catch(() => false);
+    const signage = await readSignageAddon(staff.merchantId).catch(() => ({
+      enabled: false,
+      screenLimit: 2,
+    }));
     return {
       token,
       merchant: {
@@ -219,6 +231,9 @@ export class AuthService {
         permissions,
         inventoryAddonEnabled: inventoryOn,
         inventoryEnabled: inventoryOn,
+        signageAddonEnabled: signage.enabled,
+        signageEnabled: signage.enabled,
+        signageScreenLimit: signage.screenLimit,
       },
       isOwner: false,
     };
@@ -422,6 +437,10 @@ export class AuthService {
     const inventoryOn = await readInventoryAddonEnabled(merchant.id).catch(() =>
       isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
     );
+    const signage = await readSignageAddon(merchant.id).catch(() => ({
+      enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
+      screenLimit: 2,
+    }));
     return {
       token,
       merchant: {
@@ -431,6 +450,9 @@ export class AuthService {
         status: merchant.status,
         inventoryAddonEnabled: inventoryOn,
         inventoryEnabled: inventoryOn,
+        signageAddonEnabled: signage.enabled,
+        signageEnabled: signage.enabled,
+        signageScreenLimit: signage.screenLimit,
       },
       impersonatedBy: superadminId,
     };
@@ -456,6 +478,10 @@ export class AuthService {
       const inventoryOn = await readInventoryAddonEnabled(merchantId).catch(() =>
         isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
       );
+      const signage = await readSignageAddon(merchantId).catch(() => ({
+        enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
+        screenLimit: 2,
+      }));
       return {
         id: merchant.id,
         email: merchant.email,
@@ -463,6 +489,9 @@ export class AuthService {
         status: merchant.status,
         inventoryAddonEnabled: inventoryOn,
         inventoryEnabled: inventoryOn,
+        signageAddonEnabled: signage.enabled,
+        signageEnabled: signage.enabled,
+        signageScreenLimit: signage.screenLimit,
       };
     } catch (error) {
       console.error("Error getting merchant:", error);

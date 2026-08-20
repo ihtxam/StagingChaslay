@@ -29,9 +29,11 @@ import {
 } from "@/lib/delivery-platform-settings";
 import {
   ensureInventoryAddonColumn,
+  ensureSignageAddonColumn,
   patchMerchantSchemaFromError,
 } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -96,6 +98,7 @@ export class MerchantSettingsService {
 
   private static async buildMerchantSettings(merchantId: string) {
     await ensureInventoryAddonColumn();
+    await ensureSignageAddonColumn();
     const db = getDb();
 
     const merchant = await db.query.merchants.findFirst({
@@ -109,6 +112,10 @@ export class MerchantSettingsService {
     const inventoryOn = await readInventoryAddonEnabled(merchantId).catch(() =>
       isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
     );
+    const signage = await readSignageAddon(merchantId).catch(() => ({
+      enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
+      screenLimit: Math.max(1, Number(merchant.signageScreenLimit) || 2),
+    }));
 
     const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
     const shopHost =
@@ -159,6 +166,9 @@ export class MerchantSettingsService {
       ),
       inventoryAddonEnabled: inventoryOn,
       inventoryEnabled: inventoryOn,
+      signageAddonEnabled: signage.enabled,
+      signageEnabled: signage.enabled,
+      signageScreenLimit: signage.screenLimit,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       posColorTheme: (merchant.posColorTheme as string) || "teal",
@@ -217,9 +227,11 @@ export class MerchantSettingsService {
           const { EditionEntitlementsService } = await import("./edition-entitlements.service");
           const feats = await EditionEntitlementsService.getFeatures(merchantId);
           if (feats == null) return null;
-          const withoutInv = feats.filter((k) => k !== "inventory");
-          if (!inventoryOn) return withoutInv;
-          return [...withoutInv, "inventory"];
+          const withoutPaid = feats.filter((k) => k !== "inventory" && k !== "digital_signage");
+          const extra: typeof feats = [];
+          if (inventoryOn) extra.push("inventory");
+          if (signage.enabled) extra.push("digital_signage");
+          return [...withoutPaid, ...extra];
         } catch {
           return null;
         }

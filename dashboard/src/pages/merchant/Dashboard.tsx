@@ -58,6 +58,8 @@ import {
 } from '@/lib/permissions';
 import type { EditionFeatureKey } from '@/lib/edition-features';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
+import { isSignageLicensed } from '@/lib/signage-addon';
+import SignagePage from './SignagePage';
 
 const WebsiteCms = lazy(() => import('./WebsiteCms'));
 
@@ -115,6 +117,7 @@ function MerchantShell() {
   const [posAppMode, setPosAppMode] = useState(true);
   const [editionFeatures, setEditionFeatures] = useState<EditionFeatureKey[] | null>(null);
   const [inventoryLicensed, setInventoryLicensed] = useState(() => isInventoryLicensed(user));
+  const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
   );
@@ -150,10 +153,13 @@ function MerchantShell() {
       editionFeatures?: EditionFeatureKey[] | null;
       inventoryAddonEnabled?: boolean;
       inventoryEnabled?: boolean;
+      signageAddonEnabled?: boolean;
+      signageEnabled?: boolean;
     } | null) => {
       const feats = settings?.editionFeatures;
       setEditionFeatures(Array.isArray(feats) ? feats : null);
       setInventoryLicensed(isInventoryLicensed(settings) || isInventoryLicensed(user));
+      setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
     };
     const load = () => {
       api
@@ -166,6 +172,7 @@ function MerchantShell() {
           if (cancelled) return;
           setEditionFeatures(null);
           setInventoryLicensed(isInventoryLicensed(user));
+          setSignageLicensed(isSignageLicensed(user));
         });
     };
     load();
@@ -265,6 +272,13 @@ function MerchantShell() {
     [inventoryLicensed, effective.permissions, effective.isOwner]
   );
 
+  const allowSignage = useCallback(
+    (path: string) =>
+      signageLicensed &&
+      canAccessRoute(path, effective.permissions, effective.isOwner, null),
+    [signageLicensed, effective.permissions, effective.isOwner]
+  );
+
   const showWebPosQuickAction = useMemo(
     () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
     [jwtIsOwner, user?.permissions]
@@ -339,6 +353,9 @@ function MerchantShell() {
         { label: t('cmsWebsite'), path: '/merchant/website', icon: '✏️' },
       ].filter((item) => allow(item.path)),
     },
+    ...(allowSignage('/merchant/signage')
+      ? [{ label: t('signageNav'), path: '/merchant/signage', icon: '📺' }]
+      : []),
     ...(allow('/merchant/users')
       ? [{ label: t('staffPageTitle'), path: '/merchant/users', icon: '👤' }]
       : []),
@@ -538,6 +555,14 @@ function MerchantShell() {
                   <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
                     <WebsiteCms />
                   </Suspense>
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="signage"
+              element={
+                <PanelRouteGuard path="/merchant/signage" allow={allowSignage}>
+                  <SignagePage />
                 </PanelRouteGuard>
               }
             />

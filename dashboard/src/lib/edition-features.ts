@@ -24,7 +24,8 @@ export type EditionFeatureKey =
   | 'staff_roles'
   | 'reservations'
   | 'website_cms'
-  | 'inventory';
+  | 'inventory'
+  | 'digital_signage';
 
 export type EditionFeatureGroup = {
   id: string;
@@ -77,6 +78,7 @@ export const EDITION_FEATURE_GROUPS: EditionFeatureGroup[] = [
       { key: 'reservations', label: 'Reservations' },
       { key: 'website_cms', label: 'Website / CMS' },
       { key: 'inventory', label: 'Restaurant inventory (paid addon)' },
+      { key: 'digital_signage', label: 'Digital signage / menu boards (paid addon)' },
     ],
   },
 ];
@@ -86,8 +88,8 @@ export const ALL_EDITION_FEATURES: EditionFeatureKey[] = EDITION_FEATURE_GROUPS.
 );
 
 /**
- * Do not add /merchant/inventory here — inventory is a paid merchant addon
- * (inventoryAddonEnabled), not an edition entitlement.
+ * Do not add /merchant/inventory or /merchant/signage here — those are paid
+ * merchant addons (inventoryAddonEnabled / signageAddonEnabled), not edition entitlements.
  */
 export const EDITION_ROUTE_FEATURES: Record<string, EditionFeatureKey[]> = {
   '/merchant/floor-plan': ['pos_tables'],

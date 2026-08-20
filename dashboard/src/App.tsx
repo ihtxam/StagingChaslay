@@ -25,6 +25,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import PosEmbedPage from '@/pages/PosEmbedPage';
 import PosViewportManager from '@/components/PosViewportManager';
 import KdsDisplayPage from '@/pages/KdsDisplayPage';
+import SignageDisplayPage from '@/pages/SignageDisplayPage';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 
@@ -35,7 +36,11 @@ function LegacyReceiptRedirect() {
 }
 
 function isWebPosRoute(pathname: string): boolean {
-  return /\/merchant\/(?:pos|waiter)(?:\/|$)/.test(pathname) || /^\/kds(?:\/|$)/.test(pathname);
+  return (
+    /\/merchant\/(?:pos|waiter)(?:\/|$)/.test(pathname) ||
+    /^\/kds(?:\/|$)/.test(pathname) ||
+    /^\/tv(?:\/|$)/.test(pathname)
+  );
 }
 
 /** WebPOS uses center-top toasts so they do not cover the right-side menu. */
@@ -220,6 +225,14 @@ function App() {
             element={
               <I18nProvider storageKey={PANEL_LANG_KEY}>
                 <KdsDisplayPage />
+              </I18nProvider>
+            }
+          />
+          <Route
+            path="/tv/:token"
+            element={
+              <I18nProvider storageKey={PANEL_LANG_KEY}>
+                <SignageDisplayPage />
               </I18nProvider>
             }
           />

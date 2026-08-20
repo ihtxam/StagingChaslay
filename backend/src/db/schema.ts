@@ -257,6 +257,12 @@ export const merchants = pgTable(
      */
     inventoryAddonEnabled: boolean("inventory_addon_enabled").default(false).notNull(),
     /**
+     * Paid Chaslay Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
+     */
+    signageAddonEnabled: boolean("signage_addon_enabled").default(false).notNull(),
+    /** Max TV screens when the signage addon is on. Default 2. */
+    signageScreenLimit: integer("signage_screen_limit").default(2).notNull(),
+    /**
      * Extra yield / waste factor applied to recipe usage on sale (0–0.50). Default 20%.
      */
     inventoryWasteFactor: decimal("inventory_waste_factor", { precision: 5, scale: 4 })
@@ -1129,6 +1135,93 @@ export const kdsTicketItems = pgTable(
   (table) => ({
     ticketIdx: index("kds_ticket_items_ticket_id_idx").on(table.ticketId),
     lineIdx: index("kds_ticket_items_line_id_idx").on(table.ticketId, table.lineId),
+  })
+);
+
+export const SIGNAGE_TEMPLATES = [
+  "dark_pizza",
+  "kebab_green",
+  "cafe_cream",
+  "portrait_poster",
+  "lunch_special",
+] as const;
+export type SignageTemplate = (typeof SIGNAGE_TEMPLATES)[number];
+
+export const SIGNAGE_ORIENTATIONS = ["landscape", "portrait"] as const;
+export type SignageOrientation = (typeof SIGNAGE_ORIENTATIONS)[number];
+
+export const SIGNAGE_SLIDE_TYPES = ["menu", "image", "image_text"] as const;
+export type SignageSlideType = (typeof SIGNAGE_SLIDE_TYPES)[number];
+
+/** Playlist schedule: always on, selected weekdays, or lunch/dinner daypart (Europe/Zurich). */
+export type SignageSchedule = {
+  type: "always" | "weekdays" | "daypart";
+  weekdays?: number[];
+  daypart?: "lunch" | "dinner";
+  startTime?: string;
+  endTime?: string;
+};
+
+export const signagePlaylists = pgTable(
+  "signage_playlists",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    template: varchar("template", { length: 40 }).default("dark_pizza").notNull(),
+    schedule: json("schedule").$type<SignageSchedule>().default({ type: "always" }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("signage_playlists_merchant_id_idx").on(table.merchantId),
+  })
+);
+
+export const signageScreens = pgTable(
+  "signage_screens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    token: varchar("token", { length: 128 }).notNull(),
+    orientation: varchar("orientation", { length: 20 }).default("landscape").notNull(),
+    template: varchar("template", { length: 40 }).default("dark_pizza").notNull(),
+    playlistId: uuid("playlist_id").references(() => signagePlaylists.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("signage_screens_merchant_id_idx").on(table.merchantId),
+    tokenIdx: uniqueIndex("signage_screens_token_uidx").on(table.token),
+  })
+);
+
+export const signageSlides = pgTable(
+  "signage_slides",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playlistId: uuid("playlist_id")
+      .notNull()
+      .references(() => signagePlaylists.id, { onDelete: "cascade" }),
+    type: varchar("type", { length: 30 }).default("menu").notNull(),
+    durationSec: integer("duration_sec").default(10).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
+    headline: varchar("headline", { length: 255 }),
+    body: text("body"),
+    imageUrl: varchar("image_url", { length: 500 }),
+    showPrices: boolean("show_prices").default(true).notNull(),
+    showPhotos: boolean("show_photos").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    playlistIdx: index("signage_slides_playlist_id_idx").on(table.playlistId),
   })
 );
 
@@ -2288,6 +2381,27 @@ export const kdsTicketsRelations = relations(kdsTickets, ({ one, many }) => ({
 
 export const kdsTicketItemsRelations = relations(kdsTicketItems, ({ one }) => ({
   ticket: one(kdsTickets, { fields: [kdsTicketItems.ticketId], references: [kdsTickets.id] }),
+}));
+
+export const signageScreensRelations = relations(signageScreens, ({ one }) => ({
+  merchant: one(merchants, { fields: [signageScreens.merchantId], references: [merchants.id] }),
+  playlist: one(signagePlaylists, {
+    fields: [signageScreens.playlistId],
+    references: [signagePlaylists.id],
+  }),
+}));
+
+export const signagePlaylistsRelations = relations(signagePlaylists, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [signagePlaylists.merchantId], references: [merchants.id] }),
+  slides: many(signageSlides),
+  screens: many(signageScreens),
+}));
+
+export const signageSlidesRelations = relations(signageSlides, ({ one }) => ({
+  playlist: one(signagePlaylists, {
+    fields: [signageSlides.playlistId],
+    references: [signagePlaylists.id],
+  }),
 }));
 
 export const customerAddressesRelations = relations(customerAddresses, ({ one }) => ({

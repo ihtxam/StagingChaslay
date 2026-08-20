@@ -10,6 +10,7 @@ import { EditionService } from "@/services/edition.service";
 import { ResellerService } from "@/services/reseller.service";
 import { EDITION_FEATURE_GROUPS, ALL_EDITION_FEATURES } from "@/lib/edition-features";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
 
 const router = Router();
 
@@ -214,6 +215,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
       maxPosPosts,
       maxWaiterPosts,
       inventoryAddonEnabled,
+      signageAddonEnabled,
+      signageScreenLimit,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -243,6 +246,9 @@ router.post("/merchants", async (req: Request, res: Response) => {
         maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
         maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
         inventoryAddonEnabled: isInventoryAddonEnabled(inventoryAddonEnabled),
+        signageAddonEnabled: isSignageAddonEnabled(signageAddonEnabled),
+        signageScreenLimit:
+          signageScreenLimit != null ? normalizeSignageScreenLimit(signageScreenLimit) : undefined,
       }
     );
 
@@ -299,7 +305,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.maxPosPosts != null ||
       updates.maxWaiterPosts != null ||
       updates.inventoryAddonEnabled != null ||
-      updates.inventoryEnabled != null
+      updates.inventoryEnabled != null ||
+      updates.signageAddonEnabled != null ||
+      updates.signageEnabled != null ||
+      updates.signageScreenLimit != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
@@ -310,11 +319,24 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
             : updates.inventoryEnabled != null
               ? isInventoryAddonEnabled(updates.inventoryEnabled)
               : undefined,
+        signageAddonEnabled:
+          updates.signageAddonEnabled != null
+            ? isSignageAddonEnabled(updates.signageAddonEnabled)
+            : updates.signageEnabled != null
+              ? isSignageAddonEnabled(updates.signageEnabled)
+              : undefined,
+        signageScreenLimit:
+          updates.signageScreenLimit != null
+            ? normalizeSignageScreenLimit(updates.signageScreenLimit)
+            : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
       delete updates.inventoryAddonEnabled;
       delete updates.inventoryEnabled;
+      delete updates.signageAddonEnabled;
+      delete updates.signageEnabled;
+      delete updates.signageScreenLimit;
     }
 
     const merchant =

@@ -1244,6 +1244,9 @@ router.get("/me", async (req: Request, res: Response) => {
         name: settings.name,
         inventoryAddonEnabled: inventoryOn,
         inventoryEnabled: inventoryOn,
+        signageAddonEnabled: settings.signageAddonEnabled === true,
+        signageEnabled: settings.signageAddonEnabled === true,
+        signageScreenLimit: settings.signageScreenLimit ?? 2,
         editionFeatures: settings.editionFeatures,
       },
     });
