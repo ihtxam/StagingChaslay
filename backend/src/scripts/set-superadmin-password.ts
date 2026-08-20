@@ -21,7 +21,7 @@ async function main() {
   )
     .trim()
     .toLowerCase();
-  const name = process.env.SEED_SUPERADMIN_NAME || "ChaslayReborn Admin";
+  const name = process.env.SEED_SUPERADMIN_NAME || "Chaslay Admin";
 
   if (!password || password.startsWith("-")) {
     console.error("Usage: npm run set-superadmin-password -- '<new-password>' [email]");
@@ -43,7 +43,15 @@ async function main() {
   if (existing[0]) {
     await db
       .update(schema.superadmins)
-      .set({ passwordHash, isActive: true, name: existing[0].name || name, updatedAt: new Date() })
+      .set({
+        passwordHash,
+        isActive: true,
+        name:
+          existing[0].name && !/manupos|chaslayreborn\s+admin/i.test(existing[0].name)
+            ? existing[0].name
+            : name,
+        updatedAt: new Date(),
+      })
       .where(eq(schema.superadmins.id, existing[0].id));
     console.log(`Superadmin password updated for ${existing[0].email}`);
     return;

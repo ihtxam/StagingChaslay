@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, LogOut, User, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
-import { APP_NAME } from '@/lib/brand';
+import { APP_NAME, displaySidebarAccountName } from '@/lib/brand';
 import { useI18n, type Locale } from '@/lib/i18n';
 
 export interface SidebarLeaf {
@@ -341,7 +341,9 @@ export default function Sidebar({
               <User className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-white">{user?.name}</p>
+              <p className="truncate text-sm font-medium text-white">
+                {displaySidebarAccountName(user?.name)}
+              </p>
               <p className="truncate text-[11px] text-teal-100/70" title={roleLabel}>
                 {roleLabel}
               </p>
