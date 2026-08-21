@@ -492,7 +492,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
             <div className="flex items-center gap-1.5">
               <SecretSearchTapButton
                 onUnlock={() => setSalesAdjOpen(true)}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)] shadow-sm hover:bg-[var(--bg-elevated)] active:scale-95"
               />
               <input
                 type="search"
