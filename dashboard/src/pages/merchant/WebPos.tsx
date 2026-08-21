@@ -4353,14 +4353,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setBusy(true);
     try {
       if (kitchenLines.length) {
-        await printKitchenForCart(kitchenLines, effectiveChannel, {
-          orderNumber: kitchenOrderNumber({ allowNew: false }) || kitchenOrderNumber(),
-          when: fulfillmentWhen,
-          cancelled: true,
-          cancelReason: reason,
-          forcePrint: true,
-          lineIds: kitchenLines.map((l) => l.lineId),
-        });
+        try {
+          await printKitchenForCart(kitchenLines, effectiveChannel, {
+            orderNumber: kitchenOrderNumber({ allowNew: false }) || kitchenOrderNumber(),
+            when: fulfillmentWhen,
+            cancelled: true,
+            cancelReason: reason,
+            forcePrint: true,
+            lineIds: kitchenLines.map((l) => l.lineId),
+          });
+        } catch (printErr: unknown) {
+          notifyPrintError(printErr, 'webPosKitchenPrintFailed');
+        }
       }
 
       // Persist cancellation for EOD / sales reports (reason required).
@@ -5923,38 +5927,51 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         pointsEarned,
         pointsBalance,
       }),
-      items: saleLines.map((l) => ({
-        productClientId: l.productId,
-        productId: l.productId,
-        productName: l.name,
-        quantity: l.quantity,
-        unitPrice: l.unitPrice,
-        totalPrice: l.lineTotal,
-        weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
-        taxAmount: l.taxable
-          ? vatIncludedInPrice
-            ? extractVatFromGross(l.lineTotal, taxRate)
-            : roundMoney2((l.lineTotal * taxRate) / 100)
-          : 0,
-        selectedExtras: l.selectedExtras.map((e) => ({
-          id: e.id,
-          name: e.name,
-          price: e.price,
-        })),
-        comboSelections: l.comboSelections.map((c) => ({
-          slotId: c.slotId,
-          slotName: c.slotName,
-          productId: c.productId,
-          productName: c.productName,
-          extraPrice: c.extraPrice,
-          selectedExtras: (c.selectedExtras || []).map((e) => ({
+      items: saleLines.map((l) => {
+        const pid = String(l.productId || '');
+        const validProductId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          pid
+        )
+          ? pid
+          : undefined;
+        return {
+          productClientId: l.productId,
+          productId: validProductId,
+          productName: l.name,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          totalPrice: l.lineTotal,
+          weightKg:
+            l.isWeighed && l.weightKg != null && Number.isFinite(Number(l.weightKg))
+              ? l.weightKg
+              : l.isWeighed
+                ? l.quantity
+                : undefined,
+          taxAmount: l.taxable
+            ? vatIncludedInPrice
+              ? extractVatFromGross(l.lineTotal, taxRate)
+              : roundMoney2((l.lineTotal * taxRate) / 100)
+            : 0,
+          selectedExtras: l.selectedExtras.map((e) => ({
             id: e.id,
             name: e.name,
             price: e.price,
           })),
-        })),
-        isOpenPrice: !!l.isOpenPrice,
-      })),
+          comboSelections: l.comboSelections.map((c) => ({
+            slotId: c.slotId,
+            slotName: c.slotName,
+            productId: c.productId,
+            productName: c.productName,
+            extraPrice: c.extraPrice,
+            selectedExtras: (c.selectedExtras || []).map((e) => ({
+              id: e.id,
+              name: e.name,
+              price: e.price,
+            })),
+          })),
+          isOpenPrice: !!l.isOpenPrice,
+        };
+      }),
     };
   };
 
@@ -7708,7 +7725,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 });
               } catch (e: unknown) {
                 notifyPrintError(e, 'webPosKitchenPrintFailed');
-                throw e;
               }
             }}
             onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
@@ -7876,6 +7892,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onOpenPrintIssues={() => setKitchenPrintIssuesOpen(true)}
                 onOrderPrint={kitchenEnabled ? openOrderReprint : undefined}
                 onLinePrint={kitchenEnabled ? openLineReprint : undefined}
+                onLineCancel={
+                  kitchenEnabled
+                    ? (line) => setCancelModal({ scope: 'item', lineId: line.lineId })
+                    : undefined
+                }
               />
             </div>
             ) : null}

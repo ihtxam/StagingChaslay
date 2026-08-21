@@ -11,6 +11,7 @@ import {
   User,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useI18n } from '@/lib/i18n';
 import { normalizeDashes, repairCatalogText } from '@/lib/text-encoding';
 import WebPosNumericKeypad from './WebPosNumericKeypad';
@@ -124,6 +125,8 @@ type Props = {
   onOrderPrint?: () => void;
   /** Open reprint chooser for one sent line. */
   onLinePrint?: (line: CartLine) => void;
+  /** Cancel one sent line (kitchen void). */
+  onLineCancel?: (line: CartLine) => void;
 };
 
 function lineExtrasLabel(l: CartLine) {
@@ -247,6 +250,7 @@ export default function WebPosCartPanel({
   onOpenPrintIssues,
   onOrderPrint,
   onLinePrint,
+  onLineCancel,
 }: Props) {
   const { t } = useI18n();
   const hasItems = cart.length > 0;
@@ -255,7 +259,9 @@ export default function WebPosCartPanel({
   const channelOptions =
     channelTabOptions.length > 0 ? channelTabOptions : (['takeaway', 'delivery'] as const);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [lineMenuId, setLineMenuId] = useState<string | null>(null);
+  const [lineMenu, setLineMenu] = useState<{ lineId: string; top: number; left: number } | null>(
+    null
+  );
   const [cartTab, setCartTab] = useState<CartListTab>('ordering');
   const sideBorder = dockSide === 'right' ? 'border-l' : 'border-r';
 
@@ -281,8 +287,8 @@ export default function WebPosCartPanel({
   }, [moreOpen]);
 
   useEffect(() => {
-    if (!lineMenuId) return;
-    const close = () => setLineMenuId(null);
+    if (!lineMenu) return;
+    const close = () => setLineMenu(null);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -297,7 +303,7 @@ export default function WebPosCartPanel({
       window.removeEventListener('scroll', close, true);
       window.removeEventListener('resize', close);
     };
-  }, [lineMenuId]);
+  }, [lineMenu]);
 
   const orderedLines = useMemo(() => cart.filter((l) => !!l.sentToKitchen), [cart]);
   const orderingLines = useMemo(() => cart.filter((l) => !l.sentToKitchen), [cart]);
@@ -367,8 +373,7 @@ export default function WebPosCartPanel({
   const showFulfillmentTime =
     !!onEditFulfillment && (channel === 'takeaway' || channel === 'delivery');
   const showMetaStrip = membershipName || giftCardLabel || orderNote;
-  const dineInWhenLabel =
-    fulfillmentIsLater && fulfillmentLabel ? fulfillmentLabel : t('webPosAsap');
+  const lineMenuTarget = lineMenu ? cart.find((l) => l.lineId === lineMenu.lineId) : null;
 
   const handleLineTap = (line: CartLine, selected: boolean) => {
     if (onEditLine) {
@@ -438,7 +443,7 @@ export default function WebPosCartPanel({
             ) : null}
             {tableLabel && channel === 'dine_in' ? (
               <span className="inline-flex min-w-0 flex-1 items-center truncate rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-700">
-                {`${t('dineIn')} · ${dineInWhenLabel}`}
+                {`${t('table')} ${tableLabel}`}
               </span>
             ) : tableLabel ? (
               <span className="inline-flex max-w-full items-center gap-2 truncate">
@@ -708,22 +713,6 @@ export default function WebPosCartPanel({
                   {t('webPosMoveDishTo')}
                 </button>
               ) : null}
-              {onBillDiscount ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
-                  disabled={!hasItems || busy || !canApplyBillDiscount}
-                  onClick={() => {
-                    setMoreOpen(false);
-                    onBillDiscount();
-                  }}
-                >
-                  {billDiscountLabel
-                    ? `${t('webPosBillDiscount')} (${billDiscountLabel})`
-                    : t('webPosBillDiscount')}
-                </button>
-              ) : null}
               {onCashMovement ? (
                 <button
                   type="button"
@@ -738,32 +727,7 @@ export default function WebPosCartPanel({
                   {t('webPosCashMovementTitle')}
                 </button>
               ) : null}
-              <button
-                type="button"
-                role="menuitem"
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
-                disabled={!hasItems || busy || channel === 'dine_in' || !channel}
-                onClick={() => {
-                  setMoreOpen(false);
-                  onPayLater();
-                }}
-              >
-                {t('webPosPayLater')}
-              </button>
               <div className="my-1 border-t border-stone-100" />
-              <button
-                type="button"
-                role="menuitem"
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-40"
-                disabled={!canCancelItem || busy}
-                onClick={() => {
-                  setMoreOpen(false);
-                  onCancelItem();
-                }}
-              >
-                <Ban size={14} className="shrink-0" />
-                {t('webPosCancelItem')}
-              </button>
               <button
                 type="button"
                 role="menuitem"
@@ -999,52 +963,30 @@ export default function WebPosCartPanel({
                         {money(l.lineTotal)}
                       </span>
                     </div>
-                    {l.sentToKitchen && onLinePrint ? (
+                    {l.sentToKitchen && (onLinePrint || onLineCancel) ? (
                       <div className="relative">
                         <button
                           type="button"
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
-                          aria-label={t('webPosPrint')}
+                          aria-label={t('webPosLineActions')}
                           aria-haspopup="menu"
-                          aria-expanded={lineMenuId === l.lineId}
+                          aria-expanded={lineMenu?.lineId === l.lineId}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setLineMenuId((cur) => (cur === l.lineId ? null : l.lineId));
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setLineMenu((cur) =>
+                              cur?.lineId === l.lineId
+                                ? null
+                                : {
+                                    lineId: l.lineId,
+                                    top: rect.bottom + 4,
+                                    left: Math.max(8, rect.right - 168),
+                                  }
+                            );
                           }}
                         >
                           <MoreHorizontal size={16} aria-hidden />
                         </button>
-                        {lineMenuId === l.lineId ? (
-                          <>
-                            <button
-                              type="button"
-                              className="fixed inset-0 z-[34] cursor-default border-0 bg-transparent p-0"
-                              aria-label={t('close')}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setLineMenuId(null);
-                              }}
-                            />
-                            <div
-                              role="menu"
-                              className="absolute right-0 top-full z-[36] mt-1 min-w-[10rem] rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
-                            >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setLineMenuId(null);
-                                  onLinePrint(l);
-                                }}
-                              >
-                                <Printer size={14} className="shrink-0 text-stone-500" />
-                                {t('webPosPrint')}
-                              </button>
-                            </div>
-                          </>
-                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -1300,6 +1242,55 @@ export default function WebPosCartPanel({
           ) : null}
         </div>
       </div>
+      {lineMenu && lineMenuTarget && typeof document !== 'undefined'
+        ? createPortal(
+            <>
+              <button
+                type="button"
+                className="fixed inset-0 z-[120] cursor-default border-0 bg-transparent p-0"
+                aria-label={t('close')}
+                onClick={() => setLineMenu(null)}
+              />
+              <div
+                role="menu"
+                className="fixed z-[121] min-w-[11rem] rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
+                style={{ top: lineMenu.top, left: lineMenu.left }}
+              >
+                {onLinePrint ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLineMenu(null);
+                      onLinePrint(lineMenuTarget);
+                    }}
+                  >
+                    <Printer size={14} className="shrink-0 text-stone-500" />
+                    {t('webPosResendKitchen')}
+                  </button>
+                ) : null}
+                {onLineCancel ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLineMenu(null);
+                      onLineCancel(lineMenuTarget);
+                    }}
+                  >
+                    <Ban size={14} className="shrink-0" />
+                    {t('webPosCancelDish')}
+                  </button>
+                ) : null}
+              </div>
+            </>,
+            document.body
+          )
+        : null}
     </aside>
   );
 }
