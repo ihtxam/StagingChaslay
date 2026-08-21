@@ -7811,7 +7811,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 showNewOrder={showNewOrderButton}
                 sendLabel={sendLabel}
                 onCustomer={() => setCustomerOpen(true)}
-                onProvisionalReceipt={() => void printProvisionalReceipt()}
                 onSwitchToDineIn={switchToDineIn}
                 onCourse={advanceCourse}
                 onKitchenMessage={() => setKitchenMsgOpen(true)}

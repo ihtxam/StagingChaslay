@@ -22,7 +22,7 @@ type Props = {
 };
 
 function displayName(c: WebPosCustomer) {
-  return [c.firstName, c.lastName].filter(Boolean).join(' ') || c.phone || c.email || 'ù';
+  return [c.firstName, c.lastName].filter(Boolean).join(' ') || c.phone || c.email || '?';
 }
 
 export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props) {
@@ -97,18 +97,18 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/45 p-3">
-      <div className="flex w-full max-w-lg max-h-[90dvh] flex-col rounded-2xl bg-[var(--bg-elevated)] shadow-xl border border-[var(--border)]">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/45 p-3 sm:items-center sm:p-4">
+      <div className="flex max-h-[min(90dvh,calc(100dvh-1.5rem))] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-3">
           <h2 className="font-semibold">{t('webPosSelectCustomer')}</h2>
-          <button type="button" className="p-2" onClick={onClose} aria-label={t('close')}>
+          <button type="button" className="rounded-lg p-2 hover:bg-[var(--bg-muted)]" onClick={onClose} aria-label={t('close')}>
             <X size={18} />
           </button>
         </div>
 
         {!showCreate ? (
           <>
-            <div className="p-3 border-b border-[var(--border)] flex gap-2">
+            <div className="flex shrink-0 gap-2 border-b border-[var(--border)] p-3">
               <div className="relative flex-1">
                 <Search
                   size={16}
@@ -126,97 +126,101 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
                 {t('webPosCreateCustomer')}
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-2 space-y-1">
-              {loading ? (
-                <p className="p-3 text-sm muted">{t('loading')}</p>
-              ) : list.length === 0 ? (
-                <p className="p-3 text-sm muted">{t('webPosNoCustomers')}</p>
-              ) : (
-                list.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-left hover:bg-[var(--bg-muted)]"
-                    onClick={() => onSelect(c)}
-                  >
-                    <p className="font-medium text-sm">{displayName(c)}</p>
-                    <p className="text-[11px] text-[var(--text-muted)]">
-                      {[c.phone, c.defaultAddress, c.defaultZip, c.defaultCity]
-                        .filter(Boolean)
-                        .join(' ù ')}
-                    </p>
-                  </button>
-                ))
-              )}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+              <div className="space-y-1">
+                {loading ? (
+                  <p className="p-3 text-sm muted">{t('loading')}</p>
+                ) : list.length === 0 ? (
+                  <p className="p-3 text-sm muted">{t('webPosNoCustomers')}</p>
+                ) : (
+                  list.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-left hover:bg-[var(--bg-muted)]"
+                      onClick={() => onSelect(c)}
+                    >
+                      <p className="text-sm font-medium">{displayName(c)}</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">
+                        {[c.phone, c.defaultAddress, c.defaultZip, c.defaultCity]
+                          .filter(Boolean)
+                          .join(' ? ')}
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           </>
         ) : (
-          <form className="p-4 space-y-3 overflow-y-auto" onSubmit={onCreate}>
-            <label className="block text-sm space-y-1">
-              <span>{t('name')}</span>
-              <input
-                className="input"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-              />
-            </label>
-            <label className="block text-sm space-y-1">
-              <span>{t('phone')}</span>
-              <input
-                className="input"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              />
-            </label>
-            <label className="block text-sm space-y-1">
-                <span>Email</span>
-              <input
-                className="input"
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-              />
-            </label>
-            <label className="block text-sm space-y-1">
-              <span>{t('address')}</span>
-              <input
-                className="input"
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="block text-sm space-y-1">
-                <span>ZIP</span>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <form className="space-y-3 p-4" onSubmit={onCreate}>
+              <label className="block space-y-1 text-sm">
+                <span>{t('name')}</span>
                 <input
                   className="input"
-                  value={form.zip}
-                  onChange={(e) => setForm({ ...form, zip: e.target.value })}
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
                 />
               </label>
-              <label className="block text-sm space-y-1">
-                <span>{t('city')}</span>
+              <label className="block space-y-1 text-sm">
+                <span>{t('phone')}</span>
                 <input
                   className="input"
-                  value={form.city}
-                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 />
               </label>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                className="btn-secondary flex-1"
-                onClick={() => setShowCreate(false)}
-              >
-                {t('cancel')}
-              </button>
-              <button type="submit" className="btn-primary flex-1" disabled={creating}>
-                {creating ? t('saving') : t('save')}
-              </button>
-            </div>
-          </form>
+              <label className="block space-y-1 text-sm">
+                <span>{t('email')}</span>
+                <input
+                  className="input"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
+              </label>
+              <label className="block space-y-1 text-sm">
+                <span>{t('address')}</span>
+                <input
+                  className="input"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block space-y-1 text-sm">
+                  <span>ZIP</span>
+                  <input
+                    className="input"
+                    value={form.zip}
+                    onChange={(e) => setForm({ ...form, zip: e.target.value })}
+                  />
+                </label>
+                <label className="block space-y-1 text-sm">
+                  <span>{t('city')}</span>
+                  <input
+                    className="input"
+                    value={form.city}
+                    onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  />
+                </label>
+              </div>
+              <div className="sticky bottom-0 flex gap-2 border-t border-[var(--border)] bg-[var(--bg-elevated)] pt-3">
+                <button
+                  type="button"
+                  className="btn-secondary flex-1"
+                  onClick={() => setShowCreate(false)}
+                >
+                  {t('cancel')}
+                </button>
+                <button type="submit" className="btn-primary flex-1" disabled={creating}>
+                  {creating ? t('saving') : t('save')}
+                </button>
+              </div>
+            </form>
+          </div>
         )}
       </div>
     </div>

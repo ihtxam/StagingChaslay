@@ -60,7 +60,6 @@ type Props = {
   showNewOrder: boolean;
   sendLabel: string;
   onCustomer: () => void;
-  onProvisionalReceipt: () => void;
   /** Switch order to dine-in and open table picker when needed. */
   onSwitchToDineIn: () => void;
   onCourse: () => void;
@@ -209,7 +208,6 @@ export default function WebPosCartPanel({
   showNewOrder,
   sendLabel,
   onCustomer,
-  onProvisionalReceipt,
   onSwitchToDineIn,
   onCourse,
   onKitchenMessage,
@@ -591,19 +589,6 @@ export default function WebPosCartPanel({
               >
                 <Printer size={14} className="shrink-0 text-stone-500" />
                 {t('webPosPrint')}
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
-                disabled={!hasItems || busy}
-                onClick={() => {
-                  setMoreOpen(false);
-                  onProvisionalReceipt();
-                }}
-              >
-                <Printer size={14} className="shrink-0 text-stone-500" />
-                {t('webPosProvisionalReceipt')}
               </button>
               {onEditFulfillment && (channel === 'takeaway' || channel === 'delivery') ? (
                 <button
