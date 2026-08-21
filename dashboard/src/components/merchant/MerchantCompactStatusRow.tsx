@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/auth';
 interface MerchantCompactStatusRowProps {
   onMenuClick?: () => void;
   showMenuButton?: boolean;
+  registerDisplay?: { name: string; roleLabel: string };
 }
 
 /**
@@ -19,6 +20,7 @@ interface MerchantCompactStatusRowProps {
 export default function MerchantCompactStatusRow({
   onMenuClick,
   showMenuButton = false,
+  registerDisplay,
 }: MerchantCompactStatusRowProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -100,9 +102,9 @@ export default function MerchantCompactStatusRow({
             <span className="hidden sm:inline">{t('backToSuperadmin')}</span>
           </button>
         </span>
-      ) : user?.name ? (
+      ) : registerDisplay?.name || user?.name ? (
         <span className="font-medium text-[var(--text)] truncate max-w-[12rem] sm:max-w-none">
-          {user.name}
+          {registerDisplay?.name || user?.name}
         </span>
       ) : null}
 

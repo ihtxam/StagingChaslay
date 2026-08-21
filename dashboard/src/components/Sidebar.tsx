@@ -29,6 +29,8 @@ interface SidebarProps {
   menuItems: SidebarNavEntry[];
   /** Distinguishes open-state persistence per panel (e.g. merchant / superadmin). */
   panelKey?: string;
+  /** Active register user (PIN session when clocked in, else JWT account). */
+  registerDisplay?: { name: string; roleLabel: string };
   /** Optional prominent action shown under panel branding (e.g. POS). */
   quickAction?: {
     label: string;
@@ -71,6 +73,7 @@ export default function Sidebar({
   onToggle,
   menuItems,
   panelKey = 'default',
+  registerDisplay,
   quickAction = null,
   language,
   onLanguageChange,
@@ -83,11 +86,15 @@ export default function Sidebar({
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
 
-  const roleLabel = impersonating
-    ? 'Merchant (SA)'
-    : user?.isOwner
-      ? t('staffOwnerTitle')
-      : user?.roleName || user?.role || '';
+  const roleLabel =
+    registerDisplay?.roleLabel ||
+    (impersonating
+      ? 'Merchant (SA)'
+      : user?.isOwner
+        ? t('staffOwnerTitle')
+        : user?.roleName || user?.role || '');
+
+  const accountName = displaySidebarAccountName(registerDisplay?.name || user?.name);
 
   const activeGroupIds = useMemo(() => {
     const ids = new Set<string>();
@@ -342,7 +349,7 @@ export default function Sidebar({
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-white">
-                {displaySidebarAccountName(user?.name)}
+                {accountName}
               </p>
               <p className="truncate text-[11px] text-teal-100/70" title={roleLabel}>
                 {roleLabel}

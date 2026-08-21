@@ -334,6 +334,7 @@ import {
   isMerchantOwnerJwt,
   clearWebPosStaffSession,
   loadWebPosStaffSession,
+  notifyWebPosStaffSessionChanged,
   resolveWebPosStaffSession,
   saveWebPosStaffSession,
   webPosPinGateRequired,
@@ -865,7 +866,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       setWebposStaff(session);
       if (session) {
-        window.dispatchEvent(new CustomEvent('webpos:staff-session'));
+        notifyWebPosStaffSessionChanged();
       }
       const shouldOpenPinGate =
         opts?.openPinGate !== false &&
@@ -1060,7 +1061,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       jwtPermissions: authUser?.permissions as Permission[] | undefined,
       isOwner: jwtIsOwner,
       authRole: authUser?.role,
-      staffConfigured,
+      hasStaffPins: staffConfigured,
       pinSession: webposStaff,
     });
     if (!access.canOpenBackOffice) {
@@ -2828,7 +2829,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setShiftClosedOpen(false);
     clearWebPosStaffSession();
     setWebposStaff(null);
-    window.dispatchEvent(new CustomEvent('webpos:staff-session'));
+    notifyWebPosStaffSessionChanged();
   };
 
   /** EOD print/download when cash shifts are disabled (late-night venues). */
@@ -6807,6 +6808,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     setPosAuthAlert(null);
     clearPosSessionLocal();
+    clearWebPosStaffSession();
     const reg = await registerPosSession({
       sessionKind: 'main',
       platform: 'webpos',
@@ -6825,7 +6827,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     setWebposStaff(session);
     saveWebPosStaffSession(session);
-    window.dispatchEvent(new CustomEvent('webpos:staff-session'));
+    notifyWebPosStaffSessionChanged();
     if (reg.kickedSessionIds.length > 0) {
       toast.info(t('webPosSessionReclaimed'));
     }

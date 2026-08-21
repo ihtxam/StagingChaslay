@@ -2,6 +2,7 @@ import {
   canAccessEditionRoute,
   type EditionFeatureKey,
 } from './edition-features';
+import { isStandalonePwa } from './pwa';
 
 export type Permission =
   | 'USE_POS'
@@ -238,6 +239,16 @@ export type WebPosStaffSession = {
 const WEBPOS_STAFF_KEY = 'webpos_staff_session';
 /** Survives PWA relaunch when sessionStorage is cleared (offline register). */
 const WEBPOS_STAFF_PERSIST_KEY = 'webpos_staff_session_persist';
+/** Set in sessionStorage when PIN verify / staff auto-bind succeeded in this tab. */
+const WEBPOS_STAFF_VALIDATED_KEY = 'webpos_staff_session_validated';
+
+/** Dispatched when the active register staff session changes (PIN switch, logout, reconcile). */
+export const WEBPOS_STAFF_SESSION_EVENT = 'webpos:staff-session';
+
+export function notifyWebPosStaffSessionChanged() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(WEBPOS_STAFF_SESSION_EVENT));
+}
 
 function parseStaffSession(raw: string | null): WebPosStaffSession | null {
   if (!raw) return null;
@@ -248,15 +259,31 @@ function parseStaffSession(raw: string | null): WebPosStaffSession | null {
   }
 }
 
+/**
+ * Load the active register PIN session.
+ *
+ * Persistence rules (single source of truth for "who is on the till"):
+ * - `sessionStorage` + validated flag: active tab session (survives refresh in the same tab).
+ * - `localStorage` persist: only restored in installed PWA when sessionStorage was cleared
+ *   (offline relaunch). Never auto-restored in a normal browser tab — avoids stale waiter
+ *   sessions overriding a merchant-owner JWT after login/refresh.
+ * - Merchant JWT (`localStorage` token/user) is separate and never replaced by PIN state.
+ */
 export function loadWebPosStaffSession(): WebPosStaffSession | null {
   try {
+    const validated = sessionStorage.getItem(WEBPOS_STAFF_VALIDATED_KEY) === '1';
     const fromSession = parseStaffSession(sessionStorage.getItem(WEBPOS_STAFF_KEY));
-    if (fromSession) return fromSession;
-    const fromPersist = parseStaffSession(localStorage.getItem(WEBPOS_STAFF_PERSIST_KEY));
-    if (fromPersist) {
-      sessionStorage.setItem(WEBPOS_STAFF_KEY, JSON.stringify(fromPersist));
+    if (fromSession && validated) return fromSession;
+
+    if (isStandalonePwa()) {
+      const fromPersist = parseStaffSession(localStorage.getItem(WEBPOS_STAFF_PERSIST_KEY));
+      if (fromPersist) {
+        sessionStorage.setItem(WEBPOS_STAFF_KEY, JSON.stringify(fromPersist));
+        sessionStorage.setItem(WEBPOS_STAFF_VALIDATED_KEY, '1');
+        return fromPersist;
+      }
     }
-    return fromPersist;
+    return null;
   } catch {
     return null;
   }
@@ -264,12 +291,12 @@ export function loadWebPosStaffSession(): WebPosStaffSession | null {
 
 export function saveWebPosStaffSession(session: WebPosStaffSession | null) {
   if (!session) {
-    sessionStorage.removeItem(WEBPOS_STAFF_KEY);
-    localStorage.removeItem(WEBPOS_STAFF_PERSIST_KEY);
+    clearWebPosStaffSession();
     return;
   }
   const raw = JSON.stringify(session);
   sessionStorage.setItem(WEBPOS_STAFF_KEY, raw);
+  sessionStorage.setItem(WEBPOS_STAFF_VALIDATED_KEY, '1');
   try {
     localStorage.setItem(WEBPOS_STAFF_PERSIST_KEY, raw);
   } catch {
@@ -279,6 +306,7 @@ export function saveWebPosStaffSession(session: WebPosStaffSession | null) {
 
 export function clearWebPosStaffSession() {
   sessionStorage.removeItem(WEBPOS_STAFF_KEY);
+  sessionStorage.removeItem(WEBPOS_STAFF_VALIDATED_KEY);
   try {
     localStorage.removeItem(WEBPOS_STAFF_PERSIST_KEY);
   } catch {
@@ -362,6 +390,30 @@ export function notifyStaffRosterChanged() {
   window.dispatchEvent(new CustomEvent('webpos:staff-roster-changed'));
 }
 
+function sessionFromRosterRow(
+  row: StaffRosterRow,
+  accessToken?: string
+): WebPosStaffSession {
+  return webPosSessionFromStaffProfile({
+    id: row.id,
+    name: row.name,
+    roleId: row.roleId,
+    roleName: row.roleName,
+    permissions: row.permissions || [],
+    accessToken,
+  });
+}
+
+function sessionsEqual(a: WebPosStaffSession, b: WebPosStaffSession): boolean {
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.roleId === b.roleId &&
+    a.roleName === b.roleName &&
+    JSON.stringify(a.permissions) === JSON.stringify(b.permissions)
+  );
+}
+
 export function resolveWebPosStaffSession(opts: {
   staffList: StaffRosterRow[];
   authStaffId?: string | null;
@@ -377,6 +429,17 @@ export function resolveWebPosStaffSession(opts: {
     clearWebPosStaffSession();
   }
 
+  if (session) {
+    const row = staffList.find((s) => s.id === session!.id);
+    if (row) {
+      const fresh = sessionFromRosterRow(row, session.accessToken);
+      if (!sessionsEqual(session, fresh)) {
+        session = fresh;
+        saveWebPosStaffSession(session);
+      }
+    }
+  }
+
   if (opts.authRole === 'staff' && opts.authStaffId) {
     const row = staffList.find((s) => s.id === opts.authStaffId);
     if (row) {
@@ -390,12 +453,7 @@ export function resolveWebPosStaffSession(opts: {
           : opts.authPermissions || [],
         accessToken: session?.id === row.id ? session.accessToken : undefined,
       });
-      if (
-        !session ||
-        session.id !== fresh.id ||
-        session.roleId !== fresh.roleId ||
-        session.roleName !== fresh.roleName
-      ) {
+      if (!session || !sessionsEqual(session, fresh)) {
         session = fresh;
         saveWebPosStaffSession(session);
       }
@@ -403,6 +461,40 @@ export function resolveWebPosStaffSession(opts: {
   }
 
   return session;
+}
+
+/** Sidebar / header / POS chrome — one label for the active register user. */
+export function getEffectiveRegisterDisplay(opts: {
+  jwtUser?: {
+    name?: string | null;
+    roleName?: string | null;
+    role?: string | null;
+    isOwner?: boolean;
+  } | null;
+  pinSession: WebPosStaffSession | null;
+  pinActive: boolean;
+  impersonating?: boolean;
+  t: (key: string) => string;
+}): { name: string; roleLabel: string } {
+  if (opts.impersonating) {
+    return {
+      name: opts.jwtUser?.name || '',
+      roleLabel: 'Merchant (SA)',
+    };
+  }
+  if (opts.pinActive && opts.pinSession) {
+    return {
+      name: opts.pinSession.name,
+      roleLabel: staffRoleDisplayName(opts.pinSession.roleName, opts.t),
+    };
+  }
+  const roleLabel = opts.jwtUser?.isOwner
+    ? opts.t('staffOwnerTitle')
+    : opts.jwtUser?.roleName || opts.jwtUser?.role || '';
+  return {
+    name: opts.jwtUser?.name || '',
+    roleLabel,
+  };
 }
 
 /**
@@ -417,7 +509,10 @@ export function getEffectivePanelAccess(opts: {
   jwtPermissions: Permission[] | undefined;
   isOwner: boolean;
   authRole?: string | null;
-  staffConfigured: boolean;
+  /** Shop has at least one active staff PIN configured. */
+  hasStaffPins: boolean;
+  /** @deprecated use hasStaffPins */
+  staffConfigured?: boolean;
   pinSession: WebPosStaffSession | null;
 }): {
   permissions: Permission[] | undefined;
@@ -433,7 +528,8 @@ export function getEffectivePanelAccess(opts: {
   pinActive: boolean;
 } {
   const ownerEffective = opts.isOwner && opts.authRole !== 'staff';
-  const pinActive = opts.staffConfigured && !!opts.pinSession;
+  const hasStaffPins = opts.hasStaffPins ?? !!opts.staffConfigured;
+  const pinActive = hasStaffPins && !!opts.pinSession;
   if (pinActive && opts.pinSession) {
     const permissions = opts.pinSession.permissions || [];
     const canOpenPanel = hasPermission(permissions, 'ACCESS_PANEL', false);

@@ -51,11 +51,16 @@ import {
   canShowWebPosQuickAction,
   backOfficeHomePath,
   getEffectivePanelAccess,
+  getEffectiveRegisterDisplay,
   isCatalogPanelPath,
   isOrdersPanelPath,
   isStaffJwt,
   loadWebPosStaffSession,
+  notifyWebPosStaffSessionChanged,
+  resolveWebPosStaffSession,
+  WEBPOS_STAFF_SESSION_EVENT,
   type Permission,
+  type StaffRosterRow,
   type WebPosStaffSession,
 } from '@/lib/permissions';
 import type { EditionFeatureKey } from '@/lib/edition-features';
@@ -124,17 +129,48 @@ function MerchantShell() {
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
   );
+  const [hasStaffPins, setHasStaffPins] = useState(false);
   const hideChrome = (isPosLikeRoute && posAppMode) || isPosEmbed;
+
+  // Reconcile PIN session with JWT + staff roster on load (drop stale localStorage persist).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const staffRes = await api.get('/merchant/staff');
+        if (cancelled) return;
+        const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
+        const pins = staffList.some(
+          (s) => !!(s as { pinSet?: boolean }).pinSet && s.isActive !== false
+        );
+        setHasStaffPins(pins);
+        const session = resolveWebPosStaffSession({
+          staffList,
+          authStaffId: user.staffId,
+          authRole: user.role,
+          authPermissions: user.permissions as Permission[] | undefined,
+        });
+        setPinSession(session);
+        notifyWebPosStaffSessionChanged();
+      } catch {
+        /* roster fetch is best-effort for panel gating */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.role, user?.staffId, user?.permissions]);
 
   // Keep PIN session in sync when WebPOS switches users
   useEffect(() => {
     const syncPin = () => setPinSession(loadWebPosStaffSession());
     syncPin();
     window.addEventListener('storage', syncPin);
-    window.addEventListener('webpos:staff-session', syncPin);
+    window.addEventListener(WEBPOS_STAFF_SESSION_EVENT, syncPin);
     return () => {
       window.removeEventListener('storage', syncPin);
-      window.removeEventListener('webpos:staff-session', syncPin);
+      window.removeEventListener(WEBPOS_STAFF_SESSION_EVENT, syncPin);
     };
   }, [location.pathname, posAppMode]);
 
@@ -144,11 +180,21 @@ function MerchantShell() {
         jwtPermissions: user?.permissions as Permission[] | undefined,
         isOwner: jwtIsOwner,
         authRole: user?.role,
-        // Active PIN session means floor staff perms override owner JWT for panel access.
-        staffConfigured: !!pinSession || staffJwt,
+        hasStaffPins,
         pinSession,
       }),
-    [user?.permissions, user?.role, jwtIsOwner, staffJwt, pinSession]
+    [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, pinSession]
+  );
+
+  const registerDisplay = useMemo(
+    () =>
+      getEffectiveRegisterDisplay({
+        jwtUser: user,
+        pinSession,
+        pinActive: effective.pinActive,
+        t,
+      }),
+    [user, pinSession, effective.pinActive, t]
   );
 
   useEffect(() => {
@@ -207,7 +253,7 @@ function MerchantShell() {
         jwtPermissions: user?.permissions as Permission[] | undefined,
         isOwner: jwtIsOwner,
         authRole: user?.role,
-        staffConfigured: !!loadWebPosStaffSession() || staffJwt,
+        hasStaffPins,
         pinSession: loadWebPosStaffSession(),
       });
       if (!access.canOpenBackOffice) {
@@ -229,7 +275,7 @@ function MerchantShell() {
       window.removeEventListener('webpos:show-panel', showPanel);
       window.removeEventListener('webpos:enter-app', enterApp);
     };
-  }, [user?.permissions, user?.role, jwtIsOwner, staffJwt, t, navigate]);
+  }, [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, t, navigate]);
 
   // Restricted PIN: stay in POS unless they may open menu / orders pages.
   useEffect(() => {
@@ -400,6 +446,7 @@ function MerchantShell() {
           onToggle={() => setSidebarOpen(!sidebarOpen)}
           menuItems={menuItems}
           panelKey="merchant"
+          registerDisplay={registerDisplay}
           quickAction={
             showWebPosQuickAction
               ? { label: t('sidebarPos'), path: '/merchant/pos' }
@@ -416,6 +463,7 @@ function MerchantShell() {
             title={t('merchantDashboard')}
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
             compact
+            registerDisplay={registerDisplay}
           />
         )}
 

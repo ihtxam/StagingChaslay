@@ -22,8 +22,11 @@ import {
   loadWebPosStaffSession,
   saveWebPosStaffSession,
   clearWebPosStaffSession,
+  notifyWebPosStaffSessionChanged,
+  resolveWebPosStaffSession,
   webPosPinGateRequired,
   type WebPosStaffSession,
+  type StaffRosterRow,
 } from '@/lib/permissions';
 import { useAuthStore } from '@/store/auth';
 import {
@@ -122,9 +125,17 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           api.get('/merchant/products', { params: { limit: 500 } }),
         ]);
         if (cancelled) return;
-        const list = (staffRes.data?.staff || []) as Array<{ pinSet?: boolean }>;
-        setStaffConfigured(list.some((s) => s.pinSet));
+        const list = (staffRes.data?.staff || []) as StaffRosterRow[];
+        setStaffConfigured(list.some((s) => !!(s as { pinSet?: boolean }).pinSet));
         setStaffPinsKnown(true);
+        const session = resolveWebPosStaffSession({
+          staffList: list,
+          authStaffId: authUser?.staffId,
+          authRole: authUser?.role,
+          authPermissions: authUser?.permissions,
+        });
+        setStaff(session);
+        if (session) notifyWebPosStaffSessionChanged();
         setCategories(catRes.data?.categories || []);
         setProducts(prodRes.data?.products || []);
         setPrintSettings(configRes.data?.config?.posPrintSettings || null);
@@ -137,7 +148,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [t, authUser?.staffId, authUser?.role, authUser?.permissions]);
 
   useEffect(() => {
     if (!loading && pinRequired) setPinGateOpen(true);
@@ -306,6 +317,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       clearPosSessionLocal();
       clearWebPosStaffSession();
       setStaff(null);
+      notifyWebPosStaffSessionChanged();
       resetOrder();
       setPosAuthAlert({
         title: t('webPosSessionKickedTitle'),
@@ -340,6 +352,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     }
     setPosAuthAlert(null);
     clearPosSessionLocal();
+    clearWebPosStaffSession();
     const reg = await registerPosSession({
       sessionKind: 'waiter',
       platform: 'waiter_web',
@@ -357,6 +370,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     }
     saveWebPosStaffSession(session);
     setStaff(session);
+    notifyWebPosStaffSessionChanged();
     setPinGateOpen(false);
     if (reg.kickedSessionIds.length > 0) {
       toast.info(t('webPosSessionReclaimed'));
@@ -367,6 +381,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     await revokePosSession();
     clearWebPosStaffSession();
     setStaff(null);
+    notifyWebPosStaffSessionChanged();
     resetOrder();
     setPinGateOpen(true);
   };
