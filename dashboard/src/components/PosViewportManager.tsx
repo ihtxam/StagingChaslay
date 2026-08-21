@@ -9,19 +9,25 @@ const POS_VIEWPORT =
 function isPosLikePath(pathname: string): boolean {
   return (
     /\/merchant\/(?:pos|waiter)(?:\/|$)/.test(pathname) ||
-    /^\/kds(?:\/|$)/.test(pathname)
+    /^\/kds(?:\/|$)/.test(pathname) ||
+    /^\/tv(?:\/|$)/.test(pathname)
   );
 }
 
-/** Lock zoom on POS / waiter / KDS routes to prevent iOS input auto-zoom. */
+function applyPosViewport(lock: boolean) {
+  const meta = document.querySelector('meta[name="viewport"]');
+  if (meta) meta.setAttribute('content', lock ? POS_VIEWPORT : DEFAULT_VIEWPORT);
+  document.documentElement.classList.toggle('webpos-lock', lock);
+}
+
+/** Fit POS / waiter / KDS to the phone screen — no pinch-zoom required. */
 export default function PosViewportManager() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    const meta = document.querySelector('meta[name="viewport"]');
-    if (!meta) return;
-    meta.setAttribute('content', isPosLikePath(pathname) ? POS_VIEWPORT : DEFAULT_VIEWPORT);
-    return () => meta.setAttribute('content', DEFAULT_VIEWPORT);
+    const lock = isPosLikePath(pathname);
+    applyPosViewport(lock);
+    return () => applyPosViewport(false);
   }, [pathname]);
 
   return null;

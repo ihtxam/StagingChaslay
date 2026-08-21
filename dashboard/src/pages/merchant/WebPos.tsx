@@ -760,6 +760,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (typeof window === 'undefined' || !window.matchMedia) return true;
     return !window.matchMedia('(min-width: 1024px)').matches;
   });
+  /** Phone-width: force compact tiles so the Windows till scale is not used. */
+  const [isPhoneViewport, setIsPhoneViewport] = useState(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return true;
+    return !window.matchMedia('(min-width: 640px)').matches;
+  });
   const [recentOpen, setRecentOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
@@ -1020,15 +1025,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** Mobile cart page is phone-only; restore side-cart layout from lg (1024px) up. */
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
-    const mq = window.matchMedia('(min-width: 1024px)');
+    const mqLg = window.matchMedia('(min-width: 1024px)');
+    const mqSm = window.matchMedia('(min-width: 640px)');
     const sync = () => {
-      const lgUp = mq.matches;
+      const lgUp = mqLg.matches;
       setIsNarrowViewport(!lgUp);
+      setIsPhoneViewport(!mqSm.matches);
       if (lgUp) setMobileCartOpen(false);
     };
     sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
+    mqLg.addEventListener('change', sync);
+    mqSm.addEventListener('change', sync);
+    return () => {
+      mqLg.removeEventListener('change', sync);
+      mqSm.removeEventListener('change', sync);
+    };
   }, []);
 
   useEffect(() => {
@@ -7128,6 +7139,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         data-theme={posColorTheme || 'teal'}
         data-text-size={posTextSize}
         data-narrow={isNarrowViewport ? '1' : '0'}
+        data-phone={isPhoneViewport ? '1' : '0'}
       >
         {pinNeedsNetwork ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-stone-100">
@@ -7218,6 +7230,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       data-appearance={posAppearance}
       data-text-size={posTextSize}
       data-narrow={isNarrowViewport ? '1' : '0'}
+      data-phone={isPhoneViewport ? '1' : '0'}
     >
       {reservationAlertUntil > Date.now() ? (
         <div
@@ -7891,7 +7904,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     return next;
                   });
                 }}
-                tileSize={gridTileSize}
+                tileSize={isPhoneViewport ? 'sm' : gridTileSize}
                 onCycleTileSize={() => {
                   setGridTileSize((cur) => {
                     const next: ProductGridTileSize =
