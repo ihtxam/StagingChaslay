@@ -19,6 +19,19 @@ export function paletteColorAt(index: number): string {
   return CATEGORY_PALETTE[Math.abs(index) % CATEGORY_PALETTE.length]!;
 }
 
+export function isValidHexColor(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value.trim());
+}
+
+export function normalizeHexColor(value: string): string {
+  const hex = value.trim();
+  if (hex.length === 4) {
+    return `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+  }
+  return hex;
+}
+
 /** Prefer stored category color; else stable hash / index fallback. */
 export function categoryColor(
   categoryId: string | null | undefined,
