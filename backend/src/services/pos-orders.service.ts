@@ -222,6 +222,36 @@ export class PosOrdersService {
       limit,
     });
 
+    const orderIds = rows.map((o) => o.id);
+    const refundsByOrder = new Map<string, Array<Record<string, unknown>>>();
+    if (orderIds.length) {
+      try {
+        const refundRows = await db.query.orderRefunds.findMany({
+          where: and(
+            eq(schema.orderRefunds.merchantId, merchantId),
+            inArray(schema.orderRefunds.orderId, orderIds)
+          ),
+          orderBy: [desc(schema.orderRefunds.createdAt)],
+        });
+        for (const rf of refundRows) {
+          const list = refundsByOrder.get(rf.orderId) || [];
+          list.push({
+            id: rf.id,
+            kind: rf.kind,
+            amount: Number(rf.amount),
+            reason: rf.reason || null,
+            staffName: rf.staffName || null,
+            items: rf.itemsJson || [],
+            allocation: rf.allocationJson || null,
+            createdAt: rf.createdAt?.toISOString?.() ?? null,
+          });
+          refundsByOrder.set(rf.orderId, list);
+        }
+      } catch {
+        /* table may not exist yet on older DBs */
+      }
+    }
+
     return rows.map((o) => {
       const notes = String(o.notes || "");
       const ticketMatch = notes.match(/\[ticket:([^\]]+)\]/i);
@@ -259,6 +289,7 @@ export class PosOrdersService {
       cancelledAt: o.cancelledAt,
       refundedAt: o.refundedAt,
       refundReason: o.refundReason || null,
+      refundHistory: refundsByOrder.get(o.id) || [],
       notes: o.notes,
       tableLabel: o.tableLabel,
       guestCount: o.guestCount,
@@ -569,6 +600,42 @@ export class PosOrdersService {
       .where(eq(schema.orders.id, orderId))
       .returning();
 
+    const refundItemsLog = itemUpdates
+      .map((u) => {
+        const item = (order.items || []).find((i) => i.id === u.id);
+        const prevQty = Number(item?.refundedQuantity || 0) || 0;
+        const nextQty = Number(u.refundedQuantity) || 0;
+        const delta = roundMoney2(nextQty - prevQty);
+        if (delta <= 0) return null;
+        return {
+          orderItemId: u.id,
+          productName: resolveOrderItemName(item?.productName),
+          quantity: delta,
+        };
+      })
+      .filter(Boolean) as Array<{ orderItemId: string; productName?: string; quantity: number }>;
+
+    try {
+      await db.insert(schema.orderRefunds).values({
+        merchantId,
+        orderId,
+        kind: "referenced",
+        amount: refund.toFixed(2),
+        reason: reasonText,
+        staffId: order.staffId || null,
+        staffName: order.staffName || null,
+        itemsJson: refundItemsLog.length ? refundItemsLog : null,
+        allocationJson: {
+          giftCard: refundDelta.giftCard,
+          cash: refundDelta.cash,
+          terminal: refundDelta.terminal,
+          other: refundDelta.other,
+        },
+      });
+    } catch (logErr) {
+      console.warn("Refund recorded on order but history log failed:", logErr);
+    }
+
     return {
       order: updated,
       refunded: refund,
@@ -655,6 +722,25 @@ export class PosOrdersService {
       })
       .where(eq(schema.orders.id, orderId))
       .returning();
+
+    try {
+      await db.insert(schema.orderRefunds).values({
+        merchantId,
+        orderId,
+        kind: "goodwill",
+        amount: amount.toFixed(2),
+        reason: reasonText,
+        staffId: order.staffId || null,
+        staffName: order.staffName || null,
+        itemsJson: null,
+        allocationJson:
+          method === "terminal"
+            ? { terminal: amount }
+            : { cash: amount },
+      });
+    } catch (logErr) {
+      console.warn("Goodwill recorded but history log failed:", logErr);
+    }
 
     return {
       order: updated,

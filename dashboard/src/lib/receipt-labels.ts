@@ -41,6 +41,8 @@ export type ReceiptLabels = {
   productsSold: string;
   cancelled: string;
   refunds: string;
+  refundCount: string;
+  refundsByPayment: string;
   covers: string;
   tipsNotTaxable: string;
   /** Taxable sales total (order totals minus tips) */
@@ -131,6 +133,8 @@ const EN: ReceiptLabels = {
   productsSold: 'PRODUCTS SOLD',
   cancelled: 'Cancelled',
   refunds: 'Refunds',
+  refundCount: 'Refund count',
+  refundsByPayment: 'Refunds by payment',
   covers: 'Covers',
   tipsNotTaxable: 'Tips (not taxable)',
   netSalesExclTips: 'Net sales (excl. tips)',
@@ -218,6 +222,8 @@ const FR: ReceiptLabels = {
   productsSold: 'PRODUITS VENDUS',
   cancelled: 'Annulees',
   refunds: 'Remboursements',
+  refundCount: 'Nombre de remboursements',
+  refundsByPayment: 'Remb. par paiement',
   covers: 'Couverts',
   tipsNotTaxable: 'Pourboires (non taxables)',
   netSalesExclTips: 'Ventes nettes (hors pourboires)',
@@ -305,6 +311,8 @@ const DE: ReceiptLabels = {
   productsSold: 'VERKAUFTE PRODUKTE',
   cancelled: 'Storniert',
   refunds: 'Rueckerstattungen',
+  refundCount: 'Anzahl Erstattungen',
+  refundsByPayment: 'Erstatt. nach Zahlung',
   covers: 'Gedecke',
   tipsNotTaxable: 'Trinkgeld (nicht steuerpflichtig)',
   netSalesExclTips: 'Nettoumsatz (ohne Trinkgeld)',

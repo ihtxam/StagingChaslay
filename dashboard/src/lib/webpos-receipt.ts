@@ -1852,6 +1852,13 @@ export type EodReportPrint = {
   tipsTotal?: number;
   grandTotal?: number;
   refundTotal: number;
+  refundCount?: number;
+  refundedOrders?: Array<{
+    orderNumber: string;
+    refundAmount: number;
+    refundReason?: string | null;
+  }>;
+  refundRows?: Array<{ method: string; total: number }>;
   cancelledCount: number;
   cancelledTotal: number;
   cashTotal: number;
@@ -1979,7 +1986,35 @@ export function generateEodReportText(report: EodReportPrint): string {
       ) + '\n';
   }
   if (report.refundTotal > 0) {
+    r += '\n';
+    r += thin + '\n';
+    r += centerLine(L.refunds, width) + '\n';
+    r += thin + '\n';
     r += padLine(L.refunds, money(report.refundTotal), width) + '\n';
+    if (report.refundCount != null) {
+      r += padLine(L.refundCount, String(report.refundCount), width) + '\n';
+    }
+    for (const row of report.refundedOrders || []) {
+      r +=
+        padLine(
+          String(row.orderNumber || '').slice(0, Math.max(8, width - 14)),
+          `-${money(row.refundAmount)}`,
+          width
+        ) + '\n';
+      if (row.refundReason?.trim()) {
+        for (const line of wrapKitchenWords(row.refundReason.trim(), width)) {
+          r += line + '\n';
+        }
+      }
+    }
+    if (report.refundRows?.length) {
+      r += '\n';
+      r += centerLine(L.refundsByPayment, width) + '\n';
+      for (const row of report.refundRows) {
+        r +=
+          padLine(paymentLabel(L, row.method), money(row.total), width) + '\n';
+      }
+    }
   }
   r += '\n';
   r += thin + '\n';

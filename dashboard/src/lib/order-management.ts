@@ -12,6 +12,21 @@ export type MerchantOrder = PosOrderForReceipt & {
   refundAmount: number;
   cancelReason?: string | null;
   refundReason?: string | null;
+  refundHistory?: Array<{
+    id?: string;
+    kind?: string;
+    amount: number;
+    reason?: string | null;
+    staffName?: string | null;
+    createdAt?: string | null;
+    items?: Array<{ orderItemId?: string; productName?: string; quantity: number }>;
+    allocation?: {
+      giftCard?: number;
+      cash?: number;
+      terminal?: number;
+      other?: number;
+    } | null;
+  }>;
   notes?: string | null;
   masterOrderId?: string | null;
   orderType?: string | null;

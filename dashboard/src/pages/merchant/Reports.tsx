@@ -48,6 +48,7 @@ type EodReport = {
   discountTotal: number;
   tipsTotal: number;
   refundTotal: number;
+  refundCount?: number;
   cancelledTotal: number;
   cancelledOrders?: Array<{
     orderNumber: string;
@@ -70,6 +71,7 @@ type EodReport = {
   terminalTotal: number;
   vatRows?: Array<{ label: string; net: number; tva: number; brut: number }>;
   paymentRows: Array<{ method: string; count: number; total: number; percent?: number }>;
+  refundRows?: Array<{ method: string; total: number }>;
   channelRows: Array<{ channel: string; count: number; total: number }>;
   orderTypeRows?: Array<{ label: string; count: number; total: number; percent?: number }>;
   productsSold: Array<{ name: string; quantity: number; total: number }>;
@@ -152,6 +154,13 @@ export default function ReportsPage() {
         tipsTotal: report.tipsTotal,
         grandTotal: report.grandTotal,
         refundTotal: report.refundTotal,
+        refundCount: report.refundedOrders?.length ?? report.refundCount,
+        refundedOrders: report.refundedOrders?.map((r) => ({
+          orderNumber: r.orderNumber,
+          refundAmount: r.refundAmount,
+          refundReason: r.refundReason,
+        })),
+        refundRows: report.refundRows,
         cancelledCount: report.cancelledCount,
         cancelledTotal: report.cancelledTotal,
         cashTotal: report.cashTotal,
@@ -384,11 +393,39 @@ export default function ReportsPage() {
               )}
 
               {!!report.refundedOrders?.length && (
-                <section className="rounded-xl border border-[var(--border)] overflow-hidden">
-                  <h2 className="px-3 py-2 text-sm font-semibold bg-[var(--bg-muted)]">
-                    {t('reportsRefundedOrders')}
+                <section className="rounded-xl border border-rose-200/80 bg-rose-50/30 dark:border-rose-900/40 dark:bg-rose-950/20 overflow-hidden">
+                  <h2 className="px-3 py-2 text-sm font-semibold bg-rose-100/60 dark:bg-rose-950/40 text-rose-900 dark:text-rose-100">
+                    {t('reportsRefundSummary')}
                   </h2>
-                  <ul className="divide-y divide-[var(--border)]">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 border-b border-rose-200/60 dark:border-rose-900/40">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-rose-800/70">{t('reportsRefundCount')}</p>
+                      <p className="text-lg font-semibold tabular-nums">{report.refundedOrders.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-rose-800/70">{t('reportsRefunds')}</p>
+                      <p className="text-lg font-semibold tabular-nums text-rose-700">−{money(report.refundTotal)}</p>
+                    </div>
+                  </div>
+                  {!!report.refundRows?.length && (
+                    <div className="px-3 py-2 border-b border-rose-200/60 dark:border-rose-900/40">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-rose-800/80 mb-1.5">
+                        {t('reportsRefundsByPayment')}
+                      </p>
+                      <ul className="space-y-1 text-sm">
+                        {report.refundRows.map((row) => (
+                          <li key={row.method} className="flex justify-between gap-2">
+                            <span>{paymentMethodLabel(row.method, t)}</span>
+                            <span className="font-semibold tabular-nums text-rose-700">−{money(row.total)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <h3 className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-800/80">
+                    {t('reportsRefundedOrders')}
+                  </h3>
+                  <ul className="divide-y divide-rose-200/60 dark:divide-rose-900/40">
                     {report.refundedOrders.map((r, idx) => (
                       <li
                         key={`${r.orderNumber}-rf-${idx}`}

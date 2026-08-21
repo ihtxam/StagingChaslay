@@ -1271,6 +1271,46 @@ export const orderItems = pgTable(
 );
 
 // ============================================================================
+// ORDER REFUNDS (partial + full history per ticket)
+// ============================================================================
+
+export const orderRefunds = pgTable(
+  "order_refunds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    /** referenced = capped by order total; goodwill = unreferenced compensation */
+    kind: varchar("kind", { length: 20 }).default("referenced").notNull(),
+    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    reason: text("reason"),
+    staffId: uuid("staff_id"),
+    staffName: varchar("staff_name", { length: 255 }),
+    /** [{ orderItemId, productName, quantity }] when item-level refund */
+    itemsJson: json("items_json").$type<
+      Array<{ orderItemId: string; productName?: string; quantity: number }> | null
+    >(),
+    /** Gift-first refund allocation { giftCard, cash, terminal, other } */
+    allocationJson: json("allocation_json").$type<{
+      giftCard?: number;
+      cash?: number;
+      terminal?: number;
+      other?: number;
+    } | null>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("order_refunds_merchant_id_idx").on(table.merchantId),
+    orderIdx: index("order_refunds_order_id_idx").on(table.orderId),
+    createdIdx: index("order_refunds_created_at_idx").on(table.createdAt),
+  })
+);
+
+// ============================================================================
 // FLOOR PLANS & DINING TABLES
 // ============================================================================
 
@@ -2350,6 +2390,7 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   customer: one(customers, { fields: [orders.customerId], references: [customers.id] }),
   items: many(orderItems),
   paymentTransactions: many(paymentTransactions),
+  refunds: many(orderRefunds),
 }));
 
 /** Required so `orders.with.paymentTransactions` can be inferred by Drizzle. */
@@ -2420,6 +2461,11 @@ export const customerAddressesRelations = relations(customerAddresses, ({ one })
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
   product: one(products, { fields: [orderItems.productId], references: [products.id] }),
+}));
+
+export const orderRefundsRelations = relations(orderRefunds, ({ one }) => ({
+  order: one(orders, { fields: [orderRefunds.orderId], references: [orders.id] }),
+  merchant: one(merchants, { fields: [orderRefunds.merchantId], references: [merchants.id] }),
 }));
 
 export const loyaltyCardsRelations = relations(loyaltyCards, ({ one, many }) => ({

@@ -33,6 +33,9 @@ import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
 import { toastPrintError } from '@/lib/webpos-print-toast';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
+import { parsePaymentBreakdown, hasTerminalPortion } from '@/lib/payment-breakdown';
+import WebPosRefundModal, { type RefundReasonOption } from '@/components/webpos/WebPosRefundModal';
+import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import {
   settingsDash,
   SettingsField,
@@ -92,6 +95,19 @@ function matchesTypeFilter(o: MerchantOrder, filter: TypeFilter) {
   return orderChannel(o) === filter;
 }
 
+function canRefundMerchantOrder(o: MerchantOrder): boolean {
+  if (o.status === 'cancelled' || o.paymentStatus === 'cancelled') return false;
+  const remaining = Number(o.total || 0) - Number(o.refundAmount || 0);
+  if (remaining <= 0.001) return false;
+  return (
+    o.status === 'completed' ||
+    o.status === 'partially_refunded' ||
+    o.paymentStatus === 'completed' ||
+    o.paymentStatus === 'paid' ||
+    o.paymentStatus === 'partially_refunded'
+  );
+}
+
 type InvoicePayFilter = 'all' | 'unpaid' | 'paid';
 
 export default function Orders({ invoiceLedger = false }: { invoiceLedger?: boolean }) {
@@ -131,6 +147,9 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const [printing, setPrinting] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [collectOpen, setCollectOpen] = useState(false);
+  const [refundFor, setRefundFor] = useState<MerchantOrder | null>(null);
+  const [refundReasons, setRefundReasons] = useState<RefundReasonOption[]>([]);
+  const [refundBusy, setRefundBusy] = useState(false);
 
   const loadMeta = useCallback(async () => {
     try {
@@ -179,6 +198,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         if (searchQ) params.set('q', searchQ);
         const response = await api.get(`/merchant/pos/orders?${params.toString()}`);
         setOrders((response.data.orders || []) as MerchantOrder[]);
+        setRefundReasons(response.data.refundReasons || []);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('ordersLoadFailed'));
@@ -320,6 +340,45 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
       toast.error(e.response?.data?.error || t('actionFailed'));
     } finally {
       setActionBusy(false);
+    }
+  };
+
+  const doRefund = async (payload: {
+    refundKind: 'referenced' | 'goodwill';
+    mode: 'full' | 'items';
+    reason: string;
+    items?: Array<{ orderItemId: string; quantity: number }>;
+    goodwillAmount?: number;
+    goodwillMethod?: 'cash' | 'terminal';
+  }) => {
+    if (!refundFor) return;
+    setRefundBusy(true);
+    try {
+      if (payload.refundKind === 'goodwill') {
+        await api.post(`/merchant/pos/orders/${refundFor.id}/goodwill`, {
+          amount: payload.goodwillAmount,
+          reason: payload.reason,
+          method: payload.goodwillMethod || 'cash',
+        });
+        toast.success(t('webPosGoodwillSubmitted'));
+      } else {
+        await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
+          reason: payload.reason,
+          fullTicket: payload.mode === 'full',
+          items: payload.items,
+        });
+        toast.success(t('webPosOrderRefunded'));
+      }
+      setRefundFor(null);
+      setSelected(null);
+      void load();
+    } catch (e: any) {
+      toast.error(
+        e.response?.data?.error ||
+          (payload.refundKind === 'goodwill' ? t('webPosGoodwillFailed') : t('webPosRefundFailed'))
+      );
+    } finally {
+      setRefundBusy(false);
     }
   };
 
@@ -819,11 +878,24 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                 ) : null}
               </div>
 
+              <OrderRefundHistory
+                history={selected.refundHistory || []}
+                totalRefunded={Number(selected.refundAmount || 0)}
+              />
+
               <ul className="space-y-2 border-t border-[var(--border)] pt-3 text-sm">
                 {(selected.items || []).map((item, i) => (
                   <li key={item.id || i} className="flex justify-between gap-3">
                     <span className="min-w-0">
                       {Number(item.quantity)}× {orderItemName(item)}
+                      {Number(item.refundedQuantity || 0) > 0 ? (
+                        <span className="ml-1 text-xs text-rose-700">
+                          ({t('orderItemRefunded').replace(
+                            '{n}',
+                            String(Number(item.refundedQuantity || 0))
+                          )})
+                        </span>
+                      ) : null}
                       {!!item.comboSelections?.length && (
                         <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
                           {item.comboSelections
@@ -850,6 +922,14 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               </ul>
               <p className="text-right text-sm font-extrabold tabular-nums">
                 Total CHF {Number(selected.total).toFixed(2)}
+                {Number(selected.refundAmount || 0) > 0 ? (
+                  <span className="block text-xs font-semibold text-rose-700">
+                    {t('webPosRefundRemaining').replace(
+                      '{amount}',
+                      `CHF ${Math.max(0, Number(selected.total) - Number(selected.refundAmount || 0)).toFixed(2)}`
+                    )}
+                  </span>
+                ) : null}
               </p>
 
               <SettingsReportCard icon={ShoppingBag} accent={settingsDash.accent} title={t('ordersActionsTitle')}>
@@ -975,12 +1055,51 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                     <Printer size={16} />
                     {t('webPosPrintReceipt')}
                   </button>
+                  {!showingInvoices && canRefundMerchantOrder(selected) ? (
+                    <button
+                      type="button"
+                      disabled={refundBusy}
+                      onClick={() => setRefundFor(selected)}
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-rose-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+                    >
+                      {t('webPosRefund')}
+                    </button>
+                  ) : null}
                 </div>
               </SettingsReportCard>
             </div>
           </div>
         </div>
       ) : null}
+
+      <WebPosRefundModal
+        open={!!refundFor}
+        orderNumber={refundFor?.orderNumber || ''}
+        total={refundFor?.total || 0}
+        alreadyRefunded={refundFor?.refundAmount || 0}
+        items={(refundFor?.items || []).map((it) => ({
+          id: String(it.id || ''),
+          name: orderItemName(it),
+          quantity: Number(it.quantity) || 0,
+          totalPrice: Number(it.totalPrice) || 0,
+          refundedQuantity: Number(it.refundedQuantity || 0),
+        }))}
+        reasons={refundReasons}
+        busy={refundBusy}
+        hasTerminalPortion={
+          !!refundFor &&
+          hasTerminalPortion(
+            parsePaymentBreakdown(
+              refundFor.paymentBreakdown,
+              refundFor.paymentMethod,
+              refundFor.total
+            )
+          )
+        }
+        terminalEnabled={false}
+        onClose={() => setRefundFor(null)}
+        onConfirm={(payload) => void doRefund(payload)}
+      />
     </div>
   );
 }

@@ -402,6 +402,22 @@ const TABLE_PATCHES: string[] = [
     updated_at timestamptz NOT NULL DEFAULT now()
   )`,
   `CREATE INDEX IF NOT EXISTS signage_slides_playlist_id_idx ON signage_slides(playlist_id)`,
+  `CREATE TABLE IF NOT EXISTS order_refunds (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    order_id uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    kind varchar(20) NOT NULL DEFAULT 'referenced',
+    amount numeric(10, 2) NOT NULL,
+    reason text,
+    staff_id uuid,
+    staff_name varchar(255),
+    items_json jsonb,
+    allocation_json jsonb,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS order_refunds_merchant_id_idx ON order_refunds(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS order_refunds_order_id_idx ON order_refunds(order_id)`,
+  `CREATE INDEX IF NOT EXISTS order_refunds_created_at_idx ON order_refunds(created_at)`,
 ];
 
 let startupPatchPromise: Promise<void> | null = null;

@@ -61,6 +61,7 @@ import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
   type RefundReasonOption,
 } from '@/components/webpos/WebPosRefundModal';
+import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 
@@ -153,6 +154,21 @@ export type PosOrder = PosOrderForReceipt & {
   status: string;
   paymentStatus?: string | null;
   refundAmount: number;
+  refundHistory?: Array<{
+    id?: string;
+    kind?: string;
+    amount: number;
+    reason?: string | null;
+    staffName?: string | null;
+    createdAt?: string | null;
+    items?: Array<{ orderItemId?: string; productName?: string; quantity: number }>;
+    allocation?: {
+      giftCard?: number;
+      cash?: number;
+      terminal?: number;
+      other?: number;
+    } | null;
+  }>;
   cancelReason?: string | null;
   notes?: string | null;
   masterOrderId?: string | null;
@@ -1809,6 +1825,11 @@ export default function WebPosOrdersPanel({
                       {(selectedOrder as PosOrder & { refundReason?: string | null }).refundReason}
                     </p>
                   ) : null}
+                  <OrderRefundHistory
+                    className="mt-3"
+                    history={(selectedOrder as PosOrder).refundHistory || []}
+                    totalRefunded={Number(selectedOrder.refundAmount || 0)}
+                  />
                 </div>
                 {isOpenFulfillmentOrder(selectedOrder) &&
                 (showsKitchenFulfillmentStages(selectedOrder) ||
