@@ -3,6 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      (function () {
+        var p = location.pathname || '';
+        if (
+          /\/merchant\/(pos|waiter)(\/|$)/.test(p) ||
+          /^\/kds(\/|$)/.test(p) ||
+          /^\/tv(\/|$)/.test(p)
+        ) {
+          var m = document.querySelector('meta[name="viewport"]');
+          if (m) {
+            m.setAttribute(
+              'content',
+              'width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover'
+            );
+          }
+          document.documentElement.classList.add('webpos-lock');
+        }
+      })();
+    </script>
     <meta name="theme-color" content="#0f766e" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
