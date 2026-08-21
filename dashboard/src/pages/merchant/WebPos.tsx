@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
 import { repairCatalogText } from '@/lib/text-encoding';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type Locale } from '@/lib/i18n';
 import { formatCheckoutOrderRef } from '@/lib/order-number';
 import { roundMoney2, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
@@ -491,7 +491,7 @@ function mergeBillDiscounts(
 }
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
-  const { t, locale } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const notifyPrintError = (raw: unknown, fallbackKey = 'webPosPrintFailed') => {
     if (isPrinterDisconnectedError(raw)) setPrinterDisconnected(true);
     toastPrintErrorRaw(raw, t, fallbackKey);
@@ -748,6 +748,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [pendingWeighed, setPendingWeighed] = useState<Product | null>(null);
   const [customAmountOpen, setCustomAmountOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [channelsSaving, setChannelsSaving] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(() => {
     const hasItems = (bootActive?.cart?.length || 0) > 0 || !!bootActive?.orderSent;
     return !!(bootCart?.mobileCartOpen && hasItems);
@@ -6649,6 +6650,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !staffConfigured ||
     (!!webposStaff && hasPermission(staffPerms, 'VIEW_ORDER_HISTORY', false));
   const canShowBackOffice = canOpenPanel || canManageProducts || canViewOrders;
+  const canManageOnlineShop = ownerOnRegister
+    ? hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_ONLINE_SHOP', true) ||
+      hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', true)
+    : staffConfigured
+      ? !!webposStaff &&
+        (hasPermission(staffPerms, 'MANAGE_ONLINE_SHOP', false) ||
+          hasPermission(staffPerms, 'MANAGE_SETTINGS', false))
+      : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_ONLINE_SHOP', jwtIsOwner) ||
+        hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', jwtIsOwner);
   const canViewAllSales =
     ownerOnRegister ||
     !staffConfigured ||
@@ -6707,6 +6717,45 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       localStorage.setItem(WEBPOS_APPEARANCE_KEY, appearance);
     } catch {
       /* ignore */
+    }
+  };
+
+  const changePosLanguage = async (lang: Locale) => {
+    setLocale(lang);
+    try {
+      await api.put('/merchant/settings', { panelLanguage: lang });
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('failedSaveLanguage'));
+    }
+  };
+
+  const toggleShopEnabled = async (next: boolean) => {
+    const prev = !!merchant?.shopEnabled;
+    setMerchant((m: any) => (m ? { ...m, shopEnabled: next } : m));
+    setChannelsSaving(true);
+    try {
+      await api.put('/merchant/settings', { shopEnabled: next });
+      toast.success(t('onlineShopSaved'));
+    } catch (e: any) {
+      setMerchant((m: any) => (m ? { ...m, shopEnabled: prev } : m));
+      toast.error(e.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setChannelsSaving(false);
+    }
+  };
+
+  const toggleReservationsEnabled = async (next: boolean) => {
+    const prev = !!merchant?.reservationsEnabled;
+    setMerchant((m: any) => (m ? { ...m, reservationsEnabled: next } : m));
+    setChannelsSaving(true);
+    try {
+      await api.put('/merchant/reservations/config', { enabled: next });
+      toast.success(t('saved'));
+    } catch (e: any) {
+      setMerchant((m: any) => (m ? { ...m, reservationsEnabled: prev } : m));
+      toast.error(e.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setChannelsSaving(false);
     }
   };
 
@@ -7178,7 +7227,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         reservationPendingCount={reservationPendingCount}
         staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
         canDrawer={canDrawer}
-        canShowPanel={canShowBackOffice}
         appMode={appMode}
         settingsOpen={settingsOpen}
         onToggleSettings={() => setSettingsOpen((v) => !v)}
@@ -7187,7 +7235,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onOnlineOrders={() => openOnlineOrdersInTab()}
         onSwitchUser={openSwitchUserPin}
         onOpenDrawer={() => void openCashDrawer()}
-        onShowPanel={showPanelMenus}
         tableBadge={tableBadge}
         shiftsEnabled={shiftsEnabled}
         shiftOpen={!!openShift}
@@ -7331,6 +7378,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setSettingsOpen(false);
               showPanelMenus();
             }}
+            locale={locale}
+            onLanguageChange={(lang) => void changePosLanguage(lang)}
+            canManageChannels={canManageOnlineShop}
+            shopEnabled={!!merchant?.shopEnabled}
+            reservationsEnabled={!!merchant?.reservationsEnabled}
+            channelsSaving={channelsSaving}
+            onShopEnabledChange={
+              canManageOnlineShop ? (enabled) => void toggleShopEnabled(enabled) : undefined
+            }
+            onReservationsEnabledChange={
+              canManageOnlineShop ? (enabled) => void toggleReservationsEnabled(enabled) : undefined
+            }
           />
         }
       />

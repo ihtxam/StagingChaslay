@@ -19,7 +19,7 @@ import {
   ArrowDownUp,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
 import { isStandalonePwa } from '@/lib/pwa';
 import { isUnsuitableRawPrinter } from '@/lib/print-agent';
@@ -173,8 +173,6 @@ type Props = {
   reservationPendingCount?: number;
   staffName?: string | null;
   canDrawer: boolean;
-  /** Show Back office / Esc exit (menu, orders, or full panel). */
-  canShowPanel?: boolean;
   appMode: boolean;
   settingsOpen: boolean;
   onToggleSettings: () => void;
@@ -184,7 +182,6 @@ type Props = {
   onOnlineOrders: () => void;
   onSwitchUser: () => void;
   onOpenDrawer: () => void;
-  onShowPanel: () => void;
   tableBadge?: string | null;
   shiftsEnabled?: boolean;
   shiftOpen?: boolean;
@@ -228,7 +225,6 @@ export default function WebPosTopBar({
   reservationPendingCount = 0,
   staffName,
   canDrawer,
-  canShowPanel = false,
   appMode,
   settingsOpen,
   onToggleSettings,
@@ -238,7 +234,6 @@ export default function WebPosTopBar({
   onOnlineOrders,
   onSwitchUser,
   onOpenDrawer,
-  onShowPanel,
   tableBadge,
   shiftsEnabled,
   shiftOpen,
@@ -401,18 +396,6 @@ export default function WebPosTopBar({
             <span className="truncate">{staffName || t('webPosSwitchUser')}</span>
           </button>
 
-          {canShowPanel ? (
-            <button
-              type="button"
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-stone-200 px-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 lg:h-9 lg:px-2.5"
-              onClick={onShowPanel}
-              title={t('webPosBackOffice')}
-            >
-              <PanelLeft size={16} />
-              <span className="hidden sm:inline">{t('webPosBackOffice')}</span>
-            </button>
-          ) : null}
-
           {canDrawer ? (
             <button
               type="button"
@@ -572,6 +555,14 @@ export function WebPosSettingsDropdown({
   syncFailedCount = 0,
   syncing = false,
   onSyncNow,
+  locale = 'en',
+  onLanguageChange,
+  canManageChannels = false,
+  shopEnabled = false,
+  reservationsEnabled = false,
+  channelsSaving = false,
+  onShopEnabledChange,
+  onReservationsEnabledChange,
 }: {
   printerName: string;
   printers: Array<{ name: string; isDefault?: boolean }>;
@@ -614,6 +605,14 @@ export function WebPosSettingsDropdown({
   syncFailedCount?: number;
   syncing?: boolean;
   onSyncNow?: () => void;
+  locale?: Locale;
+  onLanguageChange?: (lang: Locale) => void;
+  canManageChannels?: boolean;
+  shopEnabled?: boolean;
+  reservationsEnabled?: boolean;
+  channelsSaving?: boolean;
+  onShopEnabledChange?: (enabled: boolean) => void;
+  onReservationsEnabledChange?: (enabled: boolean) => void;
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
@@ -663,6 +662,78 @@ export function WebPosSettingsDropdown({
           </button>
         </div>
       </div>
+
+      {onLanguageChange ? (
+        <div className="space-y-2 border-b border-stone-100 pb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('language')}
+          </p>
+          <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={t('language')}>
+            {(['en', 'fr', 'de'] as Locale[]).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => onLanguageChange(code)}
+                className={`rounded-lg border px-2 py-1.5 text-[11px] font-bold uppercase tracking-wide ${
+                  locale === code
+                    ? 'border-stone-900 bg-stone-900 text-white'
+                    : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                }`}
+              >
+                {code}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {canManageChannels && (onShopEnabledChange || onReservationsEnabledChange) ? (
+        <div className="space-y-2 border-b border-stone-100 pb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('webPosOnlineChannels')}
+          </p>
+          {onShopEnabledChange ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 px-2.5 py-2">
+              <span className="min-w-0 text-xs font-semibold text-stone-700">
+                {t('enableOnlineShop')}
+              </span>
+              <button
+                type="button"
+                disabled={channelsSaving}
+                aria-pressed={shopEnabled}
+                onClick={() => onShopEnabledChange(!shopEnabled)}
+                className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${
+                  shopEnabled
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-stone-200 text-stone-600'
+                }`}
+              >
+                {shopEnabled ? t('webPosToggleOn') : t('webPosToggleOff')}
+              </button>
+            </div>
+          ) : null}
+          {onReservationsEnabledChange ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 px-2.5 py-2">
+              <span className="min-w-0 text-xs font-semibold text-stone-700">
+                {t('reservationsEnable')}
+              </span>
+              <button
+                type="button"
+                disabled={channelsSaving}
+                aria-pressed={reservationsEnabled}
+                onClick={() => onReservationsEnabledChange(!reservationsEnabled)}
+                className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${
+                  reservationsEnabled
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-stone-200 text-stone-600'
+                }`}
+              >
+                {reservationsEnabled ? t('webPosToggleOn') : t('webPosToggleOff')}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {(onAppearanceChange || onTextSizeChange) && (
         <div className="space-y-2 border-b border-stone-100 pb-3">
