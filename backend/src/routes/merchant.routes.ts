@@ -9,6 +9,7 @@ import {
 } from "@/middleware/auth.middleware";
 import { ProductService } from "@/services/product.service";
 import { CategoryService } from "@/services/category.service";
+import { isValidHexColor, normalizeHexColor } from "@/lib/category-colors";
 import { OrderService } from "@/services/order.service";
 import { CustomerService } from "@/services/customer.service";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
@@ -858,12 +859,17 @@ router.post("/categories", async (req: Request, res: Response) => {
     if (typeof trimmedDescription === "string" && trimmedDescription.length > 256) {
       return res.status(400).json({ error: "Description must be 256 characters or fewer" });
     }
+    if (color != null && color !== "" && !isValidHexColor(String(color))) {
+      return res.status(400).json({ error: "Invalid category color" });
+    }
+    const normalizedColor =
+      color != null && color !== "" ? normalizeHexColor(String(color)) : color;
 
     const category = await CategoryService.createCategory(
       merchantId,
       trimmedName,
       trimmedDescription,
-      color
+      normalizedColor
     );
 
     res.status(201).json({
@@ -910,6 +916,15 @@ router.put("/categories/:categoryId", async (req: Request, res: Response) => {
         return res.status(400).json({ error: "Description must be 256 characters or fewer" });
       }
       updates.description = trimmedDescription;
+    }
+    if (updates.color !== undefined) {
+      if (updates.color == null || updates.color === "") {
+        delete updates.color;
+      } else if (!isValidHexColor(String(updates.color))) {
+        return res.status(400).json({ error: "Invalid category color" });
+      } else {
+        updates.color = normalizeHexColor(String(updates.color));
+      }
     }
 
     const category = await CategoryService.updateCategory(merchantId, categoryId, updates);

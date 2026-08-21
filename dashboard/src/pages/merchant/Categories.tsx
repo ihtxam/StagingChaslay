@@ -3,6 +3,13 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
+import {
+  CATEGORY_PALETTE,
+  categoryColor,
+  isValidHexColor,
+  normalizeHexColor,
+  paletteColorAt,
+} from '@/components/webpos/categoryColors';
 
 interface Category {
   id: string;
@@ -26,6 +33,7 @@ export default function Categories() {
   const [reordering, setReordering] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState('');
+  const [color, setColor] = useState('');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,15 +56,18 @@ export default function Categories() {
     setName('');
     setDescription('');
     setImageUrl('');
+    setColor('');
     setEditingId(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const startEdit = (category: Category) => {
+    const index = categories.findIndex((c) => c.id === category.id);
     setEditingId(category.id);
     setName(category.name);
     setDescription(category.description || '');
     setImageUrl(category.imageUrl || '');
+    setColor(categoryColor(category.id, index >= 0 ? index : 0, category.color));
   };
 
   const onUploadImage = async (file: File | null) => {
@@ -100,9 +111,15 @@ export default function Categories() {
       toast.error(t('categoryDescTooLong'));
       return null;
     }
+    const trimmedColor = color.trim();
+    if (trimmedColor && !isValidHexColor(trimmedColor)) {
+      toast.error(t('categoryColorInvalid'));
+      return null;
+    }
     return {
       name: trimmedName,
       description: trimmedDesc || undefined,
+      color: trimmedColor ? normalizeHexColor(trimmedColor) : undefined,
     };
   };
 
@@ -117,12 +134,14 @@ export default function Categories() {
           name: payload.name,
           description: payload.description ?? '',
           imageUrl: imageUrl || null,
+          color: payload.color,
         });
         toast.success(t('categoryToastUpdated'));
       } else {
         const created = await api.post('/merchant/categories', {
           name: payload.name,
           description: payload.description,
+          color: payload.color,
         });
         if (imageUrl && created.data?.category?.id) {
           await api.put(`/merchant/categories/${created.data.category.id}`, {
@@ -204,6 +223,34 @@ export default function Categories() {
               {description.trim().length}/{MAX_CATEGORY_DESC}
             </p>
           </div>
+          <div className="md:col-span-3">
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide muted">
+              {t('categoryColor')}
+            </p>
+            <p className="mb-2 text-xs muted">{t('categoryColorHint')}</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {CATEGORY_PALETTE.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setColor(preset)}
+                  className={`h-7 w-7 rounded-full border ${
+                    color.toLowerCase() === preset.toLowerCase()
+                      ? 'border-[var(--text)] ring-1 ring-[var(--text)]'
+                      : 'border-[var(--border)]'
+                  }`}
+                  style={{ backgroundColor: preset }}
+                  title={preset}
+                />
+              ))}
+              <input
+                className="input w-28"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                placeholder={paletteColorAt(categories.length)}
+              />
+            </div>
+          </div>
           <div className="md:col-span-3 flex flex-wrap items-center gap-3">
             <label className="text-sm">
               <span className="font-medium mr-2">{t('categoryPhoto')}</span>
@@ -280,7 +327,21 @@ export default function Categories() {
                     <td className="py-2.5 px-2">
                       <DragHandle attributes={attributes} listeners={listeners} />
                     </td>
-                    <td className="py-2.5 px-2 font-medium">{category.name}</td>
+                    <td className="py-2.5 px-2 font-medium">
+                      <span className="inline-flex items-center gap-2">
+                        <span
+                          className="inline-block h-4 w-4 shrink-0 rounded-full border border-[var(--border)]"
+                          style={{
+                            backgroundColor: categoryColor(
+                              category.id,
+                              categories.findIndex((c) => c.id === category.id),
+                              category.color
+                            ),
+                          }}
+                        />
+                        {category.name}
+                      </span>
+                    </td>
                     <td className="py-2.5 px-2 muted">{category.description || '-'}</td>
                     <td className="py-2.5 px-2 text-right space-x-3 whitespace-nowrap">
                       <button
