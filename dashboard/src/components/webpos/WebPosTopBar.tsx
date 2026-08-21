@@ -259,6 +259,27 @@ export default function WebPosTopBar({
   const inCheckout = posView === 'checkout' || posView === 'success';
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
+  const closeMobileSearch = () => {
+    setMobileSearchOpen(false);
+    if (search) onSearchChange('');
+  };
+
+  const toggleMobileSearch = () => {
+    if (mobileSearchOpen) {
+      closeMobileSearch();
+      return;
+    }
+    if (settingsOpen) onCloseSettings();
+    setMobileSearchOpen(true);
+  };
+
+  useEffect(() => {
+    if (!showSearch) {
+      setMobileSearchOpen(false);
+      onSearchChange('');
+    }
+  }, [showSearch, onSearchChange]);
+
   const tabs: Array<{ id: PosTab; label: string; Icon: typeof Pencil }> = [
     ...(!hideTablesTab
       ? [{ id: 'tables' as const, label: t('webPosTabTables'), Icon: LayoutGrid }]
@@ -352,10 +373,7 @@ export default function WebPosTopBar({
                 className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 sm:hidden"
                 aria-label={t('webPosSearchProducts')}
                 aria-expanded={mobileSearchOpen}
-                onClick={() => {
-                  if (!mobileSearchOpen && settingsOpen) onCloseSettings();
-                  setMobileSearchOpen((v) => !v);
-                }}
+                onClick={toggleMobileSearch}
               >
                 {mobileSearchOpen ? <X size={18} /> : <Search size={18} />}
               </button>
@@ -414,7 +432,7 @@ export default function WebPosTopBar({
               aria-expanded={settingsOpen}
               aria-label={t('webPosMoreShort')}
               onClick={() => {
-                setMobileSearchOpen(false);
+                closeMobileSearch();
                 onToggleSettings();
               }}
             >
