@@ -20,7 +20,11 @@ export function orderItemsToCartLines(items: OrderLine[]): CartLine[] {
         : qty > 0
           ? totalPrice / qty
           : totalPrice;
-    const productId = String((item as { productId?: string | null }).productId || item.id || `item-${index}`);
+    const rawProductId = (item as { productId?: string | null }).productId;
+    const productId =
+      rawProductId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(rawProductId))
+        ? String(rawProductId)
+        : `item-${index}`;
     const name = resolveOrderItemName(item.productName, item.name, item.product?.name);
     return {
       lineId: lineId(item.id, index),

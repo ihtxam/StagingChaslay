@@ -623,28 +623,45 @@ export class SyncService {
           });
           productId = linked?.id ?? null;
           catalogName = linked?.name ?? null;
-        } else if (productId && !incomingName) {
+        } else if (productId) {
           const linked = await db.query.products.findFirst({
-            where: eq(schema.products.id, productId),
+            where: and(
+              eq(schema.products.id, productId),
+              eq(schema.products.merchantId, merchantId)
+            ),
           });
-          catalogName = linked?.name ?? null;
+          if (!linked) {
+            productId = null;
+          } else {
+            catalogName = linked.name ?? null;
+          }
         }
 
         const resolvedName = resolveOrderItemName(incomingName, catalogName);
+        const weightRaw = item.weightKg;
+        const weightKg =
+          weightRaw != null && String(weightRaw).trim() !== "" && Number.isFinite(Number(weightRaw))
+            ? String(weightRaw)
+            : null;
+        const seatRaw = item.seatNumber;
+        const seatNumber =
+          seatRaw != null && String(searRaw).trim() !== "" && Number.isFinite(Number(seatRaw))
+            ? Math.floor(Number(seatRaw))
+            : null;
 
         await db.insert(schema.orderItems).values({
           orderId: order.id,
           productId,
           productName: resolvedName,
-          quantity: item.quantity.toString(),
-          unitPrice: item.unitPrice.toString(),
-          totalPrice: item.totalPrice.toString(),
-          taxAmount: (item.taxAmount || 0).toString(),
-          weightKg: item.weightKg != null ? item.weightKg.toString() : null,
-          selectedExtras: item.selectedExtras || [],
-          comboSelections: item.comboSelections || [],
+          quantity: String(item.quantity ?? 1),
+          unitPrice: String(item.unitPrice ?? 0),
+          totalPrice: String(item.totalPrice ?? 0),
+          taxAmount: String(item.taxAmount ?? 0),
+          weightKg,
+          selectedExtras: Array.isArray(item.selectedExtras) ? item.selectedExtras : [],
+          comboSelections: Array.isArray(item.comboSelections) ? item.comboSelections : [],
           isOpenPrice: !!item.isOpenPrice,
-          seatNumber: item.seatNumber != null ? Number(item.seatNumber) : null,
+          seatNumber,
         });
       }
 
