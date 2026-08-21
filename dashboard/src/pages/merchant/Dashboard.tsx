@@ -23,6 +23,7 @@ import {
   UnitsPage,
 } from './inventory/settings-pages';
 import { InventoryReportPage, ConsumptionReportPage } from './inventory/report-pages';
+import { InventoryHomePage } from './inventory/home-page';
 import Categories from './Categories';
 import Modifiers from './Modifiers';
 import Customers from './Customers';
@@ -327,7 +328,8 @@ function MerchantShell() {
       children: allowInventory('/merchant/inventory')
         ? [
             { heading: true, label: t('invNavGroupOps') },
-            { label: t('invNavList'), path: '/merchant/inventory/list', icon: '📋' },
+            { label: t('invNavList'), path: '/merchant/inventory', icon: '📋' },
+            { label: t('invNavStockTable'), path: '/merchant/inventory/list', icon: '📊' },
             { label: t('invNavInbound'), path: '/merchant/inventory/inbound', icon: '⬇️' },
             { label: t('invNavOutbound'), path: '/merchant/inventory/outbound', icon: '⬆️' },
             { label: t('invNavCounting'), path: '/merchant/inventory/counting', icon: '🧮' },
@@ -475,7 +477,8 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             >
-              <Route index element={<Inventory />} />
+              <Route index element={<InventoryHomePage />} />
+              <Route path="home" element={<InventoryHomePage />} />
               <Route path="list" element={<InventoryListPage />} />
               <Route path="inbound" element={<InboundStockPage />} />
               <Route path="outbound" element={<OutboundStockPage />} />

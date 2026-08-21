@@ -88,6 +88,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/settings': ['MANAGE_SETTINGS'],
   '/merchant/users': ['MANAGE_STAFF'],
   '/merchant/inventory': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/home': ['MANAGE_INVENTORY'],
   '/merchant/inventory/list': ['MANAGE_INVENTORY'],
   '/merchant/inventory/inbound': ['MANAGE_INVENTORY'],
   '/merchant/inventory/outbound': ['MANAGE_INVENTORY'],

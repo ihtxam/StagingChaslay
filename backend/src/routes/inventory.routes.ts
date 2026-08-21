@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchant, requirePermission, setMerchantContext } from "@/middleware/auth.middleware";
 import { InventoryLicenseError, InventoryService } from "@/services/inventory.service";
+import { DemoInventoryService } from "@/services/demo-inventory.service";
 
 const router = Router();
 
@@ -24,9 +25,60 @@ router.get("/status", async (req: Request, res: Response) => {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
     const license = await InventoryService.getLicense(merchantId);
-    res.json({ success: true, ...license });
+    let hasDemoData = false;
+    try {
+      hasDemoData = await DemoInventoryService.hasDemoData(merchantId);
+    } catch {
+      /* column may not exist yet on old DBs */
+    }
+    res.json({ success: true, ...license, hasDemoData });
   } catch (error) {
     handleError(res, error, "Failed to load inventory status");
+  }
+});
+
+/**
+ * POST /api/merchant/inventory/import-demo
+ * Seed sample ingredients, units, recipes and stock movements (testing only).
+ * Idempotent: re-import replaces demo rows only.
+ */
+router.post("/import-demo", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const result = await DemoInventoryService.importDemo(merchantId);
+    res.json(result);
+  } catch (error) {
+    console.error("Inventory demo import failed:", error);
+    handleError(res, error, "Demo inventory import failed");
+  }
+});
+
+/**
+ * DELETE /api/merchant/inventory/demo-data
+ * Remove all demo-flagged inventory rows for this merchant.
+ */
+router.delete("/demo-data", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const result = await DemoInventoryService.deleteDemo(merchantId);
+    res.json(result);
+  } catch (error) {
+    console.error("Inventory demo delete failed:", error);
+    handleError(res, error, "Failed to delete demo inventory");
+  }
+});
+
+/** GET /api/merchant/inventory/dashboard — KPIs, scenarios and charts for inventory home. */
+router.get("/dashboard", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const dashboard = await DemoInventoryService.getDashboard(merchantId);
+    res.json({ success: true, dashboard });
+  } catch (error) {
+    handleError(res, error, "Failed to load inventory dashboard");
   }
 });
 

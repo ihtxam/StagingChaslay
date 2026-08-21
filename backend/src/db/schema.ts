@@ -2663,12 +2663,14 @@ export const inventorySuppliers = pgTable(
     /** Soft-delete when items still reference this supplier */
     archivedAt: timestamp("archived_at"),
     lastOrderEmailAt: timestamp("last_order_email_at"),
+    isDemo: boolean("is_demo").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
     merchantIdx: index("inventory_suppliers_merchant_idx").on(table.merchantId),
     merchantNameIdx: index("inventory_suppliers_merchant_name_idx").on(table.merchantId, table.name),
+    demoIdx: index("inventory_suppliers_demo_idx").on(table.merchantId, table.isDemo),
   })
 );
 
@@ -2693,6 +2695,7 @@ export const inventoryItems = pgTable(
     perishable: boolean("perishable").default(false).notNull(),
     autoReorderEnabled: boolean("auto_reorder_enabled").default(false).notNull(),
     lastAutoReorderAt: timestamp("last_auto_reorder_at"),
+    isDemo: boolean("is_demo").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -2701,6 +2704,7 @@ export const inventoryItems = pgTable(
     supplierIdx: index("inventory_items_supplier_idx").on(table.supplierId),
     categoryIdx: index("inventory_items_category_idx").on(table.categoryId),
     merchantNameIdx: index("inventory_items_merchant_name_idx").on(table.merchantId, table.name),
+    demoIdx: index("inventory_items_demo_idx").on(table.merchantId, table.isDemo),
   })
 );
 
@@ -2712,6 +2716,7 @@ export const inventoryCategories = pgTable(
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(),
+    isDemo: boolean("is_demo").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
@@ -2720,6 +2725,7 @@ export const inventoryCategories = pgTable(
       table.merchantId,
       table.name
     ),
+    demoIdx: index("inventory_categories_demo_idx").on(table.merchantId, table.isDemo),
   })
 );
 
@@ -2732,11 +2738,13 @@ export const inventoryUnits = pgTable(
       .references(() => merchants.id, { onDelete: "cascade" }),
     code: varchar("code", { length: 20 }).notNull(),
     name: varchar("name", { length: 80 }).notNull(),
+    isDemo: boolean("is_demo").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
     merchantIdx: index("inventory_units_merchant_idx").on(table.merchantId),
     merchantCodeUidx: uniqueIndex("inventory_units_merchant_code_uidx").on(table.merchantId, table.code),
+    demoIdx: index("inventory_units_demo_idx").on(table.merchantId, table.isDemo),
   })
 );
 
@@ -2751,6 +2759,7 @@ export const inventoryUnitRatios = pgTable(
     toCode: varchar("to_code", { length: 20 }).notNull(),
     /** 1 fromCode = factor toCode (1 kg = 1000 g). */
     factor: decimal("factor", { precision: 16, scale: 6 }).notNull(),
+    isDemo: boolean("is_demo").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
@@ -2760,6 +2769,7 @@ export const inventoryUnitRatios = pgTable(
       table.fromCode,
       table.toCode
     ),
+    demoIdx: index("inventory_unit_ratios_demo_idx").on(table.merchantId, table.isDemo),
   })
 );
 
@@ -2805,6 +2815,8 @@ export const productRecipes = pgTable(
       .references(() => inventoryItems.id, { onDelete: "cascade" }),
     qty: decimal("qty", { precision: 14, scale: 4 }).notNull(),
     unit: varchar("unit", { length: 20 }).default("kg").notNull(),
+    /** Sample data from demo import — safe to bulk-delete */
+    isDemo: boolean("is_demo").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -2813,6 +2825,7 @@ export const productRecipes = pgTable(
     productIdx: index("product_recipes_product_idx").on(table.productId),
     itemIdx: index("product_recipes_item_idx").on(table.itemId),
     productItemUidx: uniqueIndex("product_recipes_product_item_uidx").on(table.productId, table.itemId),
+    demoIdx: index("product_recipes_demo_idx").on(table.merchantId, table.isDemo),
   })
 );
 

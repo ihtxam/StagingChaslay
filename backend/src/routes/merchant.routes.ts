@@ -168,6 +168,45 @@ router.post(
 );
 
 /**
+ * GET /api/merchant/products/demo-status
+ * Whether demo catalog products are present.
+ */
+router.get(
+  "/products/demo-status",
+  requirePermission("MANAGE_PRODUCTS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const hasDemoData = await DemoCatalogService.hasDemoData(merchantId);
+      res.json({ success: true, hasDemoData });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to check demo status" });
+    }
+  }
+);
+
+/**
+ * DELETE /api/merchant/products/demo-data
+ * Remove imported demo catalog products/categories only (clientId demo-* prefix).
+ */
+router.delete(
+  "/products/demo-data",
+  requirePermission("MANAGE_PRODUCTS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const result = await DemoCatalogService.deleteDemo(merchantId);
+      res.json(result);
+    } catch (error) {
+      console.error("Demo catalog delete failed:", error);
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete demo catalog" });
+    }
+  }
+);
+
+/**
  * GET /api/merchant/products
  * Get all products
  */

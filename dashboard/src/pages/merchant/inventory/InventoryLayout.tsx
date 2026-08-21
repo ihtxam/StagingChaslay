@@ -8,7 +8,8 @@ const GROUPS: Array<{ titleKey: string; items: LinkItem[] }> = [
   {
     titleKey: 'invNavGroupOps',
     items: [
-      { to: '/merchant/inventory/list', labelKey: 'invNavList' },
+      { to: '/merchant/inventory', labelKey: 'invNavList' },
+      { to: '/merchant/inventory/list', labelKey: 'invNavStockTable' },
       { to: '/merchant/inventory/inbound', labelKey: 'invNavInbound' },
       { to: '/merchant/inventory/outbound', labelKey: 'invNavOutbound' },
       { to: '/merchant/inventory/counting', labelKey: 'invNavCounting' },

@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq, inArray, like, or } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { getDb, schema } from "@/db";
 import {
@@ -372,6 +372,90 @@ export class DemoCatalogService {
       modifierGroupsSkipped: counters.modifierGroupsSkipped,
       combosSkipped: counters.combosSkipped,
       categoryNames: DEMO_CATEGORIES.map((c) => c.name),
+    };
+  }
+
+  /** True when demo catalog products exist (clientId demo-prod-* / demo-combo-*). */
+  static async hasDemoData(merchantId: string): Promise<boolean> {
+    const db = getDb();
+    const [{ n }] = await db
+      .select({ n: count() })
+      .from(schema.products)
+      .where(
+        and(
+          eq(schema.products.merchantId, merchantId),
+          or(
+            like(schema.products.clientId, "demo-prod-%"),
+            like(schema.products.clientId, "demo-combo-%")
+          )
+        )
+      );
+    return Number(n) > 0;
+  }
+
+  /**
+   * Removes imported demo catalog only (clientId prefix demo-prod- / demo-combo- / demo-cat-).
+   * Real merchant products and categories are never touched.
+   */
+  static async deleteDemo(merchantId: string) {
+    const db = getDb();
+    const demoProductRows = await db
+      .select({ id: schema.products.id })
+      .from(schema.products)
+      .where(
+        and(
+          eq(schema.products.merchantId, merchantId),
+          or(
+            like(schema.products.clientId, "demo-prod-%"),
+            like(schema.products.clientId, "demo-combo-%")
+          )
+        )
+      );
+    const demoProductIds = demoProductRows.map((r) => r.id);
+
+    if (demoProductIds.length) {
+      await db.delete(schema.products).where(inArray(schema.products.id, demoProductIds));
+    }
+
+    const demoCategories = await db
+      .select({ id: schema.categories.id })
+      .from(schema.categories)
+      .where(
+        and(eq(schema.categories.merchantId, merchantId), like(schema.categories.clientId, "demo-cat-%"))
+      );
+
+    let categoriesDeleted = 0;
+    for (const cat of demoCategories) {
+      const [{ remaining }] = await db
+        .select({ remaining: count() })
+        .from(schema.products)
+        .where(eq(schema.products.categoryId, cat.id));
+      if (Number(remaining) === 0) {
+        await db.delete(schema.categories).where(eq(schema.categories.id, cat.id));
+        categoriesDeleted++;
+      }
+    }
+
+    const demoGroupTitles = DEMO_MODIFIER_GROUPS.map((g) => g.title.trim());
+    const groups = await db.query.modifierGroups.findMany({
+      where: eq(schema.modifierGroups.merchantId, merchantId),
+      columns: { id: true, title: true },
+      with: { productLinks: { columns: { productId: true } } },
+    });
+
+    let modifierGroupsDeleted = 0;
+    for (const group of groups) {
+      if (!demoGroupTitles.includes(group.title.trim())) continue;
+      if (group.productLinks.length > 0) continue;
+      await db.delete(schema.modifierGroups).where(eq(schema.modifierGroups.id, group.id));
+      modifierGroupsDeleted++;
+    }
+
+    return {
+      success: true as const,
+      productsDeleted: demoProductIds.length,
+      categoriesDeleted,
+      modifierGroupsDeleted,
     };
   }
 }

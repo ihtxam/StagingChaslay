@@ -254,6 +254,8 @@ export default function Products() {
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importingDemo, setImportingDemo] = useState(false);
+  const [deletingDemoCatalog, setDeletingDemoCatalog] = useState(false);
+  const [hasDemoCatalog, setHasDemoCatalog] = useState(false);
   const [demoImportOpen, setDemoImportOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
@@ -319,6 +321,12 @@ export default function Products() {
       setProducts(p.data.products || []);
       setCategories(c.data.categories || []);
       setAllModifierGroups(m.data.groups || []);
+      try {
+        const demoSt = await api.get('/merchant/products/demo-status');
+        setHasDemoCatalog(!!demoSt.data?.hasDemoData);
+      } catch {
+        setHasDemoCatalog(false);
+      }
       try {
         const st = await api.get('/merchant/inventory/status');
         let on = isInventoryLicensed(st.data);
@@ -870,6 +878,23 @@ export default function Products() {
     setDemoImportOpen(true);
   };
 
+  const onDeleteDemoCatalog = async () => {
+    if (!confirm(t('deleteDemoProductsConfirm'))) return;
+    setDeletingDemoCatalog(true);
+    try {
+      const res = await api.delete('/merchant/products/demo-data');
+      toast.success(
+        t('deleteDemoProductsSuccess').replace('{products}', String(res.data.productsDeleted ?? 0))
+      );
+      setHasDemoCatalog(false);
+      await load();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('deleteDemoProductsFailed'));
+    } finally {
+      setDeletingDemoCatalog(false);
+    }
+  };
+
   const catalogEmpty = products.length === 0 && categories.length === 0;
 
   const onImport = async (file: File) => {
@@ -924,6 +949,18 @@ export default function Products() {
             <Sparkles size={14} />
             {importingDemo ? t('importDemoLoading') : t('importDemoContent')}
           </button>
+          {hasDemoCatalog ? (
+            <button
+              type="button"
+              disabled={deletingDemoCatalog}
+              onClick={() => void onDeleteDemoCatalog()}
+              className="btn-secondary text-red-700"
+              title={t('deleteDemoProductsHint')}
+            >
+              <Trash2 size={14} />
+              {deletingDemoCatalog ? t('deleteDemoProductsLoading') : t('deleteDemoProducts')}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void downloadTemplate()}

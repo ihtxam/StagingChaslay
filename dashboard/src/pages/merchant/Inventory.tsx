@@ -13,6 +13,6 @@ const TAB_MAP: Record<string, string> = {
 /** Legacy /merchant/inventory?tab=… → OrderPin-style routes. */
 export default function Inventory() {
   const [params] = useSearchParams();
-  const dest = TAB_MAP[params.get('tab') || ''] || 'list';
+  const dest = TAB_MAP[params.get('tab') || ''] || 'home';
   return <Navigate to={`/merchant/inventory/${dest}`} replace />;
 }

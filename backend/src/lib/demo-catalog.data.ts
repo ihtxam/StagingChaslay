@@ -90,6 +90,12 @@ export const DEMO_CATEGORIES: DemoCategoryDef[] = [
     description: "Meal deals & bundles",
     color: "#8B5CF6",
   },
+  {
+    key: "mains",
+    name: "Mains",
+    description: "Hot plates & pizza",
+    color: "#DC2626",
+  },
 ];
 
 export const DEMO_MODIFIER_GROUPS: DemoModifierGroupDef[] = [
@@ -373,6 +379,22 @@ export const DEMO_PRODUCTS: DemoProductDef[] = [
     categoryKey: "breakfast",
     sku: "BRK-POR",
     modifierGroupKeys: ["milk"],
+  },
+  {
+    key: "pizzaMargherita",
+    name: "Pizza Margherita",
+    description: "Tomato, mozzarella & basil on thin crust",
+    price: 16.9,
+    categoryKey: "mains",
+    sku: "MAIN-PIZ-MAR",
+  },
+  {
+    key: "kebabPlate",
+    name: "Chicken Kebab Plate",
+    description: "Grilled chicken, pita, salad & sauce",
+    price: 18.5,
+    categoryKey: "mains",
+    sku: "MAIN-KEB",
   },
 ];
 

@@ -94,6 +94,18 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   inventory_item_id: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid",
   inventory_qty: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_qty numeric(14,4) NOT NULL DEFAULT 0",
   category_id: "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS category_id uuid",
+  inventory_items_is_demo:
+    "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
+  inventory_categories_is_demo:
+    "ALTER TABLE inventory_categories ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
+  inventory_suppliers_is_demo:
+    "ALTER TABLE inventory_suppliers ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
+  inventory_units_is_demo:
+    "ALTER TABLE inventory_units ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
+  inventory_unit_ratios_is_demo:
+    "ALTER TABLE inventory_unit_ratios ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
+  product_recipes_is_demo:
+    "ALTER TABLE product_recipes ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
 };
 
 /** Idempotent CREATE TABLE for features added after initial deploy. */
@@ -464,6 +476,18 @@ export async function ensureInventoryAddonColumn(): Promise<void> {
   await runPatch("recipe_yield");
   await runPatch("inventory_item_id");
   await runPatch("inventory_qty");
+  await runPatch("category_id");
+  await runPatch("inventory_suppliers_is_demo");
+  await runPatch("inventory_items_is_demo");
+  await runPatch("inventory_categories_is_demo");
+  await runPatch("inventory_units_is_demo");
+  await runPatch("inventory_unit_ratios_is_demo");
+  await runPatch("product_recipes_is_demo");
+}
+
+/** Ensure is_demo columns exist on inventory tables (demo import/delete). */
+export async function ensureInventoryDemoColumns(): Promise<void> {
+  await ensureInventoryAddonColumn();
 }
 
 export async function ensureSignageAddonColumn(): Promise<void> {
