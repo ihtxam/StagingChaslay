@@ -120,21 +120,35 @@ function MerchantsPage() {
     name: string;
     editionId: string;
     planBillingPaid: boolean;
+    subscriptionPlan: string;
   } | null>(null);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<
+    Array<{ id: string; slug: string; name: string; isActive?: boolean }>
+  >([
+    { id: 'free', slug: 'free', name: 'Free' },
+    { id: 'starter', slug: 'starter', name: 'Starter' },
+    { id: 'professional', slug: 'professional', name: 'Professional' },
+    { id: 'enterprise', slug: 'enterprise', name: 'Enterprise' },
+  ]);
   const [savingLimits, setSavingLimits] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [m, e, p] = await Promise.all([
+      const [m, e, p, pl] = await Promise.all([
         api.get('/reseller/merchants', { params: { search: search || undefined } }),
         api.get('/reseller/editions'),
         api.get('/reseller/licenses/pool'),
+        api.get('/reseller/plans'),
       ]);
       setMerchants(m.data.merchants || []);
       setEditions(e.data.editions || []);
       setPool(p.data.pool || pool);
+      const activePlans = (pl.data.plans || []).filter(
+        (plan: { isActive?: boolean }) => plan.isActive !== false
+      );
+      if (activePlans.length) setSubscriptionPlans(activePlans);
     } catch (err: any) {
       toast.error(err.response?.data?.error || t('resellerLoadFailed'));
     }
@@ -257,11 +271,16 @@ function MerchantsPage() {
       toast.error(t('posVersionSelect'));
       return;
     }
+    if (!planFor.subscriptionPlan) {
+      toast.error(t('merchantSubscriptionPlanRequired'));
+      return;
+    }
     setSavingPlan(true);
     try {
       await api.patch(`/reseller/merchants/${planFor.id}/plan`, {
         editionId: planFor.editionId,
         planBillingPaid: !!planFor.planBillingPaid,
+        subscriptionPlan: planFor.subscriptionPlan,
       });
       toast.success(t('merchantPlanSaved'));
       setPlanFor(null);
@@ -610,6 +629,7 @@ function MerchantsPage() {
                         name: m.name,
                         editionId: m.editionId || '',
                         planBillingPaid: m.planBillingPaid !== false,
+                        subscriptionPlan: m.subscriptionPlan || 'starter',
                       })
                     }
                   >
@@ -793,6 +813,22 @@ function MerchantsPage() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="block text-sm">
+              {t('subscriptionLicense')}
+              <select
+                className="input mt-1"
+                value={planFor.subscriptionPlan}
+                onChange={(e) => setPlanFor({ ...planFor, subscriptionPlan: e.target.value })}
+              >
+                <option value="">{t('merchantSubscriptionPlanRequired')}</option>
+                {subscriptionPlans.map((plan) => (
+                  <option key={plan.id || plan.slug} value={plan.slug}>
+                    {plan.name}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-stone-500 mt-1 block">{t('merchantSubscriptionPlanHint')}</span>
             </label>
             <label className="block text-sm">
               {t('merchantPlanBilling')}

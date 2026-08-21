@@ -4,6 +4,21 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { Search, Plus, Edit2, Trash2, Eye, X, Copy, KeyRound, LogIn, Eraser } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
+import { useI18n } from '@/lib/i18n';
+
+interface SubscriptionPlanOption {
+  id: string;
+  slug: string;
+  name: string;
+  isActive?: boolean;
+}
+
+const FALLBACK_SUBSCRIPTION_PLANS: SubscriptionPlanOption[] = [
+  { id: 'free', slug: 'free', name: 'Free' },
+  { id: 'starter', slug: 'starter', name: 'Starter' },
+  { id: 'professional', slug: 'professional', name: 'Professional' },
+  { id: 'enterprise', slug: 'enterprise', name: 'Enterprise' },
+];
 
 interface Merchant {
   id: string;
@@ -87,6 +102,7 @@ const emptyForm = {
 
 export default function Merchants() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const startImpersonation = useAuthStore((s) => s.startImpersonation);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,8 +128,15 @@ export default function Merchants() {
     signageScreenLimit: 2,
   });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
-  const [planForm, setPlanForm] = useState({ editionId: '', planBillingPaid: true });
+  const [planForm, setPlanForm] = useState({
+    editionId: '',
+    planBillingPaid: true,
+    subscriptionPlan: 'starter',
+  });
   const [savingPlan, setSavingPlan] = useState(false);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlanOption[]>(
+    FALLBACK_SUBSCRIPTION_PLANS
+  );
   const [editions, setEditions] = useState<Array<{ id: string; name: string; businessCategory: string }>>(
     []
   );
@@ -127,12 +150,17 @@ export default function Merchants() {
     (async () => {
       try {
         await api.post('/superadmin/resellers/ensure-agency').catch(() => null);
-        const [ed, rs] = await Promise.all([
+        const [ed, rs, pl] = await Promise.all([
           api.get('/superadmin/editions'),
           api.get('/superadmin/resellers'),
+          api.get('/superadmin/plans'),
         ]);
         setEditions(ed.data.editions || []);
         setResellers(rs.data.resellers || []);
+        const activePlans = (pl.data.plans || []).filter(
+          (p: SubscriptionPlanOption) => p.isActive !== false
+        );
+        if (activePlans.length) setSubscriptionPlans(activePlans);
       } catch {
         /* ignore */
       }
@@ -164,6 +192,7 @@ export default function Merchants() {
       setPlanForm({
         editionId: res.data.merchant?.editionId || '',
         planBillingPaid: res.data.merchant?.planBillingPaid !== false,
+        subscriptionPlan: res.data.merchant?.subscriptionPlan || 'starter',
       });
       setPosLimits({
         maxPosPosts: Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0),
@@ -222,7 +251,11 @@ export default function Merchants() {
   const handleSavePlan = async () => {
     if (!showDetail) return;
     if (!planForm.editionId) {
-      toast.error('Select a POS version');
+      toast.error(t('posVersionSelect'));
+      return;
+    }
+    if (!planForm.subscriptionPlan) {
+      toast.error(t('merchantSubscriptionPlanRequired'));
       return;
     }
     setSavingPlan(true);
@@ -230,12 +263,14 @@ export default function Merchants() {
       const res = await api.patch(`/superadmin/merchants/${showDetail.id}/plan`, {
         editionId: planForm.editionId,
         planBillingPaid: !!planForm.planBillingPaid,
+        subscriptionPlan: planForm.subscriptionPlan,
       });
       const saved = res.data?.merchant;
       setDetailFull(saved);
       setPlanForm({
         editionId: saved?.editionId || planForm.editionId,
         planBillingPaid: saved?.planBillingPaid !== false,
+        subscriptionPlan: saved?.subscriptionPlan || planForm.subscriptionPlan,
       });
       setShowDetail((prev) =>
         prev
@@ -244,13 +279,14 @@ export default function Merchants() {
               editionId: saved?.editionId ?? prev.editionId,
               editionName: saved?.editionName ?? saved?.edition?.name ?? prev.editionName,
               planBillingPaid: saved?.planBillingPaid !== false,
+              subscriptionPlan: saved?.subscriptionPlan ?? prev.subscriptionPlan,
             }
           : prev
       );
       await fetchMerchants();
-      toast.success('Plan & billing updated');
+      toast.success(t('merchantPlanSaved'));
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to update plan');
+      toast.error(err.response?.data?.error || t('merchantPlanSaveFailed'));
     } finally {
       setSavingPlan(false);
     }
@@ -736,16 +772,17 @@ export default function Merchants() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-sm font-medium">Subscription / License</span>
+                  <span className="text-sm font-medium">{t('subscriptionLicense')}</span>
                   <select
                     className="input mt-1"
                     value={form.subscriptionPlan}
                     onChange={(e) => setForm({ ...form, subscriptionPlan: e.target.value })}
                   >
-                    <option value="free">Free</option>
-                    <option value="starter">Starter</option>
-                    <option value="professional">Professional</option>
-                    <option value="enterprise">Enterprise</option>
+                    {subscriptionPlans.map((plan) => (
+                      <option key={plan.id || plan.slug} value={plan.slug}>
+                        {plan.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="block">
@@ -955,7 +992,7 @@ export default function Merchants() {
                 <span className="text-gray-500">Status:</span> {showDetail.status}
               </p>
               <div className="rounded-lg border border-teal-100 bg-teal-50/60 px-3 py-3 space-y-3">
-                <p className="font-semibold text-teal-950">POS version & plan billing</p>
+                <p className="font-semibold text-teal-950">{t('merchantPosPlanSection')}</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <PosVersionBadge
                     name={detailFull?.editionName ?? detailFull?.edition?.name ?? showDetail.editionName}
@@ -967,22 +1004,24 @@ export default function Merchants() {
                         : 'bg-amber-100 text-amber-900'
                     }`}
                   >
-                    {planForm.planBillingPaid ? 'Paid' : 'Unpaid'}
+                    {planForm.planBillingPaid ? t('invoiceStatusPaid') : t('invoiceStatusUnpaid')}
                   </span>
-                  {(detailFull?.subscriptionPlan || showDetail.subscriptionPlan) && (
+                  {planForm.subscriptionPlan ? (
                     <span className="text-xs text-gray-500">
-                      License tier: {detailFull?.subscriptionPlan || showDetail.subscriptionPlan}
+                      {t('subscriptionLicense')}:{' '}
+                      {subscriptionPlans.find((p) => p.slug === planForm.subscriptionPlan)?.name ||
+                        planForm.subscriptionPlan}
                     </span>
-                  )}
+                  ) : null}
                 </div>
                 <label className="block text-sm">
-                  <span className="font-medium">POS version</span>
+                  <span className="font-medium">{t('posVersion')}</span>
                   <select
                     className="input mt-1"
                     value={planForm.editionId}
                     onChange={(e) => setPlanForm({ ...planForm, editionId: e.target.value })}
                   >
-                    <option value="">Select POS version…</option>
+                    <option value="">{t('posVersionSelect')}</option>
                     {editions.map((ed) => (
                       <option key={ed.id} value={ed.id}>
                         {ed.name}
@@ -991,7 +1030,27 @@ export default function Merchants() {
                   </select>
                 </label>
                 <label className="block text-sm">
-                  <span className="font-medium">Plan billing status</span>
+                  <span className="font-medium">{t('subscriptionLicense')}</span>
+                  <select
+                    className="input mt-1"
+                    value={planForm.subscriptionPlan}
+                    onChange={(e) =>
+                      setPlanForm({ ...planForm, subscriptionPlan: e.target.value })
+                    }
+                  >
+                    <option value="">{t('merchantSubscriptionPlanRequired')}</option>
+                    {subscriptionPlans.map((plan) => (
+                      <option key={plan.id || plan.slug} value={plan.slug}>
+                        {plan.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-gray-500 mt-1 block">
+                    {t('merchantSubscriptionPlanHint')}
+                  </span>
+                </label>
+                <label className="block text-sm">
+                  <span className="font-medium">{t('merchantPlanBilling')}</span>
                   <select
                     className="input mt-1"
                     value={planForm.planBillingPaid ? 'paid' : 'unpaid'}
@@ -999,12 +1058,10 @@ export default function Merchants() {
                       setPlanForm({ ...planForm, planBillingPaid: e.target.value === 'paid' })
                     }
                   >
-                    <option value="paid">Paid — active billing for assigned plan</option>
-                    <option value="unpaid">Unpaid — flag for reseller billing only</option>
+                    <option value="paid">{t('invoiceStatusPaid')}</option>
+                    <option value="unpaid">{t('invoiceStatusUnpaid')}</option>
                   </select>
-                  <span className="text-xs text-gray-500 mt-1 block">
-                    Does not block merchant POS or panel login.
-                  </span>
+                  <span className="text-xs text-gray-500 mt-1 block">{t('merchantPlanBillingHint')}</span>
                 </label>
                 <button
                   type="button"
@@ -1012,7 +1069,7 @@ export default function Merchants() {
                   disabled={savingPlan}
                   onClick={() => void handleSavePlan()}
                 >
-                  {savingPlan ? 'Saving…' : 'Save plan & billing'}
+                  {savingPlan ? '…' : t('merchantSavePlanBilling')}
                 </button>
                 <p>
                   <span className="text-gray-500">Android app:</span>{' '}

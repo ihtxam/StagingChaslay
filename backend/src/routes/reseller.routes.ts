@@ -6,6 +6,7 @@ import { AuthService } from "@/services/auth.service";
 import { EDITION_FEATURE_GROUPS, ALL_EDITION_FEATURES } from "@/lib/edition-features";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
+import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 
 const router = Router();
 
@@ -257,6 +258,19 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
     res.json({ success: true, merchant });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update limits" });
+  }
+});
+
+/**
+ * GET /api/reseller/plans
+ * Active subscription plans assignable to merchants.
+ */
+router.get("/plans", async (_req: Request, res: Response) => {
+  try {
+    const plans = await SubscriptionPlansService.listAll(false);
+    res.json({ success: true, plans });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list plans" });
   }
 });
 

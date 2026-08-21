@@ -518,10 +518,12 @@ export class MerchantService {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
     if (hasPaid) patch.planBillingPaid = !!input.planBillingPaid;
     if (hasSubPlan) {
-      const plan = String(input.subscriptionPlan || "").trim();
-      const allowed = ["free", "starter", "professional", "enterprise"];
-      if (!allowed.includes(plan)) throw new Error("Invalid subscription plan");
-      patch.subscriptionPlan = plan;
+      const planSlug = String(input.subscriptionPlan || "").trim();
+      if (!planSlug) throw new Error("Subscription plan is required");
+      const { SubscriptionPlansService } = await import("./subscription-plans.service");
+      const plan = await SubscriptionPlansService.getBySlug(planSlug);
+      if (!plan || !plan.isActive) throw new Error("Subscription plan not found or inactive");
+      patch.subscriptionPlan = plan.slug;
     }
 
     if (hasEdition) {
