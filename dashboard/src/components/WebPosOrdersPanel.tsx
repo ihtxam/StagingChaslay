@@ -42,6 +42,7 @@ import {
   isOnlineShopOrder,
   isPaidOrder,
   orderChannelBadgeClass,
+  orderChannelBorderClass,
   orderChannelHeaderClass,
   orderStatusBadgeClass,
   orderStatusLabel,
@@ -333,12 +334,20 @@ function channelHeaderClass(ch?: string | null): string {
   return orderChannelHeaderClass({ channel: ch, orderType: 'pos' } as PosOrder);
 }
 
+function channelBorderClass(ch?: string | null): string {
+  return orderChannelBorderClass({ channel: ch, orderType: 'pos' } as PosOrder);
+}
+
 function orderBadgeClass(o: PosOrder) {
   return orderChannelBadgeClass(o);
 }
 
 function orderHeaderClass(o: PosOrder) {
   return orderChannelHeaderClass(o);
+}
+
+function orderBorderClass(o: PosOrder) {
+  return orderChannelBorderClass(o);
 }
 
 function isPlatformChannel(ch?: string | null) {
@@ -1292,32 +1301,33 @@ export default function WebPosOrdersPanel({
                       h.label ||
                       '—';
                     const age = formatOrderAge(heldTimeMs(h) || nowMs, nowMs);
+                    const heldCh = resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson });
                     return (
                       <button
                         key={`hg-${h.id}`}
                         type="button"
                         onClick={() => openHeldInCart(h)}
-                        className="flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border border-stone-200 bg-stone-900 text-left text-white shadow-sm transition hover:ring-2 hover:ring-teal-400"
+                        className={`flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border-2 bg-white text-left text-stone-900 shadow-sm transition hover:ring-2 hover:ring-teal-400 ${channelBorderClass(heldCh)}`}
                       >
                         <div
-                          className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${channelHeaderClass(resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson }))}`}
+                          className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${channelHeaderClass(heldCh)}`}
                         >
                           <span className="inline-flex min-w-0 items-center gap-1">
-                            <ChannelGlyph ch={resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson })} />
-                            <span className="truncate">{channelLabel(resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson }))}</span>
+                            <ChannelGlyph ch={heldCh} />
+                            <span className="truncate">{channelLabel(heldCh)}</span>
                           </span>
                           <span className="shrink-0 tabular-nums">{idLabel}</span>
                         </div>
                         <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-3">
-                          <p className="text-[11px] text-stone-400">
+                          <p className="text-[11px] text-stone-500">
                             {sentCount}/{lines.length || 0}
                           </p>
                           <p className="text-lg font-bold tabular-nums tracking-tight">
-                            <span className="text-stone-300 text-sm font-semibold">CHF </span>
-                            <span className="text-amber-300">{Number(total).toFixed(2)}</span>
+                            <span className="text-sm font-semibold text-stone-500">CHF </span>
+                            <span className="text-teal-700">{Number(total).toFixed(2)}</span>
                           </p>
                         </div>
-                        <div className="flex items-center justify-between gap-2 border-t border-stone-700 px-2.5 py-1.5 text-[10px] text-stone-400">
+                        <div className="flex items-center justify-between gap-2 border-t border-stone-200 px-2.5 py-1.5 text-[10px] text-stone-500">
                           <span className="inline-flex min-w-0 items-center gap-1 truncate">
                             <User size={11} />
                             <span className="truncate">{t('webPosOngoing')}</span>
@@ -1344,7 +1354,7 @@ export default function WebPosOrdersPanel({
                       key={`og-${o.id}`}
                       type="button"
                         onClick={() => openOrderClick(o)}
-                        className="flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border border-stone-200 bg-stone-900 text-left text-white shadow-sm transition hover:ring-2 hover:ring-teal-400"
+                        className={`flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border-2 bg-white text-left text-stone-900 shadow-sm transition hover:ring-2 hover:ring-teal-400 ${orderBorderClass(o)}`}
                     >
                       <div
                         className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${orderHeaderClass(o)}`}
@@ -1356,10 +1366,10 @@ export default function WebPosOrdersPanel({
                         <span className="shrink-0 tabular-nums">{idLabel}</span>
                       </div>
                       <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-3">
-                        <p className="text-[11px] text-stone-400">{itemCount}</p>
+                        <p className="text-[11px] text-stone-500">{itemCount}</p>
                         <p className="text-lg font-bold tabular-nums tracking-tight">
-                          <span className="text-stone-300 text-sm font-semibold">CHF </span>
-                          <span className="text-amber-300">{Number(o.total).toFixed(2)}</span>
+                          <span className="text-sm font-semibold text-stone-500">CHF </span>
+                          <span className="text-teal-700">{Number(o.total).toFixed(2)}</span>
                         </p>
                         {showsKitchenFulfillmentStages(o) ? (
                           <p className="flex flex-wrap items-center justify-center gap-1">
@@ -1371,12 +1381,12 @@ export default function WebPosOrdersPanel({
                           </p>
                         ) : null}
                         {canShowAwaitingPaymentBadge(o) ? (
-                          <p className="text-[10px] font-bold uppercase text-amber-300">
+                          <p className="text-[10px] font-bold uppercase text-amber-700">
                             {t('webPosAwaitingPayment')}
                           </p>
                         ) : null}
                       </div>
-                      <div className="flex items-center justify-between gap-2 border-t border-stone-700 px-2.5 py-1.5 text-[10px] text-stone-400">
+                      <div className="flex items-center justify-between gap-2 border-t border-stone-200 px-2.5 py-1.5 text-[10px] text-stone-500">
                         <span className="inline-flex min-w-0 items-center gap-1 truncate">
                           <User size={11} />
                           <span className="truncate">{o.customerName || o.staffName || '—'}</span>

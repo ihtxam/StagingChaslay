@@ -430,6 +430,22 @@ export function orderChannelHeaderClass(o: MerchantOrder): string {
   }
 }
 
+/** Full card outline color for POS order grid cards — matches orderChannelHeaderClass. */
+export function orderChannelBorderClass(o: MerchantOrder): string {
+  if (isOnlineShopOrder(o)) return 'border-violet-600';
+  const ch = orderChannel(o).toLowerCase();
+  switch (ch) {
+    case 'dine_in':
+      return 'border-emerald-600';
+    case 'delivery':
+      return 'border-orange-500';
+    case 'takeaway':
+      return 'border-sky-600';
+    default:
+      return 'border-stone-600';
+  }
+}
+
 export function orderSearchHaystack(o: MerchantOrder): string {
   const refs = orderPublicRefs(o);
   const ch = orderChannel(o);
