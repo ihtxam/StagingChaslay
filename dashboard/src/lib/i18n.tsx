@@ -1857,6 +1857,10 @@ const en: Dict = {
   webPosSignedInAs: 'Signed in as {name}',
   webPosSessionKicked:
     'This till was signed out because another device took your POS station slot.',
+  webPosSessionKickedReclaim:
+    'Another device is using this POS station. Enter your PIN to take over — the other session will be disconnected.',
+  webPosSessionReclaimed: 'Previous session on another device was disconnected.',
+  webPosSessionRegisterFailed: 'Could not connect to this POS station. Check your network and try again.',
   webPosPinTitle: 'Switch user',
   webPosPinGateTitle: 'Enter staff PIN',
   webPosPinGateHint: 'PIN unlocks this register for your shift. Digits submit automatically.',
@@ -4488,6 +4492,11 @@ const fr: Dict = {
   webPosSignedInAs: 'Connecté en tant que {name}',
   webPosSessionKicked:
     'Cette caisse a été déconnectée car un autre appareil a pris votre poste POS.',
+  webPosSessionKickedReclaim:
+    'Un autre appareil utilise ce poste caisse. Entrez votre PIN pour reprendre — l’autre session sera déconnectée.',
+  webPosSessionReclaimed: 'La session sur l’autre appareil a été déconnectée.',
+  webPosSessionRegisterFailed:
+    'Impossible de se connecter à ce poste caisse. Vérifiez le réseau et réessayez.',
   webPosPinTitle: 'Changer d’utilisateur',
   webPosPinGateTitle: 'Entrez le code PIN',
   webPosPinGateHint: 'Le PIN déverrouille la caisse pour votre session. Validation automatique.',
@@ -7120,6 +7129,11 @@ const de: Dict = {
   webPosSignedInAs: 'Angemeldet als {name}',
   webPosSessionKicked:
     'Diese Kasse wurde abgemeldet, weil ein anderes Gerät Ihren Kassenplatz übernommen hat.',
+  webPosSessionKickedReclaim:
+    'Ein anderes Gerät nutzt diesen Kassenplatz. PIN eingeben zum Übernehmen — die andere Sitzung wird getrennt.',
+  webPosSessionReclaimed: 'Die Sitzung auf dem anderen Gerät wurde getrennt.',
+  webPosSessionRegisterFailed:
+    'Verbindung zu diesem Kassenplatz fehlgeschlagen. Netzwerk prüfen und erneut versuchen.',
   webPosPinTitle: 'Benutzer wechseln',
   webPosPinGateTitle: 'Mitarbeiter-PIN eingeben',
   webPosPinGateHint: 'Die PIN entsperrt die Kasse für Ihre Sitzung. Automatische Bestätigung.',

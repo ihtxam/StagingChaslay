@@ -29,7 +29,7 @@ import { useAuthStore } from '@/store/auth';
 import {
   POS_SESSION_KICKED_EVENT,
   registerPosSession,
-  resumePosSessionHeartbeat,
+  clearPosSessionLocal,
   revokePosSession,
 } from '@/lib/pos-session';
 import {
@@ -63,10 +63,13 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [pinGateOpen, setPinGateOpen] = useState(false);
-  const [posAuthAlert, setPosAuthAlert] = useState<{ title?: string; message: string } | null>(
-    null
-  );
+  const [posAuthAlert, setPosAuthAlert] = useState<{
+    title?: string;
+    message: string;
+    variant?: 'error' | 'warning';
+  } | null>(null);
   const [staffConfigured, setStaffConfigured] = useState(false);
+  const [staffPinsKnown, setStaffPinsKnown] = useState(false);
   const [tab, setTab] = useState<WaiterTab>('tables');
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -90,18 +93,22 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   });
 
   useEffect(() => {
-    resumePosSessionHeartbeat();
-  }, []);
-
-  useEffect(() => {
-    if (pinRequired) return;
+    if (!staffPinsKnown) return;
+    if (pinRequired) {
+      clearPosSessionLocal();
+      return;
+    }
     void registerPosSession({
       sessionKind: 'waiter',
       platform: 'waiter_web',
       staffId: staff?.id || null,
       staffName: staff?.name || null,
+    }).then((result) => {
+      if (result.ok && result.kickedSessionIds.length > 0) {
+        toast.info(t('webPosSessionReclaimed'));
+      }
     });
-  }, [pinRequired, staff?.id, staff?.name]);
+  }, [staffPinsKnown, pinRequired, staff?.id, staff?.name, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +124,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         if (cancelled) return;
         const list = (staffRes.data?.staff || []) as Array<{ pinSet?: boolean }>;
         setStaffConfigured(list.some((s) => s.pinSet));
+        setStaffPinsKnown(true);
         setCategories(catRes.data?.categories || []);
         setProducts(prodRes.data?.products || []);
         setPrintSettings(configRes.data?.config?.posPrintSettings || null);
@@ -295,12 +303,14 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     const onKicked = () => {
+      clearPosSessionLocal();
       clearWebPosStaffSession();
       setStaff(null);
       resetOrder();
       setPosAuthAlert({
         title: t('webPosSessionKickedTitle'),
-        message: t('webPosSessionKicked'),
+        message: t('webPosSessionKickedReclaim'),
+        variant: 'warning',
       });
       setPinGateOpen(true);
     };
@@ -328,16 +338,29 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       toast.error(t('waiterNoPermission'));
       return;
     }
-    saveWebPosStaffSession(session);
-    setStaff(session);
-    setPinGateOpen(false);
     setPosAuthAlert(null);
-    await registerPosSession({
+    clearPosSessionLocal();
+    const reg = await registerPosSession({
       sessionKind: 'waiter',
       platform: 'waiter_web',
       staffId: session.id,
       staffName: session.name,
     });
+    if (!reg.ok) {
+      setPosAuthAlert({
+        title: t('webPosPinErrorTitle'),
+        message: reg.error || t('webPosSessionRegisterFailed'),
+        variant: 'error',
+      });
+      setPinGateOpen(true);
+      return;
+    }
+    saveWebPosStaffSession(session);
+    setStaff(session);
+    setPinGateOpen(false);
+    if (reg.kickedSessionIds.length > 0) {
+      toast.info(t('webPosSessionReclaimed'));
+    }
   };
 
   const handleLogout = async () => {
@@ -599,8 +622,9 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         open={!!posAuthAlert}
         title={posAuthAlert?.title}
         message={posAuthAlert?.message || ''}
+        variant={posAuthAlert?.variant || 'error'}
         onDismiss={() => setPosAuthAlert(null)}
-        minMs={8000}
+        minMs={posAuthAlert?.variant === 'warning' ? 4000 : 8000}
       />
       <WebPosPinModal
         open={pinGateOpen}

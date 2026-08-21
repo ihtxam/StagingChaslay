@@ -90,14 +90,18 @@ export function posSessionDeviceLabel(): string {
   return 'Browser POS';
 }
 
-/** Register or refresh a POS station session after staff unlock. */
+export type RegisterPosSessionResult =
+  | { ok: true; sessionId: string; kickedSessionIds: string[] }
+  | { ok: false; error?: string };
+
+/** Register or refresh a POS station session (last login wins when at post limit). */
 export async function registerPosSession(opts: {
   sessionKind: PosSessionKind;
   platform: PosSessionPlatform;
   staffId?: string | null;
   staffName?: string | null;
   deviceLabel?: string;
-}): Promise<{ sessionId: string } | null> {
+}): Promise<RegisterPosSessionResult> {
   try {
     const res = await api.post('/merchant/pos/sessions/register', {
       sessionKind: opts.sessionKind,
@@ -108,7 +112,12 @@ export async function registerPosSession(opts: {
       staffName: opts.staffName || null,
     });
     const sessionId = String(res.data?.sessionId || '');
-    if (!sessionId) return null;
+    if (!sessionId) {
+      return { ok: false, error: 'Missing session id' };
+    }
+    const kickedSessionIds = Array.isArray(res.data?.kickedSessionIds)
+      ? (res.data.kickedSessionIds as string[]).filter(Boolean)
+      : [];
     const stored: StoredPosSession = {
       sessionId,
       sessionKind: opts.sessionKind,
@@ -116,10 +125,11 @@ export async function registerPosSession(opts: {
     };
     writeStored(stored);
     startHeartbeat(stored);
-    return { sessionId };
-  } catch (e) {
+    return { ok: true, sessionId, kickedSessionIds };
+  } catch (e: any) {
+    const error = e?.response?.data?.error || e?.message || 'Register failed';
     console.warn('[pos-session] register failed', e);
-    return null;
+    return { ok: false, error: String(error) };
   }
 }
 
@@ -138,6 +148,12 @@ export async function revokePosSession(): Promise<void> {
 export function resumePosSessionHeartbeat(): void {
   const stored = readStored();
   if (stored) startHeartbeat(stored);
+}
+
+/** Stop heartbeat and drop local session (e.g. before PIN reclaim). */
+export function clearPosSessionLocal(): void {
+  stopHeartbeat();
+  writeStored(null);
 }
 
 export type ActivePosSession = {

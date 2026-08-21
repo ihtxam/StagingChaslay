@@ -86,7 +86,8 @@ import {
 import {
   POS_SESSION_KICKED_EVENT,
   registerPosSession,
-  resumePosSessionHeartbeat,
+  clearPosSessionLocal,
+  revokePosSession,
 } from '@/lib/pos-session';
 import { buildReceiptUrl, resolvePublishedReceiptRef, normalizeScannedPayload, parseTableQrPayload } from '@/lib/qr';
 import WebPosMembershipSellModal from '@/components/webpos/WebPosMembershipSellModal';
@@ -761,11 +762,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [recentOpen, setRecentOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
-  const [posAuthAlert, setPosAuthAlert] = useState<{ title?: string; message: string } | null>(
-    null
-  );
+  const [posAuthAlert, setPosAuthAlert] = useState<{
+    title?: string;
+    message: string;
+    variant?: 'error' | 'warning';
+  } | null>(null);
   const [webposStaff, setWebposStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [staffConfigured, setStaffConfigured] = useState(false);
+  const [staffPinsKnown, setStaffPinsKnown] = useState(false);
   const [setPinHintDismissed, setSetPinHintDismissed] = useState(() => {
     try {
       return sessionStorage.getItem(WEBPOS_SET_PIN_HINT_KEY) === '1';
@@ -847,6 +851,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         (s) => !!(s as { pinSet?: boolean }).pinSet && s.isActive !== false
       );
       setStaffConfigured(hasPins);
+      setStaffPinsKnown(true);
       setPanelStaff(
         staffList
           .filter((s) => s.isActive !== false)
@@ -876,18 +881,37 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
 
   useEffect(() => {
-    resumePosSessionHeartbeat();
-  }, []);
+    if (!staffPinsKnown) return;
+    if (pinGateRequired) {
+      clearPosSessionLocal();
+      return;
+    }
+    void registerPosSession({
+      sessionKind: 'main',
+      platform: 'webpos',
+      staffId: webposStaff?.id || null,
+      staffName: webposStaff?.name || null,
+    }).then((result) => {
+      if (result.ok && result.kickedSessionIds.length > 0) {
+        toast.info(t('webPosSessionReclaimed'));
+      }
+    });
+  }, [staffPinsKnown, pinGateRequired, webposStaff?.id, webposStaff?.name, t]);
 
   useEffect(() => {
     const onKicked = () => {
+      clearPosSessionLocal();
       clearWebPosStaffSession();
       setWebposStaff(null);
       setPosAuthAlert({
         title: t('webPosSessionKickedTitle'),
-        message: t('webPosSessionKicked'),
+        message: t('webPosSessionKickedReclaim'),
+        variant: 'warning',
       });
-      if (!staffConfigured) {
+      if (staffConfigured) {
+        setPinModalMode('gate');
+        setPinModalOpen(true);
+      } else if (staffPinsKnown) {
         void registerPosSession({
           sessionKind: 'main',
           platform: 'webpos',
@@ -896,17 +920,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     window.addEventListener(POS_SESSION_KICKED_EVENT, onKicked);
     return () => window.removeEventListener(POS_SESSION_KICKED_EVENT, onKicked);
-  }, [staffConfigured, t]);
-
-  useEffect(() => {
-    if (pinGateRequired) return;
-    void registerPosSession({
-      sessionKind: 'main',
-      platform: 'webpos',
-      staffId: webposStaff?.id || null,
-      staffName: webposStaff?.name || null,
-    });
-  }, [pinGateRequired, webposStaff?.id, webposStaff?.name]);
+  }, [staffConfigured, staffPinsKnown, t]);
 
   useEffect(() => {
     if (!staffRoster.length) return;
@@ -6775,7 +6789,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const onStaffPinSuccess = (staff: {
+  const onStaffPinSuccess = async (staff: {
     id: string;
     name: string;
     roleId: string;
@@ -6791,16 +6805,30 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       permissions: staff.permissions as Permission[],
       accessToken: staff.accessToken,
     };
-    setWebposStaff(session);
-    saveWebPosStaffSession(session);
-    window.dispatchEvent(new CustomEvent('webpos:staff-session'));
     setPosAuthAlert(null);
-    void registerPosSession({
+    clearPosSessionLocal();
+    const reg = await registerPosSession({
       sessionKind: 'main',
       platform: 'webpos',
       staffId: session.id,
       staffName: session.name,
     });
+    if (!reg.ok) {
+      setPosAuthAlert({
+        title: t('webPosPinErrorTitle'),
+        message: reg.error || t('webPosSessionRegisterFailed'),
+        variant: 'error',
+      });
+      setPinModalMode('gate');
+      setPinModalOpen(true);
+      return;
+    }
+    setWebposStaff(session);
+    saveWebPosStaffSession(session);
+    window.dispatchEvent(new CustomEvent('webpos:staff-session'));
+    if (reg.kickedSessionIds.length > 0) {
+      toast.info(t('webPosSessionReclaimed'));
+    }
     setPinModalOpen(false);
     toast.success(t('webPosSignedInAs').replace('{name}', staff.name));
     void refreshCurrentShift();
@@ -7117,8 +7145,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               open={!!posAuthAlert}
               title={posAuthAlert?.title}
               message={posAuthAlert?.message || ''}
+              variant={posAuthAlert?.variant || 'error'}
               onDismiss={() => setPosAuthAlert(null)}
-              minMs={8000}
+              minMs={posAuthAlert?.variant === 'warning' ? 4000 : 8000}
             />
             <WebPosPinModal
               open
