@@ -55,17 +55,17 @@ function money(v: string | number | undefined) {
 
 function decodeSaleRef(raw: string | undefined): string {
   if (!raw) return '';
-  let ref = raw.trim();
+  let ref = raw.trim().replace(/\+/g, '%20');
   try {
     ref = decodeURIComponent(ref);
   } catch {
     /* keep raw */
   }
-  if (ref.includes('://')) {
-    const parts = ref.replace(/\/$/, '').split('/');
+  if (ref.includes('://') || /\/receipts?\//i.test(ref)) {
+    const parts = ref.replace(/\/+$/, '').split('/');
     ref = parts[parts.length - 1] || ref;
   }
-  return ref.trim();
+  return ref.split('?')[0]?.split('#')[0]?.trim() || '';
 }
 
 function TotalsRow({

@@ -54,6 +54,10 @@ function buildCorsOrigins(): string[] {
     "http://localhost:3001",
     "http://localhost:3002",
     "http://localhost:3003",
+    "https://pay.chaslay.com",
+    "https://app.chaslay.com",
+    "https://shop.chaslay.com",
+    "https://api.chaslay.com",
   ].filter(Boolean) as string[];
 
   const extra = (process.env.CORS_ORIGINS || "")

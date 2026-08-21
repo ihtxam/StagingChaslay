@@ -11,21 +11,20 @@ const router = Router();
 async function findOrderForReceipt(merchantId: string, ref: string) {
   const db = getDb();
   const looksLikeUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ref);
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
+  const clauses = [eq(schema.orders.orderNumber, ref), eq(schema.orders.clientId, ref)];
+  if (looksLikeUuid) clauses.unshift(eq(schema.orders.id, ref));
 
-  return db.query.orders.findFirst({
-    where: and(
-      eq(schema.orders.merchantId, merchantId),
-      looksLikeUuid
-        ? or(
-            eq(schema.orders.id, ref),
-            eq(schema.orders.orderNumber, ref),
-            eq(schema.orders.clientId, ref)
-          )
-        : or(eq(schema.orders.orderNumber, ref), eq(schema.orders.clientId, ref))
-    ),
-    with: { merchant: true },
-  });
+  const rows = await db
+    .select({
+      id: schema.orders.id,
+      orderNumber: schema.orders.orderNumber,
+      total: schema.orders.total,
+    })
+    .from(schema.orders)
+    .where(and(eq(schema.orders.merchantId, merchantId), or(...clauses)))
+    .limit(1);
+  return rows[0] || null;
 }
 
 router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
@@ -111,7 +110,7 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
     }
 
     const url = buildReceiptPublicUrl(order.id);
-    let invoiceNumber: string | null = order.invoiceNumber || null;
+    let invoiceNumber: string | null = null;
     if (paymentMethod === "invoice") {
       try {
         const { InvoiceService } = await import("@/services/invoice.service");
@@ -147,7 +146,7 @@ router.post("/:id/email", requireChaslayApiKey, async (req: Request, res: Respon
 
     const order = await findOrderForReceipt(req.chaslayMerchantId!, receiptId);
     const merchant = req.chaslayMerchant;
-    const shopName = order?.merchant?.name || merchant?.name || "Shop";
+    const shopName = merchant?.name || "Shop";
     const receiptUrl = normalizeReceiptPublicUrl("", order?.id || receiptId);
     const orderNumber = String(
       req.body?.orderNumber || req.body?.transaction_number || order?.orderNumber || receiptId
