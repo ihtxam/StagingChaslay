@@ -11,6 +11,16 @@ function num(v: string | number | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Drawer expected: opening + cash sales (net of refunds) + cash in − cash out. */
+function expectedDrawer(
+  openingCash: number,
+  cashSales: number,
+  cashIn: number,
+  cashOut: number
+) {
+  return round2(num(openingCash) + cashSales + cashIn - cashOut);
+}
+
 /** Calendar YYYY-MM-DD in merchant timezone (Europe/Zurich). */
 function ymdInMerchantTz(d = new Date(), timeZone = MERCHANT_TZ): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -92,7 +102,12 @@ export class PosShiftService {
         const { end: dayEnd } = zurichDayBounds(openedYmd);
         const live = await this.computeLiveTotals(open.merchantId, open.openedAt, dayEnd);
         const movements = await this.sumCashMovements(open.id);
-        const expectedCash = round2(num(open.openingCash) + live.cashSales + movements.cashIn - movements.cashOut);
+        const expectedCash = expectedDrawer(
+          num(open.openingCash),
+          live.cashSales,
+          movements.cashIn,
+          movements.cashOut
+        );
 
         await db
           .update(schema.posShifts)
@@ -135,7 +150,13 @@ export class PosShiftService {
         ...live,
         cashIn: movements.cashIn,
         cashOut: movements.cashOut,
-        expectedCash: round2(num(open.openingCash) + live.cashSales + movements.cashIn - movements.cashOut),
+        cashRefunds: live.cashRefunds,
+        expectedCash: expectedDrawer(
+          num(open.openingCash),
+          live.cashSales,
+          movements.cashIn,
+          movements.cashOut
+        ),
       },
     };
   }
@@ -174,7 +195,13 @@ export class PosShiftService {
 
     const live = await this.computeLiveTotals(merchantId, open.openedAt);
     const movements = await this.sumCashMovements(open.id);
-    const expectedCash = round2(num(open.openingCash) + live.cashSales + movements.cashIn - movements.cashOut);
+    const movementLines = await this.listCashMovements(merchantId, open.id);
+    const expectedCash = expectedDrawer(
+      num(open.openingCash),
+      live.cashSales,
+      movements.cashIn,
+      movements.cashOut
+    );
     const counted = round2(Math.max(0, Number(input.closingCashCounted) || 0));
     const variance = round2(counted - expectedCash);
 
@@ -205,6 +232,10 @@ export class PosShiftService {
         from: open.openedAt.toISOString(),
         to: (updated.closedAt || new Date()).toISOString(),
       },
+      cashIn: movements.cashIn,
+      cashOut: movements.cashOut,
+      cashRefunds: live.cashRefunds,
+      movements: movementLines,
     };
   }
 
@@ -284,7 +315,13 @@ export class PosShiftService {
         ...live,
         cashIn: movements.cashIn,
         cashOut: movements.cashOut,
-        expectedCash: round2(num(open.openingCash) + live.cashSales + movements.cashIn - movements.cashOut),
+        cashRefunds: live.cashRefunds,
+        expectedCash: expectedDrawer(
+          num(open.openingCash),
+          live.cashSales,
+          movements.cashIn,
+          movements.cashOut
+        ),
       },
     };
   }
@@ -345,17 +382,23 @@ export class PosShiftService {
     let cardSales = 0;
     let terminalSales = 0;
     let otherSales = 0;
+    let cashRefunds = 0;
     let orderCount = 0;
     for (const row of rows) {
       const status = String(row.status || "").toLowerCase();
+      const method = String(row.paymentMethod || "").toLowerCase();
+      const refundAmt = num(row.refundAmount);
+      if (method === "cash") {
+        if (status === "refunded") cashRefunds += refundAmt > 0 ? refundAmt : num(row.total);
+        else cashRefunds += Math.max(0, refundAmt);
+      }
       // Fully refunded tickets contribute $0 net; partials keep total − refund.
       const amount =
         status === "refunded"
           ? 0
-          : Math.max(0, num(row.total) - num(row.refundAmount));
+          : Math.max(0, num(row.total) - refundAmt);
       if (amount <= 0) continue;
       orderCount += 1;
-      const method = String(row.paymentMethod || "").toLowerCase();
       if (method === "cash") cashSales += amount;
       else if (method === "card") cardSales += amount;
       else if (method === "terminal") terminalSales += amount;
@@ -363,6 +406,7 @@ export class PosShiftService {
     }
     return {
       cashSales: round2(cashSales),
+      cashRefunds: round2(cashRefunds),
       cardSales: round2(cardSales),
       terminalSales: round2(terminalSales),
       otherSales: round2(otherSales),

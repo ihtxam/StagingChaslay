@@ -6,6 +6,24 @@ import Header from '@/components/Header';
 import Overview from './Overview';
 import Orders from './Orders';
 import Products from './Products';
+import Inventory from './Inventory';
+import InventoryLayout from './inventory/InventoryLayout';
+import {
+  InventoryListPage,
+  InboundStockPage,
+  OutboundStockPage,
+  StockCountingPage,
+  StockHistoryPage,
+} from './inventory/ops-pages';
+import {
+  StockItemsPage,
+  StockCategoriesPage,
+  CookbookPage,
+  SuppliersPage,
+  UnitsPage,
+} from './inventory/settings-pages';
+import { InventoryReportPage, ConsumptionReportPage } from './inventory/report-pages';
+import { InventoryHomePage } from './inventory/home-page';
 import Categories from './Categories';
 import Modifiers from './Modifiers';
 import Customers from './Customers';
@@ -27,15 +45,28 @@ import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
 import { APP_PANEL_TITLE } from '@/lib/brand';
 import { useAuthStore } from '@/store/auth';
+import { homePathForUser } from '@/lib/auth-home';
 import {
   canAccessRoute,
   canShowWebPosQuickAction,
+  backOfficeHomePath,
   getEffectivePanelAccess,
+  getEffectiveRegisterDisplay,
+  isCatalogPanelPath,
+  isOrdersPanelPath,
+  isStaffJwt,
   loadWebPosStaffSession,
+  notifyWebPosStaffSessionChanged,
+  resolveWebPosStaffSession,
+  WEBPOS_STAFF_SESSION_EVENT,
   type Permission,
+  type StaffRosterRow,
   type WebPosStaffSession,
 } from '@/lib/permissions';
 import type { EditionFeatureKey } from '@/lib/edition-features';
+import { isInventoryLicensed } from '@/lib/inventory-addon';
+import { isSignageLicensed } from '@/lib/signage-addon';
+import SignagePage from './SignagePage';
 
 const WebsiteCms = lazy(() => import('./WebsiteCms'));
 
@@ -64,8 +95,11 @@ function PanelRouteGuard({
   allow: (path: string) => boolean;
   children: React.ReactNode;
 }) {
+  const user = useAuthStore((s) => s.user);
   if (!allow(path)) {
-    return <Navigate to="/merchant/pos" replace />;
+    const dest = user ? homePathForUser(user) : '/merchant/pos';
+    const fallback = dest === path || dest === '/merchant' ? '/merchant/pos' : dest;
+    return <Navigate to={fallback} replace />;
   }
   return <>{children}</>;
 }
@@ -74,6 +108,7 @@ function MerchantShell() {
   const { t, locale, setLocale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const staffJwt = isStaffJwt(user);
   const location = useLocation();
   const navigate = useNavigate();
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
@@ -89,20 +124,53 @@ function MerchantShell() {
   /** When true on /merchant/pos, hide sidebar + header so WebPOS feels like its own app. */
   const [posAppMode, setPosAppMode] = useState(true);
   const [editionFeatures, setEditionFeatures] = useState<EditionFeatureKey[] | null>(null);
+  const [inventoryLicensed, setInventoryLicensed] = useState(() => isInventoryLicensed(user));
+  const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
   );
+  const [hasStaffPins, setHasStaffPins] = useState(false);
   const hideChrome = (isPosLikeRoute && posAppMode) || isPosEmbed;
+
+  // Reconcile PIN session with JWT + staff roster on load (drop stale localStorage persist).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const staffRes = await api.get('/merchant/staff');
+        if (cancelled) return;
+        const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
+        const pins = staffList.some(
+          (s) => !!(s as { pinSet?: boolean }).pinSet && s.isActive !== false
+        );
+        setHasStaffPins(pins);
+        const session = resolveWebPosStaffSession({
+          staffList,
+          authStaffId: user.staffId,
+          authRole: user.role,
+          authPermissions: user.permissions as Permission[] | undefined,
+        });
+        setPinSession(session);
+        notifyWebPosStaffSessionChanged();
+      } catch {
+        /* roster fetch is best-effort for panel gating */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.role, user?.staffId, user?.permissions]);
 
   // Keep PIN session in sync when WebPOS switches users
   useEffect(() => {
     const syncPin = () => setPinSession(loadWebPosStaffSession());
     syncPin();
     window.addEventListener('storage', syncPin);
-    window.addEventListener('webpos:staff-session', syncPin);
+    window.addEventListener(WEBPOS_STAFF_SESSION_EVENT, syncPin);
     return () => {
       window.removeEventListener('storage', syncPin);
-      window.removeEventListener('webpos:staff-session', syncPin);
+      window.removeEventListener(WEBPOS_STAFF_SESSION_EVENT, syncPin);
     };
   }, [location.pathname, posAppMode]);
 
@@ -111,22 +179,60 @@ function MerchantShell() {
       getEffectivePanelAccess({
         jwtPermissions: user?.permissions as Permission[] | undefined,
         isOwner: jwtIsOwner,
-        // Active PIN session means floor staff perms override owner JWT for panel access.
-        staffConfigured: !!pinSession || user?.role === 'staff',
+        authRole: user?.role,
+        hasStaffPins,
         pinSession,
       }),
-    [user?.permissions, user?.role, jwtIsOwner, pinSession]
+    [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, pinSession]
+  );
+
+  const registerDisplay = useMemo(
+    () =>
+      getEffectiveRegisterDisplay({
+        jwtUser: user,
+        pinSession,
+        pinActive: effective.pinActive,
+        t,
+      }),
+    [user, pinSession, effective.pinActive, t]
   );
 
   useEffect(() => {
-    api
-      .get('/merchant/settings')
-      .then((r) => {
-        const feats = r.data?.settings?.editionFeatures;
-        setEditionFeatures(Array.isArray(feats) ? feats : null);
-      })
-      .catch(() => setEditionFeatures(null));
-  }, []);
+    let cancelled = false;
+    const applySettings = (settings: {
+      editionFeatures?: EditionFeatureKey[] | null;
+      inventoryAddonEnabled?: boolean;
+      inventoryEnabled?: boolean;
+      signageAddonEnabled?: boolean;
+      signageEnabled?: boolean;
+    } | null) => {
+      const feats = settings?.editionFeatures;
+      setEditionFeatures(Array.isArray(feats) ? feats : null);
+      setInventoryLicensed(isInventoryLicensed(settings) || isInventoryLicensed(user));
+      setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
+    };
+    const load = () => {
+      api
+        .get('/merchant/settings')
+        .then((r) => {
+          if (cancelled) return;
+          applySettings(r.data?.settings ?? null);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setEditionFeatures(null);
+          setInventoryLicensed(isInventoryLicensed(user));
+          setSignageLicensed(isSignageLicensed(user));
+        });
+    };
+    load();
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [user]);
 
   useEffect(() => {
     if (isPosLikeRoute) setPosAppMode(true);
@@ -146,12 +252,18 @@ function MerchantShell() {
       const access = getEffectivePanelAccess({
         jwtPermissions: user?.permissions as Permission[] | undefined,
         isOwner: jwtIsOwner,
-        staffConfigured: !!loadWebPosStaffSession() || user?.role === 'staff',
+        authRole: user?.role,
+        hasStaffPins,
         pinSession: loadWebPosStaffSession(),
       });
-      if (!access.canOpenPanel) {
+      if (!access.canOpenBackOffice) {
         toast.error(t('webPosPanelDenied'));
         setPosAppMode(true);
+        return;
+      }
+      if (!access.canOpenPanel) {
+        setPosAppMode(false);
+        navigate(backOfficeHomePath(access.permissions, false));
         return;
       }
       setPosAppMode(false);
@@ -163,16 +275,27 @@ function MerchantShell() {
       window.removeEventListener('webpos:show-panel', showPanel);
       window.removeEventListener('webpos:enter-app', enterApp);
     };
-  }, [user?.permissions, user?.role, jwtIsOwner, t]);
+  }, [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, t, navigate]);
 
-  // If a restricted PIN session is active, never leave POS chrome / panel routes.
+  // Restricted PIN: stay in POS unless they may open menu / orders pages.
   useEffect(() => {
     if (!effective.pinActive || effective.canOpenPanel) return;
+    if (effective.canOpenCatalog && isCatalogPanelPath(location.pathname)) return;
+    if (effective.canOpenOrders && isOrdersPanelPath(location.pathname)) return;
     if (!posAppMode) setPosAppMode(true);
-    if (!isPosRoute) {
+    if (!isPosLikeRoute) {
       navigate('/merchant/pos', { replace: true });
     }
-  }, [effective.pinActive, effective.canOpenPanel, posAppMode, isPosRoute, navigate]);
+  }, [
+    effective.pinActive,
+    effective.canOpenPanel,
+    effective.canOpenCatalog,
+    effective.canOpenOrders,
+    posAppMode,
+    isPosLikeRoute,
+    location.pathname,
+    navigate,
+  ]);
 
   const changeLanguage = useCallback(
     async (lang: Locale) => {
@@ -192,6 +315,30 @@ function MerchantShell() {
     [effective.permissions, effective.isOwner, editionFeatures]
   );
 
+  /** Inventory is a paid merchant addon — never gate it on edition feature lists. */
+  const allowInventory = useCallback(
+    (path: string) =>
+      inventoryLicensed &&
+      canAccessRoute(path, effective.permissions, effective.isOwner, null),
+    [inventoryLicensed, effective.permissions, effective.isOwner]
+  );
+
+  const allowSignage = useCallback(
+    (path: string) =>
+      signageLicensed &&
+      canAccessRoute(path, effective.permissions, effective.isOwner, null),
+    [signageLicensed, effective.permissions, effective.isOwner]
+  );
+
+  // Block direct URL access to panel pages the role may not open.
+  useEffect(() => {
+    if (effective.isOwner || isPosLikeRoute) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (allow(path)) return;
+    const dest = backOfficeHomePath(effective.permissions, false);
+    if (dest !== path) navigate(dest, { replace: true });
+  }, [effective.isOwner, effective.permissions, isPosLikeRoute, location.pathname, allow, navigate]);
+
   const showWebPosQuickAction = useMemo(
     () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
     [jwtIsOwner, user?.permissions]
@@ -199,12 +346,13 @@ function MerchantShell() {
 
   const menuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
+    { label: t('orders'), path: '/merchant/orders', icon: '📦' },
     {
       id: 'sales',
       label: t('navSales'),
-      icon: '📦',
+      icon: '📈',
       children: [
-        { label: t('orders'), path: '/merchant/orders', icon: '📦' },
+        { label: t('invoicesNav'), path: '/merchant/invoices', icon: '🧾' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
         { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
       ].filter((item) => allow(item.path)),
@@ -218,6 +366,31 @@ function MerchantShell() {
         { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
       ].filter((item) => allow(item.path)),
+    },
+    {
+      id: 'inventory',
+      label: t('invTitle'),
+      icon: '📦',
+      children: allowInventory('/merchant/inventory')
+        ? [
+            { heading: true, label: t('invNavGroupOps') },
+            { label: t('invNavList'), path: '/merchant/inventory', icon: '📋' },
+            { label: t('invNavStockTable'), path: '/merchant/inventory/list', icon: '📊' },
+            { label: t('invNavInbound'), path: '/merchant/inventory/inbound', icon: '⬇️' },
+            { label: t('invNavOutbound'), path: '/merchant/inventory/outbound', icon: '⬆️' },
+            { label: t('invNavCounting'), path: '/merchant/inventory/counting', icon: '🧮' },
+            { label: t('invNavHistory'), path: '/merchant/inventory/history', icon: '🕓' },
+            { heading: true, label: t('invNavGroupSettings') },
+            { label: t('invNavItems'), path: '/merchant/inventory/items', icon: '📦' },
+            { label: t('invNavCategories'), path: '/merchant/inventory/categories', icon: '🗂️' },
+            { label: t('invNavCookbook'), path: '/merchant/inventory/cookbook', icon: '📖' },
+            { label: t('invNavSuppliers'), path: '/merchant/inventory/suppliers', icon: '🚚' },
+            { label: t('invNavUnits'), path: '/merchant/inventory/units', icon: '⚖️' },
+            { heading: true, label: t('invNavGroupReports') },
+            { label: t('invNavReport'), path: '/merchant/inventory/report', icon: '📑' },
+            { label: t('invNavConsumption'), path: '/merchant/inventory/consumption', icon: '🍽️' },
+          ]
+        : [],
     },
     {
       id: 'customers',
@@ -241,6 +414,9 @@ function MerchantShell() {
         { label: t('cmsWebsite'), path: '/merchant/website', icon: '✏️' },
       ].filter((item) => allow(item.path)),
     },
+    ...(allowSignage('/merchant/signage')
+      ? [{ label: t('signageNav'), path: '/merchant/signage', icon: '📺' }]
+      : []),
     ...(allow('/merchant/users')
       ? [{ label: t('staffPageTitle'), path: '/merchant/users', icon: '👤' }]
       : []),
@@ -270,6 +446,7 @@ function MerchantShell() {
           onToggle={() => setSidebarOpen(!sidebarOpen)}
           menuItems={menuItems}
           panelKey="merchant"
+          registerDisplay={registerDisplay}
           quickAction={
             showWebPosQuickAction
               ? { label: t('sidebarPos'), path: '/merchant/pos' }
@@ -285,7 +462,8 @@ function MerchantShell() {
           <Header
             title={t('merchantDashboard')}
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-            showAcceptingMenu
+            compact
+            registerDisplay={registerDisplay}
           />
         )}
 
@@ -313,6 +491,14 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
+            <Route
+              path="invoices"
+              element={
+                <PanelRouteGuard path="/merchant/invoices" allow={allow}>
+                  <Orders invoiceLedger />
+                </PanelRouteGuard>
+              }
+            />
             <Route path="pos" element={<WebPos appMode={hideChrome} />} />
             <Route path="waiter" element={<WaiterApp appMode={hideChrome} />} />
             <Route
@@ -331,6 +517,29 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
+            <Route
+              path="inventory"
+              element={
+                <PanelRouteGuard path="/merchant/inventory" allow={allowInventory}>
+                  <InventoryLayout />
+                </PanelRouteGuard>
+              }
+            >
+              <Route index element={<InventoryHomePage />} />
+              <Route path="home" element={<InventoryHomePage />} />
+              <Route path="list" element={<InventoryListPage />} />
+              <Route path="inbound" element={<InboundStockPage />} />
+              <Route path="outbound" element={<OutboundStockPage />} />
+              <Route path="counting" element={<StockCountingPage />} />
+              <Route path="history" element={<StockHistoryPage />} />
+              <Route path="items" element={<StockItemsPage />} />
+              <Route path="categories" element={<StockCategoriesPage />} />
+              <Route path="cookbook" element={<CookbookPage />} />
+              <Route path="suppliers" element={<SuppliersPage />} />
+              <Route path="units" element={<UnitsPage />} />
+              <Route path="report" element={<InventoryReportPage />} />
+              <Route path="consumption" element={<ConsumptionReportPage />} />
+            </Route>
             <Route
               path="modifiers"
               element={
@@ -413,7 +622,22 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
-            <Route path="terminals" element={<Terminals />} />
+            <Route
+              path="signage"
+              element={
+                <PanelRouteGuard path="/merchant/signage" allow={allowSignage}>
+                  <SignagePage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="terminals"
+              element={
+                <PanelRouteGuard path="/merchant/terminals" allow={allow}>
+                  <Terminals />
+                </PanelRouteGuard>
+              }
+            />
             <Route
               path="floor-plan"
               element={<LegacyTablesRedirect section="layout" />}

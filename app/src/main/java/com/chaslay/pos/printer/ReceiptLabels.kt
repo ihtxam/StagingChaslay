@@ -21,6 +21,7 @@ data class ReceiptLabels(
     val vatNet: String,
     val vatTax: String,
     val vatGross: String,
+    val vatTotal: String,
     val vatIncludedNote: String,
     val payment: String,
     val paid: String,
@@ -37,6 +38,7 @@ data class ReceiptLabels(
     val tapToPay: String,
     val terminal: String,
     val payLater: String,
+    val orWord: String,
     val kitchenTitle: String,
     val cancelledKitchenTitle: String,
     val kitchenMessageTitle: String,
@@ -71,8 +73,16 @@ data class ReceiptLabels(
         PaymentMethod.CARD -> card
         PaymentMethod.TAP_TO_PAY -> tapToPay
         PaymentMethod.ADYEN_TERMINAL -> terminal
-        PaymentMethod.PAY_LATER -> payLater
+        PaymentMethod.PAY_LATER -> payLaterPaymentLine(null)
+        PaymentMethod.INVOICE -> "Invoice"
         PaymentMethod.GIFT_CARD -> "Gift card"
+    }
+
+    fun payLaterPaymentLine(preferred: PaymentMethod?): String = when (preferred) {
+        PaymentMethod.CASH -> "$payLater: $cash"
+        PaymentMethod.CARD -> "$payLater: $card"
+        PaymentMethod.ADYEN_TERMINAL, PaymentMethod.TAP_TO_PAY -> "$payLater: $terminal"
+        else -> payLater
     }
 
     fun orderSourceLabel(source: String?): String {
@@ -108,6 +118,7 @@ data class ReceiptLabels(
             vatNet = "Net",
             vatTax = "VAT",
             vatGross = "Gross",
+            vatTotal = "VAT total",
             vatIncludedNote = "VAT included in prices",
             payment = "Payment:",
             paid = "Paid:",
@@ -124,6 +135,7 @@ data class ReceiptLabels(
             tapToPay = "Tap-to-Pay",
             terminal = "Terminal",
             payLater = "Pay Later",
+            orWord = "or",
             kitchenTitle = "KITCHEN",
             cancelledKitchenTitle = "CANCELLED",
             kitchenMessageTitle = "KITCHEN MESSAGE",
@@ -157,6 +169,7 @@ data class ReceiptLabels(
             vatNet = "Net",
             vatTax = "TVA",
             vatGross = "Brut",
+            vatTotal = "Total TVA",
             vatIncludedNote = "TVA incluse dans les prix",
             payment = "Paiement :",
             paid = "Pay\u00E9 :",
@@ -172,7 +185,8 @@ data class ReceiptLabels(
             card = "Carte",
             tapToPay = "Tap-to-Pay",
             terminal = "Terminal",
-            payLater = "Payer plus tard",
+            payLater = "Paiement diff\u00E9r\u00E9",
+            orWord = "ou",
             kitchenTitle = "CUISINE",
             cancelledKitchenTitle = "ANNULÉ",
             kitchenMessageTitle = "MESSAGE CUISINE",
@@ -206,6 +220,7 @@ data class ReceiptLabels(
             vatNet = "Netto",
             vatTax = "MwSt.",
             vatGross = "Brutto",
+            vatTotal = "MwSt. total",
             vatIncludedNote = "MwSt. im Preis enthalten",
             payment = "Zahlung:",
             paid = "Bezahlt:",
@@ -222,6 +237,7 @@ data class ReceiptLabels(
             tapToPay = "Tap-to-Pay",
             terminal = "Terminal",
             payLater = "Sp\u00E4ter zahlen",
+            orWord = "oder",
             kitchenTitle = "KUECHE",
             cancelledKitchenTitle = "STORNIERT",
             kitchenMessageTitle = "KUECHEN-NACHRICHT",
@@ -255,6 +271,7 @@ data class ReceiptLabels(
             vatNet = "Netto",
             vatTax = "IVA",
             vatGross = "Lordo",
+            vatTotal = "Totale IVA",
             vatIncludedNote = "IVA inclusa nei prezzi",
             payment = "Pagamento:",
             paid = "Pagato:",
@@ -271,6 +288,7 @@ data class ReceiptLabels(
             tapToPay = "Tap-to-Pay",
             terminal = "Terminale",
             payLater = "Paga dopo",
+            orWord = "o",
             kitchenTitle = "CUCINA",
             cancelledKitchenTitle = "ANNULLATO",
             kitchenMessageTitle = "MESSAGGIO CUCINA",

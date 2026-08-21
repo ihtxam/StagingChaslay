@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, lte, inArray, or } from "drizzle-orm";
 import {
   POS_CANCEL_REASONS,
   POS_REFUND_REASONS,
@@ -33,6 +33,8 @@ const ALLOWED_PAYMENT_METHODS = new Set([
   "online",
   "loyalty",
   "pay_later",
+  "invoice",
+  "bank_transfer",
 ]);
 
 type HeldCartLine = {
@@ -53,15 +55,76 @@ function parseHeldCart(cartJson: unknown): {
   tableLabel: string | null;
   notes: string | null;
 } {
-  const data = cartJson as
-    | { cart?: HeldCartLine[]; channel?: string; tableLabel?: string; orderNote?: string }
-    | HeldCartLine[]
-    | null;
+  const data = normalizeHeldCartJson(cartJson);
   const lines = Array.isArray(data) ? data : data?.cart || [];
   const channel = (!Array.isArray(data) && data?.channel) || "takeaway";
   const tableLabel = (!Array.isArray(data) && data?.tableLabel) || null;
   const notes = (!Array.isArray(data) && data?.orderNote) || null;
   return { lines, channel: String(channel), tableLabel, notes };
+}
+
+function normalizeHeldCartJson(cartJson: unknown): {
+  cart?: HeldCartLine[];
+  channel?: string;
+  tableId?: string | null;
+  tableLabel?: string | null;
+  tabNumber?: string | null;
+  ticketDisplay?: string | null;
+  orderNote?: string;
+} | HeldCartLine[] | null {
+  let data: unknown = cartJson;
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+  if (Array.isArray(data) || (data && typeof data === "object")) {
+    return data as
+      | HeldCartLine[]
+      | {
+          cart?: HeldCartLine[];
+          channel?: string;
+          tableId?: string | null;
+          tableLabel?: string | null;
+          tabNumber?: string | null;
+          ticketDisplay?: string | null;
+          orderNote?: string;
+        };
+  }
+  return null;
+}
+
+function heldIdentity(cartJson: unknown): {
+  ticketDisplay: string | null;
+  tableId: string | null;
+  tabNumber: string | null;
+} {
+  const data = normalizeHeldCartJson(cartJson);
+  if (!data || Array.isArray(data)) {
+    return { ticketDisplay: null, tableId: null, tabNumber: null };
+  }
+  const ticket = typeof data.ticketDisplay === "string" ? data.ticketDisplay.trim() : "";
+  const tableId = typeof data.tableId === "string" ? data.tableId.trim() : "";
+  const tab = data.tabNumber != null ? String(data.tabNumber).trim() : "";
+  return {
+    ticketDisplay: ticket || null,
+    tableId: tableId || null,
+    tabNumber: tab || null,
+  };
+}
+
+function sameHeldIdentity(
+  a: ReturnType<typeof heldIdentity>,
+  b: ReturnType<typeof heldIdentity>
+): boolean {
+  if (a.tableId && b.tableId && a.tableId === b.tableId) return true;
+  if (!a.tableId && !b.tableId && a.tabNumber && b.tabNumber && a.tabNumber === b.tabNumber) {
+    return true;
+  }
+  if (a.ticketDisplay && b.ticketDisplay && a.ticketDisplay === b.ticketDisplay) return true;
+  return false;
 }
 
 export class PosOrdersService {
@@ -80,6 +143,7 @@ export class PosOrdersService {
       from?: string;
       to?: string;
       limit?: number;
+      q?: string;
     } = {}
   ) {
     const db = getDb();
@@ -91,13 +155,60 @@ export class PosOrdersService {
     ];
 
     if (opts.status && opts.status !== "all") {
-      conditions.push(eq(schema.orders.status, opts.status));
+      if (opts.status === "completed") {
+        // Unpaid invoice POS sales stay in history (status may still be preparing).
+        conditions.push(
+          or(
+            eq(schema.orders.status, "completed"),
+            and(
+              eq(schema.orders.paymentMethod, "invoice"),
+              eq(schema.orders.paymentStatus, "awaiting_payment")
+            )
+          )!
+        );
+      } else {
+        conditions.push(eq(schema.orders.status, opts.status));
+      }
     }
-    if (opts.from) {
-      conditions.push(gte(schema.orders.createdAt, zurichDayBounds(opts.from).start));
-    }
-    if (opts.to) {
-      conditions.push(lte(schema.orders.createdAt, zurichDayBounds(opts.to).end));
+
+    const q = String(opts.q || "").trim();
+    const searchCond = q
+      ? or(
+          ilike(schema.orders.orderNumber, `%${q}%`),
+          ilike(schema.orders.clientId, `%${q}%`),
+          ilike(schema.orders.invoiceNumber, `%${q}%`),
+          ilike(schema.orders.customerName, `%${q}%`),
+          ilike(schema.orders.paymentMethod, `%${q}%`)
+        )
+      : null;
+
+    // Include orders created in range OR scheduled (pickup/delivery) in range so a
+    // future delivery time does not hide a ticket from today's history.
+    // A ref search (WP-… / INV-…) also matches outside the date window — invoice
+    // and awaiting_payment POS sales were otherwise invisible when staff searched.
+    if (opts.from || opts.to) {
+      const start = opts.from ? zurichDayBounds(opts.from).start : new Date(0);
+      const end = opts.to ? zurichDayBounds(opts.to).end : new Date("9999-12-31T23:59:59.999Z");
+      const createdInRange = and(
+        gte(schema.orders.createdAt, start),
+        lte(schema.orders.createdAt, end)
+      );
+      const scheduledInRange = and(
+        gte(schema.orders.scheduledFor, start),
+        lte(schema.orders.scheduledFor, end)
+      );
+      const inRange = or(createdInRange, scheduledInRange)!;
+      const looksLikeRef =
+        /^(WP-|INV-|ORD-|#)/i.test(q) || q.replace(/[^A-Za-z0-9-]/g, "").length >= 8;
+      if (searchCond && looksLikeRef) {
+        conditions.push(or(inRange, searchCond)!);
+      } else if (searchCond) {
+        conditions.push(and(inRange, searchCond)!);
+      } else {
+        conditions.push(inRange);
+      }
+    } else if (searchCond) {
+      conditions.push(searchCond);
     }
 
     const rows = await db.query.orders.findMany({
@@ -110,6 +221,36 @@ export class PosOrdersService {
       orderBy: [desc(schema.orders.createdAt)],
       limit,
     });
+
+    const orderIds = rows.map((o) => o.id);
+    const refundsByOrder = new Map<string, Array<Record<string, unknown>>>();
+    if (orderIds.length) {
+      try {
+        const refundRows = await db.query.orderRefunds.findMany({
+          where: and(
+            eq(schema.orderRefunds.merchantId, merchantId),
+            inArray(schema.orderRefunds.orderId, orderIds)
+          ),
+          orderBy: [desc(schema.orderRefunds.createdAt)],
+        });
+        for (const rf of refundRows) {
+          const list = refundsByOrder.get(rf.orderId) || [];
+          list.push({
+            id: rf.id,
+            kind: rf.kind,
+            amount: Number(rf.amount),
+            reason: rf.reason || null,
+            staffName: rf.staffName || null,
+            items: rf.itemsJson || [],
+            allocation: rf.allocationJson || null,
+            createdAt: rf.createdAt?.toISOString?.() ?? null,
+          });
+          refundsByOrder.set(rf.orderId, list);
+        }
+      } catch {
+        /* table may not exist yet on older DBs */
+      }
+    }
 
     return rows.map((o) => {
       const notes = String(o.notes || "");
@@ -134,6 +275,9 @@ export class PosOrdersService {
       paymentMethod: o.paymentMethod,
       paymentBreakdown: o.paymentBreakdown ?? null,
       paymentStatus: o.paymentStatus,
+      invoiceNumber: (o as { invoiceNumber?: string | null }).invoiceNumber || null,
+      invoiceIssuedAt: (o as { invoiceIssuedAt?: Date | null }).invoiceIssuedAt || null,
+      invoiceDueAt: (o as { invoiceDueAt?: Date | null }).invoiceDueAt || null,
       subtotal: Number(o.subtotal),
       taxAmount: Number(o.taxAmount),
       discountAmount: Number(o.discountAmount || 0),
@@ -145,6 +289,7 @@ export class PosOrdersService {
       cancelledAt: o.cancelledAt,
       refundedAt: o.refundedAt,
       refundReason: o.refundReason || null,
+      refundHistory: refundsByOrder.get(o.id) || [],
       notes: o.notes,
       tableLabel: o.tableLabel,
       guestCount: o.guestCount,
@@ -154,6 +299,8 @@ export class PosOrdersService {
       masterOrderId: o.masterOrderId,
       splitCheckNumber: o.splitCheckNumber,
       customerName: o.customerName,
+      pointsEarned: o.pointsEarned ?? 0,
+      pointsRedeemed: o.pointsRedeemed ?? 0,
       customerPhone: o.customerPhone,
       shippingAddress: o.shippingAddress,
       scheduledFor: o.scheduledFor,
@@ -222,9 +369,10 @@ export class PosOrdersService {
     paymentMethod: string
   ) {
     const db = getDb();
-    const method = String(paymentMethod || "")
+    let method = String(paymentMethod || "")
       .trim()
-      .toLowerCase();
+      .toLowerCase()
+      .replace(/-/g, "_");
     if (!ALLOWED_PAYMENT_METHODS.has(method)) {
       throw new Error("Invalid payment method");
     }
@@ -233,6 +381,15 @@ export class PosOrdersService {
       where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
     });
     if (!order) throw new Error("Order not found");
+    const existingMethod = String(order.paymentMethod || "")
+      .toLowerCase()
+      .replace(/-/g, "_");
+    if (existingMethod === "invoice" || order.invoiceNumber) {
+      if (method !== "invoice" && method !== "bank_transfer" && method !== "bank") {
+        throw new Error("Invoice orders can only be paid by invoice / bank transfer");
+      }
+      method = "invoice";
+    }
     if (order.status === "cancelled" || order.paymentStatus === "cancelled") {
       throw new Error("Cannot change payment method on a cancelled order");
     }
@@ -443,6 +600,42 @@ export class PosOrdersService {
       .where(eq(schema.orders.id, orderId))
       .returning();
 
+    const refundItemsLog = itemUpdates
+      .map((u) => {
+        const item = (order.items || []).find((i) => i.id === u.id);
+        const prevQty = Number(item?.refundedQuantity || 0) || 0;
+        const nextQty = Number(u.refundedQuantity) || 0;
+        const delta = roundMoney2(nextQty - prevQty);
+        if (delta <= 0) return null;
+        return {
+          orderItemId: u.id,
+          productName: resolveOrderItemName(item?.productName),
+          quantity: delta,
+        };
+      })
+      .filter(Boolean) as Array<{ orderItemId: string; productName?: string; quantity: number }>;
+
+    try {
+      await db.insert(schema.orderRefunds).values({
+        merchantId,
+        orderId,
+        kind: "referenced",
+        amount: refund.toFixed(2),
+        reason: reasonText,
+        staffId: order.staffId || null,
+        staffName: order.staffName || null,
+        itemsJson: refundItemsLog.length ? refundItemsLog : null,
+        allocationJson: {
+          giftCard: refundDelta.giftCard,
+          cash: refundDelta.cash,
+          terminal: refundDelta.terminal,
+          other: refundDelta.other,
+        },
+      });
+    } catch (logErr) {
+      console.warn("Refund recorded on order but history log failed:", logErr);
+    }
+
     return {
       order: updated,
       refunded: refund,
@@ -530,6 +723,25 @@ export class PosOrdersService {
       .where(eq(schema.orders.id, orderId))
       .returning();
 
+    try {
+      await db.insert(schema.orderRefunds).values({
+        merchantId,
+        orderId,
+        kind: "goodwill",
+        amount: amount.toFixed(2),
+        reason: reasonText,
+        staffId: order.staffId || null,
+        staffName: order.staffName || null,
+        itemsJson: null,
+        allocationJson:
+          method === "terminal"
+            ? { terminal: amount }
+            : { cash: amount },
+      });
+    } catch (logErr) {
+      console.warn("Goodwill recorded but history log failed:", logErr);
+    }
+
     return {
       order: updated,
       compensated: amount,
@@ -542,18 +754,35 @@ export class PosOrdersService {
 
   static async listHeld(merchantId: string) {
     const db = getDb();
-    return db.query.heldOrders.findMany({
+    const rows = await db.query.heldOrders.findMany({
       where: and(
         eq(schema.heldOrders.merchantId, merchantId),
         inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
       ),
       orderBy: [desc(schema.heldOrders.updatedAt)],
     });
+    console.info("[pos-held] list", {
+      merchantId,
+      count: rows.length,
+      tickets: rows.map((r) => {
+        const ident = heldIdentity(r.cartJson);
+        return {
+          id: r.id,
+          status: r.status,
+          channel: r.channel,
+          ticket: ident.ticketDisplay,
+          tableId: ident.tableId,
+          tab: ident.tabNumber,
+        };
+      }),
+    });
+    return rows;
   }
 
   static async holdOrder(
     merchantId: string,
     body: {
+      id?: string;
       label?: string;
       channel?: string;
       cartJson: unknown;
@@ -565,19 +794,68 @@ export class PosOrdersService {
   ) {
     const db = getDb();
     if (body.cartJson == null) throw new Error("cartJson is required");
+    const ident = heldIdentity(body.cartJson);
+    const requested = String(body.channel || "").toLowerCase();
+    const persistChannel =
+      ident.tableId
+        ? "dine_in"
+        : requested === "dine_in" || requested === "delivery" || requested === "takeaway"
+          ? requested
+          : "takeaway";
+    const status = body.sendToKitchen ? "sent_to_kitchen" : "held";
+    const values = {
+      label: (body.label || "").trim().slice(0, 120) || null,
+      status,
+      channel: persistChannel,
+      cartJson: body.cartJson,
+      notes: body.notes || null,
+      staffId: body.staffId || null,
+      staffName: body.staffName || null,
+      updatedAt: new Date(),
+    };
+
+    const open = await db.query.heldOrders.findMany({
+      where: and(
+        eq(schema.heldOrders.merchantId, merchantId),
+        inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
+      ),
+    });
+    const existing =
+      (body.id && open.find((r) => r.id === body.id)) ||
+      open.find((r) => sameHeldIdentity(heldIdentity(r.cartJson), ident));
+
+    if (existing) {
+      const [row] = await db
+        .update(schema.heldOrders)
+        .set(values)
+        .where(eq(schema.heldOrders.id, existing.id))
+        .returning();
+      console.info("[pos-held] upsert-update", {
+        merchantId,
+        id: existing.id,
+        status,
+        channel: persistChannel,
+        ticket: ident.ticketDisplay,
+        tableId: ident.tableId,
+      });
+      return row;
+    }
+
     const [row] = await db
       .insert(schema.heldOrders)
       .values({
         merchantId,
-        label: (body.label || "").trim().slice(0, 120) || null,
-        status: body.sendToKitchen ? "sent_to_kitchen" : "held",
-        channel: body.channel || "takeaway",
-        cartJson: body.cartJson,
-        notes: body.notes || null,
-        staffId: body.staffId || null,
-        staffName: body.staffName || null,
+        ...values,
       })
       .returning();
+    console.info("[pos-held] upsert-insert", {
+      merchantId,
+      id: row.id,
+      status,
+      channel: persistChannel,
+      ticket: ident.ticketDisplay,
+      tableId: ident.tableId,
+    });
     return row;
   }
 

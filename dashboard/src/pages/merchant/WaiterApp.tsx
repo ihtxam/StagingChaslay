@@ -1,28 +1,38 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Loader2,
   LogOut,
   Minus,
+  PanelLeft,
   Plus,
   ShoppingBag,
   Table2,
   UtensilsCrossed,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { toastPrintError } from '@/lib/webpos-print-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
 import {
+  backOfficeHomePath,
   hasPermission,
+  isMerchantOwnerJwt,
   loadWebPosStaffSession,
   saveWebPosStaffSession,
   clearWebPosStaffSession,
+  notifyWebPosStaffSessionChanged,
+  resolveWebPosStaffSession,
+  webPosPinGateRequired,
   type WebPosStaffSession,
+  type StaffRosterRow,
 } from '@/lib/permissions';
+import { useAuthStore } from '@/store/auth';
 import {
   POS_SESSION_KICKED_EVENT,
   registerPosSession,
-  resumePosSessionHeartbeat,
+  clearPosSessionLocal,
   revokePosSession,
 } from '@/lib/pos-session';
 import {
@@ -31,6 +41,7 @@ import {
   printWaiterKitchen,
 } from '@/lib/waiter-kitchen';
 import WebPosPinModal from '@/components/WebPosPinModal';
+import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 import WebPosTablesView from '@/components/webpos/WebPosTablesView';
 import WebPosProductArea from '@/components/webpos/WebPosProductArea';
 import WebPosProductModifiersModal, {
@@ -48,10 +59,20 @@ function money(n: number) {
 
 export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const { t, locale } = useI18n();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const authUser = useAuthStore((s) => s.user);
+  const jwtIsOwner = isMerchantOwnerJwt(authUser);
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [pinGateOpen, setPinGateOpen] = useState(false);
+  const [posAuthAlert, setPosAuthAlert] = useState<{
+    title?: string;
+    message: string;
+    variant?: 'error' | 'warning';
+  } | null>(null);
   const [staffConfigured, setStaffConfigured] = useState(false);
+  const [staffPinsKnown, setStaffPinsKnown] = useState(false);
   const [tab, setTab] = useState<WaiterTab>('tables');
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -69,21 +90,28 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [heldTableIds, setHeldTableIds] = useState<string[]>([]);
   const [ordersRefresh, setOrdersRefresh] = useState(0);
 
-  const pinRequired = staffConfigured && !staff;
+  const pinRequired = webPosPinGateRequired({
+    hasStaffPins: staffConfigured,
+    pinSession: staff,
+  });
 
   useEffect(() => {
-    resumePosSessionHeartbeat();
-  }, []);
-
-  useEffect(() => {
-    if (pinRequired) return;
+    if (!staffPinsKnown) return;
+    if (pinRequired) {
+      clearPosSessionLocal();
+      return;
+    }
     void registerPosSession({
       sessionKind: 'waiter',
       platform: 'waiter_web',
       staffId: staff?.id || null,
       staffName: staff?.name || null,
+    }).then((result) => {
+      if (result.ok && result.kickedSessionIds.length > 0) {
+        toast.info(t('webPosSessionReclaimed'));
+      }
     });
-  }, [pinRequired, staff?.id, staff?.name]);
+  }, [staffPinsKnown, pinRequired, staff?.id, staff?.name, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,8 +125,17 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           api.get('/merchant/products', { params: { limit: 500 } }),
         ]);
         if (cancelled) return;
-        const list = (staffRes.data?.staff || []) as Array<{ pinSet?: boolean }>;
-        setStaffConfigured(list.some((s) => s.pinSet));
+        const list = (staffRes.data?.staff || []) as StaffRosterRow[];
+        setStaffConfigured(list.some((s) => !!(s as { pinSet?: boolean }).pinSet));
+        setStaffPinsKnown(true);
+        const session = resolveWebPosStaffSession({
+          staffList: list,
+          authStaffId: authUser?.staffId,
+          authRole: authUser?.role,
+          authPermissions: authUser?.permissions,
+        });
+        setStaff(session);
+        if (session) notifyWebPosStaffSessionChanged();
         setCategories(catRes.data?.categories || []);
         setProducts(prodRes.data?.products || []);
         setPrintSettings(configRes.data?.config?.posPrintSettings || null);
@@ -111,7 +148,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [t, authUser?.staffId, authUser?.role, authUser?.permissions]);
 
   useEffect(() => {
     if (!loading && pinRequired) setPinGateOpen(true);
@@ -195,6 +232,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         allowExtras: p.allowExtras,
         extras: p.extras,
         modifierGroups: p.modifierGroups,
+        specifications: p.specifications,
       });
       return;
     }
@@ -234,6 +272,35 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     setTab('order');
   };
 
+  useEffect(() => {
+    if (loading || pinRequired) return;
+    const tableParam = searchParams.get('table');
+    if (!tableParam || tableId === tableParam) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await api.get('/merchant/floor-plans/tables');
+        if (cancelled) return;
+        const rows = (res.data?.tables || []) as Array<{ id: string; label: string }>;
+        const row = rows.find((tbl) => tbl.id === tableParam);
+        selectTable({
+          id: tableParam,
+          label: row?.label || tableParam.slice(0, 6).toUpperCase(),
+        });
+      } catch {
+        if (!cancelled) {
+          selectTable({
+            id: tableParam,
+            label: tableParam.slice(0, 6).toUpperCase(),
+          });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, pinRequired, searchParams, tableId]);
+
   const resetOrder = () => {
     setCart([]);
     setTableId(null);
@@ -247,10 +314,16 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     const onKicked = () => {
+      clearPosSessionLocal();
       clearWebPosStaffSession();
       setStaff(null);
+      notifyWebPosStaffSessionChanged();
       resetOrder();
-      toast.error(t('webPosSessionKicked'));
+      setPosAuthAlert({
+        title: t('webPosSessionKickedTitle'),
+        message: t('webPosSessionKickedReclaim'),
+        variant: 'warning',
+      });
       setPinGateOpen(true);
     };
     window.addEventListener(POS_SESSION_KICKED_EVENT, onKicked);
@@ -277,21 +350,38 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       toast.error(t('waiterNoPermission'));
       return;
     }
-    saveWebPosStaffSession(session);
-    setStaff(session);
-    setPinGateOpen(false);
-    await registerPosSession({
+    setPosAuthAlert(null);
+    clearPosSessionLocal();
+    clearWebPosStaffSession();
+    const reg = await registerPosSession({
       sessionKind: 'waiter',
       platform: 'waiter_web',
       staffId: session.id,
       staffName: session.name,
     });
+    if (!reg.ok) {
+      setPosAuthAlert({
+        title: t('webPosPinErrorTitle'),
+        message: reg.error || t('webPosSessionRegisterFailed'),
+        variant: 'error',
+      });
+      setPinGateOpen(true);
+      return;
+    }
+    saveWebPosStaffSession(session);
+    setStaff(session);
+    notifyWebPosStaffSessionChanged();
+    setPinGateOpen(false);
+    if (reg.kickedSessionIds.length > 0) {
+      toast.info(t('webPosSessionReclaimed'));
+    }
   };
 
   const handleLogout = async () => {
     await revokePosSession();
     clearWebPosStaffSession();
     setStaff(null);
+    notifyWebPosStaffSessionChanged();
     resetOrder();
     setPinGateOpen(true);
   };
@@ -343,7 +433,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       toast.success(t('waiterSentToKitchen'));
       resetOrder();
     } catch (e: any) {
-      toast.error(e?.message || t('webPosKitchenPrintFailed'));
+      toastPrintError(e, t, 'webPosKitchenPrintFailed');
     } finally {
       setSending(false);
     }
@@ -359,7 +449,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
 
   return (
     <div
-      className={`flex h-full min-h-0 flex-col bg-stone-950 text-stone-100 ${
+      className={`waiter-shell flex h-full min-h-0 flex-col bg-stone-950 text-stone-100 ${
         appMode ? 'waiter-app-mode' : ''
       }`}
     >
@@ -368,14 +458,27 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           <p className="text-xs uppercase tracking-wide text-stone-500">{t('waiterAppTitle')}</p>
           <p className="font-semibold">{staff?.name || t('waiterAppSubtitle')}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleLogout()}
-          className="inline-flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm"
-        >
-          <LogOut className="h-4 w-4" aria-hidden />
-          {t('logout')}
-        </button>
+        <div className="flex items-center gap-2">
+          {hasPermission(staff?.permissions, 'MANAGE_PRODUCTS') ||
+          hasPermission(staff?.permissions, 'VIEW_ORDER_HISTORY') ? (
+            <button
+              type="button"
+              onClick={() => navigate(backOfficeHomePath(staff?.permissions, false))}
+              className="inline-flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm"
+            >
+              <PanelLeft className="h-4 w-4" aria-hidden />
+              {t('webPosBackOffice')}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            className="inline-flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm"
+          >
+            <LogOut className="h-4 w-4" aria-hidden />
+            {t('logout')}
+          </button>
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -516,7 +619,10 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           <button
             key={key}
             type="button"
-            onClick={() => setTab(key)}
+            onClick={() => {
+              setTab(key);
+              if (key === 'tables') setOrdersRefresh((n) => n + 1);
+            }}
             className={`flex flex-1 flex-col items-center gap-1 py-3 text-xs ${
               tab === key ? 'text-emerald-400' : 'text-stone-500'
             }`}
@@ -527,6 +633,14 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         ))}
       </nav>
 
+      <WebPosBlockingAlert
+        open={!!posAuthAlert}
+        title={posAuthAlert?.title}
+        message={posAuthAlert?.message || ''}
+        variant={posAuthAlert?.variant || 'error'}
+        onDismiss={() => setPosAuthAlert(null)}
+        minMs={posAuthAlert?.variant === 'warning' ? 4000 : 8000}
+      />
       <WebPosPinModal
         open={pinGateOpen}
         mode="gate"

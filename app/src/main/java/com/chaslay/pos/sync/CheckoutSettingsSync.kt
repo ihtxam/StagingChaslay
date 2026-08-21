@@ -18,12 +18,7 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(checkout: SyncCheckoutDto): 
         .ifBlank { "10,20,50,100" }
     val step = checkout.roundingStep
     val roundingStep = if (step in listOf(0.0, 0.05, 0.1, 0.5, 1.0)) step else this.roundingStep
-    val resolvedMode = when (checkout.posMode) {
-        "retail" -> PosMode.RETAIL
-        "restaurant" -> PosMode.RESTAURANT
-        else -> this.posMode
-    }
-    val requireTable = checkout.requireTableForDineIn ?: (resolvedMode != PosMode.RETAIL)
+    val requireTable = checkout.requireTableForDineIn ?: (this.posMode != PosMode.RETAIL)
     return copy(
         tipsEnabled = checkout.tipsEnabled,
         allowCustomTip = checkout.allowCustomTip,
@@ -36,8 +31,9 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(checkout: SyncCheckoutDto): 
         maxSplitParts = checkout.maxSplitParts.coerceIn(2, 20),
         vatIncludedInPrice = checkout.vatIncludedInPrice,
         vatAfterDiscount = checkout.vatAfterDiscount,
-        posMode = resolvedMode,
-        tablesEnabled = checkout.tablesEnabled,
+        // Device POS mode is local — cloud restaurant default must not flip a retail till.
+        posMode = this.posMode,
+        tablesEnabled = if (this.posMode == PosMode.RETAIL) this.tablesEnabled else checkout.tablesEnabled,
         retailDineInEnabled = checkout.retailDineInEnabled,
         retailTakeawayEnabled = checkout.retailTakeawayEnabled,
         retailDeliveryEnabled = checkout.retailDeliveryEnabled,

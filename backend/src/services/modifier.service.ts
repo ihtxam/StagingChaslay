@@ -12,6 +12,8 @@ export type ModifierOptionInput = {
   saleStatus?: SaleStatus;
   isDefault?: boolean;
   sortOrder?: number;
+  inventoryItemId?: string | null;
+  inventoryQty?: number;
 };
 
 export type ModifierGroupInput = {
@@ -36,7 +38,11 @@ function normalizeSelection(type?: string): SelectionType {
   return type === "required" ? "required" : "optional";
 }
 
+const OPTION_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function publicOption(o: typeof schema.modifierOptions.$inferSelect) {
+  const qty = parseFloat(o.inventoryQty?.toString() || "0");
   return {
     id: o.id,
     name: o.name,
@@ -44,6 +50,8 @@ function publicOption(o: typeof schema.modifierOptions.$inferSelect) {
     saleStatus: (o.saleStatus as SaleStatus) || "in_stock",
     isDefault: !!o.isDefault,
     sortOrder: o.sortOrder ?? 0,
+    inventoryItemId: o.inventoryItemId || null,
+    inventoryQty: Number.isFinite(qty) ? qty : 0,
   };
 }
 
@@ -313,12 +321,17 @@ export class ModifierService {
 
     const rows = options
       .map((o, idx) => ({
+        ...(o.id && OPTION_UUID_RE.test(o.id) ? { id: o.id } : {}),
         groupId,
         name: (o.name || "").trim(),
         price: pricingType === "free" ? "0" : String(Number(o.price) || 0),
         saleStatus: o.saleStatus === "out_of_stock" ? "out_of_stock" : "in_stock",
         isDefault: !!o.isDefault,
         sortOrder: o.sortOrder !== undefined ? Number(o.sortOrder) : idx,
+        inventoryItemId: o.inventoryItemId && OPTION_UUID_RE.test(o.inventoryItemId)
+          ? o.inventoryItemId
+          : null,
+        inventoryQty: String(Math.max(0, Number(o.inventoryQty) || 0)),
       }))
       .filter((o) => o.name);
 

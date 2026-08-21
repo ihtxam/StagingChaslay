@@ -208,6 +208,7 @@ export default function WebPosProductArea({
 
       <div
         className="webpos-product-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2 pb-3 touch-pan-y"
+        data-webpos-product-grid="1"
         onClick={() => onBackgroundClick?.()}
       >
         {isGiftCardCategory ? (

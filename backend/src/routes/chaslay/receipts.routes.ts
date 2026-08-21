@@ -11,21 +11,20 @@ const router = Router();
 async function findOrderForReceipt(merchantId: string, ref: string) {
   const db = getDb();
   const looksLikeUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ref);
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
+  const clauses = [eq(schema.orders.orderNumber, ref), eq(schema.orders.clientId, ref)];
+  if (looksLikeUuid) clauses.unshift(eq(schema.orders.id, ref));
 
-  return db.query.orders.findFirst({
-    where: and(
-      eq(schema.orders.merchantId, merchantId),
-      looksLikeUuid
-        ? or(
-            eq(schema.orders.id, ref),
-            eq(schema.orders.orderNumber, ref),
-            eq(schema.orders.clientId, ref)
-          )
-        : or(eq(schema.orders.orderNumber, ref), eq(schema.orders.clientId, ref))
-    ),
-    with: { merchant: true },
-  });
+  const rows = await db
+    .select({
+      id: schema.orders.id,
+      orderNumber: schema.orders.orderNumber,
+      total: schema.orders.total,
+    })
+    .from(schema.orders)
+    .where(and(eq(schema.orders.merchantId, merchantId), or(...clauses)))
+    .limit(1);
+  return rows[0] || null;
 }
 
 router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
@@ -44,20 +43,43 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
     const taxTotal = Number(body.tax_total ?? 0);
     const total = Number(body.total ?? subtotal + taxTotal);
     const discountAmount = Number(body.discount_amount ?? body.item_discount_total ?? 0);
+    const tipAmount = Number(body.tip_amount ?? body.tipAmount ?? 0);
     const paymentMethod = String(body.payment_method || "cash").toLowerCase();
-    const isPending = paymentMethod === "pending" || paymentMethod === "pay_later";
+    const isPending =
+      paymentMethod === "pending" ||
+      paymentMethod === "pay_later" ||
+      paymentMethod === "invoice";
+    const paymentBreakdown = Array.isArray(body.payment_breakdown)
+      ? body.payment_breakdown
+          .map((row: { method?: string; amount?: number }) => ({
+            method: String(row?.method || "").trim().toLowerCase(),
+            amount: Number(row?.amount || 0),
+          }))
+          .filter((row: { method: string; amount: number }) => row.method && row.amount > 0)
+      : undefined;
 
     const pushResults = await SyncService.pushSales(req.chaslayMerchantId!, [
       {
         clientId: id,
         orderNumber,
         paymentMethod,
+        paymentBreakdown: paymentBreakdown?.length ? paymentBreakdown : undefined,
         paymentStatus: isPending ? "awaiting_payment" : "completed",
         subtotal,
         taxAmount: taxTotal,
         discountAmount,
+        tipAmount,
         total,
         completedAt: body.created_at || Date.now(),
+        fulfillmentChannel: body.fulfillmentChannel || body.fulfillment_channel || undefined,
+        channel: body.channel || body.fulfillment_type || body.fulfillmentType || undefined,
+        scheduledFor: body.scheduledFor || body.scheduled_for || undefined,
+        pickup_time_ms: body.pickup_time_ms ?? body.pickupTimeMs ?? null,
+        customerId: body.customer_id || body.customerId || null,
+        customerName: body.customer_name || body.customerName || null,
+        customerPhone: body.customer_phone || body.customerPhone || null,
+        customerEmail: body.customer_email || body.customerEmail || null,
+        shippingAddress: body.shipping_address || body.shippingAddress || null,
         items: items.map((item: any) => ({
           productName: item.product_name || item.productName || "Item",
           quantity: Number(item.quantity || 1),
@@ -88,7 +110,22 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
     }
 
     const url = buildReceiptPublicUrl(order.id);
-    res.status(201).json({ id: order.id, clientId: id, url });
+    let invoiceNumber: string | null = null;
+    if (paymentMethod === "invoice") {
+      try {
+        const { InvoiceService } = await import("@/services/invoice.service");
+        invoiceNumber = await InvoiceService.ensureInvoiceNumber(req.chaslayMerchantId!, order.id);
+      } catch (err) {
+        console.warn("[receipts] invoice number assign failed:", err);
+      }
+    }
+    res.status(201).json({
+      id: order.id,
+      clientId: id,
+      url,
+      invoiceNumber,
+      invoicePdfPath: paymentMethod === "invoice" ? `/v1/invoices/${order.id}/pdf` : null,
+    });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Receipt publish failed" });
   }
@@ -109,7 +146,7 @@ router.post("/:id/email", requireChaslayApiKey, async (req: Request, res: Respon
 
     const order = await findOrderForReceipt(req.chaslayMerchantId!, receiptId);
     const merchant = req.chaslayMerchant;
-    const shopName = order?.merchant?.name || merchant?.name || "Shop";
+    const shopName = merchant?.name || "Shop";
     const receiptUrl = normalizeReceiptPublicUrl("", order?.id || receiptId);
     const orderNumber = String(
       req.body?.orderNumber || req.body?.transaction_number || order?.orderNumber || receiptId

@@ -5,6 +5,8 @@ import { EditionService } from "@/services/edition.service";
 import { MerchantService } from "@/services/merchant.service";
 import { LicenseAdminService } from "@/services/license-admin.service";
 import { ResellerBillingService } from "@/services/reseller-billing.service";
+import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
 
 function serializeReseller(
   row: typeof schema.resellers.$inferSelect,
@@ -43,7 +45,7 @@ function serializeReseller(
 export class ResellerService {
   static async countSeatsUsed(resellerId: string): Promise<number> {
     const db = getDb();
-    // Active seats only  revoked/suspended licenses free pool capacity
+    // Active seats only ? revoked/suspended licenses free pool capacity
     const [{ c }] = await db
       .select({ c: count() })
       .from(schema.licenses)
@@ -339,16 +341,29 @@ export class ResellerService {
         status: schema.merchants.status,
         slug: schema.merchants.slug,
         editionId: schema.merchants.editionId,
+        editionName: schema.editions.name,
         subscriptionPlan: schema.merchants.subscriptionPlan,
+        planBillingPaid: schema.merchants.planBillingPaid,
         shopEnabled: schema.merchants.shopEnabled,
         maxPosPosts: schema.merchants.maxPosPosts,
         maxWaiterPosts: schema.merchants.maxWaiterPosts,
+        inventoryAddonEnabled: schema.merchants.inventoryAddonEnabled,
+        signageAddonEnabled: schema.merchants.signageAddonEnabled,
+        signageScreenLimit: schema.merchants.signageScreenLimit,
         createdAt: schema.merchants.createdAt,
       })
       .from(schema.merchants)
+      .leftJoin(schema.editions, eq(schema.merchants.editionId, schema.editions.id))
       .where(and(...clauses))
       .orderBy(desc(schema.merchants.createdAt));
-    return rows;
+    return rows.map((r) => ({
+      ...r,
+      editionName: r.editionName ?? null,
+      planBillingPaid: r.planBillingPaid !== false,
+      inventoryAddonEnabled: isInventoryAddonEnabled(r.inventoryAddonEnabled),
+      signageAddonEnabled: isSignageAddonEnabled(r.signageAddonEnabled),
+      signageScreenLimit: normalizeSignageScreenLimit(r.signageScreenLimit),
+    }));
   }
 
   static async createMerchantForReseller(
@@ -370,6 +385,9 @@ export class ResellerService {
       sendInvite?: boolean;
       maxPosPosts?: number;
       maxWaiterPosts?: number;
+      inventoryAddonEnabled?: boolean;
+      signageAddonEnabled?: boolean;
+      signageScreenLimit?: number;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -408,6 +426,9 @@ export class ResellerService {
         businessCategory: input.businessCategory,
         maxPosPosts: input.maxPosPosts,
         maxWaiterPosts: input.maxWaiterPosts,
+        inventoryAddonEnabled: input.inventoryAddonEnabled,
+        signageAddonEnabled: input.signageAddonEnabled,
+        signageScreenLimit: input.signageScreenLimit,
       }
     );
     return created;
@@ -416,11 +437,62 @@ export class ResellerService {
   static async updateMerchantPosLimits(
     resellerId: string,
     merchantId: string,
-    limits: { maxPosPosts?: number; maxWaiterPosts?: number }
+    limits: {
+      maxPosPosts?: number;
+      maxWaiterPosts?: number;
+      inventoryAddonEnabled?: boolean;
+      signageAddonEnabled?: boolean;
+      signageScreenLimit?: number;
+    }
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
     const { MerchantService } = await import("./merchant.service");
-    return MerchantService.updatePosPostLimits(merchantId, limits);
+    await MerchantService.updatePosPostLimits(merchantId, {
+      maxPosPosts: limits.maxPosPosts,
+      maxWaiterPosts: limits.maxWaiterPosts,
+      inventoryAddonEnabled: limits.inventoryAddonEnabled,
+      signageAddonEnabled: limits.signageAddonEnabled,
+      signageScreenLimit: limits.signageScreenLimit,
+    });
+    return MerchantService.getMerchantById(merchantId);
+  }
+
+  /** Change POS edition / billing flag for an owned merchant. */
+  static async updateOwnedMerchantPlan(
+    resellerId: string,
+    merchantId: string,
+    input: {
+      editionId?: string | null;
+      planBillingPaid?: boolean;
+      subscriptionPlan?: string;
+    }
+  ) {
+    await this.assertOwnsMerchant(resellerId, merchantId);
+    const { MerchantService } = await import("./merchant.service");
+    return MerchantService.updateMerchantPlan(merchantId, input, { forResellerId: resellerId });
+  }
+
+  /** Suspend a merchant this reseller owns. Same status flag as superadmin suspend. */
+  static async suspendOwnedMerchant(resellerId: string, merchantId: string, reason?: string) {
+    const owned = await this.assertOwnsMerchant(resellerId, merchantId);
+    if (owned.status === "expired") {
+      throw new Error("Cannot suspend an expired merchant");
+    }
+    if (owned.status === "suspended") {
+      return owned;
+    }
+    const { MerchantService } = await import("./merchant.service");
+    return MerchantService.suspendMerchant(merchantId, reason);
+  }
+
+  /** Reactivate a merchant this reseller previously suspended. */
+  static async reactivateOwnedMerchant(resellerId: string, merchantId: string) {
+    const owned = await this.assertOwnsMerchant(resellerId, merchantId);
+    if (owned.status !== "suspended") {
+      throw new Error("Merchant is not suspended");
+    }
+    const { MerchantService } = await import("./merchant.service");
+    return MerchantService.reactivateMerchant(merchantId);
   }
 
   static async assertOwnsMerchant(resellerId: string, merchantId: string) {

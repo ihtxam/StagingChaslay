@@ -2,7 +2,7 @@
  * Caches the app shell /assets so the installed window can open offline.
  * API/data are never cached; WebPOS catalog/sales use IndexedDB in the page.
  */
-const CACHE = 'chaslay-shell-v4';
+const CACHE = 'chaslay-shell-v5';
 
 /** Static files that must not depend on auth or SPA routing. */
 const PRECACHE = [
@@ -96,7 +96,7 @@ self.addEventListener('fetch', (event) => {
   // Never cache API / auth traffic  WebPOS offline uses IndexedDB instead.
   if (url.pathname.startsWith('/api')) return;
 
-  // Navigations: network-first, fall back to cached SPA shell.
+  // Navigations: network-first; keep all in-scope SPA routes inside the installed window.
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
@@ -107,6 +107,7 @@ self.addEventListener('fetch', (event) => {
             await cachePutSafe(cache, '/index.html', res.clone());
             if (isAppNavigation(url.pathname)) {
               await cachePutSafe(cache, request, res.clone());
+              await cachePutSafe(cache, new Request(url.pathname), res.clone());
             }
             void precacheAssetsFromIndex(cache);
           }
@@ -115,6 +116,8 @@ self.addEventListener('fetch', (event) => {
           const cache = await caches.open(CACHE);
           const cachedRoute = await cache.match(request);
           if (cachedRoute) return cachedRoute;
+          const cachedPath = await cache.match(new Request(url.pathname));
+          if (cachedPath) return cachedPath;
           if (isAppNavigation(url.pathname)) {
             const shell = await navigationFallback();
             if (shell) return shell;

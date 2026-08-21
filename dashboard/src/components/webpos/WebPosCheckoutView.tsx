@@ -9,6 +9,7 @@ import {
   Percent,
   UserCircle2,
   Vault,
+  FileText,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -27,6 +28,8 @@ export type AppliedPayment = {
   giftCardNumber?: string;
   /** Stored-value balance remaining after this redemption. */
   giftCardRemainingBalance?: number;
+  /** When method is pay_later, intended collection tender. */
+  payLaterTender?: 'cash' | 'card' | 'terminal';
 };
 
 type Props = {
@@ -50,6 +53,7 @@ type Props = {
     terminal: boolean;
     payLater: boolean;
     giftCard?: boolean;
+    invoice?: boolean;
   };
   busy: boolean;
   customerLabel?: string | null;
@@ -72,6 +76,8 @@ type Props = {
   onTogglePayWithPoints?: (enabled: boolean) => void;
   pointsRedeemed?: number;
   pointsDiscount?: number;
+  /** Public order number and/or kitchen ticket, e.g. `WP-5M8RGFQHJT / #1658`. */
+  orderRef?: string | null;
 };
 
 function newPayId() {
@@ -108,15 +114,19 @@ export default function WebPosCheckoutView({
   onTogglePayWithPoints,
   pointsRedeemed = 0,
   pointsDiscount = 0,
+  orderRef,
 }: Props) {
   const { t } = useI18n();
   const [buffer, setBuffer] = useState('');
   const [payments, setPayments] = useState<AppliedPayment[]>([]);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
-  const [invoice, setInvoice] = useState(false);
   const [tipAmount, setTipAmount] = useState(0);
   const [tipOpen, setTipOpen] = useState(false);
   const [seeded, setSeeded] = useState(false);
+  /** Cash/Card/Terminal chosen by the cashier (not the auto-seeded default). */
+  const [explicitTender, setExplicitTender] = useState<'cash' | 'card' | 'terminal' | null>(
+    null
+  );
   /** Previous amount due — used to resize tenders when tip is added/removed. */
   const prevTotalRef = useRef<number | null>(null);
   const prevDiscountRef = useRef(0);
@@ -172,14 +182,16 @@ export default function WebPosCheckoutView({
             ? 'gift_card'
             : methods.payLater
               ? 'pay_later'
-              : null;
+              : methods.invoice
+                ? 'invoice'
+                : null;
     if (defaultMethod && baseTotal > 0 && defaultMethod !== 'gift_card') {
       const id = newPayId();
       setPayments([{ id, method: defaultMethod, amount: roundMoney2(baseTotal) }]);
       setSelectedPaymentId(id);
     }
     setSeeded(true);
-  }, [seeded, methods.cash, methods.card, methods.terminal, methods.giftCard, methods.payLater, baseTotal]);
+  }, [seeded, methods.cash, methods.card, methods.terminal, methods.giftCard, methods.payLater, methods.invoice, baseTotal]);
 
   // Inject gift-card tender from parent RFID/QR modal
   useEffect(() => {
@@ -317,6 +329,12 @@ export default function WebPosCheckoutView({
       icon: <UserCircle2 size={22} />,
       show: methods.payLater,
     },
+    {
+      id: 'invoice',
+      label: t('webPosInvoice'),
+      icon: <FileText size={22} />,
+      show: !!methods.invoice,
+    },
   ];
 
   const methodLabel = (m: PosPaymentMethod) =>
@@ -387,6 +405,31 @@ export default function WebPosCheckoutView({
 
   const applyMethod = (method: PosPaymentMethod) => {
     if (busy) return;
+
+    if (method === 'invoice' || method === 'pay_later') {
+      const id = selectedPaymentId || payments[0]?.id || newPayId();
+      setPayments([
+        {
+          id,
+          method,
+          amount: total,
+          payLaterTender: method === 'pay_later' ? explicitTender || undefined : undefined,
+        },
+      ]);
+      setSelectedPaymentId(id);
+      setBuffer('');
+      return;
+    }
+
+    if (method === 'cash' || method === 'card' || method === 'terminal') {
+      setExplicitTender(method);
+      if (payments.length === 1 && payments[0]?.method === 'pay_later') {
+        setPayments([{ ...payments[0], payLaterTender: method }]);
+        setSelectedPaymentId(payments[0].id);
+        setBuffer('');
+        return;
+      }
+    }
 
     if (method === 'gift_card') {
       const editingSelected = !!selectedPaymentId;
@@ -688,6 +731,9 @@ export default function WebPosCheckoutView({
             <p className="text-3xl font-light tabular-nums tracking-tight text-stone-800 sm:text-4xl">
               CHF {total.toFixed(2)}
             </p>
+            {orderRef ? (
+              <p className="mt-1 text-sm font-medium text-stone-700">{orderRef}</p>
+            ) : null}
             {remaining > 0.001 ? (
               <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--webpos-accent-text)]">
                 {t('webPosRemaining')}: CHF {remaining.toFixed(2)}
@@ -805,15 +851,6 @@ export default function WebPosCheckoutView({
               ) : null}
             </div>
 
-            <label className="inline-flex w-fit cursor-pointer items-center gap-1.5 px-0.5 text-xs font-semibold text-stone-600">
-              <input
-                type="checkbox"
-                checked={invoice}
-                onChange={() => setInvoice((v) => !v)}
-                className="h-3.5 w-3.5 rounded border-stone-400 text-[var(--webpos-accent)] focus:ring-[var(--webpos-accent-ring)]"
-              />
-              {t('webPosInvoice')}
-            </label>
 
             {canPayWithPoints && onTogglePayWithPoints ? (
               <div className="space-y-2 pt-1 text-left">
@@ -880,6 +917,9 @@ export default function WebPosCheckoutView({
                 <p className="text-5xl font-light tabular-nums tracking-tight text-stone-700 sm:text-6xl">
                   CHF {total.toFixed(2)}
                 </p>
+                {orderRef ? (
+                  <p className="mt-2 text-base font-medium text-stone-700">{orderRef}</p>
+                ) : null}
               </div>
               {liveEntryLabel && !selectedPaymentId ? (
                 <p className="mt-2 text-base font-semibold tabular-nums text-[var(--webpos-accent-text)]">

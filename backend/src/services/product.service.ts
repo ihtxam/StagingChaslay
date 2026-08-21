@@ -67,7 +67,7 @@ export class ProductService {
           price: price.toString(),
           categoryId,
           sku,
-          barcode,
+          barcode: barcode && String(barcode).trim() ? String(barcode).trim() : null,
           cost: cost?.toString(),
           stock: stock || 0,
           isTaxable,
@@ -255,6 +255,10 @@ export class ProductService {
       if (typeof patched.name === "string") patched.name = repairCatalogText(patched.name);
       if (typeof patched.description === "string") {
         patched.description = repairCatalogText(patched.description);
+      }
+      if (patched.barcode !== undefined) {
+        const b = String(patched.barcode || "").trim();
+        patched.barcode = b || null;
       }
       const product = await db
         .update(schema.products)

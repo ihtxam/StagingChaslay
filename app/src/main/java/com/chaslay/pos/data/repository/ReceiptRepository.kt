@@ -8,7 +8,12 @@ import com.chaslay.pos.data.remote.ReceiptApi
 import com.chaslay.pos.data.remote.dto.ReceiptEmailRequest
 import com.chaslay.pos.data.remote.dto.ReceiptItemDto
 import com.chaslay.pos.data.remote.dto.ReceiptPublishRequest
+import com.chaslay.pos.data.remote.dto.ReceiptPublishResponse
+import com.chaslay.pos.data.remote.dto.ReceiptTenderDto
 import com.chaslay.pos.domain.model.CartSummary
+import com.chaslay.pos.domain.model.FulfillmentType
+import com.chaslay.pos.domain.model.PaymentTenderNotes
+import com.chaslay.pos.domain.model.ServiceType
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import javax.inject.Inject
@@ -84,6 +89,8 @@ class ReceiptRepository @Inject constructor(
                     paymentMethod = "PENDING",
                     businessName = settings.businessName,
                     createdAt = System.currentTimeMillis(),
+                    fulfillmentChannel = channelFromFulfillment(cart.fulfillmentType, cart.serviceType),
+                    pickupTimeMs = cart.pickupTimeMs,
                     subtotal = cart.subtotal,
                     taxTotal = cart.taxTotal,
                     itemDiscountTotal = cart.itemDiscountTotal,
@@ -125,6 +132,53 @@ class ReceiptRepository @Inject constructor(
         url
     }.recoverCatching { error ->
         throw Exception(apiErrorMessage(error, "Could not upload receipt to server"), error)
+    }
+
+    suspend fun publishInvoiceSale(
+        clientId: String,
+        orderNumber: String,
+        cart: CartSummary,
+        total: Double,
+        discountAmount: Double,
+        tipAmount: Double,
+        currency: String,
+        settings: BusinessSettingsEntity,
+        customerName: String?,
+        customerPhone: String?,
+        customerAddress: String?
+    ): ReceiptPublishResponse {
+        return receiptApi.publishReceipt(
+            ReceiptPublishRequest(
+                id = clientId,
+                transactionNumber = orderNumber,
+                total = total,
+                currency = currency,
+                paymentMethod = "invoice",
+                businessName = settings.businessName,
+                createdAt = System.currentTimeMillis(),
+                fulfillmentChannel = channelFromFulfillment(cart.fulfillmentType, cart.serviceType),
+                pickupTimeMs = cart.pickupTimeMs,
+                subtotal = cart.subtotal,
+                taxTotal = cart.taxTotal,
+                discountAmount = discountAmount,
+                itemDiscountTotal = cart.itemDiscountTotal,
+                tipAmount = tipAmount.takeIf { it > 0.0 },
+                items = cart.items.map { item ->
+                    ReceiptItemDto(
+                        productName = item.productName,
+                        variantName = item.variantName,
+                        quantity = item.quantity,
+                        lineTotal = item.lineTotal,
+                        lineSubtotal = item.lineSubtotal,
+                        lineDiscount = item.lineDiscount,
+                        unitPrice = item.unitPrice
+                    )
+                },
+                customerName = customerName,
+                customerPhone = customerPhone,
+                shippingAddress = customerAddress
+            )
+        )
     }
 
     suspend fun sendReceiptEmail(
@@ -175,14 +229,17 @@ class ReceiptRepository @Inject constructor(
         transactionNumber = transaction.transactionNumber,
         total = transaction.total,
         currency = transaction.currencyCode,
-        paymentMethod = transaction.paymentMethod.name,
+        paymentMethod = PaymentTenderNotes.methodKey(transaction.paymentMethod),
         cardReference = transaction.cardReference,
         businessName = settings.businessName,
         createdAt = transaction.createdAt,
+        fulfillmentChannel = channelFromTransaction(transaction),
+        pickupTimeMs = transaction.pickupTimeMs,
         subtotal = transaction.subtotal,
         taxTotal = transaction.taxTotal,
         discountAmount = transaction.discountAmount,
         itemDiscountTotal = itemDiscountTotal,
+        tipAmount = transaction.tipAmount.takeIf { it > 0.0 },
         items = items.map { item ->
             ReceiptItemDto(
                 productName = item.productName,
@@ -193,8 +250,28 @@ class ReceiptRepository @Inject constructor(
                 lineDiscount = item.lineDiscountPerUnit * item.quantity,
                 unitPrice = item.unitPrice
             )
-        }
+        },
+        paymentBreakdown = PaymentTenderNotes.parse(transaction.notes)
+            .takeIf { it.size >= 2 }
+            ?.map { ReceiptTenderDto(PaymentTenderNotes.methodKey(it.method), it.amount) }
     )
+
+    private fun channelFromFulfillment(
+        fulfillmentType: FulfillmentType,
+        serviceType: ServiceType?
+    ): String = when (fulfillmentType) {
+        FulfillmentType.DELIVERY -> "delivery"
+        FulfillmentType.DINE_IN -> "dine_in"
+        FulfillmentType.PICKUP, FulfillmentType.WALK_IN ->
+            if (serviceType == ServiceType.DINE_IN) "dine_in" else "takeaway"
+    }
+
+    private fun channelFromTransaction(tx: TransactionEntity): String {
+        val notes = tx.notes.orEmpty()
+        if (notes.contains("--- DELIVERY ---", ignoreCase = true)) return "delivery"
+        if (tx.tableId != null || tx.serviceType == ServiceType.DINE_IN) return "dine_in"
+        return "takeaway"
+    }
 
     companion object {
         private const val TAG = "ReceiptRepository"

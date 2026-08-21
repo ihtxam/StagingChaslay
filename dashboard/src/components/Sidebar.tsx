@@ -3,13 +3,15 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, LogOut, User, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
-import { APP_NAME } from '@/lib/brand';
+import { APP_NAME, displaySidebarAccountName } from '@/lib/brand';
 import { useI18n, type Locale } from '@/lib/i18n';
 
 export interface SidebarLeaf {
   label: string;
-  path: string;
-  icon: ReactNode;
+  path?: string;
+  icon?: ReactNode;
+  /** Non-clickable section label inside a group (OrderPin-style). */
+  heading?: boolean;
 }
 
 export interface SidebarNavEntry {
@@ -27,6 +29,8 @@ interface SidebarProps {
   menuItems: SidebarNavEntry[];
   /** Distinguishes open-state persistence per panel (e.g. merchant / superadmin). */
   panelKey?: string;
+  /** Active register user (PIN session when clocked in, else JWT account). */
+  registerDisplay?: { name: string; roleLabel: string };
   /** Optional prominent action shown under panel branding (e.g. POS). */
   quickAction?: {
     label: string;
@@ -38,7 +42,8 @@ interface SidebarProps {
 
 const STORAGE_PREFIX = 'sidebar_groups_open:';
 
-function isPathActive(pathname: string, itemPath: string): boolean {
+function isPathActive(pathname: string, itemPath?: string): boolean {
+  if (!itemPath) return false;
   const isRoot = itemPath === '/merchant' || itemPath === '/superadmin' || itemPath === '/reseller';
   if (isRoot) return pathname === itemPath;
   return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
@@ -68,6 +73,7 @@ export default function Sidebar({
   onToggle,
   menuItems,
   panelKey = 'default',
+  registerDisplay,
   quickAction = null,
   language,
   onLanguageChange,
@@ -80,11 +86,15 @@ export default function Sidebar({
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
 
-  const roleLabel = impersonating
-    ? 'Merchant (SA)'
-    : user?.isOwner
-      ? t('staffOwnerTitle')
-      : user?.roleName || user?.role || '';
+  const roleLabel =
+    registerDisplay?.roleLabel ||
+    (impersonating
+      ? 'Merchant (SA)'
+      : user?.isOwner
+        ? t('staffOwnerTitle')
+        : user?.roleName || user?.role || '');
+
+  const accountName = displaySidebarAccountName(registerDisplay?.name || user?.name);
 
   const activeGroupIds = useMemo(() => {
     const ids = new Set<string>();
@@ -174,8 +184,8 @@ export default function Sidebar({
       nested ? 'px-2.5 py-1.5 pl-9' : 'px-2.5 py-2'
     } ${
       active
-        ? 'bg-slate-600 text-white'
-        : 'text-slate-300 hover:bg-slate-700/80 hover:text-slate-50'
+        ? 'bg-teal-900 text-white shadow-sm'
+        : 'text-teal-50/95 hover:bg-teal-900/45 hover:text-white'
     }`;
 
   return (
@@ -183,17 +193,17 @@ export default function Sidebar({
       <aside
         className={`panel-sidebar ${
           isOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'
-        } fixed lg:relative lg:translate-x-0 lg:pointer-events-auto w-56 h-dvh max-h-dvh lg:h-full lg:max-h-full bg-secondary text-slate-100 transition-transform duration-200 z-40 flex flex-col shrink-0`}
+        } fixed lg:relative lg:translate-x-0 lg:pointer-events-auto w-56 h-dvh max-h-dvh lg:h-full lg:max-h-full transition-transform duration-200 z-40 flex flex-col shrink-0`}
       >
-        <div className="px-4 py-3 border-b border-slate-700/80 flex items-center justify-between shrink-0">
+        <div className="panel-sidebar-divider px-4 py-3 border-b flex items-center justify-between shrink-0">
           <div>
-            <h1 className="text-base font-semibold tracking-tight text-slate-50">{APP_NAME}</h1>
-            <p className="text-[11px] text-slate-400 mt-0.5">{t('panel')}</p>
+            <h1 className="text-base font-semibold tracking-tight text-white">{APP_NAME}</h1>
+            <p className="text-[11px] text-teal-100/70 mt-0.5">{t('panel')}</p>
           </div>
           <button
             type="button"
             onClick={onToggle}
-            className="lg:hidden p-1.5 rounded-md text-slate-300 hover:bg-slate-700/80 hover:text-white"
+            className="lg:hidden p-1.5 rounded-md text-teal-50/95 hover:bg-teal-900/45 hover:text-white"
             aria-label="Close menu"
           >
             <X className="w-4 h-4" />
@@ -201,7 +211,7 @@ export default function Sidebar({
         </div>
 
         {quickAction && (
-          <div className="px-3 pt-3 pb-3 border-b border-slate-700/80 shrink-0">
+          <div className="panel-sidebar-divider px-3 pt-3 pb-3 border-b shrink-0">
             <Link
               to={quickAction.path}
               onClick={closeMobile}
@@ -272,8 +282,8 @@ export default function Sidebar({
                   aria-expanded={isOpenGroup}
                   className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
                     parentActive
-                      ? 'bg-slate-700/90 text-white'
-                      : 'text-slate-300 hover:bg-slate-700/80 hover:text-slate-50'
+                      ? 'bg-teal-900/90 text-white shadow-sm'
+                      : 'text-teal-50/95 hover:bg-teal-900/45 hover:text-white'
                   }`}
                 >
                   <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
@@ -288,7 +298,17 @@ export default function Sidebar({
                 </button>
                 {isOpenGroup && (
                   <div className="space-y-0.5">
-                    {children.map((child) => {
+                    {children.map((child, idx) => {
+                      if (child.heading || !child.path) {
+                        return (
+                          <p
+                            key={`h-${child.label}-${idx}`}
+                            className="px-2.5 pt-2 pb-0.5 pl-9 text-[10px] font-semibold uppercase tracking-wide text-teal-200/55"
+                          >
+                            {child.label}
+                          </p>
+                        );
+                      }
                       const active = isPathActive(location.pathname, child.path);
                       return (
                         <Link
@@ -311,7 +331,7 @@ export default function Sidebar({
           })}
         </nav>
 
-        <div className="panel-sidebar-footer p-3 border-t border-slate-700/80 space-y-2 shrink-0 bg-slate-900/70">
+        <div className="panel-sidebar-footer p-3 border-t space-y-2 shrink-0">
           {impersonating && (
             <button
               type="button"
@@ -324,12 +344,14 @@ export default function Sidebar({
           )}
 
           <div className="flex items-center gap-2.5 px-2 py-1.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-slate-200">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-900 text-teal-50">
               <User className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-slate-100">{user?.name}</p>
-              <p className="truncate text-[11px] text-slate-400" title={roleLabel}>
+              <p className="truncate text-sm font-medium text-white">
+                {accountName}
+              </p>
+              <p className="truncate text-[11px] text-teal-100/70" title={roleLabel}>
                 {roleLabel}
               </p>
             </div>
@@ -337,7 +359,7 @@ export default function Sidebar({
 
           {onLanguageChange && (
             <select
-              className="w-full rounded-md border border-slate-600 bg-secondary px-2.5 py-1.5 text-xs text-slate-200"
+              className="w-full rounded-md border border-white/25 bg-teal-900/40 px-2.5 py-1.5 text-xs text-teal-50"
               value={language || 'en'}
               onChange={(e) => onLanguageChange(e.target.value as Locale)}
               aria-label={t('language')}

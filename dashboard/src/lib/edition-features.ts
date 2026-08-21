@@ -1,5 +1,5 @@
 /**
- * SaaS edition feature catalog  keep in sync with backend/src/lib/edition-features.ts
+ * SaaS edition feature catalog ? keep in sync with backend/src/lib/edition-features.ts
  */
 
 export type EditionFeatureKey =
@@ -23,7 +23,9 @@ export type EditionFeatureKey =
   | 'reports'
   | 'staff_roles'
   | 'reservations'
-  | 'website_cms';
+  | 'website_cms'
+  | 'inventory'
+  | 'digital_signage';
 
 export type EditionFeatureGroup = {
   id: string;
@@ -75,6 +77,8 @@ export const EDITION_FEATURE_GROUPS: EditionFeatureGroup[] = [
       { key: 'staff_roles', label: 'Staff & roles' },
       { key: 'reservations', label: 'Reservations' },
       { key: 'website_cms', label: 'Website / CMS' },
+      { key: 'inventory', label: 'Restaurant inventory (paid addon)' },
+      { key: 'digital_signage', label: 'Digital signage / menu boards (paid addon)' },
     ],
   },
 ];
@@ -83,6 +87,10 @@ export const ALL_EDITION_FEATURES: EditionFeatureKey[] = EDITION_FEATURE_GROUPS.
   g.features.map((f) => f.key)
 );
 
+/**
+ * Do not add /merchant/inventory or /merchant/signage here â€” those are paid
+ * merchant addons (inventoryAddonEnabled / signageAddonEnabled), not edition entitlements.
+ */
 export const EDITION_ROUTE_FEATURES: Record<string, EditionFeatureKey[]> = {
   '/merchant/floor-plan': ['pos_tables'],
   '/merchant/tables': ['pos_tables'],

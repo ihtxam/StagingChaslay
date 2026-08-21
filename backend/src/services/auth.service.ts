@@ -2,6 +2,9 @@ import bcrypt from "bcrypt";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { getDb, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
+import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 
 export interface JWTPayload {
   id: string;
@@ -111,9 +114,18 @@ export class AuthService {
     try {
       return await this.loginMerchantOwner(email, password);
     } catch (ownerError) {
+      const ownerMessage = ownerError instanceof Error ? ownerError.message : "";
+      if (ownerMessage.startsWith("Merchant account is")) {
+        throw ownerError;
+      }
       try {
         return await this.loginMerchantStaff(email, password);
-      } catch {
+      } catch (staffError) {
+        const staffMessage = staffError instanceof Error ? staffError.message : "";
+        const { StaffService } = await import("@/services/staff.service");
+        if (StaffService.isLoginGuidanceError(staffMessage)) {
+          throw staffError;
+        }
         throw ownerError;
       }
     }
@@ -123,11 +135,13 @@ export class AuthService {
     const db = getDb();
     const normalizedEmail = String(email || "").trim().toLowerCase();
 
-    const merchants = await db
-      .select()
-      .from(schema.merchants)
-      .where(sql`lower(${schema.merchants.email}) = ${normalizedEmail}`)
-      .limit(1);
+    const merchants = await withMerchantSchemaRetry(() =>
+      db
+        .select()
+        .from(schema.merchants)
+        .where(sql`lower(${schema.merchants.email}) = ${normalizedEmail}`)
+        .limit(1)
+    );
     const merchant = merchants[0];
 
     if (!merchant) {
@@ -151,6 +165,13 @@ export class AuthService {
       name: merchant.name,
     });
 
+    const inventoryOn = await readInventoryAddonEnabled(merchant.id).catch(() =>
+      isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
+    );
+    const signage = await readSignageAddon(merchant.id).catch(() => ({
+      enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
+      screenLimit: 2,
+    }));
     return {
       token,
       merchant: {
@@ -159,6 +180,11 @@ export class AuthService {
         name: merchant.name,
         status: merchant.status,
         roleName: "Owner",
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
+        signageAddonEnabled: signage.enabled,
+        signageEnabled: signage.enabled,
+        signageScreenLimit: signage.screenLimit,
       },
       isOwner: true,
     };
@@ -167,6 +193,15 @@ export class AuthService {
   static async loginMerchantStaff(email: string, password: string) {
     const { StaffService } = await import("@/services/staff.service");
     const { staff, role, permissions } = await StaffService.loginStaff(email, password);
+
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, staff.merchantId),
+      columns: { status: true },
+    });
+    if (!merchant || (merchant.status !== "active" && merchant.status !== "trial")) {
+      throw new Error(`Merchant account is ${merchant?.status || "unavailable"}`);
+    }
 
     const token = this.generateToken({
       id: staff.id,
@@ -179,6 +214,11 @@ export class AuthService {
       permissions,
     });
 
+    const inventoryOn = await readInventoryAddonEnabled(staff.merchantId).catch(() => false);
+    const signage = await readSignageAddon(staff.merchantId).catch(() => ({
+      enabled: false,
+      screenLimit: 2,
+    }));
     return {
       token,
       merchant: {
@@ -189,6 +229,11 @@ export class AuthService {
         staffId: staff.id,
         roleName: role?.name,
         permissions,
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
+        signageAddonEnabled: signage.enabled,
+        signageEnabled: signage.enabled,
+        signageScreenLimit: signage.screenLimit,
       },
       isOwner: false,
     };
@@ -237,16 +282,94 @@ export class AuthService {
   }
 
   /**
+   * Unified panel login — merchant owner → staff → reseller → superadmin.
+   * Does not replace PIN WebPOS or waiter PIN.
+   */
+  static async loginAny(email: string, password: string) {
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!normalized || !password) {
+      throw new Error("Email and password are required");
+    }
+
+    try {
+      const merchant = await this.loginMerchantOwner(normalized, password);
+      return {
+        kind: "merchant" as const,
+        token: merchant.token,
+        merchant: merchant.merchant,
+        isOwner: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.startsWith("Merchant account is")) {
+        throw error;
+      }
+    }
+
+    try {
+      const staff = await this.loginMerchantStaff(normalized, password);
+      return {
+        kind: "staff" as const,
+        token: staff.token,
+        merchant: staff.merchant,
+        isOwner: false,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const { StaffService } = await import("@/services/staff.service");
+      if (StaffService.isLoginGuidanceError(message)) {
+        throw error;
+      }
+    }
+
+    try {
+      const { ResellerService } = await import("@/services/reseller.service");
+      const reseller = await ResellerService.login(normalized, password);
+      return { kind: "reseller" as const, token: reseller.token, reseller: reseller.reseller };
+    } catch {
+      /* try superadmin */
+    }
+
+    const db = getDb();
+    const rows = await db
+      .select()
+      .from(schema.superadmins)
+      .where(sql`lower(${schema.superadmins.email}) = ${normalized}`)
+      .limit(1);
+    const superadmin = rows[0];
+    if (superadmin && superadmin.isActive) {
+      const ok = await this.comparePassword(password, superadmin.passwordHash);
+      if (ok) {
+        const token = this.generateToken({
+          id: superadmin.id,
+          email: superadmin.email,
+          role: "superadmin",
+        });
+        return {
+          kind: "superadmin" as const,
+          token,
+          superadmin: { id: superadmin.id, email: superadmin.email, name: superadmin.name },
+        };
+      }
+    }
+
+    throw new Error("Invalid email or password");
+  }
+
+  /**
    * Login superadmin
    */
   static async loginSuperadmin(email: string, password: string) {
     const db = getDb();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
     try {
-      // Find superadmin
-      const superadmin = await db.query.superadmins.findFirst({
-        where: eq(schema.superadmins.email, email),
-      });
+      const rows = await db
+        .select()
+        .from(schema.superadmins)
+        .where(sql`lower(${schema.superadmins.email}) = ${normalizedEmail}`)
+        .limit(1);
+      const superadmin = rows[0];
 
       if (!superadmin) {
         throw new Error("Invalid email or password");
@@ -311,6 +434,13 @@ export class AuthService {
       impersonatedBy: superadminId,
     });
 
+    const inventoryOn = await readInventoryAddonEnabled(merchant.id).catch(() =>
+      isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
+    );
+    const signage = await readSignageAddon(merchant.id).catch(() => ({
+      enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
+      screenLimit: 2,
+    }));
     return {
       token,
       merchant: {
@@ -318,6 +448,11 @@ export class AuthService {
         email: merchant.email,
         name: merchant.name,
         status: merchant.status,
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
+        signageAddonEnabled: signage.enabled,
+        signageEnabled: signage.enabled,
+        signageScreenLimit: signage.screenLimit,
       },
       impersonatedBy: superadminId,
     };
@@ -330,19 +465,33 @@ export class AuthService {
     const db = getDb();
 
     try {
-      const merchant = await db.query.merchants.findFirst({
-        where: eq(schema.merchants.id, merchantId),
-      });
+      const merchant = await withMerchantSchemaRetry(() =>
+        db.query.merchants.findFirst({
+          where: eq(schema.merchants.id, merchantId),
+        })
+      );
 
       if (!merchant) {
         throw new Error("Merchant not found");
       }
 
+      const inventoryOn = await readInventoryAddonEnabled(merchantId).catch(() =>
+        isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
+      );
+      const signage = await readSignageAddon(merchantId).catch(() => ({
+        enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
+        screenLimit: 2,
+      }));
       return {
         id: merchant.id,
         email: merchant.email,
         name: merchant.name,
         status: merchant.status,
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
+        signageAddonEnabled: signage.enabled,
+        signageEnabled: signage.enabled,
+        signageScreenLimit: signage.screenLimit,
       };
     } catch (error) {
       console.error("Error getting merchant:", error);
@@ -405,16 +554,16 @@ export class AuthService {
     }
 
     if (role === "staff") {
-      const staff = await db.query.merchantStaff.findFirst({
-        where: eq(schema.merchantStaff.email, normalized),
-      });
+      const staffRows = await db
+        .select()
+        .from(schema.merchantStaff)
+        .where(sql`lower(${schema.merchantStaff.email}) = ${normalized}`)
+        .limit(1);
+      const staff = staffRows[0];
       if (!staff) throw new Error("Staff user not found");
-      if (!staff.canAccessPanel) {
-        throw new Error("This staff account cannot sign in to the panel");
-      }
       await db
         .update(schema.merchantStaff)
-        .set({ passwordHash, updatedAt: new Date() })
+        .set({ passwordHash, canAccessPanel: true, updatedAt: new Date() })
         .where(eq(schema.merchantStaff.id, staff.id));
       return { success: true, role: "staff" as const, email: staff.email || normalized };
     }

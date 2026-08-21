@@ -4,6 +4,9 @@ import { ResellerService } from "@/services/reseller.service";
 import { EditionService } from "@/services/edition.service";
 import { AuthService } from "@/services/auth.service";
 import { EDITION_FEATURE_GROUPS, ALL_EDITION_FEATURES } from "@/lib/edition-features";
+import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
+import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 
 const router = Router();
 
@@ -179,6 +182,9 @@ router.post("/merchants", async (req: Request, res: Response) => {
       sendInvite,
       maxPosPosts,
       maxWaiterPosts,
+      inventoryAddonEnabled,
+      signageAddonEnabled,
+      signageScreenLimit,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
     if (!email || !trimmedBusinessName || !editionId) {
@@ -201,6 +207,10 @@ router.post("/merchants", async (req: Request, res: Response) => {
       sendInvite,
       maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
       maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+      inventoryAddonEnabled: inventoryAddonEnabled === true,
+      signageAddonEnabled: signageAddonEnabled === true,
+      signageScreenLimit:
+        signageScreenLimit != null ? Number(signageScreenLimit) : undefined,
     });
     res.status(201).json({ success: true, merchant });
   } catch (error) {
@@ -214,18 +224,115 @@ router.post("/merchants", async (req: Request, res: Response) => {
  */
 router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Response) => {
   try {
-    const { maxPosPosts, maxWaiterPosts } = req.body || {};
+    const {
+      maxPosPosts,
+      maxWaiterPosts,
+      inventoryAddonEnabled,
+      inventoryEnabled,
+      signageAddonEnabled,
+      signageEnabled,
+      signageScreenLimit,
+    } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
       resellerId(req),
       req.params.merchantId,
       {
         maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
         maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+        inventoryAddonEnabled:
+          inventoryAddonEnabled != null
+            ? isInventoryAddonEnabled(inventoryAddonEnabled)
+            : inventoryEnabled != null
+              ? isInventoryAddonEnabled(inventoryEnabled)
+              : undefined,
+        signageAddonEnabled:
+          signageAddonEnabled != null
+            ? isSignageAddonEnabled(signageAddonEnabled)
+            : signageEnabled != null
+              ? isSignageAddonEnabled(signageEnabled)
+              : undefined,
+        signageScreenLimit:
+          signageScreenLimit != null ? normalizeSignageScreenLimit(signageScreenLimit) : undefined,
       }
     );
     res.json({ success: true, merchant });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update limits" });
+  }
+});
+
+/**
+ * GET /api/reseller/plans
+ * Active subscription plans assignable to merchants.
+ */
+router.get("/plans", async (_req: Request, res: Response) => {
+  try {
+    const plans = await SubscriptionPlansService.listAll(false);
+    res.json({ success: true, plans });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list plans" });
+  }
+});
+
+/**
+ * PATCH /api/reseller/merchants/:merchantId/plan
+ * Set POS edition and plan billing status for an owned merchant.
+ */
+router.patch("/merchants/:merchantId/plan", async (req: Request, res: Response) => {
+  try {
+    const { editionId, planBillingPaid, subscriptionPlan } = req.body || {};
+    const merchant = await ResellerService.updateOwnedMerchantPlan(
+      resellerId(req),
+      req.params.merchantId,
+      { editionId, planBillingPaid, subscriptionPlan }
+    );
+    res.json({ success: true, merchant });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to update plan";
+    res.status(message === "Merchant not found" ? 404 : 400).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/reseller/merchants/:merchantId/suspend
+ * Reseller-owned merchants only — same status flag as superadmin suspend.
+ */
+router.post("/merchants/:merchantId/suspend", async (req: Request, res: Response) => {
+  try {
+    const merchant = await ResellerService.suspendOwnedMerchant(
+      resellerId(req),
+      req.params.merchantId,
+      typeof req.body?.reason === "string" ? req.body.reason : undefined
+    );
+    res.json({
+      success: true,
+      message: "Merchant suspended successfully",
+      merchant,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to suspend merchant";
+    res.status(message === "Merchant not found" ? 404 : 400).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/reseller/merchants/:merchantId/reactivate
+ * Unsuspend a reseller-owned merchant.
+ */
+router.post("/merchants/:merchantId/reactivate", async (req: Request, res: Response) => {
+  try {
+    const merchant = await ResellerService.reactivateOwnedMerchant(
+      resellerId(req),
+      req.params.merchantId
+    );
+    res.json({
+      success: true,
+      message: "Merchant reactivated successfully",
+      merchant,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to reactivate merchant";
+    res.status(message === "Merchant not found" ? 404 : 400).json({ error: message });
   }
 });
 

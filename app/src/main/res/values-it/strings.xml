@@ -7,6 +7,7 @@
     <string name="biometric_login">Usa biometria</string>
     <string name="enter_pin">Inserisci PIN</string>
     <string name="login_enter_pin_to_continue">Inserisci il PIN per accedere o cambiare operatore</string>
+    <string name="setup_pin_skip">Salta per ora</string>
     <string name="email">E-mail</string>
     <string name="password">Password</string>
     <string name="login">Accedi</string>
@@ -23,6 +24,9 @@
     <string name="settings_section_tables">Tavoli e planimetria</string>
     <string name="settings_section_payments">Pagamenti</string>
     <string name="settings_section_printers">Stampanti</string>
+    <string name="settings_section_scale">Bilancia</string>
+    <string name="printer_connected">Connessa</string>
+    <string name="printer_selected_help">Questa stampante è usata per le ricevute.</string>
     <string name="settings_section_receipts">Ricevute</string>
     <string name="settings_section_users">Utenti e ruoli</string>
     <string name="settings_section_appearance">Aspetto</string>
@@ -187,7 +191,18 @@
     <string name="paid">Payant</string>
     <string name="not_paid">No payé</string>
     <string name="pay_later">Paga dopo</string>
+    <string name="pay_later_short">Dopo</string>
     <string name="pay_later_subtitle">Incassa al ritiro</string>
+    <string name="invoice">Fattura</string>
+    <string name="invoice_customer_required">Seleziona un cliente prima di creare una fattura</string>
+    <string name="invoice_created">Fattura salvata — in attesa di pagamento</string>
+    <string name="invoice_pdf_failed">Impossibile aprire il PDF</string>
+    <string name="invoice_record_payment">Registra pagamento</string>
+    <string name="invoice_mark_paid">Segna fattura come pagata</string>
+    <string name="invoice_mark_paid_hint">Le fatture si regolano con bonifico. Questo segna la fattura come pagata — non contanti o carta.</string>
+    <string name="invoice_open_pdf">Apri fattura</string>
+    <string name="invoice_bank_transfer">Bonifico</string>
+    <string name="invoice_offline_queued">Fattura salvata offline. Il PDF verrà generato online.</string>
     <string name="pos_register">Cassa</string>
     <string name="pos_orders">Ordini</string>
     <string name="product_grid_images">Img</string>
@@ -488,6 +503,12 @@
     <string name="checkout_back">Indietro</string>
     <string name="checkout_title">Pagamento</string>
     <string name="checkout_complete">Completa pagamento</string>
+    <string name="checkout_complete_with_change">Completa · resto %1$s</string>
+    <string name="checkout_amount_due">Importo dovuto</string>
+    <string name="checkout_remaining">Residuo: %1$s</string>
+    <string name="checkout_change_due">Resto: %1$s</string>
+    <string name="checkout_entering">Inserimento: %1$s</string>
+    <string name="checkout_quick_cash">Contanti rapidi</string>
     <string name="specification">Spécification</string>
     <string name="choose_one">Choisissez-en un</string>
     <string name="add_notes">Ajouter une note</string>
@@ -539,4 +560,5 @@
     <string name="cash_movement_success">Movimento di cassa registrato</string>
     <string name="cash_movement_failed">Impossibile registrare il movimento</string>
     <string name="cash_movement_requires_shift">Apri un turno prima di registrare entrate/uscite</string>
+    <string name="membership_lookup_failed">Ricerca carta non riuscita</string>
 </resources>

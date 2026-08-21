@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { paymentMethodLabelEn } from "@/lib/payment-breakdown";
 import {
   PosReportsService,
   type ReportPreset,
@@ -63,7 +64,11 @@ export class ReportExportService {
       [],
       ["Payment Method Report"],
       ["Payment method", "Amount", "Qty"],
-      ...(eod.paymentRows || []).map((p) => [p.method, money(p.total), p.count]),
+      ...(eod.paymentRows || []).map((p) => [
+        paymentMethodLabelEn(p.method),
+        money(p.total),
+        p.count,
+      ]),
       ["Total", money(eod.grandTotal || eod.revenue), eod.salesCount],
       [],
       ["Tax"],
@@ -79,8 +84,27 @@ export class ReportExportService {
       ["Funding amount (sales + tips)", money(overview.kpis.fundingAmount), "-"],
       ...(eod.shiftCash || []).flatMap((s, i) => [
         [`Shift ${i + 1} opening float`, money(s.openingFloat), s.staffName || "-"],
+        [`Shift ${i + 1} cash sales`, money(s.cashSales + (s.cashRefunds || 0)), "-"],
+        [`Shift ${i + 1} cash in`, money(s.cashIn || 0), "-"],
+        ...(s.movements || [])
+          .filter((m) => String(m.type).toLowerCase() !== "out")
+          .map((m) => [
+            `  Cash in: ${m.reason || m.staffName || "—"}`,
+            money(m.amount),
+            "-",
+          ]),
+        [`Shift ${i + 1} cash out`, money(s.cashOut || 0), "-"],
+        ...(s.movements || [])
+          .filter((m) => String(m.type).toLowerCase() === "out")
+          .map((m) => [
+            `  Cash out: ${m.reason || m.staffName || "—"}`,
+            money(m.amount),
+            "-",
+          ]),
+        ...(s.cashRefunds
+          ? [[`Shift ${i + 1} cash refunds`, money(s.cashRefunds), "-"]]
+          : []),
         [`Shift ${i + 1} expected cash`, money(s.expectedCash), "-"],
-        [`Shift ${i + 1} cash sales`, money(s.cashSales), "-"],
       ]),
     ];
     XLSX.utils.book_append_sheet(
@@ -214,6 +238,23 @@ export class ReportExportService {
     }
     for (const s of overview.staff) {
       row("Staff", s.name, money(s.total), s.salesCount);
+    }
+    for (const [i, s] of (eod.shiftCash || []).entries()) {
+      const n = i + 1;
+      row("Cash drawer", `Shift ${n} opening float`, money(s.openingFloat), "");
+      row("Cash drawer", `Shift ${n} cash sales`, money(s.cashSales + (s.cashRefunds || 0)), "");
+      row("Cash drawer", `Shift ${n} cash in`, money(s.cashIn || 0), "");
+      row("Cash drawer", `Shift ${n} cash out`, money(s.cashOut || 0), "");
+      if (s.cashRefunds) row("Cash drawer", `Shift ${n} cash refunds`, money(s.cashRefunds), "");
+      row("Cash drawer", `Shift ${n} expected cash`, money(s.expectedCash), "");
+      for (const m of s.movements || []) {
+        row(
+          "Cash drawer",
+          `Shift ${n} ${m.type === "out" ? "cash out" : "cash in"}: ${m.reason || m.staffName || "—"}`,
+          money(m.amount),
+          ""
+        );
+      }
     }
 
     const safeName = (overview.businessName || "Report").replace(/[^\w\- ]+/g, "").trim().slice(0, 40);

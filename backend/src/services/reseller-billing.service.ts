@@ -14,7 +14,9 @@ export type BillableFeatureKey =
   | "website_cms"
   | "online_payments"
   | "offers"
-  | "reservations";
+  | "reservations"
+  | "inventory"
+  | "digital_signage";
 
 export const BILLABLE_FEATURE_KEYS: BillableFeatureKey[] = [
   "online_shop",
@@ -25,6 +27,8 @@ export const BILLABLE_FEATURE_KEYS: BillableFeatureKey[] = [
   "online_payments",
   "offers",
   "reservations",
+  "inventory",
+  "digital_signage",
 ];
 
 export type ResellerBillingPrices = {
@@ -46,6 +50,8 @@ const DEFAULT_PRICES: ResellerBillingPrices = {
     online_payments: 10,
     offers: 10,
     reservations: 10,
+    inventory: 29,
+    digital_signage: 19,
   },
 };
 
@@ -69,6 +75,8 @@ export function detectActiveBillableFeatures(merchant: {
   webposGiftCardEnabled?: boolean | null;
   giftCardSettings?: unknown;
   reservationsEnabled?: boolean | null;
+  inventoryAddonEnabled?: boolean | null;
+  signageAddonEnabled?: boolean | null;
   adyenApiKey?: string | null;
   customDomain?: string | null;
   editionFeatures?: string[] | null;
@@ -92,6 +100,8 @@ export function detectActiveBillableFeatures(merchant: {
   }
   if (features.includes("offers")) out.push("offers");
   if (merchant.reservationsEnabled || features.includes("reservations")) out.push("reservations");
+  if (merchant.inventoryAddonEnabled) out.push("inventory");
+  if (merchant.signageAddonEnabled) out.push("digital_signage");
 
   return [...new Set(out)];
 }
@@ -249,6 +259,8 @@ export class ResellerBillingService {
       online_payments: 0,
       offers: 0,
       reservations: 0,
+      inventory: 0,
+      digital_signage: 0,
     };
 
     let billableMerchants = 0;
@@ -264,6 +276,8 @@ export class ResellerBillingService {
             webposGiftCardEnabled: m.webposGiftCardEnabled,
             giftCardSettings: m.giftCardSettings,
             reservationsEnabled: m.reservationsEnabled,
+            inventoryAddonEnabled: (m as { inventoryAddonEnabled?: boolean }).inventoryAddonEnabled,
+            signageAddonEnabled: (m as { signageAddonEnabled?: boolean }).signageAddonEnabled,
             adyenApiKey: m.adyenApiKey,
             customDomain: m.customDomain,
             editionFeatures,

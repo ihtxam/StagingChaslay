@@ -20,12 +20,15 @@ import deliveryZonesRoutes from "@/routes/delivery-zones.routes";
 import floorPlansRoutes from "@/routes/floor-plans.routes";
 import reservationsRoutes from "@/routes/reservations.routes";
 import receiptsRoutes from "@/routes/receipts.routes";
+import kdsRoutes, { kdsMerchantRoutes } from "@/routes/kds.routes";
+import signageRoutes, { signageMerchantRoutes } from "@/routes/signage.routes";
 import chaslayRoutes from "@/routes/chaslay";
 import webhooksRoutes from "@/routes/webhooks.routes";
 import deliveryPlatformRoutes from "@/routes/delivery-platform.routes";
 import offersRoutes from "@/routes/offers.routes";
 import vouchersRoutes from "@/routes/vouchers.routes";
 import marketingRoutes from "@/routes/marketing.routes";
+import inventoryRoutes from "@/routes/inventory.routes";
 import staffRoutes from "@/routes/staff.routes";
 import resellerRoutes from "@/routes/reseller.routes";
 import { ensureUploadsRoot } from "@/services/media-upload.service";
@@ -33,6 +36,7 @@ import { MarketingService } from "@/services/marketing.service";
 import { ReservationService } from "@/services/reservation.service";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
 import { ensureMerchantSchemaAtStartup } from "@/lib/ensure-merchant-schema";
+import { ensureLicensesSchemaAtStartup } from "@/lib/ensure-licenses-schema";
 
 // Load environment variables
 dotenv.config();
@@ -50,6 +54,10 @@ function buildCorsOrigins(): string[] {
     "http://localhost:3001",
     "http://localhost:3002",
     "http://localhost:3003",
+    "https://pay.chaslay.com",
+    "https://app.chaslay.com",
+    "https://shop.chaslay.com",
+    "https://api.chaslay.com",
   ].filter(Boolean) as string[];
 
   const extra = (process.env.CORS_ORIGINS || "")
@@ -166,7 +174,12 @@ app.use("/api/merchant/reservations", reservationsRoutes);
 app.use("/api/merchant/offers", offersRoutes);
 app.use("/api/merchant/vouchers", vouchersRoutes);
 app.use("/api/merchant/marketing", marketingRoutes);
+app.use("/api/merchant/inventory", inventoryRoutes);
 app.use("/api/receipts", receiptsRoutes);
+app.use("/api/kds", kdsRoutes);
+app.use("/api/merchant/kds", kdsMerchantRoutes);
+app.use("/api/tv", signageRoutes);
+app.use("/api/merchant/signage", signageMerchantRoutes);
 app.use("/api/webhooks", webhooksRoutes);
 app.use("/api/webhooks", deliveryPlatformRoutes);
 /** Chaslay / FoodTruck Android POS (Retrofit /v1/* contract) */
@@ -194,6 +207,7 @@ app.listen(PORT, () => {
   console.log(`🏥 Health check: /health`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
   ensureMerchantSchemaAtStartup();
+  ensureLicensesSchemaAtStartup();
 
   // Reminder sweeps (~hourly). Lightweight; skips merchants without email.
   const tick = async () => {

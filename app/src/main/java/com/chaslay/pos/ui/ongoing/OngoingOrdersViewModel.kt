@@ -41,6 +41,31 @@ enum class OrdersChannelFilter { ALL, DINE_IN, TAKEAWAY, DELIVERY }
 
 enum class OrdersPaymentFilter { ALL, UNPAID }
 
+private fun isUnpaid(card: OngoingOrderCard): Boolean =
+    card.paymentMethod == PaymentMethod.PAY_LATER || card.paymentMethod == PaymentMethod.INVOICE
+
+private fun matchesChannel(card: OngoingOrderCard, filter: OrdersChannelFilter): Boolean = when (filter) {
+    OrdersChannelFilter.ALL -> true
+    OrdersChannelFilter.DINE_IN ->
+        card.fulfillmentType == FulfillmentType.DINE_IN || card.serviceType == ServiceType.DINE_IN
+    OrdersChannelFilter.TAKEAWAY ->
+        card.fulfillmentType == FulfillmentType.PICKUP ||
+            (card.fulfillmentType == FulfillmentType.WALK_IN && card.serviceType != ServiceType.DINE_IN)
+    OrdersChannelFilter.DELIVERY ->
+        card.fulfillmentType == FulfillmentType.DELIVERY
+}
+
+private fun orderSearchHay(card: OngoingOrderCard): String {
+    val raw = listOfNotNull(
+        card.orderNumber,
+        card.tableName,
+        card.customerLabel,
+        card.statusLabel
+    ).joinToString(" ").lowercase()
+    val digits = raw.replace(Regex("[^0-9]"), "")
+    return "$raw $digits"
+}
+
 data class OngoingOrdersUiState(
     val orders: List<OngoingOrderCard> = emptyList(),
     val statusFilter: OrdersStatusFilter = OrdersStatusFilter.ACTIVE,
@@ -58,13 +83,9 @@ data class OngoingOrdersUiState(
                 if (!matchesChannel(card, channelFilter)) return@filter false
                 if (paymentFilter == OrdersPaymentFilter.UNPAID && !isUnpaid(card)) return@filter false
                 if (q.isBlank()) return@filter true
-                val hay = listOfNotNull(
-                    card.orderNumber,
-                    card.tableName,
-                    card.customerLabel,
-                    card.statusLabel
-                ).joinToString(" ").lowercase()
-                hay.contains(q)
+                val hay = orderSearchHay(card)
+                val qDigits = q.replace(Regex("[^0-9]"), "")
+                hay.contains(q) || (qDigits.length >= 3 && hay.contains(qDigits))
             }
         }
 }
@@ -80,7 +101,9 @@ class OngoingOrdersViewModel @Inject constructor(
     private val productRepository: ProductRepository,
     private val printerService: BluetoothPrinterService,
     private val crashLogger: CrashLogger,
-    private val onlineOrderAlertCoordinator: OnlineOrderAlertCoordinator
+    private val onlineOrderAlertCoordinator: OnlineOrderAlertCoordinator,
+    private val invoiceRepository: com.chaslay.pos.data.repository.InvoiceRepository,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OngoingOrdersUiState())
@@ -124,7 +147,8 @@ class OngoingOrdersViewModel @Inject constructor(
         )
         val heldTableOrderIds = heldOrdersWithItems.mapNotNull { (order, _) -> order.tableOrderId }.toSet()
         val held = heldOrdersWithItems.map { (order, items) ->
-            val isPayLater = order.paymentMethod == PaymentMethod.PAY_LATER
+            val isPayLater = order.paymentMethod == PaymentMethod.PAY_LATER ||
+                order.paymentMethod == PaymentMethod.INVOICE
             OngoingOrderCard(
                 id = order.id,
                 orderNumber = order.orderNumber,
@@ -468,19 +492,46 @@ class OngoingOrdersViewModel @Inject constructor(
         return start to cal.timeInMillis
     }
 
+    fun openInvoicePdf(card: OngoingOrderCard) {
+        viewModelScope.launch {
+            val ref = invoiceRefFor(card) ?: run {
+                _uiState.value = _uiState.value.copy(errorMessage = "Invoice is not on the server yet")
+                return@launch
+            }
+            invoiceRepository.downloadAndOpen(appContext, ref, "${card.orderNumber}.pdf")
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(errorMessage = e.message ?: "Could not open invoice PDF")
+                }
+        }
+    }
+
+    fun recordInvoicePayment(card: OngoingOrderCard, methodKey: String) {
+        viewModelScope.launch {
+            val ref = invoiceRefFor(card)
+            if (ref != null) {
+                invoiceRepository.recordPayment(ref, methodKey)
+                    .onFailure { e ->
+                        _uiState.value = _uiState.value.copy(errorMessage = e.message ?: "Could not record payment")
+                        return@launch
+                    }
+            }
+            if (card.source == OngoingOrderSource.HELD) {
+                heldOrderRepository.deleteHeldOrder(card.id)
+            }
+            refresh()
+        }
+    }
+
+    private suspend fun invoiceRefFor(card: OngoingOrderCard): String? {
+        if (card.source != OngoingOrderSource.HELD) return card.id
+        val order = heldOrderRepository.getHeldOrderWithItems(card.id)?.first ?: return null
+        val match = Regex("""\[invoice-order:([^\]]+)\]""").find(order.notes.orEmpty())
+        return match?.groupValues?.get(1) ?: card.orderNumber
+    }
+
     companion object {
         fun isUnpaid(card: OngoingOrderCard): Boolean =
-            card.paymentMethod == PaymentMethod.PAY_LATER
-
-        fun matchesChannel(card: OngoingOrderCard, filter: OrdersChannelFilter): Boolean = when (filter) {
-            OrdersChannelFilter.ALL -> true
-            OrdersChannelFilter.DINE_IN ->
-                card.fulfillmentType == FulfillmentType.DINE_IN || card.serviceType == ServiceType.DINE_IN
-            OrdersChannelFilter.TAKEAWAY ->
-                card.fulfillmentType == FulfillmentType.PICKUP ||
-                    (card.fulfillmentType == FulfillmentType.WALK_IN && card.serviceType == ServiceType.TAKEAWAY)
-            OrdersChannelFilter.DELIVERY ->
-                card.fulfillmentType == FulfillmentType.DELIVERY
-        }
+            card.paymentMethod == PaymentMethod.PAY_LATER ||
+                card.paymentMethod == PaymentMethod.INVOICE
     }
 }

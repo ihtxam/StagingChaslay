@@ -38,6 +38,8 @@ import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.HeldOrderStatus
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentStatus
+import com.chaslay.pos.domain.model.PaymentTender
+import com.chaslay.pos.domain.model.PaymentTenderNotes
 import com.chaslay.pos.domain.model.RefundedOrderRow
 import com.chaslay.pos.domain.model.isPaidSale
 import com.chaslay.pos.domain.model.roundMoney
@@ -175,7 +177,7 @@ class AuthRepository @Inject constructor(
 
     suspend fun loginWithEmail(email: String, password: String): LoginResult {
         loginLocalWithEmail(email, password)?.let { session ->
-            return LoginResult.Success(session, needsPinSetup = session.user.pinHash.isNullOrBlank())
+            return LoginResult.Success(session, needsPinSetup = false)
         }
         return loginCloudWithEmail(email, password)
     }
@@ -291,7 +293,7 @@ class AuthRepository @Inject constructor(
                 userDao.update(user)
             }
             val session = AuthSession(user, role)
-            LoginResult.Success(session, needsPinSetup = user.pinHash.isNullOrBlank())
+            LoginResult.Success(session, needsPinSetup = false)
         } catch (_: IOException) {
             LoginResult.Failure("No internet connection. Connect to Wi‑Fi and try again.")
         } catch (e: Exception) {
@@ -465,20 +467,56 @@ class ProductRepository @Inject constructor(
     }
 
     suspend fun findByBarcode(barcode: String): BarcodeLookupResult? {
-        val trimmed = barcode.trim()
-        if (trimmed.isEmpty()) return null
-        productDao.getByBarcode(trimmed)?.let { product ->
-            return BarcodeLookupResult(productId = product.id)
+        val candidates = barcodeCandidates(barcode)
+        if (candidates.isEmpty()) return null
+        for (code in candidates) {
+            productDao.getByBarcode(code)?.let { return BarcodeLookupResult(productId = it.id) }
+            productDao.getByBarcodeIgnoreCase(code)?.let { return BarcodeLookupResult(productId = it.id) }
+            productDao.getBySku(code)?.let { return BarcodeLookupResult(productId = it.id) }
+            productDao.getBySkuIgnoreCase(code)?.let { return BarcodeLookupResult(productId = it.id) }
         }
-        productVariantDao.getByBarcode(trimmed)?.let { variant ->
-            return BarcodeLookupResult(
-                productId = variant.productId,
-                variantId = variant.id,
-                variantName = variant.name,
-                variantPrice = variant.price
-            )
+        val stripped = candidates.firstOrNull { it.isNotEmpty() && it != "0" }?.trimStart('0')?.ifEmpty { "0" }
+        if (stripped != null) {
+            productDao.getByBarcodeStrippedZeros(stripped)?.let { return BarcodeLookupResult(productId = it.id) }
+        }
+        for (code in candidates) {
+            productVariantDao.getByBarcode(code)?.let { variant ->
+                return BarcodeLookupResult(
+                    productId = variant.productId,
+                    variantId = variant.id,
+                    variantName = variant.name,
+                    variantPrice = variant.price
+                )
+            }
+            productVariantDao.getByBarcodeIgnoreCase(code)?.let { variant ->
+                return BarcodeLookupResult(
+                    productId = variant.productId,
+                    variantId = variant.id,
+                    variantName = variant.name,
+                    variantPrice = variant.price
+                )
+            }
+            productVariantDao.getBySkuIgnoreCase(code)?.let { variant ->
+                return BarcodeLookupResult(
+                    productId = variant.productId,
+                    variantId = variant.id,
+                    variantName = variant.name,
+                    variantPrice = variant.price
+                )
+            }
         }
         return null
+    }
+
+    private fun barcodeCandidates(raw: String): List<String> {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        val noSpaces = trimmed.replace(" ", "")
+        val strippedZeros = noSpaces.trimStart('0').ifEmpty { "0" }
+        val padded12 = noSpaces.padStart(12, '0')
+        val padded13 = noSpaces.padStart(13, '0')
+        val padded14 = noSpaces.padStart(14, '0')
+        return listOf(trimmed, noSpaces, strippedZeros, padded12, padded13, padded14).distinct()
     }
 
     private fun ProductEntity.toModel(categoryName: String?, variants: List<ProductVariantModel>) =
@@ -548,6 +586,7 @@ class TransactionRepository @Inject constructor(
         tipAmount: Double = 0.0,
         roundingAmount: Double = 0.0,
         checkoutDiscountPercent: Double = 0.0,
+        checkoutDiscountAmount: Double = 0.0,
         overrideTotal: Double? = null,
         masterOrderId: String? = null,
         splitCheckNumber: Int? = null,
@@ -558,7 +597,8 @@ class TransactionRepository @Inject constructor(
         adyenCustomerReceiptJson: String? = null,
         adyenCashierReceiptJson: String? = null,
         giftCardPaymentAmount: Double? = null,
-        giftCardRemainingBalance: Double? = null
+        giftCardRemainingBalance: Double? = null,
+        paymentTenders: List<PaymentTender> = emptyList()
     ): TransactionEntity {
         val settings = settingsDao.get() ?: BusinessSettingsEntity()
         val resolvedTransactionId = transactionId ?: UUID.randomUUID().toString()
@@ -573,10 +613,11 @@ class TransactionRepository @Inject constructor(
         } else 0.0
         val discountPercent = when {
             checkoutDiscountPercent > 0 -> checkoutDiscountPercent
-            cart.discountPercent > 0 -> cart.discountPercent
+            checkoutDiscountAmount <= 0.0 && cart.discountPercent > 0 -> cart.discountPercent
             else -> 0.0
         }
         val discountAmount = when {
+            checkoutDiscountAmount > 0 -> checkoutDiscountAmount.coerceAtMost((subtotal - itemDiscount).coerceAtLeast(0.0))
             checkoutDiscountPercent > 0 -> checkoutDiscount
             cart.discountPercent > 0 -> (subtotal - itemDiscount) * (cart.discountPercent / 100.0)
             cart.discountAmount > 0 -> cart.discountAmount
@@ -606,7 +647,7 @@ class TransactionRepository @Inject constructor(
             paymentMethod = paymentMethod,
             paymentStatus = PaymentStatus.COMPLETED,
             currencyCode = settings.defaultCurrency,
-            notes = buildOrderNotes(cart, giftCardPaymentAmount, giftCardRemainingBalance),
+            notes = buildOrderNotes(cart, giftCardPaymentAmount, giftCardRemainingBalance, paymentTenders),
             receiptUrl = resolvedReceiptUrl,
             cardReference = cardReference,
             tableId = cart.tableId,
@@ -1217,10 +1258,10 @@ class CartManager @Inject constructor(
                     }
                 )
             } else {
+                val withCourse = stamped.copy(courseNumber = cart.activeCourse.coerceAtLeast(1))
                 val enriched = when {
-                    cart.tableOrderId != null -> stamped.copy(courseNumber = cart.activeCourse)
-                    cart.splitByItems && cart.splitCount > 1 -> stamped.copy(splitCheck = cart.activeSplitCheck)
-                    else -> stamped
+                    cart.splitByItems && cart.splitCount > 1 -> withCourse.copy(splitCheck = cart.activeSplitCheck)
+                    else -> withCourse
                 }
                 cart.copy(items = cart.items + enriched)
             }
@@ -1348,19 +1389,27 @@ class CartManager @Inject constructor(
     }
 
     fun applyItemDiscountPercent(itemId: String, percent: Double) {
-        if (percent <= 0.0) return
         _cart.update { cart ->
             cart.copy(
                 items = cart.items.map { item ->
                     if (item.id != itemId) return@map item
                     val original = item.originalUnitPrice ?: item.unitPrice
-                    val discounted = (original * (1 - percent / 100.0)).coerceAtLeast(0.0)
-                    item.copy(
-                        unitPrice = discounted,
-                        originalUnitPrice = original,
-                        lineDiscountPerUnit = original - discounted,
-                        notes = "${percent.toInt()}% off"
-                    )
+                    if (percent <= 0.0) {
+                        item.copy(
+                            unitPrice = original,
+                            originalUnitPrice = null,
+                            lineDiscountPerUnit = 0.0,
+                            notes = null
+                        )
+                    } else {
+                        val discounted = (original * (1 - percent / 100.0)).coerceAtLeast(0.0)
+                        item.copy(
+                            unitPrice = discounted,
+                            originalUnitPrice = original,
+                            lineDiscountPerUnit = original - discounted,
+                            notes = "${percent.toInt()}% off"
+                        )
+                    }
                 }
             )
         }
@@ -1595,6 +1644,10 @@ class CartManager @Inject constructor(
                 serviceType = cart.serviceType
             )
         }
+    }
+
+    fun setOrderNumber(orderNumber: String) {
+        _cart.update { it.copy(orderNumber = orderNumber) }
     }
 
     fun setPickupOrder(orderNumber: String, pickupTimeMs: Long?) {
@@ -2301,9 +2354,10 @@ class HeldOrderRepository @Inject constructor(
         userId: Long,
         userName: String
     ): HeldOrderEntity {
-        val id = UUID.randomUUID().toString()
         val orderNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() }
             ?: "H-${System.currentTimeMillis().toString().takeLast(6)}"
+        val existing = heldOrderDao.getByOrderNumber(orderNumber)
+        val id = existing?.id ?: UUID.randomUUID().toString()
         val entity = HeldOrderEntity(
             id = id,
             orderNumber = orderNumber,
@@ -2321,11 +2375,13 @@ class HeldOrderRepository @Inject constructor(
             tableOrderId = cart.tableOrderId,
             notes = cart.cartNotes,
             fulfillmentType = cart.fulfillmentType,
-            pickupTimeMs = cart.pickupTimeMs,
+            pickupTimeMs = cart.pickupTimeMs ?: existing?.pickupTimeMs,
             deliveryName = cart.deliveryName,
             deliveryAddress = cart.deliveryAddress,
             deliveryZip = cart.deliveryZip,
-            deliveryPhone = cart.deliveryPhone
+            deliveryPhone = cart.deliveryPhone,
+            paymentMethod = existing?.paymentMethod,
+            createdAt = existing?.createdAt ?: System.currentTimeMillis()
         )
         heldOrderDao.upsert(entity)
         val items = cart.items.map { item ->
@@ -2356,7 +2412,11 @@ class HeldOrderRepository @Inject constructor(
         userId: Long,
         userName: String,
         checkoutDiscountPercent: Double,
-        finalTotal: Double
+        checkoutDiscountAmount: Double = 0.0,
+        tipAmount: Double = 0.0,
+        finalTotal: Double,
+        paymentMethod: PaymentMethod = PaymentMethod.PAY_LATER,
+        extraNotes: String? = null
     ): HeldOrderEntity {
         val subtotal = cart.subtotal
         val itemDiscount = cart.itemDiscountTotal
@@ -2365,10 +2425,11 @@ class HeldOrderRepository @Inject constructor(
         } else 0.0
         val discountPercent = when {
             checkoutDiscountPercent > 0 -> checkoutDiscountPercent
-            cart.discountPercent > 0 -> cart.discountPercent
+            checkoutDiscountAmount <= 0.0 && cart.discountPercent > 0 -> cart.discountPercent
             else -> 0.0
         }
         val discountAmount = when {
+            checkoutDiscountAmount > 0 -> checkoutDiscountAmount.coerceAtMost((subtotal - itemDiscount).coerceAtLeast(0.0))
             checkoutDiscountPercent > 0 -> checkoutDiscount
             cart.discountPercent > 0 -> (subtotal - itemDiscount) * (cart.discountPercent / 100.0)
             cart.discountAmount > 0 -> cart.discountAmount
@@ -2377,6 +2438,11 @@ class HeldOrderRepository @Inject constructor(
         val id = UUID.randomUUID().toString()
         val orderNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() }
             ?: "H-${System.currentTimeMillis().toString().takeLast(6)}"
+        val tipNote = if (tipAmount > 0.001) {
+            String.format(java.util.Locale.US, "Tip: %.2f", tipAmount)
+        } else {
+            null
+        }
         val entity = HeldOrderEntity(
             id = id,
             orderNumber = orderNumber,
@@ -2392,14 +2458,20 @@ class HeldOrderRepository @Inject constructor(
             tableId = cart.tableId,
             tableName = cart.tableName,
             tableOrderId = cart.tableOrderId,
-            notes = cart.cartNotes,
+            notes = listOfNotNull(
+                cart.cartNotes?.trim()?.takeIf { it.isNotBlank() },
+                tipNote,
+                extraNotes?.trim()?.takeIf { it.isNotBlank() }
+            )
+                .joinToString("\n")
+                .ifBlank { null },
             fulfillmentType = cart.fulfillmentType,
             pickupTimeMs = cart.pickupTimeMs,
             deliveryName = cart.deliveryName,
             deliveryAddress = cart.deliveryAddress,
             deliveryZip = cart.deliveryZip,
             deliveryPhone = cart.deliveryPhone,
-            paymentMethod = PaymentMethod.PAY_LATER
+            paymentMethod = paymentMethod
         )
         heldOrderDao.upsert(entity)
         val items = cart.items.map { item ->
@@ -2495,6 +2567,11 @@ class HeldOrderRepository @Inject constructor(
 
     suspend fun countActive(): Int = heldOrderDao.countActive()
 
+    suspend fun deleteHeldOrder(id: String) {
+        heldOrderItemDao.deleteByOrder(id)
+        heldOrderDao.delete(id)
+    }
+
     /** Deletes ALL held orders and their items. Irreversible. */
     suspend fun clearAll() {
         heldOrderItemDao.deleteAll()
@@ -2521,13 +2598,15 @@ class HeldOrderRepository @Inject constructor(
 private fun buildOrderNotes(
     cart: CartSummary,
     giftCardPaymentAmount: Double? = null,
-    giftCardRemainingBalance: Double? = null
+    giftCardRemainingBalance: Double? = null,
+    paymentTenders: List<PaymentTender> = emptyList()
 ): String? {
     val lines = mutableListOf<String>()
     cart.cartNotes?.trim()?.takeIf { it.isNotBlank() }?.let { lines.add(it) }
     giftCardPaymentAmount?.takeIf { it > 0.0 }?.let { amount ->
         lines.add(String.format(Locale.US, "Gift card payment: %.2f", amount))
     }
+    lines.addAll(PaymentTenderNotes.encodeLines(paymentTenders))
     giftCardRemainingBalance?.takeIf { it >= 0.0 }?.let { balance ->
         lines.add(String.format(Locale.US, "Gift card remaining: %.2f", balance))
     }

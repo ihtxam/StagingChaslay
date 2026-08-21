@@ -88,7 +88,8 @@ fun LoginScreen(
             onDigit = viewModel::onPinSetupDigit,
             onBackspace = viewModel::onPinSetupBackspace,
             onClear = viewModel::onPinSetupClear,
-            onCancel = viewModel::cancelPinSetup
+            onCancel = viewModel::cancelPinSetup,
+            onSkip = viewModel::skipPinSetup
         )
         return
     }
@@ -453,7 +454,8 @@ private fun PinSetupScreen(
     onDigit: (String) -> Unit,
     onBackspace: () -> Unit,
     onClear: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onSkip: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -511,6 +513,9 @@ private fun PinSetupScreen(
                 Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, fontSize = 14.sp)
             }
             Spacer(modifier = Modifier.height(16.dp))
+            TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.setup_pin_skip), color = ChaslayBrand.White, fontWeight = FontWeight.SemiBold)
+            }
             TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.cancel), color = ChaslayBrand.Gray200)
             }

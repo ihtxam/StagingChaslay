@@ -6,6 +6,9 @@ import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { AuthService } from "./auth.service";
 import { MerchantSettingsService } from "./merchant-settings.service";
 import { receiptPublicUrl } from "@/lib/receipt-public-url";
+import { normalizeComboSlots } from "@/lib/combo";
+import { roundMoney2 } from "@/lib/money";
+import { ModifierService } from "./modifier.service";
 
 export function normalizeChaslayDeviceId(deviceId: string): string {
   if (!deviceId) return "";
@@ -337,9 +340,10 @@ export class ChaslayCompatService {
       where: eq(schema.categories.merchantId, merchantId),
     });
 
-    const products = await db.query.products.findMany({
-      where: and(eq(schema.products.merchantId, merchantId), eq(schema.products.isActive, true)),
+    const allProducts = await db.query.products.findMany({
+      where: eq(schema.products.merchantId, merchantId),
     });
+    const products = allProducts.filter((p) => p.isActive !== false);
 
     const { FloorPlanService } = await import("@/services/floor-plan.service");
     const { ReservationService } = await import("@/services/reservation.service");
@@ -355,6 +359,14 @@ export class ChaslayCompatService {
 
     const categoryClientById = new Map(
       categories.map((c) => [c.id, c.clientId || c.id] as const)
+    );
+    const productClientById = new Map(
+      allProducts.map((p) => [p.id, p.clientId || p.id] as const)
+    );
+    const catalogById = new Map(allProducts.map((p) => [p.id, p] as const));
+    const groupsByProduct = await ModifierService.getGroupsForProducts(
+      merchantId,
+      allProducts.map((p) => p.id)
     );
     const addressParts = [merchant.address, merchant.city, merchant.country].filter(Boolean);
     const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
@@ -383,7 +395,9 @@ export class ChaslayCompatService {
         receipt_base_url: receiptPublicBaseUrl(),
       },
       categories: categories.map((c) => this.mapCategory(c)),
-      products: products.map((p) => this.mapProduct(p, false, categoryClientById)),
+      products: products.map((p) =>
+        this.mapProduct(p, false, categoryClientById, productClientById, groupsByProduct, catalogById)
+      ),
       paymentConfig: await this.getPaymentConfigPayload(merchantId),
       floor_plans: floorPlans.map((p) => ({
         id: p.id,
@@ -470,7 +484,11 @@ export class ChaslayCompatService {
         giftCard:
           merchant.webposGiftCardEnabled === true &&
           !!(merchant.giftCardSettings as { enabled?: boolean } | null)?.enabled,
+        invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
       },
+      loyalty: (await import("@/services/shop-loyalty.service")).ShopLoyaltyService.programFromMerchant(
+        merchant
+      ),
       features: {
         courses_enabled: !!merchant.coursesEnabled,
         floor_plan_enabled: !!merchant.floorPlanEnabled,
@@ -607,11 +625,24 @@ export class ChaslayCompatService {
     const categoryClientById = new Map(
       allCategories.map((c) => [c.id, c.clientId || c.id] as const)
     );
+    const allProducts = await db.query.products.findMany({
+      where: eq(schema.products.merchantId, merchantId),
+    });
+    const productClientById = new Map(
+      allProducts.map((p) => [p.id, p.clientId || p.id] as const)
+    );
+    const catalogById = new Map(allProducts.map((p) => [p.id, p] as const));
+    const groupsByProduct = await ModifierService.getGroupsForProducts(
+      merchantId,
+      allProducts.map((p) => p.id)
+    );
 
     return {
       serverTime: Date.now(),
       categories: categories.map((c) => this.mapCategory(c, true)),
-      products: products.map((p) => this.mapProduct(p, true, categoryClientById)),
+      products: products.map((p) =>
+        this.mapProduct(p, true, categoryClientById, productClientById, groupsByProduct, catalogById)
+      ),
     };
   }
 
@@ -692,11 +723,36 @@ export class ChaslayCompatService {
   static mapProduct(
     p: typeof schema.products.$inferSelect,
     includeDeleted = false,
-    categoryClientById?: Map<string, string>
+    categoryClientById?: Map<string, string>,
+    productClientById?: Map<string, string>,
+    groupsByProduct?: Map<string, any[]>,
+    catalogById?: Map<string, typeof schema.products.$inferSelect>
   ) {
     const categoryId = p.categoryId
       ? categoryClientById?.get(p.categoryId) || p.categoryId
       : null;
+    const modifierGroups = groupsByProduct?.get(p.id) || [];
+    const extras = Array.isArray(p.extras) ? p.extras : [];
+    const comboItems = normalizeComboSlots(p.comboItems).map((slot) => ({
+      id: slot.id,
+      name: slot.name,
+      minPick: slot.minPick,
+      maxPick: slot.maxPick,
+      options: slot.options.map((o) =>
+        this.mapComboOption(o, productClientById, groupsByProduct, catalogById)
+      ),
+    }));
+    const specifications = Array.isArray(p.specifications) ? p.specifications : [];
+    const variants = specifications
+      .filter((s: any) => s?.name?.trim() && (s.saleStatus || "in_stock") !== "out_of_stock")
+      .map((s: any, i: number) => ({
+        id: s.id || `spec-${i + 1}`,
+        name: repairCatalogText(s.name || ""),
+        price: roundMoney2(Number(s.price) || 0),
+        is_default: !!s.isDefault,
+        sort_order: Number(s.sortOrder) || i,
+        sale_status: s.saleStatus || "in_stock",
+      }));
     // stock defaults to 0 in DB — that means "not tracking inventory", not unavailable.
     // Use isActive for POS/menu availability; only hide when merchant deactivated the item.
     return {
@@ -714,10 +770,47 @@ export class ChaslayCompatService {
       is_open_price: !!p.isOpenPrice,
       sold_by_weight: !!p.soldByWeight,
       product_type: p.productType || "standard",
+      allow_extras: !!p.allowExtras || modifierGroups.length > 0 || extras.length > 0,
+      extras: extras.map((e) => ({
+        id: e.id,
+        name: repairCatalogText(e.name || ""),
+        price: Number(e.price) || 0,
+      })),
+      modifier_groups: modifierGroups,
+      combo_items: comboItems,
+      specifications,
+      variants,
       online_visible: p.isActive,
       kiosk_visible: p.isActive,
       updated_at: p.updatedAt?.toISOString(),
       ...(includeDeleted && !p.isActive ? { deleted_at: p.updatedAt?.toISOString() } : {}),
+    };
+  }
+
+  private static mapComboOption(
+    o: { productId: string; extraPrice: number },
+    productClientById?: Map<string, string>,
+    groupsByProduct?: Map<string, any[]>,
+    catalogById?: Map<string, typeof schema.products.$inferSelect>
+  ) {
+    const mapped = productClientById?.get(o.productId) || o.productId;
+    const source = catalogById?.get(o.productId);
+    const childGroups = groupsByProduct?.get(o.productId) || [];
+    const childExtras = Array.isArray(source?.extras) ? source.extras : [];
+    return {
+      productId: mapped,
+      product_id: mapped,
+      sourceProductId: o.productId,
+      extraPrice: o.extraPrice,
+      name: source?.name ? repairCatalogText(source.name) : undefined,
+      image: source?.imageUrl || undefined,
+      allow_extras: !!source?.allowExtras || childGroups.length > 0 || childExtras.length > 0,
+      extras: childExtras.map((e) => ({
+        id: e.id,
+        name: repairCatalogText(e.name || ""),
+        price: Number(e.price) || 0,
+      })),
+      modifier_groups: childGroups,
     };
   }
 

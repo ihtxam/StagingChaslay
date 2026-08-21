@@ -1,16 +1,36 @@
 import { getDb, schema } from "@/db";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { AuthService } from "@/services/auth.service";
 import {
   ALL_PERMISSIONS,
   DEFAULT_ROLE_TEMPLATES,
   encodePermissions,
+  hasAnyPermission,
   parsePermissions,
+  STAFF_MERCHANT_ENTRY_PERMISSIONS,
   toAndroidPermissions,
+  waiterBlockedPermissions,
+  waiterSystemKind,
   type Permission,
 } from "@/lib/permissions";
 
 export class StaffService {
+  /** Staff row exists with a POS PIN but no email/password hash for /login. */
+  static readonly PIN_ONLY_LOGIN_MESSAGE =
+    "This account uses a POS PIN. Sign in on the POS with your PIN, or ask the owner to set an official login password in Users & roles.";
+  /** Staff email exists but password was never hashed (must be set again). */
+  static readonly NO_PASSWORD_LOGIN_MESSAGE =
+    "This staff account has no official login password. Ask the owner to set one in Users & roles.";
+  static readonly NO_ENTRY_PERMISSION_MESSAGE = "This account cannot sign in";
+
+  static isLoginGuidanceError(message: string): boolean {
+    return (
+      message === this.PIN_ONLY_LOGIN_MESSAGE ||
+      message === this.NO_PASSWORD_LOGIN_MESSAGE ||
+      message === this.NO_ENTRY_PERMISSION_MESSAGE
+    );
+  }
+
   static async ensureDefaultRoles(merchantId: string) {
     const db = getDb();
     const existing = await db.query.merchantRoles.findMany({
@@ -26,10 +46,24 @@ export class StaffService {
           sortOrder: t.sortOrder,
         }))
       );
+    } else {
+      const have = new Set(existing.map((r) => r.name.trim().toLowerCase()));
+      const missing = DEFAULT_ROLE_TEMPLATES.filter((t) => !have.has(t.name.trim().toLowerCase()));
+      if (missing.length) {
+        await db.insert(schema.merchantRoles).values(
+          missing.map((t) => ({
+            merchantId,
+            name: t.name,
+            permissions: encodePermissions(t.permissions),
+            isSystem: t.isSystem,
+            sortOrder: t.sortOrder,
+          }))
+        );
+      }
     }
     // Existing Manager roles that already see company reports keep VIEW_ALL_SALES.
     await this.ensureManagerViewAllSales(merchantId);
-    // Waiters: floor POS only ó never panel / drawer / company sales aggregates.
+    // Waiters: never panel / drawer / company sales. Menu + orders stay role-assigned.
     await this.enforceWaiterFloorRestrictions(merchantId);
     return db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
@@ -63,29 +97,18 @@ export class StaffService {
   }
 
   /**
-   * Strip privileged permissions from system Waiter role (keep other custom floor perms).
-   * ACCESS_PANEL / OPEN_CASH_DRAWER / reports are never allowed on Waiter.
+   * Strip sales / panel / finance from system Waiter templates.
+   * Menu (MANAGE_PRODUCTS) and Orders stay as assigned on the Roles page.
    */
   static async enforceWaiterFloorRestrictions(merchantId: string) {
     const db = getDb();
-    const blocked: Permission[] = [
-      "VIEW_REPORTS",
-      "VIEW_ALL_SALES",
-      "END_OF_DAY",
-      "ACCESS_PANEL",
-      "OPEN_CASH_DRAWER",
-      "MANAGE_SETTINGS",
-      "MANAGE_STAFF",
-      "MANAGE_ROLES",
-      "MANAGE_BILLING",
-      "MANAGE_PRODUCTS",
-      "REFUND_ORDERS",
-    ];
     const roles = await db.query.merchantRoles.findMany({
       where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.isSystem, true)),
     });
     for (const role of roles) {
-      if (!role.name.trim().toLowerCase().startsWith("waiter")) continue;
+      const kind = waiterSystemKind(role.name);
+      if (!kind) continue;
+      const blocked = waiterBlockedPermissions(kind);
       const perms = parsePermissions(role.permissions);
       const next = perms.filter((p) => !blocked.includes(p));
       if (next.length === perms.length) continue;
@@ -173,41 +196,8 @@ export class StaffService {
     await db.delete(schema.merchantRoles).where(eq(schema.merchantRoles.id, roleId));
   }
 
-  /**
-   * Ensure at least one active POS staff with a PIN exists (default PIN 1234).
-   * New merchants otherwise cannot complete the WebPOS PIN gate.
-   */
-  static async ensureDefaultPosStaff(merchantId: string, displayName?: string) {
-    const db = getDb();
-    await this.ensureDefaultRoles(merchantId);
-    const existing = await db.query.merchantStaff.findMany({
-      where: and(eq(schema.merchantStaff.merchantId, merchantId), eq(schema.merchantStaff.isActive, true)),
-    });
-    if (existing.some((s) => !!s.pinHash)) return;
-
-    const roles = await db.query.merchantRoles.findMany({
-      where: eq(schema.merchantRoles.merchantId, merchantId),
-    });
-    const manager =
-      roles.find((r) => r.name.trim().toLowerCase() === "manager") ||
-      roles.find((r) => r.isSystem) ||
-      roles[0];
-    if (!manager) return;
-
-    const name = (displayName || "Manager").trim().slice(0, 255) || "Manager";
-    await db.insert(schema.merchantStaff).values({
-      merchantId,
-      roleId: manager.id,
-      name,
-      pinHash: await AuthService.hashPassword("1234"),
-      canAccessPanel: false,
-      isActive: true,
-    });
-  }
-
   static async listStaff(merchantId: string) {
     await this.ensureDefaultRoles(merchantId);
-    await this.ensureDefaultPosStaff(merchantId);
     const db = getDb();
     const staff = await db.query.merchantStaff.findMany({
       where: eq(schema.merchantStaff.merchantId, merchantId),
@@ -264,14 +254,16 @@ export class StaffService {
 
     const pin = input.pin?.trim();
     if (pin && (pin.length < 4 || pin.length > 8)) {
-      throw new Error("PIN must be 4ñ8 digits");
+      throw new Error("PIN must be 4ù8 digits");
     }
 
-    const canAccessPanel = !!input.canAccessPanel;
+    const password = input.password?.trim() || "";
+    // Email + password on create always enables official /login (do not require a checkbox).
+    const canAccessPanel = !!input.canAccessPanel || !!(email && password);
     if (canAccessPanel && !email) {
       throw new Error("Email is required for panel access");
     }
-    if (canAccessPanel && !input.password?.trim()) {
+    if (canAccessPanel && !password) {
       throw new Error("Password is required for panel access");
     }
 
@@ -283,7 +275,7 @@ export class StaffService {
         name,
         email,
         pinHash: pin ? await AuthService.hashPassword(pin) : null,
-        passwordHash: input.password?.trim() ? await AuthService.hashPassword(input.password.trim()) : null,
+        passwordHash: password ? await AuthService.hashPassword(password) : null,
         canAccessPanel,
         isActive: true,
       })
@@ -340,7 +332,7 @@ export class StaffService {
         patch.pinHash = null;
       } else {
         const pin = String(input.pin).trim();
-        if (pin.length < 4 || pin.length > 8) throw new Error("PIN must be 4ñ8 digits");
+        if (pin.length < 4 || pin.length > 8) throw new Error("PIN must be 4ù8 digits");
         patch.pinHash = await AuthService.hashPassword(pin);
       }
     }
@@ -351,15 +343,22 @@ export class StaffService {
         patch.passwordHash = await AuthService.hashPassword(String(input.password).trim());
       }
     }
-    if (input.canAccessPanel !== undefined) patch.canAccessPanel = !!input.canAccessPanel;
     if (input.isActive !== undefined) patch.isActive = !!input.isActive;
 
-    const nextCanAccess =
-      input.canAccessPanel !== undefined ? !!input.canAccessPanel : !!staff.canAccessPanel;
     const nextEmail =
       input.email !== undefined
         ? input.email?.trim().toLowerCase() || null
         : staff.email;
+    const settingPassword = input.password !== undefined && !!String(input.password || "").trim();
+    // Setting email + a new password enables official /login even if the checkbox was off.
+    if (settingPassword && nextEmail) {
+      patch.canAccessPanel = true;
+    } else if (input.canAccessPanel !== undefined) {
+      patch.canAccessPanel = !!input.canAccessPanel;
+    }
+
+    const nextCanAccess =
+      patch.canAccessPanel !== undefined ? !!patch.canAccessPanel : !!staff.canAccessPanel;
     const nextPasswordHash =
       input.password !== undefined
         ? input.password === null || input.password === ""
@@ -471,12 +470,26 @@ export class StaffService {
   static async loginStaff(email: string, password: string) {
     const db = getDb();
     const normalized = email.trim().toLowerCase();
-    const staff = await db.query.merchantStaff.findFirst({
-      where: and(eq(schema.merchantStaff.email, normalized), eq(schema.merchantStaff.isActive, true)),
-    });
+    const rows = await db
+      .select()
+      .from(schema.merchantStaff)
+      .where(
+        and(
+          sql`lower(${schema.merchantStaff.email}) = ${normalized}`,
+          eq(schema.merchantStaff.isActive, true)
+        )
+      )
+      .limit(1);
+    const staff = rows[0];
 
-    if (!staff || !staff.canAccessPanel || !staff.passwordHash) {
+    if (!staff) {
       throw new Error("Invalid email or password");
+    }
+
+    if (!staff.passwordHash) {
+      throw new Error(
+        staff.pinHash ? this.PIN_ONLY_LOGIN_MESSAGE : this.NO_PASSWORD_LOGIN_MESSAGE
+      );
     }
 
     const ok = await AuthService.comparePassword(password, staff.passwordHash);
@@ -486,8 +499,8 @@ export class StaffService {
       where: eq(schema.merchantRoles.id, staff.roleId),
     });
     const permissions = parsePermissions(role?.permissions);
-    if (!permissions.includes("ACCESS_PANEL")) {
-      throw new Error("This account does not have panel access");
+    if (!hasAnyPermission(permissions, STAFF_MERCHANT_ENTRY_PERMISSIONS)) {
+      throw new Error(this.NO_ENTRY_PERMISSION_MESSAGE);
     }
 
     return {

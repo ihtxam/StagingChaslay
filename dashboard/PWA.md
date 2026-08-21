@@ -2,7 +2,7 @@
 
 The merchant dashboard is a Progressive Web App. On Windows this gives you a **Start Menu / desktop shortcut** that opens ChaslayReborn in its own window (`display: standalone`), not a browser tab.
 
-**PWA is the right first step.** Electron/Tauri would ship a full desktop runtime; a Chromium PWA reuses Edge/Chrome and is much lighter for ùdouble-click the POS.ù
+**PWA is the right first step.** Electron/Tauri would ship a full desktop runtime; a Chromium PWA reuses Edge/Chrome and is much lighter for ?double-click the POS.?
 
 ## Requirements
 
@@ -17,7 +17,7 @@ The merchant dashboard is a Progressive Web App. On Windows this gives you a **S
 3. Install:
    - **Edge**: menu (?) ? **Apps** ? **Install this site as an app**  
      or click the **install** icon in the address bar.
-   - **Chrome**: menu (?) ? **Cast, save, and share** ? **Install page as appù**  
+   - **Chrome**: menu (?) ? **Cast, save, and share** ? **Install page as app?**  
      or the install icon in the address bar.
 4. Confirm the name (**ChaslayReborn**).
 5. Launch from the **Start Menu**, desktop shortcut, or taskbar pin.
@@ -29,8 +29,8 @@ After install, double-clicking the app opens a frameless window at the POS. If t
 
 | File | Role |
 |------|------|
-| `public/manifest.webmanifest` | Name, icons, `display: standalone`, `start_url: /merchant/pos` |
-| `public/sw.js` | App shell + hashed `/assets/*` cache for offline relaunch (`chaslay-shell-v4`) |
+| `public/manifest.webmanifest` | Name, icons, `display: standalone`, `scope: /`, `start_url: /merchant/pos` |
+| `public/sw.js` | App shell + hashed `/assets/*` cache for offline relaunch (`chaslay-shell-v5`) |
 | `public/offline.html` | Fallback page when the shell is not cached yet |
 | `src/lib/webpos-offline/*` | IndexedDB catalog snapshot + sale outbox; sync via `/sync/push-sales` |
 | `public/icons/*`, `favicon.png` | Install / Start Menu icons |
@@ -41,7 +41,7 @@ After install, double-clicking the app opens a frameless window at the POS. If t
 
 After at least one **successful online** visit to the POS (loads the app shell + catalog):
 
-- Close and relaunch the installed PWA offline ó it should open from cache (not a blank page).
+- Close and relaunch the installed PWA offline ? it should open from cache (not a blank page).
 - If you see the offline fallback instead, reconnect once, open `/merchant/pos`, wait for the POS to load, then try offline again.
 
 After at least one **successful online** catalog load:
@@ -53,7 +53,18 @@ After at least one **successful online** catalog load:
 
 ## Configure start URL
 
-Default start is the POS (`/merchant/pos`). To start at login instead, change `start_url` (and optionally `id`) in `public/manifest.webmanifest` to `/login`, then rebuild and reinstall the app.
+Default start is the POS (`/merchant/pos`). The manifest `id` and `scope` are both `/` so refresh on `/merchant/*` routes stays inside the installed app window (not Chrome). Reinstall after manifest changes. To start at login instead, change `start_url` in `public/manifest.webmanifest` to `/login`, then rebuild and reinstall the app.
+
+## Register staff session persistence
+
+| Storage | Key | Purpose |
+|---------|-----|---------|
+| `sessionStorage` | `webpos_staff_session` | Active PIN session in this tab |
+| `sessionStorage` | `webpos_staff_session_validated` | Set when PIN verify succeeds in this tab |
+| `localStorage` | `webpos_staff_session_persist` | PWA offline relaunch only (not restored in browser tabs) |
+| `localStorage` | `token` / `user` | Merchant login JWT (separate from PIN session) |
+
+After login, PIN session is cleared. Owner/manager refresh without clock-in shows the PIN gate, not a stale waiter from `localStorage`.
 
 ## Uninstall
 

@@ -7,13 +7,16 @@ import {
   concatBytes,
   escposCode128,
   generateReceiptQrRasterEscPos,
+  escposQrCode,
 } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
   channelLabel,
+  formatPayLaterPaymentLabel,
   lineWidthForPaper,
+  payLaterCollectedTender,
   paymentLabel,
   receiptLabels,
   type ReceiptLang,
@@ -91,6 +94,9 @@ export function nextDineInCounterNumber(
 /** Machine markers stored in order.notes so UI/receipts can recover tab + ticket. */
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
+const MEMBER_NOTE_RE = /\[member:([^\]]+)\]/i;
+const PTS_EARN_NOTE_RE = /\[pts_earn:(\d+)\]/i;
+const PTS_BAL_NOTE_RE = /\[pts_bal:(\d+)\]/i;
 const GIFT_CARD_REMAINING_NOTE_RE = /Gift card remaining:\s*([\d.]+)/i;
 
 export function parseGiftCardRemainingFromNotes(notes?: string | null): number | null {
@@ -104,18 +110,32 @@ export function encodeOrderMetaNotes(opts: {
   existing?: string | null;
   ticketDisplay?: string | null;
   tabNumber?: string | null;
+  memberName?: string | null;
+  pointsEarned?: number | null;
+  pointsBalance?: number | null;
 }): string | undefined {
   let base = String(opts.existing || '')
     .replace(TICKET_NOTE_RE, '')
     .replace(TAB_NOTE_RE, '')
+    .replace(MEMBER_NOTE_RE, '')
+    .replace(PTS_EARN_NOTE_RE, '')
+    .replace(PTS_BAL_NOTE_RE, '')
     .replace(/\s{2,}/g, ' ')
     .replace(/^[·\s]+|[·\s]+$/g, '')
     .trim();
   const tags: string[] = [];
   const ticket = opts.ticketDisplay?.trim();
   const tab = opts.tabNumber != null ? String(opts.tabNumber).trim() : '';
+  const member = opts.memberName?.trim();
   if (ticket) tags.push(`[ticket:${ticket.replace(/[\[\]]/g, '')}]`);
   if (tab) tags.push(`[tab:${tab.replace(/[\[\]]/g, '')}]`);
+  if (member) tags.push(`[member:${member.replace(/[\[\]]/g, '').slice(0, 80)}]`);
+  if (opts.pointsEarned != null && Number(opts.pointsEarned) > 0) {
+    tags.push(`[pts_earn:${Math.floor(Number(opts.pointsEarned))}]`);
+  }
+  if (opts.pointsBalance != null && Number.isFinite(Number(opts.pointsBalance))) {
+    tags.push(`[pts_bal:${Math.max(0, Math.floor(Number(opts.pointsBalance)))}]`);
+  }
   const joined = [...tags, base].filter(Boolean).join(' ').trim();
   return joined || undefined;
 }
@@ -123,14 +143,23 @@ export function encodeOrderMetaNotes(opts: {
 export function parseOrderMetaNotes(notes?: string | null): {
   ticketDisplay?: string;
   tabNumber?: string;
+  memberName?: string;
+  pointsEarned?: number;
+  pointsBalance?: number;
   cleanNotes: string;
 } {
   const raw = String(notes || '');
   const ticketMatch = raw.match(TICKET_NOTE_RE);
   const tabMatch = raw.match(TAB_NOTE_RE);
+  const memberMatch = raw.match(MEMBER_NOTE_RE);
+  const earnMatch = raw.match(PTS_EARN_NOTE_RE);
+  const balMatch = raw.match(PTS_BAL_NOTE_RE);
   const cleanNotes = raw
     .replace(TICKET_NOTE_RE, '')
     .replace(TAB_NOTE_RE, '')
+    .replace(MEMBER_NOTE_RE, '')
+    .replace(PTS_EARN_NOTE_RE, '')
+    .replace(PTS_BAL_NOTE_RE, '')
     .replace(/\s{2,}/g, ' ')
     .replace(/^[·\s]+|[·\s]+$/g, '')
     .trim();
@@ -138,9 +167,14 @@ export function parseOrderMetaNotes(notes?: string | null): {
   if (ticketDisplay && !ticketDisplay.startsWith('#')) {
     ticketDisplay = `#${ticketDisplay.replace(/^#/, '')}`;
   }
+  const pointsEarned = earnMatch?.[1] != null ? Number(earnMatch[1]) : undefined;
+  const pointsBalance = balMatch?.[1] != null ? Number(balMatch[1]) : undefined;
   return {
     ticketDisplay,
     tabNumber: tabMatch?.[1]?.trim() || undefined,
+    memberName: memberMatch?.[1]?.trim() || undefined,
+    pointsEarned: Number.isFinite(pointsEarned) ? pointsEarned : undefined,
+    pointsBalance: Number.isFinite(pointsBalance) ? pointsBalance : undefined,
     cleanNotes,
   };
 }
@@ -161,6 +195,12 @@ export function deliveryDirectionsUrlForReceipt(tx: {
   return googleMapsNavigationUrl(address);
 }
 
+export type KitchenComboLine = {
+  slotName?: string;
+  productName: string;
+  modifierLines?: string[];
+};
+
 export type WebPosReceiptItem = {
   name: string;
   quantity: number;
@@ -170,6 +210,10 @@ export type WebPosReceiptItem = {
   seatNumber?: number | null;
   productId?: string | null;
   categoryId?: string | null;
+  courseNumber?: number | null;
+  /** One line per modifier/extra (not mashed into the article name). */
+  modifierLines?: string[];
+  comboLines?: KitchenComboLine[];
 };
 
 export type PosPrintSettingsClient = {
@@ -196,8 +240,15 @@ export type PosPrintSettingsClient = {
   scaleComPort?: string | null;
   /** Android USB scale address synced from panel. */
   scaleUsbAddress?: string | null;
-  scaleEnabled?: boolean;
-  printers?: Array<{
+    scaleEnabled?: boolean;
+    labelWidthMm?: 40 | 58;
+    labelHeightMm?: 20 | 25 | 30 | 40;
+    labelShowStoreName?: boolean;
+    labelShowProductName?: boolean;
+    labelShowBarcodeNumber?: boolean;
+    labelShowPrice?: boolean;
+    labelShowSku?: boolean;
+    printers?: Array<{
     id: string;
     name: string;
     enabled?: boolean;
@@ -205,6 +256,7 @@ export type PosPrintSettingsClient = {
     printReceipts?: boolean;
     printKitchenTickets?: boolean;
     printEndOfDayReports?: boolean;
+    printLabels?: boolean;
     printAllProducts?: boolean;
     linkedCategoryIds?: string[];
     linkedProductIds?: string[];
@@ -239,6 +291,10 @@ export type WebPosReceipt = {
   paymentMethod: string;
   /** Split tenders printed as separate lines (cash + card, etc.). */
   paymentLines?: Array<{ method: string; amount: number }>;
+  /** Pay Later collected tender: cash | card | terminal. */
+  payLaterTender?: 'cash' | 'card' | 'terminal' | null;
+  /** True when this receipt is the collect-payment copy (show Paid). */
+  payLaterCollected?: boolean;
   amountTendered?: number | null;
   changeDue?: number | null;
   /** Delivery / online customer (printed on delivery & online receipts) */
@@ -281,6 +337,12 @@ export type WebPosReceipt = {
   printAdyenReceiptOnTicket?: boolean;
   /** Remaining stored-value balance after gift card redemption on this sale. */
   giftCardRemainingBalance?: number | null;
+  /** Loyalty member printed on the customer receipt. */
+  memberName?: string | null;
+  /** Points earned on this sale. */
+  loyaltyPointsEarned?: number | null;
+  /** Running / lifetime points after this sale. */
+  loyaltyPointsBalance?: number | null;
   /** Provisional / preview receipt — no payment block. */
   isProvisional?: boolean;
 };
@@ -448,10 +510,131 @@ function padLine(left: string, right: string, width: number): string {
   return left + ' '.repeat(gap) + right;
 }
 
+function formatLoyaltyReceiptLines(
+  tx: Pick<WebPosReceipt, 'loyaltyPointsEarned' | 'loyaltyPointsBalance'>,
+  L: ReturnType<typeof receiptLabels>,
+  width: number
+): string {
+  const earned = tx.loyaltyPointsEarned != null ? Math.floor(Number(tx.loyaltyPointsEarned)) : 0;
+  const hasBalance = tx.loyaltyPointsBalance != null && Number.isFinite(Number(tx.loyaltyPointsBalance));
+  if (earned <= 0 && !hasBalance) return '';
+  let r = '-'.repeat(width) + '\n';
+  if (earned > 0) {
+    r += String(L.orderGaveYouPoints || '').replace('{n}', String(earned)) + '\n';
+  }
+  if (hasBalance) {
+    r += padLine(`${L.pointsBalance}:`, `${Math.max(0, Math.floor(Number(tx.loyaltyPointsBalance)))}`, width) + '\n';
+  }
+  return r;
+}
+
 function centerLine(text: string, width: number): string {
   const t = text.slice(0, width);
   const pad = Math.max(0, Math.floor((width - t.length) / 2));
   return ' '.repeat(pad) + t;
+}
+
+/** Centered course banner: >> COURSE 1 << */
+export function formatCourseBanner(course: number, courseLabel = 'COURSE'): string {
+  const n = Math.max(1, Math.floor(Number(course) || 1));
+  return `>> ${String(courseLabel || 'COURSE').trim() || 'COURSE'} ${n} <<`;
+}
+
+export function formatQtyArticlePrefix(item: {
+  quantity?: number | string | null;
+  weightKg?: number | null;
+}): string {
+  const weightKg = item.weightKg;
+  if (weightKg != null && Number(weightKg) > 0) {
+    return `${Number(weightKg).toFixed(3)} kg `;
+  }
+  return `${Number(item.quantity) || 0} x `;
+}
+
+function stripLeadingDash(text: string): string {
+  return String(text || '')
+    .replace(/^[-–—•]\s*/, '')
+    .trim();
+}
+
+/** Split mashed `Name (extra, extra)` when structured extras are missing. */
+export function splitReceiptArticle(
+  name: string,
+  modifierLines?: string[] | null
+): { product: string; modifiers: string[] } {
+  const existing = (modifierLines || []).map((m) => stripLeadingDash(m)).filter(Boolean);
+  const clean = String(name || '').replace(/\s+/g, ' ').trim();
+  if (existing.length) {
+    const paren = clean.match(/^(.*?)\s*\((.*)\)\s*$/);
+    return { product: paren ? paren[1].trim() : clean, modifiers: existing };
+  }
+  const paren = clean.match(/^(.*?)\s*\((.*)\)\s*$/);
+  if (paren) {
+    return {
+      product: paren[1].trim(),
+      modifiers: paren[2]
+        .split(/,\s*/)
+        .map((m) => stripLeadingDash(m))
+        .filter(Boolean),
+    };
+  }
+  return { product: clean, modifiers: [] };
+}
+
+function extraIndent(prefix: string): string {
+  return ' '.repeat(Math.max(0, prefix.length));
+}
+
+function formatReceiptExtraLine(prefix: string, extra: string): string {
+  return `${extraIndent(prefix)}- ${stripLeadingDash(extra)}`;
+}
+
+function groupReceiptItemsByCourse<T extends { courseNumber?: number | null }>(
+  items: T[]
+): Array<{ course: number | null; items: T[] }> {
+  const hasCourses = items.some((i) => i.courseNumber != null && Number(i.courseNumber) > 0);
+  if (!hasCourses) return [{ course: null, items }];
+  const courses = Array.from(
+    new Set(items.map((i) => Number(i.courseNumber) || 1).filter((n) => n > 0))
+  ).sort((a, b) => a - b);
+  return courses.map((course) => ({
+    course,
+    items: items.filter((i) => (Number(i.courseNumber) || 1) === course),
+  }));
+}
+
+function formatCustomerReceiptItemLines(
+  item: WebPosReceiptItem,
+  width: number
+): string[] {
+  const qtyPrefix = formatQtyArticlePrefix(item);
+  const { product, modifiers } = splitReceiptArticle(item.name, item.modifierLines);
+  const comboLines = (item.comboLines || []).filter((c) => c.productName?.trim());
+  const article = product || item.name || 'Item';
+  const left = `${qtyPrefix}${article}`.trim();
+  const right = Number(item.lineTotal).toFixed(2);
+  const out: string[] = [];
+  if (left.length + 1 + right.length <= width) {
+    out.push(padLine(left, right, width));
+  } else {
+    const maxLeft = Math.max(8, width - right.length - 1);
+    out.push(padLine(left.slice(0, maxLeft), right, width));
+  }
+  for (const combo of comboLines) {
+    const slotLabel = combo.slotName?.trim();
+    const pickName = combo.productName.trim();
+    const head = slotLabel ? `${slotLabel}: ${pickName}` : pickName;
+    out.push(formatReceiptExtraLine(qtyPrefix, head).slice(0, width));
+    for (const mod of combo.modifierLines || []) {
+      const text = stripLeadingDash(mod);
+      if (!text) continue;
+      out.push(formatReceiptExtraLine(qtyPrefix, text).slice(0, width));
+    }
+  }
+  for (const mod of modifiers) {
+    out.push(formatReceiptExtraLine(qtyPrefix, mod).slice(0, width));
+  }
+  return out;
 }
 
 function resolveScheduledDate(scheduledFor?: string | number | null): Date | null {
@@ -547,6 +730,23 @@ function billMerchandiseTtc(tx: WebPosReceipt): number {
   return roundMoney2(tx.total - tip - rounding);
 }
 
+/**
+ * Guest receipt bottom number = kitchen shout / display ticket (#7128).
+ * Never lead with the opaque WP-… / DI-… record id.
+ */
+export function guestReceiptBottomNumber(tx: {
+  orderDisplay?: string | null;
+  orderNumber?: string | null;
+}): string {
+  const shout = String(tx.orderDisplay || '').trim();
+  if (shout && !/^(WP|DI)-/i.test(shout)) {
+    return shout.startsWith('#') ? shout : `#${shout.replace(/^#/, '')}`;
+  }
+  const raw = String(tx.orderNumber || '').trim();
+  if (!raw || /^(WP|DI)-/i.test(raw)) return '';
+  return raw;
+}
+
 function formatReceiptMetaFooter(
   tx: WebPosReceipt,
   L: ReturnType<typeof receiptLabels>,
@@ -554,8 +754,7 @@ function formatReceiptMetaFooter(
   width: number
 ): string {
   const dateStr = formatDateTimeDDMMYYYY(tx.completedAt);
-  const rawRef = (tx.orderDisplay || tx.orderNumber || tx.id.slice(-8)).trim();
-  const orderRef = shortenOrderRef(rawRef, 16);
+  const orderRef = shortenOrderRef(guestReceiptBottomNumber(tx), 16);
   const channel = tx.channel ? channelLabel(L, tx.channel) : '';
   const user = tx.showStaff !== false && tx.staffName?.trim() ? tx.staffName.trim() : '';
   const parts = [dateStr, orderRef, channel, user].filter(Boolean);
@@ -740,8 +939,13 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
   const isDelivery = tx.channel === 'delivery';
   const isOnline = isExternalOnlineOrder(tx);
+  const memberName = tx.memberName?.trim() || '';
+  if (memberName) {
+    r += `${L.member}: ${memberName}\n`;
+  } else if ((isDelivery || isOnline) && tx.customerName?.trim()) {
+    r += `${L.customer}: ${tx.customerName.trim()}\n`;
+  }
   if (isDelivery || isOnline) {
-    if (tx.customerName?.trim()) r += `${L.customer}: ${tx.customerName.trim()}\n`;
     if (tx.customerPhone?.trim()) r += `Tel: ${tx.customerPhone.trim()}\n`;
   }
   if (isDelivery && tx.shippingAddress?.trim()) {
@@ -757,18 +961,11 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (tx.splitLabel) r += `${tx.splitLabel}\n`;
   r += thin + '\n';
 
+  // Guest receipt: no COURSE banners (those stay on kitchen tickets only).
   for (const item of tx.items) {
-    r += item.name.slice(0, width) + '\n';
-    const qtyLabel =
-      item.weightKg != null && item.weightKg > 0
-        ? `${item.weightKg.toFixed(3)} kg @ ${item.unitPrice.toFixed(2)}/kg`
-        : `  ${item.quantity} x ${item.unitPrice.toFixed(2)}`;
-    r +=
-      padLine(
-        qtyLabel,
-        item.lineTotal.toFixed(2),
-        width
-      ) + '\n';
+    for (const line of formatCustomerReceiptItemLines(item, width)) {
+      r += line + '\n';
+    }
   }
 
   r += thin + '\n';
@@ -791,11 +988,15 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   r += padLine(`${L.total}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
   r += sep + '\n';
   if (!tx.isProvisional) {
+    const payMethodRaw = String(tx.paymentMethod || '');
+    const isPayLater = /^pay[_-]?later/i.test(payMethodRaw);
     const tenders =
       tx.paymentLines && tx.paymentLines.length > 0
         ? tx.paymentLines
         : [{ method: tx.paymentMethod, amount: tx.total }];
-    if (tenders.length === 1) {
+    if (isPayLater) {
+      r += `${L.payment}: ${formatPayLaterPaymentLabel(L, tx.payLaterTender || payMethodRaw)}\n`;
+    } else if (tenders.length === 1) {
       r += `${L.payment}: ${paymentLabel(L, tenders[0]!.method)}\n`;
     } else {
       r += `${L.payment}:\n`;
@@ -808,8 +1009,14 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
           ) + '\n';
       }
     }
-    r += padLine(`${L.paid}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
+    const payLaterCollected =
+      tx.payLaterCollected === true ||
+      /pay[_-]?later[:_\s]+(cash|card|terminal)/i.test(payMethodRaw);
+    if (!isPayLater || payLaterCollected) {
+      r += padLine(`${L.paid}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
+    }
     if (
+      (!isPayLater || payLaterCollected) &&
       tx.amountTendered != null &&
       tx.amountTendered > 0 &&
       roundMoney2(tx.amountTendered) !== roundMoney2(tx.total)
@@ -837,6 +1044,8 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
           width
         ) + '\n';
     }
+    const loyaltyBlock = formatLoyaltyReceiptLines(tx, L, width);
+    if (loyaltyBlock) r += loyaltyBlock;
   }
   // VAT calculations below payment section (includes gift-card sell/reload lines)
   const vatTotals = resolveOrderReceiptVat(tx);
@@ -937,12 +1146,6 @@ export function generateRefundReceiptText(tx: RefundReceiptPrint, panelLang?: st
   return r;
 }
 
-export type KitchenComboLine = {
-  slotName?: string;
-  productName: string;
-  modifierLines?: string[];
-};
-
 export type KitchenTicketItem = WebPosReceiptItem & {
   courseNumber?: number | null;
   /** One indented line per modifier/extra (non-combo or combo-level extras). */
@@ -1031,6 +1234,9 @@ export type KitchenTicketOpts = {
   /** Void ticket: title CANCELLED + strikethrough item lines */
   cancelled?: boolean;
   cancelReason?: string | null;
+  /** Items routed to another kitchen printer (cross-station footer). */
+  otherStationItems?: KitchenTicketItem[];
+  otherStationLabel?: string | null;
 };
 
 export type KitchenMessageTicketOpts = {
@@ -1072,14 +1278,6 @@ function kitchenItemCount(items: WebPosReceiptItem[]): number {
     if (i.weightKg != null && i.weightKg > 0) return s + 1;
     return s + (Number(i.quantity) || 0);
   }, 0);
-}
-
-function formatKitchenQtyLabel(item: KitchenTicketItem): string {
-  const weightKg = item.weightKg;
-  if (weightKg != null && weightKg > 0) {
-    return `${weightKg.toFixed(3)} kg`;
-  }
-  return String(Number(item.quantity) || 0);
 }
 
 function formatKitchenChannelWhenLines(
@@ -1148,25 +1346,16 @@ function formatKitchenItemLines(
   cancelled: boolean,
   forEscPos: boolean
 ): KitchenLine[] {
-  const qty = formatKitchenQtyLabel(item);
-  const fullName = String(item.name || '').replace(/\s+/g, ' ').trim();
-  let product = fullName;
-  let modifierLines = (item.modifierLines || []).map((m) => m.trim()).filter(Boolean);
+  const qtyPrefix = formatQtyArticlePrefix(item);
+  const { product, modifiers: modifierLines } = splitReceiptArticle(
+    item.name,
+    item.modifierLines
+  );
   const comboLines = (item.comboLines || []).filter((c) => c.productName?.trim());
   const lineNote = String(item.lineNote || '').trim();
-
-  if (!modifierLines.length && !comboLines.length) {
-    const paren = fullName.match(/^(.*?)\s*\((.*)\)\s*$/);
-    if (paren) {
-      product = paren[1].trim();
-      modifierLines = paren[2]
-        .split(/,\s*/)
-        .map((m) => m.trim())
-        .filter(Boolean);
-    }
-  }
-
-  const primary = `${qty} ${product}`.trim();
+  const extraWidth = Math.max(8, width - qtyPrefix.length);
+  const qty = qtyPrefix.trimEnd();
+  const primary = `${qtyPrefix}${product}`.trim();
   const wrappedPrimary = wrapKitchenWords(primary, width);
   const lines: KitchenLine[] = [];
 
@@ -1203,37 +1392,40 @@ function formatKitchenItemLines(
     pushItem(qty, comboLines.length || modifierLines.length || lineNote ? 0 : 1);
   }
 
+  const pushDashed = (text: string, blankAfter = 0) => {
+    const line = formatReceiptExtraLine(qtyPrefix, text);
+    if (line.length <= width) {
+      pushExtra(line, blankAfter);
+      return;
+    }
+    const dashPrefix = `${extraIndent(qtyPrefix)}- `;
+    const wrapped = wrapKitchenWords(stripLeadingDash(text), Math.max(8, width - dashPrefix.length));
+    wrapped.forEach((w, i) => {
+      const row = i === 0 ? `${dashPrefix}${w}` : `${extraIndent(qtyPrefix)}  ${w}`;
+      pushExtra(row, i === wrapped.length - 1 ? blankAfter : 0);
+    });
+  };
+
   for (const combo of comboLines) {
     const slotLabel = combo.slotName?.trim();
     const pickName = combo.productName.trim();
     const head = slotLabel ? `${slotLabel}: ${pickName}` : pickName;
-    const wrappedHead = wrapKitchenWords(head, Math.max(8, width - 2));
-    wrappedHead.forEach((w, i) => {
-      const mods = combo.modifierLines || [];
-      const lastHead = i === wrappedHead.length - 1 && !mods.length;
-      pushExtra(`  ${w}`, lastHead ? 0 : 0);
-    });
+    pushDashed(head);
     for (const mod of combo.modifierLines || []) {
-      for (const w of wrapKitchenWords(mod, Math.max(8, width - 4))) {
-        pushExtra(`    ${w}`);
-      }
+      const text = stripLeadingDash(mod);
+      if (text) pushDashed(text);
     }
   }
 
   if (modifierLines.length) {
-    modifierLines.forEach((mod, i) => {
-      const wrapped = wrapKitchenWords(mod, Math.max(8, width - 2));
-      wrapped.forEach((w, j) => {
-        const last = i === modifierLines.length - 1 && j === wrapped.length - 1 && !lineNote;
-        pushExtra(`  ${w}`, last ? 0 : 0);
-      });
-    });
+    modifierLines.forEach((mod) => pushDashed(mod));
   }
 
   if (lineNote) {
     const noteText = forEscPos ? `*${lineNote}*` : `_${lineNote}_`;
-    for (const w of wrapKitchenWords(noteText, Math.max(8, width - 2))) {
-      pushNote(w, 1);
+    const notePrefix = extraIndent(qtyPrefix);
+    for (const w of wrapKitchenWords(noteText, extraWidth)) {
+      pushNote(`${notePrefix}${w}`, 1);
     }
   } else if (lines.length && (lines[lines.length - 1]?.blankAfter || 0) === 0) {
     lines[lines.length - 1] = { ...lines[lines.length - 1]!, blankAfter: 1 };
@@ -1312,23 +1504,35 @@ function buildKitchenTicketLines(
 
   const items = opts.items;
   const hasCourses =
-    !cancelled &&
-    opts.groupByCourse !== false &&
-    items.some((i) => i.courseNumber != null && i.courseNumber > 0);
+    !cancelled && items.some((i) => i.courseNumber != null && Number(i.courseNumber) > 0);
 
   if (hasCourses) {
-    const courses = Array.from(
-      new Set(items.map((i) => i.courseNumber || 1).filter((n) => n > 0))
-    ).sort((a, b) => a - b);
-    for (const course of courses) {
-      lines.push({ kind: 'header', text: `COURSE ${course}` });
-      for (const item of items.filter((i) => (i.courseNumber || 1) === course)) {
+    for (const group of groupReceiptItemsByCourse(items)) {
+      if (group.course != null) {
+        lines.push({
+          kind: 'center',
+          text: formatCourseBanner(group.course, L.courseLabel),
+          blankAfter: 0,
+        });
+      }
+      for (const item of group.items) {
         lines.push(...formatKitchenItemLines(item, itemWidth, cancelled, forEscPos));
       }
     }
   } else {
     for (const item of items) {
       lines.push(...formatKitchenItemLines(item, itemWidth, cancelled, forEscPos));
+    }
+  }
+
+  if (opts.otherStationItems?.length) {
+    lines.push({ kind: 'normal', text: thin });
+    lines.push({
+      kind: 'center',
+      text: (opts.otherStationLabel || '>>> OTHER STATION <<<').slice(0, footWidth),
+    });
+    for (const item of opts.otherStationItems) {
+      lines.push(...formatKitchenItemLines(item, itemWidth, false, forEscPos));
     }
   }
 
@@ -1342,8 +1546,12 @@ function buildKitchenTicketLines(
 
 /** Plain-text kitchen ticket (fallback / preview). */
 export function generateKitchenTicketText(opts: KitchenTicketOpts): string {
-  return buildKitchenTicketLines(opts, false)
-    .lines.map((l) => `${l.text}\n${'\n'.repeat(l.blankAfter || 0)}`)
+  const { width, lines } = buildKitchenTicketLines(opts, false);
+  return lines
+    .map((l) => {
+      const text = l.kind === 'center' ? centerLine(l.text.trim(), width) : l.text;
+      return `${text}\n${'\n'.repeat(l.blankAfter || 0)}`;
+    })
     .join('');
 }
 
@@ -1585,12 +1793,22 @@ export type EodVatRow = {
   brut: number;
 };
 
+export type EodCashMovement = {
+  type: 'in' | 'out' | string;
+  amount: number;
+  reason?: string | null;
+  staffName?: string | null;
+  createdAt?: string | null;
+};
+
 /** Cash drawer reconciliation for a closed (or closing) shift. */
 export type EodShiftCash = {
   openingFloat: number;
   cashSales: number;
   cashIn?: number;
   cashOut?: number;
+  cashRefunds?: number;
+  movements?: EodCashMovement[];
   expectedCash: number;
   closingCashCounted?: number | null;
   variance?: number | null;
@@ -1634,6 +1852,13 @@ export type EodReportPrint = {
   tipsTotal?: number;
   grandTotal?: number;
   refundTotal: number;
+  refundCount?: number;
+  refundedOrders?: Array<{
+    orderNumber: string;
+    refundAmount: number;
+    refundReason?: string | null;
+  }>;
+  refundRows?: Array<{ method: string; total: number }>;
   cancelledCount: number;
   cancelledTotal: number;
   cashTotal: number;
@@ -1761,7 +1986,35 @@ export function generateEodReportText(report: EodReportPrint): string {
       ) + '\n';
   }
   if (report.refundTotal > 0) {
+    r += '\n';
+    r += thin + '\n';
+    r += centerLine(L.refunds, width) + '\n';
+    r += thin + '\n';
     r += padLine(L.refunds, money(report.refundTotal), width) + '\n';
+    if (report.refundCount != null) {
+      r += padLine(L.refundCount, String(report.refundCount), width) + '\n';
+    }
+    for (const row of report.refundedOrders || []) {
+      r +=
+        padLine(
+          String(row.orderNumber || '').slice(0, Math.max(8, width - 14)),
+          `-${money(row.refundAmount)}`,
+          width
+        ) + '\n';
+      if (row.refundReason?.trim()) {
+        for (const line of wrapKitchenWords(row.refundReason.trim(), width)) {
+          r += line + '\n';
+        }
+      }
+    }
+    if (report.refundRows?.length) {
+      r += '\n';
+      r += centerLine(L.refundsByPayment, width) + '\n';
+      for (const row of report.refundRows) {
+        r +=
+          padLine(paymentLabel(L, row.method), money(row.total), width) + '\n';
+      }
+    }
   }
   r += '\n';
   r += thin + '\n';
@@ -1836,6 +2089,28 @@ export function generateEodReportText(report: EodReportPrint): string {
     r += thin + '\n';
     r += centerLine(L.cashDrawer, width) + '\n';
     r += thin + '\n';
+    const movementTime = (iso?: string | null) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (!Number.isFinite(d.getTime())) return '';
+      try {
+        return d.toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: 'Europe/Zurich',
+        });
+      } catch {
+        return '';
+      }
+    };
+    const movementLeft = (m: EodCashMovement) => {
+      const time = movementTime(m.createdAt);
+      const reason = (m.reason || m.staffName || '').trim();
+      const label = [time, reason].filter(Boolean).join(' ') || '—';
+      return `  ${label}`.slice(0, Math.max(8, width - 10));
+    };
+
     for (let i = 0; i < shiftRows.length; i++) {
       const s = shiftRows[i]!;
       if (shiftRows.length > 1) {
@@ -1844,16 +2119,33 @@ export function generateEodReportText(report: EodReportPrint): string {
           : `${i + 1}`;
         r += centerLine(label.slice(0, width), width) + '\n';
       }
-      r += padLine(L.openingFloat, money(s.openingFloat), width) + '\n';
-      r += centerLine(`(${L.floatCarriesForward})`, width) + '\n';
-      r += padLine(L.cashSalesDuringShift, money(s.cashSales), width) + '\n';
-      if ((s.cashIn ?? 0) > 0) {
-        r += padLine(L.cashInDuringShift, money(s.cashIn!), width) + '\n';
+      const opening = Number(s.openingFloat || 0);
+      const cashRefunds = Number(s.cashRefunds || 0);
+      const cashSalesNet = Number(s.cashSales || 0);
+      const cashSalesGross = Math.round((cashSalesNet + cashRefunds) * 100) / 100;
+      const cashIn = Number(s.cashIn || 0);
+      const cashOut = Number(s.cashOut || 0);
+      const ins = (s.movements || []).filter((m) => String(m.type).toLowerCase() !== 'out');
+      const outs = (s.movements || []).filter((m) => String(m.type).toLowerCase() === 'out');
+
+      if (opening > 0) {
+        r += padLine(L.openingFloat, money(opening), width) + '\n';
+        r += centerLine(`(${L.floatCarriesForward})`, width) + '\n';
       }
-      if ((s.cashOut ?? 0) > 0) {
-        r += padLine(L.cashOutDuringShift, money(-(s.cashOut ?? 0)), width) + '\n';
+      r += padLine(L.cashSalesDuringShift, money(cashSalesGross), width) + '\n';
+      r += padLine(L.cashInDuringShift, money(cashIn), width) + '\n';
+      for (const m of ins) {
+        r += padLine(movementLeft(m), money(m.amount), width) + '\n';
+      }
+      r += padLine(L.cashOutDuringShift, cashOut > 0 ? money(-cashOut) : money(0), width) + '\n';
+      for (const m of outs) {
+        r += padLine(movementLeft(m), money(-Math.abs(m.amount)), width) + '\n';
+      }
+      if (cashRefunds > 0) {
+        r += padLine(L.cashRefundsDuringShift, money(-cashRefunds), width) + '\n';
       }
       r += padLine(L.expectedInDrawer, money(s.expectedCash), width) + '\n';
+      r += centerLine(L.expectedDrawerFormula, width) + '\n';
       if (s.closingCashCounted != null) {
         r += padLine(L.countedClosingCash, money(s.closingCashCounted), width) + '\n';
       }
@@ -1941,9 +2233,12 @@ export async function buildReceiptEscPos(
   } = {}
 ): Promise<Uint8Array> {
   const paper = opts.paperWidthMm ?? 80;
-  const qrRaster = opts.qrData
+  let qrRaster = opts.qrData
     ? await generateReceiptQrRasterEscPos(opts.qrData, paper)
     : null;
+  if (!qrRaster?.length && opts.qrData) {
+    qrRaster = escposQrCode(opts.qrData, paper === 58 ? 4 : 5);
+  }
   const deliveryQrRaster = opts.deliveryQrData
     ? await generateReceiptQrRasterEscPos(opts.deliveryQrData, paper)
     : null;
@@ -2017,13 +2312,14 @@ export async function logoUrlToEscPos(
 
 export function printersForRole(
   settings: PosPrintSettingsClient | null | undefined,
-  role: 'receipt' | 'kitchen' | 'eod'
+  role: 'receipt' | 'kitchen' | 'eod' | 'labels'
 ): Array<{ name: string; paperWidthMm: 58 | 80 }> {
   const globalPaper: 58 | 80 = settings?.paperWidthMm === 58 ? 58 : 80;
   const list = (settings?.printers || []).filter((p) => p.enabled !== false && p.name);
   const matched = list.filter((p) => {
     if (role === 'receipt') return !!p.printReceipts;
     if (role === 'kitchen') return !!p.printKitchenTickets;
+    if (role === 'labels') return !!(p as { printLabels?: boolean }).printLabels;
     return !!p.printEndOfDayReports;
   });
   if (matched.length) {
@@ -2126,6 +2422,46 @@ export function buildKitchenPrintJobs(
   return jobs;
 }
 
+/** When multiple kitchen printers share one order, map printer name → items on other stations. */
+export function buildKitchenCrossStationFooters(
+  jobs: KitchenPrintJob[]
+): Map<string, KitchenTicketItem[]> {
+  const map = new Map<string, KitchenTicketItem[]>();
+  if (jobs.length < 2) return map;
+  for (const job of jobs) {
+    const key = (job.printerName || '').trim();
+    const others: KitchenTicketItem[] = [];
+    for (const other of jobs) {
+      if ((other.printerName || '').trim() === key) continue;
+      others.push(...other.items);
+    }
+    if (others.length) map.set(key, others);
+  }
+  return map;
+}
+
+/**
+ * Kitchen jobs that will not reprint on a guest-receipt printer.
+ * Kitchen only goes to dedicated kitchen printers (not the guest-receipt printer).
+ */
+export function kitchenJobsExcludingReceiptPrinters(
+  items: KitchenTicketItem[],
+  settings: PosPrintSettingsClient | null | undefined
+): KitchenPrintJob[] {
+  const jobs = buildKitchenPrintJobs(items, settings);
+  const receiptNames = new Set(
+    (settings?.printers || [])
+      .filter((p) => p.enabled !== false && p.printReceipts && p.name)
+      .map((p) => p.name)
+  );
+  return jobs.filter((j) => {
+    const name = (j.printerName || '').trim();
+    if (!name) return false;
+    if (receiptNames.has(name)) return false;
+    return true;
+  });
+}
+
 export function resolveReceiptLanguage(
   settings: PosPrintSettingsClient | null | undefined,
   panelLanguage?: string | null
@@ -2164,6 +2500,7 @@ export type PosOrderForReceipt = {
   orderSource?: string | null;
   orderType?: string | null;
   fulfillmentChannel?: string | null;
+  scheduledFor?: string | number | Date | null;
   completedAt?: string | null;
   createdAt: string;
   splitCheckNumber?: number | null;
@@ -2175,13 +2512,29 @@ export type PosOrderForReceipt = {
   paymentBreakdown?: Array<{ method: string; amount: number }> | null;
   /** Remaining gift card balance after redemption (from notes or redeem tx). */
   giftCardRemainingBalance?: number | null;
+  pointsEarned?: number | null;
+  pointsRedeemed?: number | null;
+  memberName?: string | null;
+  loyaltyPointsBalance?: number | null;
   items: Array<{
     id?: string;
     name?: string | null;
+    productName?: string | null;
     quantity: number;
     totalPrice: number;
     unitPrice?: number;
     refundedQuantity?: number;
+    productId?: string | null;
+    categoryId?: string | null;
+    product?: { categoryId?: string | null } | null;
+    weightKg?: number | null;
+    courseNumber?: number | null;
+    selectedExtras?: Array<{ name?: string | null }> | null;
+    comboSelections?: Array<{
+      slotName?: string | null;
+      productName?: string | null;
+      selectedExtras?: Array<{ name?: string | null }>;
+    }> | null;
   }>;
   refundReason?: string | null;
 };
@@ -2217,6 +2570,22 @@ export function posOrderToWebPosReceipt(
       : null);
   const meta = parseOrderMetaNotes(order.notes);
   const ticketDisplay = order.ticketDisplay || meta.ticketDisplay || null;
+  const loyaltyPointsEarned =
+    order.pointsEarned != null && Number(order.pointsEarned) > 0
+      ? Math.floor(Number(order.pointsEarned))
+      : meta.pointsEarned != null && meta.pointsEarned > 0
+        ? meta.pointsEarned
+        : null;
+  const loyaltyPointsBalance =
+    order.loyaltyPointsBalance != null && Number.isFinite(Number(order.loyaltyPointsBalance))
+      ? Math.max(0, Math.floor(Number(order.loyaltyPointsBalance)))
+      : meta.pointsBalance != null
+        ? meta.pointsBalance
+        : null;
+  const hasLoyalty =
+    (loyaltyPointsEarned != null && loyaltyPointsEarned > 0) || loyaltyPointsBalance != null;
+  const memberName =
+    order.memberName || meta.memberName || (hasLoyalty ? order.customerName : null) || null;
   const adyen = resolveOrderAdyenReceipts(order);
   const paymentLines = (() => {
     const tenders = parsePaymentBreakdown(
@@ -2242,22 +2611,32 @@ export function posOrderToWebPosReceipt(
     completedAt,
     channel: order.channel || order.fulfillmentChannel || undefined,
     paymentMethod: order.paymentMethod || 'cash',
+    payLaterTender: payLaterCollectedTender(order.paymentMethod),
+    payLaterCollected: !!payLaterCollectedTender(order.paymentMethod),
     paymentLines,
     customerName: order.customerName,
+    memberName,
+    loyaltyPointsEarned,
+    loyaltyPointsBalance,
     customerPhone: order.customerPhone,
     shippingAddress: order.shippingAddress,
     orderSource: order.orderSource,
     orderType: order.orderType,
     tableLabel: order.tableLabel,
     guestCount: order.guestCount,
-    items: (order.items || []).map((i) => ({
-      name: resolveOrderItemName(i.name),
-      quantity: i.quantity,
-      unitPrice: Number(i.unitPrice ?? (i.quantity ? i.totalPrice / i.quantity : i.totalPrice)),
-      lineTotal: Number(i.totalPrice),
-      productId: (i as { productId?: string | null }).productId ?? null,
-      weightKg: (i as { weightKg?: number | null }).weightKg ?? null,
-    })),
+    items: (order.items || []).map((i) =>
+      buildKitchenTicketItemFromLine({
+        name: resolveOrderItemName(i.name, i.productName),
+        quantity: Number(i.quantity) || 0,
+        unitPrice: Number(i.unitPrice ?? (i.quantity ? i.totalPrice / i.quantity : i.totalPrice)),
+        lineTotal: Number(i.totalPrice),
+        productId: i.productId ?? null,
+        weightKg: i.weightKg ?? null,
+        courseNumber: i.courseNumber,
+        selectedExtras: i.selectedExtras || [],
+        comboSelections: i.comboSelections || [],
+      })
+    ),
     subtotal,
     discount: Number(order.discountAmount ?? 0),
     taxAmount,
@@ -2321,7 +2700,7 @@ export function generateOrderNotificationTicketEscPos(opts: OrderNotificationTic
   const L = receiptLabels(lang);
   const sep = '-'.repeat(width);
   const when = opts.orderedAt ? formatDateTimeDDMMYYYY(new Date(opts.orderedAt)) : formatDateTimeDDMMYYYY(new Date());
-  const channel = channelLabel(opts.channel || 'takeaway', lang);
+  const channel = channelLabel(L, opts.channel || 'takeaway');
   const pickupLine = opts.scheduledFor
     ? `${L.pickupTime}: ${formatTimeHHMM(new Date(opts.scheduledFor))}`
     : L.asap;
@@ -2347,9 +2726,12 @@ export function generateOrderNotificationTicketEscPos(opts: OrderNotificationTic
   }
   lines.push(sep);
   for (const item of opts.items.slice(0, 12)) {
-    const qty = Number(item.quantity) || 1;
-    const name = String(item.name || 'Item').replace(/\s+/g, ' ').trim();
-    lines.push(`${qty}x ${name}`.slice(0, width));
+    const qtyPrefix = formatQtyArticlePrefix({ quantity: item.quantity });
+    const { product, modifiers } = splitReceiptArticle(String(item.name || 'Item'));
+    lines.push(`${qtyPrefix}${product}`.slice(0, width));
+    for (const mod of modifiers) {
+      lines.push(formatReceiptExtraLine(qtyPrefix, mod).slice(0, width));
+    }
   }
   if (opts.items.length > 12) {
     lines.push(`+${opts.items.length - 12} ${L.totalItems.toLowerCase()}`);

@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   foreignKey,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import type { PosPrintSettings } from "../lib/pos-print-settings";
 import type { TableQrSettings } from "../lib/table-qr-settings";
 
@@ -199,6 +199,15 @@ export const merchants = pgTable(
     webposTerminalEnabled: boolean("webpos_terminal_enabled").default(true).notNull(),
     /** Allow Gift Card as a WebPOS tender (requires gift card settings enabled) */
     webposGiftCardEnabled: boolean("webpos_gift_card_enabled").default(false).notNull(),
+    /** Allow Invoice as a WebPOS / Android checkout tender */
+    webposInvoiceEnabled: boolean("webpos_invoice_enabled").default(true).notNull(),
+    /** Bank details printed on A4 invoices + Swiss QR-bill */
+    bankIban: varchar("bank_iban", { length: 34 }),
+    bankQrIban: varchar("bank_qr_iban", { length: 34 }),
+    bankName: varchar("bank_name", { length: 255 }),
+    bankAccountHolder: varchar("bank_account_holder", { length: 255 }),
+    /** Per-merchant invoice number sequence (INV-YYYY-NNNNN) */
+    invoiceSequence: integer("invoice_sequence").default(0).notNull(),
     /**
      * Gift card / stored-value settings:
      * { enabled, presetDenominations, minAmount, maxAmount, reloadEnabled, customAmountEnabled }
@@ -243,6 +252,26 @@ export const merchants = pgTable(
      * Max concurrent waiter stations (waiter web + Android waiter). 0 = unlimited.
      */
     maxWaiterPosts: integer("max_waiter_posts").default(0).notNull(),
+    /**
+     * Paid restaurant inventory + recipes addon. Superadmin/reseller only (like POS seats).
+     */
+    inventoryAddonEnabled: boolean("inventory_addon_enabled").default(false).notNull(),
+    /**
+     * Paid Chaslay Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
+     */
+    signageAddonEnabled: boolean("signage_addon_enabled").default(false).notNull(),
+    /** Max TV screens when the signage addon is on. Default 2. */
+    signageScreenLimit: integer("signage_screen_limit").default(2).notNull(),
+    /**
+     * Extra yield / waste factor applied to recipe usage on sale (0–0.50). Default 20%.
+     */
+    inventoryWasteFactor: decimal("inventory_waste_factor", { precision: 5, scale: 4 })
+      .default("0.20")
+      .notNull(),
+    /** Master switch: email preferred supplier when an item hits par / reorder point. */
+    inventoryAutoReorderEmailEnabled: boolean("inventory_auto_reorder_email_enabled")
+      .default(false)
+      .notNull(),
     /** WebPOS / counter accent theme: teal | green | blue | violet */
     posColorTheme: varchar("pos_color_theme", { length: 20 }).default("teal").notNull(),
     /** Online / phone restaurant table reservations */
@@ -319,6 +348,8 @@ export const merchants = pgTable(
     resellerId: uuid("reseller_id").references(() => resellers.id, { onDelete: "set null" }),
     /** Assigned POS edition / feature pack (null = legacy full access) */
     editionId: uuid("edition_id").references(() => editions.id, { onDelete: "set null" }),
+    /** Reseller/agency billing flag — paid plan assigned by superadmin or owning reseller */
+    planBillingPaid: boolean("plan_billing_paid").default(true).notNull(),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
     /** Set when merchant chooses a password (invite accepted or admin set one) */
     passwordSetAt: timestamp("password_set_at"),
@@ -430,6 +461,26 @@ export const platformSettings = pgTable("platform_settings", {
   value: text("value"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+/** One-time password reset tokens for superadmin / reseller / merchant / staff. */
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: varchar("email", { length: 255 }).notNull(),
+    role: varchar("role", { length: 20 }).notNull(),
+    accountId: uuid("account_id").notNull(),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tokenHashIdx: uniqueIndex("password_reset_tokens_token_hash_idx").on(table.tokenHash),
+    emailIdx: index("password_reset_tokens_email_idx").on(table.email),
+    expiresIdx: index("password_reset_tokens_expires_idx").on(table.expiresAt),
+  })
+);
 
 /** Merchant subscription purchases paid to the platform Adyen account */
 export const subscriptionPayments = pgTable(
@@ -664,6 +715,8 @@ export const products = pgTable(
     allowExtras: boolean("allow_extras").default(false).notNull(),
     /** If set (>0), customer can claim this product free by spending this many loyalty points */
     loyaltyRewardPoints: integer("loyalty_reward_points"),
+    /** Portions this recipe produces. Sale consumes line qty / yield (default 1). */
+    recipeYield: decimal("recipe_yield", { precision: 12, scale: 4 }).default("1").notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
     clientId: varchar("client_id", { length: 64 }), // offline sync id from POS device
     isActive: boolean("is_active").default(true).notNull(),
@@ -673,6 +726,9 @@ export const products = pgTable(
   (table) => ({
     merchantIdIdx: index("products_merchant_id_idx").on(table.merchantId),
     barcodeIdx: index("products_barcode_idx").on(table.barcode),
+    barcodeUniqueIdx: uniqueIndex("products_merchant_barcode_uidx")
+      .on(table.merchantId, table.barcode)
+      .where(sql`${table.barcode} IS NOT NULL`),
     clientIdIdx: index("products_client_id_idx").on(table.clientId),
     typeIdx: index("products_type_idx").on(table.productType),
     sortOrderIdx: index("products_sort_order_idx").on(table.merchantId, table.sortOrder),
@@ -722,11 +778,15 @@ export const modifierOptions = pgTable(
     saleStatus: varchar("sale_status", { length: 40 }).default("in_stock").notNull(),
     isDefault: boolean("is_default").default(false).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
+    /** Optional ingredient consumed when this extra is selected on a paid sale. */
+    inventoryItemId: uuid("inventory_item_id"),
+    inventoryQty: decimal("inventory_qty", { precision: 14, scale: 4 }).default("0").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
     groupIdIdx: index("modifier_options_group_id_idx").on(table.groupId),
+    inventoryItemIdx: index("modifier_options_inventory_item_idx").on(table.inventoryItemId),
   })
 );
 
@@ -861,8 +921,11 @@ export const orders = pgTable(
     pointsEarned: integer("points_earned").default(0),
     pointsRedeemed: integer("points_redeemed").default(0),
     total: decimal("total", { precision: 10, scale: 2 }).notNull(),
-    paymentMethod: varchar("payment_method", { length: 50 }), // cash, card, terminal, loyalty, online
+    paymentMethod: varchar("payment_method", { length: 50 }), // cash, card, terminal, loyalty, online, invoice
     paymentStatus: varchar("payment_status", { length: 50 }), // pending, awaiting_payment, completed, failed
+    invoiceNumber: varchar("invoice_number", { length: 50 }),
+    invoiceIssuedAt: timestamp("invoice_issued_at"),
+    invoiceDueAt: timestamp("invoice_due_at"),
     adyenReference: varchar("adyen_reference", { length: 255 }),
     /** Original Adyen POI transaction timestamp (required for terminal card refunds) */
     adyenPoiTransactionTs: timestamp("adyen_poi_transaction_ts"),
@@ -1004,6 +1067,167 @@ export const posSessions = pgTable(
 );
 
 // ============================================================================
+// KITCHEN DISPLAY (browser KDS)
+// ============================================================================
+
+export const kdsStations = pgTable(
+  "kds_stations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    token: varchar("token", { length: 128 }).notNull(),
+    orderTypes: json("order_types").$type<string[]>().default([]).notNull(),
+    categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
+    productIds: json("product_ids").$type<string[]>().default([]).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("kds_stations_merchant_id_idx").on(table.merchantId),
+    tokenIdx: index("kds_stations_token_idx").on(table.token),
+  })
+);
+
+export const kdsTickets = pgTable(
+  "kds_tickets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    ticketKey: varchar("ticket_key", { length: 255 }).notNull(),
+    orderNumber: varchar("order_number", { length: 64 }),
+    tableLabel: varchar("table_label", { length: 120 }),
+    tabNumber: varchar("tab_number", { length: 64 }),
+    channel: varchar("channel", { length: 50 }),
+    status: varchar("status", { length: 30 }).default("pending").notNull(),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("kds_tickets_merchant_id_idx").on(table.merchantId),
+    ticketKeyIdx: index("kds_tickets_merchant_ticket_key_idx").on(table.merchantId, table.ticketKey),
+  })
+);
+
+export const kdsTicketItems = pgTable(
+  "kds_ticket_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ticketId: uuid("ticket_id")
+      .notNull()
+      .references(() => kdsTickets.id, { onDelete: "cascade" }),
+    lineId: varchar("line_id", { length: 128 }).notNull(),
+    productId: uuid("product_id"),
+    categoryId: uuid("category_id"),
+    name: varchar("name", { length: 255 }).notNull(),
+    quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
+    lineNote: text("line_note"),
+    courseNumber: integer("course_number"),
+    modifiersJson: json("modifiers_json").$type<Record<string, unknown>>().default({}),
+    status: varchar("status", { length: 30 }).default("pending").notNull(),
+    readyAt: timestamp("ready_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    ticketIdx: index("kds_ticket_items_ticket_id_idx").on(table.ticketId),
+    lineIdx: index("kds_ticket_items_line_id_idx").on(table.ticketId, table.lineId),
+  })
+);
+
+export const SIGNAGE_TEMPLATES = [
+  "dark_pizza",
+  "kebab_green",
+  "cafe_cream",
+  "portrait_poster",
+  "lunch_special",
+] as const;
+export type SignageTemplate = (typeof SIGNAGE_TEMPLATES)[number];
+
+export const SIGNAGE_ORIENTATIONS = ["landscape", "portrait"] as const;
+export type SignageOrientation = (typeof SIGNAGE_ORIENTATIONS)[number];
+
+export const SIGNAGE_SLIDE_TYPES = ["menu", "image", "image_text"] as const;
+export type SignageSlideType = (typeof SIGNAGE_SLIDE_TYPES)[number];
+
+/** Playlist schedule: always on, selected weekdays, or lunch/dinner daypart (Europe/Zurich). */
+export type SignageSchedule = {
+  type: "always" | "weekdays" | "daypart";
+  weekdays?: number[];
+  daypart?: "lunch" | "dinner";
+  startTime?: string;
+  endTime?: string;
+};
+
+export const signagePlaylists = pgTable(
+  "signage_playlists",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    template: varchar("template", { length: 40 }).default("dark_pizza").notNull(),
+    schedule: json("schedule").$type<SignageSchedule>().default({ type: "always" }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("signage_playlists_merchant_id_idx").on(table.merchantId),
+  })
+);
+
+export const signageScreens = pgTable(
+  "signage_screens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    token: varchar("token", { length: 128 }).notNull(),
+    orientation: varchar("orientation", { length: 20 }).default("landscape").notNull(),
+    template: varchar("template", { length: 40 }).default("dark_pizza").notNull(),
+    playlistId: uuid("playlist_id").references(() => signagePlaylists.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("signage_screens_merchant_id_idx").on(table.merchantId),
+    tokenIdx: uniqueIndex("signage_screens_token_uidx").on(table.token),
+  })
+);
+
+export const signageSlides = pgTable(
+  "signage_slides",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playlistId: uuid("playlist_id")
+      .notNull()
+      .references(() => signagePlaylists.id, { onDelete: "cascade" }),
+    type: varchar("type", { length: 30 }).default("menu").notNull(),
+    durationSec: integer("duration_sec").default(10).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
+    headline: varchar("headline", { length: 255 }),
+    body: text("body"),
+    imageUrl: varchar("image_url", { length: 500 }),
+    showPrices: boolean("show_prices").default(true).notNull(),
+    showPhotos: boolean("show_photos").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    playlistIdx: index("signage_slides_playlist_id_idx").on(table.playlistId),
+  })
+);
+
+// ============================================================================
 // ORDER ITEMS
 // ============================================================================
 
@@ -1043,6 +1267,46 @@ export const orderItems = pgTable(
   },
   (table) => ({
     orderIdIdx: index("order_items_order_id_idx").on(table.orderId),
+  })
+);
+
+// ============================================================================
+// ORDER REFUNDS (partial + full history per ticket)
+// ============================================================================
+
+export const orderRefunds = pgTable(
+  "order_refunds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    /** referenced = capped by order total; goodwill = unreferenced compensation */
+    kind: varchar("kind", { length: 20 }).default("referenced").notNull(),
+    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    reason: text("reason"),
+    staffId: uuid("staff_id"),
+    staffName: varchar("staff_name", { length: 255 }),
+    /** [{ orderItemId, productName, quantity }] when item-level refund */
+    itemsJson: json("items_json").$type<
+      Array<{ orderItemId: string; productName?: string; quantity: number }> | null
+    >(),
+    /** Gift-first refund allocation { giftCard, cash, terminal, other } */
+    allocationJson: json("allocation_json").$type<{
+      giftCard?: number;
+      cash?: number;
+      terminal?: number;
+      other?: number;
+    } | null>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("order_refunds_merchant_id_idx").on(table.merchantId),
+    orderIdx: index("order_refunds_order_id_idx").on(table.orderId),
+    createdIdx: index("order_refunds_created_at_idx").on(table.createdAt),
   })
 );
 
@@ -2126,6 +2390,7 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   customer: one(customers, { fields: [orders.customerId], references: [customers.id] }),
   items: many(orderItems),
   paymentTransactions: many(paymentTransactions),
+  refunds: many(orderRefunds),
 }));
 
 /** Required so `orders.with.paymentTransactions` can be inferred by Drizzle. */
@@ -2148,6 +2413,40 @@ export const heldOrdersRelations = relations(heldOrders, ({ one }) => ({
   merchant: one(merchants, { fields: [heldOrders.merchantId], references: [merchants.id] }),
 }));
 
+export const kdsStationsRelations = relations(kdsStations, ({ one }) => ({
+  merchant: one(merchants, { fields: [kdsStations.merchantId], references: [merchants.id] }),
+}));
+
+export const kdsTicketsRelations = relations(kdsTickets, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [kdsTickets.merchantId], references: [merchants.id] }),
+  items: many(kdsTicketItems),
+}));
+
+export const kdsTicketItemsRelations = relations(kdsTicketItems, ({ one }) => ({
+  ticket: one(kdsTickets, { fields: [kdsTicketItems.ticketId], references: [kdsTickets.id] }),
+}));
+
+export const signageScreensRelations = relations(signageScreens, ({ one }) => ({
+  merchant: one(merchants, { fields: [signageScreens.merchantId], references: [merchants.id] }),
+  playlist: one(signagePlaylists, {
+    fields: [signageScreens.playlistId],
+    references: [signagePlaylists.id],
+  }),
+}));
+
+export const signagePlaylistsRelations = relations(signagePlaylists, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [signagePlaylists.merchantId], references: [merchants.id] }),
+  slides: many(signageSlides),
+  screens: many(signageScreens),
+}));
+
+export const signageSlidesRelations = relations(signageSlides, ({ one }) => ({
+  playlist: one(signagePlaylists, {
+    fields: [signageSlides.playlistId],
+    references: [signagePlaylists.id],
+  }),
+}));
+
 export const customerAddressesRelations = relations(customerAddresses, ({ one }) => ({
   customer: one(customers, {
     fields: [customerAddresses.customerId],
@@ -2162,6 +2461,11 @@ export const customerAddressesRelations = relations(customerAddresses, ({ one })
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
   product: one(products, { fields: [orderItems.productId], references: [products.id] }),
+}));
+
+export const orderRefundsRelations = relations(orderRefunds, ({ one }) => ({
+  order: one(orders, { fields: [orderRefunds.orderId], references: [orders.id] }),
+  merchant: one(merchants, { fields: [orderRefunds.merchantId], references: [merchants.id] }),
 }));
 
 export const loyaltyCardsRelations = relations(loyaltyCards, ({ one, many }) => ({
@@ -2338,6 +2642,236 @@ export const posCashMovements = pgTable(
     createdIdx: index("pos_cash_movements_created_idx").on(table.merchantId, table.createdAt),
   })
 );
+
+// ============================================================================
+// RESTAURANT INVENTORY (premium addon) — Lightspeed-style items / recipes / suppliers
+// ============================================================================
+
+export const inventorySuppliers = pgTable(
+  "inventory_suppliers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 255 }),
+    phone: varchar("phone", { length: 40 }),
+    address: text("address"),
+    contactPerson: varchar("contact_person", { length: 255 }),
+    notes: text("notes"),
+    /** Soft-delete when items still reference this supplier */
+    archivedAt: timestamp("archived_at"),
+    lastOrderEmailAt: timestamp("last_order_email_at"),
+    isDemo: boolean("is_demo").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_suppliers_merchant_idx").on(table.merchantId),
+    merchantNameIdx: index("inventory_suppliers_merchant_name_idx").on(table.merchantId, table.name),
+    demoIdx: index("inventory_suppliers_demo_idx").on(table.merchantId, table.isDemo),
+  })
+);
+
+export const inventoryItems = pgTable(
+  "inventory_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    /** kg | L | piece */
+    unit: varchar("unit", { length: 20 }).default("kg").notNull(),
+    cost: decimal("cost", { precision: 12, scale: 4 }).default("0").notNull(),
+    onHand: decimal("on_hand", { precision: 14, scale: 4 }).default("0").notNull(),
+    /** Par / reorder point (Lightspeed par level) */
+    minStock: decimal("min_stock", { precision: 14, scale: 4 }).default("0").notNull(),
+    /** Qty to request when at/below par */
+    reorderQty: decimal("reorder_qty", { precision: 14, scale: 4 }).default("0").notNull(),
+    supplierId: uuid("supplier_id").references(() => inventorySuppliers.id, { onDelete: "set null" }),
+    categoryId: uuid("category_id"),
+    perishable: boolean("perishable").default(false).notNull(),
+    autoReorderEnabled: boolean("auto_reorder_enabled").default(false).notNull(),
+    lastAutoReorderAt: timestamp("last_auto_reorder_at"),
+    isDemo: boolean("is_demo").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_items_merchant_idx").on(table.merchantId),
+    supplierIdx: index("inventory_items_supplier_idx").on(table.supplierId),
+    categoryIdx: index("inventory_items_category_idx").on(table.categoryId),
+    merchantNameIdx: index("inventory_items_merchant_name_idx").on(table.merchantId, table.name),
+    demoIdx: index("inventory_items_demo_idx").on(table.merchantId, table.isDemo),
+  })
+);
+
+export const inventoryCategories = pgTable(
+  "inventory_categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    isDemo: boolean("is_demo").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_categories_merchant_idx").on(table.merchantId),
+    merchantNameUidx: uniqueIndex("inventory_categories_merchant_name_uidx").on(
+      table.merchantId,
+      table.name
+    ),
+    demoIdx: index("inventory_categories_demo_idx").on(table.merchantId, table.isDemo),
+  })
+);
+
+export const inventoryUnits = pgTable(
+  "inventory_units",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    code: varchar("code", { length: 20 }).notNull(),
+    name: varchar("name", { length: 80 }).notNull(),
+    isDemo: boolean("is_demo").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_units_merchant_idx").on(table.merchantId),
+    merchantCodeUidx: uniqueIndex("inventory_units_merchant_code_uidx").on(table.merchantId, table.code),
+    demoIdx: index("inventory_units_demo_idx").on(table.merchantId, table.isDemo),
+  })
+);
+
+export const inventoryUnitRatios = pgTable(
+  "inventory_unit_ratios",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    fromCode: varchar("from_code", { length: 20 }).notNull(),
+    toCode: varchar("to_code", { length: 20 }).notNull(),
+    /** 1 fromCode = factor toCode (1 kg = 1000 g). */
+    factor: decimal("factor", { precision: 16, scale: 6 }).notNull(),
+    isDemo: boolean("is_demo").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_unit_ratios_merchant_idx").on(table.merchantId),
+    pairUidx: uniqueIndex("inventory_unit_ratios_pair_uidx").on(
+      table.merchantId,
+      table.fromCode,
+      table.toCode
+    ),
+    demoIdx: index("inventory_unit_ratios_demo_idx").on(table.merchantId, table.isDemo),
+  })
+);
+
+export const inventoryMovements = pgTable(
+  "inventory_movements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
+    /** in | out | waste | sale | adjust */
+    type: varchar("type", { length: 20 }).notNull(),
+    qty: decimal("qty", { precision: 14, scale: 4 }).notNull(),
+    unitCost: decimal("unit_cost", { precision: 12, scale: 4 }),
+    note: text("note"),
+    supplierName: varchar("supplier_name", { length: 255 }),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_movements_merchant_idx").on(table.merchantId),
+    itemIdx: index("inventory_movements_item_idx").on(table.itemId, table.createdAt),
+    orderIdx: index("inventory_movements_order_idx").on(table.orderId),
+    typeIdx: index("inventory_movements_type_idx").on(table.merchantId, table.type),
+  })
+);
+
+export const productRecipes = pgTable(
+  "product_recipes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
+    qty: decimal("qty", { precision: 14, scale: 4 }).notNull(),
+    unit: varchar("unit", { length: 20 }).default("kg").notNull(),
+    /** Sample data from demo import — safe to bulk-delete */
+    isDemo: boolean("is_demo").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("product_recipes_merchant_idx").on(table.merchantId),
+    productIdx: index("product_recipes_product_idx").on(table.productId),
+    itemIdx: index("product_recipes_item_idx").on(table.itemId),
+    productItemUidx: uniqueIndex("product_recipes_product_item_uidx").on(table.productId, table.itemId),
+    demoIdx: index("product_recipes_demo_idx").on(table.merchantId, table.isDemo),
+  })
+);
+
+export const inventorySuppliersRelations = relations(inventorySuppliers, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [inventorySuppliers.merchantId], references: [merchants.id] }),
+  items: many(inventoryItems),
+}));
+
+export const inventoryItemsRelations = relations(inventoryItems, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [inventoryItems.merchantId], references: [merchants.id] }),
+  supplier: one(inventorySuppliers, {
+    fields: [inventoryItems.supplierId],
+    references: [inventorySuppliers.id],
+  }),
+  movements: many(inventoryMovements),
+  recipes: many(productRecipes),
+  category: one(inventoryCategories, {
+    fields: [inventoryItems.categoryId],
+    references: [inventoryCategories.id],
+  }),
+}));
+
+export const inventoryCategoriesRelations = relations(inventoryCategories, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [inventoryCategories.merchantId], references: [merchants.id] }),
+  items: many(inventoryItems),
+}));
+
+export const inventoryUnitsRelations = relations(inventoryUnits, ({ one }) => ({
+  merchant: one(merchants, { fields: [inventoryUnits.merchantId], references: [merchants.id] }),
+}));
+
+export const inventoryUnitRatiosRelations = relations(inventoryUnitRatios, ({ one }) => ({
+  merchant: one(merchants, { fields: [inventoryUnitRatios.merchantId], references: [merchants.id] }),
+}));
+
+export const inventoryMovementsRelations = relations(inventoryMovements, ({ one }) => ({
+  merchant: one(merchants, { fields: [inventoryMovements.merchantId], references: [merchants.id] }),
+  item: one(inventoryItems, { fields: [inventoryMovements.itemId], references: [inventoryItems.id] }),
+  order: one(orders, { fields: [inventoryMovements.orderId], references: [orders.id] }),
+}));
+
+export const productRecipesRelations = relations(productRecipes, ({ one }) => ({
+  merchant: one(merchants, { fields: [productRecipes.merchantId], references: [merchants.id] }),
+  product: one(products, { fields: [productRecipes.productId], references: [products.id] }),
+  item: one(inventoryItems, { fields: [productRecipes.itemId], references: [inventoryItems.id] }),
+}));
 
 export const subscriptionPlansRelations = relations(subscriptionPlans, ({ many }) => ({
   payments: many(subscriptionPayments),

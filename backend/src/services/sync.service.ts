@@ -79,9 +79,15 @@ export interface SyncSalePayload {
   total: number;
   notes?: string;
   fulfillmentChannel?: "takeaway" | "dine_in" | "delivery";
+  /** Alias used by WebPOS / Android receipt publish */
+  channel?: string;
+  fulfillment_type?: string;
+  fulfillmentType?: string;
   completedAt?: string | number;
   /** ISO / epoch — pickup or delivery time (null/omit = ASAP) */
   scheduledFor?: string | number | null;
+  pickup_time_ms?: number | string | null;
+  pickupTimeMs?: number | string | null;
   customerId?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
@@ -110,7 +116,39 @@ export interface SyncSalePayload {
   adyenCashierReceiptJson?: string | null;
   /** Split tenders for mixed payments */
   paymentBreakdown?: Array<{ method: string; amount: number }> | null;
+  pointsEarned?: number | null;
+  pointsRedeemed?: number | null;
+  pointsDiscount?: number | null;
   items: SyncSaleItem[];
+}
+
+function normalizeFulfillmentChannel(
+  sale: Pick<
+    SyncSalePayload,
+    "fulfillmentChannel" | "channel" | "fulfillment_type" | "fulfillmentType"
+  >
+): "takeaway" | "dine_in" | "delivery" {
+  const raw = String(
+    sale.fulfillmentChannel || sale.channel || sale.fulfillment_type || sale.fulfillmentType || ""
+  )
+    .toLowerCase()
+    .replace(/-/g, "_");
+  if (raw === "dine_in" || raw === "dinein") return "dine_in";
+  if (raw === "delivery") return "delivery";
+  if (raw === "pickup" || raw === "takeaway" || raw === "walk_in" || raw === "walkin") {
+    return "takeaway";
+  }
+  return "takeaway";
+}
+
+function parseScheduledFor(sale: SyncSalePayload): Date | null {
+  if (sale.scheduledFor != null && sale.scheduledFor !== "") {
+    const d = new Date(sale.scheduledFor);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  const ms = Number(sale.pickup_time_ms ?? sale.pickupTimeMs);
+  if (Number.isFinite(ms) && ms > 1_000_000) return new Date(ms);
+  return null;
 }
 
 function asUuidOrNull(v: unknown): string | null {
@@ -368,6 +406,7 @@ export class SyncService {
       orderId: string;
       created: boolean;
       skipped?: boolean;
+      invoiceNumber?: string | null;
     }> = [];
 
     for (const sale of sales) {
@@ -422,20 +461,29 @@ export class SyncService {
       const payStatus = isCancelled
         ? "cancelled"
         : sale.paymentStatus || "completed";
+      const isInvoice =
+        !isCancelled &&
+        (String(sale.paymentMethod || "").toLowerCase().replace(/-/g, "_") === "invoice");
       const payLater =
         !isCancelled &&
         (payStatus === "awaiting_payment" ||
           sale.paymentMethod === "pay_later" ||
-          sale.paymentMethod === "pay-later");
-      let scheduledFor: Date | null = null;
-      if (sale.scheduledFor != null && sale.scheduledFor !== "") {
-        const d = new Date(sale.scheduledFor);
-        if (!Number.isNaN(d.getTime())) scheduledFor = d;
-      }
+          sale.paymentMethod === "pay-later" ||
+          isInvoice);
+      const scheduledFor = parseScheduledFor(sale);
+      const channel = normalizeFulfillmentChannel(sale);
       const status =
         sale.status ||
         (payLater ? (scheduledFor ? "accepted" : "preparing") : "completed");
-      const completedAt = isCancelled || payLater
+      const fulfillmentOpen = [
+        "accepted",
+        "preparing",
+        "ready",
+        "out_for_delivery",
+        "pending",
+        "pending_approval",
+      ].includes(String(status).toLowerCase());
+      const completedAt = isCancelled || payLater || fulfillmentOpen
         ? null
         : sale.completedAt
           ? new Date(sale.completedAt)
@@ -447,7 +495,7 @@ export class SyncService {
       const orderValuesBase = {
         merchantId,
         orderType: "pos" as const,
-        fulfillmentChannel: sale.fulfillmentChannel || "takeaway",
+        fulfillmentChannel: channel,
         status,
         subtotal: subtotal.toFixed(2),
         taxAmount: taxAmount.toFixed(2),
@@ -465,11 +513,23 @@ export class SyncService {
         staffName: sale.staffName ? String(sale.staffName).trim().slice(0, 255) : null,
         staffId: asUuidOrNull(sale.staffId),
         total: total.toFixed(2),
+        pointsEarned:
+          sale.pointsEarned != null && Number.isFinite(Number(sale.pointsEarned))
+            ? Math.max(0, Math.floor(Number(sale.pointsEarned)))
+            : 0,
+        pointsRedeemed:
+          sale.pointsRedeemed != null && Number.isFinite(Number(sale.pointsRedeemed))
+            ? Math.max(0, Math.floor(Number(sale.pointsRedeemed)))
+            : 0,
+        pointsDiscount:
+          sale.pointsDiscount != null && Number.isFinite(Number(sale.pointsDiscount))
+            ? roundMoney2(Number(sale.pointsDiscount)).toFixed(2)
+            : "0",
         paymentBreakdown: sale.paymentBreakdown?.length ? sale.paymentBreakdown : null,
         paymentMethod: isCancelled
           ? sale.paymentMethod || null
           : resolveSalePaymentMethod(sale.paymentBreakdown || [], sale.paymentMethod),
-        paymentStatus: payStatus,
+        paymentStatus: isInvoice ? "awaiting_payment" : payStatus,
         adyenReference: sale.adyenReference ? String(sale.adyenReference).trim() : null,
         adyenPoiTransactionTs: (() => {
           if (
@@ -596,7 +656,31 @@ export class SyncService {
         }
       }
 
-      results.push({ clientId: sale.clientId, orderId: order.id, created: true });
+      let invoiceNumber: string | null = null;
+      if (isInvoice) {
+        try {
+          const { InvoiceService } = await import("@/services/invoice.service");
+          invoiceNumber = await InvoiceService.ensureInvoiceNumber(merchantId, order.id);
+        } catch (err) {
+          console.warn("[sync] invoice number assign failed:", err);
+        }
+      }
+
+      const paid =
+        !isCancelled &&
+        !payLater &&
+        (String(orderValuesBase.paymentStatus || "").toLowerCase() === "completed" ||
+          String(orderValuesBase.paymentStatus || "").toLowerCase() === "paid");
+      if (paid) {
+        try {
+          const { InventoryService } = await import("@/services/inventory.service");
+          await InventoryService.deductForPaidOrder(merchantId, order.id);
+        } catch (invErr) {
+          console.warn("[sync] inventory deduct failed:", invErr);
+        }
+      }
+
+      results.push({ clientId: sale.clientId, orderId: order.id, created: true, invoiceNumber });
     }
 
     return { results };

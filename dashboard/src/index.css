@@ -117,14 +117,22 @@ button {
     overscroll-behavior: none;
   }
 
-  /* Merchant/reseller/superadmin nav — fixed color so JIT arbitrary classes cannot drop it */
+  /* Merchant/reseller/superadmin nav — cliavo.com hero gradient (teal, no blue) */
   .panel-sidebar {
-    background-color: #1e293b;
-    color: #f1f5f9;
+    --sidebar-active: #134e4a;
+    --sidebar-hover: rgba(19, 78, 74, 0.45);
+    --sidebar-divider: rgba(255, 255, 255, 0.15);
+    background: linear-gradient(135deg, #0f766e 0%, #00bfa6 100%);
+    color: #ecfdf5;
   }
 
   .panel-sidebar-footer {
-    background-color: #172033;
+    background: transparent;
+    border-top-color: var(--sidebar-divider);
+  }
+
+  .panel-sidebar-divider {
+    border-color: var(--sidebar-divider);
   }
 
   /* Fallback when dvh is unavailable */
@@ -186,6 +194,7 @@ button {
 
   .webpos-shell {
     overscroll-behavior: none;
+    touch-action: manipulation;
     --webpos-zoom: 1;
     --webpos-bg: #f5f5f4; /* stone-100 */
     --webpos-surface: #ffffff;
@@ -392,6 +401,26 @@ button {
   .webpos-shell[data-appearance='night'] .text-stone-900 {
     color: var(--webpos-text) !important;
   }
+
+  /* Prevent iOS Safari zoom-on-focus for POS inputs (needs >= 16px). */
+  .webpos-shell input,
+  .webpos-shell textarea,
+  .webpos-shell select,
+  .waiter-shell input,
+  .waiter-shell textarea,
+  .waiter-shell select,
+  .kds-shell input,
+  .kds-shell textarea,
+  .kds-shell select {
+    font-size: 16px !important;
+    touch-action: manipulation;
+  }
+
+  .webpos-product-grid,
+  .webpos-shell [data-webpos-product-grid='1'] {
+    touch-action: pan-x pan-y;
+  }
+
   .webpos-shell[data-appearance='night'] .border-stone-100,
   .webpos-shell[data-appearance='night'] .border-stone-200,
   .webpos-shell[data-appearance='night'] .border-stone-300 {
@@ -475,6 +504,10 @@ button {
   .webpos-merchant-subline__warn {
     color: #b45309;
   }
+  .webpos-merchant-subline__ok {
+    color: #047857;
+    font-weight: 600;
+  }
   .webpos-shell[data-appearance='night'] .webpos-merchant-subline__offline {
     color: #fbbf24;
   }
@@ -486,6 +519,9 @@ button {
   }
   .webpos-shell[data-appearance='night'] .webpos-merchant-subline__warn {
     color: #fbbf24;
+  }
+  .webpos-shell[data-appearance='night'] .webpos-merchant-subline__ok {
+    color: #6ee7b7;
   }
 
   /* Product grid — touch scroll inside zoomed .webpos-shell (tablet / kiosk) */

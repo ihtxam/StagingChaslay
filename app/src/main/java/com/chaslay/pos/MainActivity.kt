@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.KeyEvent
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,6 +32,7 @@ import com.chaslay.pos.sync.PosSessionRepository
 import com.chaslay.pos.sync.SyncService
 import com.chaslay.pos.ui.license.ActivationScreen
 import com.chaslay.pos.ui.navigation.ChaslayNavHost
+import com.chaslay.pos.ui.scanner.BarcodeWedgeHub
 import com.chaslay.pos.ui.theme.ChaslayPosTheme
 import com.chaslay.pos.ui.theme.ProvideVectronTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -119,6 +121,11 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (BarcodeWedgeHub.dispatch(event, currentFocus)) return true
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onDestroy() {

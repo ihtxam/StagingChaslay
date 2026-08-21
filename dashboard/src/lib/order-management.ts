@@ -1,15 +1,32 @@
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
-import { parsePaymentBreakdown } from '@/lib/payment-breakdown';
-import { paymentLabel as receiptPaymentLabel, receiptLabels, type ReceiptLang } from '@/lib/receipt-labels';
+import { parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 
 export type MerchantOrder = PosOrderForReceipt & {
   status: string;
   paymentStatus?: string | null;
+  invoiceNumber?: string | null;
+  invoiceIssuedAt?: string | Date | null;
+  invoiceDueAt?: string | Date | null;
   paymentBreakdown?: Array<{ method: string; amount: number }> | null;
   refundAmount: number;
   cancelReason?: string | null;
   refundReason?: string | null;
+  refundHistory?: Array<{
+    id?: string;
+    kind?: string;
+    amount: number;
+    reason?: string | null;
+    staffName?: string | null;
+    createdAt?: string | null;
+    items?: Array<{ orderItemId?: string; productName?: string; quantity: number }>;
+    allocation?: {
+      giftCard?: number;
+      cash?: number;
+      terminal?: number;
+      other?: number;
+    } | null;
+  }>;
   notes?: string | null;
   masterOrderId?: string | null;
   orderType?: string | null;
@@ -38,10 +55,69 @@ export function orderChannel(o: MerchantOrder): string {
   return o.channel || o.fulfillmentChannel || 'takeaway';
 }
 
-export function isOnlineShopOrder(o: MerchantOrder): boolean {
+/** Takeaway / delivery channels used by in-store POS (not JustEat / Uber). */
+export function isKitchenFulfillmentChannel(channel?: string | null): boolean {
+  const ch = String(channel || '').toLowerCase();
+  return ch === 'takeaway' || ch === 'delivery';
+}
+
+/**
+ * Paid internal POS (dine-in / takeaway / self-delivery) closes immediately.
+ * Unpaid pay-later / invoice stay open until collection. Online / 3P use
+ * their own kitchen lifecycle and never go through this helper.
+ */
+export function posSaleFulfillmentStatus(opts: {
+  channel?: string | null;
+  payLater: boolean;
+  scheduledFor?: string | number | null;
+}): string {
+  if (opts.payLater) {
+    return opts.scheduledFor ? 'accepted' : 'preparing';
+  }
+  return 'completed';
+}
+
+/** Preparing / Accepted / Ready / Out for delivery — online shop & 3P only. */
+export function showsKitchenFulfillmentStages(o: {
+  orderType?: string | null;
+  orderSource?: string | null;
+  channel?: string | null;
+  fulfillmentChannel?: string | null;
+}): boolean {
+  return isOnlineShopOrder(o as MerchantOrder);
+}
+
+/**
+ * Kitchen Type on /merchant/orders — open online/3P kitchen tickets, plus
+ * unpaid internal pay-later / invoice. Paid internal POS is completed.
+ */
+export function isKitchenTypeOrder(o: MerchantOrder): boolean {
+  const status = (o.status || '').toLowerCase();
+  if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) {
+    return false;
+  }
+  if (isOnlineShopOrder(o)) {
+    return [
+      'accepted',
+      'preparing',
+      'ready',
+      'out_for_delivery',
+      'pending',
+      'pending_approval',
+    ].includes(status);
+  }
+  return isAwaitingPaymentOrder(o);
+}
+
+export function isOnlineShopOrder(o: {
+  orderType?: string | null;
+  orderSource?: string | null;
+  channel?: string | null;
+  fulfillmentChannel?: string | null;
+}): boolean {
   const t = (o.orderType || '').toLowerCase();
-  const src = String((o as { orderSource?: string | null }).orderSource || '').toLowerCase();
-  const ch = orderChannel(o).toLowerCase();
+  const src = String(o.orderSource || '').toLowerCase();
+  const ch = orderChannel(o as MerchantOrder).toLowerCase();
   return (
     t === 'web_shop' ||
     t === 'online' ||
@@ -111,14 +187,34 @@ export function orderPlatformBorderClass(o: MerchantOrder): string {
   }
 }
 
+/** Stored method after an invoice is settled by bank transfer. Never cash/card. */
+export const INVOICE_SETTLEMENT_METHOD = 'invoice' as const;
+
+/** POS / WebPOS invoice sale — unpaid until bank transfer is recorded. */
+export function isInvoiceOrder(o: {
+  paymentMethod?: string | null;
+  invoiceNumber?: string | null;
+  paymentStatus?: string | null;
+}): boolean {
+  const method = String(o.paymentMethod || '')
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (method === 'invoice') return true;
+  if (o.invoiceNumber) return true;
+  return false;
+}
+
 /** Unpaid web shop or POS order — pay on pickup / collect at counter. */
 export function isAwaitingPaymentOrder(o: MerchantOrder): boolean {
   const status = (o.status || '').toLowerCase();
   const pay = (o.paymentStatus || '').toLowerCase();
-  const method = (o.paymentMethod || '').toLowerCase();
-  if (['cancelled', 'refunded', 'completed'].includes(status)) return false;
+  const method = (o.paymentMethod || '').toLowerCase().replace(/-/g, '_');
+  if (['cancelled', 'refunded'].includes(status)) return false;
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
-  if (pay === 'awaiting_payment') return true;
+  // Invoice + awaiting_payment stays visible even when fulfillment status is completed
+  // (same class of hide-bug as paid POS delivery vanishing from Kitchen / history).
+  if (isInvoiceOrder(o) || pay === 'awaiting_payment') return true;
+  if (status === 'completed') return false;
   if (method === 'pay_later' || method === 'pay-later') return true;
   if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) return true;
   return false;
@@ -168,18 +264,53 @@ export function canEditPayment(o: MerchantOrder): boolean {
   );
 }
 
-/** Pickup / handoff stage — unpaid orders can be collected at the till. */
+/** Pickup / handoff stage — default shop-pickup collect is Ready-first. */
 export function isReadyForPaymentCollection(o: MerchantOrder): boolean {
   const status = (o.status || '').toLowerCase();
   if (status === 'ready' || status === 'out_for_delivery') return true;
-  // Counter POS pay-later: staff can collect while the ticket is still in kitchen.
-  if (['preparing', 'accepted'].includes(status) && isAwaitingPaymentOrder(o) && !isOnlineShopOrder(o)) {
+  // Counter POS pay-later / invoice / delivery: collect while still in kitchen
+  // (or after fulfillment if payment is still outstanding).
+  if (
+    ['preparing', 'accepted', 'sent_to_kitchen', 'completed'].includes(status) &&
+    isAwaitingPaymentOrder(o) &&
+    !isOnlineShopOrder(o)
+  ) {
     return true;
   }
   return false;
 }
 
-export function isPaidOrder(o: MerchantOrder): boolean {
+/** Staff/admin may collect unpaid tickets before Ready (shop pickup stays Ready-first by default). */
+export function canAdminCollectPayment(o: MerchantOrder): boolean {
+  const status = (o.status || '').toLowerCase();
+  const pay = (o.paymentStatus || '').toLowerCase();
+  const method = (o.paymentMethod || '').toLowerCase();
+  if (['cancelled', 'refunded'].includes(status)) return false;
+  if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
+  if (Number(o.total || 0) <= 0.001) return false;
+  if (pay === 'awaiting_payment') return true;
+  if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) return true;
+  if (method === 'pay_later' || method === 'pay-later' || method === 'invoice') return true;
+  return false;
+}
+
+export function canMarkReady(o: { status?: string | null }): boolean {
+  const status = (o.status || '').toLowerCase();
+  return status === 'accepted' || status === 'preparing';
+}
+
+/** Mark ready / kitchen stages — online shop and third-party only. */
+export function canMarkReadyOrder(o: {
+  status?: string | null;
+  orderType?: string | null;
+  orderSource?: string | null;
+  channel?: string | null;
+  fulfillmentChannel?: string | null;
+}): boolean {
+  return showsKitchenFulfillmentStages(o) && canMarkReady(o);
+}
+
+export function isPaidOrder(o: { paymentStatus?: string | null }): boolean {
   const pay = (o.paymentStatus || '').toLowerCase();
   return pay === 'completed' || pay === 'paid';
 }
@@ -194,7 +325,7 @@ export function canCollectPayment(o: MerchantOrder): boolean {
   if (!isReadyForPaymentCollection(o)) return false;
   if (pay === 'awaiting_payment') return true;
   if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) return true;
-  if (method === 'pay_later' || method === 'pay-later') return true;
+  if (method === 'pay_later' || method === 'pay-later' || method === 'invoice') return true;
   return false;
 }
 
@@ -221,6 +352,35 @@ export function orderStatusLabel(status: string, t: (k: string) => string): stri
     confirmed: t('orderStatusAccepted'),
   };
   return map[key] || status;
+}
+
+/** Colored kitchen / fulfillment badge (Preparing, Ready, …). */
+export function orderStatusBadgeClass(status: string): string {
+  switch ((status || '').toLowerCase().replace(/-/g, '_')) {
+    case 'pending':
+    case 'pending_approval':
+      return 'bg-violet-100 text-violet-800';
+    case 'accepted':
+    case 'confirmed':
+      return 'bg-sky-100 text-sky-800';
+    case 'preparing':
+    case 'sent_to_kitchen':
+    case 'held':
+      return 'bg-amber-100 text-amber-900';
+    case 'ready':
+      return 'bg-emerald-100 text-emerald-800';
+    case 'out_for_delivery':
+      return 'bg-orange-100 text-orange-900';
+    case 'completed':
+      return 'bg-stone-200 text-stone-700';
+    case 'cancelled':
+    case 'refunded':
+      return 'bg-rose-100 text-rose-800';
+    case 'partially_refunded':
+      return 'bg-rose-50 text-rose-700';
+    default:
+      return 'bg-stone-100 text-stone-600';
+  }
 }
 
 export function orderPublicRefs(o: MerchantOrder) {
@@ -270,6 +430,22 @@ export function orderChannelHeaderClass(o: MerchantOrder): string {
   }
 }
 
+/** Full card outline color for POS order grid cards — matches orderChannelHeaderClass. */
+export function orderChannelBorderClass(o: MerchantOrder): string {
+  if (isOnlineShopOrder(o)) return 'border-violet-600';
+  const ch = orderChannel(o).toLowerCase();
+  switch (ch) {
+    case 'dine_in':
+      return 'border-emerald-600';
+    case 'delivery':
+      return 'border-orange-500';
+    case 'takeaway':
+      return 'border-sky-600';
+    default:
+      return 'border-stone-600';
+  }
+}
+
 export function orderSearchHaystack(o: MerchantOrder): string {
   const refs = orderPublicRefs(o);
   const ch = orderChannel(o);
@@ -286,6 +462,8 @@ export function orderSearchHaystack(o: MerchantOrder): string {
     refs.tabNumber,
     ch,
     o.paymentMethod,
+    o.invoiceNumber,
+    o.paymentStatus,
     o.status,
   ]
     .filter(Boolean)
@@ -311,10 +489,8 @@ export function formatOrderPaymentDisplay(
     total?: number;
   },
   t: (k: string) => string,
-  locale = 'en'
+  _locale = 'en'
 ): string {
-  const lang = (locale === 'fr' ? 'fr' : locale === 'de' ? 'de' : 'en') as ReceiptLang;
-  const L = receiptLabels(lang);
   const tenders = parsePaymentBreakdown(
     order.paymentBreakdown,
     order.paymentMethod,
@@ -322,10 +498,10 @@ export function formatOrderPaymentDisplay(
   );
   if (tenders.length <= 1) {
     const method = tenders[0]?.method || order.paymentMethod || 'cash';
-    return paymentLabelUi(method, t);
+    return paymentMethodLabel(method, t);
   }
   return tenders
-    .map((p) => `${paymentLabelUi(p.method, t)} CHF ${Number(p.amount).toFixed(2)}`)
+    .map((p) => `${paymentMethodLabel(p.method, t)} CHF ${Number(p.amount).toFixed(2)}`)
     .join(' + ');
 }
 
@@ -345,13 +521,3 @@ export function orderPaymentLines(order: {
   return total > 0 ? [{ method, amount: total }] : [{ method, amount: 0 }];
 }
 
-function paymentLabelUi(method: string, t: (k: string) => string): string {
-  const m = String(method || '').toLowerCase().replace(/-/g, '_');
-  if (m === 'cash') return t('webPosCash');
-  if (m === 'card') return t('webPosCard');
-  if (m === 'terminal') return t('webPosTerminal');
-  if (m === 'gift_card') return t('giftCard');
-  if (m === 'mixed') return t('webPosMixedPayment');
-  if (m === 'pay_later') return t('webPosPayLater');
-  return receiptPaymentLabel(receiptLabels('en'), method);
-}

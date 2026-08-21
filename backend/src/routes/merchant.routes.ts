@@ -13,6 +13,7 @@ import { OrderService } from "@/services/order.service";
 import { CustomerService } from "@/services/customer.service";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { CatalogImportService } from "@/services/catalog-import.service";
+import { DemoCatalogService } from "@/services/demo-catalog.service";
 import { ModifierService } from "@/services/modifier.service";
 import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
@@ -37,10 +38,45 @@ const imageUpload = multer({
   },
 });
 
+const POS_SAFE_SETTINGS_KEYS = new Set(["posColorTheme", "panelLanguage"]);
+
+/** Staff can use POS/catalog APIs; writes to catalog/settings/billing stay permission-gated. */
+function restrictStaffMerchantWrites(req: Request, res: Response, next: NextFunction) {
+  if (req.user?.role === "merchant") return next();
+  if (req.user?.role !== "staff") return next();
+
+  const method = req.method.toUpperCase();
+  const path = req.path || "";
+
+  if (method === "PUT" && (path === "/settings" || path === "/settings/")) {
+    const keys = Object.keys((req.body || {}) as Record<string, unknown>);
+    if (keys.length && keys.every((k) => POS_SAFE_SETTINGS_KEYS.has(k))) return next();
+    return requirePermission("MANAGE_SETTINGS")(req, res, next);
+  }
+
+  if (path.startsWith("/billing")) {
+    return requirePermission("MANAGE_BILLING")(req, res, next);
+  }
+
+  const catalogWrite =
+    /^(POST|PUT|PATCH|DELETE)$/.test(method) &&
+    (/^\/products(\/|$)/.test(path) ||
+      /^\/categories(\/|$)/.test(path) ||
+      /^\/modifiers(\/|$)/.test(path) ||
+      path === "/demo-menu-photos" ||
+      path === "/media");
+  if (catalogWrite) {
+    return requirePermission("MANAGE_PRODUCTS")(req, res, next);
+  }
+
+  return next();
+}
+
 // Apply merchant middleware to all routes
 router.use(verifyToken);
 router.use(requireMerchant);
 router.use(setMerchantContext);
+router.use(restrictStaffMerchantWrites);
 
 // ============================================================================
 // PRODUCT MANAGEMENT
@@ -65,6 +101,29 @@ router.get("/products/import/template", async (_req: Request, res: Response) => 
 });
 
 /**
+ * POST /api/merchant/products/barcodes/generate
+ * Assign numeric-only barcodes (12-digit 20 + 10 internal series) to products missing a barcode.
+ * Never overwrites existing EAN/UPC or other barcodes. Optional useSku only if SKU is 8–12 digits.
+ */
+router.post("/products/barcodes/generate", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { BarcodeService } = await import("@/services/barcode.service");
+    const result = await BarcodeService.generateMissing(merchantId, {
+      productIds: Array.isArray(req.body?.productIds) ? req.body.productIds : undefined,
+      useSku: req.body?.useSku === true,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Error generating barcodes:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to generate barcodes",
+    });
+  }
+});
+
+/**
  * POST /api/merchant/products/import
  * One-click Excel import for categories + products
  */
@@ -81,6 +140,71 @@ router.post("/products/import", upload.single("file"), async (req: Request, res:
     res.status(400).json({ error: error instanceof Error ? error.message : "Import failed" });
   }
 });
+
+/**
+ * POST /api/merchant/products/import-demo
+ * Seed café/bistro demo catalog (categories, products, modifiers, combos).
+ */
+router.post(
+  "/products/import-demo",
+  requirePermission("MANAGE_PRODUCTS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+
+      const mode = req.body?.mode;
+      const force = req.body?.force === true;
+      const result = await DemoCatalogService.importDemo(merchantId, {
+        mode: mode === "replace" || mode === "merge" ? mode : undefined,
+        force,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("Demo catalog import failed:", error);
+      res.status(400).json({ error: error instanceof Error ? error.message : "Demo import failed" });
+    }
+  }
+);
+
+/**
+ * GET /api/merchant/products/demo-status
+ * Whether demo catalog products are present.
+ */
+router.get(
+  "/products/demo-status",
+  requirePermission("MANAGE_PRODUCTS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const hasDemoData = await DemoCatalogService.hasDemoData(merchantId);
+      res.json({ success: true, hasDemoData });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to check demo status" });
+    }
+  }
+);
+
+/**
+ * DELETE /api/merchant/products/demo-data
+ * Remove imported demo catalog products/categories only (clientId demo-* prefix).
+ */
+router.delete(
+  "/products/demo-data",
+  requirePermission("MANAGE_PRODUCTS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const result = await DemoCatalogService.deleteDemo(merchantId);
+      res.json(result);
+    } catch (error) {
+      console.error("Demo catalog delete failed:", error);
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete demo catalog" });
+    }
+  }
+);
 
 /**
  * GET /api/merchant/products
@@ -955,6 +1079,26 @@ router.put("/orders/:orderId/status", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/invoices — unpaid + paid invoice orders (all dates)
+ * GET /api/merchant/orders/:orderId/invoice.pdf
+ * POST /api/merchant/orders/:orderId/record-invoice-payment
+ */
+router.get("/invoices", async (req: Request, res: Response) => {
+  const { merchantListInvoices } = await import("@/routes/invoice.routes");
+  return merchantListInvoices(req, res);
+});
+
+router.get("/orders/:orderId/invoice.pdf", async (req: Request, res: Response) => {
+  const { merchantInvoicePdf } = await import("@/routes/invoice.routes");
+  return merchantInvoicePdf(req, res);
+});
+
+router.post("/orders/:orderId/record-invoice-payment", async (req: Request, res: Response) => {
+  const { merchantRecordInvoicePayment } = await import("@/routes/invoice.routes");
+  return merchantRecordInvoicePayment(req, res);
+});
+
+/**
  * POST /api/merchant/orders/:orderId/action
  * Lifecycle action: accept | start_preparing | mark_ready | out_for_delivery |
  * collect_payment | complete | complete_and_collect | reject
@@ -1120,6 +1264,39 @@ router.get("/customers/:customerId", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/me
+ * Current merchant identity + paid addon flags (inventory).
+ */
+router.get("/me", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+    const settings = await MerchantSettingsService.getMerchantSettings(merchantId);
+    const inventoryOn = settings.inventoryAddonEnabled === true;
+    res.json({
+      success: true,
+      merchant: {
+        id: settings.id,
+        email: settings.email,
+        name: settings.name,
+        inventoryAddonEnabled: inventoryOn,
+        inventoryEnabled: inventoryOn,
+        signageAddonEnabled: settings.signageAddonEnabled === true,
+        signageEnabled: settings.signageAddonEnabled === true,
+        signageScreenLimit: settings.signageScreenLimit ?? 2,
+        editionFeatures: settings.editionFeatures,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load merchant",
+    });
+  }
+});
+
+/**
  * GET /api/merchant/settings
  * Get merchant settings
  */
@@ -1227,8 +1404,12 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
           card: merchant.webposCardEnabled !== false,
           terminal: merchant.webposTerminalEnabled !== false && terminalReady,
           giftCard: merchant.webposGiftCardEnabled === true && giftCardSettings.enabled,
+          invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
         },
         giftCardSettings,
+        loyalty: (await import("@/services/shop-loyalty.service")).ShopLoyaltyService.programFromMerchant(
+          merchant
+        ),
         terminalReady,
         adyenConfigured: !!merchant.adyenApiKey && !!merchant.adyenMerchantAccount,
         adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,
@@ -1944,6 +2125,7 @@ router.get("/pos/orders", async (req: Request, res: Response) => {
       from: req.query.from ? String(req.query.from) : undefined,
       to: req.query.to ? String(req.query.to) : undefined,
       limit: req.query.limit ? Number(req.query.limit) : 50,
+      q: req.query.q ? String(req.query.q) : undefined,
     });
     res.json({
       success: true,

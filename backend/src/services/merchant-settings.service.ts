@@ -27,7 +27,13 @@ import {
   applyProductionCredentialDefaults,
   type DeliveryPlatformSettings,
 } from "@/lib/delivery-platform-settings";
-import { patchMerchantSchemaFromError } from "@/lib/ensure-merchant-schema";
+import {
+  ensureInventoryAddonColumn,
+  ensureSignageAddonColumn,
+  patchMerchantSchemaFromError,
+} from "@/lib/ensure-merchant-schema";
+import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -91,6 +97,8 @@ export class MerchantSettingsService {
   }
 
   private static async buildMerchantSettings(merchantId: string) {
+    await ensureInventoryAddonColumn();
+    await ensureSignageAddonColumn();
     const db = getDb();
 
     const merchant = await db.query.merchants.findFirst({
@@ -100,6 +108,14 @@ export class MerchantSettingsService {
     if (!merchant) {
       throw new Error("Merchant not found");
     }
+
+    const inventoryOn = await readInventoryAddonEnabled(merchantId).catch(() =>
+      isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
+    );
+    const signage = await readSignageAddon(merchantId).catch(() => ({
+      enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
+      screenLimit: Math.max(1, Number(merchant.signageScreenLimit) || 2),
+    }));
 
     const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
     const shopHost =
@@ -148,6 +164,13 @@ export class MerchantSettingsService {
         0,
         Number((merchant as { maxWaiterPosts?: number }).maxWaiterPosts ?? 0)
       ),
+      inventoryAddonEnabled: inventoryOn,
+      inventoryEnabled: inventoryOn,
+      signageAddonEnabled: signage.enabled,
+      signageEnabled: signage.enabled,
+      signageScreenLimit: signage.screenLimit,
+      inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
+      inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       posColorTheme: (merchant.posColorTheme as string) || "teal",
       storeHours: merchant.storeHours || {},
       shopLogoUrl: merchant.shopLogoUrl,
@@ -177,6 +200,11 @@ export class MerchantSettingsService {
       webposCardEnabled: merchant.webposCardEnabled !== false,
       webposTerminalEnabled: merchant.webposTerminalEnabled !== false,
       webposGiftCardEnabled: merchant.webposGiftCardEnabled === true,
+      webposInvoiceEnabled: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
+      bankIban: (merchant as { bankIban?: string | null }).bankIban || null,
+      bankQrIban: (merchant as { bankQrIban?: string | null }).bankQrIban || null,
+      bankName: (merchant as { bankName?: string | null }).bankName || null,
+      bankAccountHolder: (merchant as { bankAccountHolder?: string | null }).bankAccountHolder || null,
       onlineCardFeeFixed: merchant.onlineCardFeeFixed ?? "0",
       onlineCardFeePercent: merchant.onlineCardFeePercent ?? "0",
       panelLanguage: merchant.panelLanguage || "en",
@@ -189,11 +217,21 @@ export class MerchantSettingsService {
       subscriptionPlan: merchant.subscriptionPlan,
       editionId: (merchant as { editionId?: string | null }).editionId || null,
       resellerId: (merchant as { resellerId?: string | null }).resellerId || null,
-      /** null = legacy full access */
+      /**
+       * null = legacy full access for edition routes.
+       * Inventory is a paid merchant addon — never grant it via edition JSON.
+       * Inject only when the merchant column is true (for any leftover edition checks).
+       */
       editionFeatures: await (async () => {
         try {
           const { EditionEntitlementsService } = await import("./edition-entitlements.service");
-          return await EditionEntitlementsService.getFeatures(merchantId);
+          const feats = await EditionEntitlementsService.getFeatures(merchantId);
+          if (feats == null) return null;
+          const withoutPaid = feats.filter((k) => k !== "inventory" && k !== "digital_signage");
+          const extra: typeof feats = [];
+          if (inventoryOn) extra.push("inventory");
+          if (signage.enabled) extra.push("digital_signage");
+          return [...withoutPaid, ...extra];
         } catch {
           return null;
         }
@@ -261,6 +299,11 @@ export class MerchantSettingsService {
       webposCardEnabled?: boolean;
       webposTerminalEnabled?: boolean;
       webposGiftCardEnabled?: boolean;
+      webposInvoiceEnabled?: boolean;
+      bankIban?: string | null;
+      bankQrIban?: string | null;
+      bankName?: string | null;
+      bankAccountHolder?: string | null;
       onlineCardFeeFixed?: number;
       onlineCardFeePercent?: number;
       panelLanguage?: string;
@@ -269,6 +312,8 @@ export class MerchantSettingsService {
       tableQrSettings?: TableQrSettings | null;
       posCheckoutSettings?: PosCheckoutSettings | Partial<PosCheckoutSettings> | null;
       deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
+      inventoryWasteFactor?: number;
+      inventoryAutoReorderEmailEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -359,6 +404,23 @@ export class MerchantSettingsService {
     if (updates.webposCardEnabled !== undefined) patch.webposCardEnabled = !!updates.webposCardEnabled;
     if (updates.webposTerminalEnabled !== undefined) patch.webposTerminalEnabled = !!updates.webposTerminalEnabled;
     if (updates.webposGiftCardEnabled !== undefined) patch.webposGiftCardEnabled = !!updates.webposGiftCardEnabled;
+    if (updates.webposInvoiceEnabled !== undefined) patch.webposInvoiceEnabled = !!updates.webposInvoiceEnabled;
+    if (updates.bankIban !== undefined) {
+      patch.bankIban = updates.bankIban ? String(updates.bankIban).replace(/\s+/g, "").toUpperCase().slice(0, 34) : null;
+    }
+    if (updates.bankQrIban !== undefined) {
+      patch.bankQrIban = updates.bankQrIban
+        ? String(updates.bankQrIban).replace(/\s+/g, "").toUpperCase().slice(0, 34)
+        : null;
+    }
+    if (updates.bankName !== undefined) {
+      patch.bankName = updates.bankName ? String(updates.bankName).trim().slice(0, 255) : null;
+    }
+    if (updates.bankAccountHolder !== undefined) {
+      patch.bankAccountHolder = updates.bankAccountHolder
+        ? String(updates.bankAccountHolder).trim().slice(0, 255)
+        : null;
+    }
     if (updates.onlineCardFeeFixed !== undefined) {
       const n = Number(updates.onlineCardFeeFixed);
       if (!Number.isFinite(n) || n < 0) throw new Error("onlineCardFeeFixed must be >= 0");
@@ -444,6 +506,16 @@ export class MerchantSettingsService {
     }
     if (updates.marketingSettings !== undefined) {
       patch.marketingSettings = MarketingService.normalizeMarketing(updates.marketingSettings);
+    }
+    if (updates.inventoryWasteFactor !== undefined) {
+      const n = Number(updates.inventoryWasteFactor);
+      if (!Number.isFinite(n) || n < 0 || n > 0.5) {
+        throw new Error("inventoryWasteFactor must be between 0 and 0.50");
+      }
+      patch.inventoryWasteFactor = n.toFixed(4);
+    }
+    if (updates.inventoryAutoReorderEmailEnabled !== undefined) {
+      patch.inventoryAutoReorderEmailEnabled = !!updates.inventoryAutoReorderEmailEnabled;
     }
     if (updates.posPrintSettings !== undefined) {
       patch.posPrintSettings = normalizePosPrintSettings(updates.posPrintSettings);

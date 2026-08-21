@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
 import { repairCatalogText } from '@/lib/text-encoding';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type Locale } from '@/lib/i18n';
+import { formatCheckoutOrderRef } from '@/lib/order-number';
 import { roundMoney2, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
 import {
   buildKitchenPrintJobs,
+  buildKitchenCrossStationFooters,
+  kitchenJobsExcludingReceiptPrinters,
   buildKitchenTicketItemFromLine,
   generateKitchenTicketEscPos,
   generateKitchenTicketText,
@@ -58,10 +61,15 @@ import WebPosSplitBillModal, {
 import { localDateTimeToIso, type StoreHours } from '@/lib/shop-hours';
 import {
   browserPrintText,
-  isPrintAgentAvailable,
+  findPrinterHealCandidates,
+  getPrintAgentHealth,
+  isConfiguredPrinterMissing,
+  isPrintAgentVersionOutdated,
+  isPrinterDisconnectedError,
   isUnsuitableRawPrinter,
   listAgentPrinters,
   printViaAgent,
+  suggestPrinterAutoHeal,
   unsuitableRawPrinterMessage,
   type AgentPrinter,
 } from '@/lib/print-agent';
@@ -70,9 +78,16 @@ import {
   processPendingEscPosPrintJobs,
 } from '@/lib/webpos-print-relay';
 import {
+  removePrintJobs,
+  reprintPrintJobs,
+  startPrintQueueAutoRetry,
+  usePendingPrintJobs,
+} from '@/lib/webpos-print-queue';
+import {
   POS_SESSION_KICKED_EVENT,
   registerPosSession,
-  resumePosSessionHeartbeat,
+  clearPosSessionLocal,
+  revokePosSession,
 } from '@/lib/pos-session';
 import { buildReceiptUrl, resolvePublishedReceiptRef, normalizeScannedPayload, parseTableQrPayload } from '@/lib/qr';
 import WebPosMembershipSellModal from '@/components/webpos/WebPosMembershipSellModal';
@@ -95,6 +110,8 @@ import WebPosComboModal, {
 } from '@/components/webpos/WebPosComboModal';
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
+import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
+import { pushCartLinesToKds, fetchKdsReadyLineIds } from '@/lib/kds-push';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
@@ -118,6 +135,7 @@ const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
 const WEBPOS_GRID_SHOW_IMAGES_KEY = 'webpos.grid.showImages';
 const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
 const WEBPOS_GRID_SORT_KEY = 'webpos.grid.sort';
+const WEBPOS_SET_PIN_HINT_KEY = 'webpos_set_pin_hint_dismissed';
 
 export type WebPosAppearance = 'light' | 'night';
 
@@ -224,6 +242,9 @@ import WebPosCheckoutView from '@/components/webpos/WebPosCheckoutView';
 import WebPosSuccessView from '@/components/webpos/WebPosSuccessView';
 import WebPosSendReceiptModal from '@/components/webpos/WebPosSendReceiptModal';
 import WebPosPrintChooserModal from '@/components/webpos/WebPosPrintChooserModal';
+import WebPosKitchenPrintIssuesModal from '@/components/webpos/WebPosKitchenPrintIssuesModal';
+import WebPosReprintModal from '@/components/webpos/WebPosReprintModal';
+import { toastPrintError as toastPrintErrorRaw } from '@/lib/webpos-print-toast';
 import WebPosTablesView from '@/components/webpos/WebPosTablesView';
 import WebPosBookingsView from '@/components/webpos/WebPosBookingsView';
 import WebPosKitchenMessageModal from '@/components/webpos/WebPosKitchenMessageModal';
@@ -245,8 +266,10 @@ import {
   computeCashDiscount,
   computeEarnPoints,
   maxRedeemablePoints,
+  normalizeLoyaltyProgram,
   normalizeRfidUid,
-  REDEEM_THRESHOLD_POINTS,
+  redeemThresholdPoints,
+  type AttachedGiftCard,
   type AttachedMembership,
 } from '@/lib/loyalty-math';
 import type { AppliedPayment } from '@/components/webpos/WebPosCheckoutView';
@@ -255,7 +278,13 @@ import {
   customerFromOrder,
   orderItemsToCartLines,
 } from '@/lib/order-to-cart';
-import type { MerchantOrder } from '@/lib/order-management';
+import {
+  INVOICE_SETTLEMENT_METHOD,
+  isInvoiceOrder,
+  posSaleFulfillmentStatus,
+  type MerchantOrder,
+} from '@/lib/order-management';
+import { isPayLaterPaymentMethod, payLaterCollectedTender } from '@/lib/receipt-labels';
 
 type SplitReceiptPart = {
   id: string;
@@ -273,6 +302,8 @@ type CollectOrderRef = {
   status: string;
   total: number;
   returnView: 'orders' | 'register';
+  isInvoice?: boolean;
+  isPayLater?: boolean;
 };
 import type {
   BillDiscount,
@@ -297,12 +328,16 @@ import {
   stopOrderAlertLoop,
 } from '@/lib/order-alert';
 import {
+  backOfficeHomePath,
   getEffectivePanelAccess,
   hasPermission,
+  isMerchantOwnerJwt,
   clearWebPosStaffSession,
   loadWebPosStaffSession,
+  notifyWebPosStaffSessionChanged,
   resolveWebPosStaffSession,
   saveWebPosStaffSession,
+  webPosPinGateRequired,
   type Permission,
   type StaffRosterRow,
   type WebPosStaffSession,
@@ -352,6 +387,8 @@ type CartLine = {
   lineDiscountPercent?: number;
   sentToKitchen?: boolean;
   sentToKitchenAt?: number;
+  /** Kitchen ticket did not print after send. */
+  kitchenPrintFailed?: boolean;
   lineNote?: string;
   giftCard?: GiftCardLineMeta;
 };
@@ -391,7 +428,7 @@ type SaleRecord = {
   synced: boolean;
 };
 
-type PosPaymentMethod = 'cash' | 'card' | 'terminal' | 'pay_later' | 'gift_card';
+type PosPaymentMethod = 'cash' | 'card' | 'terminal' | 'pay_later' | 'gift_card' | 'invoice';
 
 type WebPosTerminal = {
   id: string;
@@ -407,6 +444,7 @@ type WebPosPaymentConfig = {
     card: boolean;
     terminal: boolean;
     giftCard?: boolean;
+    invoice?: boolean;
   };
   terminalReady: boolean;
   adyenConfigured: boolean;
@@ -415,6 +453,11 @@ type WebPosPaymentConfig = {
   posPrintSettings?: PosPrintSettingsClient | null;
   posCheckoutSettings?: PosCheckoutSettings | null;
   giftCardSettings?: GiftCardSettingsClient | null;
+  loyalty?: {
+    enabled?: boolean;
+    earnPointsPerChf?: number;
+    redeemPointsPerChf?: number;
+  } | null;
   shopLogoUrl?: string | null;
   panelLanguage?: string | null;
   shiftsEnabled?: boolean;
@@ -450,7 +493,12 @@ function mergeBillDiscounts(
 }
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
-  const { t, locale } = useI18n();
+  const { t, locale, setLocale } = useI18n();
+  const notifyPrintError = (raw: unknown, fallbackKey = 'webPosPrintFailed') => {
+    if (isPrinterDisconnectedError(raw)) setPrinterDisconnected(true);
+    toastPrintErrorRaw(raw, t, fallbackKey);
+  };
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
@@ -458,6 +506,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   const authUser = useAuthStore((s) => s.user);
+  const jwtIsOwner = isMerchantOwnerJwt(authUser);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
   if (bootCartRef.current === undefined) {
@@ -485,6 +534,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [keypadMode, setKeypadMode] = useState<KeypadMode>('qty');
   const [keypadBuffer, setKeypadBuffer] = useState(() => bootActive?.keypadBuffer || '');
   const [activeCourse, setActiveCourse] = useState(() => bootActive?.activeCourse || 1);
+  const [courseCount, setCourseCount] = useState(() => {
+    let max = bootActive?.activeCourse || 1;
+    if (bootActive?.courseCount && bootActive.courseCount > max) {
+      max = bootActive.courseCount;
+    }
+    for (const line of bootActive?.cart || []) {
+      const n = Number(line.courseNumber) || 0;
+      if (n > max) max = n;
+    }
+    return max;
+  });
   const [orderSent, setOrderSent] = useState(() => !!bootActive?.orderSent);
   const [coursesBulkSent, setCoursesBulkSent] = useState(() => !!bootActive?.coursesBulkSent);
   const [orderNote, setOrderNote] = useState(() => bootActive?.orderNote || '');
@@ -515,6 +575,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     cashSales: number;
     cashIn?: number;
     cashOut?: number;
+    cashRefunds?: number;
     cardSales: number;
     terminalSales: number;
     totalSales: number;
@@ -533,6 +594,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     closingCashCounted: number;
     expectedCash: number;
     cashSales: number;
+    cashIn?: number;
+    cashOut?: number;
+    cashRefunds?: number;
+    movements?: Array<{
+      type: string;
+      amount: number;
+      reason?: string | null;
+      staffName?: string | null;
+      createdAt?: string | null;
+    }>;
     cardSales: number;
     terminalSales: number;
     otherSales: number;
@@ -556,6 +627,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [setTabOpen, setSetTabOpen] = useState(false);
   const [newOrderConfirmOpen, setNewOrderConfirmOpen] = useState(false);
   const resumedHeldIdRef = useRef<string | null>(null);
+  /** Last kitchen shout printed for this cart — hurry/follow-up must reuse it. */
+  const lastKitchenTicketRef = useRef<string | null>(bootActive?.ticketDisplay ?? null);
   const [postSuccessTarget, setPostSuccessTarget] = useState<'register' | 'tables'>(() => {
     const stored = localStorage.getItem('manupos_webpos_post_success');
     return stored === 'tables' || stored === 'register' ? stored : 'register';
@@ -579,6 +652,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [agentOk, setAgentOk] = useState(false);
+  const [agentOutdated, setAgentOutdated] = useState(false);
+  const [printerDisconnected, setPrinterDisconnected] = useState(false);
   const [offlineSync, setOfflineSync] = useState<OfflineSyncState>({
     online: typeof navigator === 'undefined' ? true : navigator.onLine !== false,
     syncing: false,
@@ -590,7 +665,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   });
   const [loadedFromOfflineCache, setLoadedFromOfflineCache] = useState(false);
   const [printers, setPrinters] = useState<AgentPrinter[]>([]);
+  const [printersReady, setPrintersReady] = useState(false);
   const [printerName, setPrinterName] = useState(() => localStorage.getItem('manupos_webpos_printer') || '');
+  const printerHealAttemptedRef = useRef<Set<string>>(new Set());
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('manupos_webpos_autoprint') !== '0');
   const [lastReceipt, setLastReceipt] = useState<string>('');
   const [lastReceiptUrl, setLastReceiptUrl] = useState<string>('');
@@ -606,6 +683,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [sendReceiptPrefillEmail, setSendReceiptPrefillEmail] = useState('');
   const [printChooserOpen, setPrintChooserOpen] = useState(false);
   const [printChooserBusy, setPrintChooserBusy] = useState(false);
+  const [kitchenPrintIssuesOpen, setKitchenPrintIssuesOpen] = useState(false);
+  const [kitchenPrintRetryBusy, setKitchenPrintRetryBusy] = useState(false);
+  const [reprintModal, setReprintModal] = useState<{
+    lineIds: string[];
+    lineLabel?: string | null;
+  } | null>(null);
+  const [reprintBusy, setReprintBusy] = useState(false);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [ordersRefreshToken, setOrdersRefreshToken] = useState(0);
   const [tablesRefreshToken, setTablesRefreshToken] = useState(0);
@@ -649,8 +733,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [giftCardPayDue, setGiftCardPayDue] = useState(0);
   const [giftPayInject, setGiftPayInject] = useState<AppliedPayment | null>(null);
   const [attachedMembership, setAttachedMembership] = useState<AttachedMembership | null>(null);
+  const [attachedGiftCard, setAttachedGiftCard] = useState<AttachedGiftCard | null>(null);
   const [membershipBusy, setMembershipBusy] = useState(false);
   const [payWithPoints, setPayWithPoints] = useState(false);
+  const lastGiftInjectRef = useRef<string | null>(null);
   const [splitOpen, setSplitOpen] = useState(false);
   const [splitQueue, setSplitQueue] = useState<SplitPart[]>([]);
   const [splitIndex, setSplitIndex] = useState(0);
@@ -664,6 +750,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [pendingWeighed, setPendingWeighed] = useState<Product | null>(null);
   const [customAmountOpen, setCustomAmountOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [channelsSaving, setChannelsSaving] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(() => {
     const hasItems = (bootActive?.cart?.length || 0) > 0 || !!bootActive?.orderSent;
     return !!(bootCart?.mobileCartOpen && hasItems);
@@ -676,8 +763,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [recentOpen, setRecentOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
+  const [posAuthAlert, setPosAuthAlert] = useState<{
+    title?: string;
+    message: string;
+    variant?: 'error' | 'warning';
+  } | null>(null);
   const [webposStaff, setWebposStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [staffConfigured, setStaffConfigured] = useState(false);
+  const [staffPinsKnown, setStaffPinsKnown] = useState(false);
+  const [setPinHintDismissed, setSetPinHintDismissed] = useState(() => {
+    try {
+      return sessionStorage.getItem(WEBPOS_SET_PIN_HINT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const [staffRoster, setStaffRoster] = useState<StaffRosterRow[]>([]);
   const [panelStaff, setPanelStaff] = useState<Array<{ id: string; name: string }>>([]);
   const [eodPickerOpen, setEodPickerOpen] = useState(false);
@@ -738,10 +838,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const hideTab = !!tableLabel || !!tabNumber;
   // Waiter / staff phone: USE_WEBPOS PIN gate works on mobile Safari; kitchen + receipt
   // print still goes through the print agent / main till printers (not the phone).
-  const pinGateRequired =
-    staffConfigured &&
-    !webposStaff &&
-    !(isWebPosCurrentlyOffline() && loadedFromOfflineCache);
+  const pinGateRequired = webPosPinGateRequired({
+    hasStaffPins: staffConfigured,
+    pinSession: webposStaff,
+    offlineUnlocked: isWebPosCurrentlyOffline() && loadedFromOfflineCache,
+  });
+  /** Owner on the till without a clock-in keeps owner/manager perms. */
+  const ownerOnRegister = jwtIsOwner && !webposStaff;
 
   const applyStaffRoster = useCallback(
     (staffList: StaffRosterRow[], opts?: { openPinGate?: boolean }) => {
@@ -749,6 +852,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         (s) => !!(s as { pinSet?: boolean }).pinSet && s.isActive !== false
       );
       setStaffConfigured(hasPins);
+      setStaffPinsKnown(true);
       setPanelStaff(
         staffList
           .filter((s) => s.isActive !== false)
@@ -762,28 +866,53 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       setWebposStaff(session);
       if (session) {
-        window.dispatchEvent(new CustomEvent('webpos:staff-session'));
+        notifyWebPosStaffSessionChanged();
       }
       const shouldOpenPinGate =
-        opts?.openPinGate !== false && hasPins && !session && authUser?.role !== 'staff';
+        opts?.openPinGate !== false &&
+        hasPins &&
+        !session &&
+        authUser?.role !== 'staff';
       if (shouldOpenPinGate) {
         setPinModalMode('gate');
         setPinModalOpen(true);
       }
     },
-    [authUser?.staffId, authUser?.role, authUser?.permissions]
+    [authUser?.staffId, authUser?.role, authUser?.permissions, authUser?.isOwner]
   );
 
   useEffect(() => {
-    resumePosSessionHeartbeat();
-  }, []);
+    if (!staffPinsKnown) return;
+    if (pinGateRequired) {
+      clearPosSessionLocal();
+      return;
+    }
+    void registerPosSession({
+      sessionKind: 'main',
+      platform: 'webpos',
+      staffId: webposStaff?.id || null,
+      staffName: webposStaff?.name || null,
+    }).then((result) => {
+      if (result.ok && result.kickedSessionIds.length > 0) {
+        toast.info(t('webPosSessionReclaimed'));
+      }
+    });
+  }, [staffPinsKnown, pinGateRequired, webposStaff?.id, webposStaff?.name, t]);
 
   useEffect(() => {
     const onKicked = () => {
+      clearPosSessionLocal();
       clearWebPosStaffSession();
       setWebposStaff(null);
-      toast.error(t('webPosSessionKicked'));
-      if (!staffConfigured) {
+      setPosAuthAlert({
+        title: t('webPosSessionKickedTitle'),
+        message: t('webPosSessionKickedReclaim'),
+        variant: 'warning',
+      });
+      if (staffConfigured) {
+        setPinModalMode('gate');
+        setPinModalOpen(true);
+      } else if (staffPinsKnown) {
         void registerPosSession({
           sessionKind: 'main',
           platform: 'webpos',
@@ -792,22 +921,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     window.addEventListener(POS_SESSION_KICKED_EVENT, onKicked);
     return () => window.removeEventListener(POS_SESSION_KICKED_EVENT, onKicked);
-  }, [staffConfigured, t]);
-
-  useEffect(() => {
-    if (pinGateRequired) return;
-    void registerPosSession({
-      sessionKind: 'main',
-      platform: 'webpos',
-      staffId: webposStaff?.id || null,
-      staffName: webposStaff?.name || null,
-    });
-  }, [pinGateRequired, webposStaff?.id, webposStaff?.name]);
+  }, [staffConfigured, staffPinsKnown, t]);
 
   useEffect(() => {
     if (!staffRoster.length) return;
     applyStaffRoster(staffRoster, { openPinGate: false });
   }, [staffRoster, applyStaffRoster]);
+
+  const refreshStaffRosterFromServer = useCallback(async () => {
+    try {
+      const staffRes = await api.get('/merchant/staff');
+      const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
+      setStaffRoster(staffList);
+      applyStaffRoster(staffList, { openPinGate: true });
+    } catch {
+      /* ignore */
+    }
+  }, [applyStaffRoster]);
+
+  useEffect(() => {
+    const onRosterChanged = () => void refreshStaffRosterFromServer();
+    window.addEventListener('webpos:staff-roster-changed', onRosterChanged);
+    return () => window.removeEventListener('webpos:staff-roster-changed', onRosterChanged);
+  }, [refreshStaffRosterFromServer]);
 
   useEffect(() => {
     localStorage.setItem('manupos_webpos_post_success', postSuccessTarget);
@@ -830,13 +966,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ticketOrderNumber,
       orderNote,
       activeCourse,
+      courseCount,
       orderSent,
       coursesBulkSent,
       selectedLineId,
       keypadBuffer,
       billDiscount,
     };
-    const key = openCartDraftKey({ tableId, tabNumber, channel });
+    const key = openCartDraftKey({ tableId, tabNumber, channel, ticketDisplay });
     if (draftOccupiesTable(active)) {
       openCartDraftsRef.current.set(key, active);
     } else {
@@ -870,6 +1007,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     ticketOrderNumber,
     orderNote,
     activeCourse,
+    courseCount,
     orderSent,
     coursesBulkSent,
     selectedLineId,
@@ -919,24 +1057,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [settingsOpen]);
 
   const showPanelMenus = useCallback(() => {
-    const jwtIsOwner = authUser?.role === 'merchant' && authUser?.isOwner !== false;
-    if (jwtIsOwner) {
-      window.dispatchEvent(new CustomEvent('webpos:show-panel'));
-      return;
-    }
     const access = getEffectivePanelAccess({
       jwtPermissions: authUser?.permissions as Permission[] | undefined,
-      isOwner: false,
-      staffConfigured,
+      isOwner: jwtIsOwner,
+      authRole: authUser?.role,
+      hasStaffPins: staffConfigured,
       pinSession: webposStaff,
     });
-    // When PINs are configured, only staff with ACCESS_PANEL may leave WebPOS chrome.
-    if (staffConfigured && !access.canOpenPanel) {
+    if (!access.canOpenBackOffice) {
       toast.error(t('webPosPanelDenied'));
       return;
     }
-    window.dispatchEvent(new CustomEvent('webpos:show-panel'));
-  }, [authUser?.role, authUser?.isOwner, authUser?.permissions, staffConfigured, webposStaff, t]);
+    if (access.canOpenPanel) {
+      window.dispatchEvent(new CustomEvent('webpos:show-panel'));
+      return;
+    }
+    navigate(backOfficeHomePath(access.permissions, false));
+  }, [jwtIsOwner, authUser?.permissions, staffConfigured, webposStaff, t, navigate]);
 
   const enterPosApp = useCallback(() => {
     window.dispatchEvent(new CustomEvent('webpos:enter-app'));
@@ -1014,6 +1151,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     () => normalizePosCheckoutSettings(paymentConfig?.posCheckoutSettings),
     [paymentConfig?.posCheckoutSettings]
   );
+  const loyaltyProgram = useMemo(
+    () =>
+      normalizeLoyaltyProgram(
+        paymentConfig?.loyalty ||
+          (merchant
+            ? {
+                enabled: !!(merchant as { loyaltyEnabled?: boolean }).loyaltyEnabled,
+                earnPointsPerChf: Number(
+                  (merchant as { loyaltyEarnPointsPerChf?: string | number }).loyaltyEarnPointsPerChf
+                ),
+                redeemPointsPerChf: Number(
+                  (merchant as { loyaltyRedeemPointsPerChf?: number }).loyaltyRedeemPointsPerChf
+                ),
+              }
+            : null)
+      ),
+    [paymentConfig?.loyalty, merchant]
+  );
+  const loyaltyRedeemRate = loyaltyProgram.redeemPointsPerChf;
+  const loyaltyEarnRate = loyaltyProgram.earnPointsPerChf;
+  const loyaltyRedeemThreshold = redeemThresholdPoints(loyaltyRedeemRate);
   const editionFeatures = paymentConfig?.editionFeatures;
   const editionAllows = (key: string) =>
     editionFeatures == null || editionFeatures.includes(key);
@@ -1069,9 +1227,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     for (const l of cart) {
       if (l.courseNumber) set.add(l.courseNumber);
     }
-    if (coursesEnabled && cart.length > 0) set.add(activeCourse);
+    if (coursesEnabled && cart.length > 0) {
+      const max = Math.max(activeCourse, courseCount, ...set, 1);
+      for (let n = 1; n <= max; n++) set.add(n);
+    }
     return Array.from(set).sort((a, b) => a - b);
-  }, [cart, activeCourse, coursesEnabled]);
+  }, [cart, activeCourse, coursesEnabled, courseCount]);
 
   useEffect(() => {
     const fromSettings = checkoutSettings.postSuccessTarget;
@@ -1100,6 +1261,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     coursesBulkSent &&
     activeCourse > 1;
   const hasUnsentItems = cart.some((l) => !l.sentToKitchen);
+  const pendingPrintJobs = usePendingPrintJobs();
+  const failedPrintLines = useMemo(
+    () => cart.filter((l) => !!l.kitchenPrintFailed && !!l.sentToKitchen),
+    [cart]
+  );
+  const unprintedJobCount = Math.max(pendingPrintJobs.length, failedPrintLines.length);
   // Ongoing order with new (unsent) lines must keep Send — not New.
   const showNewOrderButton = orderSent && !showFireCourseButton && !hasUnsentItems;
   const sendLabel = useMemo(() => {
@@ -1190,7 +1357,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const membershipCheckout = useMemo(() => {
     if (
       !attachedMembership?.membershipEnabled ||
-      attachedMembership.pointsBalance < REDEEM_THRESHOLD_POINTS
+      attachedMembership.pointsBalance < loyaltyRedeemThreshold
     ) {
       return {
         canPayWithPoints: false,
@@ -1199,25 +1366,76 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       };
     }
     const payable = activeSale.totals.total;
-    const maxPoints = maxRedeemablePoints(payable, attachedMembership.pointsBalance);
+    const maxPoints = maxRedeemablePoints(
+      payable,
+      attachedMembership.pointsBalance,
+      loyaltyRedeemRate
+    );
     const pointsRedeemed = payWithPoints ? maxPoints : 0;
     const pointsDiscount =
-      pointsRedeemed > 0 ? computeCashDiscount(pointsRedeemed) : 0;
+      pointsRedeemed > 0 ? computeCashDiscount(pointsRedeemed, loyaltyRedeemRate) : 0;
     return {
       canPayWithPoints: maxPoints > 0,
       pointsRedeemed,
       pointsDiscount,
     };
-  }, [attachedMembership, activeSale.totals.total, payWithPoints]);
+  }, [
+    attachedMembership,
+    activeSale.totals.total,
+    payWithPoints,
+    loyaltyRedeemRate,
+    loyaltyRedeemThreshold,
+  ]);
 
   useEffect(() => {
     if (posView !== 'checkout' || !attachedMembership?.membershipEnabled) return;
     const payable = activeSale.totals.total;
-    const maxPts = maxRedeemablePoints(payable, attachedMembership.pointsBalance);
-    setPayWithPoints(
-      attachedMembership.pointsBalance >= REDEEM_THRESHOLD_POINTS && maxPts > 0
+    const maxPts = maxRedeemablePoints(
+      payable,
+      attachedMembership.pointsBalance,
+      loyaltyRedeemRate
     );
-  }, [posView, splitIndex, attachedMembership?.cardId, activeSale.totals.total]);
+    setPayWithPoints(
+      attachedMembership.pointsBalance >= loyaltyRedeemThreshold && maxPts > 0
+    );
+  }, [
+    posView,
+    splitIndex,
+    attachedMembership?.cardId,
+    activeSale.totals.total,
+    loyaltyRedeemRate,
+    loyaltyRedeemThreshold,
+  ]);
+
+  useEffect(() => {
+    if (posView !== 'checkout') {
+      lastGiftInjectRef.current = null;
+      return;
+    }
+    if (!attachedGiftCard || attachedGiftCard.balance <= 0.001) return;
+    const key = `${attachedGiftCard.cardId}:${splitIndex}`;
+    if (lastGiftInjectRef.current === key) return;
+    const due = roundMoney2(
+      Math.max(0, activeSale.totals.total - membershipCheckout.pointsDiscount)
+    );
+    const amount = roundMoney2(Math.min(attachedGiftCard.balance, due));
+    if (amount <= 0.001) return;
+    lastGiftInjectRef.current = key;
+    setGiftPayInject({
+      id: `gc-pay-${attachedGiftCard.cardId}`,
+      method: 'gift_card',
+      amount,
+      giftCardId: attachedGiftCard.cardId,
+      giftCardNumber: attachedGiftCard.cardNumber,
+      giftCardRemainingBalance: roundMoney2(attachedGiftCard.balance - amount),
+    });
+  }, [
+    posView,
+    attachedGiftCard,
+    splitIndex,
+    activeSale.totals.total,
+    membershipCheckout.pointsDiscount,
+  ]);
 
   const billDiscountLabel =
     billDiscount.percent > 0
@@ -1233,7 +1451,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (categoryId === POS_GIFT_CARDS_CATEGORY) {
         return false;
       } else if (categoryId !== 'all' && p.categoryId !== categoryId) return false;
-      if (q && !p.name.toLowerCase().includes(q)) return false;
+      if (q) {
+        const raw = search.trim();
+        const barcode = String(p.barcode || '').trim();
+        const sku = String(p.sku || '').trim();
+        const nameHit = p.name.toLowerCase().includes(q);
+        const codeHit =
+          (barcode && (barcode === raw || barcode.toLowerCase() === q)) ||
+          (sku && sku.toLowerCase() === q);
+        if (!nameHit && !codeHit) return false;
+      }
       return true;
     });
     const useBestsellerSort = gridSort === 'bestseller';
@@ -1249,21 +1476,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [products, categoryId, search, bestsellerIds, gridSort]);
 
   const refreshAgent = useCallback(async () => {
-    const ok = await isPrintAgentAvailable();
-    setAgentOk(ok);
-    if (!ok) {
+    const health = await getPrintAgentHealth();
+    setAgentOk(health.ok);
+    setAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
+    if (!health.ok) {
       setPrinters([]);
+      setPrintersReady(false);
       return;
     }
     try {
       const list = await listAgentPrinters();
       setPrinters(list);
+      setPrintersReady(true);
       if (!printerName && list.length) {
-        const def = list.find((p) => p.isDefault) || list[0];
+        const def = list.find((p) => p.isDefault && !isUnsuitableRawPrinter(p.name)) ||
+          list.find((p) => !isUnsuitableRawPrinter(p.name)) ||
+          list[0];
         setPrinterName(def.name);
       }
     } catch {
       setPrinters([]);
+      setPrintersReady(false);
     }
   }, [printerName]);
 
@@ -1277,6 +1510,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cashSales: number;
       cashIn?: number;
       cashOut?: number;
+      cashRefunds?: number;
       cardSales: number;
       terminalSales: number;
       totalSales: number;
@@ -1513,6 +1747,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 : g?.options,
             }))
           : p.modifierGroups,
+        specifications: Array.isArray(p.specifications)
+          ? p.specifications.map((s: any, i: number) => ({
+              id: s?.id || `spec-${i + 1}`,
+              name: repairCatalogText(s?.name || ''),
+              price: Number(s?.price) || 0,
+              saleStatus: s?.saleStatus || 'in_stock',
+              isDefault: !!s?.isDefault,
+              sortOrder: Number(s?.sortOrder) || i,
+            }))
+          : p.specifications,
         comboSlots: Array.isArray(p.comboSlots)
           ? p.comboSlots.map((slot: any) => ({
               ...slot,
@@ -1606,6 +1850,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [shiftsEnabled, offlineSync.online, refreshCurrentShift]);
+
+  /** Retry unprinted kitchen/receipt jobs every 8s while WebPOS stays open. */
+  useEffect(() => {
+    startPrintQueueAutoRetry();
+  }, []);
 
   /** Main till hub: Print Agent online → pull waiter/mobile ESC/POS jobs and print locally. */
   useEffect(() => {
@@ -1872,6 +2121,45 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [printerName]);
 
   useEffect(() => {
+    if (!agentOk || !printersReady || printers.length === 0) return;
+
+    const configured = printerName.trim();
+    if (configured && isConfiguredPrinterMissing(configured, printers)) {
+      const heal = suggestPrinterAutoHeal(configured, printers);
+      const key = `local:${configured}->${heal?.name || ''}`;
+      if (heal && !printerHealAttemptedRef.current.has(key)) {
+        printerHealAttemptedRef.current.add(key);
+        setPrinterName(heal.name);
+        setPrinterDisconnected(false);
+        toast.success(t('webPosPrinterAutoHealed').replace('{name}', heal.name));
+      } else if (!heal) {
+        setPrinterDisconnected(true);
+      }
+    } else if (configured) {
+      setPrinterDisconnected(false);
+    }
+
+    const profiles = printSettings?.printers;
+    if (!profiles?.length) return;
+    let changed = false;
+    const nextProfiles = profiles.map((p) => {
+      const name = (p.name || '').trim();
+      if (!name || !isConfiguredPrinterMissing(name, printers)) return p;
+      const heal = suggestPrinterAutoHeal(name, printers);
+      if (!heal) return p;
+      const key = `set:${p.id}:${name}->${heal.name}`;
+      if (printerHealAttemptedRef.current.has(key)) return p;
+      printerHealAttemptedRef.current.add(key);
+      changed = true;
+      return { ...p, name: heal.name };
+    });
+    if (!changed) return;
+    const next = { ...printSettings, printers: nextProfiles };
+    setPrintSettings(next);
+    void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
+  }, [agentOk, printersReady, printers, printerName, printSettings, t]);
+
+  useEffect(() => {
     localStorage.setItem('manupos_webpos_autoprint', autoPrint ? '1' : '0');
   }, [autoPrint]);
 
@@ -2101,6 +2389,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       allowExtras: product.allowExtras,
       extras: product.extras,
       modifierGroups: product.modifierGroups,
+      specifications: product.specifications,
     });
     setPendingCombo(null);
   };
@@ -2179,6 +2468,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           allowExtras: p.allowExtras,
           extras: p.extras,
           modifierGroups: p.modifierGroups,
+          specifications: p.specifications,
         });
         return;
       }
@@ -2274,11 +2564,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       };
       const reportPeriod = res.data.reportPeriod as { from: string; to: string };
       const balanced = !!res.data.balanced;
+      const liveAtClose = shiftLive;
       setLastClosedShift({
         openingCash: Number(shift.openingCash) || 0,
         closingCashCounted: Number(shift.closingCashCounted) || 0,
         expectedCash: Number(shift.expectedCash) || 0,
         cashSales: Number(shift.cashSales) || 0,
+        cashIn: Number(res.data.cashIn ?? liveAtClose?.cashIn) || 0,
+        cashOut: Number(res.data.cashOut ?? liveAtClose?.cashOut) || 0,
+        cashRefunds: Number(res.data.cashRefunds ?? liveAtClose?.cashRefunds) || 0,
+        movements: Array.isArray(res.data.movements) ? res.data.movements : [],
         cardSales: Number(shift.cardSales) || 0,
         terminalSales: Number(shift.terminalSales) || 0,
         otherSales: Number(shift.otherSales) || 0,
@@ -2323,6 +2618,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     shiftCash?: Array<{
       openingFloat: number;
       cashSales: number;
+      cashIn?: number;
+      cashOut?: number;
+      cashRefunds?: number;
+      movements?: Array<{
+        type: string;
+        amount: number;
+        reason?: string | null;
+        staffName?: string | null;
+        createdAt?: string | null;
+      }>;
       expectedCash: number;
       closingCashCounted?: number | null;
       variance?: number | null;
@@ -2347,6 +2652,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   /** Whole-day EOD: END_OF_DAY/VIEW_REPORTS plus VIEW_ALL_SALES (managers). */
   const mayPrintWholeDayEod =
+    ownerOnRegister ||
     !staffConfigured ||
     (!!webposStaff &&
       (hasPermission(webposStaff.permissions, 'VIEW_REPORTS') ||
@@ -2413,11 +2719,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       header: printSettings?.receiptHeader,
       footer: printSettings?.receiptFooter,
       shiftCash:
-        reportKind === 'eod' && report?.shiftCash?.length
+        report?.shiftCash?.length
           ? report.shiftCash
           : {
               openingFloat: lastClosedShift.openingCash,
               cashSales: lastClosedShift.cashSales,
+              cashIn: lastClosedShift.cashIn ?? 0,
+              cashOut: lastClosedShift.cashOut ?? 0,
+              cashRefunds: lastClosedShift.cashRefunds ?? 0,
+              movements: lastClosedShift.movements ?? [],
               expectedCash: lastClosedShift.expectedCash,
               closingCashCounted: lastClosedShift.closingCashCounted,
               variance: lastClosedShift.variance,
@@ -2465,7 +2775,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await printEscPosToTargets(text, { role: 'eod' });
       toast.success(t('webPosShiftPrinted'));
     } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
@@ -2505,7 +2815,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await printEscPosToTargets(text, { role: 'eod' });
       toast.success(t('webPosEodPrinted'));
     } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
@@ -2519,7 +2829,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setShiftClosedOpen(false);
     clearWebPosStaffSession();
     setWebposStaff(null);
-    window.dispatchEvent(new CustomEvent('webpos:staff-session'));
+    notifyWebPosStaffSessionChanged();
   };
 
   /** EOD print/download when cash shifts are disabled (late-night venues). */
@@ -2540,6 +2850,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       const params: Record<string, string> = { preset: 'today' };
       const adminViewAll =
+        ownerOnRegister ||
         !staffConfigured ||
         (!!webposStaff && hasPermission(webposStaff.permissions, 'VIEW_ALL_SALES', false));
       if (adminViewAll && scopeStaffId) {
@@ -2574,6 +2885,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         shiftCash?: Array<{
           openingFloat: number;
           cashSales: number;
+          cashIn?: number;
+          cashOut?: number;
+          cashRefunds?: number;
+          movements?: Array<{
+            type: string;
+            amount: number;
+            reason?: string | null;
+            staffName?: string | null;
+            createdAt?: string | null;
+          }>;
           expectedCash: number;
           closingCashCounted?: number | null;
           variance?: number | null;
@@ -2621,7 +2942,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       await printEscPosToTargets(text, { role: 'eod' });
     } catch (e: any) {
-      toast.error(e.response?.data?.error || e.message || t('webPosPrintFailed'));
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
@@ -2839,9 +3160,54 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         l.courseNumber ? l : { ...l, courseNumber: activeCourse }
       )
     );
-    const next = Math.max(activeCourse, ...courseNumbers, 0) + 1;
+    const next = Math.max(activeCourse, courseCount, ...courseNumbers, 0) + 1;
     setActiveCourse(next);
+    setCourseCount(next);
+    setSelectedLineId(null);
+    setKeypadBuffer('');
     toast.success(`${t('webPosCourse')} ${next}`);
+  };
+
+  const handleSelectCourse = (course: number) => {
+    setActiveCourse(course);
+    setSelectedLineId(null);
+    setKeypadBuffer('');
+  };
+
+  const setKitchenPrintFailedForLines = useCallback((lineIds: Iterable<string>, failed: boolean) => {
+    const idSet = new Set(lineIds);
+    setCart((prev) =>
+      prev.map((l) => (idSet.has(l.lineId) ? { ...l, kitchenPrintFailed: failed } : l))
+    );
+  }, []);
+
+  useEffect(() => {
+    const pendingLineIds = new Set(pendingPrintJobs.flatMap((j) => j.lineIds || []));
+    setCart((prev) => {
+      let changed = false;
+      const next = prev.map((l) => {
+        if (!l.kitchenPrintFailed) return l;
+        if (pendingLineIds.has(l.lineId)) return l;
+        if (pendingPrintJobs.length > 0 && pendingLineIds.size === 0) return l;
+        changed = true;
+        return { ...l, kitchenPrintFailed: false };
+      });
+      return changed ? next : prev;
+    });
+  }, [pendingPrintJobs]);
+
+  const openOrderReprint = () => {
+    const sentIds = cart.filter((l) => l.sentToKitchen).map((l) => l.lineId);
+    setReprintModal({
+      lineIds: sentIds.length ? sentIds : cart.map((l) => l.lineId),
+    });
+  };
+
+  const openLineReprint = (line: CartLine) => {
+    setReprintModal({
+      lineIds: [line.lineId],
+      lineLabel: repairCatalogText(line.name || ''),
+    });
   };
 
   const fireCourseLines = async (lines: CartLine[], courseOnly?: number) => {
@@ -2860,9 +3226,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         orderNumber: kitchenOrderNumber({ ticket }),
         when: fulfillmentWhen,
         courseOnly,
-      }).catch((e: any) => {
-      toast.error(e?.message || t('webPosKitchenPrintFailed'));
-    });
+        lineIds: lines.map((l) => l.lineId),
+      })
+      .then(() => setKitchenPrintFailedForLines(ids, false))
+      .catch((e: unknown) => {
+        setKitchenPrintFailedForLines(ids, true);
+        notifyPrintError(e, 'webPosKitchenPrintFailed');
+      });
   };
 
   /** Clear operator editing UI without deleting table/tab kitchen drafts. */
@@ -2877,26 +3247,32 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       .sort((a, b) => a - b);
     const draftActiveCourse =
       opts?.draftActiveCourse ?? pendingCourses[0] ?? activeCourse;
-    if (tableId || tabNumber) {
-      const key = openCartDraftKey({ tableId, tabNumber, channel: tableId ? 'dine_in' : channel });
-      openCartDraftsRef.current.set(key, {
-        cart: sentCart,
-        channel: tableId ? 'dine_in' : channel,
-        tableId,
-        tableLabel,
-        tabNumber,
-        ticketDisplay,
-        ticketOrderNumber,
-        orderNote,
-        activeCourse: draftActiveCourse,
-        orderSent: true,
-        coursesBulkSent: true,
-        selectedLineId: null,
-        keypadBuffer: '',
-        billDiscount,
-      });
-      setDraftVersion((n) => n + 1);
-    }
+    // Keep a local draft for every kitchen-sent ticket (including takeaway)
+    // so Orders can recover if /merchant/pos/held is slow or fails.
+    const key = openCartDraftKey({
+      tableId,
+      tabNumber,
+      channel: tableId ? 'dine_in' : effectiveChannel,
+      ticketDisplay,
+    });
+    openCartDraftsRef.current.set(key, {
+      cart: sentCart,
+      channel: tableId ? 'dine_in' : effectiveChannel,
+      tableId,
+      tableLabel,
+      tabNumber,
+      ticketDisplay,
+      ticketOrderNumber,
+      orderNote,
+      activeCourse: draftActiveCourse,
+      courseCount,
+      orderSent: true,
+      coursesBulkSent: true,
+      selectedLineId: null,
+      keypadBuffer: '',
+      billDiscount,
+    });
+    setDraftVersion((n) => n + 1);
     setCart([]);
     setSelectedLineId(null);
     setKeypadBuffer('');
@@ -2907,6 +3283,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTabNumber(null);
     clearCartTicket();
     setActiveCourse(1);
+    setCourseCount(1);
     setOrderSent(false);
     setCoursesBulkSent(false);
     setChannel(null);
@@ -2914,6 +3291,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setSelectedCustomer(null);
     setProvisionalPrinted(false);
     if (wasTable) {
+      setTablesRefreshToken((n) => n + 1);
       setPosTab('tables');
       setPosView('tables');
     } else {
@@ -2987,8 +3365,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setCoursesBulkSent(true);
       toast.success(t('webPosHeldSentKitchen'));
       releaseOperatorAfterKitchen(sentCart);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error || e.message || t('webPosKitchenPrintFailed'));
+    } catch (e: unknown) {
+      notifyPrintError(e, 'webPosKitchenPrintFailed');
     } finally {
       setBusy(false);
     }
@@ -3004,6 +3382,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     ticketOrderNumber,
     orderNote,
     activeCourse,
+    courseCount,
     orderSent,
     coursesBulkSent,
     selectedLineId,
@@ -3051,9 +3430,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTableLabel(draft.tableLabel);
     setTabNumber(draft.tabNumber);
     setTicketDisplay(draft.ticketDisplay ?? null);
+    if (draft.ticketDisplay) lastKitchenTicketRef.current = draft.ticketDisplay;
     setTicketOrderNumber(draft.ticketOrderNumber ?? null);
     setOrderNote(draft.orderNote);
     setActiveCourse(draft.activeCourse);
+    {
+      let max = Math.max(draft.activeCourse || 1, draft.courseCount || 1);
+      for (const line of draft.cart) {
+        const n = Number(line.courseNumber) || 0;
+        if (n > max) max = n;
+      }
+      setCourseCount(max);
+    }
     setOrderSent(draft.orderSent);
     setCoursesBulkSent(draft.coursesBulkSent);
     setSelectedLineId(draft.selectedLineId);
@@ -3089,16 +3477,65 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTicketOrderNumber(null);
   }, []);
 
-  /** Kitchen shout number — after tab assignment use tab #, not a stale pre-tab ticket. */
+  /** Kitchen shout number — ticketDisplay first (7128), never a new random # on follow-up. */
   const kitchenOrderNumber = useCallback(
-    (opts?: { ticket?: { display: string; orderNumber: string } }) => {
+    (opts?: { ticket?: { display: string; orderNumber: string }; allowNew?: boolean }) => {
+      const ticket =
+        opts?.ticket ??
+        (ticketDisplay
+          ? { display: ticketDisplay, orderNumber: ticketOrderNumber || '' }
+          : null);
+      if (ticket?.display?.trim()) {
+        lastKitchenTicketRef.current = ticket.display.trim();
+        return ticket.display.trim();
+      }
+      if (opts?.allowNew === false) {
+        if (lastKitchenTicketRef.current?.trim()) return lastKitchenTicketRef.current.trim();
+        if (tabNumber) return `#${tabNumber}`;
+        return '';
+      }
       if (tabNumber) return `#${tabNumber}`;
-      const ticket = opts?.ticket ?? (ticketDisplay ? { display: ticketDisplay, orderNumber: ticketOrderNumber! } : null);
-      if (ticket?.display) return ticket.display;
-      return ensureCartTicket().display;
+      const created = ensureCartTicket();
+      lastKitchenTicketRef.current = created.display;
+      return created.display;
     },
     [tabNumber, ticketDisplay, ticketOrderNumber, ensureCartTicket]
   );
+
+  const kdsTicketKey =
+    ticketDisplay?.trim() ||
+    kitchenOrderNumber({ allowNew: false }) ||
+    (tabNumber ? `#${tabNumber}` : '');
+
+  useEffect(() => {
+    if (!kdsTicketKey || isRetail) return;
+    if (!cart.some((l) => l.sentToKitchen)) return;
+    let cancelled = false;
+    const syncReady = async () => {
+      const readyIds = await fetchKdsReadyLineIds(kdsTicketKey);
+      if (cancelled || !readyIds.length) return;
+      setCart((prev) =>
+        prev.map((l) =>
+          readyIds.includes(l.lineId) && !l.kitchenReadyAt
+            ? { ...l, kitchenReadyAt: Date.now() }
+            : l
+        )
+      );
+    };
+    void syncReady();
+    const timer = window.setInterval(() => void syncReady(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [kdsTicketKey, isRetail, cart.filter((l) => l.sentToKitchen).length]);
+
+  /** Assign the kitchen/public ticket when checkout opens so AMOUNT DUE can show both. */
+  useEffect(() => {
+    if (posView !== 'checkout' || collectOrderRef) return;
+    if (!cart.length) return;
+    ensureCartTicket();
+  }, [posView, collectOrderRef, cart.length, ensureCartTicket]);
 
   /**
    * Persist cart to /merchant/pos/held so Orders can list kitchen / held tickets.
@@ -3111,19 +3548,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   ) => {
     if (!cartLines.length) return;
     const ticket = opts?.ticket ?? ensureCartTicket();
+    lastKitchenTicketRef.current = ticket.display;
+    const persistChannel = tableId ? 'dine_in' : effectiveChannel;
     const cartSum = cartLines.reduce((s, l) => s + Number(l.lineTotal || 0), 0);
     const heldLabel = [
       tableLabel || null,
       tabNumber ? `${t('webPosTab')} ${tabNumber}` : null,
       ticket.display,
-      channel,
+      persistChannel,
       money(cartSum),
     ]
       .filter(Boolean)
       .join(' · ');
     const cartJson = {
       cart: cartLines,
-      channel,
+      channel: persistChannel,
       tableId,
       tableLabel,
       tabNumber,
@@ -3133,35 +3572,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       orderNote,
     };
 
-    try {
-      const res = await api.get('/merchant/pos/held');
-      const list = (res.data?.held || []) as Array<{
-        id: string;
-        cartJson?: Record<string, unknown> | null;
-      }>;
-      for (const h of list) {
-        const cj = h.cartJson;
-        if (!cj || typeof cj !== 'object') continue;
-        const sameTicket =
-          typeof cj.ticketDisplay === 'string' && cj.ticketDisplay === ticket.display;
-        const sameTable = !!tableId && cj.tableId === tableId;
-        const sameTab =
-          !!tabNumber && !tableId && cj.tabNumber === tabNumber && !cj.tableId;
-        if (sameTicket || sameTable || sameTab) {
-          await api.delete(`/merchant/pos/held/${h.id}`);
-        }
-      }
-    } catch {
-      /* best-effort upsert cleanup */
-    }
-
-    await api.post('/merchant/pos/held', {
+    // Atomic server upsert — do not delete-then-insert (that lost kitchen tickets
+    // when POST failed after DELETE, e.g. order 5126).
+    const res = await api.post('/merchant/pos/held', {
+      id: resumedHeldIdRef.current || undefined,
       label: heldLabel,
-      channel,
+      channel: persistChannel,
       cartJson,
       staffId: webposStaff?.id,
       staffName: webposStaff?.name,
       sendToKitchen,
+    });
+    const savedId = (res.data?.held as { id?: string } | undefined)?.id;
+    if (savedId) resumedHeldIdRef.current = savedId;
+    console.info('[WebPOS][held] persisted', {
+      id: savedId,
+      ticket: ticket.display,
+      channel: persistChannel,
+      sendToKitchen,
+      lines: cartLines.length,
     });
     setOrdersRefreshToken((n) => n + 1);
   };
@@ -3179,6 +3608,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     let nextOrderSent = orderSent;
     let nextCoursesBulkSent = coursesBulkSent;
     let nextBillDiscount = billDiscount;
+    let nextCourseCount = Math.max(activeCourse, courseCount, 1);
 
     if (existing && (existing.cart.length > 0 || existing.orderSent)) {
       const existingIds = new Set(existing.cart.map((l) => l.lineId));
@@ -3206,6 +3636,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTabNumber(null);
     setOrderNote(nextNote);
     setActiveCourse(nextCourse);
+    nextCourseCount = Math.max(nextCourse, nextCourseCount, existing?.courseCount || 1);
+    for (const line of nextCart) {
+      const n = Number(line.courseNumber) || 0;
+      if (n > nextCourseCount) nextCourseCount = n;
+    }
+    setCourseCount(nextCourseCount);
     setOrderSent(nextOrderSent);
     setCoursesBulkSent(nextCoursesBulkSent);
     setBillDiscount(nextBillDiscount);
@@ -3219,6 +3655,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tabNumber: null,
       orderNote: nextNote,
       activeCourse: nextCourse,
+      courseCount: nextCourseCount,
       orderSent: nextOrderSent,
       coursesBulkSent: nextCoursesBulkSent,
       selectedLineId,
@@ -3246,6 +3683,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setTabNumber(null);
       clearCartTicket();
       setActiveCourse(1);
+      setCourseCount(1);
       setOrderSent(false);
       setCoursesBulkSent(false);
       setFulfillmentWhen(null);
@@ -3285,12 +3723,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTabNumber(null);
     clearCartTicket();
     setActiveCourse(1);
+    setCourseCount(1);
     setOrderSent(false);
     setCoursesBulkSent(false);
     setChannel('takeaway');
     setFulfillmentWhen(asapFulfillment());
     setSelectedCustomer(null);
     clearAttachedMembership();
+    clearAttachedGiftCard();
     setProvisionalPrinted(false);
     savePersistedWebPosCarts({
       drafts: draftsMapToRecord(openCartDraftsRef.current),
@@ -3333,12 +3773,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setTabNumber(null);
       clearCartTicket();
       setActiveCourse(1);
+      setCourseCount(1);
       setOrderSent(false);
       setCoursesBulkSent(false);
       setChannel('takeaway');
       setFulfillmentWhen(asapFulfillment());
       setSelectedCustomer(null);
       clearAttachedMembership();
+      clearAttachedGiftCard();
       setProvisionalPrinted(false);
       savePersistedWebPosCarts({
         drafts: draftsMapToRecord(openCartDraftsRef.current),
@@ -3473,6 +3915,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         tabNumber: null,
         orderNote: nextNote,
         activeCourse: Math.max(tgtDraft.activeCourse || 1, srcDraft.activeCourse || 1),
+        courseCount: Math.max(
+          tgtDraft.courseCount || 1,
+          srcDraft.courseCount || 1,
+          tgtDraft.activeCourse || 1,
+          srcDraft.activeCourse || 1
+        ),
         orderSent: tgtDraft.orderSent || srcDraft.orderSent,
         coursesBulkSent: tgtDraft.coursesBulkSent || srcDraft.coursesBulkSent,
         selectedLineId: null,
@@ -3706,14 +4154,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         paymentMethod: 'cash',
         isProvisional: true,
         tableLabel,
-        items: cart.map((l) => ({
-          name: lineExtrasLabel(l) ? `${l.name} (${lineExtrasLabel(l)})` : l.name,
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          lineTotal: l.lineTotal,
-          productId: l.productId,
-          categoryId: l.categoryId,
-        })),
+        items: cart.map((l) =>
+          buildKitchenTicketItemFromLine({
+            name: l.name,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            lineTotal: l.lineTotal,
+            productId: l.productId,
+            categoryId: l.categoryId,
+            courseNumber: l.courseNumber,
+            selectedExtras: l.selectedExtras,
+            comboSelections: l.comboSelections,
+            lineNote: l.lineNote,
+          })
+        ),
         subtotal: fullTotals.subtotal,
         discount: disc,
         taxAmount: fullTotals.tax,
@@ -3730,22 +4184,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         showStaff: printSettings?.receiptShowStaffLine !== false,
         staffName: webposStaff?.name,
         includeQr: false,
+        memberName: attachedMembership
+          ? attachedMembership.customerName?.trim() || attachedMembership.cardNumber || null
+          : null,
+        loyaltyPointsBalance: attachedMembership?.membershipEnabled
+          ? attachedMembership.pointsBalance
+          : null,
       };
       const text = generateWebPosReceiptText(receiptPayload, locale);
       setProvisionalPrinted(true);
       toast.success(t('webPosProvisionalPrinted'));
-      void printEscPosToTargets(text, { role: 'receipt', quiet: true }).catch((e: any) => {
-        toast.error(e?.message || t('webPosPrintFailed'));
+      void printEscPosToTargets(text, { role: 'receipt', quiet: true }).catch((e: unknown) => {
+        notifyPrintError(e, 'webPosPrintFailed');
       });
-    } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+    } catch (e: unknown) {
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
   const onKitchenMessage = async (message: string) => {
     try {
-      const orderNumber = kitchenOrderNumber();
-      const whenSnapshot = fulfillmentWhen;
+      const orderNumber = kitchenOrderNumber({ allowNew: false });
+      if (!orderNumber) {
+        toast.error(t('webPosKitchenPrintFailed'));
+        return;
+      }
       toast.success(t('webPosKitchenMessageSent'));
       const lang = resolveReceiptLanguage(printSettings, paymentConfig?.panelLanguage || locale);
       const paperWidthMm = resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
@@ -3767,11 +4230,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         dataBase64: uint8ToBase64(escpos),
         text,
         orderId: orderNumber,
-      }).catch((e: any) => {
-        toast.error(e?.message || t('webPosKitchenPrintFailed'));
+        jobKind: 'kitchen',
+        jobLabel: orderNumber || t('webPosPrintJobKitchen'),
+      }).catch((e: unknown) => {
+        notifyPrintError(e, 'webPosKitchenPrintFailed');
       });
-    } catch (e: any) {
-      toast.error(e.message || t('webPosKitchenPrintFailed'));
+    } catch (e: unknown) {
+      notifyPrintError(e, 'webPosKitchenPrintFailed');
     }
   };
 
@@ -3877,13 +4342,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setBusy(true);
     try {
       if (kitchenLines.length) {
-        const ticket = nextWebPosTicketNumber(merchant?.id);
         await printKitchenForCart(kitchenLines, effectiveChannel, {
-          orderNumber: kitchenOrderNumber(),
+          orderNumber: kitchenOrderNumber({ allowNew: false }) || kitchenOrderNumber(),
           when: fulfillmentWhen,
           cancelled: true,
           cancelReason: reason,
           forcePrint: true,
+          lineIds: kitchenLines.map((l) => l.lineId),
         });
       }
 
@@ -4079,6 +4544,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           printerName: label || undefined,
           dataBase64,
           text,
+          jobKind: 'receipt',
+          jobLabel: t('webPosPrintJobReceipt'),
         });
         if (mode === 'queued') queuedOk += 1;
         else printedOk += 1;
@@ -4121,7 +4588,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             balance,
             recipientEmail: gc.ecardEmail,
             holderName: gc.holderName,
-          }).catch((e: any) => toast.error(e?.message || t('webPosPrintFailed')));
+          }).catch((e: unknown) => notifyPrintError(e, 'webPosPrintFailed'));
         }
         if ((delivery === 'email' || delivery === 'both') && gc.ecardEmail) {
           await api.post('/gift-cards/send-ecard-email', {
@@ -4200,6 +4667,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPayWithPoints(false);
   };
 
+  const clearAttachedGiftCard = () => {
+    setAttachedGiftCard(null);
+    lastGiftInjectRef.current = null;
+  };
+
   const attachMembershipCard = (membership: AttachedMembership) => {
     const displayName = membership.customerName?.trim();
     if (displayName) {
@@ -4230,42 +4702,65 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     toast.success(displayName || membership.cardNumber || t('webPosMembershipAttached'));
   };
 
+  const cardFromLookup = (c: Record<string, unknown>, fallbackNumber: string): AttachedMembership => {
+    const customer = c.customer as
+      | { id?: string; firstName?: string; lastName?: string }
+      | null
+      | undefined;
+    const holder =
+      (c.holderName as string) ||
+      [customer?.firstName, customer?.lastName].filter(Boolean).join(' ') ||
+      null;
+    return {
+      cardId: String(c.id),
+      cardNumber: String(c.cardNumber || fallbackNumber),
+      customerName: holder,
+      customerId: (c.customerId as string) || customer?.id || null,
+      pointsBalance: Math.max(0, Math.floor(Number(c.points ?? c.pointsBalance ?? 0))),
+      giftBalance: Number(c.balance ?? c.balanceAmount ?? 0),
+      membershipEnabled: !!c.membershipEnabled,
+      membershipPlanId: (c.membershipPlanId as string) || null,
+      membershipPlan: (c.membershipPlan as MembershipPlan | null) || null,
+      stampCount: Number(c.stampCount ?? 0),
+    };
+  };
+
+  const lookupPosCard = async (
+    rawCode: string
+  ): Promise<{ kind: 'membership' | 'gift'; membership: AttachedMembership } | null> => {
+    const code = rawCode.trim();
+    if (!code) return null;
+    const ecParsed = normalizeScannedPayload(code);
+    const normalized = ecParsed || normalizeRfidUid(code) || code;
+    const mediaType = /^EC/i.test(normalized) ? 'e_card' : 'physical';
+    const res = await api.get(`/gift-cards/lookup/${encodeURIComponent(normalized)}`, {
+      params: { mediaType },
+    });
+    const c = res.data?.card;
+    if (!c?.id) return null;
+    if (c.status && c.status !== 'active') {
+      throw new Error(t('webPosCardBlocked'));
+    }
+    const membership = cardFromLookup(c, normalized);
+    const kind: 'membership' | 'gift' =
+      c.cardKind === 'membership' || membership.membershipEnabled ? 'membership' : 'gift';
+    return { kind, membership };
+  };
+
   const lookupMembershipCard = async (
     rawCode: string,
     opts?: { silentNotFound?: boolean }
   ): Promise<boolean> => {
-    const code = rawCode.trim();
-    if (!code || membershipBusy) return false;
-    const ecParsed = normalizeScannedPayload(code);
-    const normalized = ecParsed || normalizeRfidUid(code) || code;
-    const mediaType = /^EC/i.test(normalized) ? 'e_card' : 'physical';
+    if (!rawCode.trim() || membershipBusy) return false;
     setMembershipBusy(true);
     try {
-      const res = await api.get(
-        `/gift-cards/lookup/${encodeURIComponent(normalized)}`,
-        { params: { mediaType } }
-      );
-      const c = res.data?.card;
-      if (!c?.id) throw new Error(t('webPosMembershipLookupFailed'));
-      if (c.status && c.status !== 'active') {
-        throw new Error(t('webPosCardBlocked'));
+      const found = await lookupPosCard(rawCode);
+      if (!found) throw new Error(t('webPosMembershipLookupFailed'));
+      if (found.kind === 'membership') {
+        attachMembershipCard(found.membership);
+      } else {
+        applyScannedGiftCard(found.membership);
       }
-      const holder =
-        c.holderName ||
-        [c.customer?.firstName, c.customer?.lastName].filter(Boolean).join(' ') ||
-        null;
-      attachMembershipCard({
-        cardId: c.id,
-        cardNumber: c.cardNumber || normalized,
-        customerName: holder,
-        customerId: c.customerId || c.customer?.id || null,
-        pointsBalance: Math.max(0, Math.floor(Number(c.points ?? c.pointsBalance ?? 0))),
-        giftBalance: Number(c.balance ?? c.balanceAmount ?? 0),
-        membershipEnabled: !!c.membershipEnabled,
-        membershipPlanId: c.membershipPlanId || null,
-        membershipPlan: (c.membershipPlan as MembershipPlan | null) || null,
-        stampCount: Number(c.stampCount ?? 0),
-      });
       return true;
     } catch (e: any) {
       const notFound = e.response?.status === 404;
@@ -4276,6 +4771,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     } finally {
       setMembershipBusy(false);
     }
+  };
+
+  const applyScannedGiftCard = (card: AttachedMembership) => {
+    const next: AttachedGiftCard = {
+      cardId: card.cardId,
+      cardNumber: card.cardNumber,
+      balance: roundMoney2(Math.max(0, Number(card.giftBalance) || 0)),
+    };
+    setAttachedGiftCard(next);
+    lastGiftInjectRef.current = null;
+    if (next.balance <= 0.001) {
+      toast.error(t('webPosGiftCardEmpty'));
+      return;
+    }
+    toast.success(
+      t('webPosGiftCardAttached').replace('{amount}', next.balance.toFixed(2))
+    );
   };
 
   const saleMerchandiseTotal = (lines: CartLine[]) => {
@@ -4298,7 +4810,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         orderId,
       });
     }
-    const earned = computeEarnPoints(paidSubtotal);
+    const earned = computeEarnPoints(paidSubtotal, loyaltyEarnRate);
     if (earned > 0) {
       await api.post(`/gift-cards/${membership.cardId}/points/earn`, {
         points: earned,
@@ -4343,10 +4855,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setCheckoutExtras(null);
   };
 
+  const markInvoiceOrderPaid = async (
+    order: { id: string },
+    returnView: 'orders' | 'register' = 'orders'
+  ) => {
+    setBusy(true);
+    try {
+      await api.post(`/merchant/orders/${order.id}/record-invoice-payment`, {
+        paymentMethod: INVOICE_SETTLEMENT_METHOD,
+      });
+      toast.success(t('webPosPaymentCollected'));
+      setOrdersRefreshToken((n) => n + 1);
+      if (returnView === 'orders') setPosTab('orders');
+      setPosView('register');
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openOrderCollectCheckout = (
     order: MerchantOrder,
     returnView: 'orders' | 'register' = 'orders'
   ) => {
+    if (isInvoiceOrder(order)) {
+      void markInvoiceOrderPaid(order, returnView);
+      return;
+    }
     const lines = orderItemsToCartLines(order.items || []);
     if (!lines.length) {
       toast.error(t('webPosNoItems'));
@@ -4360,7 +4896,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTableId((order as { tableId?: string | null }).tableId || null);
     setTableLabel(order.tableLabel || null);
     setTabNumber(order.tabNumber || null);
-    setTicketDisplay(order.ticketDisplay || order.orderNumber);
+    const shout =
+      order.ticketDisplay && !/^(WP|DI)-/i.test(String(order.ticketDisplay))
+        ? order.ticketDisplay
+        : null;
+    setTicketDisplay(shout);
+    if (shout) lastKitchenTicketRef.current = shout;
     setTicketOrderNumber(order.orderNumber);
     setOrderSent(true);
     setCoursesBulkSent(true);
@@ -4368,6 +4909,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setSplitIndex(0);
     splitMasterIdRef.current = null;
     clearAttachedMembership();
+    clearAttachedGiftCard();
     setPayWithPoints(false);
     setSelectedCustomer(customerFromOrder(order));
     if (order.scheduledFor) {
@@ -4385,6 +4927,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       status: order.status,
       total: Number(order.total),
       returnView,
+      isInvoice: isInvoiceOrder(order),
+      isPayLater: isPayLaterPaymentMethod(order.paymentMethod),
     });
     setHighlightOrderId(null);
     setOrdersChannelPref(null);
@@ -4428,8 +4972,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       payments[0];
     if (!primary && due > 0.001) return;
     let payMethod = primary?.method === 'gift_card' ? 'card' : primary?.method || 'cash';
-    if (payMethod === 'pay_later') payMethod = 'cash';
-    if (!['cash', 'card', 'terminal'].includes(payMethod)) payMethod = 'cash';
+    if (ctx.isInvoice) {
+      payMethod = INVOICE_SETTLEMENT_METHOD;
+    } else {
+      if (payMethod === 'pay_later' || payMethod === 'invoice') payMethod = 'cash';
+      if (!['cash', 'card', 'terminal', 'bank_transfer'].includes(payMethod)) payMethod = 'cash';
+    }
     const action = collectPaymentAction(ctx.status);
     setBusy(true);
     try {
@@ -4458,16 +5006,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (!orderForReceipt.items?.length && cart.length) {
         orderForReceipt = {
           ...orderForReceipt,
-          items: cart.map((l) => {
-            const detail = lineExtrasLabel(l);
-            return {
-              name: detail ? `${l.name} (${detail})` : l.name,
-              quantity: l.quantity,
-              unitPrice: l.unitPrice,
-              totalPrice: l.lineTotal,
-              weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
-            };
-          }),
+          items: cart.map((l) => ({
+            name: l.name,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            totalPrice: l.lineTotal,
+            weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
+            courseNumber: l.courseNumber,
+            selectedExtras: l.selectedExtras,
+            comboSelections: l.comboSelections,
+          })),
         };
       }
       try {
@@ -4485,7 +5033,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const payLines = payments
           .filter((p) => roundMoney2(p.amount) > 0)
           .map((p) => ({ method: p.method, amount: roundMoney2(p.amount) }));
-        if (payLines.length) {
+        if (ctx.isPayLater) {
+          const laterTender =
+            payLaterCollectedTender(payMethod) ||
+            (payMethod === 'card' || payMethod === 'terminal' ? payMethod : 'cash');
+          receiptPayload.paymentMethod = `pay_later:${laterTender}`;
+          receiptPayload.payLaterTender = laterTender;
+          receiptPayload.payLaterCollected = true;
+        } else if (payLines.length) {
           receiptPayload.paymentLines = payLines;
           receiptPayload.paymentMethod =
             payLines.length > 1 ? 'mixed' : payLines[0]!.method;
@@ -4526,10 +5081,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         };
         splitReceiptsRef.current = [part];
         setLastSplitReceipts([part]);
-        try {
-          await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl);
-        } catch {
-          /* print is best-effort — manual reprint uses staged lastReceipt */
+        if (!ctx.isInvoice && !isInvoiceOrder(orderForReceipt || {})) {
+          try {
+            await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl);
+          } catch {
+            /* print is best-effort — manual reprint uses staged lastReceipt */
+          }
         }
       } catch {
         /* receipt build is best-effort */
@@ -4546,6 +5103,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setPosView('checkout');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const openInvoicePdf = async (orderId: string) => {
+    try {
+      const res = await api.get(`/merchant/orders/${orderId}/invoice.pdf`, {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      window.open(url, '_blank', 'noopener');
+    } catch {
+      toast.error(t('webPosInvoicePdfFailed'));
     }
   };
 
@@ -4622,6 +5191,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       amountTendered,
       changeDue: changeDue > 0 ? changeDue : null,
       tenders: payments.map((p) => ({ method: p.method, amount: roundMoney2(p.amount) })),
+      payLaterTender:
+        primary?.method === 'pay_later' ? primary.payLaterTender : undefined,
       pointsRedeemed,
       pointsDiscount,
     };
@@ -4635,6 +5206,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await runTerminalPayment(undefined, extras);
       return;
     }
+    if (primary?.method === 'invoice' && !selectedCustomer) {
+      toast.error(t('webPosInvoiceCustomerRequired'));
+      setCustomerOpen(true);
+      return;
+    }
     setBusy(true);
     try {
       const saleMethod: PosPaymentMethod =
@@ -4642,6 +5218,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ? 'cash'
           : primary.method === 'pay_later'
           ? 'pay_later'
+          : primary.method === 'invoice'
+            ? 'invoice'
           : primary.method === 'gift_card'
             ? 'gift_card'
             : primary.method;
@@ -4733,13 +5311,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       paperWidthMm?: 58 | 80;
       /** Skip success toast (caller already confirmed to the cashier). */
       quiet?: boolean;
+      /** Pay Later: one guest receipt only (first receipt printer). */
+      singleTarget?: boolean;
     }
   ) => {
     const targets = printersForRole(printSettings, opts.role);
-    const names =
+    const names = (
       targets.length > 0
         ? targets.map((x) => x.name)
-        : [printerName || ''];
+        : [printerName || '']
+    ).slice(0, opts.singleTarget ? 1 : undefined);
     const named = names.map((n) => (n || '').trim()).filter(Boolean);
     const unsuitableNamed = named.filter((n) => isUnsuitableRawPrinter(n));
 
@@ -4798,6 +5379,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           printerName: label || undefined,
           dataBase64,
           text,
+          jobKind: opts.role === 'kitchen' ? 'kitchen' : opts.role === 'eod' ? 'eod' : 'receipt',
+          jobLabel:
+            opts.role === 'eod'
+              ? t('webPosPrintJobEod')
+              : opts.role === 'kitchen'
+                ? t('webPosPrintJobKitchen')
+                : lastReceiptOrderNumber || t('webPosPrintJobReceipt'),
         });
         if (mode === 'queued') {
           queuedOk += 1;
@@ -4839,12 +5427,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const printReceipt = async (receiptText: string, receiptUrl?: string, deliveryQrUrl?: string) => {
+  const printReceipt = async (
+    receiptText: string,
+    receiptUrl?: string,
+    deliveryQrUrl?: string,
+    opts?: { singleTarget?: boolean }
+  ) => {
     await printEscPosToTargets(receiptText, {
       qrUrl: receiptUrl,
       deliveryQrUrl,
       role: 'receipt',
       quiet: true,
+      singleTarget: opts?.singleTarget,
     });
   };
 
@@ -4854,8 +5448,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     if (lastReceipt) {
-      void printReceipt(lastReceipt, lastReceiptUrl || undefined, lastDeliveryQrUrl || undefined).catch((e: any) =>
-        toast.error(e.message || t('webPosPrintFailed'))
+      void printReceipt(lastReceipt, lastReceiptUrl || undefined, lastDeliveryQrUrl || undefined).catch(
+        (e: unknown) => notifyPrintError(e, 'webPosPrintFailed')
       );
       return;
     }
@@ -4870,8 +5464,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     try {
       await printReceipt(part.text, part.url, part.deliveryQrUrl);
-    } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+    } catch (e: unknown) {
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
@@ -4885,8 +5479,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const firstUrl = lastSplitReceipts[0]?.url;
       const firstDeliveryQr = lastSplitReceipts[0]?.deliveryQrUrl;
       await printReceipt(combined, firstUrl, firstDeliveryQr);
-    } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+    } catch (e: unknown) {
+      notifyPrintError(e, 'webPosPrintFailed');
     }
   };
 
@@ -4994,6 +5588,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       /** Snapshot tab/table before cart reset (payment path). */
       tabNumber?: string | null;
       tableLabel?: string | null;
+      lineIds?: string[];
+      /** Pay Later: kitchen only on dedicated kitchen printers, not the guest-receipt printer. */
+      dedicatedKitchenOnly?: boolean;
     }
   ) => {
     if (isRetail) return;
@@ -5037,7 +5634,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const kitchenOpts = {
       channel: saleChannel,
       language: lang,
-      orderNumber: opts?.orderNumber || kitchenOrderNumber(),
+      orderNumber: opts?.orderNumber || kitchenOrderNumber({ allowNew: false }) || kitchenOrderNumber(),
       orderedAt: Date.now(),
       scheduledFor,
       userName,
@@ -5051,33 +5648,61 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cancelled: !!opts?.cancelled,
       cancelReason: opts?.cancelReason || null,
     };
+    if (kitchenOpts.orderNumber) lastKitchenTicketRef.current = kitchenOpts.orderNumber;
 
     let queuedAny = false;
-    const printJobs = buildKitchenPrintJobs(receiptItems, printSettings);
+    const kitchenLabel = [
+      kitchenOpts.orderNumber,
+      kitchenOpts.tableLabel || kitchenOpts.tabNumber,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const printMeta = {
+      jobKind: 'kitchen' as const,
+      jobLabel: kitchenLabel || t('webPosPrintJobKitchen'),
+      lineIds: opts?.lineIds,
+    };
+    const printJobs = opts?.dedicatedKitchenOnly
+      ? kitchenJobsExcludingReceiptPrinters(receiptItems, printSettings)
+      : buildKitchenPrintJobs(receiptItems, printSettings);
+    const crossFooters = buildKitchenCrossStationFooters(printJobs);
+    const otherStationLabel = t('kitchenOtherStationFooter');
     if (printJobs.length) {
       for (const job of printJobs) {
         const paperWidthMm = job.paperWidthMm;
-        const escpos = generateKitchenTicketEscPos({
+        const otherItems = crossFooters.get((job.printerName || '').trim()) || [];
+        const ticketOpts = {
           ...kitchenOpts,
           items: job.items,
           paperWidthMm,
-        });
-        const text = generateKitchenTicketText({
-          ...kitchenOpts,
-          items: job.items,
-          paperWidthMm,
-        });
+          otherStationItems: otherItems.length ? otherItems : undefined,
+          otherStationLabel: otherItems.length ? otherStationLabel : undefined,
+        };
+        const escpos = generateKitchenTicketEscPos(ticketOpts);
+        const text = generateKitchenTicketText(ticketOpts);
         const mode = await printViaAgentOrQueue({
           printerName: job.printerName || printerName || undefined,
           dataBase64: uint8ToBase64(escpos),
           text,
           orderId: opts?.orderNumber || null,
+          ...printMeta,
         });
         if (mode === 'queued') queuedAny = true;
       }
+      setPrinterDisconnected(false);
       if (queuedAny) toast.success(t('webPosPrintQueuedMainTill'));
+      void pushCartLinesToKds({
+        ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
+        orderNumber: kitchenOpts.orderNumber,
+        tableLabel: kitchenOpts.tableLabel,
+        tabNumber: kitchenOpts.tabNumber,
+        channel: saleChannel,
+        lines: filteredLines,
+      });
       return;
     }
+
+    if (opts?.dedicatedKitchenOnly) return;
 
     const paperWidthMm = resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
     const escpos = generateKitchenTicketEscPos({
@@ -5095,8 +5720,45 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       dataBase64: uint8ToBase64(escpos),
       text,
       orderId: opts?.orderNumber || null,
+      ...printMeta,
     });
+    setPrinterDisconnected(false);
     if (mode === 'queued') toast.success(t('webPosPrintQueuedMainTill'));
+    void pushCartLinesToKds({
+      ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
+      orderNumber: kitchenOpts.orderNumber,
+      tableLabel: kitchenOpts.tableLabel,
+      tabNumber: kitchenOpts.tabNumber,
+      channel: saleChannel,
+      lines: filteredLines,
+    });
+  };
+
+  const retryKitchenPrint = async (lines: CartLine[]) => {
+    if (!lines.length || isRetail) return;
+    setKitchenPrintRetryBusy(true);
+    try {
+      const ticket = ensureCartTicket();
+      await printKitchenForCart(lines, effectiveChannel, {
+        orderNumber: kitchenOrderNumber({ ticket }),
+        when: fulfillmentWhen,
+        forcePrint: true,
+        lineIds: lines.map((l) => l.lineId),
+      });
+      setKitchenPrintFailedForLines(
+        lines.map((l) => l.lineId),
+        false
+      );
+    } catch (e: unknown) {
+      setKitchenPrintFailedForLines(
+        lines.map((l) => l.lineId),
+        true
+      );
+      notifyPrintError(e, 'webPosKitchenPrintFailed');
+      throw e;
+    } finally {
+      setKitchenPrintRetryBusy(false);
+    }
   };
 
   const buildSalePayload = (
@@ -5118,16 +5780,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   ) => {
     const saleTicketDisplay = ticketMeta?.display || ticketDisplay;
     const saleTabNumber = tabNumber;
-    const payLater = method === 'pay_later';
+    const payLater = method === 'pay_later' || method === 'invoice';
     const when = whenOverride !== undefined ? whenOverride : fulfillmentWhen;
     const scheduledRaw = when?.mode === 'later' ? when.scheduledFor : null;
     const scheduledFor =
       scheduledRaw != null && scheduledRaw !== ''
         ? localDateTimeToIso(String(scheduledRaw)) || scheduledRaw
         : null;
+    const memberName =
+      attachedMembership?.customerName?.trim() || attachedMembership?.cardNumber || null;
     const custName = selectedCustomer
       ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(' ')
-      : undefined;
+      : memberName || undefined;
     const ship = selectedCustomer
       ? [selectedCustomer.defaultAddress, selectedCustomer.defaultZip, selectedCustomer.defaultCity]
           .filter(Boolean)
@@ -5154,13 +5818,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       .filter((p) => p.amount > 0);
     const resolvedMethod =
       tenders.length > 1 ? 'mixed' : tenders.length === 1 ? tenders[0]!.method : method;
+    const fulfillmentStatus = posSaleFulfillmentStatus({
+      channel: effectiveChannel,
+      payLater,
+      scheduledFor,
+    });
+    const giftCardPaid = tenders
+      .filter((p) => p.method === 'gift_card')
+      .reduce((s, p) => s + p.amount, 0);
+    const pointsRedeemed = extras?.pointsRedeemed || 0;
+    const pointsDiscount = extras?.pointsDiscount || 0;
+    const paidSubtotal = roundMoney2(
+      Math.max(0, merchandiseGross - discountAmount - pointsDiscount - giftCardPaid)
+    );
+    const pointsEarned =
+      attachedMembership?.membershipEnabled && !payLater
+        ? computeEarnPoints(paidSubtotal, loyaltyEarnRate)
+        : 0;
+    const pointsBalance =
+      attachedMembership?.membershipEnabled
+        ? Math.max(0, attachedMembership.pointsBalance - pointsRedeemed + pointsEarned)
+        : null;
     return {
       clientId,
       orderNumber,
       paymentMethod: resolvedMethod,
       paymentBreakdown: tenders.length ? tenders : undefined,
       paymentStatus: payLater ? 'awaiting_payment' : 'completed',
-      status: payLater ? (scheduledFor ? 'accepted' : 'preparing') : 'completed',
+      status: fulfillmentStatus,
       subtotal: saleTotals.subtotal,
       taxAmount: saleTotals.tax,
       discountAmount,
@@ -5172,7 +5857,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       staffId: webposStaff?.id || null,
       total: saleTotal,
       fulfillmentChannel: effectiveChannel,
-      completedAt: payLater ? undefined : Date.now(),
+      channel: effectiveChannel,
+      completedAt: fulfillmentStatus === 'completed' ? Date.now() : undefined,
       scheduledFor,
       customerId: selectedCustomer?.id || null,
       customerName: custName || null,
@@ -5199,14 +5885,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       adyenCashierReceiptJson: terminalCapture?.cashierReceipt
         ? JSON.stringify(terminalCapture.cashierReceipt)
         : undefined,
+      pointsEarned,
+      pointsRedeemed,
+      pointsDiscount,
+      pointsBalance,
       notes: encodeOrderMetaNotes({
         existing: [
           roundingAmount
             ? `Rounding ${roundingAmount > 0 ? '+' : ''}${roundingAmount.toFixed(2)}`
             : '',
           tipAmount > 0 ? `Tip CHF ${tipAmount.toFixed(2)}` : '',
-          (extras?.pointsDiscount || 0) > 0
-            ? `Points −CHF ${(extras?.pointsDiscount || 0).toFixed(2)} (${extras?.pointsRedeemed || 0} pts)`
+          pointsDiscount > 0
+            ? `Points −CHF ${pointsDiscount.toFixed(2)} (${pointsRedeemed} pts)`
             : '',
           extras?.amountTendered != null
             ? `Tendered CHF ${extras.amountTendered.toFixed(2)}`
@@ -5218,6 +5908,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           .join(' · '),
         ticketDisplay: saleTicketDisplay,
         tabNumber: saleTabNumber,
+        memberName: attachedMembership ? memberName : null,
+        pointsEarned,
+        pointsBalance,
       }),
       items: saleLines.map((l) => ({
         productClientId: l.productId,
@@ -5381,7 +6074,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (
         attachedMembership?.membershipEnabled &&
         backendOrderId &&
-        method !== 'pay_later'
+        method !== 'pay_later' &&
+        method !== 'invoice'
       ) {
         const giftCardPaid = roundMoney2(
           (extrasWithDisc?.tenders || [])
@@ -5424,9 +6118,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
     const receiptRef = queuedOffline
-      ? null
-      : await resolvePublishedReceiptRef(backendOrderId, clientId);
-    const receiptUrl = receiptRef ? buildReceiptUrl(receiptRef) : undefined;
+      ? clientId
+      : (await resolvePublishedReceiptRef(
+          backendOrderId,
+          clientId,
+          ticket.orderNumber || lastReceiptOrderNumber
+        )) ||
+        backendOrderId ||
+        clientId;
+    const receiptUrl = buildReceiptUrl(receiptRef);
     const lang = resolveReceiptLanguage(
       printSettings,
       paymentConfig?.panelLanguage || locale
@@ -5455,6 +6155,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       completedAt: Date.now(),
       channel: effectiveChannel,
       paymentMethod: method,
+      payLaterTender: method === 'pay_later' ? extrasWithDisc?.payLaterTender || null : undefined,
       paymentLines: extrasWithDisc?.tenders?.length
         ? extrasWithDisc.tenders.map((p) => ({
             method: p.method,
@@ -5464,21 +6165,35 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       amountTendered: extrasWithDisc?.amountTendered ?? null,
       changeDue: extrasWithDisc?.changeDue ?? null,
       customerName: sale.customerName || undefined,
+      memberName: attachedMembership
+        ? attachedMembership.customerName?.trim() ||
+          attachedMembership.cardNumber ||
+          sale.customerName ||
+          null
+        : null,
+      loyaltyPointsEarned: sale.pointsEarned != null && sale.pointsEarned > 0 ? sale.pointsEarned : null,
+      loyaltyPointsBalance:
+        attachedMembership?.membershipEnabled && sale.pointsBalance != null
+          ? sale.pointsBalance
+          : sale.pointsBalance ?? null,
       customerPhone: sale.customerPhone || undefined,
       shippingAddress: effectiveChannel === 'delivery' ? shipAddr : undefined,
       tableLabel,
-      items: saleLines.map((l) => {
-        const detail = lineExtrasLabel(l);
-        return {
-          name: detail ? `${l.name} (${detail})` : l.name,
+      items: saleLines.map((l) =>
+        buildKitchenTicketItemFromLine({
+          name: l.name,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
           lineTotal: l.lineTotal,
           weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
           productId: l.productId,
           categoryId: l.categoryId,
-        };
-      }),
+          courseNumber: l.courseNumber,
+          selectedExtras: l.selectedExtras,
+          comboSelections: l.comboSelections,
+          lineNote: l.lineNote,
+        })
+      ),
       subtotal: saleTotals.subtotal,
       discount: sale.discountAmount || 0,
       taxAmount: saleTotals.tax,
@@ -5490,7 +6205,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       vatAfterDiscount,
       splitLabel: activeSale.label,
       receiptUrl,
-      includeQr: !queuedOffline && printSettings?.receiptShowQrCode !== false,
+      includeQr: printSettings?.receiptShowQrCode !== false,
       deliveryDirectionsQr: printSettings?.receiptDeliveryDirectionsQr !== false,
       staffName: webposStaff?.name,
       language: lang,
@@ -5505,30 +6220,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     const receiptText = generateWebPosReceiptText(receiptPayload, locale);
     const deliveryQrUrl = deliveryDirectionsUrlForReceipt(receiptPayload);
-    setLastReceipt(receiptText);
-    setLastReceiptUrl(receiptUrl);
-    setLastDeliveryQrUrl(deliveryQrUrl || '');
-    setLastReceiptOrderId(receiptRef || clientId);
-    setLastReceiptOrderNumber(ticket.orderNumber || ticket.display || '');
-
-    const splitPart: SplitReceiptPart = {
-      id: clientId,
-      label:
-        activeSale.label ||
-        (splitQueue.length > 0
-          ? t('webPosSplitBillN').replace('{n}', String(splitIndex + 1))
-          : t('webPosPrintReceipt')),
-      text: receiptText,
-      url: receiptUrl,
-      deliveryQrUrl,
-      amount: sale.total,
-      orderNumber: ticket.orderNumber || ticket.display,
-    };
-    if (splitQueue.length > 0) {
-      if (splitIndex === 0) splitReceiptsRef.current = [splitPart];
-      else splitReceiptsRef.current = [...splitReceiptsRef.current, splitPart];
-    } else {
-      splitReceiptsRef.current = [splitPart];
+    if (method !== 'pay_later' && method !== 'invoice') {
+      setLastReceipt(receiptText);
+      setLastReceiptUrl(receiptUrl);
+      setLastDeliveryQrUrl(deliveryQrUrl || '');
+      setLastReceiptOrderId(receiptRef || clientId);
+      setLastReceiptOrderNumber(ticket.orderNumber || ticket.display || '');
+      const splitPart: SplitReceiptPart = {
+        id: clientId,
+        label:
+          activeSale.label ||
+          (splitQueue.length > 0
+            ? t('webPosSplitBillN').replace('{n}', String(splitIndex + 1))
+            : t('webPosPrintReceipt')),
+        text: receiptText,
+        url: receiptUrl,
+        deliveryQrUrl,
+        amount: sale.total,
+        orderNumber: ticket.orderNumber || ticket.display,
+      };
+      if (splitQueue.length > 0) {
+        if (splitIndex === 0) splitReceiptsRef.current = [splitPart];
+        else splitReceiptsRef.current = [...splitReceiptsRef.current, splitPart];
+      } else {
+        splitReceiptsRef.current = [splitPart];
+      }
     }
 
     setSales((prev) =>
@@ -5551,8 +6267,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (shiftsEnabled) void refreshCurrentShift(true);
     const moreSplits = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
     if (!moreSplits) {
-      const paidKey = openCartDraftKey({ tableId, tabNumber, channel });
-      openCartDraftsRef.current.delete(paidKey);
+      const paidKeys = [
+        openCartDraftKey({ tableId, tabNumber, channel }),
+        openCartDraftKey({ ticketDisplay: ticket.display, channel: effectiveChannel }),
+      ];
+      for (const paidKey of paidKeys) openCartDraftsRef.current.delete(paidKey);
+      const heldId = resumedHeldIdRef.current;
+      resumedHeldIdRef.current = null;
+      if (heldId) {
+        void api.delete(`/merchant/pos/held/${heldId}`).catch(() => {});
+      } else {
+        void (async () => {
+          try {
+            const heldRes = await api.get('/merchant/pos/held');
+            const list = (heldRes.data?.held || []) as Array<{
+              id: string;
+              cartJson?: { ticketDisplay?: string | null; tableId?: string | null };
+            }>;
+            for (const h of list) {
+              const cj = h.cartJson;
+              if (cj?.ticketDisplay === ticket.display || (tableId && cj?.tableId === tableId)) {
+                await api.delete(`/merchant/pos/held/${h.id}`);
+              }
+            }
+          } catch {
+            /* sale already recorded */
+          }
+        })();
+      }
       setDraftVersion((n) => n + 1);
       setSendReceiptPrefillEmail(selectedCustomer?.email || '');
       setCart([]);
@@ -5570,18 +6312,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setTabNumber(null);
       clearCartTicket();
       setActiveCourse(1);
+      setCourseCount(1);
       setOrderSent(false);
       setCoursesBulkSent(false);
       setChannel(null);
       setMobileCartOpen(false);
       clearAttachedMembership();
+      clearAttachedGiftCard();
       clearPersistedWebPosCarts();
       terminalPaymentRef.current = null;
-      setLastSplitReceipts([...splitReceiptsRef.current]);
+      if (method !== 'pay_later' && method !== 'invoice') {
+        setLastSplitReceipts([...splitReceiptsRef.current]);
+      } else {
+        splitReceiptsRef.current = [];
+        setLastSplitReceipts([]);
+      }
     }
     setCheckoutExtras(null);
     setCheckoutOpen(false);
-    const payLater = method === 'pay_later';
+    const payLater = method === 'pay_later' || method === 'invoice';
     const paidTotal = sale.total;
     const splitPaidTotal = roundMoney2(
       splitReceiptsRef.current.reduce((s, p) => s + p.amount, 0)
@@ -5595,7 +6344,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setExpressSuccessOpen(false);
     } else if (!showSuccessScreen || payLater || moreSplits) {
       toast.success(
-        payLater
+        method === 'invoice'
+          ? t('webPosInvoiceCreated').replace('{number}', sale.orderNumber || '')
+          : payLater
           ? t('webPosProgrammedSaved')
           : moreSplits
             ? t('webPosSplitNext').replace('{n}', String(splitIndex + 2)).replace('{total}', String(splitQueue.length))
@@ -5609,14 +6360,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     const shouldPrintReceipt =
       !opts?.skipReceiptPrint &&
-      !payLater &&
+      method !== 'invoice' &&
+      method !== 'pay_later' &&
       autoPrint &&
       printSettings?.autoPrintReceipt !== false;
     // Offline sales have no published receipt URL yet — still print text via local Print Agent.
     if (shouldPrintReceipt) {
       // Never hold checkout/busy on the print agent.
-      void printReceipt(receiptText, receiptUrl, deliveryQrUrl).catch((e: any) => {
-        toast.error(e?.message || t('webPosPrintFailed'));
+      void printReceipt(receiptText, receiptUrl, deliveryQrUrl, {
+        singleTarget: method === 'pay_later',
+      }).catch((e: unknown) => {
+        notifyPrintError(e, 'webPosPrintFailed');
       });
     }
     const kitchenDelta = unsentKitchenLines(cartSnapshot);
@@ -5627,9 +6381,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         when: whenSnapshot,
         tabNumber: tabSnapshot,
         tableLabel: tableLabelSnapshot,
-      }).catch((e: any) => {
-        toast.error(e?.message || t('webPosKitchenPrintFailed'));
+        lineIds: kitchenDelta.map((l) => l.lineId),
+        dedicatedKitchenOnly: method === 'pay_later',
+      }).catch((e: unknown) => {
+        notifyPrintError(e, 'webPosKitchenPrintFailed');
       });
+    }
+    if (method === 'invoice' && backendOrderId) {
+      void openInvoicePdf(backendOrderId);
     }
   };
 
@@ -5673,7 +6432,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       whenForCheckout = asapFulfillment();
       setFulfillmentWhen(whenForCheckout);
     }
-    if (scheduleChannel === 'delivery' && !selectedCustomer) {
+    if ((scheduleChannel === 'delivery' || method === 'invoice') && !selectedCustomer) {
+      if (method === 'invoice' && !selectedCustomer) {
+        toast.error(t('webPosInvoiceCustomerRequired'));
+      }
       setPendingPayMethod(method);
       setCustomerOpen(true);
       return;
@@ -5771,8 +6533,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             when: whenSnapshot,
             tabNumber: tabSnapshot,
             tableLabel: tableLabelSnapshot,
-          }).catch((e: any) => {
-            toast.error(e?.message || t('webPosKitchenPrintFailed'));
+            lineIds: kitchenDelta.map((l) => l.lineId),
+          }).catch((e: unknown) => {
+            notifyPrintError(e, 'webPosKitchenPrintFailed');
           });
         }
       }
@@ -5877,25 +6640,58 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const staffPerms = webposStaff?.permissions;
-  /** Never treat merchant-owner JWT as a bypass while a PIN session is required. */
+  /** A staff PIN session still overrides owner JWT. Owner on the till without clock-in keeps manager perms. */
   const canPay =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'PROCESS_PAYMENTS', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'PROCESS_PAYMENTS', false));
   const canDrawer =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'OPEN_CASH_DRAWER', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'OPEN_CASH_DRAWER', false));
   const canCancelOrders =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'CANCEL_ORDERS', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'CANCEL_ORDERS', false));
   const canRefundOrders =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'REFUND_ORDERS', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'REFUND_ORDERS', false));
   const canApplyDiscounts =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'APPLY_DISCOUNTS', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'APPLY_DISCOUNTS', false));
   const canViewReports =
+    ownerOnRegister ||
     !staffConfigured ||
     (!!webposStaff &&
       (hasPermission(staffPerms, 'VIEW_REPORTS', false) ||
         hasPermission(staffPerms, 'END_OF_DAY', false)));
   const canOpenPanel =
-    !staffConfigured || (!!webposStaff && hasPermission(staffPerms, 'ACCESS_PANEL', false));
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'ACCESS_PANEL', false));
+  const canManageProducts = ownerOnRegister
+    ? hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_PRODUCTS', true)
+    : staffConfigured
+      ? !!webposStaff && hasPermission(staffPerms, 'MANAGE_PRODUCTS', false)
+      : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_PRODUCTS', jwtIsOwner);
+  const canViewOrders =
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'VIEW_ORDER_HISTORY', false));
+  const canShowBackOffice = canOpenPanel || canManageProducts || canViewOrders;
+  const canManageOnlineShop = ownerOnRegister
+    ? hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_ONLINE_SHOP', true) ||
+      hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', true)
+    : staffConfigured
+      ? !!webposStaff &&
+        (hasPermission(staffPerms, 'MANAGE_ONLINE_SHOP', false) ||
+          hasPermission(staffPerms, 'MANAGE_SETTINGS', false))
+      : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_ONLINE_SHOP', jwtIsOwner) ||
+        hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', jwtIsOwner);
   const canViewAllSales =
+    ownerOnRegister ||
     !staffConfigured ||
     (!!webposStaff && hasPermission(staffPerms, 'VIEW_ALL_SALES', false));
   /** Whole-day EOD: report permission + company-wide sales visibility. */
@@ -5920,7 +6716,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await openCashDrawerViaAgent({ printerName: printerName || undefined });
       toast.success(t('webPosDrawerOpened'));
     } catch (e: any) {
-      toast.error(e.message || t('webPosDrawerFailed'));
+      notifyPrintError(e, 'webPosDrawerFailed');
     }
   };
 
@@ -5955,7 +6751,46 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const onStaffPinSuccess = (staff: {
+  const changePosLanguage = async (lang: Locale) => {
+    setLocale(lang);
+    try {
+      await api.put('/merchant/settings', { panelLanguage: lang });
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('failedSaveLanguage'));
+    }
+  };
+
+  const toggleShopEnabled = async (next: boolean) => {
+    const prev = !!merchant?.shopEnabled;
+    setMerchant((m: any) => (m ? { ...m, shopEnabled: next } : m));
+    setChannelsSaving(true);
+    try {
+      await api.put('/merchant/settings', { shopEnabled: next });
+      toast.success(t('onlineShopSaved'));
+    } catch (e: any) {
+      setMerchant((m: any) => (m ? { ...m, shopEnabled: prev } : m));
+      toast.error(e.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setChannelsSaving(false);
+    }
+  };
+
+  const toggleReservationsEnabled = async (next: boolean) => {
+    const prev = !!merchant?.reservationsEnabled;
+    setMerchant((m: any) => (m ? { ...m, reservationsEnabled: next } : m));
+    setChannelsSaving(true);
+    try {
+      await api.put('/merchant/reservations/config', { enabled: next });
+      toast.success(t('saved'));
+    } catch (e: any) {
+      setMerchant((m: any) => (m ? { ...m, reservationsEnabled: prev } : m));
+      toast.error(e.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setChannelsSaving(false);
+    }
+  };
+
+  const onStaffPinSuccess = async (staff: {
     id: string;
     name: string;
     roleId: string;
@@ -5971,23 +6806,55 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       permissions: staff.permissions as Permission[],
       accessToken: staff.accessToken,
     };
-    setWebposStaff(session);
-    saveWebPosStaffSession(session);
-    window.dispatchEvent(new CustomEvent('webpos:staff-session'));
-    void registerPosSession({
+    setPosAuthAlert(null);
+    clearPosSessionLocal();
+    clearWebPosStaffSession();
+    const reg = await registerPosSession({
       sessionKind: 'main',
       platform: 'webpos',
       staffId: session.id,
       staffName: session.name,
     });
+    if (!reg.ok) {
+      setPosAuthAlert({
+        title: t('webPosPinErrorTitle'),
+        message: reg.error || t('webPosSessionRegisterFailed'),
+        variant: 'error',
+      });
+      setPinModalMode('gate');
+      setPinModalOpen(true);
+      return;
+    }
+    setWebposStaff(session);
+    saveWebPosStaffSession(session);
+    notifyWebPosStaffSessionChanged();
+    if (reg.kickedSessionIds.length > 0) {
+      toast.info(t('webPosSessionReclaimed'));
+    }
     setPinModalOpen(false);
     toast.success(t('webPosSignedInAs').replace('{name}', staff.name));
     void refreshCurrentShift();
   };
 
   const openSwitchUserPin = () => {
+    if (!staffConfigured) return;
     setPinModalMode('switch');
     setPinModalOpen(true);
+  };
+
+  const dismissSetPinHint = () => {
+    setSetPinHintDismissed(true);
+    try {
+      sessionStorage.setItem(WEBPOS_SET_PIN_HINT_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const openSetStaffPin = () => {
+    dismissSetPinHint();
+    window.dispatchEvent(new CustomEvent('webpos:show-panel'));
+    navigate('/merchant/users');
   };
 
   const findProductByScanCode = useCallback(
@@ -5995,12 +6862,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const q = code.trim();
       if (!q) return null;
       const lower = q.toLowerCase();
+      const digits = q.replace(/\s/g, '');
       return (
-        products.find(
-          (p) =>
-            (p.barcode && String(p.barcode).trim() === q) ||
-            (p.sku && String(p.sku).trim().toLowerCase() === lower)
-        ) || null
+        products.find((p) => {
+          const barcode = String(p.barcode || '').trim();
+          const sku = String(p.sku || '').trim();
+          if (barcode && (barcode === q || barcode === digits || barcode.toLowerCase() === lower)) {
+            return true;
+          }
+          if (sku && sku.toLowerCase() === lower) return true;
+          return false;
+        }) || null
       );
     },
     [products]
@@ -6009,7 +6881,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const handlePosScan = useCallback(
     async (code: string) => {
       if (pinGateRequired || pinModalOpen) return;
-      if (posView !== 'register') return;
+      const onCheckout = posView === 'checkout';
+      if (posView !== 'register' && !onCheckout) return;
       if (
         pendingProduct ||
         pendingCombo ||
@@ -6030,16 +6903,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ) {
         return;
       }
-      const membershipEnabledSetting = !!(
-        paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null
-      )?.membershipEnabled;
-      const cardsScanEnabled =
-        giftCardsEditionOk &&
-        !isWebPosCurrentlyOffline() &&
-        (((paymentConfig?.methods.giftCard === true) && canPay) || membershipEnabledSetting);
-      if (cardsScanEnabled) {
-        const attached = await lookupMembershipCard(code, { silentNotFound: true });
-        if (attached) return;
+      if (!isWebPosCurrentlyOffline()) {
+        try {
+          const found = await lookupPosCard(code);
+          if (found) {
+            if (found.kind === 'membership') {
+              attachMembershipCard(found.membership);
+            } else {
+              applyScannedGiftCard(found.membership);
+            }
+            return;
+          }
+        } catch (e: any) {
+          if (e.response?.status !== 404) {
+            toast.error(e.response?.data?.error || e.message || t('webPosMembershipLookupFailed'));
+            return;
+          }
+        }
+      }
+      if (onCheckout) {
+        toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
+        return;
       }
       const product = findProductByScanCode(code);
       if (product) {
@@ -6059,7 +6943,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
     },
-    // onProductClick is stable enough for scan; listed intentionally
+    // onProductClick / attach helpers are stable enough for scan
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       pinGateRequired,
@@ -6082,9 +6966,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cancelModal,
       expressSuccessOpen,
       findProductByScanCode,
-      giftCardsEditionOk,
-      paymentConfig?.methods.giftCard,
-      canPay,
       tablesUiEnabled,
       switchToTableOrder,
       t,
@@ -6100,7 +6981,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (pinGateRequired || pinModalOpen || posView !== 'register') return;
+      if (pinGateRequired || pinModalOpen || (posView !== 'register' && posView !== 'checkout'))
+        return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
       if (
@@ -6146,6 +7028,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     terminal: (paymentConfig?.methods.terminal ?? false) && canPay && !offlineNow,
     giftCard:
       (paymentConfig?.methods.giftCard === true) && canPay && giftCardsEditionOk && !offlineNow,
+    invoice: (paymentConfig?.methods.invoice !== false) && canPay,
   };
   const giftCardsFeatureOn =
     giftCardsEditionOk && enabledMethods.giftCard;
@@ -6182,6 +7065,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       };
     });
   }, [splitQueue, splitIndex, cart]);
+
+  const configuredPrinterNames = useMemo(() => {
+    const names = new Set<string>();
+    if (printerName.trim()) names.add(printerName.trim());
+    for (const p of printSettings?.printers || []) {
+      if (p.enabled === false) continue;
+      const n = (p.name || '').trim();
+      if (n) names.add(n);
+    }
+    return [...names];
+  }, [printerName, printSettings]);
+
+  const printerNameMissing =
+    printersReady &&
+    configuredPrinterNames.some((n) => isConfiguredPrinterMissing(n, printers, { agentOk }));
+
+  const printerMissing = printerDisconnected || printerNameMissing;
+
+  const suggestedPrinters = useMemo(() => {
+    if (!printerMissing) return [];
+    const fromWebPos = findPrinterHealCandidates(printerName, printers);
+    if (fromWebPos.length) return fromWebPos;
+    for (const n of configuredPrinterNames) {
+      const found = findPrinterHealCandidates(n, printers);
+      if (found.length) return found;
+    }
+    return [];
+  }, [printerMissing, printerName, printers, configuredPrinterNames]);
 
   if (loading) {
     return (
@@ -6231,14 +7142,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             </button>
           </div>
         ) : (
-          <WebPosPinModal
-            open
-            mode="gate"
-            onClose={() => {
-              /* gate cannot be dismissed without PIN */
-            }}
-            onSuccess={onStaffPinSuccess}
-          />
+          <>
+            <WebPosBlockingAlert
+              open={!!posAuthAlert}
+              title={posAuthAlert?.title}
+              message={posAuthAlert?.message || ''}
+              variant={posAuthAlert?.variant || 'error'}
+              onDismiss={() => setPosAuthAlert(null)}
+              minMs={posAuthAlert?.variant === 'warning' ? 4000 : 8000}
+            />
+            <WebPosPinModal
+              open
+              mode="gate"
+              onClose={() => {
+                /* gate cannot be dismissed without PIN */
+              }}
+              onSuccess={onStaffPinSuccess}
+            />
+          </>
         )}
       </div>
     );
@@ -6250,6 +7171,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       null
     : null;
   const checkoutDueTotal = collectOrderRef?.total ?? activeSale.totals.total;
+  const checkoutKitchenNumber = tabNumber
+    ? `#${tabNumber}`
+    : ticketDisplay?.trim() || null;
+  const checkoutOrderRef = formatCheckoutOrderRef(
+    collectOrderRef?.orderNumber || ticketOrderNumber,
+    checkoutKitchenNumber
+  );
 
   const onlinePendingCount = unactionedOrderCount;
   const orderAlertRing = unactionedOrderCount > 0;
@@ -6268,6 +7196,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setSelectedLineId(null);
     setPosTab(tab);
     setPosView(tab);
+    if (tab === 'tables') {
+      setTablesRefreshToken((n) => n + 1);
+    }
     if (tab === 'register') {
       requestAnimationFrame(() => blurPosInputs());
     }
@@ -6296,21 +7227,53 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           {t('webPosNewReservationAlert')}
         </div>
       ) : null}
+      {!staffConfigured && !setPinHintDismissed ? (
+        <div
+          className="shrink-0 flex items-center justify-between gap-3 border-b border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-950"
+          role="status"
+        >
+          <p>{t('webPosSetPinHint')}</p>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              className="rounded-md bg-teal-700 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-800"
+              onClick={openSetStaffPin}
+            >
+              {t('webPosSetPinAction')}
+            </button>
+            <button
+              type="button"
+              className="text-xs font-medium text-teal-800 underline"
+              onClick={dismissSetPinHint}
+            >
+              {t('webPosSetPinDismiss')}
+            </button>
+          </div>
+        </div>
+      ) : null}
       <WebPosTopBar
         activeTab={posTab}
         posView={posView}
         onTabChange={onPosTabChange}
         merchantName={merchant?.name || t('webPosStore')}
         agentOk={agentOk}
+        printerMissing={printerMissing}
+        agentOutdated={agentOutdated}
         search={search}
         onSearchChange={setSearch}
+        onSearchSubmit={() => {
+          const product = findProductByScanCode(search);
+          if (product) {
+            onProductClick(product);
+            setSearch('');
+          }
+        }}
         showSearch={posView === 'register'}
         onlinePendingCount={onlinePendingCount}
         orderAlertRing={orderAlertRing}
         reservationPendingCount={reservationPendingCount}
-        staffName={webposStaff?.name}
+        staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
         canDrawer={canDrawer}
-        canShowPanel={canOpenPanel}
         appMode={appMode}
         settingsOpen={settingsOpen}
         onToggleSettings={() => setSettingsOpen((v) => !v)}
@@ -6319,7 +7282,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onOnlineOrders={() => openOnlineOrdersInTab()}
         onSwitchUser={openSwitchUserPin}
         onOpenDrawer={() => void openCashDrawer()}
-        onShowPanel={showPanelMenus}
         tableBadge={tableBadge}
         shiftsEnabled={shiftsEnabled}
         shiftOpen={!!openShift}
@@ -6364,9 +7326,28 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             printerName={printerName}
             printers={printers}
             agentOk={agentOk}
+            printerMissing={printerMissing}
+            suggestedPrinters={suggestedPrinters}
+            agentOutdated={agentOutdated}
             autoPrint={autoPrint}
             postSuccessTarget={postSuccessTarget}
-            onPrinterChange={setPrinterName}
+            onPrinterChange={(name) => {
+              setPrinterName(name);
+              setPrinterDisconnected(false);
+              const profiles = printSettings?.printers;
+              if (!name || !profiles?.length) return;
+              let changed = false;
+              const nextProfiles = profiles.map((p) => {
+                const current = (p.name || '').trim();
+                if (!current || !isConfiguredPrinterMissing(current, printers)) return p;
+                changed = true;
+                return { ...p, name };
+              });
+              if (!changed) return;
+              const next = { ...printSettings, printers: nextProfiles };
+              setPrintSettings(next);
+              void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
+            }}
             onAutoPrintChange={setAutoPrint}
             onPostSuccessChange={setPostSuccessTarget}
             onRefreshPrinters={() => {
@@ -6405,7 +7386,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setSettingsOpen(false);
               openSwitchUserPin();
             }}
-            staffName={webposStaff?.name}
+            staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
             colorTheme={posColorTheme}
             onColorThemeChange={(theme) => void changePosColorTheme(theme)}
             appearance={posAppearance}
@@ -6438,12 +7419,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setSettingsOpen(false);
               void openCashDrawer();
             }}
-            canShowPanel={canOpenPanel}
+            canShowPanel={canShowBackOffice}
             appMode={appMode}
             onShowPanel={() => {
               setSettingsOpen(false);
               showPanelMenus();
             }}
+            locale={locale}
+            onLanguageChange={(lang) => void changePosLanguage(lang)}
+            canManageChannels={canManageOnlineShop}
+            shopEnabled={!!merchant?.shopEnabled}
+            reservationsEnabled={!!merchant?.reservationsEnabled}
+            channelsSaving={channelsSaving}
+            onShopEnabledChange={
+              canManageOnlineShop ? (enabled) => void toggleShopEnabled(enabled) : undefined
+            }
+            onReservationsEnabledChange={
+              canManageOnlineShop ? (enabled) => void toggleReservationsEnabled(enabled) : undefined
+            }
           />
         }
       />
@@ -6479,7 +7472,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   : 'register-checkout'
             }
             total={checkoutDueTotal}
-            splitLabel={collectOrderRef ? collectOrderRef.orderNumber : activeSale.label}
+            orderRef={checkoutOrderRef || null}
+            splitLabel={collectOrderRef ? null : activeSale.label}
             splitGuestCount={collectOrderRef ? undefined : splitQueue.length || undefined}
             splitTickets={checkoutSplitTickets}
             splitActiveIndex={splitIndex}
@@ -6497,6 +7491,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 (channel === 'takeaway' || channel === 'delivery') &&
                 canPay &&
                 !offlineNow,
+              invoice: !collectOrderRef && enabledMethods.invoice,
             }}
             busy={busy || paymentModalOpen}
             customerLabel={customerLabel}
@@ -6590,6 +7585,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setLastSplitReceipts([]);
               splitReceiptsRef.current = [];
               const next = isRetail ? 'register' : postSuccessTarget;
+              if (next === 'tables') setTablesRefreshToken((n) => n + 1);
               setPosTab(next);
               setPosView(next);
             }}
@@ -6620,7 +7616,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             highlightOrderId={highlightOrderId}
             initialChannelFilter={ordersChannelPref}
             onResumeHeld={(held) => {
-              resumedHeldIdRef.current = held.id;
+              resumedHeldIdRef.current = String(held.id).startsWith('local:') ? null : held.id;
               const data = held.cartJson as
                 | {
                     cart?: CartLine[];
@@ -6642,7 +7638,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 if (data.tableId) setTableId(data.tableId);
                 if (data.tableLabel) setTableLabel(data.tableLabel);
                 if (data.tabNumber != null) setTabNumber(data.tabNumber);
-                if (data.ticketDisplay) setTicketDisplay(data.ticketDisplay);
+                if (data.ticketDisplay) {
+                  setTicketDisplay(data.ticketDisplay);
+                  lastKitchenTicketRef.current = data.ticketDisplay;
+                }
                 if (data.ticketOrderNumber) setTicketOrderNumber(data.ticketOrderNumber);
                 if (data.orderNote != null) setOrderNote(data.orderNote);
                 if (data.billDiscount) setBillDiscount(data.billDiscount);
@@ -6650,8 +7649,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               const sent = held.status === 'sent_to_kitchen';
               setOrderSent(sent);
               setCoursesBulkSent(sent);
-              // Remove from held list while editing/paying on the register.
-              void api.post(`/merchant/pos/held/${held.id}/resume`).catch(() => {});
+              // Keep the server held row until payment / cancel so Ongoing still lists it.
               setOrdersRefreshToken((n) => n + 1);
               setPosTab('register');
               setPosView('register');
@@ -6662,7 +7660,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               try {
                 await printPosOrderReceipt(order, splitLabel);
               } catch (e: any) {
-                toast.error(e.message || t('webPosPrintFailed'));
+                notifyPrintError(e, 'webPosPrintFailed');
               }
             }}
             onPrintRefund={async (payload) => {
@@ -6670,7 +7668,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 await printPosRefundReceipt(payload);
                 toast.success(t('webPosSentDefaultPrinter'));
               } catch (e: any) {
-                toast.error(e.message || t('webPosPrintFailed'));
+                notifyPrintError(e, 'webPosPrintFailed');
               }
             }}
             terminalEnabled={enabledMethods.terminal}
@@ -6687,12 +7685,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 null;
               const ticketDisplay =
                 existingTicket || nextWebPosTicketNumber(merchant?.id).display;
-              await printKitchenForCart(lines, ch, {
-                orderNumber: ticketDisplay,
-                cancelled: true,
-                cancelReason: reason,
-                forcePrint: true,
-              });
+              try {
+                await printKitchenForCart(lines, ch, {
+                  orderNumber: ticketDisplay,
+                  cancelled: true,
+                  cancelReason: reason,
+                  forcePrint: true,
+                  lineIds: lines.map((l) => l.lineId),
+                });
+              } catch (e: unknown) {
+                notifyPrintError(e, 'webPosKitchenPrintFailed');
+                throw e;
+              }
             }}
             onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
             onOrderActioned={markOnlineOrderActioned}
@@ -6741,7 +7745,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 activeCourse={activeCourse}
                 coursesEnabled={coursesEnabled}
                 courseNumbers={courseNumbers}
-                onSelectCourse={setActiveCourse}
+                onSelectCourse={handleSelectCourse}
                 orderNote={orderNote}
                 tableLabel={tableLabel}
                 tabNumber={tabNumber}
@@ -6762,6 +7766,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onClearMembership={
                   attachedMembership ? clearAttachedMembership : undefined
                 }
+                giftCardLabel={
+                  attachedGiftCard
+                    ? t('webPosGiftCardOnSale').replace(
+                        '{amount}',
+                        attachedGiftCard.balance.toFixed(2)
+                      )
+                    : null
+                }
+                onClearGiftCard={attachedGiftCard ? clearAttachedGiftCard : undefined}
                 fulfillmentLabel={fulfillmentWhen?.label || null}
                 fulfillmentIsLater={fulfillmentWhen?.mode === 'later'}
                 busy={busy || paymentModalOpen}
@@ -6846,6 +7859,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                       }
                     : undefined
                 }
+                failedPrintCount={unprintedJobCount}
+                onOpenPrintIssues={() => setKitchenPrintIssuesOpen(true)}
+                onOrderPrint={kitchenEnabled ? openOrderReprint : undefined}
+                onLinePrint={kitchenEnabled ? openLineReprint : undefined}
               />
             </div>
             ) : null}
@@ -7041,7 +8058,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             await printReceipt(part.text, part.url, part.deliveryQrUrl);
             setPrintChooserOpen(false);
           } catch (e: any) {
-            toast.error(e.message || t('webPosPrintFailed'));
+            notifyPrintError(e, 'webPosPrintFailed');
           } finally {
             setPrintChooserBusy(false);
           }
@@ -7058,9 +8075,85 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             await printReceipt(combined, firstUrl, firstDeliveryQr);
             setPrintChooserOpen(false);
           } catch (e: any) {
-            toast.error(e.message || t('webPosPrintFailed'));
+            notifyPrintError(e, 'webPosPrintFailed');
           } finally {
             setPrintChooserBusy(false);
+          }
+        }}
+      />
+
+      <WebPosKitchenPrintIssuesModal
+        open={kitchenPrintIssuesOpen}
+        jobs={pendingPrintJobs}
+        lines={failedPrintLines}
+        busy={kitchenPrintRetryBusy}
+        money={money}
+        onClose={() => {
+          if (!kitchenPrintRetryBusy) setKitchenPrintIssuesOpen(false);
+        }}
+        onRetryJobs={async (jobIds) => {
+          if (!jobIds.length) return;
+          setKitchenPrintRetryBusy(true);
+          try {
+            const result = await reprintPrintJobs(jobIds);
+            if (result.ok) toast.success(t('webPosPrintAutoRetryOk'));
+            if (result.failed) notifyPrintError(t('webPosPrintFailed'), 'webPosPrintFailed');
+          } finally {
+            setKitchenPrintRetryBusy(false);
+          }
+        }}
+        onDismissJobs={(jobIds) => {
+          removePrintJobs(jobIds);
+        }}
+        onRetryLine={(line) => void retryKitchenPrint([line])}
+        onRetryAll={async () => {
+          setKitchenPrintRetryBusy(true);
+          try {
+            if (pendingPrintJobs.length) {
+              const result = await reprintPrintJobs(pendingPrintJobs.map((j) => j.id));
+              if (result.ok) toast.success(t('webPosPrintAutoRetryOk'));
+              if (result.failed) notifyPrintError(t('webPosPrintFailed'), 'webPosPrintFailed');
+            }
+            const queuedLines = new Set(pendingPrintJobs.flatMap((j) => j.lineIds || []));
+            const extra = failedPrintLines.filter((l) => !queuedLines.has(l.lineId));
+            if (extra.length) {
+              await retryKitchenPrint(extra);
+            }
+          } finally {
+            setKitchenPrintRetryBusy(false);
+          }
+        }}
+      />
+
+      <WebPosReprintModal
+        open={!!reprintModal}
+        busy={reprintBusy}
+        lineLabel={reprintModal?.lineLabel}
+        onClose={() => {
+          if (!reprintBusy) setReprintModal(null);
+        }}
+        onProvisional={async () => {
+          setReprintBusy(true);
+          try {
+            await printProvisionalReceipt();
+            setReprintModal(null);
+          } catch (e: unknown) {
+            notifyPrintError(e, 'webPosPrintFailed');
+          } finally {
+            setReprintBusy(false);
+          }
+        }}
+        onKitchen={async () => {
+          if (!reprintModal) return;
+          setReprintBusy(true);
+          try {
+            const lines = cart.filter((l) => reprintModal.lineIds.includes(l.lineId));
+            await retryKitchenPrint(lines.length ? lines : cart);
+            setReprintModal(null);
+          } catch {
+            /* retryKitchenPrint already toasts */
+          } finally {
+            setReprintBusy(false);
           }
         }}
       />
@@ -7492,6 +8585,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           card: paymentConfig?.methods.card !== false,
           terminal: paymentConfig?.methods.terminal === true,
           payLater: true,
+          invoice: enabledMethods.invoice,
         }}
         initialMethod={checkoutSeedMethod}
         onClose={() => {
@@ -7605,7 +8699,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         open={cashMovementOpen}
         shiftId={openShift?.id ?? null}
         staffId={webposStaff?.id}
-        staffName={webposStaff?.name}
+        staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
         onClose={() => setCashMovementOpen(false)}
         onSuccess={(live) => {
           setShiftLive((prev) => ({ ...(prev || {}), ...live } as NonNullable<typeof shiftLive>));

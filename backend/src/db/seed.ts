@@ -38,10 +38,32 @@ const ALWAYS_OPEN = {
   },
 };
 
+const DEFAULT_SUPERADMIN_NAME = "Chaslay Admin";
+
+function resolveSuperadminName(raw?: string): string {
+  const name = (raw || "").trim();
+  if (!name || /manupos|chaslayreborn\s+admin/i.test(name)) return DEFAULT_SUPERADMIN_NAME;
+  return name;
+}
+
+async function renameLeftoverSuperadminLabels(db: ReturnType<typeof getDb>) {
+  const rows = await db
+    .select({ id: schema.superadmins.id, name: schema.superadmins.name })
+    .from(schema.superadmins);
+  for (const row of rows) {
+    if (!row.name || !/manupos|chaslayreborn\s+admin/i.test(row.name)) continue;
+    await db
+      .update(schema.superadmins)
+      .set({ name: DEFAULT_SUPERADMIN_NAME, updatedAt: new Date() })
+      .where(eq(schema.superadmins.id, row.id));
+    console.log(`Renamed leftover superadmin label to ${DEFAULT_SUPERADMIN_NAME}: ${row.id}`);
+  }
+}
+
 async function seedSuperadmin() {
-  const email = process.env.SEED_SUPERADMIN_EMAIL || "admin@manupos.webprintmedia.swiss";
+  const email = process.env.SEED_SUPERADMIN_EMAIL || "admin@chaslay.com";
   const password = process.env.SEED_SUPERADMIN_PASSWORD || "ChangeMeNow!123";
-  const name = process.env.SEED_SUPERADMIN_NAME || "ChaslayReborn Admin";
+  const name = resolveSuperadminName(process.env.SEED_SUPERADMIN_NAME);
   const db = getDb();
 
   const existing = await db
@@ -62,11 +84,13 @@ async function seedSuperadmin() {
     } else {
       console.log(`Superadmin already exists: ${email}`);
     }
+    await renameLeftoverSuperadminLabels(db);
     return;
   }
 
   const superadmin = await AuthService.registerSuperadmin(email, password, name);
   console.log("Seeded superadmin:", superadmin.email);
+  await renameLeftoverSuperadminLabels(db);
 }
 
 async function seedDemoShop() {

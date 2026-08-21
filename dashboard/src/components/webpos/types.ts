@@ -12,7 +12,7 @@ export type PosView = PosTab | 'checkout' | 'success';
 
 export type KeypadMode = 'qty' | 'percent' | 'price';
 
-export type PosPaymentMethod = 'cash' | 'card' | 'terminal' | 'pay_later' | 'gift_card';
+export type PosPaymentMethod = 'cash' | 'card' | 'terminal' | 'pay_later' | 'gift_card' | 'invoice';
 
 export type GiftCardLineMeta = {
   op: 'sell' | 'reload';
@@ -47,6 +47,10 @@ export type CartLine = {
   sentToKitchen?: boolean;
   /** Epoch ms when line was sent to kitchen (Ordered tab). */
   sentToKitchenAt?: number;
+  /** Kitchen ticket print failed after send — show retry UI. */
+  kitchenPrintFailed?: boolean;
+  /** Set when KDS marks line ready. */
+  kitchenReadyAt?: number;
   /** Per-line kitchen note from modifier modal */
   lineNote?: string;
   /** Gift card sell/reload  - credited after successful payment */
@@ -72,6 +76,14 @@ export type Product = {
   barcode?: string | null;
   allowExtras?: boolean;
   extras?: Array<{ id: string; name: string; price: number; isDefault?: boolean }>;
+  specifications?: Array<{
+    id: string;
+    name: string;
+    price: number;
+    saleStatus?: 'in_stock' | 'out_of_stock';
+    isDefault?: boolean;
+    sortOrder?: number;
+  }>;
   modifierGroups?: import('@/components/shop/ShopProductModifiersModal').ShopModifierGroup[];
   comboSlots?: import('@/components/shop/ShopComboWizard').ComboSlot[];
 };
@@ -96,6 +108,8 @@ export type OpenCartDraft = {
   ticketOrderNumber?: string | null;
   orderNote: string;
   activeCourse: number;
+  /** Highest course opened with Next course (empty Course 2 stays visible). */
+  courseCount?: number;
   orderSent: boolean;
   coursesBulkSent: boolean;
   selectedLineId: string | null;
@@ -108,9 +122,11 @@ export function openCartDraftKey(opts: {
   tableId?: string | null;
   tabNumber?: string | null;
   channel?: PosChannel | null;
+  ticketDisplay?: string | null;
 }): string {
   if (opts.tableId) return `table:${opts.tableId}`;
   if (opts.tabNumber) return `tab:${opts.tabNumber}`;
+  if (opts.ticketDisplay) return `ticket:${opts.ticketDisplay}`;
   if (opts.channel === 'delivery') return 'channel:delivery';
   if (opts.channel === 'dine_in') return 'channel:dine_in';
   return 'channel:takeaway';

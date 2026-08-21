@@ -8,14 +8,27 @@ import {
   Package,
   Plus,
   Search,
+  Sparkles,
   Trash2,
   X,
+  Printer,
+  Barcode,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
+import {
+  barcodeSvg,
+  normalizeLabelOptions,
+  printLabelsHtml,
+  printLabelsViaAgentOrQueue,
+  type LabelHeightMm,
+  type LabelPrintOptions,
+  type LabelWidthMm,
+} from '@/lib/barcode-labels';
 
 interface Extra {
   id: string;
@@ -240,6 +253,10 @@ export default function Products() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importingDemo, setImportingDemo] = useState(false);
+  const [deletingDemoCatalog, setDeletingDemoCatalog] = useState(false);
+  const [hasDemoCatalog, setHasDemoCatalog] = useState(false);
+  const [demoImportOpen, setDemoImportOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -252,6 +269,24 @@ export default function Products() {
   const [reordering, setReordering] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const imageFileRef = useRef<HTMLInputElement>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printTargets, setPrintTargets] = useState<Product[]>([]);
+  const [labelOpts, setLabelOpts] = useState<LabelPrintOptions>({
+    heightMm: 20,
+    widthMm: 40,
+    showStoreName: true,
+    showProductName: true,
+    showBarcodeNumber: true,
+    showPrice: false,
+    showSku: false,
+    copies: 1,
+  });
+  const [inventoryOn, setInventoryOn] = useState(false);
+  const [recipeLines, setRecipeLines] = useState<Array<{ itemId: string; qty: string; name?: string; unit?: string }>>([]);
+  const [recipeYield, setRecipeYield] = useState('1');
+  const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
+  const [storeName, setStoreName] = useState('');
 
   const onUploadProductImage = async (file: File | null) => {
     if (!file) return;
@@ -286,6 +321,50 @@ export default function Products() {
       setProducts(p.data.products || []);
       setCategories(c.data.categories || []);
       setAllModifierGroups(m.data.groups || []);
+      try {
+        const demoSt = await api.get('/merchant/products/demo-status');
+        setHasDemoCatalog(!!demoSt.data?.hasDemoData);
+      } catch {
+        setHasDemoCatalog(false);
+      }
+      try {
+        const st = await api.get('/merchant/inventory/status');
+        let on = isInventoryLicensed(st.data);
+        if (!on) {
+          const setRes = await api.get('/merchant/settings').catch(() => null);
+          on = isInventoryLicensed(setRes?.data?.settings);
+        }
+        setInventoryOn(on);
+        if (on) {
+          const inv = await api.get('/merchant/inventory/items');
+          setInvItems((inv.data.items || []).map((i: { id: string; name: string; unit: string }) => ({
+            id: i.id,
+            name: i.name,
+            unit: i.unit,
+          })));
+        }
+      } catch {
+        setInventoryOn(false);
+      }
+      try {
+        const setRes = await api.get('/merchant/settings');
+        const s = setRes.data?.settings;
+        setStoreName(s?.name || '');
+        const ps = s?.posPrintSettings || {};
+        setLabelOpts((prev) => ({
+          ...prev,
+          storeName: s?.name || '',
+          widthMm: ps.labelWidthMm === 58 ? 58 : 40,
+          heightMm: ([20, 25, 30, 40] as const).includes(ps.labelHeightMm) ? ps.labelHeightMm : 20,
+          showStoreName: ps.labelShowStoreName !== false,
+          showProductName: ps.labelShowProductName !== false,
+          showBarcodeNumber: ps.labelShowBarcodeNumber !== false,
+          showPrice: ps.labelShowPrice === true,
+          showSku: ps.labelShowSku === true,
+        }));
+      } catch {
+        /* optional */
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('failedLoadProducts'));
     } finally {
@@ -366,6 +445,8 @@ export default function Products() {
         emptySlot(t('comboStepDrink')),
       ],
     });
+    setRecipeLines([]);
+    setRecipeYield('1');
     setModalOpen(true);
   };
 
@@ -394,6 +475,26 @@ export default function Products() {
               },
             ];
       const comboSlots = normalizeComboSlotsFromProduct(full.comboItems);
+      if (inventoryOn) {
+        try {
+          const rec = await api.get(`/merchant/inventory/products/${product.id}/recipe`);
+          setRecipeYield(String(rec.data.recipe?.recipeYield || 1));
+          setRecipeLines(
+            (rec.data.recipe?.lines || []).map((l: { itemId: string; qty: number; itemName?: string; itemUnit?: string }) => ({
+              itemId: l.itemId,
+              qty: String(l.qty),
+              name: l.itemName,
+              unit: l.itemUnit,
+            }))
+          );
+        } catch {
+          setRecipeLines([]);
+          setRecipeYield('1');
+        }
+      } else {
+        setRecipeLines([]);
+        setRecipeYield('1');
+      }
       setForm({
         name: full.name,
         description: full.description || '',
@@ -461,6 +562,8 @@ export default function Products() {
     setForm(emptyForm());
     setModifierPickerOpen(false);
     setMoreOpen(false);
+    setRecipeLines([]);
+    setRecipeYield('1');
   };
 
   const linkedModifierGroups = useMemo(
@@ -607,12 +710,26 @@ export default function Products() {
     setSaving(true);
     try {
       const payload = buildPayload();
+      let productId = editingId;
       if (editingId) {
         await api.put(`/merchant/products/${editingId}`, payload);
         toast.success(t('productUpdated'));
       } else {
-        await api.post('/merchant/products', payload);
+        const created = await api.post('/merchant/products', payload);
+        productId = created.data?.product?.id || null;
         toast.success(t('productCreated'));
+      }
+      if (inventoryOn && productId) {
+        try {
+          await api.put(`/merchant/inventory/products/${productId}/recipe`, {
+            recipeYield: Number(recipeYield) || 1,
+            lines: recipeLines
+              .filter((l) => l.itemId && Number(l.qty) > 0)
+              .map((l) => ({ itemId: l.itemId, qty: Number(l.qty) })),
+          });
+        } catch {
+          /* recipe optional */
+        }
       }
       closeModal();
       await load();
@@ -620,6 +737,67 @@ export default function Products() {
       toast.error(error.response?.data?.error || t('failedSaveProduct'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const selectedProducts = products.filter((p) => selectedIds.includes(p.id));
+
+  const generateMissing = async (ids?: string[], useSku = false) => {
+    try {
+      const res = await api.post('/merchant/products/barcodes/generate', {
+        productIds: ids?.length ? ids : undefined,
+        useSku,
+      });
+      toast.success(t('barcodeGeneratedCount').replace('{n}', String(res.data.generated || 0)));
+      const updated = (res.data.products || []) as Array<{ id: string; barcode: string }>;
+      if (editingId) {
+        const mine = updated.find((p) => p.id === editingId);
+        if (mine) setForm((prev) => ({ ...prev, barcode: mine.barcode }));
+      }
+      await load();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('barcodeGenerateFailed'));
+    }
+  };
+
+  const openPrintFor = (list: Product[]) => {
+    const withCodes = list.filter((p) => String(p.barcode || '').trim());
+    if (!withCodes.length) {
+      toast.error(t('barcodePrintNone'));
+      return;
+    }
+    setPrintTargets(withCodes);
+    setPrintOpen(true);
+  };
+
+  const runPrint = async (mode: 'agent' | 'browser') => {
+    const opts = { ...normalizeLabelOptions(labelOpts), storeName: labelOpts.storeName || storeName };
+    const payload = printTargets.map((p) => ({
+      id: p.id,
+      name: p.name,
+      barcode: String(p.barcode || ''),
+      price: p.price,
+      sku: p.sku,
+    }));
+    try {
+      if (mode === 'browser') {
+        printLabelsHtml(payload, opts);
+      } else {
+        const settingsRes = await api.get('/merchant/settings').catch(() => null);
+        const modeUsed = await printLabelsViaAgentOrQueue(
+          payload,
+          opts,
+          settingsRes?.data?.settings?.posPrintSettings
+        );
+        toast.success(modeUsed === 'browser' ? t('barcodePrintedBrowser') : t('barcodePrinted'));
+      }
+      setPrintOpen(false);
+    } catch (error: any) {
+      toast.error(error.message || t('barcodePrintFailed'));
     }
   };
 
@@ -650,6 +828,74 @@ export default function Products() {
       toast.error(t('failedDownloadTemplate'));
     }
   };
+
+  const onImportDemo = async (mode: 'replace' | 'merge') => {
+    setImportingDemo(true);
+    setDemoImportOpen(false);
+    try {
+      const response = await api.post('/merchant/products/import-demo', { mode });
+      const r = response.data;
+      const totalSkipped =
+        (r.categoriesSkipped ?? 0) +
+        (r.productsSkipped ?? 0) +
+        (r.modifierGroupsSkipped ?? 0) +
+        (r.combosSkipped ?? 0);
+      const totalCreated =
+        (r.categoriesCreated ?? 0) +
+        (r.productsCreated ?? 0) +
+        (r.modifierGroupsCreated ?? 0);
+      if (totalSkipped > 0) {
+        toast.success(
+          t('importDemoSuccessSkipped')
+            .replace('{created}', String(totalCreated))
+            .replace('{skipped}', String(totalSkipped))
+        );
+      } else {
+        toast.success(
+          t('importDemoSuccess')
+            .replace('{categories}', String(r.categoriesCreated))
+            .replace('{products}', String(r.productsCreated))
+            .replace('{modifiers}', String(r.modifierGroupsCreated))
+            .replace('{combos}', String(r.combosCreated))
+        );
+      }
+      await load();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('importDemoFailed'));
+    } finally {
+      setImportingDemo(false);
+    }
+  };
+
+  const onImportDemoClick = () => {
+    const catalogEmpty = products.length === 0 && categories.length === 0;
+    if (catalogEmpty) {
+      if (confirm(t('importDemoEmptyConfirm'))) {
+        void onImportDemo('merge');
+      }
+      return;
+    }
+    setDemoImportOpen(true);
+  };
+
+  const onDeleteDemoCatalog = async () => {
+    if (!confirm(t('deleteDemoProductsConfirm'))) return;
+    setDeletingDemoCatalog(true);
+    try {
+      const res = await api.delete('/merchant/products/demo-data');
+      toast.success(
+        t('deleteDemoProductsSuccess').replace('{products}', String(res.data.productsDeleted ?? 0))
+      );
+      setHasDemoCatalog(false);
+      await load();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('deleteDemoProductsFailed'));
+    } finally {
+      setDeletingDemoCatalog(false);
+    }
+  };
+
+  const catalogEmpty = products.length === 0 && categories.length === 0;
 
   const onImport = async (file: File) => {
     setImporting(true);
@@ -696,6 +942,27 @@ export default function Products() {
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
+            disabled={importingDemo}
+            onClick={onImportDemoClick}
+            className="btn-secondary"
+          >
+            <Sparkles size={14} />
+            {importingDemo ? t('importDemoLoading') : t('importDemoContent')}
+          </button>
+          {hasDemoCatalog ? (
+            <button
+              type="button"
+              disabled={deletingDemoCatalog}
+              onClick={() => void onDeleteDemoCatalog()}
+              className="btn-secondary text-red-700"
+              title={t('deleteDemoProductsHint')}
+            >
+              <Trash2 size={14} />
+              {deletingDemoCatalog ? t('deleteDemoProductsLoading') : t('deleteDemoProducts')}
+            </button>
+          ) : null}
+          <button
+            type="button"
             onClick={() => void downloadTemplate()}
             className="btn-secondary"
           >
@@ -710,6 +977,24 @@ export default function Products() {
           >
             <FileSpreadsheet size={14} />
             {importing ? t('importing') : t('importExcel')}
+          </button>
+          <button
+            type="button"
+            onClick={() => void generateMissing(selectedIds.length ? selectedIds : undefined)}
+            className="btn-secondary"
+          >
+            <Barcode size={14} />
+            {t('barcodeGenerateMissing')}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              openPrintFor(selectedIds.length ? selectedProducts : filteredProducts)
+            }
+            className="btn-secondary"
+          >
+            <Printer size={14} />
+            {t('barcodePrintLabels')}
           </button>
           <button
             type="button"
@@ -796,15 +1081,30 @@ export default function Products() {
           <div className="card border-dashed px-4 py-10 text-center">
             <Package className="mx-auto muted" size={28} />
             <p className="mt-2 text-sm font-semibold">{t('noProductsFound')}</p>
-            <p className="text-xs muted mt-1">{t('createOrImport')}</p>
-            <button
-              type="button"
-              onClick={openCreate}
-              className="btn-primary mt-3"
-            >
-              <Plus size={14} />
-              {t('addProduct')}
-            </button>
+            <p className="text-xs muted mt-1 max-w-md mx-auto">
+              {catalogEmpty ? t('importDemoEmptyHint') : t('createOrImport')}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              {catalogEmpty && (
+                <button
+                  type="button"
+                  disabled={importingDemo}
+                  onClick={onImportDemoClick}
+                  className="btn-primary"
+                >
+                  <Sparkles size={14} />
+                  {importingDemo ? t('importDemoLoading') : t('importDemoContent')}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={openCreate}
+                className={catalogEmpty ? 'btn-secondary' : 'btn-primary'}
+              >
+                <Plus size={14} />
+                {t('addProduct')}
+              </button>
+            </div>
           </div>
         )}
 
@@ -834,6 +1134,13 @@ export default function Products() {
               <>
               <div className="flex items-stretch gap-2 p-3">
                 <div className="flex items-center shrink-0">
+                  <input
+                    type="checkbox"
+                    className="mr-1"
+                    checked={selectedIds.includes(product.id)}
+                    onChange={() => toggleSelected(product.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
                   <DragHandle attributes={attributes} listeners={listeners} />
                 </div>
                 <button
@@ -866,6 +1173,15 @@ export default function Products() {
                     )}
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
                       <span className="font-semibold text-emerald-700">{money(product.price)}</span>
+                      {product.barcode ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-slate-600"
+                          dangerouslySetInnerHTML={{
+                            __html: barcodeSvg(String(product.barcode), { height: 18, width: 90 }),
+                          }}
+                          title={product.barcode}
+                        />
+                      ) : null}
                       <span className="text-slate-500">{t('skuColon').replace('{sku}', product.sku || '-')}</span>
                       <span className={stockOk ? 'text-emerald-600' : 'text-amber-600'}>
                         {t('stockColon').replace('{n}', String(product.stock))}
@@ -886,6 +1202,16 @@ export default function Products() {
                 </button>
 
                 <div className="flex items-center gap-1">
+                  {product.barcode ? (
+                    <button
+                      type="button"
+                      onClick={() => openPrintFor([product])}
+                      className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+                      title={t('barcodePrintLabels')}
+                    >
+                      <Printer size={18} />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => void openEdit(product)}
@@ -1458,6 +1784,44 @@ export default function Products() {
                           if (e.key === 'Enter') e.preventDefault();
                         }}
                       />
+                      {form.barcode ? (
+                        <div
+                          className="mt-2"
+                          dangerouslySetInnerHTML={{
+                            __html: barcodeSvg(form.barcode, { height: 36, width: 160 }),
+                          }}
+                        />
+                      ) : null}
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {editingId && !form.barcode.trim() && (
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs"
+                            onClick={() => void generateMissing([editingId])}
+                          >
+                            {t('barcodeGenerateMissing')}
+                          </button>
+                        )}
+                        {form.barcode.trim() && (
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs"
+                            onClick={() =>
+                              openPrintFor([
+                                {
+                                  id: editingId || 'draft',
+                                  name: form.name,
+                                  barcode: form.barcode,
+                                  price: form.price,
+                                  sku: form.sku,
+                                },
+                              ])
+                            }
+                          >
+                            {t('barcodePrintLabels')}
+                          </button>
+                        )}
+                      </div>
                     </Field>
                     <Field label={t('stock')}>
                       <input
@@ -1594,6 +1958,79 @@ export default function Products() {
                 </div>
               )}
 
+              {inventoryOn && (
+                <div className="space-y-2 rounded-md border border-[var(--border)] p-3">
+                  <p className="text-sm font-semibold">{t('invRecipeTab')}</p>
+                  <p className="text-xs muted">{t('invRecipeHint')}</p>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium">{t('invRecipeYield')}</span>
+                    <input
+                      className="field-input"
+                      type="number"
+                      min={0.0001}
+                      step="any"
+                      value={recipeYield}
+                      onChange={(e) => setRecipeYield(e.target.value)}
+                    />
+                    <span className="text-[11px] muted">{t('invRecipeYieldHint')}</span>
+                  </label>
+                  {recipeLines.map((line, idx) => (
+                    <div key={`${line.itemId}-${idx}`} className="grid grid-cols-[1fr_90px_auto] gap-2">
+                      <select
+                        className="field-input"
+                        value={line.itemId}
+                        onChange={(e) => {
+                          const next = [...recipeLines];
+                          const found = invItems.find((i) => i.id === e.target.value);
+                          next[idx] = {
+                            ...line,
+                            itemId: e.target.value,
+                            unit: found?.unit,
+                            name: found?.name,
+                          };
+                          setRecipeLines(next);
+                        }}
+                      >
+                        <option value="">{t('invSelectItem')}</option>
+                        {invItems.map((i) => (
+                          <option key={i.id} value={i.id}>
+                            {i.name} ({i.unit})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="field-input"
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={line.qty}
+                        onChange={(e) => {
+                          const next = [...recipeLines];
+                          next[idx] = { ...line, qty: e.target.value };
+                          setRecipeLines(next);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="rounded-md p-2 text-red-600"
+                        onClick={() => setRecipeLines(recipeLines.filter((_, i) => i !== idx))}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs"
+                    onClick={() => {
+                      setRecipeLines([...recipeLines, { itemId: '', qty: '' }]);
+                    }}
+                  >
+                    <Plus size={12} /> {t('invAddIngredient')}
+                  </button>
+                </div>
+              )}
+
               <div className="flex gap-2 pt-1 sticky bottom-0 bg-[var(--bg-elevated)] pb-1">
                 <button
                   type="button"
@@ -1611,6 +2048,187 @@ export default function Products() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {printOpen && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 p-3" onClick={() => setPrintOpen(false)}>
+          <div
+            className="w-full max-w-lg rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-semibold">{t('barcodePrintLabels')}</h2>
+            <p className="text-xs muted">{t('barcodePrintHint')}</p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={labelOpts.showStoreName !== false}
+                onChange={(e) => setLabelOpts({ ...labelOpts, showStoreName: e.target.checked })}
+              />
+              {t('barcodeShowStore')}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={labelOpts.showProductName !== false}
+                onChange={(e) => setLabelOpts({ ...labelOpts, showProductName: e.target.checked })}
+              />
+              {t('barcodeShowName')}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={labelOpts.showBarcodeNumber !== false}
+                onChange={(e) => setLabelOpts({ ...labelOpts, showBarcodeNumber: e.target.checked })}
+              />
+              {t('barcodeShowNumber')}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={labelOpts.showPrice === true}
+                onChange={(e) => setLabelOpts({ ...labelOpts, showPrice: e.target.checked })}
+              />
+              {t('barcodeShowPrice')}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={labelOpts.showSku === true}
+                onChange={(e) => setLabelOpts({ ...labelOpts, showSku: e.target.checked })}
+              />
+              {t('barcodeShowSku')}
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <select
+                className="input"
+                value={labelOpts.widthMm || 40}
+                onChange={(e) =>
+                  setLabelOpts({ ...labelOpts, widthMm: Number(e.target.value) as LabelWidthMm })
+                }
+              >
+                <option value={40}>40 mm</option>
+                <option value={58}>58 mm</option>
+              </select>
+              <select
+                className="input"
+                value={labelOpts.heightMm || 20}
+                onChange={(e) =>
+                  setLabelOpts({ ...labelOpts, heightMm: Number(e.target.value) as LabelHeightMm })
+                }
+              >
+                <option value={20}>20 mm</option>
+                <option value={25}>25 mm</option>
+                <option value={30}>30 mm</option>
+                <option value={40}>40 mm</option>
+              </select>
+              <input
+                className="input"
+                type="number"
+                min={1}
+                max={20}
+                value={labelOpts.copies || 1}
+                onChange={(e) => setLabelOpts({ ...labelOpts, copies: Number(e.target.value) || 1 })}
+              />
+            </div>
+            {printTargets[0]?.barcode && (
+              <div className="rounded-md border border-[var(--border)] p-3 text-center">
+                {labelOpts.showStoreName !== false && (labelOpts.storeName || storeName) ? (
+                  <div className="text-[11px] font-bold">{labelOpts.storeName || storeName}</div>
+                ) : null}
+                {labelOpts.showProductName !== false ? (
+                  <div className="text-sm font-semibold">{printTargets[0].name}</div>
+                ) : null}
+                <div
+                  className="mt-1 flex justify-center"
+                  dangerouslySetInnerHTML={{
+                    __html: barcodeSvg(String(printTargets[0].barcode), { height: 36, width: 160 }),
+                  }}
+                />
+                {labelOpts.showBarcodeNumber !== false ? (
+                  <div className="text-xs font-mono">{printTargets[0].barcode}</div>
+                ) : null}
+              </div>
+            )}
+            <p className="text-xs muted">
+              {t('barcodePrintCount').replace('{n}', String(printTargets.length))}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-primary" onClick={() => void runPrint('agent')}>
+                {t('barcodePrintThermal')}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => void runPrint('browser')}>
+                {t('barcodePrintBrowser')}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setPrintOpen(false)}>
+                {t('cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {demoImportOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
+          onClick={() => setDemoImportOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-md rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="demo-import-title"
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
+              <h3 id="demo-import-title" className="text-sm font-semibold">
+                {t('importDemoDialogTitle')}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDemoImportOpen(false)}
+                className="rounded-md p-1.5 hover:bg-[var(--bg-muted)]"
+                aria-label={t('close')}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-3 px-4 py-4">
+              <p className="text-sm muted">{t('importDemoDialogBody')}</p>
+              <button
+                type="button"
+                disabled={importingDemo}
+                onClick={() => void onImportDemo('replace')}
+                className="w-full rounded-md border border-red-200 bg-red-50 px-3 py-3 text-left transition hover:bg-red-100"
+              >
+                <span className="block text-sm font-semibold text-red-900">
+                  {t('importDemoReplaceOption')}
+                </span>
+                <span className="mt-1 block text-xs text-red-800/90">
+                  {t('importDemoReplaceWarning')}
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={importingDemo}
+                onClick={() => void onImportDemo('merge')}
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-3 text-left transition hover:opacity-90"
+              >
+                <span className="block text-sm font-semibold">{t('importDemoMergeOption')}</span>
+                <span className="mt-1 block text-xs muted">{t('importDemoMergeHint')}</span>
+              </button>
+            </div>
+            <div className="flex justify-end border-t border-[var(--border)] px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setDemoImportOpen(false)}
+                className="btn-secondary"
+              >
+                {t('cancel')}
+              </button>
+            </div>
           </div>
         </div>
       )}

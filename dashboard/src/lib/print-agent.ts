@@ -37,6 +37,128 @@ export function isUnsuitableRawPrinter(name?: string | null): boolean {
   );
 }
 
+export function normalizePrinterName(name?: string | null): string {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-]+/g, '');
+}
+
+export function printerNameInList(
+  name: string,
+  printers: Array<{ name: string }>
+): boolean {
+  const n = normalizePrinterName(name);
+  if (!n) return false;
+  return printers.some((p) => normalizePrinterName(p.name) === n);
+}
+
+function paperWidthHint(name: string): '58' | '80' | null {
+  const n = String(name || '').toLowerCase();
+  if (/\b58\b|58mm/.test(n)) return '58';
+  if (/\b80\b|80mm|pos80|printer80/.test(n)) return '80';
+  return null;
+}
+
+export function looksLikeThermal80mm(name?: string | null): boolean {
+  const n = String(name || '');
+  if (!n.trim() || isUnsuitableRawPrinter(n)) return false;
+  return /\b80\b|80mm|pos80|printer80|thermal|receipt|escpos|xp-|rp80|tm-|chaslay/i.test(n);
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (a === b) return 0;
+  if (!m) return n;
+  if (!n) return m;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => {
+    const row = new Array<number>(n + 1);
+    row[0] = i;
+    return row;
+  });
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] =
+        a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function scorePrinterSimilarity(configured: string, candidate: string): number {
+  const cfg = normalizePrinterName(configured);
+  const cand = normalizePrinterName(candidate);
+  if (!cfg || !cand || cfg === cand) return 0;
+  let score = 0;
+  const cfgWidth = paperWidthHint(configured);
+  const candWidth = paperWidthHint(candidate);
+  if (cfgWidth && candWidth && cfgWidth === candWidth) score += 3;
+  const cfgDigits = (cfg.match(/\d+$/) || [])[0];
+  const candDigits = (cand.match(/\d+$/) || [])[0];
+  if (cfgDigits && cfgDigits === candDigits) score += 4;
+  if (looksLikeThermal80mm(candidate) && (cfgWidth === '80' || /80/.test(cfg))) score += 2;
+  const dist = levenshtein(cfg, cand);
+  if (dist <= 4) score += 5;
+  else if (dist <= 8) score += 2;
+  if (cand.includes(cfg) || cfg.includes(cand)) score += 3;
+  return score;
+}
+
+/** Agent is up but the stored Windows name is gone (rename / 1801). */
+export function isConfiguredPrinterMissing(
+  configuredName: string,
+  printers: Array<{ name: string }>,
+  opts?: { agentOk?: boolean; printersReady?: boolean }
+): boolean {
+  const name = String(configuredName || '').trim();
+  if (!name) return false;
+  if (opts?.agentOk === false) return false;
+  if (opts?.printersReady === false) return false;
+  return !printerNameInList(name, printers);
+}
+
+/** Close matches for a missing name (e.g. GLPrinter80 → chaslay80). */
+export function findSimilarAgentPrinters(
+  configuredName: string,
+  printers: AgentPrinter[]
+): AgentPrinter[] {
+  const configured = String(configuredName || '').trim();
+  if (!configured) return [];
+  const available = printers.filter((p) => p.name && !isUnsuitableRawPrinter(p.name));
+  if (printerNameInList(configured, available)) return [];
+  return available
+    .map((p) => ({ p, score: scorePrinterSimilarity(configured, p.name) }))
+    .filter((x) => x.score >= 2)
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.p);
+}
+
+/** Prompt candidates: similar names, else any 80mm-looking printer. */
+export function findPrinterHealCandidates(
+  configuredName: string,
+  printers: AgentPrinter[],
+  limit = 3
+): AgentPrinter[] {
+  const similar = findSimilarAgentPrinters(configuredName, printers);
+  if (similar.length) return similar.slice(0, limit);
+  const suitable = printers.filter((p) => p.name && !isUnsuitableRawPrinter(p.name));
+  const eighty = suitable.filter((p) => looksLikeThermal80mm(p.name));
+  return (eighty.length ? eighty : suitable).slice(0, limit);
+}
+
+/** Auto-heal only when the old name is gone and exactly one similar name exists. */
+export function suggestPrinterAutoHeal(
+  configuredName: string,
+  printers: AgentPrinter[]
+): AgentPrinter | null {
+  const similar = findSimilarAgentPrinters(configuredName, printers);
+  return similar.length === 1 ? similar[0] : null;
+}
+
 export function unsuitableRawPrinterMessage(name?: string | null): string {
   const label = (name || '').trim() || 'this printer';
   return `Select a receipt/ESC-POS printer, not OneNote/PDF (${label}). Raw bytes will not print usefully.`;
@@ -47,7 +169,103 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-async function agentFetch(path: string, init?: RequestInit) {
+/** Reinstall prompt: 1.6.0+ uses chaslayreborn-print-* temps and sanitizes Win32 1801. */
+export const MIN_PRINT_AGENT_VERSION = '1.6.0';
+
+function asPrintText(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+/** Flatten Error / agent JSON / stderr so old manupos-print dumps are still detected. */
+export function collectPrintErrorText(raw: unknown): string {
+  if (raw == null) return '';
+  if (typeof raw === 'string') return raw.trim();
+  if (raw instanceof Error) {
+    return [raw.message, (raw as Error & { stderr?: unknown }).stderr].filter(Boolean).join('\n').trim();
+  }
+  const obj = raw as {
+    response?: { data?: { error?: unknown } };
+    message?: unknown;
+    error?: unknown;
+    stderr?: unknown;
+  };
+  return [
+    asPrintText(obj.response?.data?.error),
+    asPrintText(obj.error),
+    asPrintText(obj.message),
+    asPrintText(obj.stderr),
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+}
+
+export function extractPrinterNameFromError(msg: string, fallback?: string): string {
+  const m =
+    msg.match(/OpenPrinter failed for '([^']+)'/i) ||
+    msg.match(/Printer '([^']+)' not found/i) ||
+    msg.match(/failed for '([^']+)'/i) ||
+    msg.match(/GLPrinter\d*/i);
+  return (m?.[1] || m?.[0] || fallback || '').trim();
+}
+
+/** Win32 1801 / invalid name / GLPrinter80 — agent is up, printer is not. */
+export function isPrinterDisconnectedError(raw: unknown): boolean {
+  const msg = collectPrintErrorText(raw);
+  return /win32\s*[=:]?\s*1801|\b1801\b|error_invalid_printer_name|not found or disconnected|openprinter failed|GLPrinter\d*|ERROR_INVALID_PRINTER_NAME/i.test(
+    msg
+  );
+}
+
+export function isNoisyPrintAgentDump(raw: unknown): boolean {
+  const msg = collectPrintErrorText(raw);
+  return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|chaslayreborn-print-|manupos-print-|chaslayprintagent|at c:\\|\\temp\\|-\s*file\s+c:\\|\.ps1\b/i.test(
+    msg
+  );
+}
+
+export function compareAgentVersion(version: string, minimum: string): number {
+  const a = String(version || '')
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
+  const b = String(minimum || '')
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const d = (a[i] || 0) - (b[i] || 0);
+    if (d) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+/** HTTP agents below MIN (or no version) still use manupos-print-* temps. Electron bridge is current. */
+export function isPrintAgentVersionOutdated(version?: string | null): boolean {
+  if (typeof window !== 'undefined' && window.manuposDesktop) return false;
+  if (!version || !String(version).trim()) return true;
+  return compareAgentVersion(String(version).trim(), MIN_PRINT_AGENT_VERSION) < 0;
+}
+
+/** Collapse PowerShell / Win32 dumps into a one-line ChaslayReborn message. */
+export function friendlyPrintAgentError(raw: unknown, printerName?: string): string {
+  const msg = collectPrintErrorText(raw);
+  if (!msg) return 'Print failed';
+  const open = msg.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
+  const name = extractPrinterNameFromError(msg, printerName);
+  const code = open ? Number(open[2]) : Number((msg.match(/Win32\s*[=:]?\s*(\d+)/i) || [])[1] || 0);
+  if (code === 1801 || isPrinterDisconnectedError(msg)) {
+    return name ? `Printer '${name}' not found or disconnected` : 'Printer not found or disconnected';
+  }
+  if (isNoisyPrintAgentDump(msg)) {
+    return name ? `Printer '${name}' not found or disconnected` : 'Print failed';
+  }
+  return msg.length > 220 ? 'Print failed' : msg;
+}
+
+async function agentFetch(path: string, init?: RequestInit, printerName?: string) {
   const res = await fetch(`${PRINT_AGENT_URL}${path}`, {
     ...init,
     headers: {
@@ -57,26 +275,44 @@ async function agentFetch(path: string, init?: RequestInit) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Print agent HTTP ${res.status}`);
+    throw new Error(
+      friendlyPrintAgentError(
+        collectPrintErrorText(err) || `Print agent HTTP ${res.status}`,
+        printerName
+      )
+    );
   }
   return res.json();
 }
 
-export async function isPrintAgentAvailable(): Promise<boolean> {
+export type PrintAgentHealth = {
+  ok: boolean;
+  version?: string;
+};
+
+export async function getPrintAgentHealth(): Promise<PrintAgentHealth> {
   if (window.manuposDesktop) {
     try {
       const s = await window.manuposDesktop.getAgentStatus();
-      return !!s.running;
+      return { ok: !!s.running };
     } catch {
-      return true; // desktop bridge present
+      return { ok: true };
     }
   }
   try {
     const data = await agentFetch('/health');
-    return !!data.ok;
+    return {
+      ok: !!data.ok,
+      version: data.version != null ? String(data.version) : undefined,
+    };
   } catch {
-    return false;
+    return { ok: false };
   }
+}
+
+export async function isPrintAgentAvailable(): Promise<boolean> {
+  const health = await getPrintAgentHealth();
+  return health.ok;
 }
 
 export async function listAgentPrinters(): Promise<AgentPrinter[]> {
@@ -116,20 +352,26 @@ export async function printViaAgent(opts: {
 
   if (window.manuposDesktop?.printEscPos) {
     const res = await window.manuposDesktop.printEscPos(opts);
-    if (!res.ok) throw new Error(res.error || 'Desktop print failed');
+    if (!res.ok) {
+      throw new Error(friendlyPrintAgentError(res.error || 'Desktop print failed', name));
+    }
     if (res.printer && isUnsuitableRawPrinter(res.printer)) {
       throw new Error(unsuitableRawPrinterMessage(res.printer));
     }
     return { ok: true, printer: res.printer };
   }
-  const data = await agentFetch('/print', {
-    method: 'POST',
-    body: JSON.stringify({
-      printerName: opts.printerName || undefined,
-      dataBase64: opts.dataBase64,
-      text: opts.text,
-    }),
-  });
+  const data = await agentFetch(
+    '/print',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        printerName: opts.printerName || undefined,
+        dataBase64: opts.dataBase64,
+        text: opts.text,
+      }),
+    },
+    name
+  );
   if (data?.printer && isUnsuitableRawPrinter(data.printer)) {
     throw new Error(unsuitableRawPrinterMessage(data.printer));
   }
@@ -149,10 +391,14 @@ export async function openCashDrawerViaAgent(opts?: { printerName?: string }): P
     throw new Error(unsuitableRawPrinterMessage(printerName));
   }
   try {
-    await agentFetch('/drawer', {
-      method: 'POST',
-      body: JSON.stringify({ printerName }),
-    });
+    await agentFetch(
+      '/drawer',
+      {
+        method: 'POST',
+        body: JSON.stringify({ printerName }),
+      },
+      printerName
+    );
     return;
   } catch (e: any) {
     const msg = String(e?.message || '');

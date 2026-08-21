@@ -4,6 +4,21 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { Search, Plus, Edit2, Trash2, Eye, X, Copy, KeyRound, LogIn, Eraser } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
+import { useI18n } from '@/lib/i18n';
+
+interface SubscriptionPlanOption {
+  id: string;
+  slug: string;
+  name: string;
+  isActive?: boolean;
+}
+
+const FALLBACK_SUBSCRIPTION_PLANS: SubscriptionPlanOption[] = [
+  { id: 'free', slug: 'free', name: 'Free' },
+  { id: 'starter', slug: 'starter', name: 'Starter' },
+  { id: 'professional', slug: 'professional', name: 'Professional' },
+  { id: 'enterprise', slug: 'enterprise', name: 'Enterprise' },
+];
 
 interface Merchant {
   id: string;
@@ -17,10 +32,41 @@ interface Merchant {
   shopEnabled?: boolean;
   status: 'active' | 'trial' | 'suspended' | 'expired';
   subscriptionPlan?: string;
+  editionId?: string | null;
+  editionName?: string | null;
+  planBillingPaid?: boolean;
+  lastAppVersion?: string | null;
+  lastAppVersionSeenAt?: string | null;
+  inventoryAddonEnabled?: boolean;
+  inventoryEnabled?: boolean;
+  signageAddonEnabled?: boolean;
+  signageEnabled?: boolean;
+  signageScreenLimit?: number;
   createdAt: string;
   devices: number;
   licenses: number;
   activeLicenses?: number;
+}
+
+function PosVersionBadge({ name }: { name?: string | null }) {
+  if (!name) {
+    return (
+      <span
+        className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600"
+        title="No edition assigned — legacy full access"
+      >
+        Legacy
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex max-w-[12rem] truncate px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-100 text-teal-800"
+      title={name}
+    >
+      {name}
+    </span>
+  );
 }
 
 interface IssuedLicense {
@@ -49,10 +95,14 @@ const emptyForm = {
   businessCategory: 'restaurant' as 'retail' | 'restaurant',
   maxPosPosts: 1,
   maxWaiterPosts: 0,
+  inventoryAddonEnabled: false,
+  signageAddonEnabled: false,
+  signageScreenLimit: 2,
 };
 
 export default function Merchants() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const startImpersonation = useAuthStore((s) => s.startImpersonation);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,8 +120,23 @@ export default function Merchants() {
   const [purgeConfirm, setPurgeConfirm] = useState('');
   const [deleteCustomersToo, setDeleteCustomersToo] = useState(false);
   const [purgingSales, setPurgingSales] = useState(false);
-  const [posLimits, setPosLimits] = useState({ maxPosPosts: 0, maxWaiterPosts: 0 });
+  const [posLimits, setPosLimits] = useState({
+    maxPosPosts: 0,
+    maxWaiterPosts: 0,
+    inventoryAddonEnabled: false,
+    signageAddonEnabled: false,
+    signageScreenLimit: 2,
+  });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
+  const [planForm, setPlanForm] = useState({
+    editionId: '',
+    planBillingPaid: true,
+    subscriptionPlan: 'starter',
+  });
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlanOption[]>(
+    FALLBACK_SUBSCRIPTION_PLANS
+  );
   const [editions, setEditions] = useState<Array<{ id: string; name: string; businessCategory: string }>>(
     []
   );
@@ -85,12 +150,17 @@ export default function Merchants() {
     (async () => {
       try {
         await api.post('/superadmin/resellers/ensure-agency').catch(() => null);
-        const [ed, rs] = await Promise.all([
+        const [ed, rs, pl] = await Promise.all([
           api.get('/superadmin/editions'),
           api.get('/superadmin/resellers'),
+          api.get('/superadmin/plans'),
         ]);
         setEditions(ed.data.editions || []);
         setResellers(rs.data.resellers || []);
+        const activePlans = (pl.data.plans || []).filter(
+          (p: SubscriptionPlanOption) => p.isActive !== false
+        );
+        if (activePlans.length) setSubscriptionPlans(activePlans);
       } catch {
         /* ignore */
       }
@@ -119,9 +189,17 @@ export default function Merchants() {
     try {
       const res = await api.get(`/superadmin/merchants/${merchant.id}`);
       setDetailFull(res.data.merchant);
+      setPlanForm({
+        editionId: res.data.merchant?.editionId || '',
+        planBillingPaid: res.data.merchant?.planBillingPaid !== false,
+        subscriptionPlan: res.data.merchant?.subscriptionPlan || 'starter',
+      });
       setPosLimits({
         maxPosPosts: Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(res.data.merchant?.maxWaiterPosts) || 0),
+        inventoryAddonEnabled: res.data.merchant?.inventoryAddonEnabled === true,
+        signageAddonEnabled: res.data.merchant?.signageAddonEnabled === true,
+        signageScreenLimit: Math.max(1, Number(res.data.merchant?.signageScreenLimit) || 2),
       });
     } catch {
       toast.error('Failed to load merchant details');
@@ -132,15 +210,85 @@ export default function Merchants() {
     if (!showDetail) return;
     setSavingPosLimits(true);
     try {
-      await api.put(`/superadmin/merchants/${showDetail.id}`, {
+      const res = await api.put(`/superadmin/merchants/${showDetail.id}`, {
         maxPosPosts: Number(posLimits.maxPosPosts) || 0,
         maxWaiterPosts: Number(posLimits.maxWaiterPosts) || 0,
+        inventoryAddonEnabled: !!posLimits.inventoryAddonEnabled,
+        signageAddonEnabled: !!posLimits.signageAddonEnabled,
+        signageScreenLimit: Number(posLimits.signageScreenLimit) || 2,
       });
-      toast.success('POS station limits updated');
+      const saved = res.data?.merchant;
+      const inventoryOn = saved?.inventoryAddonEnabled === true || saved?.inventoryEnabled === true;
+      const signageOn = saved?.signageAddonEnabled === true || saved?.signageEnabled === true;
+      setPosLimits({
+        maxPosPosts: Math.max(0, Number(saved?.maxPosPosts ?? posLimits.maxPosPosts) || 0),
+        maxWaiterPosts: Math.max(0, Number(saved?.maxWaiterPosts ?? posLimits.maxWaiterPosts) || 0),
+        inventoryAddonEnabled: inventoryOn,
+        signageAddonEnabled: signageOn,
+        signageScreenLimit: Math.max(1, Number(saved?.signageScreenLimit ?? posLimits.signageScreenLimit) || 2),
+      });
+      setShowDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              inventoryAddonEnabled: inventoryOn,
+              inventoryEnabled: inventoryOn,
+              signageAddonEnabled: signageOn,
+              signageEnabled: signageOn,
+              signageScreenLimit: Number(saved?.signageScreenLimit) || 2,
+            }
+          : prev
+      );
+      await fetchMerchants();
+      toast.success('POS limits & addons updated');
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to update limits');
     } finally {
       setSavingPosLimits(false);
+    }
+  };
+
+  const handleSavePlan = async () => {
+    if (!showDetail) return;
+    if (!planForm.editionId) {
+      toast.error(t('posVersionSelect'));
+      return;
+    }
+    if (!planForm.subscriptionPlan) {
+      toast.error(t('merchantSubscriptionPlanRequired'));
+      return;
+    }
+    setSavingPlan(true);
+    try {
+      const res = await api.patch(`/superadmin/merchants/${showDetail.id}/plan`, {
+        editionId: planForm.editionId,
+        planBillingPaid: !!planForm.planBillingPaid,
+        subscriptionPlan: planForm.subscriptionPlan,
+      });
+      const saved = res.data?.merchant;
+      setDetailFull(saved);
+      setPlanForm({
+        editionId: saved?.editionId || planForm.editionId,
+        planBillingPaid: saved?.planBillingPaid !== false,
+        subscriptionPlan: saved?.subscriptionPlan || planForm.subscriptionPlan,
+      });
+      setShowDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              editionId: saved?.editionId ?? prev.editionId,
+              editionName: saved?.editionName ?? saved?.edition?.name ?? prev.editionName,
+              planBillingPaid: saved?.planBillingPaid !== false,
+              subscriptionPlan: saved?.subscriptionPlan ?? prev.subscriptionPlan,
+            }
+          : prev
+      );
+      await fetchMerchants();
+      toast.success(t('merchantPlanSaved'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('merchantPlanSaveFailed'));
+    } finally {
+      setSavingPlan(false);
     }
   };
 
@@ -229,6 +377,9 @@ export default function Merchants() {
         businessCategory: form.businessCategory,
         maxPosPosts: Number(form.maxPosPosts) || 0,
         maxWaiterPosts: Number(form.maxWaiterPosts) || 0,
+        inventoryAddonEnabled: !!form.inventoryAddonEnabled,
+        signageAddonEnabled: !!form.signageAddonEnabled,
+        signageScreenLimit: Number(form.signageScreenLimit) || 2,
       });
       const issued = res.data.merchant?.issuedLicenses || [];
       setIssuedKeys(issued);
@@ -296,6 +447,8 @@ export default function Merchants() {
         role: 'merchant',
         merchantId: account.id,
         impersonatedBy: res.data.impersonatedBy,
+        inventoryAddonEnabled: !!(account.inventoryAddonEnabled || account.inventoryEnabled),
+        signageAddonEnabled: !!(account.signageAddonEnabled || account.signageEnabled),
       });
       toast.success(`Opened ${account.name}`);
       navigate('/merchant');
@@ -397,13 +550,15 @@ export default function Merchants() {
         ) : merchants.length === 0 ? (
           <div className="text-center py-12 text-gray-500">No merchants found</div>
         ) : (
-          <table className="w-full min-w-[720px]">
+          <table className="w-full min-w-[860px]">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Name</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Email</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Shop</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Status</th>
+                <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">POS version</th>
+                <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Inventory</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Devices</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Licenses</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Actions</th>
@@ -439,6 +594,34 @@ export default function Merchants() {
                     >
                       {merchant.status}
                     </span>
+                  </td>
+                  <td className="px-3 sm:px-4 py-3">
+                    <div className="flex flex-col gap-0.5 min-w-[8rem]">
+                      <PosVersionBadge name={merchant.editionName} />
+                      <span
+                        className="text-[11px] text-gray-500"
+                        title={
+                          merchant.lastAppVersionSeenAt
+                            ? `Last seen ${new Date(merchant.lastAppVersionSeenAt).toLocaleString()}`
+                            : 'Android app version last reported by a device'
+                        }
+                      >
+                        {merchant.lastAppVersion
+                          ? `Android ${merchant.lastAppVersion}`
+                          : 'No Android seen'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-3 sm:px-4 py-3">
+                    {merchant.inventoryAddonEnabled === true || merchant.inventoryEnabled === true ? (
+                      <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                        Addon on
+                      </span>
+                    ) : (
+                      <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
+                        Off
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 sm:px-4 py-3">{merchant.devices}</td>
                   <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
@@ -589,16 +772,17 @@ export default function Merchants() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-sm font-medium">Subscription / License</span>
+                  <span className="text-sm font-medium">{t('subscriptionLicense')}</span>
                   <select
                     className="input mt-1"
                     value={form.subscriptionPlan}
                     onChange={(e) => setForm({ ...form, subscriptionPlan: e.target.value })}
                   >
-                    <option value="free">Free</option>
-                    <option value="starter">Starter</option>
-                    <option value="professional">Professional</option>
-                    <option value="enterprise">Enterprise</option>
+                    {subscriptionPlans.map((plan) => (
+                      <option key={plan.id || plan.slug} value={plan.slug}>
+                        {plan.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="block">
@@ -730,6 +914,46 @@ export default function Merchants() {
                     <span className="text-xs text-gray-500">0 = unlimited</span>
                   </label>
                 </div>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!form.inventoryAddonEnabled}
+                    onChange={(e) => setForm({ ...form, inventoryAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">Restaurant inventory addon</span>
+                    <span className="text-xs text-gray-500">
+                      Ingredients, recipes, suppliers, auto-reorder emails (paid extra).
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!form.signageAddonEnabled}
+                    onChange={(e) => setForm({ ...form, signageAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">Chaslay Screens (digital signage)</span>
+                    <span className="text-xs text-gray-500">
+                      TV menu boards and promo playlists. Does not consume POS seats.
+                    </span>
+                  </span>
+                </label>
+                <label className="block text-sm pt-1">
+                  <span className="font-medium">Screen limit</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    className="input mt-1"
+                    value={form.signageScreenLimit}
+                    onChange={(e) => setForm({ ...form, signageScreenLimit: Number(e.target.value) || 2 })}
+                  />
+                  <span className="text-xs text-gray-500">Default 2. TVs are not POS stations.</span>
+                </label>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -767,6 +991,109 @@ export default function Merchants() {
               <p>
                 <span className="text-gray-500">Status:</span> {showDetail.status}
               </p>
+              <div className="rounded-lg border border-teal-100 bg-teal-50/60 px-3 py-3 space-y-3">
+                <p className="font-semibold text-teal-950">{t('merchantPosPlanSection')}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <PosVersionBadge
+                    name={detailFull?.editionName ?? detailFull?.edition?.name ?? showDetail.editionName}
+                  />
+                  <span
+                    className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      planForm.planBillingPaid
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-amber-100 text-amber-900'
+                    }`}
+                  >
+                    {planForm.planBillingPaid ? t('invoiceStatusPaid') : t('invoiceStatusUnpaid')}
+                  </span>
+                  {planForm.subscriptionPlan ? (
+                    <span className="text-xs text-gray-500">
+                      {t('subscriptionLicense')}:{' '}
+                      {subscriptionPlans.find((p) => p.slug === planForm.subscriptionPlan)?.name ||
+                        planForm.subscriptionPlan}
+                    </span>
+                  ) : null}
+                </div>
+                <label className="block text-sm">
+                  <span className="font-medium">{t('posVersion')}</span>
+                  <select
+                    className="input mt-1"
+                    value={planForm.editionId}
+                    onChange={(e) => setPlanForm({ ...planForm, editionId: e.target.value })}
+                  >
+                    <option value="">{t('posVersionSelect')}</option>
+                    {editions.map((ed) => (
+                      <option key={ed.id} value={ed.id}>
+                        {ed.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  <span className="font-medium">{t('subscriptionLicense')}</span>
+                  <select
+                    className="input mt-1"
+                    value={planForm.subscriptionPlan}
+                    onChange={(e) =>
+                      setPlanForm({ ...planForm, subscriptionPlan: e.target.value })
+                    }
+                  >
+                    <option value="">{t('merchantSubscriptionPlanRequired')}</option>
+                    {subscriptionPlans.map((plan) => (
+                      <option key={plan.id || plan.slug} value={plan.slug}>
+                        {plan.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-gray-500 mt-1 block">
+                    {t('merchantSubscriptionPlanHint')}
+                  </span>
+                </label>
+                <label className="block text-sm">
+                  <span className="font-medium">{t('merchantPlanBilling')}</span>
+                  <select
+                    className="input mt-1"
+                    value={planForm.planBillingPaid ? 'paid' : 'unpaid'}
+                    onChange={(e) =>
+                      setPlanForm({ ...planForm, planBillingPaid: e.target.value === 'paid' })
+                    }
+                  >
+                    <option value="paid">{t('invoiceStatusPaid')}</option>
+                    <option value="unpaid">{t('invoiceStatusUnpaid')}</option>
+                  </select>
+                  <span className="text-xs text-gray-500 mt-1 block">{t('merchantPlanBillingHint')}</span>
+                </label>
+                <button
+                  type="button"
+                  className="btn-secondary text-sm"
+                  disabled={savingPlan}
+                  onClick={() => void handleSavePlan()}
+                >
+                  {savingPlan ? '…' : t('merchantSavePlanBilling')}
+                </button>
+                <p>
+                  <span className="text-gray-500">Android app:</span>{' '}
+                  {detailFull?.lastAppVersion || showDetail.lastAppVersion ? (
+                    <>
+                      {detailFull?.lastAppVersion || showDetail.lastAppVersion}
+                      {(detailFull?.lastAppVersionSeenAt || showDetail.lastAppVersionSeenAt) && (
+                        <span className="text-gray-400">
+                          {' '}
+                          · last seen{' '}
+                          {new Date(
+                            detailFull?.lastAppVersionSeenAt || showDetail.lastAppVersionSeenAt || ''
+                          ).toLocaleString()}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-gray-400">No device has reported a version yet</span>
+                  )}
+                </p>
+                <p className="text-xs text-gray-500">
+                  WebPOS is the shared platform deploy (same build for every merchant).
+                </p>
+              </div>
               <p>
                 <span className="text-gray-500">Shop:</span>{' '}
                 {showDetail.shopEnabled ? `/${showDetail.slug || '-'}` : 'disabled'}
@@ -782,6 +1109,7 @@ export default function Merchants() {
                     {detailFull.devices.map((d: any) => (
                       <li key={d.id} className="font-mono text-xs bg-gray-50 rounded px-2 py-1">
                         {d.deviceName} · {d.deviceId}
+                        {d.appVersion ? ` · Android ${d.appVersion}` : ''}
                       </li>
                     ))}
                   </ul>
@@ -843,13 +1171,79 @@ export default function Merchants() {
                       />
                     </label>
                   </div>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.inventoryAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, inventoryAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Restaurant inventory addon</span>
+                      <span className="text-xs text-gray-500">
+                        Paid extra: recipes, stock, suppliers, low-stock emails.
+                      </span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.inventoryAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.inventoryAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.signageAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, signageAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Chaslay Screens (digital signage)</span>
+                      <span className="text-xs text-gray-500">
+                        Paid extra: live menu boards on restaurant TVs. Does not use POS seats.
+                      </span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.signageAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.signageAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="block text-sm mt-2">
+                    <span className="font-medium">Screen limit</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      className="input mt-1"
+                      value={posLimits.signageScreenLimit}
+                      onChange={(e) =>
+                        setPosLimits({
+                          ...posLimits,
+                          signageScreenLimit: Number(e.target.value) || 2,
+                        })
+                      }
+                    />
+                  </label>
                   <button
                     type="button"
                     className="btn-secondary mt-2 text-sm"
                     disabled={savingPosLimits}
                     onClick={() => void handleSavePosLimits()}
                   >
-                    {savingPosLimits ? 'Saving…' : 'Save POS limits'}
+                    {savingPosLimits ? 'Saving…' : 'Save POS limits & addons'}
                   </button>
                 </div>
                 <div>

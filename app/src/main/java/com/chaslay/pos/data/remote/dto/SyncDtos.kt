@@ -29,10 +29,87 @@ data class SyncProductDto(
     @SerializedName("is_open_price") val isOpenPrice: Boolean? = null,
     @SerializedName("sold_by_weight") val soldByWeight: Boolean? = null,
     @SerializedName("product_type") val productType: String? = null,
+    @SerializedName(value = "combo_items", alternate = ["comboItems", "comboSlots"])
+    val comboItems: JsonElement? = null,
+    @SerializedName(value = "allow_extras", alternate = ["allowExtras"])
+    val allowExtras: Boolean? = null,
+    val extras: List<SyncExtraDto>? = null,
+    @SerializedName(value = "modifier_groups", alternate = ["modifierGroups"])
+    val modifierGroups: List<SyncModifierGroupDto>? = null,
+    val variants: List<SyncVariantDto>? = null,
+    val specifications: List<SyncVariantDto>? = null,
     val online_visible: Boolean? = null,
     val kiosk_visible: Boolean? = null,
     val updated_at: String? = null,
     val deleted_at: String? = null
+)
+
+data class SyncExtraDto(
+    val id: String? = null,
+    val name: String? = null,
+    val price: Double = 0.0
+)
+
+data class SyncVariantDto(
+    val id: String? = null,
+    val name: String? = null,
+    val price: Double? = null,
+    @SerializedName(value = "isDefault", alternate = ["is_default"])
+    val isDefault: Boolean? = null,
+    @SerializedName(value = "sortOrder", alternate = ["sort_order"])
+    val sortOrder: Int? = null,
+    @SerializedName(value = "saleStatus", alternate = ["sale_status"])
+    val saleStatus: String? = null
+)
+
+data class SyncModifierOptionDto(
+    val id: String? = null,
+    val name: String? = null,
+    val price: Double? = null,
+    @SerializedName(value = "saleStatus", alternate = ["sale_status"])
+    val saleStatus: String? = null,
+    val sortOrder: Int? = null
+)
+
+data class SyncModifierGroupDto(
+    val id: String? = null,
+    val title: String? = null,
+    val name: String? = null,
+    @SerializedName(value = "pricingType", alternate = ["pricing_type"])
+    val pricingType: String? = null,
+    @SerializedName(value = "selectionType", alternate = ["selection_type"])
+    val selectionType: String? = null,
+    @SerializedName(value = "minSelectable", alternate = ["min_selectable"])
+    val minSelectable: Int? = null,
+    @SerializedName(value = "maxSelectable", alternate = ["max_selectable"])
+    val maxSelectable: Int? = null,
+    @SerializedName(value = "allowMultipleSameItem", alternate = ["allow_multiple_same_item"])
+    val allowMultipleSameItem: Boolean? = null,
+    val sortOrder: Int? = null,
+    val options: List<SyncModifierOptionDto>? = null
+)
+
+data class SyncComboOptionDto(
+    @SerializedName(value = "productId", alternate = ["product_id", "id", "clientId", "client_id"])
+    val productId: String? = null,
+    @SerializedName(value = "sourceProductId", alternate = ["source_product_id"])
+    val sourceProductId: String? = null,
+    @SerializedName(value = "extraPrice", alternate = ["extra_price"])
+    val extraPrice: Double? = null
+)
+
+data class SyncComboSlotDto(
+    val id: String? = null,
+    val name: String? = null,
+    @SerializedName(value = "minPick", alternate = ["min_pick"])
+    val minPick: Int? = null,
+    @SerializedName(value = "maxPick", alternate = ["max_pick"])
+    val maxPick: Int? = null,
+    @SerializedName(value = "options", alternate = ["products", "items"])
+    val options: List<SyncComboOptionDto>? = null,
+    @SerializedName(value = "productId", alternate = ["product_id"])
+    val productId: String? = null,
+    val quantity: Int? = null
 )
 
 data class SyncBusinessDto(
@@ -213,7 +290,14 @@ data class PaymentConfigResponse(
     val checkout: SyncCheckoutDto? = null,
     @SerializedName("receipt_base_url") val receiptBaseUrl: String? = null,
     val scale: SyncScaleDto? = null,
-    val print: SyncPrintDto? = null
+    val print: SyncPrintDto? = null,
+    val loyalty: SyncLoyaltyDto? = null
+)
+
+data class SyncLoyaltyDto(
+    val enabled: Boolean = false,
+    @SerializedName("earnPointsPerChf") val earnPointsPerChf: Double = 1.0,
+    @SerializedName("redeemPointsPerChf") val redeemPointsPerChf: Int = 100
 )
 
 data class PushTerminalItemDto(

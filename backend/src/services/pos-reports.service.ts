@@ -1,5 +1,6 @@
 import { getDb, schema } from "@/db";
 import { and, eq, gte, lte, desc, or, isNull, inArray } from "drizzle-orm";
+import { normalizePaymentMethod, paymentMethodLabelEn, netPaymentBucketsAfterRefund, refundBucketsFromCumulative, netTaxableSale } from "@/lib/payment-breakdown";
 
 export type ReportPreset =
   | "today"
@@ -60,6 +61,17 @@ function addDaysYmd(ymd: string, delta: number): string {
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
+}
+
+/** Paid tickets count as sales even while kitchen fulfillment is still open. */
+function isCountableSale(o: { status?: string | null; paymentStatus?: string | null }): boolean {
+  const status = String(o.status || "").toLowerCase();
+  const pay = String(o.paymentStatus || "").toLowerCase();
+  if (["cancelled", "canceled", "refunded"].includes(status)) return false;
+  if (["cancelled", "canceled", "refunded"].includes(pay)) return false;
+  if (["completed", "partially_refunded"].includes(status)) return true;
+  if (["completed", "paid", "partially_refunded"].includes(pay)) return true;
+  return false;
 }
 
 function channelLabel(ch: string): string {
@@ -242,9 +254,7 @@ export class PosReportsService {
       return "Unassigned";
     };
 
-    const completed = rows.filter((o) =>
-      ["completed", "partially_refunded"].includes(String(o.status))
-    );
+    const completed = rows.filter((o) => isCountableSale(o));
     const cancelled = rows.filter((o) => o.status === "cancelled");
     const refunded = rows.filter(
       (o) =>
@@ -266,6 +276,7 @@ export class PosReportsService {
     let cancelledTotal = 0;
     let covers = 0;
     const payments: Record<string, { count: number; total: number }> = {};
+    const refundByMethod: Record<string, number> = {};
     const channels: Record<string, { count: number; total: number }> = {};
     const products = new Map<string, { name: string; qty: number; total: number }>();
     const staffMap = new Map<string, { name: string; count: number; total: number }>();
@@ -290,11 +301,34 @@ export class PosReportsService {
       refundTotal += refundAmt;
       if (o.guestCount) covers += Number(o.guestCount) || 0;
 
-      // Payment buckets: net money kept after refunds (incl. tips share)
-      const pm = String(o.paymentMethod || "other");
-      payments[pm] = payments[pm] || { count: 0, total: 0 };
-      payments[pm].count += 1;
-      payments[pm].total += round2(Math.max(0, money(o.total) - refundAmt));
+      // Payment buckets: net money kept after refunds (gift-first for split tenders).
+      const netBuckets = netPaymentBucketsAfterRefund(
+        money(o.total),
+        refundAmt,
+        o.paymentBreakdown,
+        o.paymentMethod
+      );
+      const sliceKey =
+        netBuckets.size === 1
+          ? [...netBuckets.keys()][0]!
+          : normalizePaymentMethod(o.paymentMethod || "") || "other";
+      payments[sliceKey] = payments[sliceKey] || { count: 0, total: 0 };
+      payments[sliceKey].count += 1;
+      for (const [method, net] of netBuckets) {
+        payments[method] = payments[method] || { count: 0, total: 0 };
+        payments[method].total += net;
+      }
+
+      if (refundAmt > 0) {
+        for (const [method, amt] of refundBucketsFromCumulative(
+          refundAmt,
+          o.paymentBreakdown,
+          o.paymentMethod,
+          money(o.total)
+        )) {
+          refundByMethod[method] = round2((refundByMethod[method] || 0) + amt);
+        }
+      }
 
       const ch = String(o.fulfillmentChannel || "takeaway");
       channels[ch] = channels[ch] || { count: 0, total: 0 };
@@ -428,7 +462,17 @@ export class PosReportsService {
     });
 
     const shiftIds = closedShifts.map((s) => s.id);
-    const movementTotals = new Map<string, { cashIn: number; cashOut: number }>();
+    type ShiftMovement = {
+      type: "in" | "out";
+      amount: number;
+      reason: string | null;
+      staffName: string | null;
+      createdAt: string | null;
+    };
+    const movementTotals = new Map<
+      string,
+      { cashIn: number; cashOut: number; movements: ShiftMovement[] }
+    >();
     if (shiftIds.length) {
       try {
         const movementRows = await db
@@ -436,6 +480,9 @@ export class PosReportsService {
             shiftId: schema.posCashMovements.shiftId,
             type: schema.posCashMovements.type,
             amount: schema.posCashMovements.amount,
+            reason: schema.posCashMovements.reason,
+            staffName: schema.posCashMovements.staffName,
+            createdAt: schema.posCashMovements.createdAt,
           })
           .from(schema.posCashMovements)
           .where(
@@ -445,25 +492,80 @@ export class PosReportsService {
             )
           );
         for (const row of movementRows) {
-          const cur = movementTotals.get(row.shiftId) || { cashIn: 0, cashOut: 0 };
+          const cur = movementTotals.get(row.shiftId) || {
+            cashIn: 0,
+            cashOut: 0,
+            movements: [],
+          };
           const amt = money(row.amount);
-          if (String(row.type).toLowerCase() === "out") cur.cashOut = round2(cur.cashOut + amt);
+          const type = String(row.type).toLowerCase() === "out" ? "out" : "in";
+          if (type === "out") cur.cashOut = round2(cur.cashOut + amt);
           else cur.cashIn = round2(cur.cashIn + amt);
+          cur.movements.push({
+            type,
+            amount: round2(amt),
+            reason: row.reason || null,
+            staffName: row.staffName || null,
+            createdAt: row.createdAt?.toISOString?.() ?? null,
+          });
           movementTotals.set(row.shiftId, cur);
+        }
+        for (const cur of movementTotals.values()) {
+          cur.movements.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
         }
       } catch {
         /* table may not exist yet on older DBs */
       }
     }
 
+    const cashRefundForOrder = (o: (typeof rows)[0]) => {
+      const status = String(o.status || "").toLowerCase();
+      if (status === "cancelled" || status === "canceled") return 0;
+      const refundAmt = money(o.refundAmount);
+      if (refundAmt <= 0) return 0;
+      if (status === "refunded") {
+        const full = refundAmt > 0 ? refundAmt : money(o.total);
+        return refundBucketsFromCumulative(
+          full,
+          o.paymentBreakdown,
+          o.paymentMethod,
+          money(o.total)
+        ).get("cash") || 0;
+      }
+      return refundBucketsFromCumulative(
+        refundAmt,
+        o.paymentBreakdown,
+        o.paymentMethod,
+        money(o.total)
+      ).get("cash") || 0;
+    };
+
     const shiftCash = closedShifts.map((s) => {
-      const mov = movementTotals.get(s.id) || { cashIn: 0, cashOut: 0 };
+      const mov = movementTotals.get(s.id) || { cashIn: 0, cashOut: 0, movements: [] };
+      const openedAt = s.openedAt ? new Date(s.openedAt).getTime() : 0;
+      const closedAt = s.closedAt ? new Date(s.closedAt).getTime() : Number.POSITIVE_INFINITY;
+      const cashRefunds = round2(
+        rows.reduce((sum, o) => {
+          const t = o.createdAt ? new Date(o.createdAt).getTime() : 0;
+          if (t < openedAt || t > closedAt) return sum;
+          return sum + cashRefundForOrder(o);
+        }, 0)
+      );
+      const openingFloat = round2(money(s.openingCash));
+      const cashSales = round2(money(s.cashSales));
+      const storedExpected = s.expectedCash != null ? round2(money(s.expectedCash)) : null;
+      const expectedCash =
+        storedExpected != null && Number.isFinite(storedExpected)
+          ? storedExpected
+          : round2(openingFloat + cashSales + mov.cashIn - mov.cashOut);
       return {
-        openingFloat: round2(money(s.openingCash)),
-        cashSales: round2(money(s.cashSales)),
+        openingFloat,
+        cashSales,
         cashIn: mov.cashIn,
         cashOut: mov.cashOut,
-        expectedCash: round2(money(s.expectedCash)),
+        cashRefunds,
+        movements: mov.movements,
+        expectedCash,
         closingCashCounted:
           s.closingCashCounted != null ? round2(money(s.closingCashCounted)) : null,
         variance: s.variance != null ? round2(money(s.variance)) : null,
@@ -513,12 +615,21 @@ export class PosReportsService {
       grandTotal,
       coversServed: covers || null,
       vatRows,
-      paymentRows: Object.entries(payments).map(([method, v]) => ({
-        method,
-        count: v.count,
-        total: round2(v.total),
-        percent: grandTotal > 0 ? round2((v.total / grandTotal) * 100) : 0,
-      })),
+      paymentRows: Object.entries(payments)
+        .map(([method, v]) => ({
+          method,
+          count: v.count,
+          total: round2(v.total),
+          percent: grandTotal > 0 ? round2((v.total / grandTotal) * 100) : 0,
+        }))
+        .sort((a, b) => b.total - a.total),
+      refundRows: Object.entries(refundByMethod)
+        .map(([method, total]) => ({
+          method,
+          total: round2(total),
+        }))
+        .filter((r) => r.total > 0)
+        .sort((a, b) => b.total - a.total),
       channelRows: Object.entries(channels).map(([channel, v]) => ({
         channel,
         count: v.count,
@@ -590,12 +701,12 @@ export class PosReportsService {
         createdAt: true,
         total: true,
         tipAmount: true,
+        refundAmount: true,
         status: true,
+        paymentStatus: true,
       },
     });
-    const completed = rows.filter((o) =>
-      ["completed", "partially_refunded"].includes(String(o.status))
-    );
+    const completed = rows.filter((o) => isCountableSale(o));
 
     const singleDay = range.from === range.to;
     const salesOverTime: Array<{ label: string; amount: number }> = [];
@@ -609,7 +720,11 @@ export class PosReportsService {
             hour12: false,
           }).format(o.createdAt)
         );
-        const brut = Math.max(0, Number(o.total || 0) - Number(o.tipAmount || 0));
+        const brut = netTaxableSale(
+          Number(o.total || 0),
+          Number(o.tipAmount || 0),
+          Number(o.refundAmount || 0)
+        );
         if (hour >= 0 && hour < 24) buckets[hour]! += brut;
       }
       for (let h = 0; h < 24; h++) {
@@ -632,7 +747,11 @@ export class PosReportsService {
           month: "2-digit",
           day: "2-digit",
         }).format(o.createdAt);
-        const brut = Math.max(0, Number(o.total || 0) - Number(o.tipAmount || 0));
+        const brut = netTaxableSale(
+          Number(o.total || 0),
+          Number(o.tipAmount || 0),
+          Number(o.refundAmount || 0)
+        );
         if (byDay.has(day)) byDay.set(day, (byDay.get(day) || 0) + brut);
       }
       for (const [label, amount] of byDay) {
@@ -642,7 +761,7 @@ export class PosReportsService {
 
     const paymentMethods = (current.paymentRows || []).map((p) => ({
       method: p.method,
-      label: paymentLabel(p.method),
+      label: paymentMethodLabelEn(p.method),
       total: p.total,
       count: p.count,
       percent: p.percent ?? 0,
@@ -722,7 +841,10 @@ export class PosReportsService {
         gte(schema.orders.createdAt, start),
         or(
           eq(schema.orders.status, "completed"),
-          eq(schema.orders.status, "partially_refunded")
+          eq(schema.orders.status, "partially_refunded"),
+          eq(schema.orders.paymentStatus, "completed"),
+          eq(schema.orders.paymentStatus, "paid"),
+          eq(schema.orders.paymentStatus, "partially_refunded")
         )
       ),
       with: { items: true },
@@ -746,20 +868,3 @@ export class PosReportsService {
   }
 }
 
-function paymentLabel(method: string): string {
-  switch (String(method || "").toLowerCase()) {
-    case "cash":
-      return "Cash";
-    case "card":
-      return "Card";
-    case "terminal":
-      return "Terminal";
-    case "adyen":
-      return "Adyen";
-    case "gift_card":
-    case "giftcard":
-      return "Gift card";
-    default:
-      return method || "Other";
-  }
-}

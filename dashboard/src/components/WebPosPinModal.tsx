@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Lock, UserCircle2, X } from 'lucide-react';
-import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 
 /** Staff PINs are 4 digits (matches Android POS login). */
 const PIN_MIN_LENGTH = 4;
@@ -67,7 +67,6 @@ export default function WebPosPinModal({
     setPin('');
     setShake(true);
     window.setTimeout(() => setShake(false), 420);
-    toast.error(message);
   };
 
   const submitPin = async (value: string) => {
@@ -167,6 +166,13 @@ export default function WebPosPinModal({
   if (isGate) {
     return (
       <div className="fixed inset-0 z-[120] flex flex-col items-center justify-center bg-stone-950 px-4 py-8 text-white">
+        <WebPosBlockingAlert
+          open={!!error}
+          title={t('webPosPinErrorTitle')}
+          message={error}
+          onDismiss={() => setError('')}
+          minMs={6000}
+        />
         <div
           className={`flex w-full max-w-lg flex-col items-center ${
             shake ? 'webpos-pin-shake' : ''
@@ -198,7 +204,9 @@ export default function WebPosPinModal({
           </div>
 
           {error ? (
-            <p className="mb-4 text-center text-sm font-medium text-red-300">{error}</p>
+            <div className="mb-4 w-full rounded-xl border border-red-400/60 bg-red-950/80 px-4 py-3 text-center">
+              <p className="text-base font-semibold text-red-100">{error}</p>
+            </div>
           ) : null}
 
           {keypad}
@@ -209,6 +217,13 @@ export default function WebPosPinModal({
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <WebPosBlockingAlert
+        open={!!error}
+        title={t('webPosPinErrorTitle')}
+        message={error}
+        onDismiss={() => setError('')}
+        minMs={5000}
+      />
       <div
         className={`w-full max-w-xs rounded-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] p-5 text-[var(--webpos-text,var(--text))] shadow-2xl ${
           shake ? 'webpos-pin-shake' : ''
@@ -241,7 +256,11 @@ export default function WebPosPinModal({
           ))}
         </div>
 
-        {error ? <p className="mb-3 text-center text-sm text-red-600">{error}</p> : null}
+        {error ? (
+          <div className="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-center">
+            <p className="text-sm font-semibold text-red-800">{error}</p>
+          </div>
+        ) : null}
 
         {keypad}
       </div>

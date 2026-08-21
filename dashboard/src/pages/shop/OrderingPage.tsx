@@ -58,6 +58,14 @@ interface Product {
   productType?: string;
   allowExtras?: boolean;
   extras?: Array<{ id: string; name: string; price: number }>;
+  specifications?: Array<{
+    id: string;
+    name: string;
+    price: number;
+    saleStatus?: 'in_stock' | 'out_of_stock';
+    isDefault?: boolean;
+    sortOrder?: number;
+  }>;
   modifierGroups?: ShopModifierGroup[];
   comboSlots?: ComboSlot[];
   loyaltyRewardPoints?: number | null;

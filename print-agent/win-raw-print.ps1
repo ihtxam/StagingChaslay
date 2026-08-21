@@ -119,7 +119,10 @@ function Send-RawToPrinter {
     $handle = [IntPtr]::Zero
     if (-not [RawPrinterHelper]::OpenPrinter($Printer, [ref]$handle, [IntPtr]::Zero)) {
         $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-        throw "OpenPrinter failed for '$Printer' (Win32=$err). If the name shows '?' characters, re-select the printer in WebPOS after updating the Print Agent."
+        if ($err -eq 1801) {
+            throw "Printer '$Printer' not found or disconnected"
+        }
+        throw "OpenPrinter failed for '$Printer' (Win32=$err)"
     }
 
     try {

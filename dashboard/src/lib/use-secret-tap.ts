@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 
-/** Opens a callback after `requiredTaps` consecutive clicks within `windowMs`. */
-export function useSecretTap(requiredTaps = 5, windowMs = 2500) {
+/** Opens a callback after `requiredTaps` consecutive taps, each within `windowMs` of the last. */
+export function useSecretTap(requiredTaps = 5, windowMs = 3500) {
   const countRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

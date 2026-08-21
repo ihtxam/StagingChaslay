@@ -123,6 +123,26 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE barcode = :barcode AND isActive = 1 LIMIT 1")
     suspend fun getByBarcode(barcode: String): ProductEntity?
 
+    @Query(
+        """
+        SELECT * FROM products
+        WHERE isActive = 1 AND barcode IS NOT NULL AND TRIM(barcode) != ''
+          AND LOWER(TRIM(barcode)) = LOWER(:code)
+        LIMIT 1
+        """
+    )
+    suspend fun getByBarcodeIgnoreCase(code: String): ProductEntity?
+
+    @Query(
+        """
+        SELECT * FROM products
+        WHERE isActive = 1 AND barcode IS NOT NULL AND TRIM(barcode) != ''
+          AND LTRIM(REPLACE(barcode, ' ', ''), '0') = :stripped
+        LIMIT 1
+        """
+    )
+    suspend fun getByBarcodeStrippedZeros(stripped: String): ProductEntity?
+
     @Query("SELECT * FROM products WHERE remoteId = :remoteId LIMIT 1")
     suspend fun getByRemoteId(remoteId: String): ProductEntity?
 
@@ -150,6 +170,16 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE sku = :sku AND isActive = 1 LIMIT 1")
     suspend fun getBySku(sku: String): ProductEntity?
 
+    @Query(
+        """
+        SELECT * FROM products
+        WHERE isActive = 1 AND sku IS NOT NULL AND TRIM(sku) != ''
+          AND LOWER(TRIM(sku)) = LOWER(:sku)
+        LIMIT 1
+        """
+    )
+    suspend fun getBySkuIgnoreCase(sku: String): ProductEntity?
+
     @Query("SELECT COUNT(*) FROM products")
     suspend fun count(): Int
 
@@ -174,6 +204,26 @@ interface ProductVariantDao {
 
     @Query("SELECT * FROM product_variants WHERE barcode = :barcode AND isActive = 1 LIMIT 1")
     suspend fun getByBarcode(barcode: String): ProductVariantEntity?
+
+    @Query(
+        """
+        SELECT * FROM product_variants
+        WHERE isActive = 1 AND barcode IS NOT NULL AND TRIM(barcode) != ''
+          AND LOWER(TRIM(barcode)) = LOWER(:code)
+        LIMIT 1
+        """
+    )
+    suspend fun getByBarcodeIgnoreCase(code: String): ProductVariantEntity?
+
+    @Query(
+        """
+        SELECT * FROM product_variants
+        WHERE isActive = 1 AND sku IS NOT NULL AND TRIM(sku) != ''
+          AND LOWER(TRIM(sku)) = LOWER(:sku)
+        LIMIT 1
+        """
+    )
+    suspend fun getBySkuIgnoreCase(sku: String): ProductVariantEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(variant: ProductVariantEntity): Long

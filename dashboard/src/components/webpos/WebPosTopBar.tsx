@@ -19,7 +19,7 @@ import {
   ArrowDownUp,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
 import { isStandalonePwa } from '@/lib/pwa';
 import { isUnsuitableRawPrinter } from '@/lib/print-agent';
@@ -158,8 +158,14 @@ type Props = {
   onTabChange: (tab: PosTab) => void;
   merchantName?: string;
   agentOk: boolean;
+  /** Agent is up but Windows printer name is invalid / Win32 1801. */
+  printerMissing?: boolean;
+  /** Installed agent build is older than MIN_PRINT_AGENT_VERSION. */
+  agentOutdated?: boolean;
   search: string;
   onSearchChange: (q: string) => void;
+  /** Enter on the product search: exact barcode/SKU adds the product. */
+  onSearchSubmit?: () => void;
   showSearch: boolean;
   onlinePendingCount: number;
   /** Pulsing ring on bell while unactioned online orders remain */
@@ -167,8 +173,6 @@ type Props = {
   reservationPendingCount?: number;
   staffName?: string | null;
   canDrawer: boolean;
-  /** Show Menus / Esc exit to backend panel (requires ACCESS_PANEL). */
-  canShowPanel?: boolean;
   appMode: boolean;
   settingsOpen: boolean;
   onToggleSettings: () => void;
@@ -178,7 +182,6 @@ type Props = {
   onOnlineOrders: () => void;
   onSwitchUser: () => void;
   onOpenDrawer: () => void;
-  onShowPanel: () => void;
   tableBadge?: string | null;
   shiftsEnabled?: boolean;
   shiftOpen?: boolean;
@@ -211,15 +214,17 @@ export default function WebPosTopBar({
   onTabChange,
   merchantName,
   agentOk,
+  printerMissing = false,
+  agentOutdated = false,
   search,
   onSearchChange,
+  onSearchSubmit,
   showSearch,
   onlinePendingCount,
   orderAlertRing = false,
   reservationPendingCount = 0,
   staffName,
   canDrawer,
-  canShowPanel = true,
   appMode,
   settingsOpen,
   onToggleSettings,
@@ -229,7 +234,6 @@ export default function WebPosTopBar({
   onOnlineOrders,
   onSwitchUser,
   onOpenDrawer,
-  onShowPanel,
   tableBadge,
   shiftsEnabled,
   shiftOpen,
@@ -334,6 +338,12 @@ export default function WebPosTopBar({
                   placeholder={t('webPosSearchProducts')}
                   value={search}
                   onChange={(e) => onSearchChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      onSearchSubmit?.();
+                    }
+                  }}
                   autoComplete="off"
                 />
               </label>
@@ -438,6 +448,12 @@ export default function WebPosTopBar({
               placeholder={t('webPosSearchProducts')}
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  onSearchSubmit?.();
+                }
+              }}
               autoComplete="off"
               inputMode="search"
             />
@@ -451,9 +467,24 @@ export default function WebPosTopBar({
           {!agentOk ? (
             <span className="webpos-merchant-subline__warn">
               {' '}
-              - {t('webPosStartPrintAgent')}
+              - {t('webPosAgentNotRunningShort')}
             </span>
-          ) : null}
+          ) : printerMissing ? (
+            <span className="webpos-merchant-subline__warn">
+              {' '}
+              - {t('webPosPrinterDisconnectedShort')}
+            </span>
+          ) : agentOutdated ? (
+            <span className="webpos-merchant-subline__warn">
+              {' '}
+              - {t('webPosPrintAgentUpdateShort')}
+            </span>
+          ) : (
+            <span className="webpos-merchant-subline__ok">
+              {' '}
+              - {t('webPosAgentRunningShort')}
+            </span>
+          )}
           {!syncOnline ? (
             <span className="webpos-merchant-subline__offline">
               {' '}
@@ -487,6 +518,9 @@ export function WebPosSettingsDropdown({
   printerName,
   printers,
   agentOk,
+  printerMissing = false,
+  suggestedPrinters = [],
+  agentOutdated = false,
   autoPrint,
   postSuccessTarget,
   onPrinterChange,
@@ -521,10 +555,21 @@ export function WebPosSettingsDropdown({
   syncFailedCount = 0,
   syncing = false,
   onSyncNow,
+  locale = 'en',
+  onLanguageChange,
+  canManageChannels = false,
+  shopEnabled = false,
+  reservationsEnabled = false,
+  channelsSaving = false,
+  onShopEnabledChange,
+  onReservationsEnabledChange,
 }: {
   printerName: string;
   printers: Array<{ name: string; isDefault?: boolean }>;
   agentOk: boolean;
+  printerMissing?: boolean;
+  suggestedPrinters?: Array<{ name: string }>;
+  agentOutdated?: boolean;
   autoPrint: boolean;
   postSuccessTarget: 'register' | 'tables';
   onPrinterChange: (name: string) => void;
@@ -560,6 +605,14 @@ export function WebPosSettingsDropdown({
   syncFailedCount?: number;
   syncing?: boolean;
   onSyncNow?: () => void;
+  locale?: Locale;
+  onLanguageChange?: (lang: Locale) => void;
+  canManageChannels?: boolean;
+  shopEnabled?: boolean;
+  reservationsEnabled?: boolean;
+  channelsSaving?: boolean;
+  onShopEnabledChange?: (enabled: boolean) => void;
+  onReservationsEnabledChange?: (enabled: boolean) => void;
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
@@ -581,7 +634,7 @@ export function WebPosSettingsDropdown({
             onClick={onShowPanel}
           >
             <PanelLeft size={16} />
-            {t('webPosDashboard')}
+            {t('webPosBackOffice')}
           </button>
         ) : null}
         <div className="grid grid-cols-2 gap-1.5">
@@ -609,6 +662,78 @@ export function WebPosSettingsDropdown({
           </button>
         </div>
       </div>
+
+      {onLanguageChange ? (
+        <div className="space-y-2 border-b border-stone-100 pb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('language')}
+          </p>
+          <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={t('language')}>
+            {(['en', 'fr', 'de'] as Locale[]).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => onLanguageChange(code)}
+                className={`rounded-lg border px-2 py-1.5 text-[11px] font-bold uppercase tracking-wide ${
+                  locale === code
+                    ? 'border-stone-900 bg-stone-900 text-white'
+                    : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                }`}
+              >
+                {code}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {canManageChannels && (onShopEnabledChange || onReservationsEnabledChange) ? (
+        <div className="space-y-2 border-b border-stone-100 pb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('webPosOnlineChannels')}
+          </p>
+          {onShopEnabledChange ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 px-2.5 py-2">
+              <span className="min-w-0 text-xs font-semibold text-stone-700">
+                {t('enableOnlineShop')}
+              </span>
+              <button
+                type="button"
+                disabled={channelsSaving}
+                aria-pressed={shopEnabled}
+                onClick={() => onShopEnabledChange(!shopEnabled)}
+                className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${
+                  shopEnabled
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-stone-200 text-stone-600'
+                }`}
+              >
+                {shopEnabled ? t('webPosToggleOn') : t('webPosToggleOff')}
+              </button>
+            </div>
+          ) : null}
+          {onReservationsEnabledChange ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 px-2.5 py-2">
+              <span className="min-w-0 text-xs font-semibold text-stone-700">
+                {t('reservationsEnable')}
+              </span>
+              <button
+                type="button"
+                disabled={channelsSaving}
+                aria-pressed={reservationsEnabled}
+                onClick={() => onReservationsEnabledChange(!reservationsEnabled)}
+                className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${
+                  reservationsEnabled
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-stone-200 text-stone-600'
+                }`}
+              >
+                {reservationsEnabled ? t('webPosToggleOn') : t('webPosToggleOff')}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {(onAppearanceChange || onTextSizeChange) && (
         <div className="space-y-2 border-b border-stone-100 pb-3">
@@ -819,6 +944,11 @@ export function WebPosSettingsDropdown({
           disabled={!agentOk}
         >
           <option value="">{t('webPosDefaultPrinter')}</option>
+          {printerMissing && printerName && !printers.some((p) => p.name === printerName) ? (
+            <option value={printerName}>
+              {printerName} — {t('webPosPrinterDisconnectedShort')}
+            </option>
+          ) : null}
           {printers.map((p) => {
             const bad = isUnsuitableRawPrinter(p.name);
             return (
@@ -831,6 +961,22 @@ export function WebPosSettingsDropdown({
           })}
         </select>
       </label>
+      {printerMissing && agentOk ? (
+        <div className="space-y-1.5">
+          {suggestedPrinters
+            .filter((p) => p.name && p.name !== printerName)
+            .map((p) => (
+              <button
+                key={p.name}
+                type="button"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
+                onClick={() => onPrinterChange(p.name)}
+              >
+                {t('webPosUsePrinter').replace('{name}', p.name)}
+              </button>
+            ))}
+        </div>
+      ) : null}
       {printerName && isUnsuitableRawPrinter(printerName) ? (
         <p className="text-[10px] leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
       ) : null}
@@ -865,10 +1011,23 @@ export function WebPosSettingsDropdown({
         </button>
       </div>
       <p
-        className={`text-[10px] leading-snug text-stone-500 ${agentOk ? 'text-center' : ''}`}
+        className={`text-[10px] leading-snug ${
+          !agentOk || printerMissing || agentOutdated
+            ? 'text-amber-800'
+            : 'text-center text-emerald-700'
+        }`}
       >
-        {agentOk ? t('webPosAgentOnline') : t('webPosAgentOffline')}
+        {!agentOk
+          ? t('webPosAgentOffline')
+          : printerMissing
+            ? t('webPosPrinterDisconnectedShort')
+            : agentOutdated
+              ? t('webPosPrintAgentOutdatedHint')
+              : t('webPosAgentOnline')}
       </p>
+      {agentOk && printerMissing ? (
+        <p className="text-[10px] leading-snug text-amber-800">{t('webPosPrinterRenamedHint')}</p>
+      ) : null}
       <p className="border-t border-stone-100 pt-2 text-center text-[10px] text-stone-400">
         {webPosVersionLabel}
       </p>

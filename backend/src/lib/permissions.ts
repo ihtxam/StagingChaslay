@@ -25,6 +25,7 @@ export const PERMISSIONS = [
   "MANAGE_ROLES",
   "MANAGE_BILLING",
   "END_OF_DAY",
+  "MANAGE_INVENTORY",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -41,12 +42,12 @@ export function encodePermissions(perms: Permission[]): string {
   return [...new Set(perms)].join(",");
 }
 
-export function hasPermission(granted: Permission[] | undefined, required: Permission): boolean {
+export function hasPermission(granted: readonly string[] | undefined, required: Permission): boolean {
   if (!granted) return false;
   return granted.includes(required);
 }
 
-export function hasAnyPermission(granted: Permission[] | undefined, required: Permission[]): boolean {
+export function hasAnyPermission(granted: readonly string[] | undefined, required: readonly Permission[]): boolean {
   if (!granted?.length) return false;
   return required.some((p) => granted.includes(p));
 }
@@ -90,10 +91,11 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "MANAGE_STAFF",
       "MANAGE_BILLING",
       "END_OF_DAY",
+      "MANAGE_INVENTORY",
     ],
   },
   {
-    // Floor-only: no panel, no drawer, no company sales / EOD.
+    // Floor POS + optional back office (menu + orders). No Sales / reports / panel.
     name: "Waiter",
     isSystem: true,
     sortOrder: 20,
@@ -107,6 +109,25 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "TAKEAWAY_ORDERS",
       "VIEW_ORDER_HISTORY",
       "CANCEL_ORDERS",
+      "MANAGE_PRODUCTS",
+    ],
+  },
+  {
+    // Floor POS + catalog edits (products / categories / modifiers). No full panel.
+    name: "Waiter + menu editor",
+    isSystem: true,
+    sortOrder: 25,
+    permissions: [
+      "USE_WEBPOS",
+      "USE_POS",
+      "PROCESS_PAYMENTS",
+      "APPLY_DISCOUNTS",
+      "SEND_KITCHEN",
+      "MANAGE_TABLES",
+      "TAKEAWAY_ORDERS",
+      "VIEW_ORDER_HISTORY",
+      "CANCEL_ORDERS",
+      "MANAGE_PRODUCTS",
     ],
   },
   {
@@ -171,14 +192,19 @@ export function toAndroidPermissions(perms: Permission[] | string[]): string[] {
 export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   "/merchant": ["VIEW_REPORTS", "ACCESS_PANEL"],
   "/merchant/orders": ["VIEW_ORDER_HISTORY"],
+  "/merchant/invoices": ["VIEW_REPORTS", "VIEW_ALL_SALES", "ACCESS_PANEL"],
   "/merchant/pos": ["USE_WEBPOS"],
   "/merchant/reports": ["VIEW_REPORTS", "END_OF_DAY"],
   "/merchant/products": ["MANAGE_PRODUCTS"],
   "/merchant/modifiers": ["MANAGE_PRODUCTS"],
   "/merchant/categories": ["MANAGE_PRODUCTS"],
   "/merchant/customers": ["MANAGE_CUSTOMERS"],
+  "/merchant/members": ["MANAGE_CUSTOMERS"],
   "/merchant/loyalty": ["MANAGE_CUSTOMERS"],
   "/merchant/offers": ["MANAGE_OFFERS"],
+  "/merchant/vouchers": ["MANAGE_OFFERS"],
+  "/merchant/terminals": ["MANAGE_SETTINGS"],
+  "/merchant/waiter": ["USE_WEBPOS"],
   "/merchant/newsletter": ["MANAGE_ONLINE_SHOP"],
   "/merchant/online-shop": ["MANAGE_ONLINE_SHOP"],
   "/merchant/website": ["MANAGE_ONLINE_SHOP"],
@@ -187,8 +213,64 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   "/merchant/tables/settings": ["MANAGE_TABLES"],
   "/merchant/tables/layout": ["MANAGE_TABLES"],
   "/merchant/tables/qr": ["MANAGE_TABLES"],
-  "/merchant/reservations": ["MANAGE_ONLINE_SHOP"],
+  "/merchant/reservations": ["MANAGE_ONLINE_SHOP", "VIEW_REPORTS"],
+  "/merchant/sales/reservations": ["MANAGE_ONLINE_SHOP", "VIEW_REPORTS"],
   "/merchant/billing": ["MANAGE_BILLING"],
   "/merchant/settings": ["MANAGE_SETTINGS"],
   "/merchant/users": ["MANAGE_STAFF"],
+  "/merchant/inventory": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/list": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/inbound": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/outbound": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/counting": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/history": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/items": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/categories": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/cookbook": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/suppliers": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/units": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/report": ["MANAGE_INVENTORY"],
+  "/merchant/inventory/consumption": ["MANAGE_INVENTORY"],
 };
+
+/** Staff JWT may enter merchant APIs with any of these (POS, waiter, catalog, or full panel). */
+export const STAFF_MERCHANT_ENTRY_PERMISSIONS: Permission[] = [
+  "ACCESS_PANEL",
+  "USE_WEBPOS",
+  "USE_POS",
+  "MANAGE_PRODUCTS",
+  "MANAGE_TABLES",
+  "SEND_KITCHEN",
+];
+
+const WAITER_PRIVILEGED_BLOCKED: Permission[] = [
+  "VIEW_REPORTS",
+  "VIEW_ALL_SALES",
+  "END_OF_DAY",
+  "ACCESS_PANEL",
+  "OPEN_CASH_DRAWER",
+  "MANAGE_SETTINGS",
+  "MANAGE_STAFF",
+  "MANAGE_ROLES",
+  "MANAGE_BILLING",
+  "MANAGE_INVENTORY",
+  "MANAGE_CUSTOMERS",
+  "MANAGE_OFFERS",
+  "MANAGE_ONLINE_SHOP",
+  "REFUND_ORDERS",
+];
+
+export type WaiterSystemKind = "pos-only" | "menu-editor";
+
+/** Classify system Waiter templates. Custom roles are not matched. */
+export function waiterSystemKind(name: string): WaiterSystemKind | null {
+  const n = name.trim().toLowerCase();
+  if (!n.startsWith("waiter")) return null;
+  if (n.includes("menu")) return "menu-editor";
+  return "pos-only";
+}
+
+export function waiterBlockedPermissions(_kind: WaiterSystemKind): Permission[] {
+  // Menu (MANAGE_PRODUCTS) and Orders (VIEW_ORDER_HISTORY) are assigned in Roles.
+  return [...WAITER_PRIVILEGED_BLOCKED];
+}

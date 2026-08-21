@@ -21,6 +21,69 @@ function computeEstimatedReadyAt(
   return new Date(Date.now() + prepMinutes * 60 * 1000);
 }
 
+function isInvoiceOrderRecord(order: {
+  paymentMethod?: string | null;
+  invoiceNumber?: string | null;
+}): boolean {
+  const method = String(order.paymentMethod || "")
+    .toLowerCase()
+    .replace(/-/g, "_");
+  return method === "invoice" || !!order.invoiceNumber;
+}
+
+function resolveCollectPaymentMethod(
+  requested: string | null | undefined,
+  order: { paymentMethod?: string | null; invoiceNumber?: string | null }
+): string {
+  if (isInvoiceOrderRecord(order)) return "invoice";
+  const requestedRaw = String(requested || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  const requestedLater = requestedRaw.match(/^pay_later[:_](.+)$/);
+  const existingRaw = String(order.paymentMethod || "cash")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  const wasPayLater =
+    existingRaw === "pay_later" ||
+    existingRaw === "pay-later" ||
+    existingRaw.startsWith("pay_later:");
+  const tender = requestedLater?.[1]
+    || (["cash", "card", "terminal", "bank_transfer"].includes(requestedRaw) ? requestedRaw : "")
+    || (wasPayLater ? "cash" : "")
+    || (["cash", "card", "terminal", "bank_transfer"].includes(existingRaw) ? existingRaw : "")
+    || "cash";
+  if (wasPayLater && tender !== "bank_transfer") {
+    return `pay_later:${tender}`;
+  }
+  return tender;
+}
+
+function usesExternalKitchenLifecycle(order: {
+  orderType?: string | null;
+  orderSource?: string | null;
+  fulfillmentChannel?: string | null;
+}): boolean {
+  const t = String(order.orderType || "").toLowerCase();
+  const src = String(order.orderSource || "").toLowerCase();
+  const ch = String(order.fulfillmentChannel || "").toLowerCase();
+  return (
+    t === "web_shop" ||
+    t === "online" ||
+    src === "online_shop" ||
+    src === "justeat" ||
+    src === "ubereats" ||
+    ch.includes("uber") ||
+    ch.includes("justeat") ||
+    ch.includes("just-eat") ||
+    ch.includes("doordash") ||
+    ch.includes("deliveroo") ||
+    ch === "web_shop" ||
+    ch === "online"
+  );
+}
+
 async function enqueueOnlineOrderReceiptPrint(
   merchantId: string,
   orderId: string,
@@ -406,6 +469,7 @@ export class OrderService {
       order.paymentMethod === "cash" ||
       order.paymentMethod === "pay_later" ||
       order.paymentMethod === "pay-later" ||
+      order.paymentMethod === "invoice" ||
       order.paymentStatus === "cash" ||
       order.paymentStatus === "awaiting_payment";
 
@@ -472,23 +536,38 @@ export class OrderService {
       case "collect_payment": {
         if (paymentDone) throw new Error("Payment already completed");
         {
-          const methodRaw = String(opts?.paymentMethod || order.paymentMethod || "cash")
-            .trim()
-            .toLowerCase();
-          const method =
-            methodRaw === "pay_later" || methodRaw === "pay-later"
-              ? "cash"
-              : ["cash", "card", "terminal"].includes(methodRaw)
-                ? methodRaw
-                : "cash";
+          const invoiceOrder = isInvoiceOrderRecord(order);
+          const method = resolveCollectPaymentMethod(opts?.paymentMethod, order);
+          const closeInternal = !usesExternalKitchenLifecycle(order);
           const updated = await set({
             paymentStatus: "completed",
             paymentMethod: method,
+            ...(closeInternal
+              ? { status: "completed", completedAt: new Date() }
+              : {}),
+            ...(invoiceOrder
+              ? {
+                  paymentBreakdown: [
+                    { method, amount: roundMoney2(Number(order.total) || 0) },
+                  ],
+                }
+              : {}),
           });
           try {
-            await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
-          } catch (printErr) {
-            console.warn("Collect payment receipt print enqueue failed:", printErr);
+            const { InventoryService } = await import("@/services/inventory.service");
+            await InventoryService.deductForPaidOrder(merchantId, orderId);
+          } catch (invErr) {
+            console.warn("Inventory deduct after collect_payment failed:", invErr);
+          }
+          // Invoice A4 was printed at sale — do not print a second receipt/invoice.
+          // POS Pay Later: WebPOS prints the guest receipt on collect (one copy).
+          const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
+          if (!invoiceOrder && !wasPayLater) {
+            try {
+              await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
+            } catch (printErr) {
+              console.warn("Collect payment receipt print enqueue failed:", printErr);
+            }
           }
           return updated;
         }
@@ -508,27 +587,59 @@ export class OrderService {
         return set({ status: "completed", completedAt: new Date() });
       }
       case "complete_and_collect": {
-        // Pay-later / cash on pickup — only after the order is ready for handoff
-        if (status !== "ready" && status !== "out_for_delivery") {
+        // Ready / out_for_delivery: collect + complete (handoff).
+        // Earlier kitchen statuses: staff/admin may collect payment now and
+        // leave fulfillment open (POS invoice and online shop pickup).
+        const readyToHandoff = status === "ready" || status === "out_for_delivery";
+        const collectWhileOpen =
+          status === "preparing" ||
+          status === "accepted" ||
+          status === "sent_to_kitchen" ||
+          status === "completed";
+        if (!readyToHandoff && !collectWhileOpen) {
           throw new Error("Order is not ready to collect payment");
         }
         {
-          const methodRaw = String(opts?.paymentMethod || order.paymentMethod || "cash")
-            .trim()
-            .toLowerCase();
-          let method = methodRaw;
-          if (method === "pay_later" || method === "pay-later") method = "cash";
-          if (!["cash", "card", "terminal"].includes(method)) method = "cash";
-          const updated = await set({
-            status: "completed",
-            paymentStatus: "completed",
-            paymentMethod: method,
-            completedAt: new Date(),
-          });
+          const invoiceOrder = isInvoiceOrderRecord(order);
+          const method = resolveCollectPaymentMethod(opts?.paymentMethod, order);
+          const invoiceBreakdown = invoiceOrder
+            ? {
+                paymentBreakdown: [
+                  { method, amount: roundMoney2(Number(order.total) || 0) },
+                ],
+              }
+            : {};
+          const closeNow = readyToHandoff || !usesExternalKitchenLifecycle(order);
+          const updated = await set(
+            closeNow
+              ? {
+                  status: "completed",
+                  paymentStatus: "completed",
+                  paymentMethod: method,
+                  completedAt: new Date(),
+                  ...invoiceBreakdown,
+                }
+              : {
+                  paymentStatus: "completed",
+                  paymentMethod: method,
+                  ...invoiceBreakdown,
+                }
+          );
           try {
-            await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
-          } catch (printErr) {
-            console.warn("Complete-and-collect receipt print enqueue failed:", printErr);
+            const { InventoryService } = await import("@/services/inventory.service");
+            await InventoryService.deductForPaidOrder(merchantId, orderId);
+          } catch (invErr) {
+            console.warn("Inventory deduct after complete_and_collect failed:", invErr);
+          }
+          // Invoice A4 was printed at sale — do not print a second receipt/invoice.
+          // POS Pay Later: WebPOS prints the guest receipt on collect (one copy).
+          const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
+          if (!invoiceOrder && !wasPayLater) {
+            try {
+              await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
+            } catch (printErr) {
+              console.warn("Complete-and-collect receipt print enqueue failed:", printErr);
+            }
           }
           return updated;
         }
@@ -592,6 +703,15 @@ export class OrderService {
 
       if (order.length === 0) {
         throw new Error("Order not found");
+      }
+
+      if (paymentStatus === "completed") {
+        try {
+          const { InventoryService } = await import("@/services/inventory.service");
+          await InventoryService.deductForPaidOrder(merchantId, orderId);
+        } catch (invErr) {
+          console.warn("Inventory deduct after payment status failed:", invErr);
+        }
       }
 
       return order[0];

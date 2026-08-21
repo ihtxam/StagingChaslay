@@ -102,25 +102,53 @@ function MerchantsPage() {
     customDays: 365,
     maxPosPosts: 1,
     maxWaiterPosts: 0,
+    inventoryAddonEnabled: false,
+    signageAddonEnabled: false,
+    signageScreenLimit: 2,
   });
   const [limitsFor, setLimitsFor] = useState<{
     id: string;
     name: string;
     maxPosPosts: number;
     maxWaiterPosts: number;
+    inventoryAddonEnabled: boolean;
+    signageAddonEnabled: boolean;
+    signageScreenLimit: number;
   } | null>(null);
+  const [planFor, setPlanFor] = useState<{
+    id: string;
+    name: string;
+    editionId: string;
+    planBillingPaid: boolean;
+    subscriptionPlan: string;
+  } | null>(null);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<
+    Array<{ id: string; slug: string; name: string; isActive?: boolean }>
+  >([
+    { id: 'free', slug: 'free', name: 'Free' },
+    { id: 'starter', slug: 'starter', name: 'Starter' },
+    { id: 'professional', slug: 'professional', name: 'Professional' },
+    { id: 'enterprise', slug: 'enterprise', name: 'Enterprise' },
+  ]);
   const [savingLimits, setSavingLimits] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [m, e, p] = await Promise.all([
+      const [m, e, p, pl] = await Promise.all([
         api.get('/reseller/merchants', { params: { search: search || undefined } }),
         api.get('/reseller/editions'),
         api.get('/reseller/licenses/pool'),
+        api.get('/reseller/plans'),
       ]);
       setMerchants(m.data.merchants || []);
       setEditions(e.data.editions || []);
       setPool(p.data.pool || pool);
+      const activePlans = (pl.data.plans || []).filter(
+        (plan: { isActive?: boolean }) => plan.isActive !== false
+      );
+      if (activePlans.length) setSubscriptionPlans(activePlans);
     } catch (err: any) {
       toast.error(err.response?.data?.error || t('resellerLoadFailed'));
     }
@@ -169,7 +197,32 @@ function MerchantsPage() {
     }
   };
 
+  const setMerchantStatus = async (
+    m: { id: string; name: string; status: string },
+    next: 'suspended' | 'active'
+  ) => {
+    const confirmKey = next === 'suspended' ? 'resellerSuspendConfirm' : 'resellerReactivateConfirm';
+    if (!window.confirm(t(confirmKey).replace('{name}', m.name))) return;
+    setStatusBusyId(m.id);
+    try {
+      const path = next === 'suspended' ? 'suspend' : 'reactivate';
+      await api.post(`/reseller/merchants/${m.id}/${path}`);
+      toast.success(
+        next === 'suspended' ? t('resellerMerchantSuspended') : t('resellerMerchantReactivated')
+      );
+      load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setStatusBusyId(null);
+    }
+  };
+
   const openPanel = async (m: any) => {
+    if (m.status === 'suspended' || m.status === 'expired') {
+      toast.error(`Cannot open panel while merchant is ${m.status}`);
+      return;
+    }
     try {
       const res = await api.post(`/reseller/merchants/${m.id}/impersonate`);
       const { token, merchant } = res.data;
@@ -181,6 +234,8 @@ function MerchantsPage() {
         merchantId: merchant.id,
         isOwner: true,
         impersonatedBy: 'reseller',
+        inventoryAddonEnabled: !!(merchant.inventoryAddonEnabled || merchant.inventoryEnabled),
+        signageAddonEnabled: !!(merchant.signageAddonEnabled || merchant.signageEnabled),
       });
       toast.success(t('resellerOpenMerchant'));
       navigate('/merchant');
@@ -196,6 +251,9 @@ function MerchantsPage() {
       await api.put(`/reseller/merchants/${limitsFor.id}/pos-limits`, {
         maxPosPosts: Number(limitsFor.maxPosPosts) || 0,
         maxWaiterPosts: Number(limitsFor.maxWaiterPosts) || 0,
+        inventoryAddonEnabled: !!limitsFor.inventoryAddonEnabled,
+        signageAddonEnabled: !!limitsFor.signageAddonEnabled,
+        signageScreenLimit: Number(limitsFor.signageScreenLimit) || 2,
       });
       toast.success(t('posPostsLimitsSaved'));
       setLimitsFor(null);
@@ -204,6 +262,33 @@ function MerchantsPage() {
       toast.error(err.response?.data?.error || t('resellerSaveFailed'));
     } finally {
       setSavingLimits(false);
+    }
+  };
+
+  const saveMerchantPlan = async () => {
+    if (!planFor) return;
+    if (!planFor.editionId) {
+      toast.error(t('posVersionSelect'));
+      return;
+    }
+    if (!planFor.subscriptionPlan) {
+      toast.error(t('merchantSubscriptionPlanRequired'));
+      return;
+    }
+    setSavingPlan(true);
+    try {
+      await api.patch(`/reseller/merchants/${planFor.id}/plan`, {
+        editionId: planFor.editionId,
+        planBillingPaid: !!planFor.planBillingPaid,
+        subscriptionPlan: planFor.subscriptionPlan,
+      });
+      toast.success(t('merchantPlanSaved'));
+      setPlanFor(null);
+      load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('merchantPlanSaveFailed'));
+    } finally {
+      setSavingPlan(false);
     }
   };
 
@@ -414,6 +499,47 @@ function MerchantsPage() {
               />
             </label>
             <p className="sm:col-span-2 text-xs text-stone-500">{t('posPostsHint')}</p>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!form.inventoryAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, inventoryAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('invTitle')}</span>
+                <span className="text-xs text-stone-500">{t('invAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!form.signageAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, signageAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('signageTitle')}</span>
+                <span className="text-xs text-stone-500">{t('signageAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="text-sm">
+              {t('signageScreenLimit')}
+              <input
+                type="number"
+                min={1}
+                max={99}
+                className="input mt-1"
+                value={form.signageScreenLimit}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, signageScreenLimit: Number(e.target.value) || 2 }))
+                }
+              />
+            </label>
           </div>
 
           <div className="sm:col-span-2 flex justify-end gap-2">
@@ -434,6 +560,9 @@ function MerchantsPage() {
               <th className="px-3 py-2">{t('resellerStores')}</th>
               <th className="px-3 py-2">{t('email')}</th>
               <th className="px-3 py-2">{t('status')}</th>
+              <th className="px-3 py-2">{t('posVersion')}</th>
+              <th className="px-3 py-2">{t('merchantPlanBilling')}</th>
+              <th className="px-3 py-2">{t('invTitle')}</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -450,8 +579,62 @@ function MerchantsPage() {
                     {m.email}
                   </span>
                 </td>
-                <td className="px-3 py-2">{m.status}</td>
+                <td className="px-3 py-2">
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      m.status === 'suspended'
+                        ? 'bg-red-100 text-red-800'
+                        : m.status === 'expired'
+                          ? 'bg-stone-200 text-stone-700'
+                          : 'bg-emerald-100 text-emerald-800'
+                    }`}
+                  >
+                    {m.status === 'suspended' ? t('suspended') : m.status}
+                  </span>
+                </td>
+                <td className="px-3 py-2">
+                  <span className="text-xs text-stone-700" title={m.editionName || undefined}>
+                    {m.editionName || '—'}
+                  </span>
+                </td>
+                <td className="px-3 py-2">
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      m.planBillingPaid !== false
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-amber-100 text-amber-900'
+                    }`}
+                  >
+                    {m.planBillingPaid !== false ? t('invoiceStatusPaid') : t('invoiceStatusUnpaid')}
+                  </span>
+                </td>
+                <td className="px-3 py-2">
+                  {m.inventoryAddonEnabled === true ? (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                      On
+                    </span>
+                  ) : (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">
+                      Off
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-right space-x-3 whitespace-nowrap">
+                  <button
+                    type="button"
+                    className="text-teal-700 hover:underline"
+                    onClick={() =>
+                      setPlanFor({
+                        id: m.id,
+                        name: m.name,
+                        editionId: m.editionId || '',
+                        planBillingPaid: m.planBillingPaid !== false,
+                        subscriptionPlan: m.subscriptionPlan || 'starter',
+                      })
+                    }
+                  >
+                    {t('merchantPlanManage')}
+                  </button>
                   <button
                     type="button"
                     className="text-stone-700 hover:underline"
@@ -461,6 +644,9 @@ function MerchantsPage() {
                         name: m.name,
                         maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
                         maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
+                        inventoryAddonEnabled: m.inventoryAddonEnabled === true,
+                        signageAddonEnabled: m.signageAddonEnabled === true,
+                        signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
                       })
                     }
                   >
@@ -468,11 +654,31 @@ function MerchantsPage() {
                   </button>
                   <button
                     type="button"
-                    className="text-teal-700 hover:underline"
-                    onClick={() => openPanel(m)}
+                    className="text-teal-700 hover:underline disabled:opacity-40 disabled:no-underline"
+                    disabled={m.status === 'suspended' || m.status === 'expired'}
+                    onClick={() => void openPanel(m)}
                   >
                     {t('resellerOpenMerchant')}
                   </button>
+                  {m.status === 'suspended' ? (
+                    <button
+                      type="button"
+                      className="text-emerald-700 hover:underline disabled:opacity-40"
+                      disabled={statusBusyId === m.id}
+                      onClick={() => void setMerchantStatus(m, 'active')}
+                    >
+                      {t('reactivate')}
+                    </button>
+                  ) : m.status !== 'expired' ? (
+                    <button
+                      type="button"
+                      className="text-amber-700 hover:underline disabled:opacity-40"
+                      disabled={statusBusyId === m.id}
+                      onClick={() => void setMerchantStatus(m, 'suspended')}
+                    >
+                      {t('suspend')}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="text-rose-700 hover:underline"
@@ -527,6 +733,50 @@ function MerchantsPage() {
               </label>
             </div>
             <p className="text-xs text-stone-500">{t('posPostsHint')}</p>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.inventoryAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, inventoryAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('invTitle')}</span>
+                <span className="text-xs text-stone-500">{t('invSettingsHint')}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.signageAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, signageAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('signageTitle')}</span>
+                <span className="text-xs text-stone-500">{t('signageAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="text-sm">
+              {t('signageScreenLimit')}
+              <input
+                type="number"
+                min={1}
+                max={99}
+                className="input mt-1"
+                value={limitsFor.signageScreenLimit}
+                onChange={(e) =>
+                  setLimitsFor({
+                    ...limitsFor,
+                    signageScreenLimit: Number(e.target.value) || 2,
+                  })
+                }
+              />
+            </label>
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary text-sm" onClick={() => setLimitsFor(null)}>
                 {t('cancel')}
@@ -538,6 +788,73 @@ function MerchantsPage() {
                 onClick={() => void savePosLimits()}
               >
                 {savingLimits ? '…' : t('save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {planFor ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-2xl border bg-white p-5 shadow-xl space-y-3">
+            <h2 className="text-lg font-bold">{t('merchantPlanManage')}</h2>
+            <p className="text-sm text-stone-600">{planFor.name}</p>
+            <label className="block text-sm">
+              {t('posVersion')}
+              <select
+                className="input mt-1"
+                value={planFor.editionId}
+                onChange={(e) => setPlanFor({ ...planFor, editionId: e.target.value })}
+              >
+                <option value="">{t('posVersionSelect')}</option>
+                {editions.map((ed) => (
+                  <option key={ed.id} value={ed.id}>
+                    {ed.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              {t('subscriptionLicense')}
+              <select
+                className="input mt-1"
+                value={planFor.subscriptionPlan}
+                onChange={(e) => setPlanFor({ ...planFor, subscriptionPlan: e.target.value })}
+              >
+                <option value="">{t('merchantSubscriptionPlanRequired')}</option>
+                {subscriptionPlans.map((plan) => (
+                  <option key={plan.id || plan.slug} value={plan.slug}>
+                    {plan.name}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-stone-500 mt-1 block">{t('merchantSubscriptionPlanHint')}</span>
+            </label>
+            <label className="block text-sm">
+              {t('merchantPlanBilling')}
+              <select
+                className="input mt-1"
+                value={planFor.planBillingPaid ? 'paid' : 'unpaid'}
+                onChange={(e) =>
+                  setPlanFor({ ...planFor, planBillingPaid: e.target.value === 'paid' })
+                }
+              >
+                <option value="paid">{t('invoiceStatusPaid')}</option>
+                <option value="unpaid">{t('invoiceStatusUnpaid')}</option>
+              </select>
+              <span className="text-xs text-stone-500 mt-1 block">{t('merchantPlanBillingHint')}</span>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary text-sm" onClick={() => setPlanFor(null)}>
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                disabled={savingPlan}
+                onClick={() => void saveMerchantPlan()}
+              >
+                {savingPlan ? '…' : t('save')}
               </button>
             </div>
           </div>

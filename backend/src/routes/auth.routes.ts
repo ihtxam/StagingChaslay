@@ -1,8 +1,49 @@
 import { Router, Request, Response } from "express";
 import { AuthService } from "@/services/auth.service";
 import { verifyToken, requireMerchant, requireSuperadmin } from "@/middleware/auth.middleware";
+import {
+  PasswordResetRateLimitError,
+  PasswordResetService,
+} from "@/services/password-reset.service";
+
+function clientIp(req: Request) {
+  const forwarded = req.headers["x-forwarded-for"];
+  const first = Array.isArray(forwarded) ? forwarded[0] : String(forwarded || "").split(",")[0];
+  return (first || req.ip || req.socket.remoteAddress || "unknown").trim();
+}
 
 const router = Router();
+
+/**
+ * POST /api/auth/login
+ * Official unified login — merchant owner, staff, reseller, or superadmin.
+ */
+router.post("/login", async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const result = await AuthService.loginAny(String(email), String(password));
+    if (result.kind === "superadmin") {
+      return res.json({ success: true, kind: "superadmin", token: result.token, superadmin: result.superadmin });
+    }
+    if (result.kind === "reseller") {
+      return res.json({ success: true, kind: "reseller", token: result.token, reseller: result.reseller });
+    }
+    return res.json({
+      success: true,
+      kind: result.kind,
+      token: result.token,
+      merchant: result.merchant,
+      isOwner: result.isOwner !== false,
+    });
+  } catch (error) {
+    console.error("Error logging in:", error);
+    res.status(401).json({ error: error instanceof Error ? error.message : "Failed to login" });
+  }
+});
 
 /**
  * POST /api/auth/merchant/register
@@ -124,6 +165,81 @@ router.post("/reseller/login", async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/auth/forgot-password
+ * Public: look up email across merchant / staff / reseller / superadmin and email a 1h reset link.
+ */
+router.post("/forgot-password", async (req: Request, res: Response) => {
+  try {
+    const email = String(req.body?.email || "");
+    const result = await PasswordResetService.requestReset(email, clientIp(req));
+    res.json(result);
+  } catch (error) {
+    if (error instanceof PasswordResetRateLimitError) {
+      return res.status(429).json({ error: error.message });
+    }
+    console.error("Error requesting password reset:", error);
+    res.json({ success: true, message: PasswordResetService.genericSentMessage() });
+  }
+});
+
+/**
+ * GET /api/auth/reset-password/:token
+ * Public preview for the set-new-password page.
+ */
+router.get("/reset-password/:token", async (req: Request, res: Response) => {
+  try {
+    const preview = await PasswordResetService.previewToken(req.params.token);
+    res.json({ success: true, reset: preview });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Invalid or expired reset link",
+    });
+  }
+});
+
+/**
+ * POST /api/auth/reset-password
+ * Public: consume a reset token and set a new password.
+ */
+router.post("/reset-password", async (req: Request, res: Response) => {
+  try {
+    const { token, password, newPassword } = req.body || {};
+    const nextPassword = String(newPassword || password || "");
+    const result = await PasswordResetService.applyReset(String(token || ""), nextPassword);
+    res.json({ success: true, message: "Password updated. You can sign in now.", ...result });
+  } catch (error) {
+    console.error("Error applying password reset:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to reset password",
+    });
+  }
+});
+
+/**
+ * POST /api/auth/change-own-password
+ * Authenticated password change for superadmin / reseller / merchant / staff.
+ */
+router.post("/change-own-password", verifyToken, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    const { currentPassword, newPassword } = req.body || {};
+    await PasswordResetService.changeOwnPassword(
+      req.user,
+      String(currentPassword || ""),
+      String(newPassword || "")
+    );
+    res.json({ success: true, message: "Password changed successfully" });
+  } catch (error) {
+    console.error("Error changing own password:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to change password",
+    });
+  }
+});
+
+/**
  * POST /api/auth/reset-login-password
  * Temporary login-page password reset (merchant / staff / reseller / superadmin).
  * Disable with ALLOW_LOGIN_PASSWORD_RESET=0.
@@ -166,6 +282,11 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           merchantId: merchant.id,
           roleName: "Owner",
           isOwner: true,
+          inventoryAddonEnabled: merchant.inventoryAddonEnabled === true,
+          inventoryEnabled: merchant.inventoryEnabled === true,
+          signageAddonEnabled: merchant.signageAddonEnabled === true,
+          signageEnabled: merchant.signageEnabled === true,
+          signageScreenLimit: merchant.signageScreenLimit ?? 2,
         },
         role: "merchant",
       });
@@ -185,6 +306,13 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
         roleName: profile.roleName,
         permissions: profile.permissions,
       });
+      const { readInventoryAddonEnabled } = await import("@/lib/inventory-addon");
+      const { readSignageAddon } = await import("@/lib/signage-addon");
+      const inventoryOn = await readInventoryAddonEnabled(req.user.merchantId).catch(() => false);
+      const signage = await readSignageAddon(req.user.merchantId).catch(() => ({
+        enabled: false,
+        screenLimit: 2,
+      }));
       res.json({
         user: {
           id: profile.id,
@@ -195,6 +323,11 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           roleName: profile.roleName,
           permissions: profile.permissions,
           isOwner: false,
+          inventoryAddonEnabled: inventoryOn,
+          inventoryEnabled: inventoryOn,
+          signageAddonEnabled: signage.enabled,
+          signageEnabled: signage.enabled,
+          signageScreenLimit: signage.screenLimit,
         },
         role: "staff",
         token,

@@ -3,6 +3,7 @@ import { formatDateDDMMYYYY } from '@/lib/date-format';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { Copy, KeyRound, Plus, RefreshCw, Ban, Clock } from 'lucide-react';
+import { useI18n } from '@/lib/i18n';
 
 interface MerchantOption {
   id: string;
@@ -31,7 +32,13 @@ interface Stats {
   yearly: number;
 }
 
+function axiosErrorMessage(err: unknown, fallback: string): string {
+  const data = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+  return data?.error || data?.message || fallback;
+}
+
 export default function Licenses() {
+  const { t } = useI18n();
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
   const [merchants, setMerchants] = useState<MerchantOption[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -56,36 +63,49 @@ export default function Licenses() {
   >([]);
 
   const load = async () => {
-    try {
-      setLoading(true);
-      const [licRes, merRes, statsRes, expRes] = await Promise.all([
-        api.get('/superadmin/licenses', {
-          params: {
-            page,
-            limit: 20,
-            status: statusFilter || undefined,
-            merchantId: merchantFilter || undefined,
-          },
-        }),
-        api.get('/superadmin/merchants', { params: { page: 1, limit: 100 } }),
-        api.get('/superadmin/licenses/statistics'),
-        api.get('/superadmin/licenses/expiring-soon', { params: { days: 35 } }),
-      ]);
-      setLicenses(licRes.data.licenses || []);
+    setLoading(true);
+    const [licRes, merRes, statsRes, expRes] = await Promise.allSettled([
+      api.get('/superadmin/licenses', {
+        params: {
+          page,
+          limit: 20,
+          status: statusFilter || undefined,
+          merchantId: merchantFilter || undefined,
+        },
+      }),
+      api.get('/superadmin/merchants', { params: { page: 1, limit: 100 } }),
+      api.get('/superadmin/licenses/statistics'),
+      api.get('/superadmin/licenses/expiring-soon', { params: { days: 35 } }),
+    ]);
+
+    if (licRes.status === 'fulfilled') {
+      setLicenses(licRes.value.data.licenses || []);
+    } else {
+      setLicenses([]);
+      toast.error(axiosErrorMessage(licRes.reason, t('licenseLoadFailed')));
+    }
+
+    if (merRes.status === 'fulfilled') {
       setMerchants(
-        (merRes.data.merchants || []).map((m: any) => ({
+        (merRes.value.data.merchants || []).map((m: any) => ({
           id: m.id,
           name: m.name,
           email: m.email,
         }))
       );
-      setStats(statsRes.data.statistics || null);
-      setExpiring(expRes.data.licenses || []);
-    } catch {
-      toast.error('Failed to load licenses');
-    } finally {
-      setLoading(false);
     }
+
+    if (statsRes.status === 'fulfilled') {
+      setStats(statsRes.value.data.statistics || null);
+    }
+
+    if (expRes.status === 'fulfilled') {
+      setExpiring(expRes.value.data.licenses || []);
+    } else {
+      setExpiring([]);
+    }
+
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -307,7 +327,7 @@ export default function Licenses() {
         {loading ? (
           <div className="text-center py-12">Loading...</div>
         ) : licenses.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">No licenses found</div>
+          <div className="text-center py-12 text-gray-500">{t('noLicenses')}</div>
         ) : (
           <table className="w-full min-w-[800px]">
             <thead className="bg-gray-50 border-b">

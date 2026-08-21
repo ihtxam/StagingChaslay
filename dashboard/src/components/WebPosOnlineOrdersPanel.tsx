@@ -7,9 +7,12 @@ import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import {
+  canAdminCollectPayment,
   isAwaitingApproval,
   isAwaitingPaymentOrder,
+  orderStatusBadgeClass,
   orderStatusLabel,
+  type MerchantOrder,
 } from '@/lib/order-management';
 
 export type OnlineOrder = {
@@ -265,9 +268,9 @@ export default function WebPosOnlineOrdersPanel({
                           {t('webPosNewBadge')}
                         </span>
                       ) : null}
-                      {isUnpaid(o) && !isNew(o.status) && (o.status === 'ready' || o.status === 'out_for_delivery') ? (
+                      {isUnpaid(o) && !isNew(o.status) ? (
                         <span className="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
-                          {t('webPosPayLater')}
+                          {t('webPosAwaitingPayment')}
                         </span>
                       ) : null}
                     </p>
@@ -275,8 +278,10 @@ export default function WebPosOnlineOrdersPanel({
                       {channelLabel(o.fulfillmentChannel)} · {money(o.total)} ·{' '}
                       {o.scheduledFor ? formatDateTime(o.scheduledFor) : t('webPosAsap')}
                       {!isNew(o.status) ? (
-                        <span className="ml-1 font-semibold text-stone-600">
-                          · {orderStatusLabel(o.status, t)}
+                        <span
+                          className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(o.status)}`}
+                        >
+                          {orderStatusLabel(o.status, t)}
                         </span>
                       ) : null}
                     </p>
@@ -347,6 +352,22 @@ export default function WebPosOnlineOrdersPanel({
                       onClick={() => void run(o, 'mark_ready')}
                     >
                       {t('webPosMarkReady')}
+                    </button>
+                  ) : null}
+                  {canAdminCollectPayment(o as MerchantOrder) &&
+                  o.status !== 'ready' &&
+                  o.status !== 'out_for_delivery' &&
+                  !isNew(o.status) ? (
+                    <button
+                      type="button"
+                      className="btn-secondary flex-1 text-xs"
+                      disabled={busyId === o.id}
+                      onClick={() => {
+                        onClose();
+                        onCollectPayment?.(o);
+                      }}
+                    >
+                      {t('webPosCollectNow')}
                     </button>
                   ) : null}
                   {o.status === 'ready' && o.fulfillmentChannel === 'delivery' ? (

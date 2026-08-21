@@ -107,13 +107,19 @@ export function buildGiftCardBarcodePayload(code: string): string {
 /** Return the first ref that exists on the public receipt API (backend UUID preferred). */
 export async function resolvePublishedReceiptRef(
   backendOrderId: string | null | undefined,
-  clientId: string
+  clientId: string,
+  orderNumber?: string | null
 ): Promise<string | null> {
-  const candidates = [...new Set([backendOrderId, clientId].filter(Boolean))] as string[];
+  const candidates = [
+    ...new Set([backendOrderId, orderNumber, clientId].filter(Boolean)),
+  ] as string[];
   for (const ref of candidates) {
     try {
-      await publicApi.get(`/receipts/${encodeURIComponent(ref)}`);
-      return ref;
+      const res = await publicApi.get(`/receipts/${encodeURIComponent(ref)}`);
+      if (res.data?.success && res.data?.receipt?.id) {
+        return String(res.data.receipt.id);
+      }
+      if (res.status === 200 && res.data?.receipt) return ref;
     } catch {
       /* try next candidate */
     }
@@ -121,16 +127,25 @@ export async function resolvePublishedReceiptRef(
   return null;
 }
 
-/** External PNG QR (works in browser print without npm dep) */
-export function qrImageUrl(data: string, size = 180): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&ecc=L&data=${encodeURIComponent(
+export type EscPosErrorCorrection = 'L' | 'M' | 'Q' | 'H';
+
+/** External PNG QR (works in browser print without npm dep). ECC-M + quiet zone for scan reliability. */
+export function qrImageUrl(
+  data: string,
+  size = 180,
+  opts?: { ecc?: EscPosErrorCorrection; margin?: number }
+): string {
+  const ecc = opts?.ecc ?? 'M';
+  const margin = Math.max(0, opts?.margin ?? 4);
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&ecc=${ecc}&margin=${margin}&data=${encodeURIComponent(
     data
   )}`;
 }
 
-/** Thermal receipt QR raster width — ~25% of 80mm printable (384 dots), bitmap path. */
-export const RECEIPT_QR_RASTER_PX_80 = 150;
-export const RECEIPT_QR_RASTER_PX_58 = 112;
+/** Thermal receipt QR raster width — ~180px on 80mm (384-dot) paper. */
+export const RECEIPT_QR_RASTER_PX_80 = 180;
+/** 58mm thermal QR — same visual ratio as 80mm 180px (was 112 @ 150). */
+export const RECEIPT_QR_RASTER_PX_58 = 136;
 
 export function receiptQrRasterPx(paperWidthMm?: 58 | 80): number {
   return paperWidthMm === 58 ? RECEIPT_QR_RASTER_PX_58 : RECEIPT_QR_RASTER_PX_80;
@@ -140,17 +155,19 @@ export function receiptQrRasterPx(paperWidthMm?: 58 | 80): number {
 export function imageDataToEscPosRaster(
   data: Uint8ClampedArray,
   width: number,
-  height: number
+  height: number,
+  darkThreshold = 160
 ): Uint8Array {
   const paddedWidth = Math.ceil(width / 8) * 8;
   const bytesPerRow = paddedWidth / 8;
   const raster = new Uint8Array(bytesPerRow * height);
+  const cutoff = Math.max(1, Math.min(255, darkThreshold));
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < paddedWidth; x++) {
       if (x >= width) continue;
       const i = (y * width + x) * 4;
       const lum = data[i]! * 0.299 + data[i + 1]! * 0.587 + data[i + 2]! * 0.114;
-      if (lum < 160) {
+      if (lum < cutoff) {
         raster[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
       }
     }
@@ -187,7 +204,7 @@ export async function generateReceiptQrRasterEscPos(
   if (!raw || typeof document === 'undefined') return null;
   const size = receiptQrRasterPx(paperWidthMm);
   try {
-    const img = await loadImage(qrImageUrl(raw, size));
+    const img = await loadImage(qrImageUrl(raw, size, { ecc: 'M', margin: 8 }));
     const w = Math.max(8, img.width);
     const h = Math.max(8, img.height);
     const canvas = document.createElement('canvas');
@@ -195,17 +212,16 @@ export async function generateReceiptQrRasterEscPos(
     canvas.height = h;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
-    ctx.fillStyle = '#fff';
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(img, 0, 0, w, h);
     const { data: pixels } = ctx.getImageData(0, 0, w, h);
-    return imageDataToEscPosRaster(pixels, w, h);
+    return imageDataToEscPosRaster(pixels, w, h, 128);
   } catch {
     return null;
   }
 }
-
-export type EscPosErrorCorrection = 'L' | 'M' | 'Q' | 'H';
 
 /** GS ( k fn 69 n — 48=L, 49=M, 50=Q, 51=H (Epson ESC/POS). */
 const ESCPOS_EC_BYTE: Record<EscPosErrorCorrection, number> = {
@@ -346,4 +362,28 @@ export function buildTableShopUrl(
   const slug = encodeURIComponent(merchantSlug);
   const table = encodeURIComponent(tableId);
   return `${base}/shop/${slug}/menu?channel=dine_in&table=${table}`;
+}
+
+/** Waiter ordering URL — opens waiter app on a specific table (not customer menu). */
+export function buildWaiterTableUrl(tableId: string, origin?: string): string {
+  const base = String(origin || (typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com')).replace(/\/$/, '');
+  return `${base}/merchant/waiter?table=${encodeURIComponent(tableId)}`;
+}
+
+/** Parse waiter table deep link (?table=uuid). */
+export function parseWaiterTableUrl(raw: string): { tableId: string } | null {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return null;
+  try {
+    if (/^https?:\/\//i.test(trimmed)) {
+      const url = new URL(trimmed);
+      const table = url.searchParams.get('table');
+      if (table) return { tableId: table };
+    }
+  } catch {
+    /* not a URL */
+  }
+  const inline = trimmed.match(/[?&]table=([a-f0-9-]+)/i);
+  if (inline?.[1]) return { tableId: inline[1]! };
+  return null;
 }

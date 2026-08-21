@@ -21,6 +21,7 @@ enum class PaymentMethod {
     TAP_TO_PAY,
     ADYEN_TERMINAL,
     PAY_LATER,
+    INVOICE,
     GIFT_CARD
 }
 
@@ -264,7 +265,15 @@ data class CartItem(
         val lines = mutableListOf<String>()
         if (isCombo) {
             lines.add(COMBO_NOTES_MARKER)
-            comboSelections.forEach { lines.add("${it.slotName}: ${it.productName}") }
+            comboSelections.forEach { sel ->
+                val extraBits = sel.modifiers.map { it.name } + sel.extras.map { it.name }
+                lines.add(
+                    if (extraBits.isEmpty()) "${sel.slotName}: ${sel.productName}"
+                    else "${sel.slotName}: ${sel.productName} (${extraBits.joinToString(", ")})"
+                )
+            }
+            modifiers.forEach { lines.add("${it.quantity}x ${it.name}") }
+            addons.forEach { lines.add("${it.quantity}x ${it.name}") }
         } else {
             modifiers.forEach { lines.add("${it.quantity}x ${it.name}") }
             addons.forEach { lines.add("${it.quantity}x ${it.name}") }
@@ -360,11 +369,11 @@ data class CartSummary(
     val isEmpty: Boolean get() = items.isEmpty()
 
     /** Amount due for products before tip and cash rounding. */
-    fun merchandiseTotal(checkoutDiscountPercent: Double = 0.0): Double {
-        val discount = if (checkoutDiscountPercent > 0) {
-            roundMoney(netSubtotal * (checkoutDiscountPercent / 100.0))
-        } else {
-            discountValue
+    fun merchandiseTotal(checkoutDiscountPercent: Double = 0.0, checkoutDiscountAmount: Double = 0.0): Double {
+        val discount = when {
+            checkoutDiscountPercent > 0 -> roundMoney(netSubtotal * (checkoutDiscountPercent / 100.0))
+            checkoutDiscountAmount > 0 -> roundMoney(checkoutDiscountAmount.coerceAtMost(netSubtotal))
+            else -> discountValue
         }
         val tax = adjustTaxForOrderDiscount(
             rawTaxTotal,
@@ -449,14 +458,29 @@ data class SelectedModifier(val name: String, val quantity: Int = 1)
 
 data class SelectedAddon(val name: String, val price: Double, val quantity: Int = 1)
 
-data class ComboSelection(val slotName: String, val productId: Long, val productName: String)
+data class ComboSelection(
+    val slotName: String,
+    val productId: Long,
+    val productName: String,
+    val extraPrice: Double = 0.0,
+    val extras: List<SelectedAddon> = emptyList(),
+    val modifiers: List<SelectedModifier> = emptyList()
+) {
+    val surcharge: Double
+        get() = extraPrice + extras.sumOf { it.price * it.quantity }
+}
 
 data class ComboSlotOptionModel(
     val id: Long,
     val productId: Long,
     val productName: String,
-    val imageUri: String? = null
-)
+    val imageUri: String? = null,
+    val extraPrice: Double = 0.0,
+    val modifierGroups: List<ModifierGroupModel> = emptyList(),
+    val addonGroups: List<AddonGroupModel> = emptyList()
+) {
+    val hasCustomize: Boolean get() = modifierGroups.isNotEmpty() || addonGroups.isNotEmpty()
+}
 
 data class ComboSlotModel(
     val id: Long,
@@ -468,8 +492,12 @@ data class ComboSlotModel(
 
 data class ComboMealModel(
     val product: ProductWithVariants,
-    val slots: List<ComboSlotModel>
-)
+    val slots: List<ComboSlotModel>,
+    val modifierGroups: List<ModifierGroupModel> = emptyList(),
+    val addonGroups: List<AddonGroupModel> = emptyList()
+) {
+    val hasComboExtras: Boolean get() = modifierGroups.isNotEmpty() || addonGroups.isNotEmpty()
+}
 
 data class ComboPickState(val combo: ComboMealModel)
 

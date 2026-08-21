@@ -1,24 +1,41 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Filter, Printer, RefreshCw, Search, ShoppingBag, X } from 'lucide-react';
+import { Download, FileText, Filter, Printer, RefreshCw, ShoppingBag, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
+  canAdminCollectPayment,
+  canMarkReadyOrder,
+  showsKitchenFulfillmentStages,
   formatOrderPaymentDisplay,
+  INVOICE_SETTLEMENT_METHOD,
+  isAwaitingApproval,
+  isAwaitingPaymentOrder,
+  isInvoiceOrder,
+  isKitchenTypeOrder,
   isOnlineShopOrder,
+  isPaidOrder,
   orderSourceLabel,
   orderChannel,
   ONLINE_CHANNEL_BORDER,
   ONLINE_CHANNEL_STYLE,
   orderPublicRefs,
   orderSearchHaystack,
+  orderStatusBadgeClass,
   todayIso,
   type MerchantOrder,
 } from '@/lib/order-management';
+import { collectPaymentAction } from '@/lib/order-to-cart';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
+import { toastPrintError } from '@/lib/webpos-print-toast';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
+import { parsePaymentBreakdown, hasTerminalPortion } from '@/lib/payment-breakdown';
+import WebPosRefundModal, { type RefundReasonOption } from '@/components/webpos/WebPosRefundModal';
+import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import {
   settingsDash,
   SettingsField,
@@ -26,9 +43,10 @@ import {
   SettingsReportCard,
 } from '@/components/settings/SettingsReportUi';
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
-import { useSecretTap } from '@/lib/use-secret-tap';
+import SecretSearchTapButton from '@/components/SecretSearchTapButton';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
+type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online' | 'invoice';
 
 const CHANNEL_STYLE: Record<string, string> = {
   takeaway:
@@ -71,19 +89,50 @@ function matchesChannelFilter(o: MerchantOrder, filter: ChannelFilter) {
   return orderChannel(o) === filter;
 }
 
-export default function Orders() {
+function matchesTypeFilter(o: MerchantOrder, filter: TypeFilter) {
+  if (filter === 'all') return true;
+  if (filter === 'kitchen') return isKitchenTypeOrder(o);
+  if (filter === 'online') return isOnlineShopOrder(o);
+  if (filter === 'invoice') return isInvoiceOrder(o);
+  return orderChannel(o) === filter;
+}
+
+function canRefundMerchantOrder(o: MerchantOrder): boolean {
+  if (o.status === 'cancelled' || o.paymentStatus === 'cancelled') return false;
+  const remaining = Number(o.total || 0) - Number(o.refundAmount || 0);
+  if (remaining <= 0.001) return false;
+  return (
+    o.status === 'completed' ||
+    o.status === 'partially_refunded' ||
+    o.paymentStatus === 'completed' ||
+    o.paymentStatus === 'paid' ||
+    o.paymentStatus === 'partially_refunded'
+  );
+}
+
+type InvoicePayFilter = 'all' | 'unpaid' | 'paid';
+
+export default function Orders({ invoiceLedger = false }: { invoiceLedger?: boolean }) {
   const { t, formatDateTime, locale } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<MerchantOrder | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const [dateFrom, setDateFrom] = useState(todayIso);
   const [dateTo, setDateTo] = useState(todayIso);
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(
+    invoiceLedger || searchParams.get('type') === 'invoice' ? 'invoice' : 'all'
+  );
+  const [invoicePayFilter, setInvoicePayFilter] = useState<InvoicePayFilter>('all');
   const [staffFilter, setStaffFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [searchQ, setSearchQ] = useState('');
+  const showingInvoices = invoiceLedger || typeFilter === 'invoice';
 
   const [staffList, setStaffList] = useState<Array<{ id: string; name: string }>>([]);
   const [merchant, setMerchant] = useState<{
@@ -99,7 +148,11 @@ export default function Orders() {
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [printing, setPrinting] = useState(false);
   const [salesAdjOpen, setSalesAdjOpen] = useState(false);
-  const registerSalesAdjTap = useSecretTap(5);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [collectOpen, setCollectOpen] = useState(false);
+  const [refundFor, setRefundFor] = useState<MerchantOrder | null>(null);
+  const [refundReasons, setRefundReasons] = useState<RefundReasonOption[]>([]);
+  const [refundBusy, setRefundBusy] = useState(false);
 
   const loadMeta = useCallback(async () => {
     try {
@@ -132,20 +185,35 @@ export default function Orders() {
 
   const load = useCallback(async () => {
     try {
-      const params = new URLSearchParams({
-        limit: '200',
-        from: dateFrom,
-        to: dateTo,
-      });
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      const response = await api.get(`/merchant/pos/orders?${params.toString()}`);
-      setOrders((response.data.orders || []) as MerchantOrder[]);
+      if (showingInvoices) {
+        const params = new URLSearchParams({ limit: '200' });
+        if (invoicePayFilter !== 'all') params.set('status', invoicePayFilter);
+        if (searchQ) params.set('q', searchQ);
+        const response = await api.get(`/merchant/invoices?${params.toString()}`);
+        setOrders((response.data.invoices || []) as MerchantOrder[]);
+      } else {
+        const params = new URLSearchParams({
+          limit: '200',
+          from: dateFrom,
+          to: dateTo,
+        });
+        if (statusFilter !== 'all') params.set('status', statusFilter);
+        if (searchQ) params.set('q', searchQ);
+        const response = await api.get(`/merchant/pos/orders?${params.toString()}`);
+        setOrders((response.data.orders || []) as MerchantOrder[]);
+        setRefundReasons(response.data.refundReasons || []);
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('ordersLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, statusFilter, t]);
+  }, [dateFrom, dateTo, statusFilter, searchQ, showingInvoices, invoicePayFilter, t]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setSearchQ(search.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [search]);
 
   useEffect(() => {
     void loadMeta();
@@ -177,10 +245,16 @@ export default function Orders() {
     const q = search.trim().toLowerCase();
     return orders
       .filter((o) => {
-        if (paymentFilter !== 'all' && (o.paymentMethod || '').toLowerCase() !== paymentFilter) {
+        if (paymentFilter === 'invoice') {
+          if (!isInvoiceOrder(o)) return false;
+        } else if (
+          paymentFilter !== 'all' &&
+          (o.paymentMethod || '').toLowerCase() !== paymentFilter
+        ) {
           return false;
         }
-        if (!matchesChannelFilter(o, channelFilter)) return false;
+        if (!showingInvoices && !matchesTypeFilter(o, typeFilter)) return false;
+        if (!showingInvoices && !matchesChannelFilter(o, channelFilter)) return false;
         if (staffFilter !== 'all') {
           const staffRow = staffList.find((s) => s.id === staffFilter);
           const target = staffRow?.name || staffFilter;
@@ -190,14 +264,124 @@ export default function Orders() {
         return true;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [orders, paymentFilter, channelFilter, staffFilter, staffList, search]);
+  }, [
+    orders,
+    paymentFilter,
+    typeFilter,
+    channelFilter,
+    staffFilter,
+    staffList,
+    search,
+    showingInvoices,
+  ]);
+
+  const openInvoice = async (order: MerchantOrder, mode: 'view' | 'download') => {
+    setPdfBusy(true);
+    try {
+      if (mode === 'download') {
+        await downloadInvoicePdf(order.id, order.invoiceNumber ? `${order.invoiceNumber}.pdf` : undefined);
+      } else {
+        await viewInvoicePdf(order.id);
+      }
+    } catch {
+      toast.error(t('webPosInvoicePdfFailed'));
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   const openDetail = async (order: MerchantOrder) => {
+    setCollectOpen(false);
     try {
       const res = await api.get(`/merchant/orders/${order.id}`);
       setSelected((res.data.order as MerchantOrder) || order);
     } catch {
       setSelected(order);
+    }
+  };
+
+  const recordInvoicePaid = async (order: MerchantOrder) => {
+    setActionBusy(true);
+    try {
+      const res = await api.post(`/merchant/orders/${order.id}/record-invoice-payment`, {
+        paymentMethod: INVOICE_SETTLEMENT_METHOD,
+      });
+      const updated = (res.data?.order as MerchantOrder) || order;
+      setSelected((prev) =>
+        prev && prev.id === order.id
+          ? { ...prev, ...updated, items: prev.items || updated.items }
+          : { ...order, ...updated }
+      );
+      toast.success(t('webPosPaymentCollected'));
+      setCollectOpen(false);
+      void load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const runOrderAction = async (
+    order: MerchantOrder,
+    action: string,
+    extra?: Record<string, unknown>
+  ) => {
+    setActionBusy(true);
+    try {
+      const res = await api.post(`/merchant/orders/${order.id}/action`, { action, ...extra });
+      const updated = (res.data?.order as MerchantOrder) || order;
+      setSelected((prev) =>
+        prev && prev.id === order.id
+          ? { ...prev, ...updated, items: prev.items || updated.items }
+          : { ...order, ...updated }
+      );
+      toast.success(t('updated'));
+      setCollectOpen(false);
+      void load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('actionFailed'));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const doRefund = async (payload: {
+    refundKind: 'referenced' | 'goodwill';
+    mode: 'full' | 'items';
+    reason: string;
+    items?: Array<{ orderItemId: string; quantity: number }>;
+    goodwillAmount?: number;
+    goodwillMethod?: 'cash' | 'terminal';
+  }) => {
+    if (!refundFor) return;
+    setRefundBusy(true);
+    try {
+      if (payload.refundKind === 'goodwill') {
+        await api.post(`/merchant/pos/orders/${refundFor.id}/goodwill`, {
+          amount: payload.goodwillAmount,
+          reason: payload.reason,
+          method: payload.goodwillMethod || 'cash',
+        });
+        toast.success(t('webPosGoodwillSubmitted'));
+      } else {
+        await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
+          reason: payload.reason,
+          fullTicket: payload.mode === 'full',
+          items: payload.items,
+        });
+        toast.success(t('webPosOrderRefunded'));
+      }
+      setRefundFor(null);
+      setSelected(null);
+      void load();
+    } catch (e: any) {
+      toast.error(
+        e.response?.data?.error ||
+          (payload.refundKind === 'goodwill' ? t('webPosGoodwillFailed') : t('webPosRefundFailed'))
+      );
+    } finally {
+      setRefundBusy(false);
     }
   };
 
@@ -215,9 +399,19 @@ export default function Orders() {
       });
       toast.success(t('webPosSentDefaultPrinter'));
     } catch (e: any) {
-      toast.error(e.message || t('webPosPrintFailed'));
+      toastPrintError(e, t, 'webPosPrintFailed');
     } finally {
       setPrinting(false);
+    }
+  };
+
+  const setTypeTab = (id: TypeFilter) => {
+    setTypeFilter(id);
+    if (invoiceLedger) return;
+    if (id === 'invoice') {
+      setSearchParams({ type: 'invoice' }, { replace: true });
+    } else if (searchParams.get('type')) {
+      setSearchParams({}, { replace: true });
     }
   };
 
@@ -227,17 +421,23 @@ export default function Orders() {
     setStatusFilter('all');
     setPaymentFilter('all');
     setChannelFilter('all');
+    setTypeFilter(invoiceLedger ? 'invoice' : 'all');
+    setInvoicePayFilter('all');
     setStaffFilter('all');
     setSearch('');
+    if (!invoiceLedger && searchParams.get('type')) {
+      setSearchParams({}, { replace: true });
+    }
   };
 
   const hasActiveFilters =
     paymentFilter !== 'all' ||
+    (!invoiceLedger && typeFilter !== 'all') ||
     channelFilter !== 'all' ||
     staffFilter !== 'all' ||
+    invoicePayFilter !== 'all' ||
     search.trim() !== '' ||
-    dateFrom !== todayIso() ||
-    dateTo !== todayIso();
+    (!showingInvoices && (dateFrom !== todayIso() || dateTo !== todayIso()));
 
   if (loading && orders.length === 0) {
     return <div className="text-center py-10 muted text-sm">{t('ordersLoading')}</div>;
@@ -246,8 +446,8 @@ export default function Orders() {
   return (
     <div className="space-y-4 max-w-6xl">
       <SettingsPageHeader
-        title={t('orders')}
-        subtitle={t('ordersManageHint')}
+        title={showingInvoices ? t('invoicesTitle') : t('orders')}
+        subtitle={showingInvoices ? t('invoicesHint') : t('ordersManageHint')}
         action={
           <button
             type="button"
@@ -268,6 +468,8 @@ export default function Orders() {
         description={t('ordersFilterHint')}
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {showingInvoices ? null : (
+            <>
           <SettingsField label={t('ordersFilterFrom')}>
             <input
               type="date"
@@ -284,24 +486,25 @@ export default function Orders() {
               onChange={(e) => setDateTo(e.target.value)}
             />
           </SettingsField>
+            </>
+          )}
           <SettingsField label={t('webPosSearchOrders')}>
-            <div className="relative">
-              <button
-                type="button"
-                className="absolute left-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
-                onClick={() => registerSalesAdjTap(() => setSalesAdjOpen(true))}
-              >
-                <Search size={14} />
-              </button>
+            <div className="flex items-center gap-1.5">
+              <SecretSearchTapButton
+                onUnlock={() => setSalesAdjOpen(true)}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
+              />
               <input
                 type="search"
-                className="input w-full pl-8"
+                className="input w-full"
                 placeholder={t('webPosSearchOrders')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
           </SettingsField>
+          {showingInvoices ? null : (
+            <>
           <SettingsField label={t('ordersFilterStatus')}>
             <select
               className="input w-full"
@@ -332,6 +535,22 @@ export default function Orders() {
               <option value="terminal">{t('webPosTerminal')}</option>
               <option value="express">{t('webPosExpress')}</option>
               <option value="pay_later">{t('webPosPayLater')}</option>
+              <option value="invoice">{t('webPosInvoice')}</option>
+            </select>
+          </SettingsField>
+          <SettingsField label={t('ordersFilterType')}>
+            <select
+              className="input w-full"
+              value={typeFilter}
+              onChange={(e) => setTypeTab(e.target.value as TypeFilter)}
+            >
+              <option value="all">{t('ordersAllTypes')}</option>
+              <option value="kitchen">{t('ordersTabKitchen')}</option>
+              <option value="delivery">{t('delivery')}</option>
+              <option value="takeaway">{t('takeaway')}</option>
+              <option value="dine_in">{t('dineIn')}</option>
+              <option value="online">{t('webPosOnlineOrders')}</option>
+              <option value="invoice">{t('webPosInvoice')}</option>
             </select>
           </SettingsField>
           <SettingsField label={t('ordersFilterChannel')}>
@@ -347,6 +566,8 @@ export default function Orders() {
               <option value="online">{t('webPosOnlineOrders')}</option>
             </select>
           </SettingsField>
+            </>
+          )}
           <SettingsField label={t('ordersFilterStaff')}>
             <select
               className="input w-full"
@@ -381,6 +602,60 @@ export default function Orders() {
         </div>
       </SettingsReportCard>
 
+      {invoiceLedger ? null : (
+      <div className="flex flex-wrap gap-1.5">
+        {(
+          [
+            ['all', t('ordersTabAll')],
+            ['kitchen', t('ordersTabKitchen')],
+            ['delivery', t('delivery')],
+            ['takeaway', t('takeaway')],
+            ['dine_in', t('dineIn')],
+            ['online', t('webPosOnlineOrders')],
+            ['invoice', t('webPosInvoice')],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTypeTab(id)}
+            className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              typeFilter === id
+                ? 'border-slate-900 bg-slate-900 text-white'
+                : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-slate-400'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      )}
+
+      {showingInvoices ? (
+        <div className="flex flex-wrap gap-1.5">
+          {(
+            [
+              ['all', t('invoicesAll')],
+              ['unpaid', t('invoicesUnpaid')],
+              ['paid', t('invoicesPaid')],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setInvoicePayFilter(id)}
+              className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                invoicePayFilter === id
+                  ? 'border-indigo-700 bg-indigo-700 text-white'
+                  : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-indigo-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-2.5 text-[11px] font-medium text-[var(--text-muted)]">
         <span className="inline-flex items-center gap-1">
           <span className="h-2 w-2 rounded-full bg-amber-500" /> {t('takeaway')}
@@ -399,18 +674,22 @@ export default function Orders() {
       <div className="grid gap-2.5 sm:grid-cols-2">
         {list.length === 0 && (
           <div className="col-span-full rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-elevated)] py-12 text-center text-sm text-[var(--text-muted)]">
-            {t('ordersEmpty')}
+            {showingInvoices ? t('invoicesEmpty') : t('ordersEmpty')}
           </div>
         )}
         {list.map((order) => {
           const ch = orderChannel(order);
           const refs = orderPublicRefs(order);
           const online = isOnlineShopOrder(order);
-          const title =
-            refs.ticketDisplay ||
-            (refs.tabNumber ? `#${refs.tabNumber}` : null) ||
-            formatOrderNumberDisplay(order.orderNumber) ||
-            order.id.slice(0, 8);
+          const title = showingInvoices
+            ? order.invoiceNumber ||
+              formatOrderNumberDisplay(order.orderNumber) ||
+              order.id.slice(0, 8)
+            : refs.ticketDisplay ||
+              (refs.tabNumber ? `#${refs.tabNumber}` : null) ||
+              formatOrderNumberDisplay(order.orderNumber) ||
+              order.id.slice(0, 8);
+          const invoicePaid = isPaidOrder(order);
           return (
             <article
               key={order.id}
@@ -451,12 +730,31 @@ export default function Orders() {
               </div>
 
               <div className="mt-2 flex flex-wrap gap-1 text-[10px] font-semibold">
-                <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5">
-                  {statusLabel(order.status, t)}
-                </span>
+                {showsKitchenFulfillmentStages(order) ? (
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 font-bold uppercase ${orderStatusBadgeClass(order.status)}`}
+                  >
+                    {statusLabel(order.status, t)}
+                  </span>
+                ) : null}
                 <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5">
                   {formatOrderPaymentDisplay(order, t, locale)}
                 </span>
+                {isInvoiceOrder(order) ? (
+                  <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-indigo-800">
+                    {showingInvoices
+                      ? invoicePaid
+                        ? t('invoiceStatusPaid')
+                        : t('invoiceStatusUnpaid')
+                      : t('webPosInvoice')}
+                    {!showingInvoices && order.invoiceNumber ? ` ${order.invoiceNumber}` : ''}
+                  </span>
+                ) : null}
+                {isAwaitingPaymentOrder(order) ? (
+                  <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-amber-900">
+                    {t('webPosAwaitingPayment')}
+                  </span>
+                ) : null}
                 {order.staffName ? (
                   <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5 truncate max-w-[8rem]">
                     {order.staffName}
@@ -473,6 +771,20 @@ export default function Orders() {
                   {order.customerPhone ? ` · ${order.customerPhone}` : ''}
                 </p>
               )}
+              {isInvoiceOrder(order) ? (
+                <button
+                  type="button"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-semibold hover:bg-[var(--bg-muted)]"
+                  disabled={pdfBusy}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void openInvoice(order, 'download');
+                  }}
+                >
+                  <Download size={12} />
+                  {t('webPosDownloadInvoice')}
+                </button>
+              ) : null}
             </article>
           );
         })}
@@ -492,7 +804,20 @@ export default function Orders() {
                 <h2 className="truncate text-base font-extrabold">
                   {formatOrderNumberDisplay(selected.orderNumber) || selected.id.slice(0, 8)}
                 </h2>
-                <p className="text-xs text-[var(--text-muted)]">{statusLabel(selected.status, t)}</p>
+                <p className="mt-1 flex flex-wrap items-center gap-1.5">
+                  {showsKitchenFulfillmentStages(selected) ? (
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(selected.status)}`}
+                    >
+                      {statusLabel(selected.status, t)}
+                    </span>
+                  ) : null}
+                  {isAwaitingPaymentOrder(selected) ? (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                      {t('webPosAwaitingPayment')}
+                    </span>
+                  ) : null}
+                </p>
               </div>
               <button
                 type="button"
@@ -513,6 +838,14 @@ export default function Orders() {
                   <p>
                     <span className="text-[var(--text-muted)]">{t('ordersAddress')}:</span>{' '}
                     {selected.shippingAddress}
+                  </p>
+                ) : null}
+                {isInvoiceOrder(selected) ? (
+                  <p>
+                    <span className="text-[var(--text-muted)]">{t('invoicesNumber')}:</span>{' '}
+                    {selected.invoiceNumber || '—'}
+                    {' · '}
+                    {isPaidOrder(selected) ? t('invoiceStatusPaid') : t('invoiceStatusUnpaid')}
                   </p>
                 ) : null}
                 <p>
@@ -548,11 +881,24 @@ export default function Orders() {
                 ) : null}
               </div>
 
+              <OrderRefundHistory
+                history={selected.refundHistory || []}
+                totalRefunded={Number(selected.refundAmount || 0)}
+              />
+
               <ul className="space-y-2 border-t border-[var(--border)] pt-3 text-sm">
                 {(selected.items || []).map((item, i) => (
                   <li key={item.id || i} className="flex justify-between gap-3">
                     <span className="min-w-0">
                       {Number(item.quantity)}× {orderItemName(item)}
+                      {Number(item.refundedQuantity || 0) > 0 ? (
+                        <span className="ml-1 text-xs text-rose-700">
+                          ({t('orderItemRefunded').replace(
+                            '{n}',
+                            String(Number(item.refundedQuantity || 0))
+                          )})
+                        </span>
+                      ) : null}
                       {!!item.comboSelections?.length && (
                         <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
                           {item.comboSelections
@@ -579,18 +925,150 @@ export default function Orders() {
               </ul>
               <p className="text-right text-sm font-extrabold tabular-nums">
                 Total CHF {Number(selected.total).toFixed(2)}
+                {Number(selected.refundAmount || 0) > 0 ? (
+                  <span className="block text-xs font-semibold text-rose-700">
+                    {t('webPosRefundRemaining').replace(
+                      '{amount}',
+                      `CHF ${Math.max(0, Number(selected.total) - Number(selected.refundAmount || 0)).toFixed(2)}`
+                    )}
+                  </span>
+                ) : null}
               </p>
 
               <SettingsReportCard icon={ShoppingBag} accent={settingsDash.accent} title={t('ordersActionsTitle')}>
-                <button
-                  type="button"
-                  disabled={printing}
-                  onClick={() => void doPrint(selected)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
-                >
-                  <Printer size={16} />
-                  {t('webPosPrintReceipt')}
-                </button>
+                <div className="space-y-2">
+                  {isInvoiceOrder(selected) ? (
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        disabled={pdfBusy}
+                        onClick={() => void openInvoice(selected, 'view')}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                      >
+                        <FileText size={16} />
+                        {t('webPosViewInvoice')}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pdfBusy}
+                        onClick={() => void openInvoice(selected, 'download')}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-sm font-semibold text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        <Download size={16} />
+                        {t('webPosDownloadInvoice')}
+                      </button>
+                    </div>
+                  ) : null}
+                  {isAwaitingApproval(selected.status) ? (
+                    <button
+                      type="button"
+                      disabled={actionBusy}
+                      onClick={() => void runOrderAction(selected, 'accept')}
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-violet-800 px-3 py-2.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
+                    >
+                      {t('webPosAcceptOrder')}
+                    </button>
+                  ) : null}
+                  {canMarkReadyOrder(selected) ? (
+                    <button
+                      type="button"
+                      disabled={actionBusy}
+                      onClick={() => void runOrderAction(selected, 'mark_ready')}
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-violet-800 px-3 py-2.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
+                    >
+                      {t('webPosMarkReady')}
+                    </button>
+                  ) : null}
+                  {showsKitchenFulfillmentStages(selected) &&
+                  selected.status === 'ready' &&
+                  (selected.fulfillmentChannel || selected.channel) === 'delivery' ? (
+                    <button
+                      type="button"
+                      disabled={actionBusy}
+                      onClick={() => void runOrderAction(selected, 'out_for_delivery')}
+                      className="inline-flex w-full items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                    >
+                      {t('ordersActionSendDelivery')}
+                    </button>
+                  ) : null}
+                  {canAdminCollectPayment(selected) ? (
+                    isInvoiceOrder(selected) ? (
+                      <div className="space-y-1.5">
+                        <button
+                          type="button"
+                          disabled={actionBusy}
+                          onClick={() => void recordInvoicePaid(selected)}
+                          className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                        >
+                          {t('webPosInvoiceMarkPaid')} · CHF {Number(selected.total || 0).toFixed(2)}
+                        </button>
+                        <p className="text-[11px] text-[var(--text-muted)]">
+                          {t('webPosInvoiceMarkPaidHint')}
+                        </p>
+                      </div>
+                    ) : (
+                    <>
+                      <button
+                        type="button"
+                        disabled={actionBusy}
+                        onClick={() => setCollectOpen((v) => !v)}
+                        className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {t('webPosCollectNow')} · CHF {Number(selected.total || 0).toFixed(2)}
+                      </button>
+                      {collectOpen ? (
+                        <div className="space-y-1.5 rounded-lg border border-[var(--border)] p-2">
+                          <p className="text-[11px] text-[var(--text-muted)]">
+                            {t('webPosCollectNowHint')}
+                          </p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {(['cash', 'card', 'terminal', 'bank_transfer'] as const).map((method) => (
+                              <button
+                                key={method}
+                                type="button"
+                                disabled={actionBusy}
+                                onClick={() =>
+                                  void runOrderAction(selected, collectPaymentAction(selected.status), {
+                                    paymentMethod: method,
+                                  })
+                                }
+                                className="rounded-md border border-[var(--border)] px-2 py-1.5 text-xs font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                              >
+                                {method === 'cash'
+                                  ? t('webPosCash')
+                                  : method === 'card'
+                                    ? t('webPosCard')
+                                    : method === 'terminal'
+                                      ? t('webPosTerminal')
+                                      : t('webPosBankTransfer')}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                    )
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={printing}
+                    onClick={() => void doPrint(selected)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                  >
+                    <Printer size={16} />
+                    {t('webPosPrintReceipt')}
+                  </button>
+                  {!showingInvoices && canRefundMerchantOrder(selected) ? (
+                    <button
+                      type="button"
+                      disabled={refundBusy}
+                      onClick={() => setRefundFor(selected)}
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-rose-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+                    >
+                      {t('webPosRefund')}
+                    </button>
+                  ) : null}
+                </div>
               </SettingsReportCard>
             </div>
           </div>
@@ -600,6 +1078,35 @@ export default function Orders() {
         open={salesAdjOpen}
         onClose={() => setSalesAdjOpen(false)}
         onApplied={() => void load()}
+      />
+
+      <WebPosRefundModal
+        open={!!refundFor}
+        orderNumber={refundFor?.orderNumber || ''}
+        total={refundFor?.total || 0}
+        alreadyRefunded={refundFor?.refundAmount || 0}
+        items={(refundFor?.items || []).map((it) => ({
+          id: String(it.id || ''),
+          name: orderItemName(it),
+          quantity: Number(it.quantity) || 0,
+          totalPrice: Number(it.totalPrice) || 0,
+          refundedQuantity: Number(it.refundedQuantity || 0),
+        }))}
+        reasons={refundReasons}
+        busy={refundBusy}
+        hasTerminalPortion={
+          !!refundFor &&
+          hasTerminalPortion(
+            parsePaymentBreakdown(
+              refundFor.paymentBreakdown,
+              refundFor.paymentMethod,
+              refundFor.total
+            )
+          )
+        }
+        terminalEnabled={false}
+        onClose={() => setRefundFor(null)}
+        onConfirm={(payload) => void doRefund(payload)}
       />
     </div>
   );

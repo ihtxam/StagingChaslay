@@ -1,6 +1,34 @@
 -- Idempotent: reseller license seat pool + billing support
 -- Run: psql "$DATABASE_URL" -f backend/sql/ensure-reseller-licenses-billing.sql
 
+CREATE TABLE IF NOT EXISTS devices (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+  device_id varchar(255) NOT NULL UNIQUE,
+  device_name varchar(255) NOT NULL,
+  device_type varchar(50) NOT NULL,
+  os_version varchar(50),
+  app_version varchar(50),
+  last_sync timestamp,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS licenses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+  device_id uuid NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+  license_key varchar(255) NOT NULL UNIQUE,
+  license_type varchar(50) NOT NULL,
+  trial_days integer DEFAULT 7,
+  starts_at timestamp NOT NULL,
+  expires_at timestamp NOT NULL,
+  renewal_notified_at timestamp,
+  status varchar(50) NOT NULL DEFAULT 'active',
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now()
+);
+
 -- Seat pool granted by Superadmin to each reseller
 ALTER TABLE resellers
   ADD COLUMN IF NOT EXISTS license_seats INTEGER NOT NULL DEFAULT 0;

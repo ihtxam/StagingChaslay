@@ -148,6 +148,18 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /** Official login can enter POS without inventing a PIN. */
+    fun skipPinSetup() {
+        val session = pendingSession ?: return
+        val pull = pendingPullCloudMenu
+        pendingSession = null
+        pendingPullCloudMenu = false
+        resetPinSetupBuffers()
+        viewModelScope.launch {
+            finishLogin(session, pullCloudMenu = pull)
+        }
+    }
+
     private fun savePinAndLogin(pin: String) {
         val session = pendingSession ?: return
         val pull = pendingPullCloudMenu

@@ -71,6 +71,7 @@ import com.chaslay.pos.ui.pos.OrderCompleteDialog
 import com.chaslay.pos.ui.pos.PosViewModel
 import com.chaslay.pos.ui.pos.ComboPickDialog
 import com.chaslay.pos.ui.pos.ProductCustomizeDialog
+import com.chaslay.pos.ui.pos.TerminalPaymentDialog
 import com.chaslay.pos.ui.theme.VectronColors
 import com.chaslay.pos.ui.theme.vectronColors
 import com.chaslay.pos.ui.tableplan.GuestCountDialog
@@ -87,6 +88,7 @@ fun WaiterPosScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     var tab by remember { mutableStateOf(WaiterTab.TABLES) }
+    var selectedFloorIndex by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(state.snackbarMessage) {
         state.snackbarMessage?.let { msg ->
@@ -112,16 +114,18 @@ fun WaiterPosScreen(
             terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
             onBack = viewModel::dismissCheckout,
             onSelectMethod = viewModel::updateCheckoutMethod,
+            onDeselectMethod = viewModel::deselectCheckoutMethod,
+            onApplyCardRemainder = viewModel::applyCheckoutCardRemainder,
             onTipAmount = viewModel::updateCheckoutTipAmount,
             onTipPercent = viewModel::updateCheckoutTipPercent,
             onDiscountPercent = viewModel::updateCheckoutDiscountPercent,
-            onRoundingStep = viewModel::updateCheckoutRoundingStep,
+            onDiscountAmount = viewModel::updateCheckoutDiscountAmount,
             onToggleTipPanel = viewModel::toggleCheckoutTipPanel,
             onToggleDiscountPanel = viewModel::toggleCheckoutDiscountPanel,
             onSplitClick = {},
             onOpenCashDrawer = {},
             onPrintReceipt = {},
-            onQuickCash = { amount -> viewModel.completeCheckoutWithQuickCash(amount, activity) },
+            onTenderAmount = viewModel::updateCheckoutTenderAmount,
             onComplete = { viewModel.completeCheckout(activity) }
         )
         if (state.showOrderComplete && state.completedTransaction != null) {
@@ -141,6 +145,16 @@ fun WaiterPosScreen(
                     viewModel.dismissOrderComplete()
                     tab = WaiterTab.TABLES
                 }
+            )
+        }
+        if (state.showTerminalPaymentModal) {
+            TerminalPaymentDialog(
+                phase = state.terminalPaymentPhase,
+                amountLabel = String.format(java.util.Locale.getDefault(), "%s %.2f", state.currencySymbol, state.terminalPaymentAmount),
+                message = state.terminalPaymentMessage,
+                onCancel = viewModel::cancelTerminalPayment,
+                onRetry = { viewModel.retryTerminalPayment(activity) },
+                onClose = viewModel::dismissTerminalPaymentModal
             )
         }
         return
@@ -163,6 +177,8 @@ fun WaiterPosScreen(
                     tables = state.tables,
                     currencySymbol = state.currencySymbol,
                     activeTableName = state.activeTableName,
+                    selectedFloorIndex = selectedFloorIndex,
+                    onSelectFloor = { selectedFloorIndex = it },
                     onSelectTable = { tableId ->
                         viewModel.openTable(tableId)
                         tab = WaiterTab.ORDER
@@ -284,6 +300,8 @@ private fun WaiterTablesPanel(
     tables: List<TableWithOrderInfo>,
     currencySymbol: String,
     activeTableName: String?,
+    selectedFloorIndex: Int,
+    onSelectFloor: (Int) -> Unit,
     onSelectTable: (Long) -> Unit
 ) {
     val mainFloorLabel = stringResource(R.string.main_floor)
@@ -299,7 +317,7 @@ private fun WaiterTablesPanel(
             )
         }
     }
-    var selectedFloor by remember(tables) { mutableIntStateOf(0) }
+    val selectedFloor = selectedFloorIndex.coerceIn(0, floorPairs.lastIndex.coerceAtLeast(0))
     val floorTables = floorPairs.getOrElse(selectedFloor) { floorPairs.first() }.second
 
     Column(
@@ -311,7 +329,7 @@ private fun WaiterTablesPanel(
             floorPairs.forEachIndexed { index, (name, _) ->
                 FilterChip(
                     selected = selectedFloor == index,
-                    onClick = { selectedFloor = index },
+                    onClick = { onSelectFloor(index) },
                     label = { Text(name, fontSize = 12.sp) }
                 )
             }

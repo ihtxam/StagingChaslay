@@ -2,6 +2,7 @@ import {
   canAccessEditionRoute,
   type EditionFeatureKey,
 } from './edition-features';
+import { isStandalonePwa } from './pwa';
 
 export type Permission =
   | 'USE_POS'
@@ -27,7 +28,8 @@ export type Permission =
   | 'MANAGE_STAFF'
   | 'MANAGE_ROLES'
   | 'MANAGE_BILLING'
-  | 'END_OF_DAY';
+  | 'END_OF_DAY'
+  | 'MANAGE_INVENTORY';
 
 export const ALL_PERMISSIONS: Permission[] = [
   'USE_POS',
@@ -54,11 +56,13 @@ export const ALL_PERMISSIONS: Permission[] = [
   'MANAGE_ROLES',
   'MANAGE_BILLING',
   'END_OF_DAY',
+  'MANAGE_INVENTORY',
 ];
 
 export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant': ['VIEW_REPORTS', 'ACCESS_PANEL'],
   '/merchant/orders': ['VIEW_ORDER_HISTORY'],
+  '/merchant/invoices': ['VIEW_REPORTS', 'VIEW_ALL_SALES', 'ACCESS_PANEL'],
   '/merchant/pos': ['USE_WEBPOS'],
   '/merchant/waiter': ['USE_WEBPOS'],
   '/merchant/reports': ['VIEW_REPORTS', 'END_OF_DAY'],
@@ -70,6 +74,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/loyalty': ['MANAGE_CUSTOMERS'],
   '/merchant/offers': ['MANAGE_OFFERS'],
   '/merchant/vouchers': ['MANAGE_OFFERS'],
+  '/merchant/terminals': ['MANAGE_SETTINGS'],
   '/merchant/newsletter': ['MANAGE_ONLINE_SHOP'],
   '/merchant/online-shop': ['MANAGE_ONLINE_SHOP'],
   '/merchant/website': ['MANAGE_ONLINE_SHOP'],
@@ -78,12 +83,112 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/tables/settings': ['MANAGE_TABLES'],
   '/merchant/tables/layout': ['MANAGE_TABLES'],
   '/merchant/tables/qr': ['MANAGE_TABLES'],
-  '/merchant/sales/reservations': ['VIEW_ORDER_HISTORY'],
-  '/merchant/reservations': ['VIEW_ORDER_HISTORY'],
+  '/merchant/sales/reservations': ['MANAGE_ONLINE_SHOP', 'VIEW_REPORTS'],
+  '/merchant/reservations': ['MANAGE_ONLINE_SHOP', 'VIEW_REPORTS'],
   '/merchant/billing': ['MANAGE_BILLING'],
   '/merchant/settings': ['MANAGE_SETTINGS'],
   '/merchant/users': ['MANAGE_STAFF'],
+  '/merchant/inventory': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/home': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/list': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/inbound': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/outbound': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/counting': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/history': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/items': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/categories': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/cookbook': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/suppliers': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/units': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/report': ['MANAGE_INVENTORY'],
+  '/merchant/inventory/consumption': ['MANAGE_INVENTORY'],
+  '/merchant/signage': ['MANAGE_SETTINGS', 'MANAGE_PRODUCTS', 'ACCESS_PANEL'],
 };
+
+export const CATALOG_PANEL_PATHS = [
+  '/merchant/products',
+  '/merchant/categories',
+  '/merchant/modifiers',
+] as const;
+
+export function isCatalogPanelPath(path: string): boolean {
+  return CATALOG_PANEL_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+}
+
+export function isOrdersPanelPath(path: string): boolean {
+  return path === '/merchant/orders' || path.startsWith('/merchant/orders/');
+}
+
+function normalizePanelPath(path: string): string {
+  return path.split('?')[0].replace(/\/$/, '') || '/merchant';
+}
+
+/** Resolve required permissions for a panel path; null = unknown merchant route (deny non-owners). */
+export function resolvePanelRoutePermissions(path: string): Permission[] | null | undefined {
+  const normalized = normalizePanelPath(path);
+  if (Object.prototype.hasOwnProperty.call(PANEL_ROUTE_PERMISSIONS, normalized)) {
+    return PANEL_ROUTE_PERMISSIONS[normalized];
+  }
+  if (normalized.startsWith('/merchant/inventory/')) {
+    return PANEL_ROUTE_PERMISSIONS['/merchant/inventory'];
+  }
+  if (normalized.startsWith('/merchant/')) {
+    return null;
+  }
+  return [];
+}
+
+/** Catalog and/or orders — not Sales, invoices, or reports. */
+export function isLimitedBackOfficePath(path: string): boolean {
+  return isCatalogPanelPath(path) || isOrdersPanelPath(path);
+}
+
+/**
+ * Where limited staff land when leaving POS.
+ * Menu (catalogue) is preferred when both menu and orders are granted.
+ */
+export function backOfficeHomePath(
+  permissions: Permission[] | undefined,
+  isOwner: boolean
+): string {
+  if (isOwner || hasPermission(permissions, 'ACCESS_PANEL', false)) {
+    return '/merchant';
+  }
+  if (hasPermission(permissions, 'MANAGE_PRODUCTS', false)) return '/merchant/products';
+  if (hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return '/merchant/orders';
+  return '/merchant/pos';
+}
+
+/** Full merchant backend (not catalog-only). MANAGE_PRODUCTS is catalog, not dashboard. */
+export const FULL_PANEL_PERMISSIONS: Permission[] = [
+  'ACCESS_PANEL',
+  'VIEW_REPORTS',
+  'MANAGE_SETTINGS',
+  'MANAGE_STAFF',
+  'MANAGE_BILLING',
+  'MANAGE_CUSTOMERS',
+  'MANAGE_ONLINE_SHOP',
+  'MANAGE_OFFERS',
+  'MANAGE_INVENTORY',
+  'MANAGE_ROLES',
+  'VIEW_ALL_SALES',
+  'END_OF_DAY',
+];
+
+export function hasFullPanelAccess(
+  permissions: Permission[] | undefined,
+  isOwner: boolean
+): boolean {
+  if (isOwner) return true;
+  return FULL_PANEL_PERMISSIONS.some((p) => hasPermission(permissions, p, false));
+}
+
+export function staffRoleDisplayName(name: string, t: (key: string) => string): string {
+  const n = name.trim().toLowerCase();
+  if (n === 'waiter' || n === 'waiter (pos only)') return t('staffRoleWaiter');
+  if (n.includes('menu editor') || n.includes('menu-editor')) return t('staffRoleWaiterMenu');
+  return name;
+}
 
 export function canAccessRoute(
   path: string,
@@ -93,8 +198,9 @@ export function canAccessRoute(
 ): boolean {
   if (!canAccessEditionRoute(path, editionFeatures ?? null)) return false;
   if (isOwner) return true;
-  const required = PANEL_ROUTE_PERMISSIONS[path];
-  if (!required?.length) return true;
+  const required = resolvePanelRoutePermissions(path);
+  if (required === null) return false;
+  if (!required.length) return true;
   if (!permissions?.length) return false;
   return required.some((p) => permissions.includes(p));
 }
@@ -133,6 +239,16 @@ export type WebPosStaffSession = {
 const WEBPOS_STAFF_KEY = 'webpos_staff_session';
 /** Survives PWA relaunch when sessionStorage is cleared (offline register). */
 const WEBPOS_STAFF_PERSIST_KEY = 'webpos_staff_session_persist';
+/** Set in sessionStorage when PIN verify / staff auto-bind succeeded in this tab. */
+const WEBPOS_STAFF_VALIDATED_KEY = 'webpos_staff_session_validated';
+
+/** Dispatched when the active register staff session changes (PIN switch, logout, reconcile). */
+export const WEBPOS_STAFF_SESSION_EVENT = 'webpos:staff-session';
+
+export function notifyWebPosStaffSessionChanged() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(WEBPOS_STAFF_SESSION_EVENT));
+}
 
 function parseStaffSession(raw: string | null): WebPosStaffSession | null {
   if (!raw) return null;
@@ -143,15 +259,31 @@ function parseStaffSession(raw: string | null): WebPosStaffSession | null {
   }
 }
 
+/**
+ * Load the active register PIN session.
+ *
+ * Persistence rules (single source of truth for "who is on the till"):
+ * - `sessionStorage` + validated flag: active tab session (survives refresh in the same tab).
+ * - `localStorage` persist: only restored in installed PWA when sessionStorage was cleared
+ *   (offline relaunch). Never auto-restored in a normal browser tab — avoids stale waiter
+ *   sessions overriding a merchant-owner JWT after login/refresh.
+ * - Merchant JWT (`localStorage` token/user) is separate and never replaced by PIN state.
+ */
 export function loadWebPosStaffSession(): WebPosStaffSession | null {
   try {
+    const validated = sessionStorage.getItem(WEBPOS_STAFF_VALIDATED_KEY) === '1';
     const fromSession = parseStaffSession(sessionStorage.getItem(WEBPOS_STAFF_KEY));
-    if (fromSession) return fromSession;
-    const fromPersist = parseStaffSession(localStorage.getItem(WEBPOS_STAFF_PERSIST_KEY));
-    if (fromPersist) {
-      sessionStorage.setItem(WEBPOS_STAFF_KEY, JSON.stringify(fromPersist));
+    if (fromSession && validated) return fromSession;
+
+    if (isStandalonePwa()) {
+      const fromPersist = parseStaffSession(localStorage.getItem(WEBPOS_STAFF_PERSIST_KEY));
+      if (fromPersist) {
+        sessionStorage.setItem(WEBPOS_STAFF_KEY, JSON.stringify(fromPersist));
+        sessionStorage.setItem(WEBPOS_STAFF_VALIDATED_KEY, '1');
+        return fromPersist;
+      }
     }
-    return fromPersist;
+    return null;
   } catch {
     return null;
   }
@@ -159,12 +291,12 @@ export function loadWebPosStaffSession(): WebPosStaffSession | null {
 
 export function saveWebPosStaffSession(session: WebPosStaffSession | null) {
   if (!session) {
-    sessionStorage.removeItem(WEBPOS_STAFF_KEY);
-    localStorage.removeItem(WEBPOS_STAFF_PERSIST_KEY);
+    clearWebPosStaffSession();
     return;
   }
   const raw = JSON.stringify(session);
   sessionStorage.setItem(WEBPOS_STAFF_KEY, raw);
+  sessionStorage.setItem(WEBPOS_STAFF_VALIDATED_KEY, '1');
   try {
     localStorage.setItem(WEBPOS_STAFF_PERSIST_KEY, raw);
   } catch {
@@ -174,6 +306,7 @@ export function saveWebPosStaffSession(session: WebPosStaffSession | null) {
 
 export function clearWebPosStaffSession() {
   sessionStorage.removeItem(WEBPOS_STAFF_KEY);
+  sessionStorage.removeItem(WEBPOS_STAFF_VALIDATED_KEY);
   try {
     localStorage.removeItem(WEBPOS_STAFF_PERSIST_KEY);
   } catch {
@@ -225,6 +358,62 @@ export function isStaleWebPosStaffSession(
  * - drop stale PIN sessions (role changed in portal)
  * - auto-bind panel staff JWT users to their current server role (skip PIN gate)
  */
+/** Merchant owner (or impersonated owner) already signed into the dashboard. */
+export function isMerchantOwnerJwt(user?: {
+  role?: string | null;
+  isOwner?: boolean;
+} | null): boolean {
+  return user?.role === 'merchant' && user?.isOwner !== false;
+}
+
+/**
+ * Hard PIN wall for WebPOS / waiter:
+ * - skip when no staff PINs exist (first-run / new shop)
+ * - skip when a staff PIN session is already active (incl. official staff login auto-bind)
+ * - skip when offline cache unlock applies
+ * Merchant owner JWT does not bypass — shared registers require clock-in once PINs exist.
+ */
+export function webPosPinGateRequired(opts: {
+  hasStaffPins: boolean;
+  pinSession: WebPosStaffSession | null;
+  offlineUnlocked?: boolean;
+}): boolean {
+  if (opts.offlineUnlocked) return false;
+  if (opts.pinSession) return false;
+  if (!opts.hasStaffPins) return false;
+  return true;
+}
+
+/** Notify open WebPOS / waiter tabs to reload staff roster (e.g. after PIN created in Users). */
+export function notifyStaffRosterChanged() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('webpos:staff-roster-changed'));
+}
+
+function sessionFromRosterRow(
+  row: StaffRosterRow,
+  accessToken?: string
+): WebPosStaffSession {
+  return webPosSessionFromStaffProfile({
+    id: row.id,
+    name: row.name,
+    roleId: row.roleId,
+    roleName: row.roleName,
+    permissions: row.permissions || [],
+    accessToken,
+  });
+}
+
+function sessionsEqual(a: WebPosStaffSession, b: WebPosStaffSession): boolean {
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.roleId === b.roleId &&
+    a.roleName === b.roleName &&
+    JSON.stringify(a.permissions) === JSON.stringify(b.permissions)
+  );
+}
+
 export function resolveWebPosStaffSession(opts: {
   staffList: StaffRosterRow[];
   authStaffId?: string | null;
@@ -240,6 +429,17 @@ export function resolveWebPosStaffSession(opts: {
     clearWebPosStaffSession();
   }
 
+  if (session) {
+    const row = staffList.find((s) => s.id === session!.id);
+    if (row) {
+      const fresh = sessionFromRosterRow(row, session.accessToken);
+      if (!sessionsEqual(session, fresh)) {
+        session = fresh;
+        saveWebPosStaffSession(session);
+      }
+    }
+  }
+
   if (opts.authRole === 'staff' && opts.authStaffId) {
     const row = staffList.find((s) => s.id === opts.authStaffId);
     if (row) {
@@ -253,12 +453,7 @@ export function resolveWebPosStaffSession(opts: {
           : opts.authPermissions || [],
         accessToken: session?.id === row.id ? session.accessToken : undefined,
       });
-      if (
-        !session ||
-        session.id !== fresh.id ||
-        session.roleId !== fresh.roleId ||
-        session.roleName !== fresh.roleName
-      ) {
+      if (!session || !sessionsEqual(session, fresh)) {
         session = fresh;
         saveWebPosStaffSession(session);
       }
@@ -268,36 +463,101 @@ export function resolveWebPosStaffSession(opts: {
   return session;
 }
 
+/** Sidebar / header / POS chrome — one label for the active register user. */
+export function getEffectiveRegisterDisplay(opts: {
+  jwtUser?: {
+    name?: string | null;
+    roleName?: string | null;
+    role?: string | null;
+    isOwner?: boolean;
+  } | null;
+  pinSession: WebPosStaffSession | null;
+  pinActive: boolean;
+  impersonating?: boolean;
+  t: (key: string) => string;
+}): { name: string; roleLabel: string } {
+  if (opts.impersonating) {
+    return {
+      name: opts.jwtUser?.name || '',
+      roleLabel: 'Merchant (SA)',
+    };
+  }
+  if (opts.pinActive && opts.pinSession) {
+    return {
+      name: opts.pinSession.name,
+      roleLabel: staffRoleDisplayName(opts.pinSession.roleName, opts.t),
+    };
+  }
+  const roleLabel = opts.jwtUser?.isOwner
+    ? opts.t('staffOwnerTitle')
+    : opts.jwtUser?.roleName || opts.jwtUser?.role || '';
+  return {
+    name: opts.jwtUser?.name || '',
+    roleLabel,
+  };
+}
+
 /**
  * Effective panel permissions while a WebPOS PIN session is active.
  * Owner JWT must not bypass a restricted floor staff PIN (waiter/cashier).
  */
+export function isStaffJwt(user?: { role?: string | null } | null): boolean {
+  return user?.role === 'staff';
+}
+
 export function getEffectivePanelAccess(opts: {
   jwtPermissions: Permission[] | undefined;
   isOwner: boolean;
-  staffConfigured: boolean;
+  authRole?: string | null;
+  /** Shop has at least one active staff PIN configured. */
+  hasStaffPins: boolean;
+  /** @deprecated use hasStaffPins */
+  staffConfigured?: boolean;
   pinSession: WebPosStaffSession | null;
 }): {
   permissions: Permission[] | undefined;
   /** Treat as owner for route checks (false when a PIN session is active). */
   isOwner: boolean;
   canOpenPanel: boolean;
+  /** Products / categories / modifiers only — not Sales, Settings, Users. */
+  canOpenCatalog: boolean;
+  /** Backend Orders list — not invoices, reports, or Sales overview. */
+  canOpenOrders: boolean;
+  /** At least one back-office page (panel, menu, or orders). */
+  canOpenBackOffice: boolean;
   pinActive: boolean;
 } {
-  const pinActive = opts.staffConfigured && !!opts.pinSession;
+  const ownerEffective = opts.isOwner && opts.authRole !== 'staff';
+  const hasStaffPins = opts.hasStaffPins ?? !!opts.staffConfigured;
+  const pinActive = hasStaffPins && !!opts.pinSession;
   if (pinActive && opts.pinSession) {
     const permissions = opts.pinSession.permissions || [];
+    const canOpenPanel = hasPermission(permissions, 'ACCESS_PANEL', false);
+    const canOpenCatalog = hasPermission(permissions, 'MANAGE_PRODUCTS', false);
+    const canOpenOrders = hasPermission(permissions, 'VIEW_ORDER_HISTORY', false);
     return {
       permissions,
       isOwner: false,
-      canOpenPanel: hasPermission(permissions, 'ACCESS_PANEL', false),
+      canOpenPanel,
+      canOpenCatalog,
+      canOpenOrders,
+      canOpenBackOffice: canOpenPanel || canOpenCatalog || canOpenOrders,
       pinActive: true,
     };
   }
+  const canOpenPanel =
+    ownerEffective || hasPermission(opts.jwtPermissions, 'ACCESS_PANEL', false);
+  const canOpenCatalog =
+    ownerEffective || hasPermission(opts.jwtPermissions, 'MANAGE_PRODUCTS', false);
+  const canOpenOrders =
+    ownerEffective || hasPermission(opts.jwtPermissions, 'VIEW_ORDER_HISTORY', false);
   return {
     permissions: opts.jwtPermissions,
-    isOwner: opts.isOwner,
-    canOpenPanel: opts.isOwner || hasPermission(opts.jwtPermissions, 'ACCESS_PANEL', false),
+    isOwner: ownerEffective,
+    canOpenPanel,
+    canOpenCatalog,
+    canOpenOrders,
+    canOpenBackOffice: canOpenPanel || canOpenCatalog || canOpenOrders,
     pinActive: false,
   };
 }

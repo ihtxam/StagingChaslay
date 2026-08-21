@@ -5,8 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -21,9 +22,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import com.chaslay.pos.domain.model.PaymentMethod
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -37,6 +44,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,7 +68,7 @@ import com.chaslay.pos.ui.theme.vectronColors
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OngoingOrdersScreen(
     onBack: () -> Unit,
@@ -68,6 +78,7 @@ fun OngoingOrdersScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val orders = state.filteredOrders
     val colors = vectronColors()
+    var recordPaymentFor by remember { mutableStateOf<OngoingOrderCard?>(null) }
     val filterChipColors = FilterChipDefaults.filterChipColors(
         containerColor = Color(0xFFE8E8E8),
         labelColor = Color(0xFF333333),
@@ -86,80 +97,102 @@ fun OngoingOrdersScreen(
                 .background(colors.background)
                 .padding(12.dp)
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = state.statusFilter == OrdersStatusFilter.ACTIVE,
-                    onClick = { viewModel.setStatusFilter(OrdersStatusFilter.ACTIVE) },
-                    label = { Text(stringResource(R.string.orders_filter_active)) },
-                    colors = filterChipColors
-                )
-                FilterChip(
-                    selected = state.statusFilter == OrdersStatusFilter.COMPLETED,
-                    onClick = { viewModel.setStatusFilter(OrdersStatusFilter.COMPLETED) },
-                    label = { Text(stringResource(R.string.orders_filter_completed)) },
-                    colors = filterChipColors
-                )
-            }
-
-            FlowRow(
-                modifier = Modifier.padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            var searchOpen by remember { mutableStateOf(state.searchQuery.isNotBlank()) }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                FilterChip(
-                    selected = state.channelFilter == OrdersChannelFilter.ALL,
-                    onClick = { viewModel.setChannelFilter(OrdersChannelFilter.ALL) },
-                    label = { Text(stringResource(R.string.all)) },
-                    colors = filterChipColors
-                )
-                FilterChip(
-                    selected = state.channelFilter == OrdersChannelFilter.DINE_IN,
-                    onClick = { viewModel.setChannelFilter(OrdersChannelFilter.DINE_IN) },
-                    label = { Text(stringResource(R.string.dine_in)) },
-                    colors = filterChipColors
-                )
-                FilterChip(
-                    selected = state.channelFilter == OrdersChannelFilter.TAKEAWAY,
-                    onClick = { viewModel.setChannelFilter(OrdersChannelFilter.TAKEAWAY) },
-                    label = { Text(stringResource(R.string.pickup)) },
-                    colors = filterChipColors
-                )
-                FilterChip(
-                    selected = state.channelFilter == OrdersChannelFilter.DELIVERY,
-                    onClick = { viewModel.setChannelFilter(OrdersChannelFilter.DELIVERY) },
-                    label = { Text(stringResource(R.string.delivery)) },
-                    colors = filterChipColors
-                )
-                if (state.statusFilter == OrdersStatusFilter.ACTIVE) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     FilterChip(
-                        selected = state.paymentFilter == OrdersPaymentFilter.UNPAID,
-                        onClick = {
-                            viewModel.setPaymentFilter(
-                                if (state.paymentFilter == OrdersPaymentFilter.UNPAID) {
-                                    OrdersPaymentFilter.ALL
-                                } else {
-                                    OrdersPaymentFilter.UNPAID
-                                }
-                            )
-                        },
-                        label = { Text(stringResource(R.string.orders_filter_unpaid)) },
+                        selected = state.statusFilter == OrdersStatusFilter.ACTIVE,
+                        onClick = { viewModel.setStatusFilter(OrdersStatusFilter.ACTIVE) },
+                        label = { Text(stringResource(R.string.orders_filter_active)) },
                         colors = filterChipColors
+                    )
+                    FilterChip(
+                        selected = state.statusFilter == OrdersStatusFilter.COMPLETED,
+                        onClick = { viewModel.setStatusFilter(OrdersStatusFilter.COMPLETED) },
+                        label = { Text(stringResource(R.string.orders_filter_completed)) },
+                        colors = filterChipColors
+                    )
+                    FilterChip(
+                        selected = state.channelFilter == OrdersChannelFilter.ALL,
+                        onClick = { viewModel.setChannelFilter(OrdersChannelFilter.ALL) },
+                        label = { Text(stringResource(R.string.all)) },
+                        colors = filterChipColors
+                    )
+                    FilterChip(
+                        selected = state.channelFilter == OrdersChannelFilter.DINE_IN,
+                        onClick = { viewModel.setChannelFilter(OrdersChannelFilter.DINE_IN) },
+                        label = { Text(stringResource(R.string.dine_in)) },
+                        colors = filterChipColors
+                    )
+                    FilterChip(
+                        selected = state.channelFilter == OrdersChannelFilter.TAKEAWAY,
+                        onClick = { viewModel.setChannelFilter(OrdersChannelFilter.TAKEAWAY) },
+                        label = { Text(stringResource(R.string.pickup)) },
+                        colors = filterChipColors
+                    )
+                    FilterChip(
+                        selected = state.channelFilter == OrdersChannelFilter.DELIVERY,
+                        onClick = { viewModel.setChannelFilter(OrdersChannelFilter.DELIVERY) },
+                        label = { Text(stringResource(R.string.delivery)) },
+                        colors = filterChipColors
+                    )
+                    if (state.statusFilter == OrdersStatusFilter.ACTIVE) {
+                        FilterChip(
+                            selected = state.paymentFilter == OrdersPaymentFilter.UNPAID,
+                            onClick = {
+                                viewModel.setPaymentFilter(
+                                    if (state.paymentFilter == OrdersPaymentFilter.UNPAID) {
+                                        OrdersPaymentFilter.ALL
+                                    } else {
+                                        OrdersPaymentFilter.UNPAID
+                                    }
+                                )
+                            },
+                            label = { Text(stringResource(R.string.orders_filter_unpaid)) },
+                            colors = filterChipColors
+                        )
+                    }
+                }
+                if (searchOpen) {
+                    OutlinedTextField(
+                        value = state.searchQuery,
+                        onValueChange = viewModel::setSearchQuery,
+                        modifier = Modifier
+                            .widthIn(min = 160.dp, max = 240.dp)
+                            .height(52.dp),
+                        singleLine = true,
+                        placeholder = { Text(stringResource(R.string.orders_search_hint), fontSize = 13.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        if (searchOpen) {
+                            viewModel.setSearchQuery("")
+                            searchOpen = false
+                        } else {
+                            searchOpen = true
+                        }
+                    }
+                ) {
+                    Icon(
+                        if (searchOpen) Icons.Default.Close else Icons.Default.Search,
+                        contentDescription = stringResource(R.string.orders_search_hint),
+                        tint = colors.textPrimary
                     )
                 }
             }
-
-            OutlinedTextField(
-                value = state.searchQuery,
-                onValueChange = viewModel::setSearchQuery,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                singleLine = true,
-                placeholder = { Text(stringResource(R.string.orders_search_hint)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                shape = RoundedCornerShape(10.dp)
-            )
 
             if (state.isLoading) {
                 Text(
@@ -191,7 +224,7 @@ fun OngoingOrdersScreen(
                     columns = GridCells.Adaptive(minSize = 180.dp),
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = 12.dp),
+                        .padding(top = 20.dp),
                     contentPadding = PaddingValues(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -206,7 +239,13 @@ fun OngoingOrdersScreen(
                                 }
                             },
                             onPrint = { viewModel.printReceiptForOrder(order) },
-                            onSendKitchen = { viewModel.sendKitchenForOrder(order) }
+                            onSendKitchen = { viewModel.sendKitchenForOrder(order) },
+                            onOpenInvoice = if (order.paymentMethod == PaymentMethod.INVOICE) {
+                                { viewModel.openInvoicePdf(order) }
+                            } else null,
+                            onRecordPayment = if (order.paymentMethod == PaymentMethod.INVOICE) {
+                                { recordPaymentFor = order }
+                            } else null
                         )
                     }
                 }
@@ -232,6 +271,33 @@ fun OngoingOrdersScreen(
             content(Modifier.padding(padding))
         }
     }
+
+    recordPaymentFor?.let { card ->
+        AlertDialog(
+            onDismissRequest = { recordPaymentFor = null },
+            title = { Text(stringResource(R.string.invoice_record_payment)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("#${card.orderNumber}")
+                    Text(stringResource(R.string.invoice_mark_paid_hint))
+                    Text(stringResource(R.string.invoice_bank_transfer))
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.recordInvoicePayment(card, "invoice")
+                        recordPaymentFor = null
+                    }
+                ) { Text(stringResource(R.string.invoice_mark_paid)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { recordPaymentFor = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -240,7 +306,9 @@ private fun OngoingOrderCardView(
     currencySymbol: String,
     onClick: () -> Unit,
     onPrint: () -> Unit,
-    onSendKitchen: () -> Unit
+    onSendKitchen: () -> Unit,
+    onOpenInvoice: (() -> Unit)? = null,
+    onRecordPayment: (() -> Unit)? = null
 ) {
     val headerColor = channelHeaderColor(order)
     val channelLabel = channelLabel(order)
@@ -337,6 +405,12 @@ private fun OngoingOrderCardView(
                 OngoingActionIcon(Icons.Default.Print, onPrint)
                 if (!isCompleted) {
                     OngoingActionIcon(Icons.Default.Restaurant, onSendKitchen)
+                }
+                if (onOpenInvoice != null) {
+                    OngoingActionIcon(Icons.Default.Description, onOpenInvoice)
+                }
+                if (onRecordPayment != null) {
+                    OngoingActionIcon(Icons.Default.Payments, onRecordPayment)
                 }
             }
         }

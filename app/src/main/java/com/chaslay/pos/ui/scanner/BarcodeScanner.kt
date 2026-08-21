@@ -115,6 +115,7 @@ private fun CameraBarcodePreview(onBarcode: (String) -> Unit) {
                     }
                     val analysis = ImageAnalysis.Builder()
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                         .build()
                     analysis.setAnalyzer(executor) { imageProxy ->
                         val mediaImage = imageProxy.image
@@ -128,7 +129,9 @@ private fun CameraBarcodePreview(onBarcode: (String) -> Unit) {
                         )
                         scanner.process(input)
                             .addOnSuccessListener { barcodes ->
-                                barcodes.firstOrNull()?.rawValue?.let(onBarcode)
+                                val value = barcodes.firstOrNull()?.rawValue
+                                    ?: barcodes.firstOrNull()?.displayValue
+                                value?.takeIf { it.isNotBlank() }?.let(onBarcode)
                             }
                             .addOnCompleteListener { imageProxy.close() }
                     }
@@ -146,7 +149,7 @@ private fun CameraBarcodePreview(onBarcode: (String) -> Unit) {
         },
         modifier = Modifier
             .fillMaxWidth()
-            .height(280.dp)
+            .height(360.dp)
     )
 }
 
@@ -177,8 +180,18 @@ fun BarcodeWedgeListener(
                         if (buffer.isNotEmpty()) buffer.deleteCharAt(buffer.length - 1)
                         true
                     }
+                    Key.Tab -> {
+                        val code = buffer.toString().trim()
+                        buffer.clear()
+                        if (code.isNotEmpty()) onBarcode(code)
+                        true
+                    }
                     else -> {
-                        val char = event.nativeKeyEvent.displayLabel
+                        val unicode = event.nativeKeyEvent.unicodeChar
+                        val char = when {
+                            unicode != 0 && !Character.isISOControl(unicode) -> unicode.toChar()
+                            else -> event.nativeKeyEvent.displayLabel
+                        }
                         if (char != null && char.code in 32..126) {
                             buffer.append(char)
                             true

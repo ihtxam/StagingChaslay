@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthService, JWTPayload } from "@/services/auth.service";
+import { hasAnyPermission, STAFF_MERCHANT_ENTRY_PERMISSIONS } from "@/lib/permissions";
 
 declare global {
   namespace Express {
@@ -68,7 +69,8 @@ export function requireMerchantOwner(req: Request, res: Response, next: NextFunc
 }
 
 /**
- * Merchant owner or staff with panel access
+ * Merchant owner or staff with POS / waiter / catalog / panel entry permissions.
+ * Route-level requirePermission still gates writes (settings, billing, inventory, catalog).
  */
 export function requireMerchantPanel(req: Request, res: Response, next: NextFunction) {
   if (!req.user) {
@@ -76,9 +78,8 @@ export function requireMerchantPanel(req: Request, res: Response, next: NextFunc
   }
   if (req.user.role === "merchant") return next();
   if (req.user.role === "staff") {
-    const perms = req.user.permissions || [];
-    if (perms.includes("ACCESS_PANEL")) return next();
-    return res.status(403).json({ error: "Panel access required" });
+    if (hasAnyPermission(req.user.permissions, STAFF_MERCHANT_ENTRY_PERMISSIONS)) return next();
+    return res.status(403).json({ error: "Staff access required" });
   }
   return res.status(403).json({ error: "Merchant access required" });
 }

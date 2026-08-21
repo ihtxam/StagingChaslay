@@ -8,6 +8,7 @@ import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
 
 import LoginPage from '@/pages/LoginPage';
 import SetPasswordPage from '@/pages/SetPasswordPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import SuperadminDashboard from '@/pages/superadmin/Dashboard';
 import MerchantDashboard from '@/pages/merchant/Dashboard';
 import ResellerDashboard from '@/pages/reseller/Dashboard';
@@ -22,6 +23,9 @@ import ReservationsPage from '@/pages/shop/ReservationsPage';
 import ReceiptPage from '@/pages/ReceiptPage';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import PosEmbedPage from '@/pages/PosEmbedPage';
+import PosViewportManager from '@/components/PosViewportManager';
+import KdsDisplayPage from '@/pages/KdsDisplayPage';
+import SignageDisplayPage from '@/pages/SignageDisplayPage';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 
@@ -32,7 +36,11 @@ function LegacyReceiptRedirect() {
 }
 
 function isWebPosRoute(pathname: string): boolean {
-  return /\/merchant\/(?:pos|waiter)(?:\/|$)/.test(pathname);
+  return (
+    /\/merchant\/(?:pos|waiter)(?:\/|$)/.test(pathname) ||
+    /^\/kds(?:\/|$)/.test(pathname) ||
+    /^\/tv(?:\/|$)/.test(pathname)
+  );
 }
 
 /** WebPOS uses center-top toasts so they do not cover the right-side menu. */
@@ -129,9 +137,79 @@ function App() {
   return (
     <>
       <BrowserRouter>
+        <PosViewportManager />
         <Routes>
-          {!shopMode && <Route path="/login" element={<LoginPage />} />}
+          {!shopMode && (
+            <Route
+              path="/login"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
+          {!shopMode && (
+            <Route
+              path="/signin"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
+          {!shopMode && (
+            <Route
+              path="/superadmin/login"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
+          {!shopMode && (
+            <Route
+              path="/reseller/login"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
+          {!shopMode && (
+            <Route
+              path="/merchant/login"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
           {!shopMode && <Route path="/set-password" element={<SetPasswordPage />} />}
+          {!shopMode && (
+            <Route
+              path="/reset-password"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <ResetPasswordPage />
+                </I18nProvider>
+              }
+            />
+          )}
+          {!shopMode && (
+            <Route
+              path="/forgot-password"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <LoginPage />
+                </I18nProvider>
+              }
+            />
+          )}
           {!shopMode && <Route path="/pos-embed" element={<PosEmbedPage />} />}
           <Route
             path="/receipt/:saleId"
@@ -142,6 +220,22 @@ function App() {
             }
           />
           <Route path="/receipts/:saleId" element={<LegacyReceiptRedirect />} />
+          <Route
+            path="/kds/:token"
+            element={
+              <I18nProvider storageKey={PANEL_LANG_KEY}>
+                <KdsDisplayPage />
+              </I18nProvider>
+            }
+          />
+          <Route
+            path="/tv/:token"
+            element={
+              <I18nProvider storageKey={PANEL_LANG_KEY}>
+                <SignageDisplayPage />
+              </I18nProvider>
+            }
+          />
           <Route
             path="/shop/:merchantSlug"
             element={

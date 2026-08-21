@@ -7,13 +7,13 @@ import {
   ChevronRight,
   Clock,
   CreditCard,
+  FileText,
   Info,
   LayoutGrid,
   List,
   MoreHorizontal,
   Printer,
   RefreshCw,
-  Search,
   ShoppingBag,
   Store,
   Trash2,
@@ -25,28 +25,46 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
 import {
+  canAdminCollectPayment,
   canCollectPayment,
+  canMarkReadyOrder,
   canShowAwaitingPaymentBadge,
+  showsKitchenFulfillmentStages,
   formatOrderPaymentDisplay,
+  INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
+  isInvoiceOrder,
   isOnlineShopOrder,
   isPaidOrder,
   orderChannelBadgeClass,
+  orderChannelBorderClass,
   orderChannelHeaderClass,
+  orderStatusBadgeClass,
   orderStatusLabel,
 } from '@/lib/order-management';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import { hasTerminalPortion, parsePaymentBreakdown } from '@/lib/payment-breakdown';
+import { collectPaymentAction } from '@/lib/order-to-cart';
+import {
+  localHeldRowsFromSession,
+  parseHeldCartJson,
+  removeLocalHeldDraft,
+  resolveHeldChannel,
+  sameHeldIdentity,
+  ticketQueryMatches,
+} from '@/lib/webpos-held';
+import { hasTerminalPortion, parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
   type RefundReasonOption,
 } from '@/components/webpos/WebPosRefundModal';
+import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
-import { useSecretTap } from '@/lib/use-secret-tap';
+import SecretSearchTapButton from '@/components/SecretSearchTapButton';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 
 function toMs(raw: string | number | Date | null | undefined): number {
@@ -138,12 +156,29 @@ export type PosOrder = PosOrderForReceipt & {
   status: string;
   paymentStatus?: string | null;
   refundAmount: number;
+  refundHistory?: Array<{
+    id?: string;
+    kind?: string;
+    amount: number;
+    reason?: string | null;
+    staffName?: string | null;
+    createdAt?: string | null;
+    items?: Array<{ orderItemId?: string; productName?: string; quantity: number }>;
+    allocation?: {
+      giftCard?: number;
+      cash?: number;
+      terminal?: number;
+      other?: number;
+    } | null;
+  }>;
   cancelReason?: string | null;
   notes?: string | null;
   masterOrderId?: string | null;
   /** pos | web_shop */
   orderType?: string | null;
   orderSource?: string | null;
+  invoiceNumber?: string | null;
+  scheduledFor?: string | number | Date | null;
 };
 export type HeldRow = {
   id: string;
@@ -156,7 +191,7 @@ export type HeldRow = {
   createdAt?: string | null;
 };
 type StatusFilter = 'active' | 'completed' | 'all' | 'held';
-type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
+type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online' | 'invoice';
 type Props = {
   open: boolean;
   /** Full-width in-tab layout instead of slide-over overlay */
@@ -191,7 +226,7 @@ type Props = {
   onChannelFilterChange?: (filter: ChannelFilter) => void;
 };
 
-const PAYMENT_OPTIONS = ['cash', 'card', 'terminal'] as const;
+const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
 
 function todayIso(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
@@ -206,21 +241,43 @@ function canCancelOrder(o: PosOrder): boolean {
   return true;
 }
 
-/** Still in kitchen / fulfillment — includes paid online shop orders */
+/** Still in kitchen / fulfillment — paid online/3P stay open; paid internal POS does not. */
 function isOpenFulfillmentOrder(o: PosOrder): boolean {
   const status = (o.status || '').toLowerCase();
-  return !['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status);
+  if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) return false;
+  if (!isOnlineShopOrder(o) && isPaidOrder(o)) return false;
+  return true;
 }
 
-function isOnlineShopOrder(o: PosOrder): boolean {
-  const t = (o.orderType || '').toLowerCase();
-  return t === 'web_shop' || t === 'online' || isPlatformChannel(o.channel);
+/** Paid delivery/takeaway with a future slot — still a kitchen ticket, also in history. */
+function isScheduledKitchenTicket(o: PosOrder): boolean {
+  const status = (o.status || '').toLowerCase();
+  if (status !== 'completed' && status !== 'partially_refunded') return false;
+  const ch = String(o.channel || o.fulfillmentChannel || '').toLowerCase();
+  if (ch !== 'delivery' && ch !== 'takeaway') return false;
+  if (o.scheduledFor == null || o.scheduledFor === '') return false;
+  const when = new Date(o.scheduledFor as string | number | Date).getTime();
+  return Number.isFinite(when) && when > Date.now();
 }
 
-function matchesChannelFilter(o: { channel?: string | null; orderType?: string | null }, filter: ChannelFilter) {
+function isUnpaidInvoice(o: PosOrder): boolean {
+  if (!isInvoiceOrder(o)) return false;
+  const pay = (o.paymentStatus || '').toLowerCase();
+  return !['completed', 'paid', 'partially_refunded', 'cancelled'].includes(pay);
+}
+
+function matchesChannelFilter(
+  o: { channel?: string | null; orderType?: string | null; cartJson?: unknown; paymentMethod?: string | null; invoiceNumber?: string | null },
+  filter: ChannelFilter
+) {
   if (filter === 'all') return true;
   if (filter === 'online') return isOnlineShopOrder(o as PosOrder);
-  return (o.channel || 'takeaway') === filter;
+  if (filter === 'invoice') return isInvoiceOrder(o);
+  const ch =
+    o.cartJson != null
+      ? resolveHeldChannel({ channel: o.channel, cartJson: o.cartJson })
+      : o.channel || (o as { fulfillmentChannel?: string | null }).fulfillmentChannel || 'takeaway';
+  return ch === filter;
 }
 
 function canEditPayment(o: PosOrder): boolean {
@@ -248,7 +305,13 @@ function isUnpaidOnline(o: PosOrder): boolean {
   if (isPaidOrder(o)) return false;
   const pay = (o.paymentStatus || '').toLowerCase();
   const method = (o.paymentMethod || '').toLowerCase();
-  return pay === 'awaiting_payment' || method === 'pay_later' || method === 'pay-later' || pay === 'cash';
+  return (
+    pay === 'awaiting_payment' ||
+    method === 'pay_later' ||
+    method === 'pay-later' ||
+    method === 'invoice' ||
+    pay === 'cash'
+  );
 }
 
 function canRefundOrder(o: PosOrder): boolean {
@@ -272,12 +335,20 @@ function channelHeaderClass(ch?: string | null): string {
   return orderChannelHeaderClass({ channel: ch, orderType: 'pos' } as PosOrder);
 }
 
+function channelBorderClass(ch?: string | null): string {
+  return orderChannelBorderClass({ channel: ch, orderType: 'pos' } as PosOrder);
+}
+
 function orderBadgeClass(o: PosOrder) {
   return orderChannelBadgeClass(o);
 }
 
 function orderHeaderClass(o: PosOrder) {
   return orderChannelHeaderClass(o);
+}
+
+function orderBorderClass(o: PosOrder) {
+  return orderChannelBorderClass(o);
 }
 
 function isPlatformChannel(ch?: string | null) {
@@ -365,6 +436,7 @@ export default function WebPosOrdersPanel({
     () => initialChannelFilter || 'all'
   );
   const [search, setSearch] = useState('');
+  const [searchQ, setSearchQ] = useState('');
   const [held, setHeld] = useState<HeldRow[]>([]);
   const [orders, setOrders] = useState<PosOrder[]>([]);
   const [reasons, setReasons] = useState<CancelReason[]>([]);
@@ -392,7 +464,6 @@ export default function WebPosOrdersPanel({
   const [rowMenuAnchor, setRowMenuAnchor] = useState<HTMLElement | null>(null);
   const [detailMenuAnchor, setDetailMenuAnchor] = useState<HTMLElement | null>(null);
   const [salesAdjOpen, setSalesAdjOpen] = useState(false);
-  const registerSalesAdjTap = useSecretTap(5);
 
   useEffect(() => {
     try {
@@ -408,15 +479,8 @@ export default function WebPosOrdersPanel({
     return () => window.clearInterval(id);
   }, [ordersView]);
 
-  const paymentLabel = (method?: string | null) => {
-    const m = (method || '').toLowerCase();
-    if (m === 'cash') return t('webPosCash');
-    if (m === 'card') return t('webPosCard');
-    if (m === 'terminal') return t('webPosTerminal');
-    if (m === 'express') return t('webPosExpress');
-    if (m === 'pay_later' || m === 'pay-later') return t('webPosPayLater');
-    return method || '—';
-  };
+  const paymentLabel = (method?: string | null) =>
+    paymentMethodLabel(method || '', t) || '—';
 
   const statusLabel = (status: string) => orderStatusLabel(status, t);
 
@@ -430,24 +494,78 @@ export default function WebPosOrdersPanel({
     return ch;
   };
 
+  useEffect(() => {
+    const id = window.setTimeout(() => setSearchQ(search.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [search]);
+
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const params = new URLSearchParams({ limit: '80', from: todayIso(), to: todayIso() });
-      const [h, o] = await Promise.all([
-        api.get('/merchant/pos/held'),
-        api.get(`/merchant/pos/orders?${params.toString()}`),
-      ]);
-      setHeld(h.data.held || []);
-      setOrders(o.data.orders || []);
-      setReasons(o.data.cancelReasons || []);
-      setRefundReasons(o.data.refundReasons || []);
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('webPosOrdersLoadFailed'));
-    } finally {
-      setLoading(false);
+    const params = new URLSearchParams({ limit: '80', from: todayIso(), to: todayIso() });
+    if (searchQ) params.set('q', searchQ);
+    const heldPromise = api.get('/merchant/pos/held');
+    const ordersPromise = api.get(`/merchant/pos/orders?${params.toString()}`);
+    const invoiceUrl =
+      channelFilter === 'invoice'
+        ? '/merchant/invoices?limit=200'
+        : '/merchant/invoices?status=unpaid&limit=200';
+    const invoicePromise = api.get(invoiceUrl);
+    const [heldRes, ordersRes, invoiceRes] = await Promise.allSettled([
+      heldPromise,
+      ordersPromise,
+      invoicePromise,
+    ]);
+    let nextHeld: HeldRow[] = [];
+    let nextOrders: PosOrder[] = [];
+    if (heldRes.status === 'fulfilled') {
+      nextHeld = heldRes.value.data.held || [];
+    } else {
+      toast.error(t('webPosOrdersLoadFailed'));
+      console.warn('[WebPOS][orders] held list failed', heldRes.reason);
     }
-  }, [t]);
+    if (ordersRes.status === 'fulfilled') {
+      nextOrders = ordersRes.value.data.orders || [];
+      setReasons(ordersRes.value.data.cancelReasons || []);
+      setRefundReasons(ordersRes.value.data.refundReasons || []);
+    } else if (heldRes.status === 'fulfilled') {
+      toast.error(t('webPosOrdersLoadFailed'));
+      console.warn('[WebPOS][orders] pos orders list failed', ordersRes.reason);
+    }
+    if (invoiceRes.status === 'fulfilled') {
+      const extra = (invoiceRes.value.data.invoices || []) as PosOrder[];
+      const map = new Map(nextOrders.map((o) => [o.id, o]));
+      for (const o of extra) {
+        if (o?.id && !map.has(o.id)) map.set(o.id, o);
+      }
+      nextOrders = [...map.values()];
+    }
+    const localRows = localHeldRowsFromSession().filter((row): row is NonNullable<typeof row> => !!row);
+    for (const local of localRows) {
+      const ident = {
+        ticketDisplay: local.cartJson.ticketDisplay,
+        tableId: local.cartJson.tableId,
+        tabNumber: local.cartJson.tabNumber,
+      };
+      const already = nextHeld.some((h) => {
+        const meta = parseHeldCartJson(h.cartJson);
+        return sameHeldIdentity(ident, {
+          ticketDisplay: meta.ticketDisplay,
+          tableId: meta.tableId,
+          tabNumber: meta.tabNumber,
+        });
+      });
+      if (!already) nextHeld.push(local as HeldRow);
+    }
+    console.info('[WebPOS][orders] loaded', {
+      held: nextHeld.length,
+      localAdded: localRows.length,
+      posOrders: nextOrders.length,
+      openPos: nextOrders.filter((o) => isOpenFulfillmentOrder(o)).length,
+    });
+    setHeld(nextHeld);
+    setOrders(nextOrders);
+    setLoading(false);
+  }, [t, searchQ, channelFilter]);
 
   useEffect(() => {
     if (open) void load();
@@ -493,57 +611,94 @@ export default function WebPosOrdersPanel({
   const listItems = useMemo(() => {
     const items: ListItem[] = [];
     const q = search.trim().toLowerCase();
+    const view = q ? 'all' : statusFilter;
     const heldBucket: HeldRow[] = [];
     const activeBucket: PosOrder[] = [];
     const doneBucket: PosOrder[] = [];
 
-    if (statusFilter === 'active' || statusFilter === 'all' || statusFilter === 'held') {
+    if (view === 'active' || view === 'all' || view === 'held') {
       for (const h of held) {
-        // Held tickets are POS-only; hide when filtering Online shop.
+        // Held / kitchen-sent tickets are POS register work — hide only on Online shop.
         if (channelFilter === 'online') continue;
         if (!matchesChannelFilter(h, channelFilter)) continue;
         if (q) {
-          const label = (h.label || '').toLowerCase();
-          const cj = h.cartJson as
-            | { ticketDisplay?: string | null; tabNumber?: string | null; tableLabel?: string | null }
-            | null;
-          const hay = [
-            label,
-            h.channel || '',
-            cj && !Array.isArray(cj) ? cj.ticketDisplay || '' : '',
-            cj && !Array.isArray(cj) ? cj.tabNumber || '' : '',
-            cj && !Array.isArray(cj) ? cj.tableLabel || '' : '',
-          ]
-            .join(' ')
-            .toLowerCase();
-          if (!hay.includes(q)) continue;
+          const meta = parseHeldCartJson(h.cartJson);
+          if (
+            !ticketQueryMatches(
+              q,
+              h.label,
+              h.channel,
+              meta.ticketDisplay,
+              meta.tabNumber,
+              meta.tableLabel,
+              meta.ticketOrderNumber
+            )
+          ) {
+            continue;
+          }
         }
         heldBucket.push(h);
       }
-      if (statusFilter !== 'held') {
+      if (view !== 'held') {
       for (const o of orders) {
-        if (!isOpenFulfillmentOrder(o)) continue;
+        const showOnActive =
+          isOpenFulfillmentOrder(o) ||
+          (view === 'active' && isScheduledKitchenTicket(o)) ||
+          (view === 'active' && isUnpaidInvoice(o));
+        if (!showOnActive) continue;
         if (!matchesChannelFilter(o, channelFilter)) continue;
         if (q) {
           const refs = orderPublicRefs(o);
-          const hay =
-            `${formatOrderNumberDisplay(o.orderNumber)} ${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${o.orderType || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
-          if (!hay.includes(q)) continue;
+          if (
+            !ticketQueryMatches(
+              q,
+              formatOrderNumberDisplay(o.orderNumber),
+              o.orderNumber,
+              o.clientId,
+              o.customerName,
+              o.tableLabel,
+              o.orderType,
+              o.paymentMethod,
+              o.invoiceNumber,
+              refs.ticketDisplay,
+              refs.tabNumber
+            )
+          ) {
+            continue;
+          }
         }
         activeBucket.push(o);
       }
       }
     }
-    if (statusFilter === 'completed' || statusFilter === 'all') {
+    if (view === 'completed' || view === 'all') {
       for (const o of orders) {
         // Ongoing orders already listed under Active; skip them here (including "All").
-        if (isOpenFulfillmentOrder(o)) continue;
+        // Invoice sales stay in history even when unpaid / still "preparing".
+        const listedInActive =
+          isOpenFulfillmentOrder(o) || (view === 'all' && isUnpaidInvoice(o));
+        if (listedInActive && view === 'all') continue;
+        if (isOpenFulfillmentOrder(o) && !isInvoiceOrder(o)) continue;
         if (!matchesChannelFilter(o, channelFilter)) continue;
         if (q) {
           const refs = orderPublicRefs(o);
-          const hay =
-            `${formatOrderNumberDisplay(o.orderNumber)} ${o.orderNumber} ${o.clientId || ''} ${o.customerName || ''} ${o.tableLabel || ''} ${o.orderType || ''} ${refs.ticketDisplay || ''} ${refs.tabNumber || ''}`.toLowerCase();
-          if (!hay.includes(q)) continue;
+          if (
+            !ticketQueryMatches(
+              q,
+              formatOrderNumberDisplay(o.orderNumber),
+              o.orderNumber,
+              o.clientId,
+              o.customerName,
+              o.tableLabel,
+              o.orderType,
+              o.paymentMethod,
+              o.invoiceNumber,
+              refs.ticketDisplay,
+              refs.tabNumber
+            )
+          ) {
+            continue;
+          }
         }
         doneBucket.push(o);
       }
@@ -564,13 +719,7 @@ export default function WebPosOrdersPanel({
   const rangeEnd = Math.min(listItems.length, (page + 1) * pageSize);
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
 
-  const heldCartLines = (h: HeldRow) => {
-    const data = h.cartJson as
-      | { cart?: Array<{ name: string; quantity: number; lineTotal: number }> }
-      | Array<{ name: string; quantity: number; lineTotal: number }>;
-    if (Array.isArray(data)) return data;
-    return data?.cart || [];
-  };
+  const heldCartLines = (h: HeldRow) => parseHeldCartJson(h.cartJson).cart;
 
   const heldTotal = (h: HeldRow) =>
     heldCartLines(h).reduce((s, l) => s + Number(l.lineTotal || 0), 0);
@@ -599,7 +748,17 @@ export default function WebPosOrdersPanel({
           /* kitchen print is best-effort */
         }
       }
-      await api.post(`/merchant/pos/held/${heldRow.id}/cancel`, { reason });
+      if (String(heldRow.id).startsWith('local:')) {
+        const meta = parseHeldCartJson(heldRow.cartJson);
+        removeLocalHeldDraft({
+          localId: heldRow.id,
+          ticketDisplay: meta.ticketDisplay,
+          tableId: meta.tableId,
+          tabNumber: meta.tabNumber,
+        });
+      } else {
+        await api.post(`/merchant/pos/held/${heldRow.id}/cancel`, { reason });
+      }
       toast.success(t('webPosOrderCancelled'));
       setCancelHeldFor(null);
       if (selectedHeld?.id === heldRow.id) setSelectedHeld(null);
@@ -685,10 +844,15 @@ export default function WebPosOrdersPanel({
     if (!collectFor) return;
     setCollectBusy(true);
     try {
-      const res = await api.post(`/merchant/orders/${collectFor.id}/action`, {
-        action: 'complete_and_collect',
-        paymentMethod: paymentMethodDraft,
-      });
+      const invoiceOrder = isInvoiceOrder(collectFor);
+      const res = invoiceOrder
+        ? await api.post(`/merchant/orders/${collectFor.id}/record-invoice-payment`, {
+            paymentMethod: INVOICE_SETTLEMENT_METHOD,
+          })
+        : await api.post(`/merchant/orders/${collectFor.id}/action`, {
+            action: collectPaymentAction(collectFor.status),
+            paymentMethod: paymentMethodDraft,
+          });
       toast.success(t('webPosPaymentCollected'));
       setCollectFor(null);
       const updated = res.data?.order as PosOrder | undefined;
@@ -710,10 +874,6 @@ export default function WebPosOrdersPanel({
   const finalizeOnlineWhenReady = async (order: PosOrder) => {
     if (isUnpaidOnline(order)) {
       onOrderActioned?.(order.id);
-      if (onCollectPaymentCheckout) {
-        onCollectPaymentCheckout(order);
-        return;
-      }
       startCollectPayment(order);
       return;
     }
@@ -746,9 +906,6 @@ export default function WebPosOrdersPanel({
           : ({ ...order, ...fresh } as PosOrder)
       );
       void load();
-      if (action === 'mark_ready') {
-        await finalizeOnlineWhenReady({ ...order, ...(updated || {}), status: 'ready' });
-      }
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('actionFailed'));
     } finally {
@@ -786,6 +943,12 @@ export default function WebPosOrdersPanel({
 
   const startCollectPayment = (order: PosOrder) => {
     setPaymentEditFor(null);
+    if (isInvoiceOrder(order)) {
+      setPaymentMethodDraft(INVOICE_SETTLEMENT_METHOD);
+      setCollectFor(order);
+      setSelectedOrder(order);
+      return;
+    }
     if (onCollectPaymentCheckout) {
       onCollectPaymentCheckout(order);
       return;
@@ -834,8 +997,9 @@ export default function WebPosOrdersPanel({
     const showPrint = !!onPrintOrder;
     const showCancel = !!(canCancel && canCancelOrder(order));
     const showRefund = !!(canRefund && canRefundOrder(order));
-    const showEditPay = canEditPayment(order);
-    if (!showPrint && !showCancel && !showRefund && !showEditPay) return null;
+    const showEditPay = canEditPayment(order) && !isInvoiceOrder(order);
+    const showInvoice = isInvoiceOrder(order);
+    if (!showPrint && !showCancel && !showRefund && !showEditPay && !showInvoice) return null;
     if (!opts.anchor) return null;
     return (
       <PortaledActionMenu
@@ -843,6 +1007,23 @@ export default function WebPosOrdersPanel({
         align={opts.align}
         onClose={opts.onClose}
       >
+        {showInvoice ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={() => {
+              opts.onClose();
+              void downloadInvoicePdf(order.id, order.invoiceNumber ? `${order.invoiceNumber}.pdf` : undefined).catch(
+                () => toast.error(t('webPosInvoicePdfFailed'))
+              );
+            }}
+          >
+            <FileText size={14} className="shrink-0 text-stone-500" />
+            {t('webPosDownloadInvoice')}
+            {order.invoiceNumber ? ` · ${order.invoiceNumber}` : ''}
+          </button>
+        ) : null}
         {showPrint ? (
           <button
             type="button"
@@ -931,6 +1112,7 @@ export default function WebPosOrdersPanel({
     { id: 'takeaway', label: t('takeaway') },
     { id: 'delivery', label: t('delivery') },
     { id: 'online', label: t('webPosOnlineOrders') },
+    { id: 'invoice', label: t('webPosInvoice') },
   ];
 
   const cancelModalOpen = !!(cancelFor || cancelHeldFor);
@@ -951,24 +1133,11 @@ export default function WebPosOrdersPanel({
         }
       >
         <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-2 py-2 sm:px-3 sm:py-2.5">
-          <div className="relative min-w-0 flex-1 basis-full sm:min-w-[12rem] sm:basis-auto">
-            <button
-              type="button"
-              className={`absolute left-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md ${
-                statusFilter === 'completed' ? 'text-stone-500 hover:bg-stone-100' : 'pointer-events-none text-stone-400'
-              }`}
-              aria-hidden={statusFilter !== 'completed'}
-              tabIndex={statusFilter === 'completed' ? 0 : -1}
-              onClick={() => {
-                if (statusFilter !== 'completed') return;
-                registerSalesAdjTap(() => setSalesAdjOpen(true));
-              }}
-            >
-              <Search size={14} />
-            </button>
+          <div className="flex min-w-0 flex-1 basis-full items-center gap-1.5 sm:min-w-[14rem] sm:basis-auto">
+            <SecretSearchTapButton onUnlock={() => setSalesAdjOpen(true)} />
             <input
               type="search"
-              className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-8 pr-3 text-sm"
+              className="min-w-0 w-full rounded-lg border border-stone-200 bg-stone-50 py-2 px-3 text-sm"
               placeholder={t('webPosSearchOrders')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -1098,10 +1267,6 @@ export default function WebPosOrdersPanel({
               onOrderActioned={onOrderActioned}
               onCollectPayment={(order) => {
                 onOrderActioned?.(order.id);
-                if (onCollectPaymentCheckout) {
-                  onCollectPaymentCheckout(order as PosOrder);
-                  return;
-                }
                 startCollectPayment(order as PosOrder);
               }}
             />
@@ -1130,14 +1295,7 @@ export default function WebPosOrdersPanel({
                     const total = heldTotal(h);
                     const lines = heldCartLines(h);
                     const sentCount = lines.filter((l: any) => l.sentToKitchen).length;
-                    const heldMeta =
-                      h.cartJson && typeof h.cartJson === 'object' && !Array.isArray(h.cartJson)
-                        ? (h.cartJson as {
-                            tabNumber?: string | null;
-                            ticketDisplay?: string | null;
-                            tableLabel?: string | null;
-                          })
-                        : {};
+                    const heldMeta = parseHeldCartJson(h.cartJson);
                     const idLabel =
                       heldMeta.tableLabel ||
                       (heldMeta.tabNumber ? `#${heldMeta.tabNumber}` : null) ||
@@ -1145,35 +1303,33 @@ export default function WebPosOrdersPanel({
                       h.label ||
                       '—';
                     const age = formatOrderAge(heldTimeMs(h) || nowMs, nowMs);
+                    const heldCh = resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson });
                     return (
                       <button
                         key={`hg-${h.id}`}
                         type="button"
                         onClick={() => openHeldInCart(h)}
-                        className="flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border border-stone-200 bg-stone-900 text-left text-white shadow-sm transition hover:ring-2 hover:ring-teal-400"
+                        className={`flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border-2 bg-white text-left text-stone-900 shadow-sm transition hover:ring-2 hover:ring-teal-400 ${channelBorderClass(heldCh)}`}
                       >
                         <div
-                          className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${channelHeaderClass(h.channel)}`}
+                          className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${channelHeaderClass(heldCh)}`}
                         >
                           <span className="inline-flex min-w-0 items-center gap-1">
-                            <ChannelGlyph ch={h.channel} />
-                            <span className="truncate">{channelLabel(h.channel)}</span>
+                            <ChannelGlyph ch={heldCh} />
+                            <span className="truncate">{channelLabel(heldCh)}</span>
                           </span>
                           <span className="shrink-0 tabular-nums">{idLabel}</span>
                         </div>
                         <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-3">
-                          <p className="text-[11px] text-stone-400">
+                          <p className="text-[11px] text-stone-500">
                             {sentCount}/{lines.length || 0}
                           </p>
                           <p className="text-lg font-bold tabular-nums tracking-tight">
-                            <span className="text-stone-300 text-sm font-semibold">CHF </span>
-                            <span className="text-amber-300">{Number(total).toFixed(2)}</span>
-                          </p>
-                          <p className="text-[11px] font-semibold uppercase text-stone-300">
-                            {statusLabel(h.status)}
+                            <span className="text-sm font-semibold text-stone-500">CHF </span>
+                            <span className="text-teal-700">{Number(total).toFixed(2)}</span>
                           </p>
                         </div>
-                        <div className="flex items-center justify-between gap-2 border-t border-stone-700 px-2.5 py-1.5 text-[10px] text-stone-400">
+                        <div className="flex items-center justify-between gap-2 border-t border-stone-200 px-2.5 py-1.5 text-[10px] text-stone-500">
                           <span className="inline-flex min-w-0 items-center gap-1 truncate">
                             <User size={11} />
                             <span className="truncate">{t('webPosOngoing')}</span>
@@ -1200,7 +1356,7 @@ export default function WebPosOrdersPanel({
                       key={`og-${o.id}`}
                       type="button"
                         onClick={() => openOrderClick(o)}
-                        className="flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border border-stone-200 bg-stone-900 text-left text-white shadow-sm transition hover:ring-2 hover:ring-teal-400"
+                        className={`flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border-2 bg-white text-left text-stone-900 shadow-sm transition hover:ring-2 hover:ring-teal-400 ${orderBorderClass(o)}`}
                     >
                       <div
                         className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${orderHeaderClass(o)}`}
@@ -1212,18 +1368,27 @@ export default function WebPosOrdersPanel({
                         <span className="shrink-0 tabular-nums">{idLabel}</span>
                       </div>
                       <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-3">
-                        <p className="text-[11px] text-stone-400">{itemCount}</p>
+                        <p className="text-[11px] text-stone-500">{itemCount}</p>
                         <p className="text-lg font-bold tabular-nums tracking-tight">
-                          <span className="text-stone-300 text-sm font-semibold">CHF </span>
-                          <span className="text-amber-300">{Number(o.total).toFixed(2)}</span>
+                          <span className="text-sm font-semibold text-stone-500">CHF </span>
+                          <span className="text-teal-700">{Number(o.total).toFixed(2)}</span>
                         </p>
-                        <p className="text-[11px] font-semibold uppercase text-stone-300">
-                          {canShowAwaitingPaymentBadge(o)
-                            ? t('webPosAwaitingPayment')
-                            : statusLabel(o.status)}
-                        </p>
+                        {showsKitchenFulfillmentStages(o) ? (
+                          <p className="flex flex-wrap items-center justify-center gap-1">
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(o.status)}`}
+                            >
+                              {statusLabel(o.status)}
+                            </span>
+                          </p>
+                        ) : null}
+                        {canShowAwaitingPaymentBadge(o) ? (
+                          <p className="text-[10px] font-bold uppercase text-amber-700">
+                            {t('webPosAwaitingPayment')}
+                          </p>
+                        ) : null}
                       </div>
-                      <div className="flex items-center justify-between gap-2 border-t border-stone-700 px-2.5 py-1.5 text-[10px] text-stone-400">
+                      <div className="flex items-center justify-between gap-2 border-t border-stone-200 px-2.5 py-1.5 text-[10px] text-stone-500">
                         <span className="inline-flex min-w-0 items-center gap-1 truncate">
                           <User size={11} />
                           <span className="truncate">{o.customerName || o.staffName || '—'}</span>
@@ -1244,14 +1409,7 @@ export default function WebPosOrdersPanel({
                     const h = item.held;
                     const selected = selectedHeld?.id === h.id;
                     const total = heldTotal(h);
-                    const heldMeta =
-                      h.cartJson && typeof h.cartJson === 'object' && !Array.isArray(h.cartJson)
-                        ? (h.cartJson as {
-                            tabNumber?: string | null;
-                            ticketDisplay?: string | null;
-                            tableLabel?: string | null;
-                          })
-                        : {};
+                    const heldMeta = parseHeldCartJson(h.cartJson);
                     return (
                       <li key={`h-${h.id}`}>
                         <button
@@ -1277,9 +1435,9 @@ export default function WebPosOrdersPanel({
                             </div>
                             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                               <span
-                                className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${channelBadgeClass(h.channel)}`}
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${channelBadgeClass(resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson }))}`}
                               >
-                                {channelLabel(h.channel)}
+                                {channelLabel(resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson }))}
                               </span>
                               {heldMeta.ticketDisplay ? (
                                 <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold text-teal-900">
@@ -1296,9 +1454,6 @@ export default function WebPosOrdersPanel({
                                   {t('table')} {heldMeta.tableLabel}
                                 </span>
                               ) : null}
-                              <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-teal-800">
-                                {t('webPosOngoing')}
-                              </span>
                             </div>
                           </div>
                           <Info size={16} className="mt-1 shrink-0 text-stone-400 sm:mt-0" />
@@ -1389,17 +1544,18 @@ export default function WebPosOrdersPanel({
                                 {t('webPosSplitBadge')}
                               </span>
                             ) : null}
-                            <span
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
-                                o.status === 'completed'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : o.status === 'cancelled'
-                                    ? 'bg-rose-100 text-rose-800'
-                                    : 'bg-stone-100 text-stone-600'
-                              }`}
-                            >
-                              {statusLabel(o.status)}
-                            </span>
+                            {showsKitchenFulfillmentStages(o) ? (
+                              <span
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(o.status)}`}
+                              >
+                                {statusLabel(o.status)}
+                              </span>
+                            ) : null}
+                            {canShowAwaitingPaymentBadge(o) ? (
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                                {t('webPosAwaitingPayment')}
+                              </span>
+                            ) : null}
                           </div>
                           <p className="mt-0.5 text-[11px] text-stone-400">{formatOrderNumberDisplay(o.orderNumber)}</p>
                         </div>
@@ -1493,7 +1649,7 @@ export default function WebPosOrdersPanel({
                   </button>
                   <p className="text-sm font-semibold">{selectedHeld.label || t('webPosHeldOrder')}</p>
                   <p className="mt-1 text-xs text-stone-500">
-                    {channelLabel(selectedHeld.channel)} · {statusLabel(selectedHeld.status)}
+                    {channelLabel(selectedHeld.channel)}
                   </p>
                   <ul className="mt-4 space-y-2 text-sm">
                     {heldCartLines(selectedHeld).map((l, idx) => (
@@ -1557,7 +1713,9 @@ export default function WebPosOrdersPanel({
                         ? `${t('table')} ${selectedOrder.tableLabel}`
                         : null,
                       channelLabel(selectedOrder.channel, selectedOrder),
-                      statusLabel(selectedOrder.status),
+                      showsKitchenFulfillmentStages(selectedOrder)
+                        ? statusLabel(selectedOrder.status)
+                        : null,
                     ].filter(Boolean);
                     return (
                       <>
@@ -1619,8 +1777,19 @@ export default function WebPosOrdersPanel({
                           ? `${t('webPosTab')} ${refs.tabNumber}`
                           : formatOrderNumberDisplay(selectedOrder.orderNumber))}
                     </p>
-                    <p className="text-xs text-stone-500">
-                      {statusLabel(selectedOrder.status)}
+                    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
+                      {showsKitchenFulfillmentStages(selectedOrder) ? (
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${orderStatusBadgeClass(selectedOrder.status)}`}
+                        >
+                          {statusLabel(selectedOrder.status)}
+                        </span>
+                      ) : null}
+                      {canShowAwaitingPaymentBadge(selectedOrder) ? (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                          {t('webPosAwaitingPayment')}
+                        </span>
+                      ) : null}
                       {refs.tabNumber && refs.ticketDisplay
                         ? ` · ${t('webPosTab')} ${refs.tabNumber}`
                         : ''}
@@ -1668,10 +1837,18 @@ export default function WebPosOrdersPanel({
                       {(selectedOrder as PosOrder & { refundReason?: string | null }).refundReason}
                     </p>
                   ) : null}
+                  <OrderRefundHistory
+                    className="mt-3"
+                    history={(selectedOrder as PosOrder).refundHistory || []}
+                    totalRefunded={Number(selectedOrder.refundAmount || 0)}
+                  />
                 </div>
-                {isOpenOnlineFulfillment(selectedOrder) ? (
+                {isOpenFulfillmentOrder(selectedOrder) &&
+                (showsKitchenFulfillmentStages(selectedOrder) ||
+                  canCollectPayment(selectedOrder) ||
+                  canAdminCollectPayment(selectedOrder)) ? (
                   <div className="space-y-2 border-t border-stone-200 p-3">
-                    {isAwaitingApproval(selectedOrder.status) ? (
+                    {isOpenOnlineFulfillment(selectedOrder) && isAwaitingApproval(selectedOrder.status) ? (
                       <>
                         <button
                           type="button"
@@ -1691,7 +1868,7 @@ export default function WebPosOrdersPanel({
                         </button>
                       </>
                     ) : null}
-                    {selectedOrder.status === 'accepted' ? (
+                    {isOpenOnlineFulfillment(selectedOrder) && selectedOrder.status === 'accepted' ? (
                       <button
                         type="button"
                         className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
@@ -1701,7 +1878,7 @@ export default function WebPosOrdersPanel({
                         {t('webPosSendToKitchen')}
                       </button>
                     ) : null}
-                    {selectedOrder.status === 'preparing' ? (
+                    {canMarkReadyOrder(selectedOrder) ? (
                       <button
                         type="button"
                         className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
@@ -1711,7 +1888,8 @@ export default function WebPosOrdersPanel({
                         {t('webPosMarkReady')}
                       </button>
                     ) : null}
-                    {selectedOrder.status === 'ready' &&
+                    {showsKitchenFulfillmentStages(selectedOrder) &&
+                    selectedOrder.status === 'ready' &&
                     (selectedOrder.fulfillmentChannel || selectedOrder.channel) === 'delivery' ? (
                       <button
                         type="button"
@@ -1722,7 +1900,8 @@ export default function WebPosOrdersPanel({
                         {t('ordersActionSendDelivery')}
                       </button>
                     ) : null}
-                    {(selectedOrder.status === 'ready' ||
+                    {showsKitchenFulfillmentStages(selectedOrder) &&
+                    (selectedOrder.status === 'ready' ||
                       selectedOrder.status === 'out_for_delivery') &&
                     !['completed', 'cancelled'].includes(selectedOrder.status) ? (
                       <button
@@ -1731,20 +1910,62 @@ export default function WebPosOrdersPanel({
                         disabled={onlineActionBusy === selectedOrder.id}
                         onClick={() => void finalizeOnlineWhenReady(selectedOrder)}
                       >
-                        {isUnpaidOnline(selectedOrder)
+                        {isUnpaidOnline(selectedOrder) || canCollectPayment(selectedOrder)
                           ? `${t('webPosTakePayment')} · ${money(selectedOrder.total)}`
                           : t('webPosCompleteOrder')}
                       </button>
                     ) : null}
+                    {canAdminCollectPayment(selectedOrder) &&
+                    selectedOrder.status !== 'ready' &&
+                    selectedOrder.status !== 'out_for_delivery' ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-xl border border-emerald-200 bg-emerald-50 py-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+                        disabled={onlineActionBusy === selectedOrder.id}
+                        onClick={() => startCollectPayment(selectedOrder)}
+                      >
+                        {(selectedOrder.paymentMethod === 'invoice' || selectedOrder.invoiceNumber
+                          ? t('webPosRecordInvoicePayment')
+                          : t('webPosCollectNow'))}{' '}
+                        · {money(selectedOrder.total)}
+                      </button>
+                    ) : null}
                   </div>
-                ) : canCollectPayment(selectedOrder) ? (
+                ) : null}
+                {isInvoiceOrder(selectedOrder) ? (
                   <div className="space-y-2 border-t border-stone-200 p-3">
+                    {selectedOrder.invoiceNumber ? (
+                      <p className="text-xs font-semibold text-stone-600">
+                        {t('invoicesNumber')}: {selectedOrder.invoiceNumber}
+                        {' · '}
+                        {isPaidOrder(selectedOrder) ? t('invoiceStatusPaid') : t('invoiceStatusUnpaid')}
+                      </p>
+                    ) : null}
                     <button
                       type="button"
-                      className="w-full rounded-xl bg-emerald-700 py-3.5 text-sm font-bold text-white hover:bg-emerald-800"
-                      onClick={() => startCollectPayment(selectedOrder)}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+                      onClick={() => {
+                        void viewInvoicePdf(selectedOrder.id).catch(() =>
+                          toast.error(t('webPosInvoicePdfFailed'))
+                        );
+                      }}
                     >
-                      {t('webPosTakePayment')} · {money(selectedOrder.total)}
+                      <FileText size={16} />
+                      {t('webPosViewInvoice')}
+                      {selectedOrder.invoiceNumber ? ` · ${selectedOrder.invoiceNumber}` : ''}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 py-2.5 text-sm font-semibold text-indigo-900 hover:bg-indigo-100"
+                      onClick={() => {
+                        void downloadInvoicePdf(
+                          selectedOrder.id,
+                          selectedOrder.invoiceNumber ? `${selectedOrder.invoiceNumber}.pdf` : undefined
+                        ).catch(() => toast.error(t('webPosInvoicePdfFailed')));
+                      }}
+                    >
+                      <FileText size={16} />
+                      {t('webPosDownloadInvoice')}
                     </button>
                   </div>
                 ) : null}
@@ -1757,28 +1978,42 @@ export default function WebPosOrdersPanel({
           </aside>
           ) : null}
         </div>
-        {!isOnlineMode && collectFor ? (
+        {collectFor && (!isOnlineMode || isInvoiceOrder(collectFor)) ? (
           <div className="border-t border-stone-200 bg-white p-4 space-y-3">
-            <p className="text-sm font-medium">
-              {t('webPosTakePayment')} · {money(collectFor.total)}
-            </p>
-            <p className="text-xs text-stone-500">{t('webPosTakePaymentHint')}</p>
-            <div className="flex flex-wrap gap-2">
-              {PAYMENT_OPTIONS.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setPaymentMethodDraft(m)}
-                  className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
-                    paymentMethodDraft === m
-                      ? 'bg-emerald-700 text-white'
-                      : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-                  }`}
-                >
-                  {paymentLabel(m)}
-                </button>
-              ))}
-            </div>
+            {isInvoiceOrder(collectFor) ? (
+              <>
+                <p className="text-sm font-medium">
+                  {t('webPosInvoiceMarkPaid')} · {money(collectFor.total)}
+                </p>
+                <p className="text-xs text-stone-500">{t('webPosInvoiceMarkPaidHint')}</p>
+                <p className="text-sm font-semibold text-stone-700">
+                  {t('webPosInvoice')} · {t('webPosBankTransfer')}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium">
+                  {t('webPosTakePayment')} · {money(collectFor.total)}
+                </p>
+                <p className="text-xs text-stone-500">{t('webPosTakePaymentHint')}</p>
+                <div className="flex flex-wrap gap-2">
+                  {PAYMENT_OPTIONS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setPaymentMethodDraft(m)}
+                      className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
+                        paymentMethodDraft === m
+                          ? 'bg-emerald-700 text-white'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                      }`}
+                    >
+                      {paymentLabel(m)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
             <div className="flex gap-2">
               <button
                 type="button"

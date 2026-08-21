@@ -2,11 +2,85 @@ import { roundMoney2 } from '@/lib/money';
 
 export type PaymentTender = { method: string; amount: number };
 
+const PAYMENT_METHOD_ALIASES: Record<string, string> = {
+  cash: 'cash',
+  express: 'cash',
+  especes: 'cash',
+  espece: 'cash',
+  bar: 'cash',
+  bargeld: 'cash',
+  liquide: 'cash',
+  card: 'card',
+  carte: 'card',
+  karte: 'card',
+  credit_card: 'card',
+  creditcard: 'card',
+  debit: 'card',
+  debit_card: 'card',
+  tap_to_pay: 'card',
+  taptopay: 'card',
+  terminal: 'terminal',
+  adyen: 'terminal',
+  adyen_terminal: 'terminal',
+  mixed: 'mixed',
+  split: 'mixed',
+  split_tender: 'mixed',
+  paiement_mixte: 'mixed',
+  gemischte_zahlung: 'mixed',
+  gift_card: 'gift_card',
+  giftcard: 'gift_card',
+  gift: 'gift_card',
+  carte_cadeau: 'gift_card',
+  geschenkkarte: 'gift_card',
+  invoice: 'invoice',
+  facture: 'invoice',
+  rechnung: 'invoice',
+  pay_later: 'pay_later',
+  paylater: 'pay_later',
+  bank_transfer: 'bank_transfer',
+  virement: 'bank_transfer',
+  uberweisung: 'bank_transfer',
+};
+
+/** Fold case, diacritics, spaces, and known aliases into one report key. */
 export function normalizePaymentMethod(method: string): string {
-  return String(method || '')
+  const raw = String(method || '')
     .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/-/g, '_');
+    .replace(/[\s-]+/g, '_');
+  if (!raw) return '';
+  const later = raw.match(/^pay_later[:_](.+)$/);
+  if (later) {
+    return PAYMENT_METHOD_ALIASES[later[1]] || later[1];
+  }
+  return PAYMENT_METHOD_ALIASES[raw] || raw;
+}
+
+export function paymentMethodLabel(
+  method: string,
+  t: (key: string) => string
+): string {
+  const raw = String(method || '').trim();
+  const later = raw.match(/^pay[_-]?later(?::|_|\s+)?(.*)$/i);
+  if (later) {
+    const tender = normalizePaymentMethod(later[1] || '');
+    if (tender === 'cash') return `${t('webPosPayLater')}: ${t('webPosCash')}`;
+    if (tender === 'card') return `${t('webPosPayLater')}: ${t('webPosCard')}`;
+    if (tender === 'terminal') return `${t('webPosPayLater')}: ${t('webPosTerminal')}`;
+    return t('webPosPayLater');
+  }
+  const m = normalizePaymentMethod(method);
+  if (m === 'cash') return t('webPosCash');
+  if (m === 'card') return t('webPosCard');
+  if (m === 'terminal') return t('webPosTerminal');
+  if (m === 'gift_card') return t('giftCard');
+  if (m === 'mixed') return t('webPosMixedPayment');
+  if (m === 'pay_later') return t('webPosPayLater');
+  if (m === 'invoice') return t('webPosInvoice');
+  if (m === 'bank_transfer') return t('webPosBankTransfer');
+  return method || t('reportsEmpty');
 }
 
 export function parsePaymentBreakdown(

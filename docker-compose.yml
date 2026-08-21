@@ -50,7 +50,7 @@ services:
       SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-}
       SEED_SUPERADMIN_EMAIL: ${SEED_SUPERADMIN_EMAIL:-admin@manupos.webprintmedia.swiss}
       SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-}
-      SEED_SUPERADMIN_NAME: ${SEED_SUPERADMIN_NAME:-ChaslayReborn Admin}
+      SEED_SUPERADMIN_NAME: ${SEED_SUPERADMIN_NAME:-Chaslay Admin}
     volumes:
       - uploads_data:/app/uploads
       # Host-built print-agent EXE (gitignored). Deploy script rebuilds into this path.
@@ -73,7 +73,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       SEED_SUPERADMIN_EMAIL: ${SEED_SUPERADMIN_EMAIL:-admin@manupos.webprintmedia.swiss}
       SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-ChangeMeNow!123}
-      SEED_SUPERADMIN_NAME: ${SEED_SUPERADMIN_NAME:-ChaslayReborn Admin}
+      SEED_SUPERADMIN_NAME: ${SEED_SUPERADMIN_NAME:-Chaslay Admin}
     command: >
       sh -c "npx drizzle-kit push --force &&
              npx tsx src/db/seed.ts || true"

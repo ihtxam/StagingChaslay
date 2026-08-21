@@ -498,6 +498,7 @@ private fun paymentShortLabel(method: PaymentMethod): String = when (method) {
     PaymentMethod.TAP_TO_PAY -> "Tap"
     PaymentMethod.ADYEN_TERMINAL -> "Term"
     PaymentMethod.PAY_LATER -> "Later"
+    PaymentMethod.INVOICE -> "Invoice"
     PaymentMethod.GIFT_CARD -> "Gift"
 }
 
@@ -713,6 +714,7 @@ private fun paymentLabel(method: PaymentMethod): String = when (method) {
     PaymentMethod.ADYEN_TERMINAL -> "Terminal"
     PaymentMethod.TAP_TO_PAY -> "Tap"
     PaymentMethod.PAY_LATER -> "Pay Later"
+    PaymentMethod.INVOICE -> "Invoice"
     PaymentMethod.GIFT_CARD -> "Gift card"
 }
 

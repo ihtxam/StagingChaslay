@@ -1,3 +1,5 @@
+import { normalizePaymentMethod } from '@/lib/payment-breakdown';
+
 export type ReceiptLang = 'en' | 'fr' | 'de';
 
 export type ReceiptLabels = {
@@ -39,6 +41,8 @@ export type ReceiptLabels = {
   productsSold: string;
   cancelled: string;
   refunds: string;
+  refundCount: string;
+  refundsByPayment: string;
   covers: string;
   tipsNotTaxable: string;
   /** Taxable sales total (order totals minus tips) */
@@ -57,6 +61,9 @@ export type ReceiptLabels = {
   deliveryTime: string;
   asap: string;
   payLater: string;
+  /** Unused leftover; Pay Later receipts always name one collected tender. */
+  or: string;
+  invoice: string;
   totalItems: string;
   vatIncludedNote: string;
   tip: string;
@@ -67,7 +74,9 @@ export type ReceiptLabels = {
   cashSalesDuringShift: string;
   cashInDuringShift: string;
   cashOutDuringShift: string;
+  cashRefundsDuringShift: string;
   expectedInDrawer: string;
+  expectedDrawerFormula: string;
   countedClosingCash: string;
   cashVariance: string;
   floatCarriesForward: string;
@@ -77,6 +86,13 @@ export type ReceiptLabels = {
   giftCardBalance: string;
   giftCardRemainingBalance: string;
   giftCardScanRedeem: string;
+  member: string;
+  pointsEarned: string;
+  pointsBalance: string;
+  /** Guest line: This order gave you: XXX points */
+  orderGaveYouPoints: string;
+  /** Kitchen / guest receipt course banner, e.g. >> COURSE 1 << */
+  courseLabel: string;
 };
 
 const EN: ReceiptLabels = {
@@ -117,6 +133,8 @@ const EN: ReceiptLabels = {
   productsSold: 'PRODUCTS SOLD',
   cancelled: 'Cancelled',
   refunds: 'Refunds',
+  refundCount: 'Refund count',
+  refundsByPayment: 'Refunds by payment',
   covers: 'Covers',
   tipsNotTaxable: 'Tips (not taxable)',
   netSalesExclTips: 'Net sales (excl. tips)',
@@ -133,7 +151,9 @@ const EN: ReceiptLabels = {
   pickupTime: 'Pickup:',
   deliveryTime: 'Delivery:',
   asap: 'ASAP',
-  payLater: 'Pay later',
+  payLater: 'Pay Later',
+  or: 'or',
+  invoice: 'Invoice',
   totalItems: 'Items',
   vatIncludedNote: 'VAT included in prices',
   tip: 'Tip',
@@ -144,7 +164,9 @@ const EN: ReceiptLabels = {
   cashSalesDuringShift: 'Cash sales (shift)',
   cashInDuringShift: 'Cash in',
   cashOutDuringShift: 'Cash out',
+  cashRefundsDuringShift: 'Cash refunds',
   expectedInDrawer: 'Expected in drawer',
+  expectedDrawerFormula: 'Expected = float + cash sales + cash in - cash out - refunds',
   countedClosingCash: 'Counted / closing cash',
   cashVariance: 'Variance',
   floatCarriesForward: 'Carries forward as base',
@@ -155,6 +177,11 @@ const EN: ReceiptLabels = {
   giftCardBalance: 'Balance',
   giftCardRemainingBalance: 'Gift card remaining',
   giftCardScanRedeem: 'Scan barcode to redeem',
+  member: 'Member',
+  pointsEarned: 'Points this sale',
+  pointsBalance: 'Points so far',
+  orderGaveYouPoints: 'This order gave you: {n} points',
+  courseLabel: 'COURSE',
 };
 
 const FR: ReceiptLabels = {
@@ -195,6 +222,8 @@ const FR: ReceiptLabels = {
   productsSold: 'PRODUITS VENDUS',
   cancelled: 'Annulees',
   refunds: 'Remboursements',
+  refundCount: 'Nombre de remboursements',
+  refundsByPayment: 'Remb. par paiement',
   covers: 'Couverts',
   tipsNotTaxable: 'Pourboires (non taxables)',
   netSalesExclTips: 'Ventes nettes (hors pourboires)',
@@ -211,7 +240,9 @@ const FR: ReceiptLabels = {
   pickupTime: 'Retrait :',
   deliveryTime: 'Livraison :',
   asap: 'Des que possible',
-  payLater: 'Payer plus tard',
+  payLater: 'Paiement différé',
+  or: 'ou',
+  invoice: 'Facture',
   totalItems: 'Articles',
   vatIncludedNote: 'TVA incluse dans les prix',
   tip: 'Pourboire',
@@ -222,7 +253,9 @@ const FR: ReceiptLabels = {
   cashSalesDuringShift: 'Ventes especes (shift)',
   cashInDuringShift: 'Entree caisse',
   cashOutDuringShift: 'Sortie caisse',
+  cashRefundsDuringShift: 'Remb. especes',
   expectedInDrawer: 'Caisse attendue',
+  expectedDrawerFormula: 'Attendu = fond + ventes + entrees - sorties - remb.',
   countedClosingCash: 'Especes comptees',
   cashVariance: 'Ecart',
   floatCarriesForward: 'Se reporte (fond suivant)',
@@ -233,6 +266,11 @@ const FR: ReceiptLabels = {
   giftCardBalance: 'Solde',
   giftCardRemainingBalance: 'Solde carte cadeau',
   giftCardScanRedeem: 'Scannez le code-barres pour payer',
+  member: 'Membre',
+  pointsEarned: 'Points cette vente',
+  pointsBalance: 'Points accumulés',
+  orderGaveYouPoints: 'Cette commande vous a rapporté : {n} points',
+  courseLabel: 'PLAT',
 };
 
 const DE: ReceiptLabels = {
@@ -273,6 +311,8 @@ const DE: ReceiptLabels = {
   productsSold: 'VERKAUFTE PRODUKTE',
   cancelled: 'Storniert',
   refunds: 'Rueckerstattungen',
+  refundCount: 'Anzahl Erstattungen',
+  refundsByPayment: 'Erstatt. nach Zahlung',
   covers: 'Gedecke',
   tipsNotTaxable: 'Trinkgeld (nicht steuerpflichtig)',
   netSalesExclTips: 'Nettoumsatz (ohne Trinkgeld)',
@@ -289,7 +329,9 @@ const DE: ReceiptLabels = {
   pickupTime: 'Abholung:',
   deliveryTime: 'Lieferung:',
   asap: 'Sofort',
-  payLater: 'Spaeter zahlen',
+  payLater: 'Später zahlen',
+  or: 'oder',
+  invoice: 'Rechnung',
   totalItems: 'Artikel',
   vatIncludedNote: 'MwSt. im Preis enthalten',
   tip: 'Trinkgeld',
@@ -300,7 +342,9 @@ const DE: ReceiptLabels = {
   cashSalesDuringShift: 'Barverkaeufe (Schicht)',
   cashInDuringShift: 'Bareinlage',
   cashOutDuringShift: 'Barentnahme',
+  cashRefundsDuringShift: 'Barrueckerstattung',
   expectedInDrawer: 'Erwarteter Bestand',
+  expectedDrawerFormula: 'Erwartet = Anfang + Verkauf + Einlage - Entnahme - Rueck.',
   countedClosingCash: 'Gezaehltes Bargeld',
   cashVariance: 'Differenz',
   floatCarriesForward: 'Bleibt als Wechselgeld',
@@ -311,6 +355,11 @@ const DE: ReceiptLabels = {
   giftCardBalance: 'Guthaben',
   giftCardRemainingBalance: 'Guthaben Geschenkkarte',
   giftCardScanRedeem: 'Barcode an der Kasse scannen',
+  member: 'Mitglied',
+  pointsEarned: 'Punkte dieser Verkauf',
+  pointsBalance: 'Punkte bisher',
+  orderGaveYouPoints: 'Diese Bestellung hat Ihnen {n} Punkte gebracht',
+  courseLabel: 'GANG',
 };
 
 export function receiptLabels(lang: string | null | undefined): ReceiptLabels {
@@ -326,13 +375,48 @@ export function channelLabel(labels: ReceiptLabels, channel?: string | null): st
   return labels.takeaway;
 }
 
+export function isPayLaterPaymentMethod(method?: string | null): boolean {
+  return /^pay[_-]?later/i.test(String(method || ''));
+}
+
+export function payLaterCollectedTender(
+  method?: string | null
+): 'cash' | 'card' | 'terminal' | null {
+  const raw = String(method || '').trim();
+  const later = raw.match(/^pay[_-]?later(?::|_|\s+)(.+)$/i);
+  const intent = normalizePaymentMethod(later?.[1] || raw);
+  if (intent === 'cash') return 'cash';
+  if (intent === 'card') return 'card';
+  if (intent === 'terminal') return 'terminal';
+  return null;
+}
+
+/** Pay Later line: "Pay Later: Cash" (one collected tender, never "Cash or Card or Terminal"). */
+export function formatPayLaterPaymentLabel(
+  labels: ReceiptLabels,
+  preferredTender?: string | null
+): string {
+  const intent = payLaterCollectedTender(preferredTender) || normalizePaymentMethod(String(preferredTender || ''));
+  if (intent === 'cash') return `${labels.payLater}: ${labels.cash}`;
+  if (intent === 'card') return `${labels.payLater}: ${labels.card}`;
+  if (intent === 'terminal') return `${labels.payLater}: ${labels.terminal}`;
+  return labels.payLater;
+}
+
 export function paymentLabel(labels: ReceiptLabels, method?: string | null): string {
-  const m = String(method || '').toLowerCase();
-  if (m === 'cash' || m === 'express') return m === 'express' ? labels.express : labels.cash;
+  const raw = String(method || '').trim();
+  const later = raw.match(/^pay[_-]?later(?::|_|\s+)?(.*)$/i);
+  if (later) {
+    return formatPayLaterPaymentLabel(labels, later[1] || '');
+  }
+  const m = normalizePaymentMethod(raw);
+  if (m === 'cash') return labels.cash;
   if (m === 'card') return labels.card;
   if (m === 'terminal') return labels.terminal;
-  if (m === 'pay_later') return labels.payLater;
-  if (m === 'gift_card' || m === 'gift-card') return 'Gift card';
+  if (m === 'pay_later') return formatPayLaterPaymentLabel(labels);
+  if (m === 'invoice') return labels.invoice || 'Invoice';
+  if (m === 'bank_transfer') return 'Bank transfer';
+  if (m === 'gift_card') return 'Gift card';
   if (m === 'mixed') return 'Mixed';
   return String(method || '').toUpperCase();
 }

@@ -11,6 +11,7 @@ import {
   Languages,
   Mail,
   Monitor,
+  Package,
   Percent,
   Printer,
   RefreshCw,
@@ -19,13 +20,21 @@ import {
   SlidersHorizontal,
   Truck,
   UtensilsCrossed,
+  ChefHat,
 } from 'lucide-react';
 import PosPostsSection from '@/components/settings/PosPostsSection';
+import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import api from '@/lib/api';
+import { isInventoryLicensed } from '@/lib/inventory-addon';
+import { isSignageLicensed } from '@/lib/signage-addon';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
+  findPrinterHealCandidates,
   formatScalePortLabel,
+  getPrintAgentHealth,
+  isConfiguredPrinterMissing,
   isPrintAgentAvailable,
+  isPrintAgentVersionOutdated,
   isUnsuitableRawPrinter,
   listAgentPrinters,
   listScalePorts,
@@ -73,6 +82,13 @@ interface SettingsData {
   shiftsEnabled?: boolean;
   maxPosPosts?: number;
   maxWaiterPosts?: number;
+  inventoryAddonEnabled?: boolean;
+  inventoryEnabled?: boolean;
+  signageAddonEnabled?: boolean;
+  signageEnabled?: boolean;
+  signageScreenLimit?: number;
+  inventoryWasteFactor?: number;
+  inventoryAutoReorderEmailEnabled?: boolean;
   posColorTheme?: string;
   posCheckoutSettings?: {
     tipsEnabled?: boolean;
@@ -108,6 +124,11 @@ interface SettingsData {
   webposCashEnabled?: boolean;
   webposCardEnabled?: boolean;
   webposGiftCardEnabled?: boolean;
+  webposInvoiceEnabled?: boolean;
+  bankIban?: string | null;
+  bankQrIban?: string | null;
+  bankName?: string | null;
+  bankAccountHolder?: string | null;
   webposTerminalEnabled?: boolean;
   adyenLiveEnvironment?: boolean;
   adyenUseLegacyEndpoint?: boolean;
@@ -177,6 +198,13 @@ interface SettingsData {
     scaleComPort?: string | null;
     scaleUsbAddress?: string | null;
     scaleEnabled?: boolean;
+    labelWidthMm?: 40 | 58;
+    labelHeightMm?: 20 | 25 | 30 | 40;
+    labelShowStoreName?: boolean;
+    labelShowProductName?: boolean;
+    labelShowBarcodeNumber?: boolean;
+    labelShowPrice?: boolean;
+    labelShowSku?: boolean;
     printers?: Array<{
       id: string;
       name: string;
@@ -185,6 +213,7 @@ interface SettingsData {
       printReceipts?: boolean;
       printKitchenTickets?: boolean;
       printEndOfDayReports?: boolean;
+      printLabels?: boolean;
       printAllProducts?: boolean;
       linkedCategoryIds?: string[];
       linkedProductIds?: string[];
@@ -425,6 +454,7 @@ export default function Settings() {
   const [savingWebposPay, setSavingWebposPay] = useState(false);
   const [savingReceipt, setSavingReceipt] = useState(false);
   const [printAgentOk, setPrintAgentOk] = useState(false);
+  const [printAgentOutdated, setPrintAgentOutdated] = useState(false);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
   const [scalePorts, setScalePorts] = useState<string[]>([]);
@@ -469,6 +499,7 @@ export default function Settings() {
         { id: 'pos' as const, label: t('settingsPos'), icon: Monitor },
         { id: 'payments' as const, label: t('settingsPayments'), icon: CreditCard },
         { id: 'receipt' as const, label: t('settingsReceipt'), icon: Printer },
+        { id: 'kds' as const, label: t('kdsSettingsTitle'), icon: ChefHat },
         { id: 'email' as const, label: t('settingsEmail'), icon: Mail },
         { id: 'language' as const, label: t('language'), icon: Languages },
       ] as const,
@@ -677,6 +708,21 @@ export default function Settings() {
         keywords: ['receipt', 'printer', 'kitchen', 'ticket', t('settingsReceipt')],
       },
       {
+        id: 'barcode-labels',
+        tab: 'receipt',
+        keywords: ['barcode', 'label', 'code128', t('barcodeLabelsTitle')],
+      },
+      {
+        id: 'inventory-addon',
+        tab: 'pos',
+        keywords: ['inventory', 'stock', 'recipe', 'supplier', t('invTitle')],
+      },
+      {
+        id: 'signage-addon',
+        tab: 'pos',
+        keywords: ['signage', 'tv', 'menu board', 'screens', t('signageTitle')],
+      },
+      {
         id: 'email-smtp',
         tab: 'email',
         keywords: [
@@ -829,9 +875,10 @@ export default function Settings() {
   const refreshPrintAgentPrinters = useCallback(async () => {
     setRefreshingPrinters(true);
     try {
-      const ok = await isPrintAgentAvailable();
-      setPrintAgentOk(ok);
-      if (!ok) {
+      const health = await getPrintAgentHealth();
+      setPrintAgentOk(health.ok);
+      setPrintAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
+      if (!health.ok) {
         setAgentPrinters([]);
         return;
       }
@@ -839,6 +886,7 @@ export default function Settings() {
       setAgentPrinters(list);
     } catch {
       setPrintAgentOk(false);
+      setPrintAgentOutdated(false);
       setAgentPrinters([]);
     } finally {
       setRefreshingPrinters(false);
@@ -912,6 +960,11 @@ export default function Settings() {
         webposCardEnabled: settings.webposCardEnabled !== false,
         webposTerminalEnabled: settings.webposTerminalEnabled !== false,
         webposGiftCardEnabled: settings.webposGiftCardEnabled === true,
+        webposInvoiceEnabled: settings.webposInvoiceEnabled !== false,
+        bankIban: settings.bankIban || null,
+        bankQrIban: settings.bankQrIban || null,
+        bankName: settings.bankName || null,
+        bankAccountHolder: settings.bankAccountHolder || null,
         panelLanguage: settings.panelLanguage || locale,
         emailSmtpSettings: {
           enabled: !!settings.emailSmtpSettings?.enabled,
@@ -1025,6 +1078,11 @@ export default function Settings() {
         webposCardEnabled: settings.webposCardEnabled !== false,
         webposTerminalEnabled: settings.webposTerminalEnabled !== false,
         webposGiftCardEnabled: settings.webposGiftCardEnabled === true,
+        webposInvoiceEnabled: settings.webposInvoiceEnabled !== false,
+        bankIban: settings.bankIban || null,
+        bankQrIban: settings.bankQrIban || null,
+        bankName: settings.bankName || null,
+        bankAccountHolder: settings.bankAccountHolder || null,
         adyenLiveEnvironment: !!settings.adyenLiveEnvironment,
         adyenUseLegacyEndpoint: !!settings.adyenUseLegacyEndpoint,
       });
@@ -1073,6 +1131,16 @@ export default function Settings() {
         scaleEnabled:
           !!ps.scaleComPort?.trim() || !!ps.scaleUsbAddress?.trim() || ps.scaleEnabled === true,
         printers,
+        labelWidthMm: ps.labelWidthMm === 58 ? 58 : 40,
+        labelHeightMm:
+          ps.labelHeightMm === 25 || ps.labelHeightMm === 30 || ps.labelHeightMm === 40
+            ? ps.labelHeightMm
+            : 20,
+        labelShowStoreName: ps.labelShowStoreName !== false,
+        labelShowProductName: ps.labelShowProductName !== false,
+        labelShowBarcodeNumber: ps.labelShowBarcodeNumber !== false,
+        labelShowPrice: ps.labelShowPrice === true,
+        labelShowSku: ps.labelShowSku === true,
       };
     },
     []
@@ -1918,6 +1986,99 @@ export default function Settings() {
               </Section>
 
               <Section
+                id="inventory-addon"
+                icon={Package}
+                accent={settingsDash.accent}
+                title={t('invTitle')}
+                description={t('invSettingsHint')}
+                highlight={isSectionHighlight('inventory-addon')}
+                dimmed={normalizedQuery ? !isSectionVisible('inventory-addon') : false}
+              >
+                <p className="text-sm">
+                  {isInventoryLicensed(settings) ? t('invAddonOn') : t('invAddonOff')}
+                </p>
+                <p className="text-xs muted mt-1">{t('invAddonReadOnly')}</p>
+                <SettingsField label={t('invWasteFactor')} hint={t('invWasteFactorHint')}>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    max={50}
+                    step={1}
+                    disabled={!isInventoryLicensed(settings)}
+                    value={Math.round((Number(settings.inventoryWasteFactor) || 0.2) * 100)}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        inventoryWasteFactor: Math.min(50, Math.max(0, Number(e.target.value) || 0)) / 100,
+                      })
+                    }
+                  />
+                </SettingsField>
+                <label className="mt-3 flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    disabled={!isInventoryLicensed(settings)}
+                    checked={!!settings.inventoryAutoReorderEmailEnabled}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        inventoryAutoReorderEmailEnabled: e.target.checked,
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium block">{t('invAutoReorderMaster')}</span>
+                    <span className="text-xs muted">{t('invAutoReorderMasterHint')}</span>
+                  </span>
+                </label>
+                {isInventoryLicensed(settings) && (
+                  <Link to="/merchant/inventory/cookbook" className="btn-secondary mt-3 inline-flex">
+                    {t('invNavCookbook')}
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  className="btn-primary mt-3"
+                  disabled={!isInventoryLicensed(settings) || saving}
+                  onClick={async () => {
+                    try {
+                      await api.put('/merchant/settings', {
+                        inventoryWasteFactor: Number(settings.inventoryWasteFactor) || 0.2,
+                        inventoryAutoReorderEmailEnabled: !!settings.inventoryAutoReorderEmailEnabled,
+                      });
+                      toast.success(t('saved'));
+                    } catch (error: any) {
+                      toast.error(error.response?.data?.error || t('saveFailed'));
+                    }
+                  }}
+                >
+                  {t('save')}
+                </button>
+              </Section>
+
+              <Section
+                id="signage-addon"
+                icon={Monitor}
+                accent={settingsDash.accent}
+                title={t('signageTitle')}
+                description={t('signageAddonReadOnly')}
+                highlight={isSectionHighlight('signage-addon')}
+                dimmed={normalizedQuery ? !isSectionVisible('signage-addon') : false}
+              >
+                <p className="text-sm">
+                  {isSignageLicensed(settings) ? t('signageAddonOn') : t('signageAddonOff')}
+                </p>
+                <p className="text-xs muted mt-1">{t('signageAddonReadOnly')}</p>
+                {isSignageLicensed(settings) ? (
+                  <Link to="/merchant/signage" className="btn-secondary mt-3 inline-flex">
+                    {t('signageNav')}
+                  </Link>
+                ) : null}
+              </Section>
+
+              <Section
                 id="pos-courses"
                 icon={Monitor}
                 accent={settingsDash.success}
@@ -2047,6 +2208,7 @@ export default function Settings() {
                       ['webposCardEnabled', t('webposCard'), false] as const,
                       ['webposTerminalEnabled', t('webposTerminal'), false] as const,
                       ['webposGiftCardEnabled', t('webposGiftCard'), true] as const,
+                      ['webposInvoiceEnabled', t('webposInvoice'), false] as const,
                     ] as const
                   ).map(([key, label, optIn]) => (
                     <label
@@ -2210,6 +2372,66 @@ export default function Settings() {
                     />
                     {t('adyenLegacyEndpoint')}
                   </label>
+                </Section>
+                <SettingsSaveBar saving={savingWebposPay} />
+              </form>
+
+              <form onSubmit={saveWebposPayments} className="space-y-5">
+                <Section
+                  id="payments-invoice-bank"
+                  icon={Building2}
+                  accent={settingsDash.info}
+                  title={t('invoiceBankDetails')}
+                  description={t('invoiceBankDetailsHint')}
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field label={t('invoiceAccountHolder')}>
+                      <input
+                        className="input"
+                        value={settings?.bankAccountHolder || ''}
+                        onChange={(e) =>
+                          setSettings((prev) =>
+                            prev ? { ...prev, bankAccountHolder: e.target.value } : prev
+                          )
+                        }
+                      />
+                    </Field>
+                    <Field label={t('invoiceBankName')}>
+                      <input
+                        className="input"
+                        value={settings?.bankName || ''}
+                        onChange={(e) =>
+                          setSettings((prev) =>
+                            prev ? { ...prev, bankName: e.target.value } : prev
+                          )
+                        }
+                      />
+                    </Field>
+                    <Field label={t('invoiceIban')}>
+                      <input
+                        className="input font-mono uppercase"
+                        value={settings?.bankIban || ''}
+                        onChange={(e) =>
+                          setSettings((prev) =>
+                            prev ? { ...prev, bankIban: e.target.value.toUpperCase() } : prev
+                          )
+                        }
+                        placeholder="CH93 0076 2011 6238 5295 7"
+                      />
+                    </Field>
+                    <Field label={t('invoiceQrIban')} hint={t('invoiceQrIbanHint')}>
+                      <input
+                        className="input font-mono uppercase"
+                        value={settings?.bankQrIban || ''}
+                        onChange={(e) =>
+                          setSettings((prev) =>
+                            prev ? { ...prev, bankQrIban: e.target.value.toUpperCase() } : prev
+                          )
+                        }
+                        placeholder="CH44 3199 9123 0008 8901 2"
+                      />
+                    </Field>
+                  </div>
                 </Section>
                 <SettingsSaveBar saving={savingWebposPay} />
               </form>
@@ -3216,16 +3438,42 @@ export default function Settings() {
                   </button>
                   <p
                     className={`text-sm m-0 ${
-                      printAgentOk ? 'text-emerald-700' : 'text-[var(--text-muted)]'
+                      !printAgentOk
+                        ? 'text-[var(--text-muted)]'
+                        : printAgentOutdated ||
+                            (settings.posPrintSettings?.printers || []).some(
+                              (p) =>
+                                isConfiguredPrinterMissing(p.name, agentPrinters, {
+                                  agentOk: printAgentOk,
+                                  printersReady: agentPrinters.length > 0,
+                                })
+                            )
+                          ? 'text-amber-800'
+                          : 'text-emerald-700'
                     }`}
                   >
-                    {printAgentOk ? t('webPosAgentOnline') : t('webPosAgentOffline')}
+                    {!printAgentOk
+                      ? t('webPosAgentOffline')
+                      : (settings.posPrintSettings?.printers || []).some((p) =>
+                            isConfiguredPrinterMissing(p.name, agentPrinters, {
+                              agentOk: printAgentOk,
+                              printersReady: agentPrinters.length > 0,
+                            })
+                          )
+                        ? t('webPosPrinterDisconnectedShort')
+                        : printAgentOutdated
+                          ? t('webPosPrintAgentOutdatedHint')
+                          : t('webPosAgentOnline')}
                   </p>
                 </div>
                 {(settings.posPrintSettings?.printers || []).map((p, idx) => {
-                  const printerNames = new Set(agentPrinters.map((ap) => ap.name));
-                  const savedNameMissing =
-                    !!p.name.trim() && printAgentOk && agentPrinters.length > 0 && !printerNames.has(p.name);
+                  const savedNameMissing = isConfiguredPrinterMissing(p.name, agentPrinters, {
+                    agentOk: printAgentOk,
+                    printersReady: agentPrinters.length > 0,
+                  });
+                  const healCandidates = savedNameMissing
+                    ? findPrinterHealCandidates(p.name, agentPrinters)
+                    : [];
                   const useDropdown = printAgentOk && agentPrinters.length > 0;
                   return (
                   <div
@@ -3283,12 +3531,40 @@ export default function Settings() {
                     {p.name && isUnsuitableRawPrinter(p.name) ? (
                       <p className="text-xs leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
                     ) : null}
+                    {savedNameMissing ? (
+                      <div className="space-y-1.5">
+                        <p className="text-xs leading-snug text-amber-800 m-0">
+                          {t('webPosPrinterDisconnectedShort')}
+                        </p>
+                        <p className="text-xs leading-snug text-amber-800 m-0">
+                          {t('webPosPrinterRenamedHint')}
+                        </p>
+                        {healCandidates.map((ap) => (
+                          <button
+                            key={ap.name}
+                            type="button"
+                            className="inline-flex items-center rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                            onClick={() => {
+                              const printers = [...(settings.posPrintSettings?.printers || [])];
+                              printers[idx] = { ...p, name: ap.name };
+                              setSettings({
+                                ...settings,
+                                posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                              });
+                            }}
+                          >
+                            {t('webPosUsePrinter').replace('{name}', ap.name)}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                     <div className="flex flex-wrap gap-3 text-sm">
                       {(
                         [
                           ['printReceipts', t('printRoleReceipts')],
                           ['printKitchenTickets', t('printRoleKitchen')],
                           ['printEndOfDayReports', t('printRoleEod')],
+                          ['printLabels', t('printRoleLabels')],
                         ] as const
                       ).map(([key, label]) => (
                         <label key={key} className="inline-flex items-center gap-1.5">
@@ -3382,6 +3658,7 @@ export default function Settings() {
                         printReceipts: false,
                         printKitchenTickets: true,
                         printEndOfDayReports: false,
+                        printLabels: false,
                         printAllProducts: true,
                       },
                     ];
@@ -3395,8 +3672,100 @@ export default function Settings() {
                 </button>
               </Section>
 
+              <Section
+                id="barcode-labels"
+                icon={Printer}
+                accent={settingsDash.accent}
+                title={t('barcodeLabelsTitle')}
+                description={t('barcodeLabelsHint')}
+                highlight={isSectionHighlight('barcode-labels')}
+                dimmed={normalizedQuery ? !isSectionVisible('barcode-labels') : false}
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  <SettingsField label={t('barcodeLabelWidth')}>
+                    <select
+                      className="input"
+                      value={settings.posPrintSettings?.labelWidthMm === 58 ? 58 : 40}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            labelWidthMm: Number(e.target.value) === 58 ? 58 : 40,
+                          },
+                        })
+                      }
+                    >
+                      <option value={40}>40 mm</option>
+                      <option value={58}>58 mm</option>
+                    </select>
+                  </SettingsField>
+                  <SettingsField label={t('barcodeLabelHeight')}>
+                    <select
+                      className="input"
+                      value={settings.posPrintSettings?.labelHeightMm || 20}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            labelHeightMm: Number(e.target.value) as 20 | 25 | 30 | 40,
+                          },
+                        })
+                      }
+                    >
+                      <option value={20}>20 mm</option>
+                      <option value={25}>25 mm</option>
+                      <option value={30}>30 mm</option>
+                      <option value={40}>40 mm</option>
+                    </select>
+                  </SettingsField>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-3 text-sm">
+                  {(
+                    [
+                      ['labelShowStoreName', t('barcodeShowStore')],
+                      ['labelShowProductName', t('barcodeShowName')],
+                      ['labelShowBarcodeNumber', t('barcodeShowNumber')],
+                      ['labelShowPrice', t('barcodeShowPrice')],
+                      ['labelShowSku', t('barcodeShowSku')],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key} className="inline-flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={
+                          key === 'labelShowPrice' || key === 'labelShowSku'
+                            ? settings.posPrintSettings?.[key] === true
+                            : settings.posPrintSettings?.[key] !== false
+                        }
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            posPrintSettings: {
+                              ...(settings.posPrintSettings || {}),
+                              [key]: e.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </Section>
+
               <SettingsSaveBar saving={savingReceipt} />
             </form>
+          )}
+
+          {tab === 'kds' && (
+            <div className="space-y-5">
+              <SettingsPageHeader title={t('kdsSettingsTitle')} subtitle={t('kdsSettingsHint')} />
+              <Section icon={ChefHat} accent={settingsDash.accent} title={t('kdsSettingsTitle')} description={t('kdsSettingsHint')}>
+                <KdsSettingsPanel />
+              </Section>
+            </div>
           )}
 
           {tab === 'language' && (
