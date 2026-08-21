@@ -261,6 +261,25 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
 });
 
 /**
+ * PATCH /api/reseller/merchants/:merchantId/plan
+ * Set POS edition and plan billing status for an owned merchant.
+ */
+router.patch("/merchants/:merchantId/plan", async (req: Request, res: Response) => {
+  try {
+    const { editionId, planBillingPaid, subscriptionPlan } = req.body || {};
+    const merchant = await ResellerService.updateOwnedMerchantPlan(
+      resellerId(req),
+      req.params.merchantId,
+      { editionId, planBillingPaid, subscriptionPlan }
+    );
+    res.json({ success: true, merchant });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to update plan";
+    res.status(message === "Merchant not found" ? 404 : 400).json({ error: message });
+  }
+});
+
+/**
  * POST /api/reseller/merchants/:merchantId/suspend
  * Reseller-owned merchants only — same status flag as superadmin suspend.
  */

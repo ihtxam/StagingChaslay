@@ -348,6 +348,8 @@ export const merchants = pgTable(
     resellerId: uuid("reseller_id").references(() => resellers.id, { onDelete: "set null" }),
     /** Assigned POS edition / feature pack (null = legacy full access) */
     editionId: uuid("edition_id").references(() => editions.id, { onDelete: "set null" }),
+    /** Reseller/agency billing flag — paid plan assigned by superadmin or owning reseller */
+    planBillingPaid: boolean("plan_billing_paid").default(true).notNull(),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
     /** Set when merchant chooses a password (invite accepted or admin set one) */
     passwordSetAt: timestamp("password_set_at"),

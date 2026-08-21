@@ -16,6 +16,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   pos_color_theme:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_color_theme varchar(20) NOT NULL DEFAULT 'teal'",
   edition_id: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS edition_id uuid",
+  plan_billing_paid:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS plan_billing_paid boolean NOT NULL DEFAULT true",
   reseller_id: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reseller_id uuid",
   report_email_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS report_email_settings jsonb",

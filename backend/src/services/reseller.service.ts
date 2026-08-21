@@ -341,7 +341,9 @@ export class ResellerService {
         status: schema.merchants.status,
         slug: schema.merchants.slug,
         editionId: schema.merchants.editionId,
+        editionName: schema.editions.name,
         subscriptionPlan: schema.merchants.subscriptionPlan,
+        planBillingPaid: schema.merchants.planBillingPaid,
         shopEnabled: schema.merchants.shopEnabled,
         maxPosPosts: schema.merchants.maxPosPosts,
         maxWaiterPosts: schema.merchants.maxWaiterPosts,
@@ -351,10 +353,13 @@ export class ResellerService {
         createdAt: schema.merchants.createdAt,
       })
       .from(schema.merchants)
+      .leftJoin(schema.editions, eq(schema.merchants.editionId, schema.editions.id))
       .where(and(...clauses))
       .orderBy(desc(schema.merchants.createdAt));
     return rows.map((r) => ({
       ...r,
+      editionName: r.editionName ?? null,
+      planBillingPaid: r.planBillingPaid !== false,
       inventoryAddonEnabled: isInventoryAddonEnabled(r.inventoryAddonEnabled),
       signageAddonEnabled: isSignageAddonEnabled(r.signageAddonEnabled),
       signageScreenLimit: normalizeSignageScreenLimit(r.signageScreenLimit),
@@ -450,6 +455,21 @@ export class ResellerService {
       signageScreenLimit: limits.signageScreenLimit,
     });
     return MerchantService.getMerchantById(merchantId);
+  }
+
+  /** Change POS edition / billing flag for an owned merchant. */
+  static async updateOwnedMerchantPlan(
+    resellerId: string,
+    merchantId: string,
+    input: {
+      editionId?: string | null;
+      planBillingPaid?: boolean;
+      subscriptionPlan?: string;
+    }
+  ) {
+    await this.assertOwnsMerchant(resellerId, merchantId);
+    const { MerchantService } = await import("./merchant.service");
+    return MerchantService.updateMerchantPlan(merchantId, input, { forResellerId: resellerId });
   }
 
   /** Suspend a merchant this reseller owns. Same status flag as superadmin suspend. */

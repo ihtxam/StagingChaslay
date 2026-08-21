@@ -19,6 +19,7 @@ interface Merchant {
   subscriptionPlan?: string;
   editionId?: string | null;
   editionName?: string | null;
+  planBillingPaid?: boolean;
   lastAppVersion?: string | null;
   lastAppVersionSeenAt?: string | null;
   inventoryAddonEnabled?: boolean;
@@ -111,6 +112,8 @@ export default function Merchants() {
     signageScreenLimit: 2,
   });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
+  const [planForm, setPlanForm] = useState({ editionId: '', planBillingPaid: true });
+  const [savingPlan, setSavingPlan] = useState(false);
   const [editions, setEditions] = useState<Array<{ id: string; name: string; businessCategory: string }>>(
     []
   );
@@ -158,6 +161,10 @@ export default function Merchants() {
     try {
       const res = await api.get(`/superadmin/merchants/${merchant.id}`);
       setDetailFull(res.data.merchant);
+      setPlanForm({
+        editionId: res.data.merchant?.editionId || '',
+        planBillingPaid: res.data.merchant?.planBillingPaid !== false,
+      });
       setPosLimits({
         maxPosPosts: Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(res.data.merchant?.maxWaiterPosts) || 0),
@@ -209,6 +216,43 @@ export default function Merchants() {
       toast.error(err.response?.data?.error || 'Failed to update limits');
     } finally {
       setSavingPosLimits(false);
+    }
+  };
+
+  const handleSavePlan = async () => {
+    if (!showDetail) return;
+    if (!planForm.editionId) {
+      toast.error('Select a POS version');
+      return;
+    }
+    setSavingPlan(true);
+    try {
+      const res = await api.patch(`/superadmin/merchants/${showDetail.id}/plan`, {
+        editionId: planForm.editionId,
+        planBillingPaid: !!planForm.planBillingPaid,
+      });
+      const saved = res.data?.merchant;
+      setDetailFull(saved);
+      setPlanForm({
+        editionId: saved?.editionId || planForm.editionId,
+        planBillingPaid: saved?.planBillingPaid !== false,
+      });
+      setShowDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              editionId: saved?.editionId ?? prev.editionId,
+              editionName: saved?.editionName ?? saved?.edition?.name ?? prev.editionName,
+              planBillingPaid: saved?.planBillingPaid !== false,
+            }
+          : prev
+      );
+      await fetchMerchants();
+      toast.success('Plan & billing updated');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to update plan');
+    } finally {
+      setSavingPlan(false);
     }
   };
 
@@ -910,18 +954,66 @@ export default function Merchants() {
               <p>
                 <span className="text-gray-500">Status:</span> {showDetail.status}
               </p>
-              <div className="rounded-lg border border-teal-100 bg-teal-50/60 px-3 py-3 space-y-2">
-                <p className="font-semibold text-teal-950">POS version</p>
+              <div className="rounded-lg border border-teal-100 bg-teal-50/60 px-3 py-3 space-y-3">
+                <p className="font-semibold text-teal-950">POS version & plan billing</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <PosVersionBadge
                     name={detailFull?.editionName ?? detailFull?.edition?.name ?? showDetail.editionName}
                   />
+                  <span
+                    className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      planForm.planBillingPaid
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-amber-100 text-amber-900'
+                    }`}
+                  >
+                    {planForm.planBillingPaid ? 'Paid' : 'Unpaid'}
+                  </span>
                   {(detailFull?.subscriptionPlan || showDetail.subscriptionPlan) && (
                     <span className="text-xs text-gray-500">
-                      Plan: {detailFull?.subscriptionPlan || showDetail.subscriptionPlan}
+                      License tier: {detailFull?.subscriptionPlan || showDetail.subscriptionPlan}
                     </span>
                   )}
                 </div>
+                <label className="block text-sm">
+                  <span className="font-medium">POS version</span>
+                  <select
+                    className="input mt-1"
+                    value={planForm.editionId}
+                    onChange={(e) => setPlanForm({ ...planForm, editionId: e.target.value })}
+                  >
+                    <option value="">Select POS version…</option>
+                    {editions.map((ed) => (
+                      <option key={ed.id} value={ed.id}>
+                        {ed.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  <span className="font-medium">Plan billing status</span>
+                  <select
+                    className="input mt-1"
+                    value={planForm.planBillingPaid ? 'paid' : 'unpaid'}
+                    onChange={(e) =>
+                      setPlanForm({ ...planForm, planBillingPaid: e.target.value === 'paid' })
+                    }
+                  >
+                    <option value="paid">Paid — active billing for assigned plan</option>
+                    <option value="unpaid">Unpaid — flag for reseller billing only</option>
+                  </select>
+                  <span className="text-xs text-gray-500 mt-1 block">
+                    Does not block merchant POS or panel login.
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  className="btn-secondary text-sm"
+                  disabled={savingPlan}
+                  onClick={() => void handleSavePlan()}
+                >
+                  {savingPlan ? 'Saving…' : 'Save plan & billing'}
+                </button>
                 <p>
                   <span className="text-gray-500">Android app:</span>{' '}
                   {detailFull?.lastAppVersion || showDetail.lastAppVersion ? (

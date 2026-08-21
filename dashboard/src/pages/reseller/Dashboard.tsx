@@ -115,7 +115,14 @@ function MerchantsPage() {
     signageAddonEnabled: boolean;
     signageScreenLimit: number;
   } | null>(null);
+  const [planFor, setPlanFor] = useState<{
+    id: string;
+    name: string;
+    editionId: string;
+    planBillingPaid: boolean;
+  } | null>(null);
   const [savingLimits, setSavingLimits] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -241,6 +248,28 @@ function MerchantsPage() {
       toast.error(err.response?.data?.error || t('resellerSaveFailed'));
     } finally {
       setSavingLimits(false);
+    }
+  };
+
+  const saveMerchantPlan = async () => {
+    if (!planFor) return;
+    if (!planFor.editionId) {
+      toast.error(t('posVersionSelect'));
+      return;
+    }
+    setSavingPlan(true);
+    try {
+      await api.patch(`/reseller/merchants/${planFor.id}/plan`, {
+        editionId: planFor.editionId,
+        planBillingPaid: !!planFor.planBillingPaid,
+      });
+      toast.success(t('merchantPlanSaved'));
+      setPlanFor(null);
+      load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('merchantPlanSaveFailed'));
+    } finally {
+      setSavingPlan(false);
     }
   };
 
@@ -512,6 +541,8 @@ function MerchantsPage() {
               <th className="px-3 py-2">{t('resellerStores')}</th>
               <th className="px-3 py-2">{t('email')}</th>
               <th className="px-3 py-2">{t('status')}</th>
+              <th className="px-3 py-2">{t('posVersion')}</th>
+              <th className="px-3 py-2">{t('merchantPlanBilling')}</th>
               <th className="px-3 py-2">{t('invTitle')}</th>
               <th className="px-3 py-2" />
             </tr>
@@ -543,6 +574,22 @@ function MerchantsPage() {
                   </span>
                 </td>
                 <td className="px-3 py-2">
+                  <span className="text-xs text-stone-700" title={m.editionName || undefined}>
+                    {m.editionName || '—'}
+                  </span>
+                </td>
+                <td className="px-3 py-2">
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      m.planBillingPaid !== false
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-amber-100 text-amber-900'
+                    }`}
+                  >
+                    {m.planBillingPaid !== false ? t('invoiceStatusPaid') : t('invoiceStatusUnpaid')}
+                  </span>
+                </td>
+                <td className="px-3 py-2">
                   {m.inventoryAddonEnabled === true ? (
                     <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
                       On
@@ -554,6 +601,20 @@ function MerchantsPage() {
                   )}
                 </td>
                 <td className="px-3 py-2 text-right space-x-3 whitespace-nowrap">
+                  <button
+                    type="button"
+                    className="text-teal-700 hover:underline"
+                    onClick={() =>
+                      setPlanFor({
+                        id: m.id,
+                        name: m.name,
+                        editionId: m.editionId || '',
+                        planBillingPaid: m.planBillingPaid !== false,
+                      })
+                    }
+                  >
+                    {t('merchantPlanManage')}
+                  </button>
                   <button
                     type="button"
                     className="text-stone-700 hover:underline"
@@ -707,6 +768,57 @@ function MerchantsPage() {
                 onClick={() => void savePosLimits()}
               >
                 {savingLimits ? '…' : t('save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {planFor ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-2xl border bg-white p-5 shadow-xl space-y-3">
+            <h2 className="text-lg font-bold">{t('merchantPlanManage')}</h2>
+            <p className="text-sm text-stone-600">{planFor.name}</p>
+            <label className="block text-sm">
+              {t('posVersion')}
+              <select
+                className="input mt-1"
+                value={planFor.editionId}
+                onChange={(e) => setPlanFor({ ...planFor, editionId: e.target.value })}
+              >
+                <option value="">{t('posVersionSelect')}</option>
+                {editions.map((ed) => (
+                  <option key={ed.id} value={ed.id}>
+                    {ed.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              {t('merchantPlanBilling')}
+              <select
+                className="input mt-1"
+                value={planFor.planBillingPaid ? 'paid' : 'unpaid'}
+                onChange={(e) =>
+                  setPlanFor({ ...planFor, planBillingPaid: e.target.value === 'paid' })
+                }
+              >
+                <option value="paid">{t('invoiceStatusPaid')}</option>
+                <option value="unpaid">{t('invoiceStatusUnpaid')}</option>
+              </select>
+              <span className="text-xs text-stone-500 mt-1 block">{t('merchantPlanBillingHint')}</span>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary text-sm" onClick={() => setPlanFor(null)}>
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                disabled={savingPlan}
+                onClick={() => void saveMerchantPlan()}
+              >
+                {savingPlan ? '…' : t('save')}
               </button>
             </div>
           </div>

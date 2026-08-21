@@ -143,6 +143,7 @@ export class MerchantService {
           subscriptionEndsAt: m.subscriptionEndsAt,
           editionId: m.editionId ?? null,
           editionName: m.edition?.name ?? null,
+          planBillingPaid: m.planBillingPaid !== false,
           lastAppVersion: lastSeen.lastAppVersion,
           lastAppVersionSeenAt: lastSeen.lastAppVersionSeenAt,
           resellerId: m.resellerId ?? null,
@@ -210,6 +211,7 @@ export class MerchantService {
         signageEnabled: signage.enabled,
         signageScreenLimit: signage.screenLimit,
         editionName: merchant.edition?.name ?? null,
+        planBillingPaid: merchant.planBillingPaid !== false,
         lastAppVersion: lastSeen.lastAppVersion,
         lastAppVersionSeenAt: lastSeen.lastAppVersionSeenAt,
       };
@@ -485,6 +487,69 @@ export class MerchantService {
       throw new Error(
         "At least one of maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, or signageScreenLimit is required"
       );
+    }
+    return this.getMerchantById(merchantId);
+  }
+
+  /** Superadmin / owning reseller: change POS edition and plan billing flag. */
+  static async updateMerchantPlan(
+    merchantId: string,
+    input: {
+      editionId?: string | null;
+      planBillingPaid?: boolean;
+      subscriptionPlan?: string;
+    },
+    opts?: { forResellerId?: string; allowClearEdition?: boolean }
+  ) {
+    const hasEdition = input.editionId !== undefined;
+    const hasPaid = input.planBillingPaid !== undefined;
+    const hasSubPlan = input.subscriptionPlan !== undefined;
+    if (!hasEdition && !hasPaid && !hasSubPlan) {
+      throw new Error("At least one of editionId, planBillingPaid, or subscriptionPlan is required");
+    }
+
+    const db = getDb();
+    const existing = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { id: true },
+    });
+    if (!existing) throw new Error("Merchant not found");
+
+    const patch: Partial<typeof schema.merchants.$inferInsert> = {};
+    if (hasPaid) patch.planBillingPaid = !!input.planBillingPaid;
+    if (hasSubPlan) {
+      const plan = String(input.subscriptionPlan || "").trim();
+      const allowed = ["free", "starter", "professional", "enterprise"];
+      if (!allowed.includes(plan)) throw new Error("Invalid subscription plan");
+      patch.subscriptionPlan = plan;
+    }
+
+    if (hasEdition) {
+      if (input.editionId === null) {
+        if (!opts?.allowClearEdition) throw new Error("POS version is required");
+        patch.editionId = null;
+      } else {
+        const editionId = String(input.editionId || "").trim();
+        if (!editionId) throw new Error("POS version is required");
+        const { EditionService } = await import("./edition.service");
+        const edition = await EditionService.getById(editionId);
+        if (!edition || !edition.isActive) throw new Error("POS version not found or inactive");
+        if (opts?.forResellerId) {
+          const allowedEdition =
+            edition.ownerType === "platform" ||
+            (edition.ownerType === "reseller" && edition.ownerId === opts.forResellerId);
+          if (!allowedEdition) throw new Error("POS version not available for this reseller");
+        }
+        if (Object.keys(patch).length) {
+          await this.updateMerchant(merchantId, patch);
+        }
+        await EditionService.applyEditionDefaultsToMerchant(merchantId, editionId);
+        return this.getMerchantById(merchantId);
+      }
+    }
+
+    if (Object.keys(patch).length) {
+      await this.updateMerchant(merchantId, patch);
     }
     return this.getMerchantById(merchantId);
   }

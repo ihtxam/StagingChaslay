@@ -865,26 +865,48 @@ router.delete("/editions/:editionId", async (req: Request, res: Response) => {
 
 router.patch("/merchants/:merchantId/edition", async (req: Request, res: Response) => {
   try {
-    const { editionId, resellerId } = req.body || {};
-    const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
-    if (resellerId !== undefined) dbUpdates.resellerId = resellerId || null;
-    if (editionId) {
-      await EditionService.applyEditionDefaultsToMerchant(req.params.merchantId, editionId);
-    } else if (editionId === null) {
-      dbUpdates.editionId = null;
-      await MerchantService.updateMerchant(req.params.merchantId, dbUpdates as any);
+    const { editionId, resellerId, planBillingPaid, subscriptionPlan } = req.body || {};
+
+    if (
+      editionId !== undefined ||
+      planBillingPaid !== undefined ||
+      subscriptionPlan !== undefined
+    ) {
+      await MerchantService.updateMerchantPlan(req.params.merchantId, {
+        editionId,
+        planBillingPaid,
+        subscriptionPlan,
+      }, { allowClearEdition: true });
     }
-    if (resellerId !== undefined && !editionId) {
-      await MerchantService.updateMerchant(req.params.merchantId, dbUpdates as any);
-    } else if (resellerId !== undefined && editionId) {
+
+    if (resellerId !== undefined) {
       await MerchantService.updateMerchant(req.params.merchantId, {
         resellerId: resellerId || null,
       } as any);
     }
+
     const merchant = await MerchantService.getMerchantById(req.params.merchantId);
     res.json({ success: true, merchant });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * PATCH /api/superadmin/merchants/:merchantId/plan
+ * Set POS edition and plan billing status.
+ */
+router.patch("/merchants/:merchantId/plan", async (req: Request, res: Response) => {
+  try {
+    const { editionId, planBillingPaid, subscriptionPlan } = req.body || {};
+    const merchant = await MerchantService.updateMerchantPlan(req.params.merchantId, {
+      editionId,
+      planBillingPaid,
+      subscriptionPlan,
+    }, { allowClearEdition: true });
+    res.json({ success: true, merchant });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update plan" });
   }
 });
 
