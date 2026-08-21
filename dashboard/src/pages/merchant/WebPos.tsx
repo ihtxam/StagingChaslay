@@ -836,7 +836,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const pinGateRequired = webPosPinGateRequired({
     hasStaffPins: staffConfigured,
     pinSession: webposStaff,
-    isOwnerJwt: jwtIsOwner,
     offlineUnlocked: isWebPosCurrentlyOffline() && loadedFromOfflineCache,
   });
   /** Owner on the till without a clock-in keeps owner/manager perms. */
@@ -867,8 +866,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         opts?.openPinGate !== false &&
         hasPins &&
         !session &&
-        authUser?.role !== 'staff' &&
-        !isMerchantOwnerJwt(authUser);
+        authUser?.role !== 'staff';
       if (shouldOpenPinGate) {
         setPinModalMode('gate');
         setPinModalOpen(true);
@@ -914,6 +912,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!staffRoster.length) return;
     applyStaffRoster(staffRoster, { openPinGate: false });
   }, [staffRoster, applyStaffRoster]);
+
+  const refreshStaffRosterFromServer = useCallback(async () => {
+    try {
+      const staffRes = await api.get('/merchant/staff');
+      const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
+      setStaffRoster(staffList);
+      applyStaffRoster(staffList, { openPinGate: true });
+    } catch {
+      /* ignore */
+    }
+  }, [applyStaffRoster]);
+
+  useEffect(() => {
+    const onRosterChanged = () => void refreshStaffRosterFromServer();
+    window.addEventListener('webpos:staff-roster-changed', onRosterChanged);
+    return () => window.removeEventListener('webpos:staff-roster-changed', onRosterChanged);
+  }, [refreshStaffRosterFromServer]);
 
   useEffect(() => {
     localStorage.setItem('manupos_webpos_post_success', postSuccessTarget);
@@ -1030,6 +1045,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const access = getEffectivePanelAccess({
       jwtPermissions: authUser?.permissions as Permission[] | undefined,
       isOwner: jwtIsOwner,
+      authRole: authUser?.role,
       staffConfigured,
       pinSession: webposStaff,
     });

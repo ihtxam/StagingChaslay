@@ -87,7 +87,6 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const pinRequired = webPosPinGateRequired({
     hasStaffPins: staffConfigured,
     pinSession: staff,
-    isOwnerJwt: jwtIsOwner,
   });
 
   useEffect(() => {

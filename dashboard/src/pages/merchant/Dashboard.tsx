@@ -52,6 +52,7 @@ import {
   getEffectivePanelAccess,
   isCatalogPanelPath,
   isOrdersPanelPath,
+  isStaffJwt,
   loadWebPosStaffSession,
   type Permission,
   type WebPosStaffSession,
@@ -101,6 +102,7 @@ function MerchantShell() {
   const { t, locale, setLocale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const staffJwt = isStaffJwt(user);
   const location = useLocation();
   const navigate = useNavigate();
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
@@ -140,11 +142,12 @@ function MerchantShell() {
       getEffectivePanelAccess({
         jwtPermissions: user?.permissions as Permission[] | undefined,
         isOwner: jwtIsOwner,
+        authRole: user?.role,
         // Active PIN session means floor staff perms override owner JWT for panel access.
-        staffConfigured: !!pinSession || user?.role === 'staff',
+        staffConfigured: !!pinSession || staffJwt,
         pinSession,
       }),
-    [user?.permissions, user?.role, jwtIsOwner, pinSession]
+    [user?.permissions, user?.role, jwtIsOwner, staffJwt, pinSession]
   );
 
   useEffect(() => {
@@ -202,7 +205,8 @@ function MerchantShell() {
       const access = getEffectivePanelAccess({
         jwtPermissions: user?.permissions as Permission[] | undefined,
         isOwner: jwtIsOwner,
-        staffConfigured: !!loadWebPosStaffSession() || user?.role === 'staff',
+        authRole: user?.role,
+        staffConfigured: !!loadWebPosStaffSession() || staffJwt,
         pinSession: loadWebPosStaffSession(),
       });
       if (!access.canOpenBackOffice) {
@@ -224,7 +228,7 @@ function MerchantShell() {
       window.removeEventListener('webpos:show-panel', showPanel);
       window.removeEventListener('webpos:enter-app', enterApp);
     };
-  }, [user?.permissions, user?.role, jwtIsOwner, t, navigate]);
+  }, [user?.permissions, user?.role, jwtIsOwner, staffJwt, t, navigate]);
 
   // Restricted PIN: stay in POS unless they may open menu / orders pages.
   useEffect(() => {
@@ -278,6 +282,15 @@ function MerchantShell() {
       canAccessRoute(path, effective.permissions, effective.isOwner, null),
     [signageLicensed, effective.permissions, effective.isOwner]
   );
+
+  // Block direct URL access to panel pages the role may not open.
+  useEffect(() => {
+    if (effective.isOwner || isPosLikeRoute) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (allow(path)) return;
+    const dest = backOfficeHomePath(effective.permissions, false);
+    if (dest !== path) navigate(dest, { replace: true });
+  }, [effective.isOwner, effective.permissions, isPosLikeRoute, location.pathname, allow, navigate]);
 
   const showWebPosQuickAction = useMemo(
     () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
@@ -566,7 +579,14 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
-            <Route path="terminals" element={<Terminals />} />
+            <Route
+              path="terminals"
+              element={
+                <PanelRouteGuard path="/merchant/terminals" allow={allow}>
+                  <Terminals />
+                </PanelRouteGuard>
+              }
+            />
             <Route
               path="floor-plan"
               element={<LegacyTablesRedirect section="layout" />}

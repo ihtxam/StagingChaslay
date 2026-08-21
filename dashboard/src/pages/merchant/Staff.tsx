@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { notifyStaffRosterChanged } from '@/lib/permissions';
 import { useI18n } from '@/lib/i18n';
 import { ALL_PERMISSIONS, staffRoleDisplayName, type Permission } from '@/lib/permissions';
 import { useAuthStore } from '@/store/auth';
@@ -96,6 +97,7 @@ export default function StaffPage() {
       await api.put(`/merchant/roles/${editingRole.id}`, { permissions: rolePerms });
       toast.success(t('staffRoleUpdated'));
       setEditingRole(null);
+      notifyStaffRosterChanged();
       void load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('staffRoleSaveFailed'));
@@ -121,6 +123,7 @@ export default function StaffPage() {
       await api.post('/merchant/staff', { ...staffForm, email, password, canAccessPanel });
       toast.success(t('staffUserCreated'));
       setStaffForm({ ...emptyCreateForm, roleId: roles[0]?.id || '' });
+      notifyStaffRosterChanged();
       void load();
     } catch (err: any) {
       toast.error(err.response?.data?.error || t('staffUserCreateFailed'));
@@ -183,6 +186,7 @@ export default function StaffPage() {
       await api.put(`/merchant/staff/${editingStaff.id}`, body);
       toast.success(t('staffUserUpdated'));
       closeStaffEdit();
+      notifyStaffRosterChanged();
       void load();
     } catch (err: any) {
       toast.error(err.response?.data?.error || t('staffUserUpdateFailed'));
@@ -196,6 +200,7 @@ export default function StaffPage() {
     try {
       await api.delete(`/merchant/staff/${id}`);
       toast.success(t('staffUserRemoved'));
+      notifyStaffRosterChanged();
       void load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('staffUserRemoveFailed'));
