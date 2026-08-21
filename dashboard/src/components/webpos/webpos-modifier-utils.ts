@@ -40,6 +40,7 @@ export function validateGroupSelection(
 
 const GROUP_TITLE_KEYS: Record<string, string> = {
   Extras: 'shopExtras',
+  Sizes: 'sizes',
   Additions: 'webPosModAdditions',
   Removals: 'webPosModRemovals',
   'Bread Choice': 'webPosModBreadChoice',

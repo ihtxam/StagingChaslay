@@ -97,6 +97,18 @@ function mapShopProduct(
   })).filter((s) => s.options.length > 0);
 
   const rewardPts = p.loyaltyRewardPoints != null ? Number(p.loyaltyRewardPoints) : null;
+  const specifications = Array.isArray(p.specifications)
+    ? p.specifications
+        .filter((s: any) => s?.name?.trim() && (s.saleStatus || "in_stock") !== "out_of_stock")
+        .map((s: any, i: number) => ({
+          id: s.id || `spec-${i + 1}`,
+          name: s.name.trim(),
+          price: roundMoney2(Number(s.price) || 0),
+          saleStatus: s.saleStatus || "in_stock",
+          isDefault: !!s.isDefault,
+          sortOrder: Number(s.sortOrder) || i,
+        }))
+    : [];
   return {
     id: p.id,
     name: p.name,
@@ -111,6 +123,7 @@ function mapShopProduct(
       name: e.name,
       price: Number(e.price) || 0,
     })),
+    specifications,
     modifierGroups,
     comboSlots: isCombo ? comboSlots : [],
     loyaltyRewardPoints:

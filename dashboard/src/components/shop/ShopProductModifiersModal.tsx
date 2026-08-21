@@ -69,7 +69,8 @@ export default function ShopProductModifiersModal({
       chooseAtLeast: (n, name) =>
         t('shopChooseAtLeastOptions').replace('{n}', String(n)).replace('{name}', name),
       tooMany: (name) => t('shopTooManyOptions').replace('{name}', name),
-      groupTitle: (title) => (title === 'Extras' ? t('shopExtras') : title),
+      groupTitle: (title) =>
+        title === 'Extras' ? t('shopExtras') : title === 'Sizes' ? t('sizes') : title,
     });
     if (err) {
       setError(err);

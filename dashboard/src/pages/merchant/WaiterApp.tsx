@@ -214,6 +214,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         allowExtras: p.allowExtras,
         extras: p.extras,
         modifierGroups: p.modifierGroups,
+        specifications: p.specifications,
       });
       return;
     }

@@ -7,6 +7,7 @@ import { AuthService } from "./auth.service";
 import { MerchantSettingsService } from "./merchant-settings.service";
 import { receiptPublicUrl } from "@/lib/receipt-public-url";
 import { normalizeComboSlots } from "@/lib/combo";
+import { roundMoney2 } from "@/lib/money";
 import { ModifierService } from "./modifier.service";
 
 export function normalizeChaslayDeviceId(deviceId: string): string {
@@ -741,6 +742,17 @@ export class ChaslayCompatService {
         this.mapComboOption(o, productClientById, groupsByProduct, catalogById)
       ),
     }));
+    const specifications = Array.isArray(p.specifications) ? p.specifications : [];
+    const variants = specifications
+      .filter((s: any) => s?.name?.trim() && (s.saleStatus || "in_stock") !== "out_of_stock")
+      .map((s: any, i: number) => ({
+        id: s.id || `spec-${i + 1}`,
+        name: repairCatalogText(s.name || ""),
+        price: roundMoney2(Number(s.price) || 0),
+        is_default: !!s.isDefault,
+        sort_order: Number(s.sortOrder) || i,
+        sale_status: s.saleStatus || "in_stock",
+      }));
     // stock defaults to 0 in DB — that means "not tracking inventory", not unavailable.
     // Use isActive for POS/menu availability; only hide when merchant deactivated the item.
     return {
@@ -766,6 +778,8 @@ export class ChaslayCompatService {
       })),
       modifier_groups: modifierGroups,
       combo_items: comboItems,
+      specifications,
+      variants,
       online_visible: p.isActive,
       kiosk_visible: p.isActive,
       updated_at: p.updatedAt?.toISOString(),

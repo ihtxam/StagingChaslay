@@ -10,6 +10,7 @@ import com.chaslay.pos.data.local.dao.ModifierOptionDao
 import com.chaslay.pos.data.local.dao.ProductAddonGroupDao
 import com.chaslay.pos.data.local.dao.ProductDao
 import com.chaslay.pos.data.local.dao.ProductModifierGroupDao
+import com.chaslay.pos.data.local.dao.ProductVariantDao
 import com.chaslay.pos.data.local.entity.AddonGroupEntity
 import com.chaslay.pos.data.local.entity.AddonOptionEntity
 import com.chaslay.pos.data.local.entity.CategoryEntity
@@ -20,6 +21,7 @@ import com.chaslay.pos.data.local.entity.ModifierOptionEntity
 import com.chaslay.pos.data.local.entity.ProductAddonGroupEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.data.local.entity.ProductModifierGroupEntity
+import com.chaslay.pos.data.local.entity.ProductVariantEntity
 import com.chaslay.pos.data.preferences.SyncApiKeyStore
 import com.chaslay.pos.data.preferences.SyncPreferences
 import com.chaslay.pos.util.TextEncoding
@@ -32,6 +34,7 @@ import com.chaslay.pos.data.remote.dto.SyncCategoryDto
 import com.chaslay.pos.data.remote.dto.SyncExtraDto
 import com.chaslay.pos.data.remote.dto.SyncModifierGroupDto
 import com.chaslay.pos.data.remote.dto.SyncProductDto
+import com.chaslay.pos.data.remote.dto.SyncVariantDto
 import com.chaslay.pos.data.repository.SettingsRepository
 import com.google.gson.JsonElement
 import com.chaslay.pos.data.repository.ReceiptPublicUrls
@@ -64,6 +67,7 @@ class MenuSyncRepository @Inject constructor(
     private val addonOptionDao: AddonOptionDao,
     private val productModifierGroupDao: ProductModifierGroupDao,
     private val productAddonGroupDao: ProductAddonGroupDao,
+    private val productVariantDao: ProductVariantDao,
     private val settingsRepository: SettingsRepository
 ) {
     suspend fun syncMenu(mode: MenuSyncMode = MenuSyncMode.MERGE): MenuSyncResult =
@@ -121,6 +125,10 @@ class MenuSyncRepository @Inject constructor(
                 productIdByRemote = productIdByRemote
             )
             persistModifiersFromCatalog(
+                catalogProducts = bootstrap?.products ?: products,
+                productIdByRemote = productIdByRemote
+            )
+            persistVariantsFromCatalog(
                 catalogProducts = bootstrap?.products ?: products,
                 productIdByRemote = productIdByRemote
             )
@@ -308,7 +316,43 @@ class MenuSyncRepository @Inject constructor(
         } else {
             productDao.update(entity)
             existing.id
+        }.also { localId ->
+            persistProductVariants(localId, dto)
         }
+    }
+
+    private suspend fun persistVariantsFromCatalog(
+        catalogProducts: List<SyncProductDto>,
+        productIdByRemote: Map<String, Long>
+    ) {
+        catalogProducts.forEach { dto ->
+            val localId = productIdByRemote[dto.id] ?: productDao.getByRemoteId(dto.id)?.id ?: return@forEach
+            persistProductVariants(localId, dto)
+        }
+    }
+
+    private suspend fun persistProductVariants(localProductId: Long, dto: SyncProductDto) {
+        val raw = dto.variants ?: dto.specifications ?: emptyList()
+        productVariantDao.deactivateByProduct(localProductId)
+        val entities = raw.mapIndexedNotNull { index, variant ->
+            variant.toEntity(localProductId, index)
+        }
+        if (entities.isNotEmpty()) {
+            productVariantDao.insertAll(entities)
+        }
+    }
+
+    private fun SyncVariantDto.toEntity(localProductId: Long, index: Int): ProductVariantEntity? {
+        val variantName = name?.trim().orEmpty()
+        if (variantName.isEmpty()) return null
+        if (saleStatus == "out_of_stock") return null
+        return ProductVariantEntity(
+            productId = localProductId,
+            name = TextEncoding.repairCatalogText(variantName),
+            price = price ?: 0.0,
+            sortOrder = sortOrder ?: index,
+            isActive = true
+        )
     }
 
     private suspend fun persistComboSlotsFromCatalog(

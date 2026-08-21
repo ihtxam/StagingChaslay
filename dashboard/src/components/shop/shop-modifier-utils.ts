@@ -19,6 +19,16 @@ export interface ShopModifierGroup {
   options: ShopModifierOption[];
 }
 
+/** Catalogue size/spec row (Small / Regular / Large, each with its own price). */
+export interface ShopProductSpec {
+  id: string;
+  name: string;
+  price: number;
+  saleStatus?: 'in_stock' | 'out_of_stock';
+  isDefault?: boolean;
+  sortOrder?: number;
+}
+
 export interface ShopProductForModifiers {
   id: string;
   name: string;
@@ -28,9 +38,42 @@ export interface ShopProductForModifiers {
   allowExtras?: boolean;
   extras?: ShopModifierOption[];
   modifierGroups?: ShopModifierGroup[];
+  specifications?: ShopProductSpec[];
 }
 
-export function effectiveGroups(product: ShopProductForModifiers): ShopModifierGroup[] {
+/** Synthetic modifier group id for catalogue size rows. */
+export const SIZE_MODIFIER_GROUP_ID = '__sizes__';
+
+export function inStockSpecifications(product: ShopProductForModifiers): ShopProductSpec[] {
+  return (product.specifications || [])
+    .filter((s) => s.name?.trim() && (s.saleStatus || 'in_stock') !== 'out_of_stock')
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+}
+
+export function productHasSizeChoice(product: ShopProductForModifiers): boolean {
+  return inStockSpecifications(product).length > 1;
+}
+
+function sizeGroupFromSpecifications(product: ShopProductForModifiers): ShopModifierGroup | null {
+  const specs = inStockSpecifications(product);
+  if (specs.length <= 1) return null;
+  const base = roundMoney2(Number(product.price) || 0);
+  return {
+    id: SIZE_MODIFIER_GROUP_ID,
+    title: 'Sizes',
+    selectionType: 'required',
+    minSelectable: 1,
+    maxSelectable: 1,
+    options: specs.map((s) => ({
+      id: s.id,
+      name: s.name.trim(),
+      price: roundMoney2(Number(s.price) - base),
+      isDefault: !!s.isDefault,
+    })),
+  };
+}
+
+function legacyExtrasGroups(product: ShopProductForModifiers): ShopModifierGroup[] {
   if (product.modifierGroups?.length) return product.modifierGroups;
   if (product.allowExtras && product.extras?.length) {
     return [
@@ -45,6 +88,12 @@ export function effectiveGroups(product: ShopProductForModifiers): ShopModifierG
     ];
   }
   return [];
+}
+
+export function effectiveGroups(product: ShopProductForModifiers): ShopModifierGroup[] {
+  const sizeGroup = sizeGroupFromSpecifications(product);
+  const groups = legacyExtrasGroups(product);
+  return sizeGroup ? [sizeGroup, ...groups] : groups;
 }
 
 export function groupMin(g: ShopModifierGroup) {
@@ -192,6 +241,7 @@ export function effectiveGroupsForComboOption(opt: {
 
 export function productHasModifiers(product: ShopProductForModifiers) {
   return (
+    productHasSizeChoice(product) ||
     (product.modifierGroups?.some((g) => g.options?.length) ?? false) ||
     !!(product.allowExtras && product.extras?.length)
   );

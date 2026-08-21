@@ -76,6 +76,14 @@ export type Product = {
   barcode?: string | null;
   allowExtras?: boolean;
   extras?: Array<{ id: string; name: string; price: number; isDefault?: boolean }>;
+  specifications?: Array<{
+    id: string;
+    name: string;
+    price: number;
+    saleStatus?: 'in_stock' | 'out_of_stock';
+    isDefault?: boolean;
+    sortOrder?: number;
+  }>;
   modifierGroups?: import('@/components/shop/ShopProductModifiersModal').ShopModifierGroup[];
   comboSlots?: import('@/components/shop/ShopComboWizard').ComboSlot[];
 };

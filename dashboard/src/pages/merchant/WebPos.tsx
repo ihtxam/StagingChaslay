@@ -1715,6 +1715,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 : g?.options,
             }))
           : p.modifierGroups,
+        specifications: Array.isArray(p.specifications)
+          ? p.specifications.map((s: any, i: number) => ({
+              id: s?.id || `spec-${i + 1}`,
+              name: repairCatalogText(s?.name || ''),
+              price: Number(s?.price) || 0,
+              saleStatus: s?.saleStatus || 'in_stock',
+              isDefault: !!s?.isDefault,
+              sortOrder: Number(s?.sortOrder) || i,
+            }))
+          : p.specifications,
         comboSlots: Array.isArray(p.comboSlots)
           ? p.comboSlots.map((slot: any) => ({
               ...slot,
@@ -2347,6 +2357,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       allowExtras: product.allowExtras,
       extras: product.extras,
       modifierGroups: product.modifierGroups,
+      specifications: product.specifications,
     });
     setPendingCombo(null);
   };
@@ -2425,6 +2436,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           allowExtras: p.allowExtras,
           extras: p.extras,
           modifierGroups: p.modifierGroups,
+          specifications: p.specifications,
         });
         return;
       }
