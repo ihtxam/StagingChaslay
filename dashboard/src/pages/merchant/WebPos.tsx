@@ -136,6 +136,9 @@ import WebPosTopBar, {
   type WebPosColorTheme,
   type WebPosTextSize,
 } from '@/components/webpos/WebPosTopBar';
+import WebPosLogsModal from '@/components/webpos/WebPosLogsModal';
+import WebPosOnboardingTour, { readWebPosOnboardingDone } from '@/components/webpos/WebPosOnboardingTour';
+import { appendWebPosLog, hookWebPosConsole } from '@/lib/webpos-log';
 
 const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
 const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
@@ -146,6 +149,42 @@ const WEBPOS_GRID_MOBILE_COLS_KEY = 'webpos.grid.mobileCols';
 type MobileGridLayoutStep = 0 | 1 | 2;
 const WEBPOS_GRID_SORT_KEY = 'webpos.grid.sort';
 const WEBPOS_SET_PIN_HINT_KEY = 'webpos_set_pin_hint_dismissed';
+const WEBPOS_TERMINAL_KEY = 'manupos_webpos_terminal';
+
+function terminalStorageKey(staffId?: string | null) {
+  return staffId ? `${WEBPOS_TERMINAL_KEY}_${staffId}` : WEBPOS_TERMINAL_KEY;
+}
+
+function readStoredTerminalId(staffId?: string | null): string {
+  try {
+    return localStorage.getItem(terminalStorageKey(staffId)) || '';
+  } catch {
+    return '';
+  }
+}
+
+function persistTerminalId(terminalId: string, staffId?: string | null) {
+  try {
+    const key = terminalStorageKey(staffId);
+    if (terminalId.trim()) localStorage.setItem(key, terminalId.trim());
+    else localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+function resolveActiveTerminalId(
+  terminals: WebPosTerminal[] | undefined,
+  opts: { preferred?: string | null; defaultId?: string | null; stored?: string | null }
+): string {
+  const active = (terminals || []).filter((t) => t.status === 'active');
+  const valid = new Set(active.map((t) => t.terminalId));
+  for (const candidate of [opts.preferred, opts.stored, opts.defaultId]) {
+    const id = (candidate || '').trim();
+    if (id && valid.has(id)) return id;
+  }
+  return active[0]?.terminalId || '';
+}
 
 export type WebPosAppearance = 'light' | 'night';
 
@@ -477,6 +516,7 @@ type WebPosPaymentConfig = {
   terminalReady: boolean;
   adyenConfigured: boolean;
   defaultTerminalId: string | null;
+  staffPreferredTerminalId?: string | null;
   terminals: WebPosTerminal[];
   posPrintSettings?: PosPrintSettingsClient | null;
   posCheckoutSettings?: PosCheckoutSettings | null;
@@ -779,6 +819,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     scope: CancelScope;
     lineId?: string;
   } | null>(null);
+  const [logsOpen, setLogsOpen] = useState(false);
+  const [logsAutoSend, setLogsAutoSend] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutSeedMethod, setCheckoutSeedMethod] = useState<
     PosPaymentMethod | 'express'
@@ -1685,7 +1728,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ...cfg,
           editionFeatures: cfg.editionFeatures ?? merch?.editionFeatures ?? null,
         });
-        if (cfg.defaultTerminalId) setSelectedTerminalId(cfg.defaultTerminalId);
+        const offlineStaffId = loadWebPosStaffSession()?.id;
+        const offlineTerminalId = resolveActiveTerminalId(cfg.terminals, {
+          preferred: cfg.staffPreferredTerminalId,
+          defaultId: cfg.defaultTerminalId,
+          stored: readStoredTerminalId(offlineStaffId),
+        });
+        if (offlineTerminalId) setSelectedTerminalId(offlineTerminalId);
         const first = ['cash', 'card', 'terminal'] as const;
         const pick = first.find((m) => cfg.methods[m]);
         if (pick) setPaymentMethod(pick);
@@ -1792,7 +1841,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           nextPrintSettings = cfg.posPrintSettings;
           setPrintSettings(cfg.posPrintSettings);
         }
-        if (cfg.defaultTerminalId) setSelectedTerminalId(cfg.defaultTerminalId);
+        const staffId = loadWebPosStaffSession()?.id;
+        const terminalId = resolveActiveTerminalId(cfg.terminals, {
+          preferred: cfg.staffPreferredTerminalId,
+          defaultId: cfg.defaultTerminalId,
+          stored: readStoredTerminalId(staffId),
+        });
+        if (terminalId) setSelectedTerminalId(terminalId);
         const first = ['cash', 'card', 'terminal'] as const;
         const pick = first.find((m) => cfg.methods[m]);
         if (pick) setPaymentMethod(pick);
@@ -1916,6 +1971,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    hookWebPosConsole();
+    appendWebPosLog('WebPOS session started');
+    if (!readWebPosOnboardingDone()) {
+      setOnboardingOpen(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!shiftsEnabled || !offlineSync.online) return;
@@ -4593,6 +4656,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const confirmCancelCart = async (reason: string, reasonId?: string) => {
     if (!cancelModal) return;
+    if (!canCancelOrders) {
+      toast.error(t('webPosCancelDenied'));
+      setCancelModal(null);
+      return;
+    }
     const scope = cancelModal.scope;
     const lineId = cancelModal.lineId;
     const kitchenLines =
@@ -7081,6 +7149,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
+  const changePosTerminal = async (terminalId: string) => {
+    setSelectedTerminalId(terminalId);
+    persistTerminalId(terminalId, webposStaff?.id);
+    if (webposStaff?.id) {
+      try {
+        await api.put('/merchant/pos/staff-preferences', {
+          preferredTerminalId: terminalId || null,
+        });
+      } catch {
+        /* local fallback kept */
+      }
+    }
+  };
+
   const onStaffPinSuccess = async (staff: {
     id: string;
     name: string;
@@ -7088,6 +7170,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     roleName: string;
     permissions: string[];
     accessToken?: string;
+    preferredTerminalId?: string | null;
   }) => {
     const session: WebPosStaffSession = {
       id: staff.id,
@@ -7124,6 +7207,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     setPinModalOpen(false);
     toast.success(t('webPosSignedInAs').replace('{name}', staff.name));
+    if (paymentConfig?.terminals?.length) {
+      const terminalId = resolveActiveTerminalId(paymentConfig.terminals, {
+        preferred: staff.preferredTerminalId,
+        defaultId: paymentConfig.defaultTerminalId,
+        stored: readStoredTerminalId(staff.id),
+      });
+      if (terminalId) {
+        setSelectedTerminalId(terminalId);
+        persistTerminalId(terminalId, staff.id);
+      }
+    }
     void refreshCurrentShift();
   };
 
@@ -7733,6 +7827,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onReservationsEnabledChange={
               canManageOnlineShop ? (enabled) => void toggleReservationsEnabled(enabled) : undefined
             }
+            onViewLogs={() => {
+              setSettingsOpen(false);
+              setLogsAutoSend(false);
+              setLogsOpen(true);
+            }}
+            onSendLogs={() => {
+              setSettingsOpen(false);
+              setLogsAutoSend(true);
+              setLogsOpen(true);
+            }}
+            onShowTutorial={() => {
+              setSettingsOpen(false);
+              setOnboardingOpen(true);
+            }}
+            terminalEnabled={enabledMethods.terminal}
+            terminals={activeTerminals}
+            selectedTerminalId={selectedTerminalId}
+            onTerminalChange={(id) => void changePosTerminal(id)}
           />
         }
       />
@@ -8088,6 +8200,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onNewOrder={startNewOrder}
                 onPayment={openRegisterCheckout}
                 onCancelOrder={() => {
+                  if (!canCancelOrders) {
+                    toast.error(t('webPosCancelDenied'));
+                    return;
+                  }
                   if (!cart.length && !orderSent) {
                     void startNewOrder(true);
                     return;
@@ -8096,6 +8212,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   setCancelModal({ scope: 'order' });
                 }}
                 onCancelItem={() => {
+                  if (!canCancelOrders) {
+                    toast.error(t('webPosCancelDenied'));
+                    return;
+                  }
                   const line = cart.find((l) => l.lineId === selectedLineId);
                   if (!line?.sentToKitchen) {
                     toast.error(t('webPosCancelItemNeedSent'));
@@ -8108,8 +8228,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onEditFulfillment={() => setScheduleOpen(true)}
                 showSend={showSend}
                 hideTab={hideTab}
-                canCancelOrder={cart.length > 0 || (!kitchenEnabled && !orderSent)}
-                canCancelItem={!!cart.find((l) => l.lineId === selectedLineId)?.sentToKitchen}
+                canCancelOrder={
+                  canCancelOrders && (cart.length > 0 || (!kitchenEnabled && !orderSent))
+                }
+                canCancelItem={
+                  canCancelOrders &&
+                  !!cart.find((l) => l.lineId === selectedLineId)?.sentToKitchen
+                }
                 dockSide={cartSide}
                 showChannelTabs={showChannelTabs}
                 channelTabOptions={channelTabOptions}
@@ -8155,7 +8280,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onOrderPrint={kitchenEnabled ? openOrderReprint : undefined}
                 onLinePrint={kitchenEnabled ? openLineReprint : undefined}
                 onLineCancel={
-                  kitchenEnabled
+                  canCancelOrders && kitchenEnabled
                     ? (line) => setCancelModal({ scope: 'item', lineId: line.lineId })
                     : undefined
                 }
@@ -8889,6 +9014,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
         onClose={() => setCancelModal(null)}
         onConfirm={(reason, reasonId) => void confirmCancelCart(reason, reasonId)}
+      />
+
+      <WebPosLogsModal
+        open={logsOpen}
+        autoSend={logsAutoSend}
+        onClose={() => {
+          setLogsOpen(false);
+          setLogsAutoSend(false);
+        }}
+        diagnostics={{
+          locale,
+          staffName: webposStaff?.name,
+          staffRole: webposStaff?.roleName,
+          merchantName: merchant?.name || merchant?.businessName,
+        }}
+      />
+
+      <WebPosOnboardingTour
+        open={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
       />
 
       <WebPosCustomerPicker

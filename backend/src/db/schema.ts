@@ -416,6 +416,8 @@ export const merchantStaff = pgTable(
     passwordHash: varchar("password_hash", { length: 255 }),
     /** Can sign in to merchant backend panel (email + password) */
     canAccessPanel: boolean("can_access_panel").default(false).notNull(),
+    /** Adyen POI terminal id preferred by this staff member on WebPOS/waiter. */
+    preferredTerminalId: varchar("preferred_terminal_id", { length: 255 }),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -107,6 +107,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE inventory_unit_ratios ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
   product_recipes_is_demo:
     "ALTER TABLE product_recipes ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
+  preferred_terminal_id:
+    "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS preferred_terminal_id varchar(255)",
 };
 
 /** Idempotent CREATE TABLE for features added after initial deploy. */

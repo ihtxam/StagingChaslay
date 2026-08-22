@@ -108,7 +108,6 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "MANAGE_TABLES",
       "TAKEAWAY_ORDERS",
       "VIEW_ORDER_HISTORY",
-      "CANCEL_ORDERS",
       "MANAGE_PRODUCTS",
     ],
   },
@@ -126,7 +125,6 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "MANAGE_TABLES",
       "TAKEAWAY_ORDERS",
       "VIEW_ORDER_HISTORY",
-      "CANCEL_ORDERS",
       "MANAGE_PRODUCTS",
     ],
   },
@@ -258,6 +256,7 @@ const WAITER_PRIVILEGED_BLOCKED: Permission[] = [
   "MANAGE_OFFERS",
   "MANAGE_ONLINE_SHOP",
   "REFUND_ORDERS",
+  "CANCEL_ORDERS",
 ];
 
 export type WaiterSystemKind = "pos-only" | "menu-editor";
