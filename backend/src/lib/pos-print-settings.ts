@@ -52,6 +52,8 @@ export type PosPrintSettings = {
   receiptLogoUrl?: string | null;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  /** Play a bell on the main till when a waiter/mobile kitchen order arrives. */
+  waiterTillBellEnabled?: boolean;
   /** WebPOS / Print Agent USB scale COM port (e.g. COM3). Skips port discovery when set. */
   scaleComPort?: string | null;
   /** Android USB scale stable address synced from panel (optional). */
@@ -99,6 +101,7 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   receiptLogoUrl: null,
     autoPrintReceipt: true,
     autoPrintKitchen: true,
+    waiterTillBellEnabled: true,
     scaleComPort: null,
     scaleUsbAddress: null,
     scaleEnabled: false,
@@ -217,6 +220,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
         : String(src.receiptLogoUrl).trim().slice(0, 500) || null,
     autoPrintReceipt: src.autoPrintReceipt !== false,
     autoPrintKitchen: src.autoPrintKitchen !== false,
+    waiterTillBellEnabled: src.waiterTillBellEnabled !== false,
     scaleComPort:
       src.scaleComPort === null || src.scaleComPort === undefined
         ? null

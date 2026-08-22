@@ -195,6 +195,7 @@ interface SettingsData {
     receiptLogoUrl?: string | null;
     autoPrintReceipt?: boolean;
     autoPrintKitchen?: boolean;
+    waiterTillBellEnabled?: boolean;
     scaleComPort?: string | null;
     scaleUsbAddress?: string | null;
     scaleEnabled?: boolean;
@@ -1127,6 +1128,7 @@ export default function Settings() {
         receiptLogoUrl: ps.receiptLogoUrl || null,
         autoPrintReceipt: ps.autoPrintReceipt !== false,
         autoPrintKitchen: ps.autoPrintKitchen !== false,
+        waiterTillBellEnabled: ps.waiterTillBellEnabled !== false,
         scaleComPort: ps.scaleComPort?.trim() || null,
         scaleUsbAddress: ps.scaleUsbAddress?.trim() || null,
         scaleEnabled:
@@ -3373,6 +3375,28 @@ export default function Settings() {
                     </label>
                   ))}
                 </div>
+                <label className="mt-3 flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.posPrintSettings?.waiterTillBellEnabled !== false}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          waiterTillBellEnabled: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{t('waiterTillBellEnabled')}</span>
+                    <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                      {t('waiterTillBellEnabledHint')}
+                    </span>
+                  </span>
+                </label>
                 <label className="flex items-start gap-2 text-sm">
                   <input
                     type="checkbox"

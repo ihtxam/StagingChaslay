@@ -245,6 +245,8 @@ export type PosPrintSettingsClient = {
   receiptLogoUrl?: string | null;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  /** Play a bell on the main till when a waiter/mobile kitchen order arrives. */
+  waiterTillBellEnabled?: boolean;
   /** Print Agent USB scale COM port (WebPOS). */
   scaleComPort?: string | null;
   /** Android USB scale address synced from panel. */
