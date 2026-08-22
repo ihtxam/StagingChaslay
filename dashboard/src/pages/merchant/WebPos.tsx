@@ -3508,6 +3508,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setFulfillmentWhen(null);
     setSelectedCustomer(null);
     setProvisionalPrinted(false);
+    setMobileCartOpen(false);
     if (wasTable) {
       setTablesRefreshToken((n) => n + 1);
       setPosTab('tables');
@@ -3960,6 +3961,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setTableLabel(table.label);
       setChannel('dine_in');
     }
+    // Mobile register: land on the product grid so staff can add items (not an empty cart page).
+    setMobileCartOpen(false);
     setPosTab('register');
     setPosView('register');
   };
