@@ -58,6 +58,24 @@ export async function enqueueEscPosPrintJob(opts: {
 export type PrintJobKind = 'kitchen' | 'receipt' | 'eod' | 'other';
 
 /**
+ * True when this browser is the register PC (local Print Agent + 8s retry queue).
+ * Phones and narrow WebPOS layouts without a local agent queue jobs to the main till.
+ */
+export function isLocalPrintStation(agentOnline: boolean): boolean {
+  if (agentOnline) return true;
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return true;
+  const ua = navigator.userAgent || '';
+  if (/Mobile|Android|iPhone|iPod/i.test(ua) && !/iPad|Tablet/i.test(ua)) return false;
+  if (window.matchMedia && !window.matchMedia('(min-width: 1024px)').matches) return false;
+  return true;
+}
+
+/** Whether failed/offline prints should retry on this machine vs queue for the main till. */
+export function resolvePrintRetryLocally(agentOnline: boolean): boolean {
+  return isLocalPrintStation(agentOnline);
+}
+
+/**
  * Print via local Print Agent when available; otherwise queue for the main till hub.
  * On local failure (or agent down with retryLocally), persists the job for 8s auto-retry.
  * Returns `'local' | 'queued'`.
@@ -109,7 +127,9 @@ export async function printViaAgentOrQueue(opts: {
   }
 
   const offlineErr = new Error(
-    'Print agent offline — start Chaslay Print Agent on this PC to print.'
+    retryLocally
+      ? 'Print agent offline — start Chaslay Print Agent on this PC to print.'
+      : 'Network required — connect to send prints to the main till.'
   );
   if (retryLocally || !isBrowserOnline()) {
     persistLocal(offlineErr);

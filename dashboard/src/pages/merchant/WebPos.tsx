@@ -78,6 +78,7 @@ import {
 import {
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
+  resolvePrintRetryLocally,
 } from '@/lib/webpos-print-relay';
 import {
   removePrintJobs,
@@ -246,7 +247,10 @@ import WebPosSendReceiptModal from '@/components/webpos/WebPosSendReceiptModal';
 import WebPosPrintChooserModal from '@/components/webpos/WebPosPrintChooserModal';
 import WebPosKitchenPrintIssuesModal from '@/components/webpos/WebPosKitchenPrintIssuesModal';
 import WebPosReprintModal from '@/components/webpos/WebPosReprintModal';
-import { toastPrintError as toastPrintErrorRaw } from '@/lib/webpos-print-toast';
+import {
+  shortPrintErrorMessage,
+  toastPrintError as toastPrintErrorRaw,
+} from '@/lib/webpos-print-toast';
 import WebPosTablesView from '@/components/webpos/WebPosTablesView';
 import WebPosBookingsView from '@/components/webpos/WebPosBookingsView';
 import WebPosKitchenMessageModal from '@/components/webpos/WebPosKitchenMessageModal';
@@ -496,8 +500,25 @@ function mergeBillDiscounts(
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const { t, locale, setLocale } = useI18n();
+  const lastPrintErrorRef = useRef<{ key: string; at: number } | null>(null);
+  const lastQueuedToastAtRef = useRef(0);
+  const toastPrintQueuedMainTill = () => {
+    const now = Date.now();
+    if (now - lastQueuedToastAtRef.current < 4000) return;
+    lastQueuedToastAtRef.current = now;
+    toast.success(t('webPosPrintQueuedMainTill'));
+  };
   const notifyPrintError = (raw: unknown, fallbackKey = 'webPosPrintFailed') => {
     if (isPrinterDisconnectedError(raw)) setPrinterDisconnected(true);
+    const short = shortPrintErrorMessage(raw, t, fallbackKey);
+    const now = Date.now();
+    if (
+      lastPrintErrorRef.current?.key === short &&
+      now - lastPrintErrorRef.current.at < 4000
+    ) {
+      return;
+    }
+    lastPrintErrorRef.current = { key: short, at: now };
     toastPrintErrorRaw(raw, t, fallbackKey);
   };
   const navigate = useNavigate();
@@ -656,6 +677,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [agentOk, setAgentOk] = useState(false);
   const [agentOutdated, setAgentOutdated] = useState(false);
+  const printRetryLocally = resolvePrintRetryLocally(agentOk);
   const [printerDisconnected, setPrinterDisconnected] = useState(false);
   const [offlineSync, setOfflineSync] = useState<OfflineSyncState>({
     online: typeof navigator === 'undefined' ? true : navigator.onLine !== false,
@@ -4320,6 +4342,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         dataBase64: uint8ToBase64(escpos),
         text,
         orderId: orderNumber,
+        retryLocally: printRetryLocally,
         jobKind: 'kitchen',
         jobLabel: orderNumber || t('webPosPrintJobKitchen'),
       }).catch((e: unknown) => {
@@ -4632,6 +4655,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           printerName: label || undefined,
           dataBase64,
           text,
+          retryLocally: printRetryLocally,
           jobKind: 'receipt',
           jobLabel: t('webPosPrintJobReceipt'),
         });
@@ -5469,6 +5493,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           printerName: label || undefined,
           dataBase64,
           text,
+          retryLocally: printRetryLocally,
           jobKind: opts.role === 'kitchen' ? 'kitchen' : opts.role === 'eod' ? 'eod' : 'receipt',
           jobLabel:
             opts.role === 'eod'
@@ -5501,9 +5526,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       throw new Error(t('webPosPrintFailed'));
     }
 
-    if (opts.quiet) return;
+    if (opts.quiet) {
+      if (queuedOk && !printedOk && !printRetryLocally) {
+        toastPrintQueuedMainTill();
+      }
+      return;
+    }
     if (queuedOk && !printedOk) {
-      toast.success(t('webPosPrintQueuedMainTill'));
+      toastPrintQueuedMainTill();
       return;
     }
     if (opts.role === 'eod') {
@@ -5776,12 +5806,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           dataBase64: uint8ToBase64(escpos),
           text,
           orderId: opts?.orderNumber || null,
+          retryLocally: printRetryLocally,
           ...printMeta,
         });
         if (mode === 'queued') queuedAny = true;
       }
       setPrinterDisconnected(false);
-      if (queuedAny) toast.success(t('webPosPrintQueuedMainTill'));
+      if (queuedAny) toastPrintQueuedMainTill();
       void pushCartLinesToKds({
         ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
         orderNumber: kitchenOpts.orderNumber,
@@ -5811,10 +5842,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       dataBase64: uint8ToBase64(escpos),
       text,
       orderId: opts?.orderNumber || null,
+      retryLocally: printRetryLocally,
       ...printMeta,
     });
     setPrinterDisconnected(false);
-    if (mode === 'queued') toast.success(t('webPosPrintQueuedMainTill'));
+    if (mode === 'queued') toastPrintQueuedMainTill();
     void pushCartLinesToKds({
       ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
       orderNumber: kitchenOpts.orderNumber,
