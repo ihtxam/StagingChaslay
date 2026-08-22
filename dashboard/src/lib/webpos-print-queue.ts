@@ -1,6 +1,6 @@
 /**
  * Persistent unprinted ESC/POS jobs for WebPOS.
- * Survives cart reset after Send/Pay. Auto-retries every 8s while the page is open.
+ * Survives cart reset after Send/Pay. Auto-retries on a configurable interval while the page is open.
  */
 import { useEffect, useState } from 'react';
 import { friendlyPrintAgentError, printViaAgent } from '@/lib/print-agent';
@@ -24,19 +24,39 @@ export type PendingPrintJob = {
   text?: string;
   orderId?: string | null;
   lineIds?: string[];
+  /** Set when auto-retry budget is used up — show error UI and allow manual reprint. */
+  exhausted?: boolean;
 };
 
+export type PrintQueueRetryConfig = {
+  enabled: boolean;
+  maxAttempts: number;
+  intervalMs: number;
+};
+
+const DEFAULT_RETRY_CONFIG: PrintQueueRetryConfig = {
+  enabled: true,
+  maxAttempts: 5,
+  intervalMs: 5000,
+};
+
+/** @deprecated use getPrintQueueRetryConfig().intervalMs */
+export const PRINT_QUEUE_RETRY_MS = DEFAULT_RETRY_CONFIG.intervalMs;
+
 const STORAGE_KEY = 'chaslayreborn_webpos_print_queue_v1';
-export const PRINT_QUEUE_RETRY_MS = 8000;
 const MAX_JOBS = 40;
 const MAX_AGE_MS = 36 * 60 * 60 * 1000;
 
 type Listener = (jobs: PendingPrintJob[]) => void;
+type ExhaustedListener = (job: PendingPrintJob) => void;
+
 const listeners = new Set<Listener>();
+const exhaustedListeners = new Set<ExhaustedListener>();
 
 let jobs: PendingPrintJob[] = loadJobs();
 let retryTimer: number | null = null;
 let retryInFlight = false;
+let retryConfig: PrintQueueRetryConfig = { ...DEFAULT_RETRY_CONFIG };
 
 function loadJobs(): PendingPrintJob[] {
   try {
@@ -72,8 +92,89 @@ function persist() {
   }
 }
 
+function clampInt(value: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+export function getPrintQueueRetryConfig(): PrintQueueRetryConfig {
+  return retryConfig;
+}
+
+export function setPrintQueueRetryConfig(partial: Partial<PrintQueueRetryConfig>) {
+  const prevInterval = retryConfig.intervalMs;
+  retryConfig = {
+    enabled: partial.enabled ?? retryConfig.enabled,
+    maxAttempts: partial.maxAttempts ?? retryConfig.maxAttempts,
+    intervalMs: partial.intervalMs ?? retryConfig.intervalMs,
+  };
+  if (partial.intervalMs != null && partial.intervalMs !== prevInterval) {
+    restartPrintQueueAutoRetry();
+  }
+}
+
+export function applyKitchenPrintRetryFromSettings(settings?: {
+  kitchenPrintRetryEnabled?: boolean;
+  kitchenPrintRetryAttempts?: number;
+  kitchenPrintRetryIntervalSec?: number;
+} | null) {
+  setPrintQueueRetryConfig({
+    enabled: settings?.kitchenPrintRetryEnabled !== false,
+    maxAttempts: clampInt(settings?.kitchenPrintRetryAttempts, 1, 20, 5),
+    intervalMs: clampInt(settings?.kitchenPrintRetryIntervalSec, 2, 60, 5) * 1000,
+  });
+}
+
+function shouldExhaust(job: PendingPrintJob): boolean {
+  if (!retryConfig.enabled) return true;
+  return (job.attempts || 0) >= retryConfig.maxAttempts;
+}
+
+function notifyExhausted(job: PendingPrintJob) {
+  for (const fn of exhaustedListeners) {
+    try {
+      fn(job);
+    } catch {
+      /* ignore subscriber errors */
+    }
+  }
+}
+
+function markExhausted(job: PendingPrintJob) {
+  if (job.exhausted) return;
+  job.exhausted = true;
+  notifyExhausted(job);
+}
+
+export function subscribePrintJobExhausted(fn: ExhaustedListener): () => void {
+  exhaustedListeners.add(fn);
+  return () => {
+    exhaustedListeners.delete(fn);
+  };
+}
+
 export function listPendingPrintJobs(): PendingPrintJob[] {
   return jobs;
+}
+
+export function listExhaustedPrintJobs(): PendingPrintJob[] {
+  return jobs.filter((j) => j.exhausted);
+}
+
+export function listRetryingPrintJobs(): PendingPrintJob[] {
+  return jobs.filter((j) => !j.exhausted);
+}
+
+export function hasKitchenRetryPending(lineIds?: Iterable<string>): boolean {
+  const ids = lineIds ? new Set(lineIds) : null;
+  return jobs.some((j) => {
+    if (j.kind !== 'kitchen' || j.exhausted) return false;
+    if (!retryConfig.enabled) return false;
+    if ((j.attempts || 0) >= retryConfig.maxAttempts) return false;
+    if (!ids) return true;
+    return (j.lineIds || []).some((id) => ids.has(id));
+  });
 }
 
 export function subscribePrintQueue(fn: Listener): () => void {
@@ -120,6 +221,7 @@ export function enqueueFailedPrintJob(input: {
     if (input.lineIds?.length) {
       existing.lineIds = Array.from(new Set([...(existing.lineIds || []), ...input.lineIds]));
     }
+    if (shouldExhaust(existing)) markExhausted(existing);
     persist();
     ensurePrintQueueAutoRetry();
     return existing;
@@ -138,7 +240,9 @@ export function enqueueFailedPrintJob(input: {
     text: input.text,
     orderId: input.orderId || null,
     lineIds: input.lineIds?.length ? [...input.lineIds] : undefined,
+    exhausted: false,
   };
+  if (shouldExhaust(job)) markExhausted(job);
   jobs = [job, ...jobs].slice(0, MAX_JOBS);
   persist();
   ensurePrintQueueAutoRetry();
@@ -179,6 +283,8 @@ export async function reprintPrintJobs(ids: Iterable<string>): Promise<{ ok: num
       job.lastError = safeJobError(e, job.printerName) || job.lastError;
       job.lastAttemptAt = Date.now();
       job.attempts = (job.attempts || 0) + 1;
+      job.exhausted = false;
+      if (shouldExhaust(job)) markExhausted(job);
       failed += 1;
     }
   }
@@ -193,6 +299,15 @@ async function autoRetryOnce(): Promise<number> {
   try {
     const snapshot = [...jobs];
     for (const job of snapshot) {
+      if (job.exhausted) continue;
+      if (!retryConfig.enabled) {
+        markExhausted(job);
+        continue;
+      }
+      if ((job.attempts || 0) >= retryConfig.maxAttempts) {
+        markExhausted(job);
+        continue;
+      }
       try {
         await printViaAgent({
           printerName: job.printerName,
@@ -205,13 +320,23 @@ async function autoRetryOnce(): Promise<number> {
         job.lastError = safeJobError(e, job.printerName) || job.lastError;
         job.lastAttemptAt = Date.now();
         job.attempts = (job.attempts || 0) + 1;
+        if (shouldExhaust(job)) markExhausted(job);
       }
     }
-    if (printed === 0 && snapshot.length) persist();
+    if (printed === 0 && snapshot.some((j) => !j.exhausted)) persist();
   } finally {
     retryInFlight = false;
   }
   return printed;
+}
+
+function restartPrintQueueAutoRetry() {
+  if (typeof window === 'undefined') return;
+  if (retryTimer != null) {
+    window.clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  ensurePrintQueueAutoRetry();
 }
 
 export function ensurePrintQueueAutoRetry() {
@@ -219,13 +344,13 @@ export function ensurePrintQueueAutoRetry() {
   if (retryTimer != null) return;
   const tick = () => {
     void autoRetryOnce().finally(() => {
-      retryTimer = window.setTimeout(tick, PRINT_QUEUE_RETRY_MS);
+      retryTimer = window.setTimeout(tick, retryConfig.intervalMs);
     });
   };
-  retryTimer = window.setTimeout(tick, PRINT_QUEUE_RETRY_MS);
+  retryTimer = window.setTimeout(tick, retryConfig.intervalMs);
 }
 
 export function startPrintQueueAutoRetry() {
   ensurePrintQueueAutoRetry();
-  if (jobs.length) void autoRetryOnce();
+  if (jobs.some((j) => !j.exhausted)) void autoRetryOnce();
 }

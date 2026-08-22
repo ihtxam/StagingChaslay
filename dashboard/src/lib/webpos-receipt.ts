@@ -245,6 +245,12 @@ export type PosPrintSettingsClient = {
   receiptLogoUrl?: string | null;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  /** Auto-retry failed kitchen prints before surfacing an error. */
+  kitchenPrintRetryEnabled?: boolean;
+  /** Total print attempts before marking kitchen job failed (default 5). */
+  kitchenPrintRetryAttempts?: number;
+  /** Seconds between kitchen print retries (default 5). */
+  kitchenPrintRetryIntervalSec?: number;
   /** Print Agent USB scale COM port (WebPOS). */
   scaleComPort?: string | null;
   /** Android USB scale address synced from panel. */
