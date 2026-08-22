@@ -196,6 +196,9 @@ interface SettingsData {
     autoPrintReceipt?: boolean;
     autoPrintKitchen?: boolean;
     waiterTillBellEnabled?: boolean;
+    kitchenPrintRetryEnabled?: boolean;
+    kitchenPrintRetryAttempts?: number;
+    kitchenPrintRetryIntervalSec?: number;
     scaleComPort?: string | null;
     scaleUsbAddress?: string | null;
     scaleEnabled?: boolean;
@@ -1129,6 +1132,12 @@ export default function Settings() {
         autoPrintReceipt: ps.autoPrintReceipt !== false,
         autoPrintKitchen: ps.autoPrintKitchen !== false,
         waiterTillBellEnabled: ps.waiterTillBellEnabled !== false,
+        kitchenPrintRetryEnabled: ps.kitchenPrintRetryEnabled !== false,
+        kitchenPrintRetryAttempts: Math.min(20, Math.max(1, Number(ps.kitchenPrintRetryAttempts) || 5)),
+        kitchenPrintRetryIntervalSec: Math.min(
+          60,
+          Math.max(2, Number(ps.kitchenPrintRetryIntervalSec) || 5)
+        ),
         scaleComPort: ps.scaleComPort?.trim() || null,
         scaleUsbAddress: ps.scaleUsbAddress?.trim() || null,
         scaleEnabled:
@@ -3374,6 +3383,72 @@ export default function Settings() {
                       {label}
                     </label>
                   ))}
+                </div>
+                <div className="mt-3 space-y-3 rounded-xl border border-stone-200 bg-stone-50/80 p-3">
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.posPrintSettings?.kitchenPrintRetryEnabled !== false}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            kitchenPrintRetryEnabled: e.target.checked,
+                          },
+                        })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{t('kitchenPrintRetryEnabled')}</span>
+                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                        {t('kitchenPrintRetryEnabledHint')}
+                      </span>
+                    </span>
+                  </label>
+                  {settings.posPrintSettings?.kitchenPrintRetryEnabled !== false ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block text-sm">
+                        <span className="mb-1 block font-medium">{t('kitchenPrintRetryAttempts')}</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          className="input w-full"
+                          value={settings.posPrintSettings?.kitchenPrintRetryAttempts ?? 5}
+                          onChange={(e) =>
+                            setSettings({
+                              ...settings,
+                              posPrintSettings: {
+                                ...(settings.posPrintSettings || {}),
+                                kitchenPrintRetryAttempts: Number(e.target.value) || 5,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="block text-sm">
+                        <span className="mb-1 block font-medium">{t('kitchenPrintRetryIntervalSec')}</span>
+                        <input
+                          type="number"
+                          min={2}
+                          max={60}
+                          className="input w-full"
+                          value={settings.posPrintSettings?.kitchenPrintRetryIntervalSec ?? 5}
+                          onChange={(e) =>
+                            setSettings({
+                              ...settings,
+                              posPrintSettings: {
+                                ...(settings.posPrintSettings || {}),
+                                kitchenPrintRetryIntervalSec: Number(e.target.value) || 5,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  ) : null}
                 </div>
                 <label className="mt-3 flex items-start gap-2 text-sm">
                   <input

@@ -54,6 +54,12 @@ export type PosPrintSettings = {
   autoPrintKitchen?: boolean;
   /** Play a bell on the main till when a waiter/mobile kitchen order arrives. */
   waiterTillBellEnabled?: boolean;
+  /** Auto-retry failed kitchen prints before showing an error (WebPOS local queue). */
+  kitchenPrintRetryEnabled?: boolean;
+  /** Total print attempts before marking kitchen job failed (default 5). */
+  kitchenPrintRetryAttempts?: number;
+  /** Seconds between kitchen print retries (default 5). */
+  kitchenPrintRetryIntervalSec?: number;
   /** WebPOS / Print Agent USB scale COM port (e.g. COM3). Skips port discovery when set. */
   scaleComPort?: string | null;
   /** Android USB scale stable address synced from panel (optional). */
@@ -102,6 +108,9 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
     autoPrintReceipt: true,
     autoPrintKitchen: true,
     waiterTillBellEnabled: true,
+    kitchenPrintRetryEnabled: true,
+    kitchenPrintRetryAttempts: 5,
+    kitchenPrintRetryIntervalSec: 5,
     scaleComPort: null,
     scaleUsbAddress: null,
     scaleEnabled: false,
@@ -114,6 +123,12 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
     labelShowPrice: false,
     labelShowSku: false,
   };
+
+function clampInt(value: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
 
 export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
   const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -221,6 +236,9 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     autoPrintReceipt: src.autoPrintReceipt !== false,
     autoPrintKitchen: src.autoPrintKitchen !== false,
     waiterTillBellEnabled: src.waiterTillBellEnabled !== false,
+    kitchenPrintRetryEnabled: src.kitchenPrintRetryEnabled !== false,
+    kitchenPrintRetryAttempts: clampInt(src.kitchenPrintRetryAttempts, 1, 20, 5),
+    kitchenPrintRetryIntervalSec: clampInt(src.kitchenPrintRetryIntervalSec, 2, 60, 5),
     scaleComPort:
       src.scaleComPort === null || src.scaleComPort === undefined
         ? null

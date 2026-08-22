@@ -78,11 +78,16 @@ import {
 import {
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
+  resolvePrintRetryLocally,
 } from '@/lib/webpos-print-relay';
 import {
+  applyKitchenPrintRetryFromSettings,
+  hasKitchenRetryPending,
+  listExhaustedPrintJobs,
   removePrintJobs,
   reprintPrintJobs,
   startPrintQueueAutoRetry,
+  subscribePrintJobExhausted,
   usePendingPrintJobs,
 } from '@/lib/webpos-print-queue';
 import {
@@ -246,7 +251,10 @@ import WebPosSendReceiptModal from '@/components/webpos/WebPosSendReceiptModal';
 import WebPosPrintChooserModal from '@/components/webpos/WebPosPrintChooserModal';
 import WebPosKitchenPrintIssuesModal from '@/components/webpos/WebPosKitchenPrintIssuesModal';
 import WebPosReprintModal from '@/components/webpos/WebPosReprintModal';
-import { toastPrintError as toastPrintErrorRaw } from '@/lib/webpos-print-toast';
+import {
+  shortPrintErrorMessage,
+  toastPrintError as toastPrintErrorRaw,
+} from '@/lib/webpos-print-toast';
 import WebPosTablesView from '@/components/webpos/WebPosTablesView';
 import WebPosBookingsView from '@/components/webpos/WebPosBookingsView';
 import WebPosKitchenMessageModal from '@/components/webpos/WebPosKitchenMessageModal';
@@ -498,10 +506,29 @@ function mergeBillDiscounts(
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const { t, locale, setLocale } = useI18n();
+  const lastPrintErrorRef = useRef<{ key: string; at: number } | null>(null);
+  const lastQueuedToastAtRef = useRef(0);
+  const toastPrintQueuedMainTill = () => {
+    const now = Date.now();
+    if (now - lastQueuedToastAtRef.current < 4000) return;
+    lastQueuedToastAtRef.current = now;
+    toast.success(t('webPosPrintQueuedMainTill'));
+  };
   const notifyPrintError = (raw: unknown, fallbackKey = 'webPosPrintFailed') => {
     if (isPrinterDisconnectedError(raw)) setPrinterDisconnected(true);
+    const short = shortPrintErrorMessage(raw, t, fallbackKey);
+    const now = Date.now();
+    if (
+      lastPrintErrorRef.current?.key === short &&
+      now - lastPrintErrorRef.current.at < 4000
+    ) {
+      return;
+    }
+    lastPrintErrorRef.current = { key: short, at: now };
     toastPrintErrorRaw(raw, t, fallbackKey);
   };
+  const notifyPrintErrorRef = useRef(notifyPrintError);
+  notifyPrintErrorRef.current = notifyPrintError;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -658,6 +685,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [agentOk, setAgentOk] = useState(false);
   const [agentOutdated, setAgentOutdated] = useState(false);
+  const printRetryLocally = resolvePrintRetryLocally(agentOk);
   const [printerDisconnected, setPrinterDisconnected] = useState(false);
   const [offlineSync, setOfflineSync] = useState<OfflineSyncState>({
     online: typeof navigator === 'undefined' ? true : navigator.onLine !== false,
@@ -1281,11 +1309,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     activeCourse > 1;
   const hasUnsentItems = cart.some((l) => !l.sentToKitchen);
   const pendingPrintJobs = usePendingPrintJobs();
+  const exhaustedPrintJobs = useMemo(
+    () => pendingPrintJobs.filter((j) => j.exhausted),
+    [pendingPrintJobs]
+  );
   const failedPrintLines = useMemo(
     () => cart.filter((l) => !!l.kitchenPrintFailed && !!l.sentToKitchen),
     [cart]
   );
-  const unprintedJobCount = Math.max(pendingPrintJobs.length, failedPrintLines.length);
+  const unprintedJobCount = Math.max(exhaustedPrintJobs.length, failedPrintLines.length);
   // Ongoing order with new (unsent) lines must keep Send — not New.
   const showNewOrderButton = orderSent && !showFireCourseButton && !hasUnsentItems;
   const sendLabel = useMemo(() => {
@@ -3295,13 +3327,40 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   useEffect(() => {
-    const pendingLineIds = new Set(pendingPrintJobs.flatMap((j) => j.lineIds || []));
+    applyKitchenPrintRetryFromSettings(printSettings);
+  }, [printSettings]);
+
+  useEffect(() => {
+    return subscribePrintJobExhausted((job) => {
+      if (job.kind === 'kitchen' && job.lineIds?.length) {
+        setKitchenPrintFailedForLines(job.lineIds, true);
+      }
+      notifyPrintErrorRef.current(
+        job.lastError,
+        job.kind === 'kitchen' ? 'webPosKitchenPrintFailed' : 'webPosPrintFailed'
+      );
+    });
+  }, [setKitchenPrintFailedForLines]);
+
+  useEffect(() => {
+    const retryingLineIds = new Set(
+      pendingPrintJobs.filter((j) => !j.exhausted).flatMap((j) => j.lineIds || [])
+    );
+    const exhaustedLineIds = new Set(
+      pendingPrintJobs.filter((j) => j.exhausted).flatMap((j) => j.lineIds || [])
+    );
     setCart((prev) => {
       let changed = false;
       const next = prev.map((l) => {
         if (!l.kitchenPrintFailed) return l;
-        if (pendingLineIds.has(l.lineId)) return l;
-        if (pendingPrintJobs.length > 0 && pendingLineIds.size === 0) return l;
+        if (retryingLineIds.has(l.lineId)) {
+          changed = true;
+          return { ...l, kitchenPrintFailed: false };
+        }
+        if (exhaustedLineIds.has(l.lineId)) return l;
+        if (pendingPrintJobs.length > 0 && retryingLineIds.size === 0 && exhaustedLineIds.size === 0) {
+          return l;
+        }
         changed = true;
         return { ...l, kitchenPrintFailed: false };
       });
@@ -3321,6 +3380,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       lineIds: [line.lineId],
       lineLabel: repairCatalogText(line.name || ''),
     });
+  };
+
+  const handleKitchenPrintFailure = (e: unknown, lineIds: Iterable<string>) => {
+    const ids = [...lineIds];
+    if (hasKitchenRetryPending(ids)) {
+      toast(t('webPosKitchenPrintRetrying'), { duration: 3500 });
+      return;
+    }
+    const justExhausted = listExhaustedPrintJobs().some(
+      (j) =>
+        j.kind === 'kitchen' &&
+        (j.lineIds || []).some((id) => ids.includes(id))
+    );
+    if (justExhausted) return;
+    setKitchenPrintFailedForLines(ids, true);
+    notifyPrintError(e, 'webPosKitchenPrintFailed');
   };
 
   const fireCourseLines = async (lines: CartLine[], courseOnly?: number) => {
@@ -3343,8 +3418,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       })
       .then(() => setKitchenPrintFailedForLines(ids, false))
       .catch((e: unknown) => {
-        setKitchenPrintFailedForLines(ids, true);
-        notifyPrintError(e, 'webPosKitchenPrintFailed');
+        handleKitchenPrintFailure(e, ids);
       });
   };
 
@@ -4397,13 +4471,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         dataBase64: uint8ToBase64(escpos),
         text,
         orderId: orderNumber,
+        retryLocally: printRetryLocally,
         jobKind: 'kitchen',
         jobLabel: orderNumber || t('webPosPrintJobKitchen'),
       }).catch((e: unknown) => {
-        notifyPrintError(e, 'webPosKitchenPrintFailed');
+        handleKitchenPrintFailure(e, []);
       });
     } catch (e: unknown) {
-      notifyPrintError(e, 'webPosKitchenPrintFailed');
+      handleKitchenPrintFailure(e, []);
     }
   };
 
@@ -4513,7 +4588,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             lineIds: kitchenLines.map((l) => l.lineId),
           });
         } catch (printErr: unknown) {
-          notifyPrintError(printErr, 'webPosKitchenPrintFailed');
+          handleKitchenPrintFailure(printErr, kitchenLines.map((l) => l.lineId));
         }
       }
 
@@ -4709,6 +4784,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           printerName: label || undefined,
           dataBase64,
           text,
+          retryLocally: printRetryLocally,
           jobKind: 'receipt',
           jobLabel: t('webPosPrintJobReceipt'),
         });
@@ -5546,6 +5622,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           printerName: label || undefined,
           dataBase64,
           text,
+          retryLocally: printRetryLocally,
           jobKind: opts.role === 'kitchen' ? 'kitchen' : opts.role === 'eod' ? 'eod' : 'receipt',
           jobLabel:
             opts.role === 'eod'
@@ -5578,9 +5655,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       throw new Error(t('webPosPrintFailed'));
     }
 
-    if (opts.quiet) return;
+    if (opts.quiet) {
+      if (queuedOk && !printedOk && !printRetryLocally) {
+        toastPrintQueuedMainTill();
+      }
+      return;
+    }
     if (queuedOk && !printedOk) {
-      toast.success(t('webPosPrintQueuedMainTill'));
+      toastPrintQueuedMainTill();
       return;
     }
     if (opts.role === 'eod') {
@@ -5853,12 +5935,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           dataBase64: uint8ToBase64(escpos),
           text,
           orderId: opts?.orderNumber || null,
+          retryLocally: printRetryLocally,
           ...printMeta,
         });
         if (mode === 'queued') queuedAny = true;
       }
       setPrinterDisconnected(false);
-      if (queuedAny) toast.success(t('webPosPrintQueuedMainTill'));
+      if (queuedAny) toastPrintQueuedMainTill();
       void pushCartLinesToKds({
         ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
         orderNumber: kitchenOpts.orderNumber,
@@ -5888,10 +5971,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       dataBase64: uint8ToBase64(escpos),
       text,
       orderId: opts?.orderNumber || null,
+      retryLocally: printRetryLocally,
       ...printMeta,
     });
     setPrinterDisconnected(false);
-    if (mode === 'queued') toast.success(t('webPosPrintQueuedMainTill'));
+    if (mode === 'queued') toastPrintQueuedMainTill();
     void pushCartLinesToKds({
       ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
       orderNumber: kitchenOpts.orderNumber,
@@ -5918,12 +6002,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         false
       );
     } catch (e: unknown) {
-      setKitchenPrintFailedForLines(
-        lines.map((l) => l.lineId),
-        true
-      );
-      notifyPrintError(e, 'webPosKitchenPrintFailed');
-      throw e;
+      handleKitchenPrintFailure(e, lines.map((l) => l.lineId));
+      if (!hasKitchenRetryPending(lines.map((l) => l.lineId))) throw e;
     } finally {
       setKitchenPrintRetryBusy(false);
     }
@@ -6565,7 +6645,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         lineIds: kitchenDelta.map((l) => l.lineId),
         dedicatedKitchenOnly: method === 'pay_later',
       }).catch((e: unknown) => {
-        notifyPrintError(e, 'webPosKitchenPrintFailed');
+        handleKitchenPrintFailure(e, kitchenDelta.map((l) => l.lineId));
       });
     }
     if (method === 'invoice' && backendOrderId) {
@@ -6716,7 +6796,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             tableLabel: tableLabelSnapshot,
             lineIds: kitchenDelta.map((l) => l.lineId),
           }).catch((e: unknown) => {
-            notifyPrintError(e, 'webPosKitchenPrintFailed');
+            handleKitchenPrintFailure(e, kitchenDelta.map((l) => l.lineId));
           });
         }
       }
@@ -7880,7 +7960,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   lineIds: lines.map((l) => l.lineId),
                 });
               } catch (e: unknown) {
-                notifyPrintError(e, 'webPosKitchenPrintFailed');
+                handleKitchenPrintFailure(e, lines.map((l) => l.lineId));
               }
             }}
             onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
@@ -8268,7 +8348,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
       <WebPosKitchenPrintIssuesModal
         open={kitchenPrintIssuesOpen}
-        jobs={pendingPrintJobs}
+        jobs={pendingPrintJobs.filter((j) => j.exhausted || j.kind === 'kitchen')}
         lines={failedPrintLines}
         busy={kitchenPrintRetryBusy}
         money={money}

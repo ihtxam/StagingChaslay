@@ -1331,6 +1331,11 @@ const en: Dict = {
   waiterTillBellEnabled: 'Bell on main till when waiter sends order',
   waiterTillBellEnabledHint:
     'Play a short chime on the register PC when a waiter phone or mobile WebPOS sends a kitchen order — after it is registered and sent to the printer.',
+  kitchenPrintRetryEnabled: 'Retry kitchen print before showing error',
+  kitchenPrintRetryEnabledHint:
+    'When a kitchen ticket fails to print, ChaslayReborn retries automatically on the register PC before alerting staff.',
+  kitchenPrintRetryAttempts: 'Max print attempts',
+  kitchenPrintRetryIntervalSec: 'Seconds between retries',
   printAgentDownload: 'Windows print agent',
   printAgentDownloadHint:
     'Install once on the ChaslayReborn PC. The agent starts with Windows - no need to re-run start.bat. Use a thermal ESC/POS printer (not OneNote/PDF).',
@@ -1474,6 +1479,8 @@ const en: Dict = {
   webPosHoldFailed: 'Could not hold order',
   webPosOrderResumed: 'Order resumed',
   webPosKitchenPrintFailed: 'Kitchen print failed',
+  webPosKitchenPrintRetrying: 'Kitchen print failed — retrying automatically…',
+  webPosKitchenPrintRetryingStatus: 'Retrying… attempt {n} of {max}',
   webPosPrintAgentOfflineShort: 'Print Agent offline — start it on this PC',
   webPosPrintPrinterIssueShort: 'Printer issue — check Settings → Receipts & printers',
   webPosPrinterNotFound: 'Printer {name} not found or disconnected',
@@ -1490,7 +1497,7 @@ const en: Dict = {
     'Print Agent is outdated. Download and reinstall from Settings (same folder %LOCALAPPDATA%\\ChaslayPrintAgent).',
   webPosKitchenPrintIssuesTitle: 'Not printed',
   webPosKitchenPrintIssuesHint:
-    'Select tickets and tap Reprint. WebPOS retries automatically every 8 seconds while this page is open.',
+    'Select tickets and tap Reprint. Failed kitchen tickets retry automatically (see Settings → Receipts & printers) before appearing here.',
   webPosKitchenPrintIssuesBanner: '{n} not printed — tap to reprint',
   webPosKitchenPrintRetryAll: 'Print all',
   webPosPrintRetrySelected: 'Reprint selected',
@@ -4188,6 +4195,11 @@ const fr: Dict = {
   waiterTillBellEnabled: 'Sonnerie caisse quand le serveur envoie',
   waiterTillBellEnabledHint:
     'Un signal sonore sur la caisse principale quand un serveur ou WebPOS mobile envoie en cuisine — une fois la commande enregistrée et envoyée à l’imprimante.',
+  kitchenPrintRetryEnabled: 'Réessayer l’impression cuisine avant l’alerte',
+  kitchenPrintRetryEnabledHint:
+    'Si un ticket cuisine ne s’imprime pas, ChaslayReborn réessaie automatiquement sur la caisse avant d’alerter le personnel.',
+  kitchenPrintRetryAttempts: 'Nombre max. de tentatives',
+  kitchenPrintRetryIntervalSec: 'Secondes entre les tentatives',
   printAgentDownload: 'Agent d’impression Windows',
   printAgentDownloadHint:
     'Installez une seule fois sur le PC ChaslayReborn. L’agent démarre avec Windows - plus besoin de relancer start.bat. Utilisez une imprimante tickets ESC/POS (pas OneNote/PDF).',
@@ -4332,6 +4344,8 @@ const fr: Dict = {
   webPosHoldFailed: 'Impossible de mettre en attente',
   webPosOrderResumed: 'Commande reprise',
   webPosKitchenPrintFailed: 'Échec impression cuisine',
+  webPosKitchenPrintRetrying: 'Impression cuisine échouée — nouvelle tentative…',
+  webPosKitchenPrintRetryingStatus: 'Nouvelle tentative… essai {n} sur {max}',
   webPosPrintAgentOfflineShort: 'Print Agent hors ligne — démarrez-le sur ce PC',
   webPosPrintPrinterIssueShort: 'Problème imprimante — vérifiez Paramètres → Reçus',
   webPosPrinterNotFound: 'Imprimante {name} introuvable ou déconnectée',
@@ -4348,7 +4362,7 @@ const fr: Dict = {
     'Agent d’impression obsolète. Téléchargez et réinstallez depuis Paramètres (dossier %LOCALAPPDATA%\\ChaslayPrintAgent).',
   webPosKitchenPrintIssuesTitle: 'Non imprimé',
   webPosKitchenPrintIssuesHint:
-    'Sélectionnez les tickets puis Réimprimer. WebPOS réessaie automatiquement toutes les 8 secondes tant que cette page est ouverte.',
+    'Sélectionnez les tickets puis Réimprimer. Les échecs cuisine sont réessayés automatiquement (Réglages → Reçus et imprimantes) avant d’apparaître ici.',
   webPosKitchenPrintIssuesBanner: '{n} non imprimé(s) — toucher pour réimprimer',
   webPosKitchenPrintRetryAll: 'Tout imprimer',
   webPosPrintRetrySelected: 'Réimprimer la sélection',
@@ -7051,6 +7065,11 @@ const de: Dict = {
   waiterTillBellEnabled: 'Klingel an Hauptkasse bei Kellnersendung',
   waiterTillBellEnabledHint:
     'Kurzer Signalton an der Kasse, wenn ein Kellner-Handy oder mobiles WebPOS eine Küchenbestellung sendet — nach Registrierung und Druckauftrag.',
+  kitchenPrintRetryEnabled: 'Küchendruck vor Fehlermeldung wiederholen',
+  kitchenPrintRetryEnabledHint:
+    'Wenn ein Küchenticket nicht druckt, versucht ChaslayReborn automatisch erneut an der Kasse, bevor das Personal benachrichtigt wird.',
+  kitchenPrintRetryAttempts: 'Max. Druckversuche',
+  kitchenPrintRetryIntervalSec: 'Sekunden zwischen Versuchen',
   printAgentDownload: 'Windows-Druckagent',
   printAgentDownloadHint:
     'Einmal auf dem ChaslayReborn-PC installieren. Der Agent startet mit Windows - start.bat nicht mehr nötig. ESC/POS-Bondrucker verwenden (nicht OneNote/PDF).',
@@ -7195,6 +7214,8 @@ const de: Dict = {
   webPosHoldFailed: 'Halten fehlgeschlagen',
   webPosOrderResumed: 'Bestellung fortgesetzt',
   webPosKitchenPrintFailed: 'Küchendruck fehlgeschlagen',
+  webPosKitchenPrintRetrying: 'Küchendruck fehlgeschlagen — automatischer Neuversuch…',
+  webPosKitchenPrintRetryingStatus: 'Neuversuch… Versuch {n} von {max}',
   webPosPrintAgentOfflineShort: 'Print Agent offline — auf diesem PC starten',
   webPosPrintPrinterIssueShort: 'Druckerproblem — Einstellungen → Belege prüfen',
   webPosPrinterNotFound: 'Drucker {name} nicht gefunden oder getrennt',
@@ -7211,7 +7232,7 @@ const de: Dict = {
     'Druckagent veraltet. Unter Einstellungen neu herunterladen und installieren (%LOCALAPPDATA%\\ChaslayPrintAgent).',
   webPosKitchenPrintIssuesTitle: 'Nicht gedruckt',
   webPosKitchenPrintIssuesHint:
-    'Tickets wählen und erneut drucken. WebPOS versucht es automatisch alle 8 Sekunden, solange diese Seite offen ist.',
+    'Tickets wählen und erneut drucken. Fehlgeschlagene Küchentickets werden automatisch wiederholt (Einstellungen → Belege & Drucker), bevor sie hier erscheinen.',
   webPosKitchenPrintIssuesBanner: '{n} nicht gedruckt — tippen zum Nachdrucken',
   webPosKitchenPrintRetryAll: 'Alle drucken',
   webPosPrintRetrySelected: 'Auswahl drucken',

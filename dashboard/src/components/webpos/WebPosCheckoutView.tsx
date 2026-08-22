@@ -959,6 +959,17 @@ export default function WebPosCheckoutView({
               {paymentLinesList}
             </div>
 
+            {/* Mobile: discount / tip / points above keypad */}
+            {hasAdjustments ? (
+              <div
+                className="space-y-2 lg:hidden"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                {adjustmentCards}
+              </div>
+            ) : null}
+
             <div
               className="mt-auto space-y-2 border-t border-stone-100 pt-2 lg:mt-auto"
               onClick={(e) => e.stopPropagation()}
@@ -1090,16 +1101,6 @@ export default function WebPosCheckoutView({
                   </div>
                 ) : null}
               </div>
-
-              {hasAdjustments ? (
-                <div
-                  className="mt-3 w-full max-w-md space-y-2 text-left lg:hidden"
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
-                >
-                  {adjustmentCards}
-                </div>
-              ) : null}
 
               <div className="mt-4 w-full max-w-md space-y-1 text-sm lg:hidden">
                 <div
