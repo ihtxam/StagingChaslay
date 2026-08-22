@@ -115,10 +115,26 @@ router.post("/test-email", async (req: Request, res: Response) => {
       to,
       subject: `Test email from ${merchant?.name || "ChaslayReborn"}`,
       html: `<p>This is a test message from your SMTP / email settings.</p><p>${new Date().toISOString()}</p>`,
+      emailType: "marketing_test",
     });
     res.json({ success: true });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Send failed" });
+  }
+});
+
+/**
+ * GET /api/merchant/marketing/platform-email-usage
+ */
+router.get("/platform-email-usage", async (req: Request, res: Response) => {
+  try {
+    const { EmailUsageService } = await import("@/services/email-usage.service");
+    const usage = await EmailUsageService.getMerchantPlatformUsage(req.merchantId!);
+    res.json({ success: true, usage });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load platform email usage",
+    });
   }
 });
 

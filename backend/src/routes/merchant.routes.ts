@@ -2124,6 +2124,7 @@ router.post("/pos/send-receipt-email", async (req: Request, res: Response) => {
       subject,
       html,
       text,
+      emailType: "receipt",
     });
 
     res.json({ success: true });

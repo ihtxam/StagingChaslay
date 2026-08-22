@@ -126,6 +126,7 @@ ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
 <p>Please contact us if you have questions.</p>
 <p>— ${merchantName}</p>`,
       text: `Your order ${order.orderNumber || ""} could not be accepted.${reason ? ` Reason: ${reason}` : ""} — ${merchantName}`,
+      emailType: "shop_order",
     });
   } catch (err) {
     console.warn("Order rejection email failed:", err);

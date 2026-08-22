@@ -155,6 +155,7 @@ interface SettingsData {
     monthlySent?: number;
     monthlyPeriod?: string | null;
   } | null;
+  emailDeliveryMode?: 'platform' | 'own';
   marketingSettings?: {
     reorderReminderEnabled?: boolean;
     reorderReminderDays?: number;
@@ -446,6 +447,11 @@ export default function Settings() {
       planType?: string | null;
       error?: string;
     } | null;
+  } | null>(null);
+  const [platformEmailUsage, setPlatformEmailUsage] = useState<{
+    today?: number;
+    thisMonth?: number;
+    period?: { day?: string; month?: string };
   } | null>(null);
   const [terminals, setTerminals] = useState<TerminalRow[]>([]);
   const [terminalId, setTerminalId] = useState('');
@@ -839,6 +845,12 @@ export default function Settings() {
         } catch {
           setBrevoUsage(null);
         }
+        try {
+          const platformUsageRes = await api.get('/merchant/marketing/platform-email-usage');
+          setPlatformEmailUsage(platformUsageRes.data.usage || null);
+        } catch {
+          setPlatformEmailUsage(null);
+        }
 
         const stored = localStorage.getItem('manupos_panel_lang');
         if (
@@ -989,6 +1001,7 @@ export default function Settings() {
           dailyLimit: settings.emailBrevoSettings?.dailyLimit ?? null,
           monthlyLimit: settings.emailBrevoSettings?.monthlyLimit ?? null,
         },
+        emailDeliveryMode: settings.emailDeliveryMode === 'own' ? 'own' : 'platform',
         marketingSettings: {
           reorderReminderEnabled: !!settings.marketingSettings?.reorderReminderEnabled,
           reorderReminderDays: Number(settings.marketingSettings?.reorderReminderDays) || 5,
@@ -2519,7 +2532,11 @@ export default function Settings() {
             <form onSubmit={onSave} className="space-y-5">
               <SettingsPageHeader
                 title={t('settingsEmail')}
-                subtitle={t('settingsSmtpHint')}
+                subtitle={
+                  settings.emailDeliveryMode === 'own'
+                    ? t('settingsSmtpHint')
+                    : t('emailDeliveryPlatformHint')
+                }
                 action={
                   <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={saving}>
                     <Save className="h-4 w-4" aria-hidden />
@@ -2527,6 +2544,53 @@ export default function Settings() {
                   </button>
                 }
               />
+              <Section icon={Mail} accent={settingsDash.accent} title={t('emailDeliveryMode')}>
+                <div className="space-y-3">
+                  <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name="emailDeliveryMode"
+                      className="mt-0.5"
+                      checked={settings.emailDeliveryMode !== 'own'}
+                      onChange={() =>
+                        setSettings({ ...settings, emailDeliveryMode: 'platform' })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">{t('emailDeliveryPlatform')}</span>
+                      <span className="text-xs muted">{t('emailDeliveryPlatformHint')}</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name="emailDeliveryMode"
+                      className="mt-0.5"
+                      checked={settings.emailDeliveryMode === 'own'}
+                      onChange={() => setSettings({ ...settings, emailDeliveryMode: 'own' })}
+                    />
+                    <span>
+                      <span className="font-medium block">{t('emailDeliveryOwn')}</span>
+                      <span className="text-xs muted">{t('emailDeliveryOwnHint')}</span>
+                    </span>
+                  </label>
+                </div>
+                {settings.emailDeliveryMode !== 'own' ? (
+                  <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm">
+                    <p className="font-medium">{t('platformEmailUsageTitle')}</p>
+                    <p className="mt-1 muted">
+                      {t('platformEmailUsageToday')}: {platformEmailUsage?.today ?? 0}
+                      {platformEmailUsage?.period?.day ? ` · ${platformEmailUsage.period.day}` : ''}
+                    </p>
+                    <p className="muted">
+                      {t('platformEmailUsageMonth')}: {platformEmailUsage?.thisMonth ?? 0}
+                      {platformEmailUsage?.period?.month ? ` · ${platformEmailUsage.period.month}` : ''}
+                    </p>
+                  </div>
+                ) : null}
+              </Section>
+              {settings.emailDeliveryMode === 'own' ? (
+              <>
               <div
                 id="email-smtp"
                 className={
@@ -2961,6 +3025,8 @@ export default function Settings() {
                 </div>
               </Section>
               </div>
+              </>
+              ) : null}
 
               <Section icon={Mail} accent={settingsDash.warning} title={t('reorderReminder')} description={t('reorderReminderHint')}>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
