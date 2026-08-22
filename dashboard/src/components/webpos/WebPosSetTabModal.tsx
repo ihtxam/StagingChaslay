@@ -8,9 +8,10 @@ type Props = {
   onClose: () => void;
   onConfirm: (tabNumber: string) => void;
   current?: string | null;
+  title?: string;
 };
 
-export default function WebPosSetTabModal({ open, onClose, onConfirm, current }: Props) {
+export default function WebPosSetTabModal({ open, onClose, onConfirm, current, title }: Props) {
   const { t } = useI18n();
   const [value, setValue] = useState(current || '');
 
@@ -30,7 +31,7 @@ export default function WebPosSetTabModal({ open, onClose, onConfirm, current }:
   };
 
   return (
-    <WebPosKeypadModalShell open={open} onClose={onClose} title={t('webPosSetTab')}>
+    <WebPosKeypadModalShell open={open} onClose={onClose} title={title || t('webPosSetTab')}>
       <input
         className="input w-full text-center text-3xl font-bold tabular-nums tracking-wide"
         inputMode="none"
