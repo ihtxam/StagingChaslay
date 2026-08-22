@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Ban,
+  ChefHat,
   MessageSquare,
   MoreHorizontal,
   Printer,
@@ -769,7 +770,10 @@ export default function WebPosCartPanel({
           >
             {t('webPosCartOrdered')}
             {orderedLines.length ? (
-              <span className="ml-1 tabular-nums opacity-80">
+              <span className="ml-1 inline-flex items-center gap-0.5 tabular-nums opacity-80">
+                {kdsReadyCount > 0 ? (
+                  <ChefHat className="h-3 w-3 text-amber-600" aria-hidden />
+                ) : null}
                 ({kdsReadyCount > 0 ? `${kdsReadyCount}/` : ''}
                 {orderedLines.length})
               </span>
@@ -875,9 +879,16 @@ export default function WebPosCartPanel({
                         </span>
                       ) : null}
                       {l.sentToKitchen ? (
-                        <span className="ml-1 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
-                          {l.kitchenReadyAt ? t('webPosReadyBadge') : t('webPosSentBadge')}
-                        </span>
+                        l.kitchenReadyAt ? (
+                          <ChefHat
+                            className="ml-1 inline h-3.5 w-3.5 shrink-0 text-amber-600"
+                            aria-label={t('webPosReadyBadge')}
+                          />
+                        ) : (
+                          <span className="ml-1 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
+                            {t('webPosSentBadge')}
+                          </span>
+                        )
                       ) : null}
                       {l.kitchenPrintFailed ? (
                         <span className="ml-1 rounded bg-amber-200 px-1 text-[9px] font-bold uppercase text-amber-900">

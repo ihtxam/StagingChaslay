@@ -118,7 +118,7 @@ import WebPosComboModal, {
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
-import { pushCartLinesToKds, fetchKdsReadyLineIds } from '@/lib/kds-push';
+import { pushCartLinesToKds, fetchKdsTicketStatus, applyKdsReadyToCart } from '@/lib/kds-push';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
@@ -1719,16 +1719,37 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const fetchOpts = { timeout: fetchTimeout };
 
     try {
-      const [settingsRes, catRes, prodRes, webposRes, staffRes, bestsellerRes] = await Promise.all([
+      const settled = await Promise.allSettled([
         api.get('/merchant/settings', fetchOpts),
         api.get('/merchant/categories', fetchOpts),
         api.get('/merchant/products', { params: { limit: 500 }, ...fetchOpts }),
-        api.get('/merchant/webpos-config', fetchOpts).catch(() => ({ data: { config: null } })),
-        api.get('/merchant/staff', fetchOpts).catch(() => ({ data: { staff: [] } })),
-        api
-          .get('/merchant/bestsellers', { params: { limit: 20, days: 30 }, ...fetchOpts })
-          .catch(() => ({ data: { productIds: [] } })),
+        api.get('/merchant/webpos-config', fetchOpts),
+        api.get('/merchant/staff', fetchOpts),
+        api.get('/merchant/bestsellers', { params: { limit: 20, days: 30 }, ...fetchOpts }),
       ]);
+
+      const pick = <T,>(idx: number, fallback: T): T =>
+        settled[idx].status === 'fulfilled' ? (settled[idx] as PromiseFulfilledResult<T>).value : fallback;
+
+      const settingsRes = pick(0, { data: {} } as { data: Record<string, unknown> });
+      const catRes = pick(1, { data: { categories: [] } } as { data: { categories: unknown[] } });
+      const prodRes = pick(2, { data: { products: [] } } as { data: { products: unknown[] } });
+      const webposRes = pick(3, { data: { config: null } } as { data: { config: null } });
+      const staffRes = pick(4, { data: { staff: [] } } as { data: { staff: unknown[] } });
+      const bestsellerRes = pick(5, { data: { productIds: [] } } as { data: { productIds: string[] } });
+
+      const settingsFailed = settled[0].status === 'rejected';
+      const productsFailed = settled[2].status === 'rejected';
+      if (settingsFailed && productsFailed) {
+        throw (settled[0] as PromiseRejectedResult).reason;
+      }
+      if (settingsFailed) {
+        console.warn('[WebPOS] settings load failed', (settled[0] as PromiseRejectedResult).reason);
+      }
+      if (productsFailed) {
+        console.warn('[WebPOS] products load failed', (settled[2] as PromiseRejectedResult).reason);
+      }
+
       const merch = settingsRes.data.settings || settingsRes.data.merchant;
       setMerchant(merch);
       setPrintSettings(merch?.posPrintSettings || null);
@@ -3764,15 +3785,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!cart.some((l) => l.sentToKitchen)) return;
     let cancelled = false;
     const syncReady = async () => {
-      const readyIds = await fetchKdsReadyLineIds(kdsTicketKey);
-      if (cancelled || !readyIds.length) return;
-      setCart((prev) =>
-        prev.map((l) =>
-          readyIds.includes(l.lineId) && !l.kitchenReadyAt
-            ? { ...l, kitchenReadyAt: Date.now() }
-            : l
-        )
-      );
+      const status = await fetchKdsTicketStatus(kdsTicketKey);
+      if (cancelled || !status?.readyLineIds?.length) return;
+      setCart((prev) => applyKdsReadyToCart(prev, status.readyLineIds));
     };
     void syncReady();
     const timer = window.setInterval(() => void syncReady(), 4000);
@@ -7900,6 +7915,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           <WebPosOrdersPanel
             embedded
             open
+            kitchenEnabled={kitchenEnabled}
             onClose={() => {
               setHighlightOrderId(null);
               setOrdersChannelPref(null);

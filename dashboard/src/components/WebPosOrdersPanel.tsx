@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import {
   Ban,
+  ChefHat,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -56,6 +57,13 @@ import {
   sameHeldIdentity,
   ticketQueryMatches,
 } from '@/lib/webpos-held';
+import { fetchKdsTicketStatus } from '@/lib/kds-push';
+import {
+  kitchenProgressFromLines,
+  mergeKitchenProgress,
+  resolveKitchenTicketKey,
+} from '@/lib/kitchen-progress';
+import type { CartLine } from '@/components/webpos/types';
 import { hasTerminalPortion, parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
@@ -224,6 +232,8 @@ type Props = {
   onRefreshOnline?: () => void;
   /** Notify parent when channel filter changes (e.g. stop bell loop on online view) */
   onChannelFilterChange?: (filter: ChannelFilter) => void;
+  /** When true, poll KDS and show ready/sent progress on held kitchen tickets */
+  kitchenEnabled?: boolean;
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
@@ -410,6 +420,35 @@ function ChannelGlyph({ ch, order }: { ch?: string | null; order?: PosOrder }) {
   return <Store size={14} />;
 }
 
+function KitchenProgressLabel({
+  progress,
+  kitchenEnabled,
+}: {
+  progress: { sent: number; ready: number; total: number };
+  kitchenEnabled?: boolean;
+}) {
+  if (kitchenEnabled && progress.sent > 0) {
+    return (
+      <span className="inline-flex items-center justify-center gap-1">
+        {progress.ready > 0 ? (
+          <ChefHat className="h-3.5 w-3.5 text-amber-600" aria-hidden />
+        ) : null}
+        <span className="tabular-nums">
+          {progress.ready}/{progress.sent}
+        </span>
+      </span>
+    );
+  }
+  if (progress.sent > 0) {
+    return (
+      <span className="tabular-nums">
+        {progress.sent}/{progress.total || progress.sent}
+      </span>
+    );
+  }
+  return <span className="tabular-nums">{progress.total}</span>;
+}
+
 export default function WebPosOrdersPanel({
   open,
   embedded = false,
@@ -429,6 +468,7 @@ export default function WebPosOrdersPanel({
   onlineOrders = [],
   onRefreshOnline,
   onChannelFilterChange,
+  kitchenEnabled = false,
 }: Props) {
   const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -464,6 +504,9 @@ export default function WebPosOrdersPanel({
   const [rowMenuAnchor, setRowMenuAnchor] = useState<HTMLElement | null>(null);
   const [detailMenuAnchor, setDetailMenuAnchor] = useState<HTMLElement | null>(null);
   const [salesAdjOpen, setSalesAdjOpen] = useState(false);
+  const [kdsByTicket, setKdsByTicket] = useState<
+    Record<string, { ready: number; sent: number; readyLineIds: string[] }>
+  >({});
 
   useEffect(() => {
     try {
@@ -719,7 +762,71 @@ export default function WebPosOrdersPanel({
   const rangeEnd = Math.min(listItems.length, (page + 1) * pageSize);
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
 
-  const heldCartLines = (h: HeldRow) => parseHeldCartJson(h.cartJson).cart;
+  const heldCartLines = (h: HeldRow) => parseHeldCartJson(h.cartJson).cart as CartLine[];
+
+  const refreshKdsHeld = useCallback(
+    async (rows: HeldRow[]) => {
+      if (!kitchenEnabled) {
+        setKdsByTicket({});
+        return;
+      }
+      const keys = new Set<string>();
+      for (const h of rows) {
+        if (h.status !== 'sent_to_kitchen') continue;
+        const meta = parseHeldCartJson(h.cartJson);
+        const key = resolveKitchenTicketKey(meta);
+        if (key) keys.add(key);
+      }
+      if (!keys.size) {
+        setKdsByTicket({});
+        return;
+      }
+      const next: Record<string, { ready: number; sent: number; readyLineIds: string[] }> = {};
+      await Promise.all(
+        [...keys].map(async (key) => {
+          const status = await fetchKdsTicketStatus(key);
+          if (status) {
+            next[key] = {
+              ready: status.ready,
+              sent: status.sent || status.total,
+              readyLineIds: status.readyLineIds || [],
+            };
+          }
+        })
+      );
+      setKdsByTicket(next);
+    },
+    [kitchenEnabled]
+  );
+
+  const heldKitchenProgress = useCallback(
+    (h: HeldRow) => {
+      const lines = heldCartLines(h);
+      const meta = parseHeldCartJson(h.cartJson);
+      const key = resolveKitchenTicketKey(meta);
+      const local = kitchenProgressFromLines(lines);
+      return mergeKitchenProgress(local, key ? kdsByTicket[key] : null);
+    },
+    [kdsByTicket]
+  );
+
+  const heldLineReady = useCallback(
+    (h: HeldRow, line: CartLine) => {
+      if (line.kitchenReadyAt) return true;
+      const meta = parseHeldCartJson(h.cartJson);
+      const key = resolveKitchenTicketKey(meta);
+      const ids = key ? kdsByTicket[key]?.readyLineIds : null;
+      return !!ids?.includes(line.lineId);
+    },
+    [kdsByTicket]
+  );
+
+  useEffect(() => {
+    if (!open || !kitchenEnabled) return;
+    void refreshKdsHeld(held);
+    const timer = window.setInterval(() => void refreshKdsHeld(held), 8000);
+    return () => window.clearInterval(timer);
+  }, [open, kitchenEnabled, held, refreshKdsHeld]);
 
   const heldTotal = (h: HeldRow) =>
     heldCartLines(h).reduce((s, l) => s + Number(l.lineTotal || 0), 0);
@@ -1293,8 +1400,7 @@ export default function WebPosOrdersPanel({
                   if (item.kind === 'held') {
                     const h = item.held;
                     const total = heldTotal(h);
-                    const lines = heldCartLines(h);
-                    const sentCount = lines.filter((l: any) => l.sentToKitchen).length;
+                    const kitchenProgress = heldKitchenProgress(h);
                     const heldMeta = parseHeldCartJson(h.cartJson);
                     const idLabel =
                       heldMeta.tableLabel ||
@@ -1322,7 +1428,10 @@ export default function WebPosOrdersPanel({
                         </div>
                         <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-3">
                           <p className="text-[11px] text-stone-500">
-                            {sentCount}/{lines.length || 0}
+                            <KitchenProgressLabel
+                              progress={kitchenProgress}
+                              kitchenEnabled={kitchenEnabled}
+                            />
                           </p>
                           <p className="text-lg font-bold tabular-nums tracking-tight">
                             <span className="text-sm font-semibold text-stone-500">CHF </span>
@@ -1409,6 +1518,7 @@ export default function WebPosOrdersPanel({
                     const h = item.held;
                     const selected = selectedHeld?.id === h.id;
                     const total = heldTotal(h);
+                    const kitchenProgress = heldKitchenProgress(h);
                     const heldMeta = parseHeldCartJson(h.cartJson);
                     return (
                       <li key={`h-${h.id}`}>
@@ -1452,6 +1562,14 @@ export default function WebPosOrdersPanel({
                               {heldMeta.tableLabel ? (
                                 <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800">
                                   {t('table')} {heldMeta.tableLabel}
+                                </span>
+                              ) : null}
+                              {kitchenProgress.sent > 0 ? (
+                                <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
+                                  <KitchenProgressLabel
+                                    progress={kitchenProgress}
+                                    kitchenEnabled={kitchenEnabled}
+                                  />
                                 </span>
                               ) : null}
                             </div>
@@ -1651,13 +1769,36 @@ export default function WebPosOrdersPanel({
                   <p className="mt-1 text-xs text-stone-500">
                     {channelLabel(selectedHeld.channel)}
                   </p>
+                  {(() => {
+                    const progress = heldKitchenProgress(selectedHeld);
+                    return progress.sent > 0 ? (
+                      <p className="mt-2 inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">
+                        <KitchenProgressLabel
+                          progress={progress}
+                          kitchenEnabled={kitchenEnabled}
+                        />
+                      </p>
+                    ) : null;
+                  })()}
                   <ul className="mt-4 space-y-2 text-sm">
                     {heldCartLines(selectedHeld).map((l, idx) => (
                       <li key={idx} className="flex justify-between gap-2">
-                        <span>
+                        <span className="min-w-0">
                           {l.quantity}× {resolveOrderItemName(l.name)}
+                          {l.sentToKitchen ? (
+                            heldLineReady(selectedHeld, l) ? (
+                              <ChefHat
+                                className="ml-1 inline h-3.5 w-3.5 shrink-0 text-amber-600"
+                                aria-label={t('webPosReadyBadge')}
+                              />
+                            ) : (
+                              <span className="ml-1 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
+                                {t('webPosSentBadge')}
+                              </span>
+                            )
+                          ) : null}
                         </span>
-                        <span className="tabular-nums">{money(l.lineTotal)}</span>
+                        <span className="shrink-0 tabular-nums">{money(l.lineTotal)}</span>
                       </li>
                     ))}
                   </ul>
