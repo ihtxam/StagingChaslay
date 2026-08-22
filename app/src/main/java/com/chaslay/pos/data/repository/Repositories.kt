@@ -1444,7 +1444,10 @@ class CartManager @Inject constructor(
     }
 
     fun applyDiscount(percent: Double, amount: Double) {
-        _cart.update { it.copy(discountPercent = percent, discountAmount = amount) }
+        _cart.update { cart ->
+            val (pct, amt) = com.chaslay.pos.domain.clampBillDiscountToCart(cart, percent, amount)
+            cart.copy(discountPercent = pct, discountAmount = amt)
+        }
     }
 
     fun setNotes(notes: String?) {

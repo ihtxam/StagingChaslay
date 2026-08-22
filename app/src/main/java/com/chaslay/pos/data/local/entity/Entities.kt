@@ -253,6 +253,12 @@ data class BusinessSettingsEntity(
     val kitchenPrinterPrintKitchen: Boolean = true,
     /** Synced from merchant panel posPrintSettings.autoPrintKitchen */
     val autoPrintKitchen: Boolean = true,
+    /** Ring on main till when a waiter device sends kitchen print (panel sync). */
+    val waiterTillBellEnabled: Boolean = true,
+    /** Auto-retry failed kitchen prints before showing error (panel sync). */
+    val kitchenPrintRetryEnabled: Boolean = true,
+    val kitchenPrintRetryAttempts: Int = 5,
+    val kitchenPrintRetryIntervalSec: Int = 5,
     val printerMacAddress: String? = null,
     val printerName: String? = null,
     val kitchenPrinterMacAddress: String? = null,
