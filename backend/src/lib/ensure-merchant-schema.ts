@@ -109,6 +109,10 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE product_recipes ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
   preferred_terminal_id:
     "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS preferred_terminal_id varchar(255)",
+  assigned_delivery_staff_id:
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_delivery_staff_id uuid REFERENCES merchant_staff(id) ON DELETE SET NULL",
+  delivery_latitude: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_latitude numeric(10,7)",
+  delivery_longitude: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_longitude numeric(10,7)",
 };
 
 /** Idempotent CREATE TABLE for features added after initial deploy. */
@@ -192,6 +196,20 @@ const TABLE_PATCHES: string[] = [
     revoked_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now()
   )`,
+  `CREATE TABLE IF NOT EXISTS delivery_driver_locations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    staff_id uuid NOT NULL REFERENCES merchant_staff(id) ON DELETE CASCADE,
+    latitude numeric(10,7) NOT NULL,
+    longitude numeric(10,7) NOT NULL,
+    accuracy_m numeric(10,2),
+    heading numeric(6,2),
+    speed_mps numeric(8,3),
+    recorded_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_driver_locations_merchant_staff_uidx ON delivery_driver_locations (merchant_id, staff_id)`,
+  `CREATE INDEX IF NOT EXISTS delivery_driver_locations_merchant_recorded_idx ON delivery_driver_locations (merchant_id, recorded_at DESC)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_id_idx ON pos_sessions(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_device_idx ON pos_sessions(merchant_id, device_id, session_kind)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_active_idx ON pos_sessions(merchant_id, session_kind, last_heartbeat)`,

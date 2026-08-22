@@ -939,6 +939,13 @@ export const orders = pgTable(
     adyenCashierReceiptJson: text("adyen_cashier_receipt_json"),
     notes: text("notes"),
     shippingAddress: text("shipping_address"),
+    /** Geocoded destination for delivery map (shop checkout / assign). */
+    deliveryLatitude: decimal("delivery_latitude", { precision: 10, scale: 7 }),
+    deliveryLongitude: decimal("delivery_longitude", { precision: 10, scale: 7 }),
+    /** Delivery driver assigned from the panel (distinct from staffId = cashier). */
+    assignedDeliveryStaffId: uuid("assigned_delivery_staff_id").references(() => merchantStaff.id, {
+      onDelete: "set null",
+    }),
     deliveryZoneId: uuid("delivery_zone_id"),
     scheduledFor: timestamp("scheduled_for"), // null = ASAP
     customerName: varchar("customer_name", { length: 255 }),
@@ -1066,6 +1073,37 @@ export const posSessions = pgTable(
       table.merchantId,
       table.sessionKind,
       table.lastHeartbeat
+    ),
+  })
+);
+
+/** Latest GPS ping per delivery driver (upserted on each location post). */
+export const deliveryDriverLocations = pgTable(
+  "delivery_driver_locations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    staffId: uuid("staff_id")
+      .notNull()
+      .references(() => merchantStaff.id, { onDelete: "cascade" }),
+    latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
+    longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+    accuracyM: decimal("accuracy_m", { precision: 10, scale: 2 }),
+    heading: decimal("heading", { precision: 6, scale: 2 }),
+    speedMps: decimal("speed_mps", { precision: 8, scale: 3 }),
+    recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantStaffUnique: uniqueIndex("delivery_driver_locations_merchant_staff_uidx").on(
+      table.merchantId,
+      table.staffId
+    ),
+    merchantRecordedIdx: index("delivery_driver_locations_merchant_recorded_idx").on(
+      table.merchantId,
+      table.recordedAt
     ),
   })
 );

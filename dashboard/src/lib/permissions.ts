@@ -14,6 +14,7 @@ export type Permission =
   | 'MANAGE_TABLES'
   | 'TAKEAWAY_ORDERS'
   | 'DELIVERY_ORDERS'
+  | 'VIEW_DELIVERY_TRACKING'
   | 'VIEW_ORDER_HISTORY'
   | 'CANCEL_ORDERS'
   | 'REFUND_ORDERS'
@@ -41,6 +42,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'MANAGE_TABLES',
   'TAKEAWAY_ORDERS',
   'DELIVERY_ORDERS',
+  'VIEW_DELIVERY_TRACKING',
   'VIEW_ORDER_HISTORY',
   'CANCEL_ORDERS',
   'REFUND_ORDERS',
@@ -62,6 +64,8 @@ export const ALL_PERMISSIONS: Permission[] = [
 export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant': ['VIEW_REPORTS', 'ACCESS_PANEL'],
   '/merchant/orders': ['VIEW_ORDER_HISTORY'],
+  '/merchant/delivery': ['VIEW_DELIVERY_TRACKING'],
+  '/merchant/delivery/driver': ['DELIVERY_ORDERS'],
   '/merchant/invoices': ['VIEW_REPORTS', 'VIEW_ALL_SALES', 'ACCESS_PANEL'],
   '/merchant/pos': ['USE_WEBPOS'],
   '/merchant/waiter': ['USE_WEBPOS'],

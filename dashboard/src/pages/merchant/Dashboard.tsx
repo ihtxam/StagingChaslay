@@ -42,6 +42,8 @@ import Reservations from './Reservations';
 import Newsletter from './Newsletter';
 import WebPos from './WebPos';
 import WaiterApp from './WaiterApp';
+import DeliveryTrackingPage from './DeliveryTracking';
+import DeliveryDriverPage from './DeliveryDriver';
 import Reports from './Reports';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
@@ -352,6 +354,9 @@ function MerchantShell() {
   const menuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
     { label: t('orders'), path: '/merchant/orders', icon: '📦' },
+    ...(allow('/merchant/delivery')
+      ? [{ label: t('deliveryMapNav'), path: '/merchant/delivery', icon: '🛵' }]
+      : []),
     {
       id: 'sales',
       label: t('navSales'),
@@ -500,6 +505,22 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/orders" allow={allow}>
                   <Orders />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="delivery"
+              element={
+                <PanelRouteGuard path="/merchant/delivery" allow={allow}>
+                  <DeliveryTrackingPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="delivery/driver"
+              element={
+                <PanelRouteGuard path="/merchant/delivery/driver" allow={allow}>
+                  <DeliveryDriverPage />
                 </PanelRouteGuard>
               }
             />

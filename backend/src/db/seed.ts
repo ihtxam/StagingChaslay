@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import { eq } from "drizzle-orm";
+import { and, eq, like } from "drizzle-orm";
 import { getDb, schema } from "./index";
 import { AuthService } from "../services/auth.service";
 import { generateSyncApiKey } from "../services/chaslay-compat.service";
@@ -178,75 +178,194 @@ async function seedDemoShop() {
   });
   if (existingCats.length > 0) {
     console.log("Demo catalog already present");
+  } else {
+    const catFood = (
+      await db
+        .insert(schema.categories)
+        .values({
+          merchantId: merchant.id,
+          name: "Food",
+          sortOrder: 1,
+          color: "#F97316",
+          clientId: "cat-food",
+        })
+        .returning()
+    )[0]!;
+
+    const catDrinks = (
+      await db
+        .insert(schema.categories)
+        .values({
+          merchantId: merchant.id,
+          name: "Drinks",
+          sortOrder: 2,
+          color: "#0EA5E9",
+          clientId: "cat-drinks",
+        })
+        .returning()
+    )[0]!;
+
+    await db.insert(schema.products).values([
+      {
+        merchantId: merchant.id,
+        categoryId: catFood.id,
+        name: "Cheeseburger",
+        description: "Beef patty, cheese, house sauce",
+        price: "12.50",
+        stock: 100,
+        isActive: true,
+        isTaxable: true,
+        clientId: "prod-burger",
+        sku: "BURGER-01",
+      },
+      {
+        merchantId: merchant.id,
+        categoryId: catFood.id,
+        name: "Fries",
+        description: "Crispy fries",
+        price: "5.00",
+        stock: 100,
+        isActive: true,
+        isTaxable: true,
+        clientId: "prod-fries",
+        sku: "FRIES-01",
+      },
+      {
+        merchantId: merchant.id,
+        categoryId: catDrinks.id,
+        name: "Cola",
+        description: "0.33L",
+        price: "3.50",
+        stock: 100,
+        isActive: true,
+        isTaxable: true,
+        clientId: "prod-cola",
+        sku: "COLA-01",
+      },
+    ]);
+
+    console.log("Seeded demo categories + products");
+  }
+
+  await seedDemoInventoryBundle(merchant.id);
+  await seedDemoDeliveryStaff(merchant.id);
+}
+
+async function seedDemoInventoryBundle(merchantId: string) {
+  if (process.env.SEED_DEMO_INVENTORY === "false") {
+    console.log("SEED_DEMO_INVENTORY=false — skipping demo inventory");
     return;
   }
 
-  const catFood = (
-    await db
-      .insert(schema.categories)
-      .values({
-        merchantId: merchant.id,
-        name: "Food",
-        sortOrder: 1,
-        color: "#F97316",
-        clientId: "cat-food",
-      })
-      .returning()
-  )[0]!;
+  const { writeInventoryAddonEnabled } = await import("../lib/inventory-addon");
+  await writeInventoryAddonEnabled(merchantId, true);
 
-  const catDrinks = (
-    await db
-      .insert(schema.categories)
-      .values({
-        merchantId: merchant.id,
-        name: "Drinks",
-        sortOrder: 2,
-        color: "#0EA5E9",
-        clientId: "cat-drinks",
-      })
-      .returning()
-  )[0]!;
+  const db = getDb();
+  const { DemoCatalogService } = await import("../services/demo-catalog.service");
+  const { DemoInventoryService } = await import("../services/demo-inventory.service");
 
-  await db.insert(schema.products).values([
-    {
-      merchantId: merchant.id,
-      categoryId: catFood.id,
-      name: "Cheeseburger",
-      description: "Beef patty, cheese, house sauce",
-      price: "12.50",
-      stock: 100,
-      isActive: true,
-      isTaxable: true,
-      clientId: "prod-burger",
-      sku: "BURGER-01",
-    },
-    {
-      merchantId: merchant.id,
-      categoryId: catFood.id,
-      name: "Fries",
-      description: "Crispy fries",
-      price: "5.00",
-      stock: 100,
-      isActive: true,
-      isTaxable: true,
-      clientId: "prod-fries",
-      sku: "FRIES-01",
-    },
-    {
-      merchantId: merchant.id,
-      categoryId: catDrinks.id,
-      name: "Cola",
-      description: "0.33L",
-      price: "3.50",
-      stock: 100,
-      isActive: true,
-      isTaxable: true,
-      clientId: "prod-cola",
-      sku: "COLA-01",
-    },
-  ]);
+  const demoProd = await db.query.products.findFirst({
+    where: and(
+      eq(schema.products.merchantId, merchantId),
+      like(schema.products.clientId, "demo-prod-%")
+    ),
+  });
 
-  console.log("Seeded demo categories + products");
+  if (!demoProd) {
+    try {
+      const catResult = await DemoCatalogService.importDemo(merchantId, {
+        mode: "merge",
+        force: true,
+      });
+      console.log(
+        `Seeded demo café catalog: ${catResult.productsCreated} products, ${catResult.categoriesCreated} categories`
+      );
+    } catch (err) {
+      console.warn("Demo catalog import skipped:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  try {
+    if (!(await DemoInventoryService.hasDemoData(merchantId))) {
+      const inv = await DemoInventoryService.importDemo(merchantId);
+      console.log(
+        `Seeded demo inventory: ${inv.itemsCreated} items, ${inv.recipesCreated} recipe lines, ${inv.stockMovementsCreated} movements`
+      );
+    } else {
+      console.log("Demo inventory already present");
+    }
+  } catch (err) {
+    console.warn("Demo inventory import skipped:", err instanceof Error ? err.message : err);
+  }
+}
+
+async function seedDemoDeliveryStaff(merchantId: string) {
+  if (process.env.SEED_DEMO_DELIVERY === "false") {
+    console.log("SEED_DEMO_DELIVERY=false — skipping demo delivery drivers");
+    return;
+  }
+
+  const db = getDb();
+  const baseLat = 47.3769;
+  const baseLng = 8.5417;
+
+  if (!merchantId) return;
+
+  await db
+    .update(schema.merchants)
+    .set({
+      latitude: String(baseLat),
+      longitude: String(baseLng),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.merchants.id, merchantId));
+
+  const { StaffService } = await import("../services/staff.service");
+  const { DeliveryTrackingService } = await import("../services/delivery-tracking.service");
+  await StaffService.ensureDefaultRoles(merchantId);
+
+  const deliveryRole = await db.query.merchantRoles.findFirst({
+    where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.name, "Delivery")),
+  });
+  if (!deliveryRole) return;
+
+  const existing = await db.query.merchantStaff.findMany({
+    where: and(
+      eq(schema.merchantStaff.merchantId, merchantId),
+      eq(schema.merchantStaff.roleId, deliveryRole.id)
+    ),
+  });
+
+  const drivers: Array<{ staffId: string; lat: number; lng: number }> = [];
+  const demoNames = ["Alex (demo driver)", "Sam (demo driver)"];
+
+  for (let i = 0; i < demoNames.length; i++) {
+    const name = demoNames[i]!;
+    let staff = existing.find((s) => s.name === name);
+    if (!staff) {
+      try {
+        staff = await StaffService.createStaff(merchantId, {
+          name,
+          roleId: deliveryRole.id,
+          pin: String(4000 + i),
+        });
+        console.log(`Seeded demo delivery driver ${name} (PIN ${4000 + i})`);
+      } catch (err) {
+        console.warn(`Demo driver ${name} skipped:`, err instanceof Error ? err.message : err);
+        continue;
+      }
+    }
+    drivers.push({
+      staffId: staff.id,
+      lat: baseLat + 0.006 * (i + 1),
+      lng: baseLng + 0.005 * (i + 1),
+    });
+  }
+
+  if (drivers.length) {
+    await DeliveryTrackingService.seedDemoDriverLocations(merchantId, drivers);
+    console.log(`Seeded ${drivers.length} demo delivery driver map positions`);
+  }
 }
 
 async function seedEditionsAndReseller() {
