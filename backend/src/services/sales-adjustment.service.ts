@@ -137,6 +137,31 @@ function scaleOrderAmounts(
   };
 }
 
+function scalePaymentBreakdown(order: OrderRow, newTotal: number): unknown {
+  const oldTotal = Number(order.total) || 0;
+  if (oldTotal <= 0) return order.paymentBreakdown;
+  const ratio = Math.max(0, Math.min(1, newTotal / oldTotal));
+  const tenders = parsePaymentBreakdown(
+    order.paymentBreakdown,
+    order.paymentMethod,
+    oldTotal
+  );
+  if (!tenders.length) {
+    const method = normalizePaymentMethod(String(order.paymentMethod || "cash")) || "cash";
+    return [{ method, amount: roundMoney2(newTotal) }];
+  }
+  const scaled = tenders.map((t) => ({
+    method: t.method,
+    amount: roundMoney2(t.amount * ratio),
+  }));
+  const sum = roundMoney2(scaled.reduce((s, t) => s + t.amount, 0));
+  const diff = roundMoney2(newTotal - sum);
+  if (Math.abs(diff) >= 0.01 && scaled.length) {
+    scaled[0]!.amount = roundMoney2(scaled[0]!.amount + diff);
+  }
+  return scaled;
+}
+
 export class SalesAdjustmentService {
   static allowedPercents(): readonly number[] {
     return ALLOWED_PERCENTS;
@@ -284,6 +309,11 @@ export class SalesAdjustmentService {
     for (const orderId of adjustedOrderIds) {
       const order = orders.find((o) => o.id === orderId);
       if (!order) continue;
+      const paymentBreakdown = scalePaymentBreakdown(order, Number(order.total)) as Array<{
+        method: string;
+        amount: number;
+      }>;
+      order.paymentBreakdown = paymentBreakdown;
       await db
         .update(schema.orders)
         .set({
@@ -291,6 +321,7 @@ export class SalesAdjustmentService {
           taxAmount: order.taxAmount,
           discountAmount: order.discountAmount || "0",
           total: order.total,
+          paymentBreakdown,
           updatedAt: new Date(),
         })
         .where(eq(schema.orders.id, orderId));

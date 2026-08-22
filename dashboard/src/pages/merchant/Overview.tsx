@@ -55,7 +55,7 @@ import {
   type CashDrawerShift,
 } from '@/components/reports/CashDrawerBreakdown';
 
-type Preset = 'today' | 'yesterday' | 'last_week' | 'custom';
+type Preset = 'today' | 'yesterday' | 'last_week' | 'this_month' | 'last_month' | 'last_3_months' | 'custom';
 
 type OverviewData = {
   range: { label: string; from: string; to: string; preset: string };
@@ -232,7 +232,9 @@ export default function Overview() {
 
   const downloadExport = async (format: 'xlsx' | 'csv') => {
     try {
-      const res = await api.get(`/merchant/reports/export?${queryParams}&format=${format}`, {
+      const res = await api.get(
+        `/merchant/reports/export?${queryParams}&format=${format}&language=${locale}`,
+        {
         responseType: 'blob',
       });
       const cd = String(res.headers['content-disposition'] || '');
@@ -308,13 +310,13 @@ export default function Overview() {
         paymentRows: eod.paymentRows,
         orderTypeRows: eod.orderTypeRows,
         channelRows: eod.channelRows,
-        shiftCash: eod.shiftCash?.length ? eod.shiftCash : undefined,
         businessName: data.businessName,
         language: lang,
         paperWidthMm,
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
         includeProductsSold: eodIncludeProductsSold,
+        reportKind: 'eod',
       });
       const names =
         targets.length > 0
@@ -375,6 +377,9 @@ export default function Overview() {
     { id: 'today', label: t('reportsToday') },
     { id: 'yesterday', label: t('reportsYesterday') },
     { id: 'last_week', label: t('reportsLastWeek') },
+    { id: 'this_month', label: t('reportsThisMonth') },
+    { id: 'last_month', label: t('reportsLastMonth') },
+    { id: 'last_3_months', label: t('reportsLast3Months') },
     { id: 'custom', label: t('reportsCustom') },
   ];
 
@@ -397,17 +402,6 @@ export default function Overview() {
           <p className="page-sub">{t('overviewSub')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            className="input py-1.5 text-sm min-w-[140px]"
-            value={preset}
-            onChange={(e) => setPreset(e.target.value as Preset)}
-          >
-            {presets.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
           <EodIncludeProductsCheckbox
             checked={eodIncludeProductsSold}
             onChange={setEodIncludeProductsSold}
@@ -458,6 +452,23 @@ export default function Overview() {
             {t('ovSettings')}
           </button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {presets.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setPreset(p.id)}
+            className={`rounded-lg px-3 py-1.5 text-sm border ${
+              preset === p.id
+                ? 'bg-[var(--bg-elevated)] border-[var(--border)] shadow-sm font-medium'
+                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
       </div>
 
       {preset === 'custom' && (

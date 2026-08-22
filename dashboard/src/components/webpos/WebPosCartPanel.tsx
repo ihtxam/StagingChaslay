@@ -515,8 +515,10 @@ export default function WebPosCartPanel({
                       ? t('takeaway')
                       : t('takeaway')}
               </span>
-            ) : !isRetail && showChannelTabs && ticketDisplay && channel === 'dine_in' ? (
-              <span className="truncate text-[11px] font-semibold text-sky-800">{ticketDisplay}</span>
+            ) : !isRetail && showChannelTabs && channel === 'dine_in' && (ticketDisplay || tableLabel) ? (
+              <span className="truncate text-[11px] font-semibold text-sky-800">
+                {tableLabel ? `${t('table')} ${tableLabel}` : ticketDisplay}
+              </span>
             ) : !isRetail && customerLabel ? (
               <span
                 className="min-w-0 truncate text-[11px] font-semibold text-violet-900"
@@ -1130,24 +1132,26 @@ export default function WebPosCartPanel({
             </button>
           ) : (
             <>
-              {kitchenEnabled && !tablesEnabled ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={onSetTab}
-                  className="rounded-lg bg-indigo-700 py-3 text-xs font-bold text-white hover:bg-indigo-800 disabled:opacity-40"
-                >
-                  {tabNumber ? `#${tabNumber}` : t('webPosSetTab')}
-                </button>
-              ) : kitchenEnabled && tablesEnabled && !hideTab && !effectiveShowSend && !orderSent ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={onSetTable}
-                  className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
-                >
-                  {tableLabel || t('webPosSetTable')}
-                </button>
+              {kitchenEnabled && !orderSent && !hideTab ? (
+                channel === 'dine_in' && tablesEnabled ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={onSetTable}
+                    className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+                  >
+                    {tableLabel || t('webPosSetTable')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={onSetTab}
+                    className="rounded-lg bg-indigo-700 py-3 text-xs font-bold text-white hover:bg-indigo-800 disabled:opacity-40"
+                  >
+                    {tabNumber ? `#${tabNumber}` : t('webPosSetTab')}
+                  </button>
+                )
               ) : !kitchenEnabled ? (
                 <button
                   type="button"
@@ -1158,14 +1162,7 @@ export default function WebPosCartPanel({
                   {onHoldOrder ? t('webPosHoldOrder') : t('webPosNew')}
                 </button>
               ) : (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={onSetTab}
-                  className="rounded-lg bg-indigo-700 py-3 text-xs font-bold text-white hover:bg-indigo-800 disabled:opacity-40"
-                >
-                  {tabNumber ? `#${tabNumber}` : t('webPosSetTab')}
-                </button>
+                <div />
               )}
               {kitchenEnabled && !isRetail ? (
                 <button

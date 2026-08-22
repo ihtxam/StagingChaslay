@@ -6,6 +6,7 @@ export type ReportPreset =
   | "today"
   | "yesterday"
   | "last_week"
+  | "this_month"
   | "last_month"
   | "last_3_months"
   | "custom";
@@ -105,6 +106,12 @@ export function resolveReportRange(
   }
   if (preset === "last_week") {
     const f = addDaysYmd(today, -6);
+    const a = zurichDayBounds(f);
+    const b = zurichDayBounds(today);
+    return { start: a.start, end: b.end, label: `${f} to ${today}`, from: f, to: today };
+  }
+  if (preset === "this_month") {
+    const f = `${today.slice(0, 7)}-01`;
     const a = zurichDayBounds(f);
     const b = zurichDayBounds(today);
     return { start: a.start, end: b.end, label: `${f} to ${today}`, from: f, to: today };
