@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import {
   SIGNAGE_ORIENTATIONS,
@@ -25,7 +25,10 @@ export type SignageScreenInput = {
   orientation?: string;
   template?: string;
   playlistId?: string | null;
+  screenSizeIn?: number;
 };
+
+export const SIGNAGE_SCREEN_SIZES = [10, 15, 23, 32, 43, 55, 65] as const;
 
 export type SignagePlaylistInput = {
   name: string;
@@ -47,6 +50,41 @@ export type SignageSlideInput = {
 
 function newToken(): string {
   return randomBytes(24).toString("hex");
+}
+
+function clampScreenSize(raw: unknown): number {
+  const n = Math.round(Number(raw));
+  return (SIGNAGE_SCREEN_SIZES as readonly number[]).includes(n) ? n : 32;
+}
+
+async function newShortCode(db: ReturnType<typeof getDb>): Promise<string> {
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const digits = attempt < 40 ? 5 : 6;
+    const min = digits === 4 ? 1000 : digits === 5 ? 10000 : 100000;
+    const max = digits === 4 ? 9999 : digits === 5 ? 99999 : 999999;
+    const code = String(Math.floor(min + Math.random() * (max - min + 1)));
+    const taken = await db.query.signageScreens.findFirst({
+      where: eq(schema.signageScreens.shortCode, code),
+      columns: { id: true },
+    });
+    if (!taken) return code;
+  }
+  throw new Error("Could not allocate a screen code — try again");
+}
+
+async function ensureShortCodes(db: ReturnType<typeof getDb>, merchantId: string) {
+  const rows = await db.query.signageScreens.findMany({
+    where: and(eq(schema.signageScreens.merchantId, merchantId)),
+    columns: { id: true, shortCode: true },
+  });
+  for (const row of rows) {
+    if (row.shortCode) continue;
+    const shortCode = await newShortCode(db);
+    await db
+      .update(schema.signageScreens)
+      .set({ shortCode, updatedAt: new Date() })
+      .where(eq(schema.signageScreens.id, row.id));
+  }
 }
 
 function asTemplate(raw: unknown, fallback: SignageTemplate = "dark_pizza"): SignageTemplate {
@@ -156,6 +194,7 @@ export class SignageService {
   static async listScreens(merchantId: string) {
     await requireAddon(merchantId);
     const db = getDb();
+    await ensureShortCodes(db, merchantId);
     return db.query.signageScreens.findMany({
       where: eq(schema.signageScreens.merchantId, merchantId),
       orderBy: [asc(schema.signageScreens.name)],
@@ -206,8 +245,10 @@ export class SignageService {
         merchantId,
         name,
         token: newToken(),
+        shortCode: await newShortCode(db),
         orientation: asOrientation(input.orientation),
         template: asTemplate(input.template),
+        screenSizeIn: clampScreenSize(input.screenSizeIn),
         playlistId,
       })
       .returning();
@@ -225,6 +266,7 @@ export class SignageService {
     }
     if (input.orientation != null) patch.orientation = asOrientation(input.orientation);
     if (input.template != null) patch.template = asTemplate(input.template);
+    if (input.screenSizeIn != null) patch.screenSizeIn = clampScreenSize(input.screenSizeIn);
     if (input.playlistId !== undefined) {
       if (input.playlistId) {
         const pl = await db.query.signagePlaylists.findFirst({
@@ -262,7 +304,11 @@ export class SignageService {
     const db = getDb();
     const [row] = await db
       .update(schema.signageScreens)
-      .set({ token: newToken(), updatedAt: new Date() })
+      .set({
+        token: newToken(),
+        shortCode: await newShortCode(db),
+        updatedAt: new Date(),
+      })
       .where(and(eq(schema.signageScreens.id, id), eq(schema.signageScreens.merchantId, merchantId)))
       .returning();
     if (!row) throw new Error("Screen not found");
@@ -421,7 +467,7 @@ export class SignageService {
     await ensureSignageAddonColumn();
     const db = getDb();
     const screen = await db.query.signageScreens.findFirst({
-      where: eq(schema.signageScreens.token, trimmed),
+      where: or(eq(schema.signageScreens.shortCode, trimmed), eq(schema.signageScreens.token, trimmed)),
     });
     if (!screen) throw new Error("Invalid screen link");
 
@@ -514,6 +560,7 @@ export class SignageService {
         name: screen.name,
         orientation: asOrientation(screen.orientation),
         template,
+        screenSizeIn: screen.screenSizeIn ?? 32,
       },
       merchant: {
         name: merchant.name,

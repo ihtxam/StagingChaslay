@@ -6,7 +6,7 @@ import {
   paletteColorAt,
 } from "@/lib/category-colors";
 import { repairCatalogText } from "@/lib/text-encoding";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 
 export interface ImportRowError {
   sheet: string;
@@ -285,6 +285,62 @@ export class CatalogImportService {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(categories), "Categories");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(products), "Products");
+    return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  }
+
+  /** Export current categories + products to Excel (same columns as import template). */
+  static async exportWorkbook(merchantId: string): Promise<Buffer> {
+    const db = getDb();
+    const categories = await db.query.categories.findMany({
+      where: eq(schema.categories.merchantId, merchantId),
+      orderBy: [asc(schema.categories.sortOrder), asc(schema.categories.name)],
+    });
+    const products = await db.query.products.findMany({
+      where: eq(schema.products.merchantId, merchantId),
+      with: { category: { columns: { name: true } } },
+      orderBy: [asc(schema.products.name)],
+    });
+
+    const catRows = categories.map((c) => ({
+      name: c.name,
+      description: c.description || "",
+      color: c.color || "",
+      sortOrder: c.sortOrder ?? 0,
+    }));
+
+    const productRows = products.map((p) => {
+      const bulk = Array.isArray(p.bulkPricing) ? p.bulkPricing : [];
+      const bulkStr = bulk
+        .map((t) => `${t.minQty}:${t.price}`)
+        .filter(Boolean)
+        .join(";");
+      const extras = Array.isArray(p.extras) ? p.extras : [];
+      const extrasStr = extras
+        .map((e) => `${e.name}:${e.price}`)
+        .filter(Boolean)
+        .join("|");
+      return {
+        name: p.name,
+        price: Number(p.price),
+        category: (p as { category?: { name?: string } }).category?.name || "",
+        sku: p.sku || "",
+        barcode: p.barcode || "",
+        stock: p.stock ?? 0,
+        cost: p.cost != null ? Number(p.cost) : "",
+        taxable: p.isTaxable !== false,
+        description: p.description || "",
+        productType: p.productType || "standard",
+        isOpenPrice: !!p.isOpenPrice,
+        soldByWeight: !!p.soldByWeight,
+        weightUnit: p.weightUnit || "kg",
+        bulkPricing: bulkStr,
+        extras: extrasStr,
+      };
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), "Categories");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(productRows), "Products");
     return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
   }
 }

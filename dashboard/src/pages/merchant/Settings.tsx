@@ -929,6 +929,7 @@ export default function Settings() {
     try {
       const response = await api.put('/merchant/settings', {
         name: settings.name,
+        email: settings.email,
         phone: settings.phone,
         address: settings.address,
         city: settings.city,

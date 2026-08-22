@@ -918,6 +918,22 @@ export default function Products() {
     }
   };
 
+  const exportCatalog = async () => {
+    try {
+      const response = await api.get('/merchant/products/export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'chaslay-catalog-export.xlsx';
+      a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success(t('exportCatalogSuccess'));
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('exportCatalogFailed'));
+    }
+  };
+
   const onImportDemo = async (mode: 'replace' | 'merge') => {
     setImportingDemo(true);
     setDemoImportOpen(false);
@@ -1072,6 +1088,10 @@ export default function Products() {
           >
             <FileSpreadsheet size={14} />
             {importing ? t('importing') : t('importExcel')}
+          </button>
+          <button type="button" onClick={() => void exportCatalog()} className="btn-secondary">
+            <Download size={14} />
+            {t('exportExcel')}
           </button>
           <button
             type="button"
