@@ -1259,4 +1259,92 @@ router.delete("/platform-messages/:messageId", async (req: Request, res: Respons
   }
 });
 
+// ============================================================================
+// SUPPORT TICKETS & AGENTS
+// ============================================================================
+
+router.get("/support/tickets", async (req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const tickets = await SupportTicketService.listAllTickets({
+      status: String(req.query.status || "all"),
+      category: String(req.query.category || "") || undefined,
+      assignedTo: String(req.query.assignedTo || "") || undefined,
+    });
+    res.json({ success: true, tickets });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list tickets" });
+  }
+});
+
+router.get("/support/tickets/:ticketId", async (req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const ticket = await SupportTicketService.getTicketWithMessages(req.params.ticketId);
+    res.json({ success: true, ticket });
+  } catch (error) {
+    res.status(404).json({ error: error instanceof Error ? error.message : "Ticket not found" });
+  }
+});
+
+router.post("/support/tickets/:ticketId/reply", async (req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const body = String(req.body?.body || "").trim();
+    if (!body) return res.status(400).json({ error: "Message is required" });
+    const existing = await SupportTicketService.getTicketWithMessages(req.params.ticketId);
+    if (existing.category !== "technical") {
+      return res.status(403).json({
+        error: "Non-technical tickets are handled by the merchant's reseller (information only).",
+      });
+    }
+    const ticket = await SupportTicketService.addReply(req.params.ticketId, {
+      authorRole: "superadmin",
+      authorId: req.user?.id,
+      authorName: req.user?.name,
+      body,
+      closeTicket: !!req.body?.close,
+    });
+    res.json({ success: true, ticket });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to reply" });
+  }
+});
+
+router.patch("/support/tickets/:ticketId/assign", async (req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const ticket = await SupportTicketService.assignTicket(
+      req.params.ticketId,
+      req.body?.assignedToSuperadminId || null
+    );
+    res.json({ success: true, ticket });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to assign" });
+  }
+});
+
+router.get("/support/agents", async (_req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const agents = await SupportTicketService.listSuperadminsForSupportMgmt();
+    res.json({ success: true, agents });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list agents" });
+  }
+});
+
+router.patch("/support/agents/:superadminId", async (req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const agent = await SupportTicketService.setSupportAgent(
+      req.params.superadminId,
+      !!req.body?.handlesSupport
+    );
+    res.json({ success: true, agent });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update agent" });
+  }
+});
+
 export default router;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, LogOut, User, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, LifeBuoy, LogOut, Settings, User, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { APP_NAME, displaySidebarAccountName } from '@/lib/brand';
@@ -38,6 +38,11 @@ interface SidebarProps {
   } | null;
   language?: Locale;
   onLanguageChange?: (locale: Locale) => void;
+  /** Cliavo-style profile menu: Settings, Support, Sign out */
+  profileMenu?: {
+    settingsPath?: string;
+    supportPath?: string;
+  };
 }
 
 const STORAGE_PREFIX = 'sidebar_groups_open:';
@@ -77,6 +82,7 @@ export default function Sidebar({
   quickAction = null,
   language,
   onLanguageChange,
+  profileMenu,
 }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -107,7 +113,6 @@ export default function Sidebar({
     return ids;
   }, [menuItems, location.pathname]);
 
-  // Accordion: at most one group open (keeps the sidebar short).
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     const stored = loadOpenGroups(panelKey);
     const activeId = [...activeGroupIds][0];
@@ -126,6 +131,8 @@ export default function Sidebar({
       return next;
     });
   }, [activeGroupIds, panelKey]);
+
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const toggleGroup = (id: string) => {
     setOpenGroups((prev) => {
@@ -343,19 +350,76 @@ export default function Sidebar({
             </button>
           )}
 
-          <div className="flex items-center gap-2.5 px-2 py-1.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-900 text-teal-50">
-              <User className="h-4 w-4" />
+          {profileMenu ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setProfileOpen((v) => !v)}
+                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-md hover:bg-teal-900/45 transition-colors"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-900 text-teal-50">
+                  <User className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="truncate text-sm font-medium text-white">{accountName}</p>
+                  <p className="truncate text-[11px] text-teal-100/70">{roleLabel}</p>
+                </div>
+                <ChevronDown
+                  className={`w-4 h-4 text-teal-100/70 shrink-0 transition-transform ${profileOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {profileOpen ? (
+                <div className="mt-1 rounded-lg border border-white/15 bg-teal-950/90 overflow-hidden">
+                  {profileMenu.supportPath ? (
+                    <Link
+                      to={profileMenu.supportPath}
+                      onClick={() => {
+                        setProfileOpen(false);
+                        closeMobile();
+                      }}
+                      className="flex items-center gap-2 px-3 py-2.5 text-sm text-teal-50 hover:bg-teal-900/60"
+                    >
+                      <LifeBuoy className="w-4 h-4" />
+                      {t('support')}
+                    </Link>
+                  ) : null}
+                  {profileMenu.settingsPath ? (
+                    <Link
+                      to={profileMenu.settingsPath}
+                      onClick={() => {
+                        setProfileOpen(false);
+                        closeMobile();
+                      }}
+                      className="flex items-center gap-2 px-3 py-2.5 text-sm text-teal-50 hover:bg-teal-900/60"
+                    >
+                      <Settings className="w-4 h-4" />
+                      {t('settings')}
+                    </Link>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-rose-200 hover:bg-rose-900/40 border-t border-white/10"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    {t('logout')}
+                  </button>
+                </div>
+              ) : null}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-white">
-                {accountName}
-              </p>
-              <p className="truncate text-[11px] text-teal-100/70" title={roleLabel}>
-                {roleLabel}
-              </p>
+          ) : (
+            <div className="flex items-center gap-2.5 px-2 py-1.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-900 text-teal-50">
+                <User className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-white">{accountName}</p>
+                <p className="truncate text-[11px] text-teal-100/70" title={roleLabel}>
+                  {roleLabel}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           {onLanguageChange && (
             <select
@@ -370,14 +434,16 @@ export default function Sidebar({
             </select>
           )}
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            {t('logout')}
-          </button>
+          {!profileMenu ? (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              {t('logout')}
+            </button>
+          ) : null}
         </div>
       </aside>
 

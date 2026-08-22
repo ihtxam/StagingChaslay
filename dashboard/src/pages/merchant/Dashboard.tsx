@@ -34,6 +34,7 @@ import Vouchers from './Vouchers';
 import Terminals from './Terminals';
 import Settings from './Settings';
 import PlatformShop from './PlatformShop';
+import Support from './Support';
 import Billing from './Billing';
 import Staff from './Staff';
 import OnlineShop from './OnlineShop';
@@ -459,6 +460,10 @@ function MerchantShell() {
           }
           language={locale}
           onLanguageChange={changeLanguage}
+          profileMenu={{
+            settingsPath: '/merchant/settings',
+            supportPath: '/merchant/support',
+          }}
         />
       )}
 
@@ -688,6 +693,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/users" allow={allow}>
                   <Staff />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="support"
+              element={
+                <PanelRouteGuard path="/merchant/support" allow={allow}>
+                  <Support />
                 </PanelRouteGuard>
               }
             />

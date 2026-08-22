@@ -7,6 +7,7 @@ import {
   Copy,
   KeyRound,
   LayoutDashboard,
+  LifeBuoy,
   Package,
   Plus,
   RefreshCw,
@@ -27,6 +28,7 @@ import {
   type EditionFeatureKey,
 } from '@/lib/edition-features';
 import EditionFeatureChecklist from '@/components/EditionFeatureChecklist';
+import SupportInbox from '../shared/SupportInbox';
 
 function Overview() {
   const { t } = useI18n();
@@ -1594,6 +1596,7 @@ function ResellerShell() {
       icon: <Package />,
       children: [{ label: t('posVersionManagement'), path: '/reseller/editions', icon: <Package /> }],
     },
+    { label: t('supportInboxTitle'), path: '/reseller/support', icon: <LifeBuoy /> },
   ];
 
   return (
@@ -1618,6 +1621,7 @@ function ResellerShell() {
             <Route path="merchants" element={<MerchantsPage />} />
             <Route path="licenses" element={<LicensesPage />} />
             <Route path="editions" element={<EditionsPage />} />
+            <Route path="support" element={<SupportInbox mode="reseller" />} />
           </Routes>
         </main>
       </div>

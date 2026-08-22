@@ -530,6 +530,40 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS platform_message_dismissals_unique ON platform_message_dismissals(message_id, viewer_role, viewer_id)`,
   `CREATE INDEX IF NOT EXISTS platform_message_dismissals_viewer_idx ON platform_message_dismissals(viewer_role, viewer_id)`,
+  `ALTER TABLE superadmins ADD COLUMN IF NOT EXISTS handles_support boolean NOT NULL DEFAULT false`,
+  `CREATE TABLE IF NOT EXISTS support_tickets (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_number varchar(20) NOT NULL UNIQUE,
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    reseller_id uuid REFERENCES resellers(id) ON DELETE SET NULL,
+    category varchar(30) NOT NULL DEFAULT 'technical',
+    subcategory varchar(80),
+    subject varchar(255) NOT NULL,
+    status varchar(20) NOT NULL DEFAULT 'open',
+    assigned_to_superadmin_id uuid,
+    last_message_at timestamptz NOT NULL DEFAULT now(),
+    closed_at timestamptz,
+    auto_close_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS support_tickets_merchant_idx ON support_tickets(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS support_tickets_reseller_idx ON support_tickets(reseller_id)`,
+  `CREATE INDEX IF NOT EXISTS support_tickets_status_idx ON support_tickets(status)`,
+  `CREATE INDEX IF NOT EXISTS support_tickets_created_idx ON support_tickets(created_at)`,
+  `CREATE TABLE IF NOT EXISTS support_ticket_messages (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_id uuid NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+    author_role varchar(20) NOT NULL,
+    author_id uuid,
+    author_name varchar(255),
+    body text NOT NULL,
+    attachment_url varchar(500),
+    attachment_name varchar(255),
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS support_ticket_messages_ticket_idx ON support_ticket_messages(ticket_id)`,
+  `CREATE INDEX IF NOT EXISTS support_ticket_messages_created_idx ON support_ticket_messages(created_at)`,
 ];
 
 let startupPatchPromise: Promise<void> | null = null;
