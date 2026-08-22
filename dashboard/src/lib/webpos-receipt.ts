@@ -64,6 +64,13 @@ export function nextWebPosTicketNumber(_merchantId?: string | null): {
   return { display, orderNumber };
 }
 
+/** Opaque backend id when the customer-facing shout # already exists. */
+export function webPosBackendOrderId(_merchantId?: string | null): string {
+  const a = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const b = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `WP-${a}${b}`.slice(0, 20);
+}
+
 const DINE_IN_COUNTER_STORAGE_KEY = 'webpos_dine_in_counter_v1';
 
 /**
@@ -1226,8 +1233,10 @@ export type KitchenTicketOpts = {
   itemTextScale?: 1 | 2 | 3;
   headerTextScale?: 1 | 2 | 3;
   boldText?: boolean;
-  /** Print COURSE N headers when items have courseNumber */
+  /** Print COURSE N headers when items have courseNumber and multiple services are active */
   groupByCourse?: boolean;
+  /** Highest opened course (1 = single service — no course banners on ticket) */
+  maxCourse?: number;
   tableLabel?: string | null;
   /** Bar tab number (shown on ticket after tab is assigned). */
   tabNumber?: string | null;
@@ -1503,8 +1512,12 @@ function buildKitchenTicketLines(
   }
 
   const items = opts.items;
+  const maxCourse = Math.max(1, Number(opts.maxCourse) || 1);
   const hasCourses =
-    !cancelled && items.some((i) => i.courseNumber != null && Number(i.courseNumber) > 0);
+    !cancelled &&
+    !!opts.groupByCourse &&
+    maxCourse > 1 &&
+    items.some((i) => i.courseNumber != null && Number(i.courseNumber) > 0);
 
   if (hasCourses) {
     for (const group of groupReceiptItemsByCourse(items)) {
