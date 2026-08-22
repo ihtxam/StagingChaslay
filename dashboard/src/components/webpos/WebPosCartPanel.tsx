@@ -241,7 +241,6 @@ export default function WebPosCartPanel({
   canReleaseTable = false,
   onReleaseTable,
   isRetail = false,
-  onCashMovement,
   failedPrintCount = 0,
   onOpenPrintIssues,
   onOrderPrint,
