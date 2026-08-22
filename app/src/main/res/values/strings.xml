@@ -230,6 +230,11 @@
     <string name="online_orders_channel">Online orders</string>
     <string name="online_orders_channel_desc">Alerts when new shop orders arrive while the app is in the background</string>
     <string name="new_online_order_title">New online order</string>
+    <string name="waiter_till_bell_title">Waiter order at till</string>
+    <string name="waiter_till_bell">Waiter order received — sent to kitchen</string>
+    <string name="waiter_till_bell_named">Waiter order at %1$s — sent to kitchen</string>
+    <string name="kitchen_print_retry_queued">Kitchen print queued — retrying automatically</string>
+    <string name="kitchen_print_retry_failed">Kitchen print failed after retries</string>
     <string name="new_online_orders_title">%1$d new online orders</string>
     <string name="new_online_order_body">Tap to open the POS and view the order.</string>
     <string name="new_online_order_alert_title">New online order</string>

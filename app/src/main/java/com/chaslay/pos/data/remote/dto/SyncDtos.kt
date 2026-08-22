@@ -276,7 +276,11 @@ data class SyncScaleDto(
 data class SyncPrintDto(
     @SerializedName("adyen_receipt_digital_only") val adyenReceiptDigitalOnly: Boolean = false,
     @SerializedName("receipt_delivery_directions_qr") val receiptDeliveryDirectionsQr: Boolean = true,
-    @SerializedName("auto_print_kitchen") val autoPrintKitchen: Boolean = true
+    @SerializedName("auto_print_kitchen") val autoPrintKitchen: Boolean = true,
+    @SerializedName("waiter_till_bell_enabled") val waiterTillBellEnabled: Boolean = true,
+    @SerializedName("kitchen_print_retry_enabled") val kitchenPrintRetryEnabled: Boolean = true,
+    @SerializedName("kitchen_print_retry_attempts") val kitchenPrintRetryAttempts: Int = 5,
+    @SerializedName("kitchen_print_retry_interval_sec") val kitchenPrintRetryIntervalSec: Int = 5
 )
 
 data class PaymentConfigResponse(

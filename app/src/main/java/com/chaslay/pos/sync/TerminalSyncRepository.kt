@@ -11,6 +11,7 @@ import com.chaslay.pos.data.remote.dto.PushTerminalsRequest
 import com.chaslay.pos.data.remote.dto.SyncCheckoutDto
 import com.chaslay.pos.data.repository.SettingsRepository
 import com.chaslay.pos.sync.mergePosCheckoutSettings
+import com.chaslay.pos.sync.mergePosPrintSettings
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -171,11 +172,7 @@ class TerminalSyncRepository @Inject constructor(
         }
 
         config.print?.let { print ->
-            merged = merged.copy(
-                adyenReceiptDigitalOnly = print.adyenReceiptDigitalOnly,
-                receiptDeliveryDirectionsQr = print.receiptDeliveryDirectionsQr,
-                autoPrintKitchen = print.autoPrintKitchen
-            )
+            merged = merged.mergePosPrintSettings(print)
         }
 
         return merged

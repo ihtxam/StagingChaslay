@@ -38,7 +38,9 @@ class FloorSyncRepository @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val tableOrderRepository: TableOrderRepository,
     private val printerService: BluetoothPrinterService,
-    private val floorSyncEvents: FloorSyncEvents
+    private val floorSyncEvents: FloorSyncEvents,
+    private val kitchenPrintRetryQueue: KitchenPrintRetryQueue,
+    private val waiterTillBellNotifier: WaiterTillBellNotifier
 ) {
     private val gson = Gson()
     private var lastCloudOrderSyncMs = 0L
@@ -149,7 +151,21 @@ class FloorSyncRepository @Inject constructor(
         val settings = settingsRepository.getSettings()
         return runCatching {
             when (request.jobType.uppercase()) {
-                "KITCHEN" -> executeKitchenJob(settings, request.payload)
+                "KITCHEN" -> {
+                    val ok = executeKitchenJob(settings, request.payload)
+                    if (ok) {
+                        waiterTillBellNotifier.ringIfEnabled(
+                            settings,
+                            request.payload?.get("tableName")?.asString
+                        )
+                        true
+                    } else if (settings.kitchenPrintRetryEnabled) {
+                        enqueueKitchenRetry(settings, request.payload, cloudPrintJobId = null)
+                        true
+                    } else {
+                        false
+                    }
+                }
                 else -> true
             }
         }.getOrDefault(false)
@@ -222,25 +238,66 @@ class FloorSyncRepository @Inject constructor(
         if (!settings.floorSyncEnabled || BuildConfig.SYNC_API_KEY.isBlank()) return 0
         if (FloorDeviceRole.fromApi(settings.floorDeviceRole) != FloorDeviceRole.MAIN_POS) return 0
         val pending = runCatching { floorApi.pendingPrintJobs() }.getOrNull()?.jobs.orEmpty()
+        val ownDeviceId = deviceIdProvider.getDeviceId()
         var processed = 0
         for (job in pending) {
             // WebPOS waiter phones enqueue ESCPOS for the Windows Print Agent hub — leave pending.
             if (job.job_type.equals("ESCPOS", ignoreCase = true)) continue
+            val isRemote = !job.source_device_id.isNullOrBlank() && job.source_device_id != ownDeviceId
             val success = runCatching {
                 when (job.job_type.uppercase()) {
                     "KITCHEN" -> executeKitchenJob(settings, job.payload)
                     else -> true
                 }
             }.getOrDefault(false)
-            runCatching {
-                floorApi.ackPrintJob(
-                    job.id,
-                    FloorAckRequest(status = if (success) "DONE" else "FAILED")
-                )
+            if (success) {
+                runCatching {
+                    floorApi.ackPrintJob(job.id, FloorAckRequest(status = "DONE"))
+                }
+                if (isRemote) {
+                    waiterTillBellNotifier.ringIfEnabled(
+                        settings,
+                        job.payload?.get("tableName")?.asString
+                    )
+                }
+                processed++
+            } else if (
+                settings.kitchenPrintRetryEnabled &&
+                job.job_type.equals("KITCHEN", ignoreCase = true)
+            ) {
+                enqueueKitchenRetry(settings, job.payload, cloudPrintJobId = job.id)
+            } else {
+                runCatching {
+                    floorApi.ackPrintJob(job.id, FloorAckRequest(status = "FAILED"))
+                }
             }
-            if (success) processed++
         }
         return processed
+    }
+
+    private fun enqueueKitchenRetry(
+        settings: BusinessSettingsEntity,
+        payload: JsonObject?,
+        cloudPrintJobId: String?
+    ) {
+        if (payload == null) return
+        val tableName = payload.get("tableName")?.asString.orEmpty()
+        val serviceType = payload.get("serviceType")?.asString ?: "DINE_IN"
+        val round = payload.get("round")?.asInt ?: 1
+        val itemsType = object : com.google.gson.reflect.TypeToken<List<TableOrderItemEntity>>() {}.type
+        val items: List<TableOrderItemEntity> = gson.fromJson(payload.get("items"), itemsType) ?: return
+        val metaType = object : com.google.gson.reflect.TypeToken<KitchenPrintMeta>() {}.type
+        val meta: KitchenPrintMeta = gson.fromJson(payload.get("meta"), metaType) ?: KitchenPrintMeta()
+        val svc = runCatching { ServiceType.valueOf(serviceType) }.getOrDefault(ServiceType.DINE_IN)
+        kitchenPrintRetryQueue.enqueue(
+            settings = settings,
+            tableName = tableName,
+            serviceType = svc,
+            round = round,
+            items = items,
+            meta = meta,
+            cloudPrintJobId = cloudPrintJobId
+        )
     }
 
     private suspend fun executeKitchenJob(settings: BusinessSettingsEntity, payload: JsonObject?): Boolean {

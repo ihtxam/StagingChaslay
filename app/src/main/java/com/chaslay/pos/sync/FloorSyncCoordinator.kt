@@ -16,7 +16,8 @@ import kotlinx.coroutines.launch
 class FloorSyncCoordinator @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val floorSyncRepository: FloorSyncRepository,
-    private val floorLanServer: FloorLanServer
+    private val floorLanServer: FloorLanServer,
+    private val kitchenPrintRetryQueue: KitchenPrintRetryQueue
 ) {
     private var appScope: CoroutineScope? = null
     private var settingsJob: Job? = null
@@ -68,8 +69,12 @@ class FloorSyncCoordinator @Inject constructor(
                 runCatching {
                     floorSyncRepository.processPendingPrintJobs(settings)
                     floorSyncRepository.pullCloudOrders(settings)
+                    if (settings.kitchenPrintRetryEnabled && kitchenPrintRetryQueue.pendingCount() > 0) {
+                        kitchenPrintRetryQueue.processNext(settings)
+                    }
                 }.onFailure { Log.w(TAG, "Floor sync poll failed", it) }
-                delay(POLL_INTERVAL_MS)
+                val retryMs = settings.kitchenPrintRetryIntervalSec.coerceIn(2, 60) * 1000L
+                delay(if (kitchenPrintRetryQueue.pendingCount() > 0) retryMs else POLL_INTERVAL_MS)
             }
         }
     }

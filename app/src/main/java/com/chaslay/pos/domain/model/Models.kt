@@ -1,5 +1,7 @@
 package com.chaslay.pos.domain.model
 
+import com.chaslay.pos.domain.resolveBillDiscountAmount
+import com.chaslay.pos.domain.resolveCartBillDiscountAmount
 enum class UserRole {
     ADMIN,
     MANAGER,
@@ -341,11 +343,7 @@ data class CartSummary(
     val netSubtotal: Double get() = roundMoney((subtotal - itemDiscountTotal).coerceAtLeast(0.0))
     private val rawTaxTotal: Double get() = items.sumOf { it.lineTax }
     val discountValue: Double
-        get() = when {
-            discountPercent > 0 -> subtotal * (discountPercent / 100.0)
-            discountAmount > 0 -> discountAmount.coerceAtMost(subtotal)
-            else -> 0.0
-        }
+        get() = resolveCartBillDiscountAmount(this)
     private val merchandiseBase: Double
         get() = if (vatIncludedInPrice) {
             roundMoney(netSubtotal + rawTaxTotal)
@@ -370,11 +368,7 @@ data class CartSummary(
 
     /** Amount due for products before tip and cash rounding. */
     fun merchandiseTotal(checkoutDiscountPercent: Double = 0.0, checkoutDiscountAmount: Double = 0.0): Double {
-        val discount = when {
-            checkoutDiscountPercent > 0 -> roundMoney(netSubtotal * (checkoutDiscountPercent / 100.0))
-            checkoutDiscountAmount > 0 -> roundMoney(checkoutDiscountAmount.coerceAtMost(netSubtotal))
-            else -> discountValue
-        }
+        val discount = resolveBillDiscountAmount(this, checkoutDiscountPercent, checkoutDiscountAmount)
         val tax = adjustTaxForOrderDiscount(
             rawTaxTotal,
             merchandiseBase,

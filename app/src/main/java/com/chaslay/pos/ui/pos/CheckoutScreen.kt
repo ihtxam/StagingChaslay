@@ -55,6 +55,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chaslay.pos.R
+import com.chaslay.pos.domain.cartMerchandiseBase
+import com.chaslay.pos.domain.resolveBillDiscountAmount
 import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.LoyaltyMath
@@ -226,7 +228,7 @@ fun CheckoutScreen(
         TipDiscountDialog(
             title = stringResource(R.string.discount),
             currencySymbol = currencySymbol,
-            baseAmount = totals.subtotal,
+            baseAmount = cartMerchandiseBase(cart),
             presetsPercent = presetPercents.ifEmpty { listOf(5.0, 10.0, 15.0) },
             allowPercent = true,
             allowAmount = true,
@@ -841,11 +843,11 @@ private fun rememberCheckoutTotals(
     equalSplitCount: Int = 1
 ): CheckoutTotals {
     val netSubtotal = cart.subtotal - cart.itemDiscountTotal
-    val cartDiscount = when {
-        checkoutState.discountPercent > 0 -> netSubtotal * (checkoutState.discountPercent / 100.0)
-        checkoutState.discountAmount > 0 -> checkoutState.discountAmount.coerceAtMost(netSubtotal)
-        else -> cart.discountValue
-    }
+    val cartDiscount = resolveBillDiscountAmount(
+        cart,
+        checkoutState.discountPercent,
+        checkoutState.discountAmount
+    ).let { if (checkoutState.discountPercent <= 0 && checkoutState.discountAmount <= 0) cart.discountValue else it }
     val preTipTotal = cart.merchandiseTotal(checkoutState.discountPercent, checkoutState.discountAmount)
     val shareTotal = if (equalSplitCount > 1) preTipTotal / equalSplitCount else preTipTotal
     val afterPoints = (shareTotal + checkoutState.tipAmount - checkoutState.pointsDiscount).coerceAtLeast(0.0)

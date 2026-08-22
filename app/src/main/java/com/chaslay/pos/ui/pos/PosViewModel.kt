@@ -63,7 +63,10 @@ import com.chaslay.pos.payment.TapToPayService
 import com.chaslay.pos.printer.BluetoothPrinterService
 import com.chaslay.pos.sync.FloorSyncRepository
 import com.chaslay.pos.sync.FloorSyncEvents
-import com.chaslay.pos.sync.mergePosCheckoutSettings
+import com.chaslay.pos.domain.clampBillDiscountToCart
+import com.chaslay.pos.domain.mergeBillDiscounts
+import com.chaslay.pos.domain.resolveBillDiscountAmount
+import com.chaslay.pos.sync.mergePosPrintSettings
 import com.chaslay.pos.util.DineInCounterTicket
 import com.chaslay.pos.printer.KitchenPrintMeta
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -245,6 +248,7 @@ class PosViewModel @Inject constructor(
     private val scaleService: com.chaslay.pos.scale.AclasScaleService,
     private val floorSyncRepository: FloorSyncRepository,
     private val floorSyncEvents: FloorSyncEvents,
+    private val kitchenPrintRetryQueue: com.chaslay.pos.sync.KitchenPrintRetryQueue,
     private val giftCardRepository: com.chaslay.pos.data.repository.GiftCardRepository,
     private val posShiftRepository: com.chaslay.pos.data.repository.PosShiftRepository,
     private val syncApi: com.chaslay.pos.data.remote.SyncApi,
@@ -672,8 +676,14 @@ class PosViewModel @Inject constructor(
         )
         if (pendingCart != null) {
             pendingCart.items.forEach { cartManager.addItem(it) }
-            if (pendingCart.discountPercent > 0.0 || pendingCart.discountAmount > 0.0) {
-                cartManager.applyDiscount(pendingCart.discountPercent, pendingCart.discountAmount)
+            val (pct, amt) = mergeBillDiscounts(
+                pendingCart.discountPercent,
+                pendingCart.discountAmount,
+                order.discountPercent,
+                order.discountAmount
+            )
+            if (pct > 0.0 || amt > 0.0) {
+                cartManager.applyDiscount(pct, amt)
             }
             pendingCart.cartNotes?.let { cartManager.setNotes(it) }
         }
@@ -1515,7 +1525,9 @@ class PosViewModel @Inject constructor(
     fun showDiscountDialog() = updateExtras { it.copy(showDiscountDialog = true) }
 
     fun applyDiscount(percent: Double, amount: Double) {
-        cartManager.applyDiscount(percent, amount)
+        val cart = cartManager.snapshot()
+        val (pct, amt) = clampBillDiscountToCart(cart, percent, amount)
+        cartManager.applyDiscount(pct, amt)
         updateExtras { it.copy(showDiscountDialog = false) }
         persistTableOrderAsync()
     }
@@ -1571,9 +1583,7 @@ class PosViewModel @Inject constructor(
                         keypadBuffer = ""
                     )
                 }
-            }.onFailure { e ->
-                showError("Kitchen", e.message ?: "Kitchen print failed")
-            }
+            }.onFailure { e -> handleKitchenDeliverFailure(e) }
         }
     }
 
@@ -1654,9 +1664,7 @@ class PosViewModel @Inject constructor(
                         )
                     }
                     refreshTables()
-                }.onFailure { e ->
-                    showError("Kitchen", e.message ?: "Kitchen print failed")
-                }
+                }.onFailure { e -> handleKitchenDeliverFailure(e) }
             }
         }
     }
@@ -1710,9 +1718,7 @@ class PosViewModel @Inject constructor(
                             keypadBuffer = ""
                         )
                     }
-                }.onFailure { e ->
-                    showError("Kitchen", e.message ?: "Kitchen print failed")
-                }
+                }.onFailure { e -> handleKitchenDeliverFailure(e) }
             }
             return
         }
@@ -1764,9 +1770,7 @@ class PosViewModel @Inject constructor(
                         )
                     }
                     refreshTables()
-                }.onFailure { e ->
-                    showError("Kitchen", e.message ?: "Kitchen print failed")
-                }
+                }.onFailure { e -> handleKitchenDeliverFailure(e) }
             }
         }
     }
@@ -2149,12 +2153,10 @@ class PosViewModel @Inject constructor(
     }
 
     private fun checkoutSaleDiscount(cart: CartSummary, checkout: CheckoutState, equalSplitCount: Int): Double {
-        val netSubtotal = (cart.subtotal - cart.itemDiscountTotal).coerceAtLeast(0.0)
-        val fullDiscount = when {
-            checkout.discountPercent > 0 -> netSubtotal * (checkout.discountPercent / 100.0)
-            checkout.discountAmount > 0 -> checkout.discountAmount.coerceAtMost(netSubtotal)
-            else -> cart.discountValue
-        }
+        val fullDiscount = resolveBillDiscountAmount(cart, checkout.discountPercent, checkout.discountAmount)
+            .let { resolved ->
+                if (checkout.discountPercent <= 0 && checkout.discountAmount <= 0) cart.discountValue else resolved
+            }
         return if (equalSplitCount > 1) fullDiscount / equalSplitCount else fullDiscount
     }
 
@@ -2307,22 +2309,26 @@ class PosViewModel @Inject constructor(
     }
 
     fun updateCheckoutDiscountPercent(percent: Double) {
+        val cart = cartManager.snapshot()
+        val (pct, amt) = clampBillDiscountToCart(cart, percent.coerceAtLeast(0.0), 0.0)
         updateExtras {
             it.copy(
                 checkoutState = it.checkoutState.copy(
-                    discountPercent = percent.coerceAtLeast(0.0),
-                    discountAmount = if (percent > 0) 0.0 else it.checkoutState.discountAmount
+                    discountPercent = pct,
+                    discountAmount = amt
                 )
             )
         }
     }
 
     fun updateCheckoutDiscountAmount(amount: Double) {
+        val cart = cartManager.snapshot()
+        val (pct, amt) = clampBillDiscountToCart(cart, 0.0, amount.coerceAtLeast(0.0))
         updateExtras {
             it.copy(
                 checkoutState = it.checkoutState.copy(
-                    discountAmount = amount.coerceAtLeast(0.0),
-                    discountPercent = if (amount > 0) 0.0 else it.checkoutState.discountPercent
+                    discountAmount = amt,
+                    discountPercent = pct
                 )
             )
         }
@@ -2539,11 +2545,7 @@ class PosViewModel @Inject constructor(
                 }
             }
             cfg.print?.let { print ->
-                merged = merged.copy(
-                    adyenReceiptDigitalOnly = print.adyenReceiptDigitalOnly,
-                    receiptDeliveryDirectionsQr = print.receiptDeliveryDirectionsQr,
-                    autoPrintKitchen = print.autoPrintKitchen
-                )
+                merged = merged.mergePosPrintSettings(print)
             }
             cfg.checkout?.let { checkout ->
                 merged = merged.mergePosCheckoutSettings(checkout)
@@ -3319,12 +3321,10 @@ class PosViewModel @Inject constructor(
                 return@launch
             }
             val checkout = _uiExtras.value.checkoutState
-            val netSubtotal = cart.subtotal - cart.itemDiscountTotal
-            val discount = when {
-                checkout.discountPercent > 0 -> netSubtotal * (checkout.discountPercent / 100.0)
-                checkout.discountAmount > 0 -> checkout.discountAmount.coerceAtMost(netSubtotal)
-                else -> cart.discountValue
-            }
+            val discount = resolveBillDiscountAmount(cart, checkout.discountPercent, checkout.discountAmount)
+                .let { resolved ->
+                    if (checkout.discountPercent <= 0 && checkout.discountAmount <= 0) cart.discountValue else resolved
+                }
             val equalSplitCount = if (cart.splitCount > 1 && !cart.splitByItems) cart.splitCount else 1
             val merchandiseTotal = cart.merchandiseTotal(checkout.discountPercent, checkout.discountAmount)
             val shareTotal = if (equalSplitCount > 1) merchandiseTotal / equalSplitCount else merchandiseTotal
@@ -4736,6 +4736,15 @@ class PosViewModel @Inject constructor(
         updateExtras { it.copy(errorTitle = title, errorMessage = message) }
     }
 
+    private fun handleKitchenDeliverFailure(e: Throwable) {
+        val retryMsg = appContext.getString(R.string.kitchen_print_retry_queued)
+        if (e.message == retryMsg) {
+            updateExtras { it.copy(snackbarMessage = retryMsg) }
+        } else {
+            showError("Kitchen", e.message ?: "Kitchen print failed")
+        }
+    }
+
     private fun playItemClickBeep() {
         runCatching {
             android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 35)
@@ -4865,7 +4874,7 @@ class PosViewModel @Inject constructor(
         }
         val categories = productRepository.getAllCategories()
         val products = productRepository.getAllProducts()
-        return printerService.routeKitchen(
+        val printResult = printerService.routeKitchen(
             settings = settings,
             tableName = tableName,
             serviceType = serviceType,
@@ -4876,7 +4885,20 @@ class PosViewModel @Inject constructor(
             categories = categories,
             products = products,
             meta = meta
-        ).map { }
+        )
+        if (printResult.isSuccess) return Result.success(Unit)
+        if (settings.kitchenPrintRetryEnabled) {
+            kitchenPrintRetryQueue.enqueue(
+                settings = settings,
+                tableName = tableName,
+                serviceType = serviceType,
+                round = round,
+                items = items,
+                meta = meta
+            )
+            return Result.failure(Exception(appContext.getString(R.string.kitchen_print_retry_queued)))
+        }
+        return printResult.map { }
     }
 
     private suspend fun persistTableOrderIfNeeded() {

@@ -203,8 +203,13 @@ fun TipDiscountDialog(
                     }
                     Button(
                         onClick = {
-                            val percent = if (mode == AmountPercentMode.PERCENT) raw else 0.0
-                            onConfirm(resolvedAmount, percent, mode)
+                            val percent = if (mode == AmountPercentMode.PERCENT) raw.coerceIn(0.0, 100.0) else 0.0
+                            val amount = if (mode == AmountPercentMode.AMOUNT) {
+                                resolvedAmount.coerceAtMost(baseAmount.coerceAtLeast(0.0))
+                            } else {
+                                resolvedAmount
+                            }
+                            onConfirm(amount, percent, mode)
                         },
                         modifier = Modifier
                             .weight(1f)
