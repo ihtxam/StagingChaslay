@@ -3433,16 +3433,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const ticket = ensureCartTicket();
     const ids = new Set(lines.map((l) => l.lineId));
     const sentAt = Date.now();
+    const orderNo = kitchenOrderNumber({ ticket });
+    const kdsBatchKey = `${orderNo}@${sentAt}`;
     // Mark sent first so Send can release the register immediately.
     setCart((prev) =>
       prev.map((l) =>
-        ids.has(l.lineId) ? { ...l, sentToKitchen: true, sentToKitchenAt: l.sentToKitchenAt || sentAt } : l
+        ids.has(l.lineId)
+          ? {
+              ...l,
+              sentToKitchen: true,
+              sentToKitchenAt: l.sentToKitchenAt || sentAt,
+              kdsBatchKey: l.kdsBatchKey || kdsBatchKey,
+            }
+          : l
       )
     );
     // Print agent can take several seconds; never block the Send button on it.
     // printKitchenForCart captures ticket fields synchronously before its first await.
     void printKitchenForCart(lines, effectiveChannel, {
-        orderNumber: kitchenOrderNumber({ ticket }),
+        orderNumber: orderNo,
+        kdsBatchKey,
         when: fulfillmentWhen,
         courseOnly,
         lineIds: lines.map((l) => l.lineId),
@@ -5870,6 +5880,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       lineIds?: string[];
       /** Pay Later: kitchen only on dedicated kitchen printers, not the guest-receipt printer. */
       dedicatedKitchenOnly?: boolean;
+      /** Unique KDS ticket key per kitchen send (enables one column per batch). */
+      kdsBatchKey?: string;
     }
   ) => {
     if (isRetail) return;
@@ -5973,7 +5985,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setPrinterDisconnected(false);
       if (queuedAny) toastPrintQueuedMainTill();
       void pushCartLinesToKds({
-        ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
+        ticketKey: opts?.kdsBatchKey || `${kitchenOpts.orderNumber || kdsTicketKey}@${kitchenOpts.orderedAt}`,
         orderNumber: kitchenOpts.orderNumber,
         tableLabel: kitchenOpts.tableLabel,
         tabNumber: kitchenOpts.tabNumber,
@@ -6007,7 +6019,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPrinterDisconnected(false);
     if (mode === 'queued') toastPrintQueuedMainTill();
     void pushCartLinesToKds({
-      ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
+      ticketKey: opts?.kdsBatchKey || `${kitchenOpts.orderNumber || kdsTicketKey}@${kitchenOpts.orderedAt}`,
       orderNumber: kitchenOpts.orderNumber,
       tableLabel: kitchenOpts.tableLabel,
       tabNumber: kitchenOpts.tabNumber,
@@ -6021,8 +6033,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setKitchenPrintRetryBusy(true);
     try {
       const ticket = ensureCartTicket();
+      const existingBatch = lines.find((l) => l.kdsBatchKey)?.kdsBatchKey;
       await printKitchenForCart(lines, effectiveChannel, {
         orderNumber: kitchenOrderNumber({ ticket }),
+        kdsBatchKey: existingBatch || `${kitchenOrderNumber({ ticket })}@${Date.now()}`,
         when: fulfillmentWhen,
         forcePrint: true,
         lineIds: lines.map((l) => l.lineId),

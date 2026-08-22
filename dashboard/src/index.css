@@ -430,6 +430,25 @@ button {
     touch-action: manipulation;
   }
 
+  .kds-ticket-rail {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(87 83 78) rgb(28 25 23);
+  }
+
+  .kds-ticket-rail::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .kds-ticket-rail::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: rgb(87 83 78);
+  }
+
+  .kds-ticket-column {
+    max-height: 100%;
+  }
+
   .webpos-product-grid,
   .webpos-shell [data-webpos-product-grid='1'] {
     touch-action: pan-x pan-y;

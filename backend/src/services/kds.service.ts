@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 
 export type KdsStationInput = {
@@ -267,15 +267,45 @@ export class KdsService {
     if (!item?.ticket || item.ticket.merchantId !== station.merchantId) {
       throw new Error("Item not found");
     }
+    const now = new Date();
     await db
       .update(schema.kdsTicketItems)
-      .set({ status: "ready", readyAt: new Date() })
+      .set({ status: "ready", readyAt: now })
       .where(eq(schema.kdsTicketItems.id, itemId));
     await db
       .update(schema.kdsTickets)
-      .set({ updatedAt: new Date() })
+      .set({ updatedAt: now })
       .where(eq(schema.kdsTickets.id, item.ticketId));
-    return { ok: true, lineId: item.lineId, ticketKey: item.ticket.ticketKey };
+
+    const ticket = await db.query.kdsTickets.findFirst({
+      where: eq(schema.kdsTickets.id, item.ticketId),
+      with: { items: true },
+    });
+    if (ticket && ticket.status === "pending") {
+      const visible = (ticket.items || []).filter((row) =>
+        itemMatchesStation(row, station, ticket.channel)
+      );
+      const allReady =
+        visible.length > 0 && visible.every((row) => row.status === "ready");
+      if (allReady) {
+        await db
+          .update(schema.kdsTicketItems)
+          .set({ status: "ready", readyAt: now })
+          .where(eq(schema.kdsTicketItems.ticketId, ticket.id));
+        await db
+          .update(schema.kdsTickets)
+          .set({ status: "completed", completedAt: now, updatedAt: now })
+          .where(eq(schema.kdsTickets.id, ticket.id));
+        return {
+          ok: true,
+          lineId: item.lineId,
+          ticketKey: ticket.ticketKey,
+          completed: true,
+        };
+      }
+    }
+
+    return { ok: true, lineId: item.lineId, ticketKey: item.ticket!.ticketKey };
   }
 
   static async completeTicket(token: string, ticketId: string) {
@@ -331,19 +361,27 @@ export class KdsService {
   }
 
   static async ticketStatusForPos(merchantId: string, ticketKey: string) {
+    const base = String(ticketKey || "")
+      .trim()
+      .split("@")[0];
+    if (!base) return { readyLineIds: [] as string[], total: 0, ready: 0 };
+
     const db = getDb();
-    const ticket = await db.query.kdsTickets.findFirst({
+    const tickets = await db.query.kdsTickets.findMany({
       where: and(
         eq(schema.kdsTickets.merchantId, merchantId),
-        eq(schema.kdsTickets.ticketKey, ticketKey)
+        or(
+          eq(schema.kdsTickets.ticketKey, base),
+          sql`${schema.kdsTickets.ticketKey} LIKE ${`${base}@%`}`
+        )
       ),
       with: { items: true },
     });
-    if (!ticket) return { readyLineIds: [] as string[], total: 0, ready: 0 };
-    const items = ticket.items || [];
+    if (!tickets.length) return { readyLineIds: [] as string[], total: 0, ready: 0 };
+    const items = tickets.flatMap((t) => t.items || []);
     const readyLineIds = items.filter((i) => i.status === "ready").map((i) => i.lineId);
     return {
-      status: ticket.status,
+      status: tickets.some((t) => t.status === "pending") ? "pending" : "completed",
       readyLineIds,
       total: items.length,
       ready: readyLineIds.length,

@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Ban,
+  ChefHat,
   MessageSquare,
   MoreHorizontal,
   Printer,
@@ -875,8 +876,15 @@ export default function WebPosCartPanel({
                         </span>
                       ) : null}
                       {l.sentToKitchen ? (
-                        <span className="ml-1 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
-                          {l.kitchenReadyAt ? t('webPosReadyBadge') : t('webPosSentBadge')}
+                        <span className="ml-1 inline-flex items-center gap-0.5 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
+                          {l.kitchenReadyAt ? (
+                            <>
+                              <ChefHat className="h-3 w-3 text-amber-700" aria-hidden />
+                              {t('webPosReadyBadge')}
+                            </>
+                          ) : (
+                            t('webPosSentBadge')
+                          )}
                         </span>
                       ) : null}
                       {l.kitchenPrintFailed ? (
