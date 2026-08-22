@@ -1157,13 +1157,22 @@ export type SignageOrientation = (typeof SIGNAGE_ORIENTATIONS)[number];
 export const SIGNAGE_SLIDE_TYPES = ["menu", "image", "image_text"] as const;
 export type SignageSlideType = (typeof SIGNAGE_SLIDE_TYPES)[number];
 
-/** Playlist schedule: always on, selected weekdays, or lunch/dinner daypart (Europe/Zurich). */
+/** One day/time window inside a multi-window playlist schedule (Europe/Zurich). */
+export type SignageScheduleWindow = {
+  label?: string;
+  weekdays: number[];
+  startTime: string;
+  endTime: string;
+};
+
+/** Playlist schedule: always on, selected weekdays, daypart, or multiple windows. */
 export type SignageSchedule = {
-  type: "always" | "weekdays" | "daypart";
+  type: "always" | "weekdays" | "daypart" | "windows";
   weekdays?: number[];
   daypart?: "lunch" | "dinner";
   startTime?: string;
   endTime?: string;
+  windows?: SignageScheduleWindow[];
 };
 
 export const signagePlaylists = pgTable(
