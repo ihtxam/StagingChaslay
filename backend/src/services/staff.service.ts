@@ -430,6 +430,7 @@ export class StaffService {
         roleId: staff.roleId,
         roleName: role?.name || "Staff",
         permissions,
+        preferredTerminalId: staff.preferredTerminalId || null,
         accessToken,
         /** Android PosPermission-compatible keys for clients that consume this payload. */
         androidPermissions: toAndroidPermissions(permissions),
@@ -464,7 +465,44 @@ export class StaffService {
       roleName: role?.name || "Staff",
       permissions,
       canAccessPanel: staff.canAccessPanel,
+      preferredTerminalId: staff.preferredTerminalId || null,
     };
+  }
+
+  /** Waiter / cashier saves their preferred payment terminal for WebPOS. */
+  static async updatePosPreferences(
+    merchantId: string,
+    staffId: string,
+    prefs: { preferredTerminalId?: string | null }
+  ) {
+    const db = getDb();
+    const staff = await db.query.merchantStaff.findFirst({
+      where: and(
+        eq(schema.merchantStaff.id, staffId),
+        eq(schema.merchantStaff.merchantId, merchantId),
+        eq(schema.merchantStaff.isActive, true)
+      ),
+    });
+    if (!staff) throw new Error("Staff member not found");
+
+    let terminalId: string | null = null;
+    if (prefs.preferredTerminalId != null && String(prefs.preferredTerminalId).trim()) {
+      terminalId = String(prefs.preferredTerminalId).trim();
+      const terminal = await db.query.paymentTerminals.findFirst({
+        where: and(
+          eq(schema.paymentTerminals.merchantId, merchantId),
+          eq(schema.paymentTerminals.terminalId, terminalId)
+        ),
+      });
+      if (!terminal) throw new Error("Terminal not found");
+    }
+
+    await db
+      .update(schema.merchantStaff)
+      .set({ preferredTerminalId: terminalId, updatedAt: new Date() })
+      .where(eq(schema.merchantStaff.id, staffId));
+
+    return { preferredTerminalId: terminalId };
   }
 
   static async loginStaff(email: string, password: string) {

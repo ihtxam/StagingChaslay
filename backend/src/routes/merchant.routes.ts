@@ -1481,6 +1481,21 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
     const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
     const entitlement = await WebPosEntitlementService.getEntitlement(merchantId);
 
+    let staffPreferredTerminalId: string | null = null;
+    const clockedStaffId = req.user?.staffId;
+    if (clockedStaffId) {
+      const staffRow = await db.query.merchantStaff.findFirst({
+        where: and(
+          eq(schema.merchantStaff.id, clockedStaffId),
+          eq(schema.merchantStaff.merchantId, merchantId)
+        ),
+      });
+      const pref = staffRow?.preferredTerminalId?.trim() || null;
+      if (pref && activeTerminals.some((t) => t.terminalId === pref)) {
+        staffPreferredTerminalId = pref;
+      }
+    }
+
     res.json({
       success: true,
       config: {
@@ -1501,6 +1516,7 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
         adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,
         adyenUseLegacyEndpoint: !!merchant.adyenUseLegacyEndpoint,
         defaultTerminalId: activeTerminals[0]?.terminalId || null,
+        staffPreferredTerminalId,
         terminals: terminals.map((t) => ({
           id: t.id,
           terminalId: t.terminalId,
@@ -2231,7 +2247,7 @@ router.get("/pos/orders", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/pos/orders/:id/cancel", async (req: Request, res: Response) => {
+router.post("/pos/orders/:id/cancel", requirePermission("CANCEL_ORDERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
@@ -2306,7 +2322,7 @@ router.post("/pos/orders/:id/goodwill", async (req: Request, res: Response) => {
 });
 
 /** Preview monthly cash sales reduction (quantity adjustments, cash-only). */
-router.get("/pos/sales-adjustment/preview", async (req: Request, res: Response) => {
+router.get("/pos/sales-adjustment/preview", requirePermission("VIEW_ALL_SALES"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
@@ -2323,7 +2339,7 @@ router.get("/pos/sales-adjustment/preview", async (req: Request, res: Response) 
 });
 
 /** Apply monthly cash sales reduction by lowering line quantities (no deletions). */
-router.post("/pos/sales-adjustment/apply", async (req: Request, res: Response) => {
+router.post("/pos/sales-adjustment/apply", requirePermission("VIEW_ALL_SALES"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
@@ -2335,6 +2351,27 @@ router.post("/pos/sales-adjustment/apply", async (req: Request, res: Response) =
   } catch (error) {
     res.status(400).json({
       error: error instanceof Error ? error.message : "Sales adjustment failed",
+    });
+  }
+});
+
+/** Save clocked-in staff POS preferences (e.g. preferred payment terminal). */
+router.put("/pos/staff-preferences", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const staffId = req.user?.staffId;
+    if (!staffId) {
+      return res.status(403).json({ error: "Clock in with your staff PIN to save preferences" });
+    }
+    const { StaffService } = await import("@/services/staff.service");
+    const prefs = await StaffService.updatePosPreferences(merchantId, staffId, {
+      preferredTerminalId: req.body?.preferredTerminalId ?? null,
+    });
+    res.json({ success: true, ...prefs });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to save preferences",
     });
   }
 });
@@ -2377,7 +2414,7 @@ router.post("/pos/held/:id/resume", async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/pos/held/:id", async (req: Request, res: Response) => {
+router.delete("/pos/held/:id", requirePermission("CANCEL_ORDERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
@@ -2390,7 +2427,7 @@ router.delete("/pos/held/:id", async (req: Request, res: Response) => {
 });
 
 /** Cancel held / kitchen-sent order with reason — records cancellation for reports */
-router.post("/pos/held/:id/cancel", async (req: Request, res: Response) => {
+router.post("/pos/held/:id/cancel", requirePermission("CANCEL_ORDERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });

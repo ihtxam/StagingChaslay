@@ -2,6 +2,8 @@ import {
   Bell,
   BookOpen,
   ClipboardList,
+  FileText,
+  GraduationCap,
   LayoutGrid,
   Maximize2,
   Menu,
@@ -11,6 +13,7 @@ import {
   PanelLeft,
   Pencil,
   RefreshCw,
+  ScrollText,
   Search,
   Sun,
   UserCircle2,
@@ -581,6 +584,13 @@ export function WebPosSettingsDropdown({
   channelsSaving = false,
   onShopEnabledChange,
   onReservationsEnabledChange,
+  onViewLogs,
+  onSendLogs,
+  onShowTutorial,
+  terminalEnabled = false,
+  terminals = [],
+  selectedTerminalId = '',
+  onTerminalChange,
 }: {
   printerName: string;
   printers: Array<{ name: string; isDefault?: boolean }>;
@@ -631,6 +641,13 @@ export function WebPosSettingsDropdown({
   channelsSaving?: boolean;
   onShopEnabledChange?: (enabled: boolean) => void;
   onReservationsEnabledChange?: (enabled: boolean) => void;
+  onViewLogs?: () => void;
+  onSendLogs?: () => void;
+  onShowTutorial?: () => void;
+  terminalEnabled?: boolean;
+  terminals?: Array<{ terminalId: string; terminalName: string | null }>;
+  selectedTerminalId?: string;
+  onTerminalChange?: (terminalId: string) => void;
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
@@ -946,6 +963,68 @@ export function WebPosSettingsDropdown({
                 : t('webPosSyncPending').replace('{n}', String(syncPendingCount))}
             </p>
           ) : null}
+        </div>
+      ) : null}
+
+      {(onViewLogs || onSendLogs || onShowTutorial) && (
+        <div className="space-y-2 border-b border-stone-100 pb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('webPosHelpMenu')}
+          </p>
+          {onShowTutorial ? (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+              onClick={onShowTutorial}
+            >
+              <GraduationCap size={16} />
+              {t('webPosShowTutorial')}
+            </button>
+          ) : null}
+          {onViewLogs ? (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+              onClick={onViewLogs}
+            >
+              <ScrollText size={16} />
+              {t('webPosViewLogs')}
+            </button>
+          ) : null}
+          {onSendLogs ? (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2 py-2 text-left text-xs font-semibold text-teal-900 hover:bg-teal-100"
+              onClick={onSendLogs}
+            >
+              <FileText size={16} />
+              {t('webPosSendLogs')}
+            </button>
+          ) : null}
+        </div>
+      )}
+
+      {terminalEnabled && terminals.length > 0 && onTerminalChange ? (
+        <div className="space-y-2 border-b border-stone-100 pb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('webPosMyTerminal')}
+          </p>
+          <label className="block space-y-1 text-xs">
+            <span className="text-[11px] text-stone-500">{t('webPosPaymentTerminal')}</span>
+            <select
+              className="input w-full text-xs"
+              value={selectedTerminalId}
+              onChange={(e) => onTerminalChange(e.target.value)}
+            >
+              <option value="">{t('webPosTerminalPick')}</option>
+              {terminals.map((term) => (
+                <option key={term.terminalId} value={term.terminalId}>
+                  {term.terminalName || term.terminalId}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-[10px] leading-snug text-stone-500">{t('webPosMyTerminalHint')}</p>
         </div>
       ) : null}
 
