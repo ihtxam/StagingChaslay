@@ -124,6 +124,7 @@ export default function WebPosCheckoutView({
   const [tipAmount, setTipAmount] = useState(0);
   const [tipOpen, setTipOpen] = useState(false);
   const [seeded, setSeeded] = useState(false);
+  const [paymentFocusDismissed, setPaymentFocusDismissed] = useState(false);
   /** Cash/Card/Terminal chosen by the cashier (not the auto-seeded default). */
   const [explicitTender, setExplicitTender] = useState<'cash' | 'card' | 'terminal' | null>(
     null
@@ -163,12 +164,13 @@ export default function WebPosCheckoutView({
   }, [settings.quickCashEnabled, settings.quickCashDenominations]);
 
   const activeMethod = useMemo<PosPaymentMethod | null>(() => {
+    if (paymentFocusDismissed && !selectedPaymentId) return null;
     if (selectedPaymentId) {
       return payments.find((p) => p.id === selectedPaymentId)?.method ?? null;
     }
     if (payments.length === 1) return payments[0]!.method;
     return null;
-  }, [payments, selectedPaymentId]);
+  }, [payments, selectedPaymentId, paymentFocusDismissed]);
 
   // Default: cash covers full amount and is selected (so Card switches method)
   useEffect(() => {
@@ -346,10 +348,16 @@ export default function WebPosCheckoutView({
     setBuffer('');
   };
 
+  const dismissPaymentFocus = () => {
+    setPaymentFocusDismissed(true);
+    clearPaymentSelection();
+  };
+
   const selectPayment = (id: string) => {
+    setPaymentFocusDismissed(false);
     // Re-tap selected row to deselect — frees Cash/Card to add a new tender amount.
     if (selectedPaymentId === id) {
-      clearPaymentSelection();
+      dismissPaymentFocus();
       return;
     }
     setSelectedPaymentId(id);
@@ -406,6 +414,7 @@ export default function WebPosCheckoutView({
 
   const applyMethod = (method: PosPaymentMethod) => {
     if (busy) return;
+    setPaymentFocusDismissed(false);
 
     if (method === 'invoice' || method === 'pay_later') {
       const id = selectedPaymentId || payments[0]?.id || newPayId();
@@ -685,6 +694,68 @@ export default function WebPosCheckoutView({
   const hasAdjustments =
     billDiscountAmount > 0.001 || tipAmount > 0.001 || pointsDiscount > 0.001;
 
+  const paymentLinesList = (
+    <>
+      {payments.length === 0 ? (
+        <p className="hidden text-center text-sm text-stone-400 lg:block">
+          {t('webPosTapPaymentMethod')}
+        </p>
+      ) : (
+        payments.map((p) => {
+          const selected = selectedPaymentId === p.id;
+          const displayAmount = selected && bufferAmount != null ? bufferAmount : p.amount;
+          return (
+            <div
+              key={p.id}
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                selectPayment(p.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  selectPayment(p.id);
+                }
+              }}
+              className={`flex cursor-pointer items-center justify-between rounded-xl border px-3 py-2.5 sm:px-4 sm:py-3 ${
+                selected
+                  ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] ring-1 ring-[var(--webpos-accent-ring)]'
+                  : 'border-stone-200 bg-white hover:bg-stone-50'
+              }`}
+            >
+              <div className="min-w-0">
+                <span className="text-sm font-semibold">{methodLabel(p.method)}</span>
+                {selected && liveEntryLabel ? (
+                  <p className="mt-0.5 text-xs font-medium text-[var(--webpos-accent-text)]">
+                    {t('webPosEntering')}: {liveEntryLabel}
+                  </p>
+                ) : selected ? (
+                  <p className="mt-0.5 text-xs text-stone-500">{t('webPosEditAmount')}</p>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold tabular-nums">CHF {displayAmount.toFixed(2)}</span>
+                <button
+                  type="button"
+                  className="rounded p-1 text-red-500 hover:bg-red-50"
+                  aria-label={t('delete')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removePayment(p.id);
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </>
+  );
+
   const footerBar = (opts: { mobileOnly?: boolean; desktopOnly?: boolean }) => (
     <div
       className={`webpos-checkout-footer flex shrink-0 items-stretch gap-2 border-t border-stone-100 bg-white p-3 sm:p-4 ${
@@ -724,8 +795,12 @@ export default function WebPosCheckoutView({
       */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         <div className="webpos-checkout-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] lg:contents">
-          {/* Mobile: total first */}
-          <div className="order-1 flex shrink-0 flex-col items-center border-b border-stone-100 px-4 py-3 text-center lg:hidden">
+          {/* Mobile: total first — tap to deselect payment row */}
+          <div
+            className="order-1 flex shrink-0 flex-col items-center border-b border-stone-100 px-4 py-3 text-center lg:hidden cursor-pointer"
+            onClick={() => dismissPaymentFocus()}
+            role="presentation"
+          >
             <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">
               {t('webPosAmountDue')}
             </p>
@@ -747,9 +822,13 @@ export default function WebPosCheckoutView({
             ) : null}
           </div>
 
-          {/* Methods + compact icon actions + keypad */}
-          <div className="order-2 flex shrink-0 flex-col gap-2 border-b border-stone-100 p-3 lg:order-1 lg:h-full lg:w-[min(20rem,36vw)] lg:overflow-y-auto lg:border-b-0 lg:border-r">
-            <div className="grid grid-cols-3 gap-1.5 lg:grid-cols-1 lg:gap-2">
+          {/* Methods + payment bubbles + keypad (mobile: keypad pinned bottom) */}
+          <div
+            className="order-2 flex min-h-0 flex-1 flex-col gap-2 border-b border-stone-100 p-3 lg:order-1 lg:h-full lg:w-[min(20rem,36vw)] lg:flex-none lg:overflow-y-auto lg:border-b-0 lg:border-r"
+            onClick={() => dismissPaymentFocus()}
+            role="presentation"
+          >
+            <div className="grid grid-cols-3 gap-1.5 lg:grid-cols-1 lg:gap-2" onClick={(e) => e.stopPropagation()}>
               {payButtons
                 .filter((b) => b.show)
                 .map((b) => {
@@ -776,7 +855,7 @@ export default function WebPosCheckoutView({
             </div>
 
             {/* One row: customer / split / discount / tip / drawer */}
-            <div className="flex items-stretch gap-1.5">
+            <div className="flex items-stretch gap-1.5" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
                 disabled={busy || !onCustomer}
@@ -856,7 +935,7 @@ export default function WebPosCheckoutView({
 
 
             {canPayWithPoints && onTogglePayWithPoints ? (
-              <div className="space-y-2 pt-1 text-left">
+              <div className="space-y-2 pt-1 text-left" onClick={(e) => e.stopPropagation()}>
                 <p className="text-[11px] font-bold uppercase tracking-wide text-stone-400">
                   {t('webPosLoyaltyPoints')}
                 </p>
@@ -875,7 +954,15 @@ export default function WebPosCheckoutView({
               </div>
             ) : null}
 
-            <div className="space-y-2 border-t border-stone-100 pt-2 lg:mt-auto">
+            {/* Mobile: selected payment rows between methods and keypad */}
+            <div className="space-y-2 lg:hidden" onClick={(e) => e.stopPropagation()}>
+              {paymentLinesList}
+            </div>
+
+            <div
+              className="mt-auto space-y-2 border-t border-stone-100 pt-2 lg:mt-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className={showKeypad ? '' : 'hidden lg:block'}>
                 <WebPosNumericKeypad
                   mode="qty"
@@ -909,9 +996,7 @@ export default function WebPosCheckoutView({
           <div className="order-3 flex min-h-0 flex-1 flex-col lg:order-2 lg:h-full lg:overflow-hidden">
             <div
               className="flex flex-col items-center px-4 py-3 pb-8 text-center lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:py-8"
-              onClick={() => {
-                if (selectedPaymentId) clearPaymentSelection();
-              }}
+              onClick={() => dismissPaymentFocus()}
             >
               <div className="hidden w-full flex-col items-center lg:flex">
                 <p className="text-sm font-semibold uppercase tracking-wide text-stone-400">
@@ -993,67 +1078,8 @@ export default function WebPosCheckoutView({
                 </div>
               ) : null}
 
-              <div className="mt-3 w-full max-w-md space-y-2 text-left lg:mt-8">
-                {payments.length === 0 ? (
-                  <p className="hidden text-center text-sm text-stone-400 lg:block">
-                    {t('webPosTapPaymentMethod')}
-                  </p>
-                ) : (
-                  payments.map((p) => {
-                    const selected = selectedPaymentId === p.id;
-                    const displayAmount =
-                      selected && bufferAmount != null ? bufferAmount : p.amount;
-                    return (
-                      <div
-                        key={p.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          selectPayment(p.id);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            selectPayment(p.id);
-                          }
-                        }}
-                        className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 ${
-                          selected
-                            ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] ring-1 ring-[var(--webpos-accent-ring)]'
-                            : 'border-stone-200 bg-white hover:bg-stone-50'
-                        }`}
-                      >
-                        <div className="min-w-0">
-                          <span className="text-sm font-semibold">{methodLabel(p.method)}</span>
-                          {selected && liveEntryLabel ? (
-                            <p className="mt-0.5 text-xs font-medium text-[var(--webpos-accent-text)]">
-                              {t('webPosEntering')}: {liveEntryLabel}
-                            </p>
-                          ) : selected ? (
-                            <p className="mt-0.5 text-xs text-stone-500">{t('webPosEditAmount')}</p>
-                          ) : null}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold tabular-nums">
-                            CHF {displayAmount.toFixed(2)}
-                          </span>
-                          <button
-                            type="button"
-                            className="rounded p-1 text-red-500 hover:bg-red-50"
-                            aria-label={t('delete')}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removePayment(p.id);
-                            }}
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+              <div className="mt-3 hidden w-full max-w-md space-y-2 text-left lg:mt-8 lg:block">
+                {paymentLinesList}
                 {hasAdjustments ? (
                   <div
                     className="space-y-2 pt-1"
@@ -1065,7 +1091,17 @@ export default function WebPosCheckoutView({
                 ) : null}
               </div>
 
-              <div className="mt-4 w-full max-w-md space-y-1 text-sm">
+              {hasAdjustments ? (
+                <div
+                  className="mt-3 w-full max-w-md space-y-2 text-left lg:hidden"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  {adjustmentCards}
+                </div>
+              ) : null}
+
+              <div className="mt-4 w-full max-w-md space-y-1 text-sm lg:hidden">
                 <div
                   className={`flex justify-between font-semibold ${
                     remaining > 0.001 ? 'text-[var(--webpos-accent-text)]' : ''

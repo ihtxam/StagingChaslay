@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -31,6 +32,16 @@ function addDaysYmd(days: number) {
   return ymd(d);
 }
 
+const emptyForm = () => ({
+  guestName: '',
+  guestPhone: '',
+  guestEmail: '',
+  partySize: 2,
+  date: ymd(),
+  time: '19:00',
+  notes: '',
+});
+
 export default function WebPosBookingsView() {
   const { t, formatDate, formatTime } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -38,6 +49,10 @@ export default function WebPosBookingsView() {
   const [tables, setTables] = useState<Table[]>([]);
   const [scope, setScope] = useState<'today' | 'future'>('today');
   const [maxDaysAhead, setMaxDaysAhead] = useState(30);
+  const [autoAccept, setAutoAccept] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -57,6 +72,7 @@ export default function WebPosBookingsView() {
       const cfg = await api.get('/merchant/reservations/config');
       const ahead = Number(cfg.data.config?.settings?.maxDaysAhead) || 30;
       setMaxDaysAhead(ahead);
+      setAutoAccept(!!cfg.data.config?.settings?.autoAccept);
       setTables(cfg.data.tables || []);
 
       const today = ymd();
@@ -73,8 +89,9 @@ export default function WebPosBookingsView() {
         params: { from: from.toISOString(), to: to.toISOString(), status: 'all' },
       });
       setReservations(res.data.reservations || []);
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('cmsLoadFailed'));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('cmsLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -83,6 +100,11 @@ export default function WebPosBookingsView() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const pendingCount = useMemo(
+    () => reservations.filter((r) => r.status === 'pending').length,
+    [reservations]
+  );
 
   const editing = useMemo(
     () => reservations.find((r) => r.id === editId) || null,
@@ -117,8 +139,9 @@ export default function WebPosBookingsView() {
       toast.success(t('saved'));
       setEditId(null);
       await load();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || t('cmsSaveFailed'));
+    } catch (err: unknown) {
+      const e2 = err as { response?: { data?: { error?: string } } };
+      toast.error(e2.response?.data?.error || t('cmsSaveFailed'));
     }
   };
 
@@ -128,8 +151,9 @@ export default function WebPosBookingsView() {
       toast.success(t('saved'));
       setCancelOpen(null);
       await load();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || t('cmsSaveFailed'));
+    } catch (err: unknown) {
+      const e2 = err as { response?: { data?: { error?: string } } };
+      toast.error(e2.response?.data?.error || t('cmsSaveFailed'));
     }
   };
 
@@ -139,6 +163,28 @@ export default function WebPosBookingsView() {
       cancelReason,
       sendRejectionEmail: true,
     });
+  };
+
+  const createReservation = async (e: FormEvent) => {
+    e.preventDefault();
+    setCreateBusy(true);
+    try {
+      await api.post('/merchant/reservations', {
+        ...form,
+        partySize: Number(form.partySize),
+        source: 'pos',
+        skipSlotCheck: true,
+      });
+      toast.success(t('created'));
+      setCreateOpen(false);
+      setForm(emptyForm());
+      await load();
+    } catch (err: unknown) {
+      const e2 = err as { response?: { data?: { error?: string } } };
+      toast.error(e2.response?.data?.error || t('cmsSaveFailed'));
+    } finally {
+      setCreateBusy(false);
+    }
   };
 
   const statusBadge = (status: string) => {
@@ -152,6 +198,28 @@ export default function WebPosBookingsView() {
       no_show: 'bg-red-50 text-red-700',
     };
     return colors[status] || 'bg-stone-100 text-stone-700';
+  };
+
+  const pendingActions = (r: Reservation, compact = false) => {
+    if (r.status !== 'pending') return null;
+    return (
+      <div className={`flex gap-2 ${compact ? 'flex-col sm:flex-row' : ''}`}>
+        <button
+          type="button"
+          className={`webpos-accent-btn rounded-lg font-semibold ${compact ? 'flex-1 px-3 py-2 text-sm' : 'w-full px-4 py-2.5 text-sm'}`}
+          onClick={() => void runAction(r.id, 'accept')}
+        >
+          {t('reservationsAccept')}
+        </button>
+        <button
+          type="button"
+          className={`rounded-lg border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 ${compact ? 'flex-1 px-3 py-2 text-sm' : 'w-full px-4 py-2 text-sm'}`}
+          onClick={() => void runAction(r.id, 'reject')}
+        >
+          {t('reservationsReject')}
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -179,12 +247,25 @@ export default function WebPosBookingsView() {
         >
           {t('reservationsFuture')}
         </button>
-        <button type="button" className="btn-secondary ml-auto text-sm" onClick={() => void load()}>
+        {!autoAccept && pendingCount > 0 ? (
+          <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">
+            {t('reservationsPendingCount').replace('{n}', String(pendingCount))}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="webpos-accent-btn ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold"
+          onClick={() => setCreateOpen(true)}
+        >
+          <Plus className="h-4 w-4" />
+          {t('reservationsNew')}
+        </button>
+        <button type="button" className="btn-secondary text-sm" onClick={() => void load()}>
           {t('refresh')}
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      <div className="min-h-0 flex-1 overflow-auto p-4 pb-24">
         {loading ? (
           <p className="text-sm text-stone-500">{t('loading')}</p>
         ) : reservations.length === 0 ? (
@@ -210,12 +291,8 @@ export default function WebPosBookingsView() {
                   const dt = new Date(r.reservedAt);
                   return (
                     <tr key={r.id} className="border-b border-stone-100 last:border-0">
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        {formatDate(dt)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        {formatTime(dt)}
-                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">{formatDate(dt)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{formatTime(dt)}</td>
                       <td className="px-3 py-2 font-medium">{r.guestName}</td>
                       <td className="px-3 py-2">{r.partySize}</td>
                       <td className="px-3 py-2">{r.tableLabel || t('reservationsNoTable')}</td>
@@ -225,25 +302,20 @@ export default function WebPosBookingsView() {
                         </span>
                       </td>
                       <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-1">
-                          {!['cancelled', 'rejected', 'completed', 'no_show'].includes(r.status) ? (
-                            <button
-                              type="button"
-                              className="text-xs font-semibold text-indigo-700"
-                              onClick={() => openEdit(r)}
-                            >
-                              {t('edit')}
-                            </button>
-                          ) : null}
-                          {['pending', 'confirmed'].includes(r.status) ? (
-                            <button
-                              type="button"
-                              className="text-xs font-semibold text-red-700"
-                              onClick={() => setCancelOpen(r.id)}
-                            >
-                              {t('cancel')}
-                            </button>
-                          ) : null}
+                        <div className="flex min-w-[8rem] flex-col gap-2">
+                          {r.status === 'pending' ? pendingActions(r, true) : null}
+                          <div className="flex flex-wrap gap-1">
+                            {!['cancelled', 'rejected', 'completed', 'no_show'].includes(r.status) ? (
+                              <button type="button" className="text-xs font-semibold text-indigo-700" onClick={() => openEdit(r)}>
+                                {t('edit')}
+                              </button>
+                            ) : null}
+                            {['pending', 'confirmed'].includes(r.status) ? (
+                              <button type="button" className="text-xs font-semibold text-red-700" onClick={() => setCancelOpen(r.id)}>
+                                {t('cancel')}
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -253,51 +325,129 @@ export default function WebPosBookingsView() {
             </table>
           </div>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {reservations.map((r) => (
-              <li
-                key={r.id}
-                className="rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{r.guestName}</p>
-                    <p className="text-xs text-stone-500">
-                      {formatTime(r.reservedAt)}{' '}
-                      · {r.partySize} {t('reservationsGuests')}
-                    </p>
-                    <p className="text-xs text-stone-500">{r.guestPhone}</p>
-                  </div>
-                  <div className="text-right text-xs">
-                    <p className={`inline-block rounded px-2 py-0.5 font-semibold uppercase ${statusBadge(r.status)}`}>
-                      {r.status}
-                    </p>
-                    <p className="text-stone-500">{r.tableLabel || t('reservationsNoTable')}</p>
-                    <p className="text-stone-400">{r.code}</p>
-                    <div className="mt-1 flex justify-end gap-2">
-                      {!['cancelled', 'rejected', 'completed', 'no_show'].includes(r.status) ? (
-                        <button type="button" className="font-semibold text-indigo-700" onClick={() => openEdit(r)}>
-                          {t('edit')}
-                        </button>
-                      ) : null}
-                      {r.status === 'pending' ? (
-                        <>
-                          <button type="button" className="font-semibold text-emerald-700" onClick={() => void runAction(r.id, 'accept')}>
-                            {t('reservationsAccept')}
-                          </button>
-                          <button type="button" className="font-semibold text-red-700" onClick={() => void runAction(r.id, 'reject')}>
-                            {t('reservationsReject')}
-                          </button>
-                        </>
-                      ) : null}
+              <li key={r.id} className="rounded-xl border border-stone-200 bg-white shadow-sm overflow-hidden">
+                <div className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">{r.guestName}</p>
+                      <p className="text-xs text-stone-500">
+                        {formatTime(r.reservedAt)} · {r.partySize} {t('reservationsGuests')}
+                      </p>
+                      <p className="text-xs text-stone-500">{r.guestPhone}</p>
+                      {r.guestEmail ? <p className="text-xs text-stone-400">{r.guestEmail}</p> : null}
+                    </div>
+                    <div className="text-right text-xs">
+                      <p className={`inline-block rounded px-2 py-0.5 font-semibold uppercase ${statusBadge(r.status)}`}>
+                        {r.status}
+                      </p>
+                      <p className="mt-1 text-stone-500">{r.tableLabel || t('reservationsNoTable')}</p>
+                      <p className="text-stone-400">{r.code}</p>
                     </div>
                   </div>
+                  {r.notes ? <p className="mt-2 text-xs text-stone-600">{r.notes}</p> : null}
+                  {!['cancelled', 'rejected', 'completed', 'no_show'].includes(r.status) ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" className="text-xs font-semibold text-indigo-700" onClick={() => openEdit(r)}>
+                        {t('edit')}
+                      </button>
+                      {['pending', 'confirmed'].includes(r.status) ? (
+                        <button type="button" className="text-xs font-semibold text-red-700" onClick={() => setCancelOpen(r.id)}>
+                          {t('cancel')}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
+                {r.status === 'pending' ? (
+                  <div className="border-t border-stone-100 bg-stone-50 px-4 py-3">
+                    {pendingActions(r)}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      {createOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+          <form
+            onSubmit={createReservation}
+            className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-xl bg-white p-4 shadow-xl space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold">{t('reservationsNew')}</h3>
+            <input
+              className="input w-full"
+              required
+              placeholder={t('name')}
+              value={form.guestName}
+              onChange={(e) => setForm({ ...form, guestName: e.target.value })}
+            />
+            <input
+              className="input w-full"
+              required
+              placeholder={t('phone')}
+              value={form.guestPhone}
+              onChange={(e) => setForm({ ...form, guestPhone: e.target.value })}
+            />
+            <input
+              className="input w-full"
+              type="email"
+              placeholder={`${t('email')} (${t('optional')})`}
+              value={form.guestEmail}
+              onChange={(e) => setForm({ ...form, guestEmail: e.target.value })}
+            />
+            <input
+              className="input w-full"
+              type="number"
+              min={1}
+              placeholder={t('reservationsGuests')}
+              value={form.partySize}
+              onChange={(e) => setForm({ ...form, partySize: Number(e.target.value) })}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs block">
+                {t('date')}
+                <input
+                  className="input mt-1 w-full"
+                  type="date"
+                  required
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                />
+              </label>
+              <label className="text-xs block">
+                {t('time')}
+                <input
+                  className="input mt-1 w-full"
+                  type="time"
+                  required
+                  value={form.time}
+                  onChange={(e) => setForm({ ...form, time: e.target.value })}
+                />
+              </label>
+            </div>
+            <textarea
+              className="input min-h-20 w-full"
+              placeholder={t('notes')}
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+            <p className="text-xs text-stone-500">{t('reservationsSendConfirmEmail')}</p>
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)} disabled={createBusy}>
+                {t('cancel')}
+              </button>
+              <button type="submit" className="btn-primary" disabled={createBusy}>
+                {t('create')}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
 
       {editId && editing ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -308,7 +458,7 @@ export default function WebPosBookingsView() {
             <h3 className="text-lg font-semibold">{t('reservationsEdit')}</h3>
             <input className="input" required value={editForm.guestName} onChange={(e) => setEditForm({ ...editForm, guestName: e.target.value })} placeholder={t('name')} />
             <input className="input" required value={editForm.guestPhone} onChange={(e) => setEditForm({ ...editForm, guestPhone: e.target.value })} placeholder={t('phone')} />
-            <input className="input" type="email" value={editForm.guestEmail} onChange={(e) => setEditForm({ ...editForm, guestEmail: e.target.value })} placeholder="Email" />
+            <input className="input" type="email" value={editForm.guestEmail} onChange={(e) => setEditForm({ ...editForm, guestEmail: e.target.value })} placeholder={t('email')} />
             <input className="input" type="number" min={1} value={editForm.partySize} onChange={(e) => setEditForm({ ...editForm, partySize: Number(e.target.value) })} />
             <div className="grid grid-cols-2 gap-2">
               <input className="input" type="date" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} />
