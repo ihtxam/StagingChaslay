@@ -28,6 +28,7 @@ import deliveryPlatformRoutes from "@/routes/delivery-platform.routes";
 import offersRoutes from "@/routes/offers.routes";
 import vouchersRoutes from "@/routes/vouchers.routes";
 import marketingRoutes from "@/routes/marketing.routes";
+import panelRoutes from "@/routes/panel.routes";
 import inventoryRoutes from "@/routes/inventory.routes";
 import staffRoutes from "@/routes/staff.routes";
 import resellerRoutes from "@/routes/reseller.routes";
@@ -155,6 +156,7 @@ app.get("/health", (_req: Request, res: Response) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/licensing", licensingRoutes);
 app.use("/api/superadmin", superadminRoutes);
+app.use("/api/panel", panelRoutes);
 app.use("/api/reseller", resellerRoutes);
 app.use("/api/merchant", merchantRoutes);
 app.use("/api/merchant", staffRoutes);

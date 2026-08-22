@@ -3,6 +3,7 @@ import { ArrowLeft, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AcceptingMenu from '@/components/AcceptingMenu';
+import { usePlatformMessagesUi } from '@/components/platform/PlatformMessagesProvider';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useAuthStore } from '@/store/auth';
@@ -27,6 +28,7 @@ export default function MerchantCompactStatusRow({
   const user = useAuthStore((s) => s.user);
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
+  const platformUi = usePlatformMessagesUi();
 
   const [shiftsEnabled, setShiftsEnabled] = useState(false);
   const [shiftOpen, setShiftOpen] = useState(false);
@@ -124,6 +126,11 @@ export default function MerchantCompactStatusRow({
           {shiftOpen ? t('webPosShiftOpenBadge') : t('webPosShiftClosedBadge')}
         </span>
       ) : null}
+
+      {platformUi?.Bell ? (() => {
+        const BellSlot = platformUi.Bell;
+        return <BellSlot />;
+      })() : null}
 
       <AcceptingMenu />
     </div>

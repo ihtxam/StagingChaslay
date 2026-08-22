@@ -45,6 +45,9 @@ import Reports from './Reports';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
 import { APP_PANEL_TITLE } from '@/lib/brand';
+import PlatformMessagesProvider, {
+  PlatformStatusBannerSlot,
+} from '@/components/platform/PlatformMessagesProvider';
 import { useAuthStore } from '@/store/auth';
 import { homePathForUser } from '@/lib/auth-home';
 import {
@@ -469,6 +472,8 @@ function MerchantShell() {
           />
         )}
 
+        {!hideChrome ? <PlatformStatusBannerSlot /> : null}
+
         <main
           className={
             isPosLikeRoute && posAppMode
@@ -704,7 +709,9 @@ function MerchantShell() {
 export default function MerchantDashboard() {
   return (
     <I18nProvider>
-      <MerchantShell />
+      <PlatformMessagesProvider>
+        <MerchantShell />
+      </PlatformMessagesProvider>
     </I18nProvider>
   );
 }

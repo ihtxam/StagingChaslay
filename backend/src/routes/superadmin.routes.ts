@@ -1172,4 +1172,91 @@ router.patch("/platform-shop/orders/:orderId", async (req: Request, res: Respons
   }
 });
 
+// ============================================================================
+// SYSTEM LOGS & PLATFORM MESSAGES
+// ============================================================================
+
+router.get("/system-logs", async (req: Request, res: Response) => {
+  try {
+    const { PlatformLogService } = await import("@/services/platform-log.service");
+    const result = await PlatformLogService.list({
+      page: Number(req.query.page) || 1,
+      limit: Number(req.query.limit) || 50,
+      level: String(req.query.level || "") || undefined,
+      category: String(req.query.category || "") || undefined,
+      from: req.query.from ? new Date(String(req.query.from)) : undefined,
+      to: req.query.to ? new Date(String(req.query.to)) : undefined,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list logs" });
+  }
+});
+
+router.post("/system-logs", async (req: Request, res: Response) => {
+  try {
+    const { PlatformLogService } = await import("@/services/platform-log.service");
+    const log = await PlatformLogService.write({
+      ...req.body,
+      actorRole: "superadmin",
+      actorId: req.user?.id,
+    });
+    res.status(201).json({ success: true, log });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to write log" });
+  }
+});
+
+router.get("/platform-messages", async (req: Request, res: Response) => {
+  try {
+    const { PlatformMessageService } = await import("@/services/platform-message.service");
+    const messages = await PlatformMessageService.listAll(req.query.all === "1");
+    res.json({ success: true, messages });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list messages" });
+  }
+});
+
+router.post("/platform-messages", async (req: Request, res: Response) => {
+  try {
+    const { PlatformMessageService } = await import("@/services/platform-message.service");
+    const { PlatformLogService } = await import("@/services/platform-log.service");
+    const message = await PlatformMessageService.create({
+      ...req.body,
+      createdBySuperadminId: req.user?.id,
+    });
+    await PlatformLogService.write({
+      level: "info",
+      category: "platform_message",
+      message: `Published ${message.kind}: ${message.title}`,
+      actorRole: "superadmin",
+      actorId: req.user?.id,
+      metadata: { messageId: message.id, audience: message.audience },
+    });
+    res.status(201).json({ success: true, message });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create message" });
+  }
+});
+
+router.put("/platform-messages/:messageId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformMessageService } = await import("@/services/platform-message.service");
+    const message = await PlatformMessageService.update(req.params.messageId, req.body || {});
+    res.json({ success: true, message });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update message" });
+  }
+});
+
+router.delete("/platform-messages/:messageId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformMessageService } = await import("@/services/platform-message.service");
+    const message = await PlatformMessageService.remove(req.params.messageId);
+    res.json({ success: true, message });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate message" });
+  }
+});
+
 export default router;

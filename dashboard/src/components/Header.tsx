@@ -6,6 +6,7 @@ import { useTheme } from '@/lib/theme';
 import { useI18n } from '@/lib/i18n';
 import AcceptingMenu from '@/components/AcceptingMenu';
 import MerchantCompactStatusRow from '@/components/merchant/MerchantCompactStatusRow';
+import { usePlatformMessagesUi } from '@/components/platform/PlatformMessagesProvider';
 
 interface HeaderProps {
   title: string;
@@ -29,6 +30,7 @@ export default function Header({
   const { t } = useI18n();
   const { user, impersonating, stopImpersonation } = useAuthStore();
   const { theme, toggleTheme } = useTheme();
+  const platformUi = usePlatformMessagesUi();
 
   const backToSuperadmin = () => {
     if (!stopImpersonation()) {
@@ -104,10 +106,14 @@ export default function Header({
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
-          <button type="button" className="relative p-1.5 rounded-md hover:bg-[var(--bg-muted)] hidden sm:inline-flex">
-            <Bell className="w-4 h-4 muted" />
-            <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full" />
-          </button>
+          {platformUi?.Bell ? (() => {
+            const BellSlot = platformUi.Bell;
+            return <BellSlot />;
+          })() : (
+            <button type="button" className="relative p-1.5 rounded-md hover:bg-[var(--bg-muted)] hidden sm:inline-flex">
+              <Bell className="w-4 h-4 muted" />
+            </button>
+          )}
         </div>
       </div>
     </header>
