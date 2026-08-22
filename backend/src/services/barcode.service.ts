@@ -110,23 +110,32 @@ export class BarcodeService {
       updates.push({ id: product.id, barcode: code });
     }
 
+    const saved: Array<{ id: string; barcode: string }> = [];
     for (const row of updates) {
-      await db
+      const updated = await db
         .update(schema.products)
         .set({ barcode: row.barcode, updatedAt: new Date() })
         .where(
           and(
             eq(schema.products.id, row.id),
             eq(schema.products.merchantId, merchantId),
-            or(isNull(schema.products.barcode), eq(schema.products.barcode, ""))
+            or(
+              isNull(schema.products.barcode),
+              eq(schema.products.barcode, ""),
+              sql`btrim(${schema.products.barcode}) = ''`
+            )
           )
-        );
+        )
+        .returning({ id: schema.products.id, barcode: schema.products.barcode });
+      if (updated[0]?.barcode) {
+        saved.push({ id: updated[0].id, barcode: String(updated[0].barcode) });
+      }
     }
 
     return {
-      generated: updates.length,
+      generated: saved.length,
       skipped: products.length - missing.length,
-      products: updates,
+      products: saved,
     };
   }
 
