@@ -24,8 +24,10 @@ import {
   computeGiftCardSaleVat,
   logoUrlToEscPos,
   encodeOrderMetaNotes,
+  parseOrderMetaNotes,
   nextWebPosTicketNumber,
   nextDineInCounterNumber,
+  webPosBackendOrderId,
   printersForRole,
   resolveReceiptLanguage,
   buildReceiptEscPos,
@@ -3491,8 +3493,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   /** One arbitrary ticket per open cart (kitchen + receipt share the same shout #). */
   const ensureCartTicket = useCallback(() => {
-    if (ticketDisplay && ticketOrderNumber) {
-      return { display: ticketDisplay, orderNumber: ticketOrderNumber };
+    const display = ticketDisplay?.trim();
+    if (display) {
+      if (ticketOrderNumber?.trim()) {
+        return { display, orderNumber: ticketOrderNumber.trim() };
+      }
+      const orderNumber = webPosBackendOrderId(merchant?.id);
+      setTicketOrderNumber(orderNumber);
+      return { display, orderNumber };
     }
     const isCounterDineIn =
       effectiveChannel === 'dine_in' && counterDineInEnabled && !tableId;
@@ -3501,6 +3509,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       : nextWebPosTicketNumber(merchant?.id);
     setTicketDisplay(ticket.display);
     setTicketOrderNumber(ticket.orderNumber);
+    lastKitchenTicketRef.current = ticket.display;
     return ticket;
   }, [
     ticketDisplay,
@@ -3517,35 +3526,35 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTicketOrderNumber(null);
   }, []);
 
-  /** Kitchen shout number — ticketDisplay first (7128), never a new random # on follow-up. */
+  /** Kitchen shout number — one #6457 for kitchen send, message, and receipt. */
   const kitchenOrderNumber = useCallback(
     (opts?: { ticket?: { display: string; orderNumber: string }; allowNew?: boolean }) => {
       const ticket =
         opts?.ticket ??
-        (ticketDisplay
-          ? { display: ticketDisplay, orderNumber: ticketOrderNumber || '' }
+        (ticketDisplay?.trim()
+          ? { display: ticketDisplay.trim(), orderNumber: ticketOrderNumber || '' }
           : null);
       if (ticket?.display?.trim()) {
         lastKitchenTicketRef.current = ticket.display.trim();
         return ticket.display.trim();
       }
+      if (lastKitchenTicketRef.current?.trim()) {
+        return lastKitchenTicketRef.current.trim();
+      }
       if (opts?.allowNew === false) {
-        if (lastKitchenTicketRef.current?.trim()) return lastKitchenTicketRef.current.trim();
-        if (tabNumber) return `#${tabNumber}`;
         return '';
       }
-      if (tabNumber) return `#${tabNumber}`;
       const created = ensureCartTicket();
       lastKitchenTicketRef.current = created.display;
       return created.display;
     },
-    [tabNumber, ticketDisplay, ticketOrderNumber, ensureCartTicket]
+    [ticketDisplay, ticketOrderNumber, ensureCartTicket]
   );
 
   const kdsTicketKey =
     ticketDisplay?.trim() ||
-    kitchenOrderNumber({ allowNew: false }) ||
-    (tabNumber ? `#${tabNumber}` : '');
+    lastKitchenTicketRef.current?.trim() ||
+    '';
 
   useEffect(() => {
     if (!kdsTicketKey || isRetail) return;
@@ -3576,6 +3585,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!cart.length) return;
     ensureCartTicket();
   }, [posView, collectOrderRef, cart.length, ensureCartTicket]);
+
+  /** Reattach kitchen shout # when cart has sent lines but ticket state was cleared. */
+  useEffect(() => {
+    if (ticketDisplay?.trim()) return;
+    if (!cart.some((l) => l.sentToKitchen)) return;
+    const remembered = lastKitchenTicketRef.current?.trim();
+    if (!remembered) return;
+    setTicketDisplay(remembered);
+  }, [cart, ticketDisplay]);
 
   /**
    * Persist cart to /merchant/pos/held so Orders can list kitchen / held tickets.
@@ -4244,7 +4262,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const onKitchenMessage = async (message: string) => {
     try {
-      const orderNumber = kitchenOrderNumber({ allowNew: false });
+      let orderNumber = kitchenOrderNumber({ allowNew: false });
+      if (!orderNumber) {
+        const ticket = ensureCartTicket();
+        orderNumber = ticket.display;
+      }
       if (!orderNumber) {
         toast.error(t('webPosKitchenPrintFailed'));
         return;
@@ -4943,7 +4965,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const shout =
       order.ticketDisplay && !/^(WP|DI)-/i.test(String(order.ticketDisplay))
         ? order.ticketDisplay
-        : null;
+        : parseOrderMetaNotes(order.notes).ticketDisplay || null;
     setTicketDisplay(shout);
     if (shout) lastKitchenTicketRef.current = shout;
     setTicketOrderNumber(order.orderNumber);
@@ -5687,6 +5709,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       headerTextScale: printSettings?.kitchenHeaderTextScale || 2,
       boldText: printSettings?.kitchenBoldText !== false,
       groupByCourse: coursesEnabled && !opts?.cancelled,
+      maxCourse: courseCount,
       tableLabel: opts?.tableLabel !== undefined ? opts.tableLabel : tableLabel || null,
       tabNumber: opts?.tabNumber !== undefined ? opts.tabNumber : tabNumber || null,
       cancelled: !!opts?.cancelled,
@@ -7229,9 +7252,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       null
     : null;
   const checkoutDueTotal = collectOrderRef?.total ?? activeSale.totals.total;
-  const checkoutKitchenNumber = tabNumber
-    ? `#${tabNumber}`
-    : ticketDisplay?.trim() || null;
+  const checkoutKitchenNumber = ticketDisplay?.trim() || null;
   const checkoutOrderRef = formatCheckoutOrderRef(
     collectOrderRef?.orderNumber || ticketOrderNumber,
     checkoutKitchenNumber
@@ -7697,9 +7718,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 if (data.tableId) setTableId(data.tableId);
                 if (data.tableLabel) setTableLabel(data.tableLabel);
                 if (data.tabNumber != null) setTabNumber(data.tabNumber);
-                if (data.ticketDisplay) {
-                  setTicketDisplay(data.ticketDisplay);
-                  lastKitchenTicketRef.current = data.ticketDisplay;
+                const ticketFromLabel = (held.label || '').match(/#\d{4}/)?.[0] || null;
+                const restoredTicket = data.ticketDisplay?.trim() || ticketFromLabel;
+                if (restoredTicket) {
+                  setTicketDisplay(restoredTicket);
+                  lastKitchenTicketRef.current = restoredTicket;
                 }
                 if (data.ticketOrderNumber) setTicketOrderNumber(data.ticketOrderNumber);
                 if (data.orderNote != null) setOrderNote(data.orderNote);
