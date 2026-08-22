@@ -142,6 +142,8 @@ const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
 const WEBPOS_GRID_SHOW_IMAGES_KEY = 'webpos.grid.showImages';
 const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
 const WEBPOS_GRID_MOBILE_COLS_KEY = 'webpos.grid.mobileCols';
+/** Mobile grid step: 0 = 2× categories + 2× products, 1 = 3× cat + 2× prod, 2 = 3× both */
+type MobileGridLayoutStep = 0 | 1 | 2;
 const WEBPOS_GRID_SORT_KEY = 'webpos.grid.sort';
 const WEBPOS_SET_PIN_HINT_KEY = 'webpos_set_pin_hint_dismissed';
 
@@ -185,14 +187,17 @@ function readStoredGridTileSize(): 'sm' | 'md' | 'lg' {
   return 'md';
 }
 
-function readStoredMobileGridCols(): 2 | 3 {
+function readStoredMobileGridLayout(): MobileGridLayoutStep {
   try {
     const v = localStorage.getItem(WEBPOS_GRID_MOBILE_COLS_KEY);
-    if (v === '2' || v === '3') return Number(v) as 2 | 3;
+    if (v === '0' || v === '1' || v === '2') return Number(v) as MobileGridLayoutStep;
+    // Migrate legacy single column count (2 | 3 toggled together).
+    if (v === '3') return 2;
+    if (v === '2') return 0;
   } catch {
     /* ignore */
   }
-  return 2;
+  return 0;
 }
 
 function readStoredGridSort(): 'default' | 'alpha' | 'bestseller' {
@@ -608,7 +613,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [posAppearance, setPosAppearance] = useState<WebPosAppearance>(() => readStoredAppearance());
   const [gridShowImages, setGridShowImages] = useState(() => readStoredGridShowImages());
   const [gridTileSize, setGridTileSize] = useState<ProductGridTileSize>(() => readStoredGridTileSize());
-  const [gridMobileCols, setGridMobileCols] = useState<2 | 3>(() => readStoredMobileGridCols());
+  const [gridMobileLayout, setGridMobileLayout] = useState<MobileGridLayoutStep>(() =>
+    readStoredMobileGridLayout()
+  );
   const [gridSort, setGridSort] = useState<ProductGridSort>(() => readStoredGridSort());
   const [openShift, setOpenShift] = useState<{
     id: string;
@@ -7415,7 +7422,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         data-text-size={posTextSize}
         data-narrow={isNarrowViewport ? '1' : '0'}
         data-phone={isPhoneViewport ? '1' : '0'}
-        data-grid-cols={isPhoneViewport ? String(gridMobileCols) : undefined}
+        data-grid-step={isPhoneViewport ? String(gridMobileLayout) : undefined}
       >
         {pinNeedsNetwork ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-stone-100">
@@ -7506,7 +7513,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       data-text-size={posTextSize}
       data-narrow={isNarrowViewport ? '1' : '0'}
       data-phone={isPhoneViewport ? '1' : '0'}
-      data-grid-cols={isPhoneViewport ? String(gridMobileCols) : undefined}
+      data-grid-step={isPhoneViewport ? String(gridMobileLayout) : undefined}
     >
       {reservationAlertUntil > Date.now() ? (
         <div
@@ -8181,12 +8188,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   });
                 }}
                 tileSize={gridTileSize}
-                mobileGridCols={gridMobileCols}
+                mobileGridStep={gridMobileLayout}
                 isPhoneLayout={isPhoneViewport}
                 onCycleTileSize={() => {
                   if (isPhoneViewport) {
-                    setGridMobileCols((cur) => {
-                      const next: 2 | 3 = cur === 2 ? 3 : 2;
+                    setGridMobileLayout((cur) => {
+                      const next = ((cur + 1) % 3) as MobileGridLayoutStep;
                       try {
                         localStorage.setItem(WEBPOS_GRID_MOBILE_COLS_KEY, String(next));
                       } catch {

@@ -36,8 +36,8 @@ type Props = {
   showProductImages?: boolean;
   onToggleShowImages?: () => void;
   tileSize?: ProductGridTileSize;
-  /** Phone layout: 2 or 3 columns for categories + products (controlled by grid filter). */
-  mobileGridCols?: 2 | 3;
+  /** Phone layout step: 0 = 2×2, 1 = 3× cat / 2× prod, 2 = 3× both */
+  mobileGridStep?: 0 | 1 | 2;
   isPhoneLayout?: boolean;
   onCycleTileSize?: () => void;
   productSort?: ProductGridSort;
@@ -77,7 +77,7 @@ export default function WebPosProductArea({
   showProductImages = false,
   onToggleShowImages,
   tileSize = 'md',
-  mobileGridCols = 2,
+  mobileGridStep = 0,
   isPhoneLayout = false,
   onCycleTileSize,
   productSort = 'default',
@@ -125,25 +125,15 @@ export default function WebPosProductArea({
             <button
               type="button"
               onClick={onCycleTileSize}
-              title={
-                isPhoneLayout
-                  ? t('webPosGridColumns').replace('{n}', String(mobileGridCols))
-                  : t('webPosGridTileSize')
-              }
-              aria-label={
-                isPhoneLayout
-                  ? t('webPosGridColumns').replace('{n}', String(mobileGridCols))
-                  : t('webPosGridTileSize')
-              }
-              className={`inline-flex h-8 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-600 hover:bg-stone-50 ${
-                isPhoneLayout ? 'min-w-[2.25rem] px-1.5 text-[10px] font-bold' : 'w-8'
+              title={t('webPosGridTileSize')}
+              aria-label={t('webPosGridTileSize')}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${
+                isPhoneLayout && mobileGridStep > 0
+                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
+                  : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
               }`}
             >
-              {isPhoneLayout ? (
-                <span>{mobileGridCols}</span>
-              ) : (
-                <LayoutGrid size={16} aria-hidden />
-              )}
+              <LayoutGrid size={16} aria-hidden />
             </button>
           ) : null}
           {onToggleSortAlpha ? (
