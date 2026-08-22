@@ -29,6 +29,8 @@ export const superadmins = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     role: varchar("role", { length: 50 }).default("superadmin").notNull(),
     isActive: boolean("is_active").default(true).notNull(),
+    /** Can be assigned support tickets (technical issues). */
+    handlesSupport: boolean("handles_support").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -3069,3 +3071,73 @@ export const platformMessageDismissals = pgTable(
     viewerIdx: index("platform_message_dismissals_viewer_idx").on(table.viewerRole, table.viewerId),
   })
 );
+
+// ============================================================================
+// SUPPORT TICKETS
+// ============================================================================
+
+export type SupportTicketCategory = "technical" | "accounting" | "miscellaneous";
+export type SupportTicketStatus = "open" | "answered" | "closed";
+
+export const supportTickets = pgTable(
+  "support_tickets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ticketNumber: varchar("ticket_number", { length: 20 }).notNull(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    resellerId: uuid("reseller_id").references(() => resellers.id, { onDelete: "set null" }),
+    category: varchar("category", { length: 30 }).notNull().default("technical"),
+    subcategory: varchar("subcategory", { length: 80 }),
+    subject: varchar("subject", { length: 255 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("open"),
+    assignedToSuperadminId: uuid("assigned_to_superadmin_id"),
+    lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
+    closedAt: timestamp("closed_at"),
+    autoCloseAt: timestamp("auto_close_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("support_tickets_merchant_idx").on(table.merchantId),
+    resellerIdx: index("support_tickets_reseller_idx").on(table.resellerId),
+    statusIdx: index("support_tickets_status_idx").on(table.status),
+    numberIdx: uniqueIndex("support_tickets_number_idx").on(table.ticketNumber),
+    createdIdx: index("support_tickets_created_idx").on(table.createdAt),
+  })
+);
+
+export const supportTicketMessages = pgTable(
+  "support_ticket_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ticketId: uuid("ticket_id")
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: "cascade" }),
+    authorRole: varchar("author_role", { length: 20 }).notNull(),
+    authorId: uuid("author_id"),
+    authorName: varchar("author_name", { length: 255 }),
+    body: text("body").notNull(),
+    attachmentUrl: varchar("attachment_url", { length: 500 }),
+    attachmentName: varchar("attachment_name", { length: 255 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    ticketIdx: index("support_ticket_messages_ticket_idx").on(table.ticketId),
+    createdIdx: index("support_ticket_messages_created_idx").on(table.createdAt),
+  })
+);
+
+export const supportTicketsRelations = relations(supportTickets, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [supportTickets.merchantId], references: [merchants.id] }),
+  reseller: one(resellers, { fields: [supportTickets.resellerId], references: [resellers.id] }),
+  messages: many(supportTicketMessages),
+}));
+
+export const supportTicketMessagesRelations = relations(supportTicketMessages, ({ one }) => ({
+  ticket: one(supportTickets, {
+    fields: [supportTicketMessages.ticketId],
+    references: [supportTickets.id],
+  }),
+}));
