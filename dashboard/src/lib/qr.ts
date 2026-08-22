@@ -223,6 +223,129 @@ export async function generateReceiptQrRasterEscPos(
   }
 }
 
+function wrapLabelLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = String(text || '')
+    .trim()
+    .split(/\s+/);
+  if (!words.length) return [];
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (ctx.measureText(next).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 3);
+}
+
+function drawCenteredLabel(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  x: number,
+  y: number,
+  width: number,
+  lineHeight: number
+): number {
+  const lines = wrapLabelLines(ctx, label, width - 4);
+  ctx.fillStyle = '#000000';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (const ln of lines) {
+    ctx.fillText(ln, x + width / 2, y);
+    y += lineHeight;
+  }
+  return y;
+}
+
+/** Single labeled QR block (label centered above QR). */
+export async function buildLabeledReceiptQrRasterEscPos(opts: {
+  label: string;
+  data: string;
+  paperWidthMm?: 58 | 80;
+}): Promise<Uint8Array | null> {
+  const raw = String(opts.data || '').trim();
+  if (!raw || typeof document === 'undefined') return null;
+  const paper = opts.paperWidthMm ?? 80;
+  const canvasWidth = paper === 58 ? 280 : 384;
+  const qrSize = paper === 58 ? 120 : 160;
+  const labelLineHeight = 14;
+  const gap = 6;
+  try {
+    const img = await loadImage(qrImageUrl(raw, qrSize, { ecc: 'M', margin: 6 }));
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.font = 'bold 12px Arial, sans-serif';
+    const labelLines = wrapLabelLines(ctx, opts.label, canvasWidth - 8);
+    const labelHeight = Math.max(labelLineHeight, labelLines.length * labelLineHeight);
+    canvas.width = canvasWidth;
+    canvas.height = labelHeight + gap + qrSize + 8;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const labelBottom = drawCenteredLabel(ctx, opts.label, 0, 4, canvasWidth, labelLineHeight);
+    const qrX = Math.floor((canvasWidth - qrSize) / 2);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, qrX, labelBottom + gap, qrSize, qrSize);
+    const { data: pixels } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return imageDataToEscPosRaster(pixels, canvas.width, canvas.height, 128);
+  } catch {
+    return null;
+  }
+}
+
+/** Two labeled QRs side-by-side (digital receipt + delivery directions). */
+export async function buildDualReceiptQrRasterEscPos(opts: {
+  left: { label: string; data: string };
+  right: { label: string; data: string };
+  paperWidthMm?: 58 | 80;
+}): Promise<Uint8Array | null> {
+  const leftData = String(opts.left.data || '').trim();
+  const rightData = String(opts.right.data || '').trim();
+  if (!leftData || !rightData || typeof document === 'undefined') return null;
+  const paper = opts.paperWidthMm ?? 80;
+  const canvasWidth = paper === 58 ? 280 : 384;
+  const gap = paper === 58 ? 10 : 16;
+  const colWidth = Math.floor((canvasWidth - gap) / 2);
+  const qrSize = paper === 58 ? 108 : 136;
+  const labelLineHeight = 13;
+  const labelGap = 5;
+  try {
+    const [leftImg, rightImg] = await Promise.all([
+      loadImage(qrImageUrl(leftData, qrSize, { ecc: 'M', margin: 6 })),
+      loadImage(qrImageUrl(rightData, qrSize, { ecc: 'M', margin: 6 })),
+    ]);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.font = 'bold 11px Arial, sans-serif';
+    const leftLabelLines = wrapLabelLines(ctx, opts.left.label, colWidth - 4);
+    const rightLabelLines = wrapLabelLines(ctx, opts.right.label, colWidth - 4);
+    const labelRows = Math.max(leftLabelLines.length, rightLabelLines.length, 1);
+    const labelHeight = labelRows * labelLineHeight + 4;
+    canvas.width = canvasWidth;
+    canvas.height = labelHeight + labelGap + qrSize + 8;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawCenteredLabel(ctx, opts.left.label, 0, 4, colWidth, labelLineHeight);
+    drawCenteredLabel(ctx, opts.right.label, colWidth + gap, 4, colWidth, labelLineHeight);
+    const qrY = labelHeight + labelGap;
+    const leftQrX = Math.floor(colWidth / 2 - qrSize / 2);
+    const rightQrX = colWidth + gap + Math.floor(colWidth / 2 - qrSize / 2);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(leftImg, leftQrX, qrY, qrSize, qrSize);
+    ctx.drawImage(rightImg, rightQrX, qrY, qrSize, qrSize);
+    const { data: pixels } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return imageDataToEscPosRaster(pixels, canvas.width, canvas.height, 128);
+  } catch {
+    return null;
+  }
+}
+
 /** GS ( k fn 69 n — 48=L, 49=M, 50=Q, 51=H (Epson ESC/POS). */
 const ESCPOS_EC_BYTE: Record<EscPosErrorCorrection, number> = {
   L: 0x30,

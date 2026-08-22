@@ -19,6 +19,10 @@ export type ReceiptLabels = {
   note: string;
   staff: string;
   scanDigitalReceipt: string;
+  /** Title above digital receipt QR on thermal */
+  digitalReceiptQrTitle: string;
+  /** Title above delivery directions QR on thermal */
+  scanDeliveryDirections: string;
   thankYou: string;
   kitchen: string;
   /** Kitchen void / cancel ticket title */
@@ -112,6 +116,8 @@ const EN: ReceiptLabels = {
   note: 'Note',
   staff: 'Staff',
   scanDigitalReceipt: 'Scan for digital receipt',
+  digitalReceiptQrTitle: 'Digital receipt',
+  scanDeliveryDirections: 'Scan for directions',
   thankYou: 'Thank you',
   kitchen: 'KITCHEN',
   cancelledTicket: 'CANCELLED',
@@ -201,6 +207,8 @@ const FR: ReceiptLabels = {
   note: 'Note',
   staff: 'Personnel',
   scanDigitalReceipt: 'Scannez pour le recu digital',
+  digitalReceiptQrTitle: 'Reçu digital',
+  scanDeliveryDirections: "Scannez pour l'itinéraire",
   thankYou: 'Merci',
   kitchen: 'CUISINE',
   cancelledTicket: 'ANNULE',
@@ -290,6 +298,8 @@ const DE: ReceiptLabels = {
   note: 'Notiz',
   staff: 'Personal',
   scanDigitalReceipt: 'Scannen fuer digitalen Beleg',
+  digitalReceiptQrTitle: 'Digitaler Beleg',
+  scanDeliveryDirections: 'Scan fuer Wegbeschreibung',
   thankYou: 'Danke',
   kitchen: 'KUECHE',
   cancelledTicket: 'STORNIERT',
