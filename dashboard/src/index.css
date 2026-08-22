@@ -695,11 +695,12 @@ button {
       overflow: visible;
       padding-bottom: 0;
     }
-    .webpos-shell[data-narrow='1'][data-grid-cols='3'] .webpos-cat-scroll {
+    .webpos-shell[data-narrow='1'][data-grid-step='1'] .webpos-cat-scroll,
+    .webpos-shell[data-narrow='1'][data-grid-step='2'] .webpos-cat-scroll {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
-    .webpos-shell[data-narrow='1'][data-grid-cols='2'] .webpos-cat-scroll,
-    .webpos-shell[data-narrow='1']:not([data-grid-cols]) .webpos-cat-scroll {
+    .webpos-shell[data-narrow='1'][data-grid-step='0'] .webpos-cat-scroll,
+    .webpos-shell[data-narrow='1']:not([data-grid-step]) .webpos-cat-scroll {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .webpos-shell[data-narrow='1'] .webpos-category-chip {
@@ -715,12 +716,13 @@ button {
     .webpos-shell[data-narrow='1'] .webpos-accent-chip {
       display: none;
     }
-    .webpos-shell[data-narrow='1'][data-grid-cols='3'] .webpos-product-scroll > .grid {
+    .webpos-shell[data-narrow='1'][data-grid-step='2'] .webpos-product-scroll > .grid {
       grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
       gap: 0.375rem;
     }
-    .webpos-shell[data-narrow='1'][data-grid-cols='2'] .webpos-product-scroll > .grid,
-    .webpos-shell[data-narrow='1']:not([data-grid-cols]) .webpos-product-scroll > .grid {
+    .webpos-shell[data-narrow='1'][data-grid-step='0'] .webpos-product-scroll > .grid,
+    .webpos-shell[data-narrow='1'][data-grid-step='1'] .webpos-product-scroll > .grid,
+    .webpos-shell[data-narrow='1']:not([data-grid-step]) .webpos-product-scroll > .grid {
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       gap: 0.375rem;
     }
