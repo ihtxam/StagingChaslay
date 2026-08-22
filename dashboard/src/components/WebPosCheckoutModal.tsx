@@ -225,7 +225,7 @@ export default function WebPosCheckoutModal({
             <p className="text-xs font-semibold uppercase tracking-wide muted mb-2">
               {t('payment')}
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {payButtons
                 .filter((b) => b.show)
                 .map((b) => (
