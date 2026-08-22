@@ -501,7 +501,8 @@ function mergeBillDiscounts(
   if (src.percent > 0 || tgt.percent > 0) {
     return { percent: Math.max(src.percent, tgt.percent), amount: 0 };
   }
-  return { percent: 0, amount: roundMoney2(src.amount + tgt.amount) };
+  // Fixed amounts: keep the larger single discount (do not sum — avoids 48+10 on a CHF 10 cart).
+  return { percent: 0, amount: roundMoney2(Math.max(src.amount, tgt.amount)) };
 }
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
@@ -1492,8 +1493,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     billDiscount.percent > 0
       ? `${billDiscount.percent}%`
       : billDiscount.amount > 0
-        ? money(billDiscount.amount)
+        ? money(
+            resolveBillDiscountAmount(fullTotals, billDiscount, vatIncludedInPrice)
+          )
         : null;
+
+  /** Keep stored fixed discount ≤ current merchandise (e.g. after cart edits or draft merge). */
+  useEffect(() => {
+    if (billDiscount.amount <= 0) return;
+    const merch = merchandiseBase(fullTotals, vatIncludedInPrice);
+    if (billDiscount.amount > merch + 0.001) {
+      setBillDiscount((d) => ({ ...d, amount: roundMoney2(Math.min(d.amount, merch)) }));
+    }
+  }, [fullTotals.subtotal, fullTotals.tax, billDiscount.amount, vatIncludedInPrice]);
 
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -4367,8 +4379,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const amount = resolveBillDiscountAmount(fullTotals, billDiscount, vatIncludedInPrice);
     return {
       discountPercent: billDiscount.percent,
-      discountAmount:
-        billDiscount.percent > 0 ? amount : billDiscount.amount > 0 ? billDiscount.amount : amount,
+      discountAmount: amount,
     };
   };
 
@@ -8736,10 +8747,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             setBillDiscountOpen(false);
             return;
           }
+          const merch = merchandiseBase(fullTotals, vatIncludedInPrice);
           if (meta?.mode === 'percent') {
-            setBillDiscount({ percent: Math.max(0, meta.value), amount: 0 });
+            setBillDiscount({ percent: Math.max(0, Math.min(100, meta.value)), amount: 0 });
           } else {
-            setBillDiscount({ percent: 0, amount: Math.max(0, amount) });
+            setBillDiscount({
+              percent: 0,
+              amount: roundMoney2(Math.min(Math.max(0, amount), merch)),
+            });
           }
           setBillDiscountOpen(false);
           if (amount > 0 || (meta?.value || 0) > 0) {
