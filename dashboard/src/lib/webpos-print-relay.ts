@@ -142,10 +142,18 @@ export async function printViaAgentOrQueue(opts: {
 
 type PendingJob = {
   id: string;
+  sourceDeviceId?: string;
   payload?: EscPosPrintJobPayload | Record<string, unknown> | null;
 };
 
-let drainInFlight: Promise<number> | null = null;
+export type ProcessEscPosPrintJobsResult = {
+  /** Jobs physically printed and acked. */
+  done: number;
+  /** Kitchen jobs from another device (waiter phone / mobile WebPOS). */
+  remoteKitchenDone: number;
+};
+
+let drainInFlight: Promise<ProcessEscPosPrintJobsResult> | null = null;
 
 async function ackPrintJob(jobId: string, status: 'DONE' | 'FAILED', attempts = 4) {
   let lastErr: unknown;
@@ -166,16 +174,18 @@ async function ackPrintJob(jobId: string, status: 'DONE' | 'FAILED', attempts = 
  * Serialized: overlapping 2.5s poll ticks must not print the same job twice.
  * Backend also claims jobs as PROCESSING on fetch.
  */
-export async function processPendingEscPosPrintJobs(): Promise<number> {
+export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrintJobsResult> {
   if (drainInFlight) return drainInFlight;
-  drainInFlight = (async () => {
+  drainInFlight = (async (): Promise<ProcessEscPosPrintJobsResult> => {
     try {
-      if (!(await isPrintAgentAvailable())) return 0;
+      if (!(await isPrintAgentAvailable())) return { done: 0, remoteKitchenDone: 0 };
+      const localDeviceId = webPosDeviceId();
       const res = await api.get('/merchant/pos/print-jobs/pending', {
         params: { jobType: 'ESCPOS', limit: 15 },
       });
       const jobs = (res.data?.jobs || []) as PendingJob[];
       let done = 0;
+      let remoteKitchenDone = 0;
       for (const job of jobs) {
         const p = (job.payload || {}) as Partial<
           EscPosPrintJobPayload & AutoPrintOrderPayload & AutoPrintReservationPayload
@@ -213,6 +223,11 @@ export async function processPendingEscPosPrintJobs(): Promise<number> {
           // Never mark FAILED after a successful physical print — retry DONE ack.
           await ackPrintJob(job.id, 'DONE');
           done += 1;
+          const remote =
+            !!job.sourceDeviceId &&
+            job.sourceDeviceId !== localDeviceId &&
+            p.kind === 'escpos';
+          if (remote) remoteKitchenDone += 1;
         } catch (e) {
           enqueueFailedPrintJob({
             kind: 'other',
@@ -225,7 +240,7 @@ export async function processPendingEscPosPrintJobs(): Promise<number> {
           await ackPrintJob(job.id, 'FAILED').catch(() => {});
         }
       }
-      return done;
+      return { done, remoteKitchenDone };
     } finally {
       drainInFlight = null;
     }

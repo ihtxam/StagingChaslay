@@ -1,0 +1,147 @@
+export type PlanInput = {
+    name: string;
+    slug: string;
+    description?: string | null;
+    priceMonthly: number | string;
+    priceYearly?: number | string | null;
+    currency?: string;
+    maxDevices?: number;
+    maxProducts?: number | null;
+    features?: string[];
+    isActive?: boolean;
+    isPublic?: boolean;
+    sortOrder?: number;
+    trialDays?: number;
+};
+export declare class SubscriptionPlansService {
+    static listAll(includeInactive?: boolean): Promise<{
+        id: string;
+        name: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        features: string[] | null;
+        slug: string;
+        sortOrder: number;
+        description: string | null;
+        priceMonthly: string;
+        priceYearly: string | null;
+        currency: string;
+        maxDevices: number;
+        maxProducts: number | null;
+        isPublic: boolean;
+        trialDays: number;
+    }[]>;
+    /** Plans merchants can see / buy */
+    static listPublic(): Promise<{
+        id: string;
+        name: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        features: string[] | null;
+        slug: string;
+        sortOrder: number;
+        description: string | null;
+        priceMonthly: string;
+        priceYearly: string | null;
+        currency: string;
+        maxDevices: number;
+        maxProducts: number | null;
+        isPublic: boolean;
+        trialDays: number;
+    }[]>;
+    static getById(id: string): Promise<{
+        id: string;
+        name: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        features: string[] | null;
+        slug: string;
+        sortOrder: number;
+        description: string | null;
+        priceMonthly: string;
+        priceYearly: string | null;
+        currency: string;
+        maxDevices: number;
+        maxProducts: number | null;
+        isPublic: boolean;
+        trialDays: number;
+    }>;
+    static getBySlug(slug: string): Promise<{
+        id: string;
+        name: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        features: string[] | null;
+        slug: string;
+        sortOrder: number;
+        description: string | null;
+        priceMonthly: string;
+        priceYearly: string | null;
+        currency: string;
+        maxDevices: number;
+        maxProducts: number | null;
+        isPublic: boolean;
+        trialDays: number;
+    } | undefined>;
+    static create(input: PlanInput): Promise<{
+        id: string;
+        name: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        features: string[] | null;
+        slug: string;
+        sortOrder: number;
+        description: string | null;
+        priceMonthly: string;
+        priceYearly: string | null;
+        currency: string;
+        maxDevices: number;
+        maxProducts: number | null;
+        isPublic: boolean;
+        trialDays: number;
+    }>;
+    static update(id: string, input: Partial<PlanInput>): Promise<{
+        id: string;
+        name: string;
+        slug: string;
+        description: string | null;
+        priceMonthly: string;
+        priceYearly: string | null;
+        currency: string;
+        maxDevices: number;
+        maxProducts: number | null;
+        features: string[] | null;
+        isActive: boolean;
+        isPublic: boolean;
+        sortOrder: number;
+        trialDays: number;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
+    static remove(id: string): Promise<{
+        id: string;
+        name: string;
+        slug: string;
+        description: string | null;
+        priceMonthly: string;
+        priceYearly: string | null;
+        currency: string;
+        maxDevices: number;
+        maxProducts: number | null;
+        features: string[] | null;
+        isActive: boolean;
+        isPublic: boolean;
+        sortOrder: number;
+        trialDays: number;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
+    /** Seed default plans if table is empty */
+    static ensureDefaults(): Promise<void>;
+}
+//# sourceMappingURL=subscription-plans.service.d.ts.map

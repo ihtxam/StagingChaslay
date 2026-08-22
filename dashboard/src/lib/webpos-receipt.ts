@@ -245,6 +245,8 @@ export type PosPrintSettingsClient = {
   receiptLogoUrl?: string | null;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  /** Play a bell on the main till when a waiter/mobile kitchen order arrives. */
+  waiterTillBellEnabled?: boolean;
   /** Auto-retry failed kitchen prints before surfacing an error. */
   kitchenPrintRetryEnabled?: boolean;
   /** Total print attempts before marking kitchen job failed (default 5). */

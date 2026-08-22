@@ -52,6 +52,8 @@ export type PosPrintSettings = {
   receiptLogoUrl?: string | null;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  /** Play a bell on the main till when a waiter/mobile kitchen order arrives. */
+  waiterTillBellEnabled?: boolean;
   /** Auto-retry failed kitchen prints before showing an error (WebPOS local queue). */
   kitchenPrintRetryEnabled?: boolean;
   /** Total print attempts before marking kitchen job failed (default 5). */
@@ -105,6 +107,7 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   receiptLogoUrl: null,
     autoPrintReceipt: true,
     autoPrintKitchen: true,
+    waiterTillBellEnabled: true,
     kitchenPrintRetryEnabled: true,
     kitchenPrintRetryAttempts: 5,
     kitchenPrintRetryIntervalSec: 5,
@@ -232,6 +235,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
         : String(src.receiptLogoUrl).trim().slice(0, 500) || null,
     autoPrintReceipt: src.autoPrintReceipt !== false,
     autoPrintKitchen: src.autoPrintKitchen !== false,
+    waiterTillBellEnabled: src.waiterTillBellEnabled !== false,
     kitchenPrintRetryEnabled: src.kitchenPrintRetryEnabled !== false,
     kitchenPrintRetryAttempts: clampInt(src.kitchenPrintRetryAttempts, 1, 20, 5),
     kitchenPrintRetryIntervalSec: clampInt(src.kitchenPrintRetryIntervalSec, 2, 60, 5),

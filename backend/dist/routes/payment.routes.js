@@ -1,0 +1,292 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_middleware_1 = require("@/middleware/auth.middleware");
+const adyen_service_1 = require("@/services/adyen.service");
+const adyen_terminal_poi_service_1 = require("@/services/adyen-terminal-poi.service");
+const router = (0, express_1.Router)();
+// Apply merchant middleware
+router.use(auth_middleware_1.verifyToken);
+router.use(auth_middleware_1.requireMerchant);
+router.use(auth_middleware_1.setMerchantContext);
+/**
+ * POST /api/payment/initialize
+ * Initialize payment session
+ */
+router.post("/initialize", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const { orderId, amount, currency, returnUrl } = req.body;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        if (!orderId || !amount) {
+            return res.status(400).json({ error: "Order ID and amount are required" });
+        }
+        const session = await adyen_service_1.AdyenService.initializePaymentSession(merchantId, orderId, amount, currency || "USD", returnUrl);
+        res.json({
+            success: true,
+            session,
+        });
+    }
+    catch (error) {
+        console.error("Error initializing payment:", error);
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to initialize payment" });
+    }
+});
+/**
+ * POST /api/payment/card
+ * Process card payment
+ */
+router.post("/card", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const { orderId, amount, paymentMethod, currency } = req.body;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        if (!orderId || !amount || !paymentMethod) {
+            return res.status(400).json({ error: "Order ID, amount, and payment method are required" });
+        }
+        const result = await adyen_service_1.AdyenService.processCardPayment(merchantId, orderId, amount, paymentMethod, currency || "USD");
+        // Record transaction
+        if (result.resultCode === "Authorised" || result.resultCode === "Received") {
+            await adyen_service_1.AdyenService.recordPaymentTransaction(merchantId, orderId, amount, "card", result.pspReference, "completed");
+        }
+        res.json({
+            success: true,
+            result,
+        });
+    }
+    catch (error) {
+        console.error("Error processing card payment:", error);
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to process payment" });
+    }
+});
+/**
+ * POST /api/payment/terminal
+ * Process terminal payment
+ */
+router.post("/terminal", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const { orderId, amount, terminalId, currency } = req.body;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        if (!orderId || !amount || !terminalId) {
+            return res.status(400).json({ error: "Order ID, amount, and terminal ID are required" });
+        }
+        const result = await adyen_service_1.AdyenService.processTerminalPayment(merchantId, orderId, amount, terminalId, currency || "USD");
+        // Record transaction
+        if (result.resultCode === "Authorised" || result.resultCode === "Received") {
+            await adyen_service_1.AdyenService.recordPaymentTransaction(merchantId, orderId, amount, "terminal", result.pspReference, "completed");
+        }
+        res.json({
+            success: true,
+            result,
+        });
+    }
+    catch (error) {
+        console.error("Error processing terminal payment:", error);
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to process payment" });
+    }
+});
+/**
+ * POST /api/payment/terminal/poi
+ * Adyen Terminal API (SaleToPOI) — same flow as Android POS terminal payments
+ */
+router.post("/terminal/poi", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const { amount, terminalId, currency, saleRef } = req.body;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        if (amount == null || Number(amount) <= 0) {
+            return res.status(400).json({ error: "Valid amount is required" });
+        }
+        const result = await adyen_terminal_poi_service_1.AdyenTerminalPoiService.processTerminalPayment(merchantId, Number(amount), {
+            terminalId,
+            currency: currency || "CHF",
+        });
+        // Order is created after terminal approval (WebPOS finalizeSale). Logging must not fail the payment.
+        if (result.status === "approved" && saleRef) {
+            try {
+                await adyen_service_1.AdyenService.recordPaymentTransactionByClientRef(merchantId, String(saleRef), Number(amount), "terminal", result.reference || `terminal-${Date.now()}`, "captured", {
+                    poiTransactionTimestamp: result.poiTransactionTimestamp,
+                    currency: currency || "CHF",
+                });
+            }
+            catch (logErr) {
+                console.warn("Terminal payment approved but transaction log failed:", logErr);
+            }
+        }
+        res.json({
+            success: result.status === "approved",
+            result: {
+                ...result,
+                customerReceipt: result.customerReceipt ?? null,
+                cashierReceipt: result.cashierReceipt ?? null,
+            },
+        });
+    }
+    catch (error) {
+        console.error("Error processing terminal POI payment:", error);
+        res.status(400).json({ error: error instanceof Error ? error.message : "Terminal payment failed" });
+    }
+});
+/**
+ * POST /api/payment/terminal/poi/refund
+ * Adyen Terminal API referenced refund (ReversalRequest) to customer's bank card.
+ */
+router.post("/terminal/poi/refund", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const { amount, originalPoiTransactionId, originalPoiTransactionTimestamp, terminalId, currency, } = req.body;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        if (amount == null || Number(amount) <= 0) {
+            return res.status(400).json({ error: "Valid refund amount is required" });
+        }
+        if (!originalPoiTransactionId || !originalPoiTransactionTimestamp) {
+            return res.status(400).json({
+                error: "Original POI transaction id and timestamp are required for card refund",
+            });
+        }
+        const result = await adyen_terminal_poi_service_1.AdyenTerminalPoiService.processTerminalRefund(merchantId, Number(amount), {
+            terminalId,
+            currency: currency || "CHF",
+            originalPoiTransactionId: String(originalPoiTransactionId),
+            originalPoiTransactionTimestamp: String(originalPoiTransactionTimestamp),
+        });
+        res.json({ success: result.status === "approved", result });
+    }
+    catch (error) {
+        console.error("Error processing terminal POI refund:", error);
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Terminal refund failed",
+        });
+    }
+});
+/**
+ * POST /api/payment/terminal/poi/refund/unreferenced
+ * Adyen Terminal API unreferenced refund (goodwill compensation).
+ */
+router.post("/terminal/poi/refund/unreferenced", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const { amount, terminalId, currency } = req.body;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        if (amount == null || Number(amount) <= 0) {
+            return res.status(400).json({ error: "Valid compensation amount is required" });
+        }
+        const result = await adyen_terminal_poi_service_1.AdyenTerminalPoiService.processUnreferencedTerminalRefund(merchantId, Number(amount), { terminalId, currency: currency || "CHF" });
+        res.json({ success: result.status === "approved", result });
+    }
+    catch (error) {
+        console.error("Error processing unreferenced terminal refund:", error);
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Unreferenced terminal refund failed",
+        });
+    }
+});
+/**
+ * POST /api/payment/refund
+ * Refund payment
+ */
+router.post("/refund", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const { transactionId, amount } = req.body;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        if (!transactionId) {
+            return res.status(400).json({ error: "Transaction ID is required" });
+        }
+        const result = await adyen_service_1.AdyenService.refundPayment(merchantId, transactionId, amount);
+        res.json({
+            success: true,
+            result,
+        });
+    }
+    catch (error) {
+        console.error("Error refunding payment:", error);
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to refund payment" });
+    }
+});
+/**
+ * GET /api/payment/methods
+ * Get available payment methods
+ */
+router.get("/methods", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        const methods = await adyen_service_1.AdyenService.getMerchantPaymentMethods(merchantId);
+        res.json({
+            success: true,
+            methods,
+        });
+    }
+    catch (error) {
+        console.error("Error getting payment methods:", error);
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get payment methods" });
+    }
+});
+/**
+ * GET /api/payment/transactions
+ * Get transaction history
+ */
+router.get("/transactions", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const status = req.query.status;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        const transactions = await adyen_service_1.AdyenService.getTransactionHistory(merchantId, page, limit, status);
+        res.json({
+            success: true,
+            transactions,
+            pagination: { page, limit },
+        });
+    }
+    catch (error) {
+        console.error("Error getting transactions:", error);
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get transactions" });
+    }
+});
+/**
+ * GET /api/payment/summary
+ * Get payment summary
+ */
+router.get("/summary", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const startDate = req.query.startDate ? new Date(req.query.startDate) : undefined;
+        const endDate = req.query.endDate ? new Date(req.query.endDate) : undefined;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        const summary = await adyen_service_1.AdyenService.getPaymentSummary(merchantId, startDate, endDate);
+        res.json({
+            success: true,
+            summary,
+        });
+    }
+    catch (error) {
+        console.error("Error getting payment summary:", error);
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get payment summary" });
+    }
+});
+exports.default = router;
+//# sourceMappingURL=payment.routes.js.map

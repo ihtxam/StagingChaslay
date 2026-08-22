@@ -43,6 +43,15 @@ export function playOrderAlertOnce(): void {
   tone(ctx, 1480, t0 + 0.95, 0.35, 0.2);
 }
 
+/** Short double ding when a waiter/mobile order reaches the main till (~0.5s). */
+export function playWaiterTillBellOnce(): void {
+  const ctx = getCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + 0.02;
+  tone(ctx, 988, t0, 0.12, 0.16);
+  tone(ctx, 1319, t0 + 0.16, 0.22, 0.18);
+}
+
 /** Repeat ringtone until stopOrderAlertLoop() — used while new orders are waiting. */
 export function startOrderAlertLoop(intervalMs = 4500): void {
   if (loopTimer) return;

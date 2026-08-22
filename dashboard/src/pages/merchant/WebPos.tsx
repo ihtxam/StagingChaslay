@@ -333,10 +333,12 @@ import {
 } from '@/lib/webpos-bill-discount';
 import {
   playOrderAlertOnce,
+  playWaiterTillBellOnce,
   startOrderAlertLoop,
   startOrderAlertForDuration,
   stopOrderAlertLoop,
 } from '@/lib/order-alert';
+import { isMainTillRegister, shouldRingWaiterTillBell } from '@/lib/waiter-till-bell';
 import {
   backOfficeHomePath,
   getEffectivePanelAccess,
@@ -736,6 +738,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [alertRejectOrder, setAlertRejectOrder] = useState<OnlineOrder | null>(null);
   const [alertActionBusy, setAlertActionBusy] = useState(false);
   const knownReservationIdsRef = useRef<Set<string> | null>(null);
+  /** Held orders seen by remote-order bell poll (seeded on first tick). */
+  const knownRemoteHeldRef = useRef<Set<string> | null>(null);
+  /** Suppress till bell for held rows this till just saved (avoid self-ring). */
+  const localHeldBellSuppressRef = useRef<Map<string, number>>(new Map());
   const onlinePanelOpenRef = useRef(false);
   const [reservationPendingCount, setReservationPendingCount] = useState(0);
   const [reservationAlertUntil, setReservationAlertUntil] = useState(0);
@@ -1896,6 +1902,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [shiftsEnabled, offlineSync.online, refreshCurrentShift]);
 
+  const ringWaiterTillBell = useCallback(
+    (key: string, label?: string | null) => {
+      if (printSettings?.waiterTillBellEnabled === false) return;
+      if (!isMainTillRegister(agentOk)) return;
+      if (!shouldRingWaiterTillBell(key)) return;
+      playWaiterTillBellOnce();
+      const msg = (label || '').trim()
+        ? t('webPosWaiterOrderAtTillNamed').replace('{label}', label!.trim())
+        : t('webPosWaiterOrderAtTill');
+      toast.success(msg, { duration: 4000 });
+      setOrdersRefreshToken((n) => n + 1);
+    },
+    [printSettings?.waiterTillBellEnabled, agentOk, t]
+  );
+
   /** Retry unprinted kitchen/receipt jobs every 8s while WebPOS stays open. */
   useEffect(() => {
     startPrintQueueAutoRetry();
@@ -1915,8 +1936,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const tick = async () => {
       if (cancelled) return;
       try {
-        // processPendingEscPosPrintJobs is mutexed; backend claims jobs as PROCESSING.
-        await processPendingEscPosPrintJobs();
+        const result = await processPendingEscPosPrintJobs();
+        if (result.remoteKitchenDone > 0) {
+          ringWaiterTillBell(`remote-print-${Date.now()}`);
+        }
       } catch {
         /* best-effort */
       } finally {
@@ -1928,7 +1951,54 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cancelled = true;
       if (timer != null) window.clearTimeout(timer);
     };
-  }, [agentOk]);
+  }, [agentOk, ringWaiterTillBell]);
+
+  /** Main till bell: new waiter/mobile kitchen sends registered via held orders. */
+  useEffect(() => {
+    if (!isMainTillRegister(agentOk)) return;
+    if (printSettings?.waiterTillBellEnabled === false) return;
+    let cancelled = false;
+    let timer: number | null = null;
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const res = await api.get('/merchant/pos/held');
+        const held = (res.data?.held || []) as Array<{
+          id: string;
+          status?: string;
+          label?: string | null;
+          staffName?: string | null;
+        }>;
+        if (knownRemoteHeldRef.current == null) {
+          knownRemoteHeldRef.current = new Set(held.map((h) => h.id));
+        } else {
+          for (const h of held) {
+            if (h.status !== 'sent_to_kitchen') continue;
+            if (knownRemoteHeldRef.current.has(h.id)) continue;
+            knownRemoteHeldRef.current.add(h.id);
+            const suppressUntil = localHeldBellSuppressRef.current.get(h.id);
+            if (suppressUntil != null && Date.now() < suppressUntil) continue;
+            ringWaiterTillBell(
+              `held-${h.id}`,
+              h.label || h.staffName || null
+            );
+          }
+          const ids = new Set(held.map((h) => h.id));
+          for (const id of [...knownRemoteHeldRef.current]) {
+            if (!ids.has(id)) knownRemoteHeldRef.current.delete(id);
+          }
+        }
+      } catch {
+        /* best-effort */
+      }
+      if (!cancelled) timer = window.setTimeout(poll, 8000);
+    };
+    timer = window.setTimeout(poll, 8000);
+    return () => {
+      cancelled = true;
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [agentOk, printSettings?.waiterTillBellEnabled, ringWaiterTillBell]);
 
   useEffect(() => {
     if (!isWebPosOfflineEnabled()) return;
@@ -3745,6 +3815,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     });
     const savedId = (res.data?.held as { id?: string } | undefined)?.id;
     if (savedId) resumedHeldIdRef.current = savedId;
+    if (sendToKitchen) {
+      const suppressUntil = Date.now() + 60_000;
+      if (savedId) localHeldBellSuppressRef.current.set(savedId, suppressUntil);
+      if (ticket.display) {
+        localHeldBellSuppressRef.current.set(`ticket:${ticket.display}`, suppressUntil);
+      }
+    }
     console.info('[WebPOS][held] persisted', {
       id: savedId,
       ticket: ticket.display,

@@ -195,6 +195,7 @@ interface SettingsData {
     receiptLogoUrl?: string | null;
     autoPrintReceipt?: boolean;
     autoPrintKitchen?: boolean;
+    waiterTillBellEnabled?: boolean;
     kitchenPrintRetryEnabled?: boolean;
     kitchenPrintRetryAttempts?: number;
     kitchenPrintRetryIntervalSec?: number;
@@ -1130,6 +1131,7 @@ export default function Settings() {
         receiptLogoUrl: ps.receiptLogoUrl || null,
         autoPrintReceipt: ps.autoPrintReceipt !== false,
         autoPrintKitchen: ps.autoPrintKitchen !== false,
+        waiterTillBellEnabled: ps.waiterTillBellEnabled !== false,
         kitchenPrintRetryEnabled: ps.kitchenPrintRetryEnabled !== false,
         kitchenPrintRetryAttempts: Math.min(20, Math.max(1, Number(ps.kitchenPrintRetryAttempts) || 5)),
         kitchenPrintRetryIntervalSec: Math.min(
@@ -3448,6 +3450,28 @@ export default function Settings() {
                     </div>
                   ) : null}
                 </div>
+                <label className="mt-3 flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.posPrintSettings?.waiterTillBellEnabled !== false}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          waiterTillBellEnabled: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{t('waiterTillBellEnabled')}</span>
+                    <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                      {t('waiterTillBellEnabledHint')}
+                    </span>
+                  </span>
+                </label>
                 <label className="flex items-start gap-2 text-sm">
                   <input
                     type="checkbox"

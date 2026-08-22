@@ -1,0 +1,526 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.OffersService = void 0;
+const drizzle_orm_1 = require("drizzle-orm");
+const db_1 = require("@/db");
+const money_1 = require("@/lib/money");
+const geo_1 = require("@/lib/geo");
+function zurichParts(at) {
+    const fmt = new Intl.DateTimeFormat("en-GB", {
+        timeZone: geo_1.MERCHANT_TZ,
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    });
+    const parts = Object.fromEntries(fmt.formatToParts(at).map((p) => [p.type, p.value]));
+    const wd = String(parts.weekday || "").toLowerCase().slice(0, 3);
+    const map = {
+        sun: "sun",
+        mon: "mon",
+        tue: "tue",
+        wed: "wed",
+        thu: "thu",
+        fri: "fri",
+        sat: "sat",
+    };
+    return {
+        day: map[wd] || "mon",
+        hm: `${parts.hour}:${parts.minute}`,
+    };
+}
+function parseHm(hm) {
+    if (!hm)
+        return null;
+    // Accept HH:mm or HH:mm:ss (browsers' <input type="time"> may include seconds)
+    const m = String(hm).trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (!m)
+        return null;
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (!Number.isFinite(h) || !Number.isFinite(min) || h > 24 || min > 59)
+        return null;
+    return (h === 24 ? 0 : h) * 60 + min;
+}
+function inTimeWindow(hm, start, end) {
+    const cur = parseHm(hm);
+    if (cur == null)
+        return true;
+    const s = parseHm(start);
+    const e = parseHm(end);
+    if (s == null && e == null)
+        return true;
+    if (s != null && e != null) {
+        if (e >= s)
+            return cur >= s && cur < e;
+        return cur >= s || cur < e; // overnight
+    }
+    if (s != null)
+        return cur >= s;
+    if (e != null)
+        return cur < e;
+    return true;
+}
+function defaultBadge(type, rules) {
+    if (rules.percentOff)
+        return `${rules.percentOff}% off`;
+    if (rules.fixedOff)
+        return `CHF ${Number(rules.fixedOff).toFixed(0)} off`;
+    if (type === "bogo") {
+        const buy = rules.buyQty || 1;
+        const get = rules.getQty || 1;
+        if (buy === 1 && get === 1)
+            return "1+1";
+        if (buy === 2 && get === 1)
+            return "2+1";
+        return `${buy}+${get}`;
+    }
+    if (type === "pay_n_get_m") {
+        const pay = rules.payQty || 3;
+        const recv = rules.receiveQty || pay + 1;
+        return `${pay}+${recv - pay}`;
+    }
+    if (type === "package_deal") {
+        const buy = rules.buyQty || 2;
+        const get = rules.getQty || 1;
+        const price = Number(rules.packagePrice) || 0;
+        if (price > 0)
+            return `${buy}+${get} · CHF ${price.toFixed(0)}`;
+        return `${buy}+${get}`;
+    }
+    return "Offer";
+}
+class OffersService {
+    static async list(merchantId) {
+        const db = (0, db_1.getDb)();
+        return db.query.offers.findMany({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.offers.merchantId, merchantId),
+            orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.offers.sortOrder), (0, drizzle_orm_1.desc)(db_1.schema.offers.priority), (0, drizzle_orm_1.desc)(db_1.schema.offers.createdAt)],
+        });
+    }
+    static async get(merchantId, offerId) {
+        const db = (0, db_1.getDb)();
+        const row = await db.query.offers.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.offers.id, offerId), (0, drizzle_orm_1.eq)(db_1.schema.offers.merchantId, merchantId)),
+        });
+        if (!row)
+            throw new Error("Offer not found");
+        return row;
+    }
+    static async ensureOffersCategory(merchantId) {
+        const db = (0, db_1.getDb)();
+        const existing = await db.query.categories.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.categories.isOffersCategory, true)),
+        });
+        if (existing)
+            return existing;
+        const [created] = await db
+            .insert(db_1.schema.categories)
+            .values({
+            merchantId,
+            name: "Offers",
+            description: "Current promotions and special deals",
+            color: "#b45309",
+            isOffersCategory: true,
+            sortOrder: -100,
+        })
+            .returning();
+        return created;
+    }
+    static async create(merchantId, input) {
+        const db = (0, db_1.getDb)();
+        const offerType = String(input.offerType || "percent_category");
+        const rules = (input.rules || {});
+        if (input.featured !== false) {
+            await this.ensureOffersCategory(merchantId);
+        }
+        const [row] = await db
+            .insert(db_1.schema.offers)
+            .values({
+            merchantId,
+            name: String(input.name || "").trim().slice(0, 255) || "Offer",
+            description: input.description?.trim() || null,
+            offerType,
+            rules,
+            channels: Array.isArray(input.channels) ? input.channels : [],
+            categoryIds: Array.isArray(input.categoryIds) ? input.categoryIds : [],
+            productIds: Array.isArray(input.productIds) ? input.productIds : [],
+            scheduleMode: input.scheduleMode === "days" ? "days" : "always",
+            daysOfWeek: Array.isArray(input.daysOfWeek) ? input.daysOfWeek : [],
+            timeStart: input.timeStart || null,
+            timeEnd: input.timeEnd || null,
+            validFrom: input.validFrom ? new Date(input.validFrom) : null,
+            validTo: input.validTo ? new Date(input.validTo) : null,
+            isActive: input.isActive !== false,
+            featured: input.featured !== false,
+            badgeLabel: input.badgeLabel?.trim() || defaultBadge(offerType, rules),
+            priority: Math.floor(Number(input.priority) || 0),
+            stackable: !!input.stackable,
+        })
+            .returning();
+        return row;
+    }
+    static async update(merchantId, offerId, updates) {
+        const db = (0, db_1.getDb)();
+        const patch = { updatedAt: new Date() };
+        const allow = [
+            "name",
+            "description",
+            "offerType",
+            "rules",
+            "channels",
+            "categoryIds",
+            "productIds",
+            "scheduleMode",
+            "daysOfWeek",
+            "timeStart",
+            "timeEnd",
+            "isActive",
+            "featured",
+            "badgeLabel",
+            "priority",
+            "stackable",
+            "sortOrder",
+        ];
+        for (const key of allow) {
+            if (updates[key] !== undefined)
+                patch[key] = updates[key];
+        }
+        if (updates.validFrom !== undefined) {
+            patch.validFrom = updates.validFrom ? new Date(String(updates.validFrom)) : null;
+        }
+        if (updates.validTo !== undefined) {
+            patch.validTo = updates.validTo ? new Date(String(updates.validTo)) : null;
+        }
+        if (patch.featured)
+            await this.ensureOffersCategory(merchantId);
+        const rows = await db
+            .update(db_1.schema.offers)
+            .set(patch)
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.offers.id, offerId), (0, drizzle_orm_1.eq)(db_1.schema.offers.merchantId, merchantId)))
+            .returning();
+        if (!rows.length)
+            throw new Error("Offer not found");
+        return rows[0];
+    }
+    static async remove(merchantId, offerId) {
+        const db = (0, db_1.getDb)();
+        const rows = await db
+            .delete(db_1.schema.offers)
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.offers.id, offerId), (0, drizzle_orm_1.eq)(db_1.schema.offers.merchantId, merchantId)))
+            .returning();
+        if (!rows.length)
+            throw new Error("Offer not found");
+        return { success: true };
+    }
+    static isOfferActiveAt(offer, at, channel) {
+        if (!offer.isActive)
+            return false;
+        if (offer.validFrom && at < offer.validFrom)
+            return false;
+        if (offer.validTo && at > offer.validTo)
+            return false;
+        const channels = (offer.channels || []);
+        if (channel && channels.length && !channels.includes(channel))
+            return false;
+        const { day, hm } = zurichParts(at);
+        if (offer.scheduleMode === "days") {
+            const days = (offer.daysOfWeek || []);
+            if (days.length && !days.includes(day))
+                return false;
+        }
+        if (!inTimeWindow(hm, offer.timeStart, offer.timeEnd))
+            return false;
+        return true;
+    }
+    static async listActivePublic(merchantId, at = new Date(), channel) {
+        const all = await this.list(merchantId);
+        return all.filter((o) => this.isOfferActiveAt(o, at, channel));
+    }
+    static matchesProduct(offer, line) {
+        if (line.loyaltyReward)
+            return false;
+        const pids = (offer.productIds || []);
+        const cids = (offer.categoryIds || []);
+        if (pids.length)
+            return pids.includes(line.productId);
+        if (cids.length)
+            return !!line.categoryId && cids.includes(line.categoryId);
+        return true;
+    }
+    static computeOfferDiscount(offer, lines) {
+        const rules = (offer.rules || {});
+        const minOrder = Number(rules.minOrderAmount) || 0;
+        const foodTotal = (0, money_1.roundMoney2)(lines.filter((l) => !l.loyaltyReward).reduce((s, l) => s + l.unitPrice * l.quantity, 0));
+        if (minOrder > 0 && foodTotal < minOrder)
+            return 0;
+        const type = offer.offerType;
+        const eligible = lines.filter((l) => this.matchesProduct(offer, l));
+        if (type === "percent_order") {
+            const pct = Math.min(100, Math.max(0, Number(rules.percentOff) || 0));
+            return (0, money_1.roundMoney2)((foodTotal * pct) / 100);
+        }
+        if (type === "fixed_off") {
+            const amt = Math.max(0, Number(rules.fixedOff) || 0);
+            return (0, money_1.roundMoney2)(Math.min(amt, foodTotal));
+        }
+        if (type === "percent_category") {
+            const pct = Math.min(100, Math.max(0, Number(rules.percentOff) || 0));
+            const base = eligible.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+            return (0, money_1.roundMoney2)((base * pct) / 100);
+        }
+        if (type === "bogo") {
+            const buy = Math.max(1, Math.floor(Number(rules.buyQty) || 1));
+            const get = Math.max(1, Math.floor(Number(rules.getQty) || 1));
+            const getPct = Math.min(100, Math.max(0, Number(rules.getDiscountPercent) ?? 100));
+            // Expand to unit prices sorted ascending (cheapest free)
+            const units = [];
+            for (const l of eligible) {
+                for (let i = 0; i < l.quantity; i++)
+                    units.push(l.unitPrice);
+            }
+            units.sort((a, b) => a - b);
+            const group = buy + get;
+            const freeSlots = Math.floor(units.length / group) * get;
+            let discount = 0;
+            for (let i = 0; i < freeSlots; i++) {
+                discount += (units[i] * getPct) / 100;
+            }
+            return (0, money_1.roundMoney2)(discount);
+        }
+        if (type === "pay_n_get_m") {
+            const pay = Math.max(1, Math.floor(Number(rules.payQty) || 3));
+            const recv = Math.max(pay + 1, Math.floor(Number(rules.receiveQty) || pay + 1));
+            const freePerSet = recv - pay;
+            const units = [];
+            for (const l of eligible) {
+                for (let i = 0; i < l.quantity; i++)
+                    units.push(l.unitPrice);
+            }
+            units.sort((a, b) => a - b);
+            const sets = Math.floor(units.length / recv);
+            let discount = 0;
+            for (let s = 0; s < sets; s++) {
+                for (let f = 0; f < freePerSet; f++) {
+                    discount += units[s * recv + f] || 0;
+                }
+            }
+            return (0, money_1.roundMoney2)(discount);
+        }
+        if (type === "combo_deal") {
+            const needed = (rules.comboProductIds || []);
+            if (!needed.length)
+                return 0;
+            const counts = new Map();
+            for (const l of lines) {
+                if (l.loyaltyReward)
+                    continue;
+                counts.set(l.productId, (counts.get(l.productId) || 0) + l.quantity);
+            }
+            let combos = Infinity;
+            for (const id of needed) {
+                combos = Math.min(combos, counts.get(id) || 0);
+            }
+            if (!Number.isFinite(combos) || combos <= 0)
+                return 0;
+            // Price of one combo set = sum of one unit of each product (cheapest unit if multiples)
+            let setPrice = 0;
+            for (const id of needed) {
+                const prices = lines
+                    .filter((l) => l.productId === id && !l.loyaltyReward)
+                    .map((l) => l.unitPrice);
+                setPrice += Math.min(...prices);
+            }
+            const pct = Number(rules.comboPercentOff) || 0;
+            const fixed = Number(rules.comboFixedOff) || 0;
+            const per = pct > 0 ? (setPrice * pct) / 100 : fixed;
+            return (0, money_1.roundMoney2)(per * combos);
+        }
+        if (type === "package_deal") {
+            return this.computePackageDealDiscount(rules, lines);
+        }
+        return 0;
+    }
+    /**
+     * Choose buyQty from buyProductIds + getQty from getProductIds for packagePrice.
+     * Forms as many sets as possible; each set discounts (sum of unit prices − packagePrice).
+     */
+    static computePackageDealDiscount(rules, lines) {
+        const buyQty = Math.max(1, Math.floor(Number(rules.buyQty) || 2));
+        const getQty = Math.max(0, Math.floor(Number(rules.getQty) || 1));
+        const packagePrice = Math.max(0, Number(rules.packagePrice) || 0);
+        const buyIds = new Set((rules.buyProductIds || []).map(String).filter(Boolean));
+        const getIds = new Set((rules.getProductIds || []).map(String).filter(Boolean));
+        // Fallback: use offer productIds / category-eligible lines as the buy pool
+        const useAllEligible = buyIds.size === 0;
+        const units = [];
+        let idx = 0;
+        for (const l of lines) {
+            if (l.loyaltyReward)
+                continue;
+            for (let i = 0; i < l.quantity; i++) {
+                units.push({
+                    productId: l.productId,
+                    price: l.unitPrice,
+                    key: `${l.productId}:${idx++}`,
+                });
+            }
+        }
+        const available = new Set(units.map((u) => u.key));
+        let discount = 0;
+        const takeBest = (pool, n) => {
+            const candidates = pool
+                .filter((u) => available.has(u.key))
+                .sort((a, b) => b.price - a.price);
+            const picked = candidates.slice(0, n);
+            for (const u of picked)
+                available.delete(u.key);
+            return picked;
+        };
+        while (true) {
+            const buyPool = units.filter((u) => available.has(u.key) && (useAllEligible || buyIds.has(u.productId)));
+            if (buyPool.length < buyQty)
+                break;
+            const bought = takeBest(buyPool, buyQty);
+            if (bought.length < buyQty)
+                break;
+            let free = [];
+            if (getQty > 0) {
+                const freePool = units.filter((u) => available.has(u.key) &&
+                    (getIds.size ? getIds.has(u.productId) : buyIds.has(u.productId) || useAllEligible));
+                if (freePool.length < getQty) {
+                    // Put bought back and stop
+                    for (const u of bought)
+                        available.add(u.key);
+                    break;
+                }
+                free = takeBest(freePool, getQty);
+                if (free.length < getQty) {
+                    for (const u of bought)
+                        available.add(u.key);
+                    for (const u of free)
+                        available.add(u.key);
+                    break;
+                }
+            }
+            const setSum = [...bought, ...free].reduce((s, u) => s + u.price, 0);
+            if (packagePrice > 0) {
+                discount += Math.max(0, setSum - packagePrice);
+            }
+            else {
+                // No package price → free items are 100% off
+                discount += free.reduce((s, u) => s + u.price, 0);
+            }
+        }
+        return (0, money_1.roundMoney2)(discount);
+    }
+    /**
+     * Pick best non-stackable offer, or sum stackable ones (cap at food total).
+     */
+    static evaluateCart(offers, lines, at, channel) {
+        const bakedOfferIds = new Set(lines.map((l) => l.offerId).filter((id) => !!id));
+        const active = offers
+            .filter((o) => this.isOfferActiveAt(o, at, channel) && !bakedOfferIds.has(o.id))
+            .sort((a, b) => (b.priority || 0) - (a.priority || 0));
+        const foodTotal = (0, money_1.roundMoney2)(lines.filter((l) => !l.loyaltyReward).reduce((s, l) => s + l.unitPrice * l.quantity, 0));
+        const stackableApplied = [];
+        let stackSum = 0;
+        let bestSingle = null;
+        for (const offer of active) {
+            const discount = this.computeOfferDiscount(offer, lines);
+            if (discount <= 0)
+                continue;
+            const applied = {
+                offerId: offer.id,
+                name: offer.name,
+                badgeLabel: offer.badgeLabel,
+                discount,
+                offerType: offer.offerType,
+            };
+            if (offer.stackable) {
+                stackableApplied.push(applied);
+                stackSum += discount;
+            }
+            else if (!bestSingle || discount > bestSingle.discount) {
+                bestSingle = applied;
+            }
+        }
+        if (stackableApplied.length && (!bestSingle || stackSum >= bestSingle.discount)) {
+            const discount = (0, money_1.roundMoney2)(Math.min(stackSum, foodTotal));
+            return { discount, applied: stackableApplied };
+        }
+        if (bestSingle) {
+            return {
+                discount: (0, money_1.roundMoney2)(Math.min(bestSingle.discount, foodTotal)),
+                applied: [bestSingle],
+            };
+        }
+        return { discount: 0, applied: [] };
+    }
+    /** Seed a few sensible demo offers for merchants. */
+    static async seedDemoOffers(merchantId, categoryIds = []) {
+        const existing = await this.list(merchantId);
+        if (existing.length)
+            return existing;
+        const demos = [
+            {
+                name: "Happy hour 20% — Food",
+                description: "20% off the Food category, weekdays 13:00–17:00 (off-peak).",
+                offerType: "percent_category",
+                rules: { percentOff: 20 },
+                categoryIds: categoryIds.slice(0, 1),
+                scheduleMode: "days",
+                daysOfWeek: ["mon", "tue", "wed", "thu", "fri"],
+                timeStart: "13:00",
+                timeEnd: "17:00",
+                badgeLabel: "20% off",
+                priority: 10,
+            },
+            {
+                name: "Buy 1 get 1 free",
+                description: "Buy one eligible item, get the second free (cheapest).",
+                offerType: "bogo",
+                rules: { buyQty: 1, getQty: 1, getDiscountPercent: 100 },
+                badgeLabel: "1+1",
+                priority: 20,
+            },
+            {
+                name: "Buy 2 get 1 free",
+                description: "Buy two, get one free.",
+                offerType: "bogo",
+                rules: { buyQty: 2, getQty: 1, getDiscountPercent: 100 },
+                badgeLabel: "2+1",
+                priority: 15,
+            },
+            {
+                name: "Dine-in 3+1",
+                description: "Pay for 3, 4th free — dine-in only.",
+                offerType: "pay_n_get_m",
+                rules: { payQty: 3, receiveQty: 4 },
+                channels: ["dine_in"],
+                badgeLabel: "3+1",
+                priority: 25,
+            },
+            {
+                name: "Weekend 15% off order",
+                description: "15% off your whole order on Saturday & Sunday.",
+                offerType: "percent_order",
+                rules: { percentOff: 15, minOrderAmount: 20 },
+                scheduleMode: "days",
+                daysOfWeek: ["sat", "sun"],
+                badgeLabel: "15% off",
+                priority: 5,
+            },
+        ];
+        const created = [];
+        for (const d of demos) {
+            created.push(await this.create(merchantId, d));
+        }
+        return created;
+    }
+}
+exports.OffersService = OffersService;
+//# sourceMappingURL=offers.service.js.map

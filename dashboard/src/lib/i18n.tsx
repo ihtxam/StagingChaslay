@@ -1328,6 +1328,9 @@ const en: Dict = {
   webPosGoodwillFailed: 'Goodwill compensation failed',
   autoPrintReceipt: 'Auto-print customer receipt',
   autoPrintKitchen: 'Auto-print kitchen ticket',
+  waiterTillBellEnabled: 'Bell on main till when waiter sends order',
+  waiterTillBellEnabledHint:
+    'Play a short chime on the register PC when a waiter phone or mobile WebPOS sends a kitchen order — after it is registered and sent to the printer.',
   kitchenPrintRetryEnabled: 'Retry kitchen print before showing error',
   kitchenPrintRetryEnabledHint:
     'When a kitchen ticket fails to print, ChaslayReborn retries automatically on the register PC before alerting staff.',
@@ -1934,6 +1937,8 @@ const en: Dict = {
     'Keep ChaslayReborn open on the PC with the Print Agent — that till prints kitchen/receipt jobs from waiter phones automatically.',
   webPosPrintQueuedMainTill:
     'Sent to main till printer. Keep ChaslayReborn open on the PC with the Print Agent.',
+  webPosWaiterOrderAtTill: 'Waiter order received — printing on this till',
+  webPosWaiterOrderAtTillNamed: 'Waiter order received — {label}',
   webPosAgentOffline:
     'Print agent offline. Download & install once from Settings → Receipts & printers (or run print-agent setup EXE), then Refresh printers. Set your thermal printer as Windows default, or pick it above.',
   webPosSearchProducts: 'Search products or barcode…',
@@ -4187,6 +4192,9 @@ const fr: Dict = {
   webPosGoodwillFailed: 'Échec du geste commercial',
   autoPrintReceipt: 'Impression auto du reçu',
   autoPrintKitchen: 'Impression auto cuisine',
+  waiterTillBellEnabled: 'Sonnerie caisse quand le serveur envoie',
+  waiterTillBellEnabledHint:
+    'Un signal sonore sur la caisse principale quand un serveur ou WebPOS mobile envoie en cuisine — une fois la commande enregistrée et envoyée à l’imprimante.',
   kitchenPrintRetryEnabled: 'Réessayer l’impression cuisine avant l’alerte',
   kitchenPrintRetryEnabledHint:
     'Si un ticket cuisine ne s’imprime pas, ChaslayReborn réessaie automatiquement sur la caisse avant d’alerter le personnel.',
@@ -4792,6 +4800,8 @@ const fr: Dict = {
     'Laissez ChaslayReborn ouvert sur le PC avec l\'agent d\'impression — cette caisse imprime automatiquement les tickets des téléphones serveurs.',
   webPosPrintQueuedMainTill:
     'Envoyé à l\'imprimante de la caisse principale. Gardez ChaslayReborn ouvert sur le PC avec l\'agent d\'impression.',
+  webPosWaiterOrderAtTill: 'Commande serveur reçue — impression sur cette caisse',
+  webPosWaiterOrderAtTillNamed: 'Commande serveur reçue — {label}',
   webPosAgentOffline:
     'Agent hors ligne. Téléchargez et installez une fois depuis Paramètres → Reçus & imprimantes (setup EXE), puis Actualiser. Imprimante thermique par défaut Windows, ou choisissez-la ci-dessus.',
   webPosSearchProducts: 'Rechercher un produit ou code-barres…',
@@ -7052,6 +7062,9 @@ const de: Dict = {
   webPosGoodwillFailed: 'Kulanz fehlgeschlagen',
   autoPrintReceipt: 'Kundenbeleg automatisch drucken',
   autoPrintKitchen: 'Küchenticket automatisch drucken',
+  waiterTillBellEnabled: 'Klingel an Hauptkasse bei Kellnersendung',
+  waiterTillBellEnabledHint:
+    'Kurzer Signalton an der Kasse, wenn ein Kellner-Handy oder mobiles WebPOS eine Küchenbestellung sendet — nach Registrierung und Druckauftrag.',
   kitchenPrintRetryEnabled: 'Küchendruck vor Fehlermeldung wiederholen',
   kitchenPrintRetryEnabledHint:
     'Wenn ein Küchenticket nicht druckt, versucht ChaslayReborn automatisch erneut an der Kasse, bevor das Personal benachrichtigt wird.',
@@ -7657,6 +7670,8 @@ const de: Dict = {
     'Lassen Sie ChaslayReborn auf dem PC mit Druckagent geöffnet — diese Kasse druckt Küchen-/Belegjobs von Kellner-Handys automatisch.',
   webPosPrintQueuedMainTill:
     'An die Hauptkasse gesendet. ChaslayReborn auf dem PC mit Druckagent geöffnet lassen.',
+  webPosWaiterOrderAtTill: 'Kellnerbestellung eingegangen — Druck an dieser Kasse',
+  webPosWaiterOrderAtTillNamed: 'Kellnerbestellung eingegangen — {label}',
   webPosAgentOffline:
     'Druckagent offline. Einmal unter Einstellungen → Belege & Drucker herunterladen/installieren, dann aktualisieren. Thermodrucker als Windows-Standard setzen oder oben wählen.',
   webPosSearchProducts: 'Produkt oder Barcode suchen…',
