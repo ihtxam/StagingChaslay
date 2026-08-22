@@ -1110,12 +1110,12 @@ export default function Settings() {
         receiptFooter: ps.receiptFooter || '',
         kitchenTicketHeader: ps.kitchenTicketHeader || '',
         kitchenTicketFooter: ps.kitchenTicketFooter || '',
-        kitchenItemTextScale: ps.kitchenItemTextScale === 1 || ps.kitchenItemTextScale === 3 ? ps.kitchenItemTextScale : 2,
+        kitchenItemTextScale: ps.kitchenItemTextScale === 2 || ps.kitchenItemTextScale === 3 ? ps.kitchenItemTextScale : 1,
         kitchenHeaderTextScale:
-          ps.kitchenHeaderTextScale === 1 || ps.kitchenHeaderTextScale === 3
+          ps.kitchenHeaderTextScale === 2 || ps.kitchenHeaderTextScale === 3
             ? ps.kitchenHeaderTextScale
-            : 2,
-        kitchenBoldText: ps.kitchenBoldText !== false,
+            : 1,
+        kitchenBoldText: ps.kitchenBoldText === true,
         receiptShowVatTable: ps.receiptShowVatTable !== false,
         receiptShowStaffLine: ps.receiptShowStaffLine !== false,
         receiptShowQrCode: ps.receiptShowQrCode !== false,
@@ -3292,7 +3292,7 @@ export default function Settings() {
                 <Field label={t('kitchenItemTextScale')} hint={t('kitchenTextScaleHint')}>
                   <select
                     className="input"
-                    value={settings.posPrintSettings?.kitchenItemTextScale || 2}
+                    value={settings.posPrintSettings?.kitchenItemTextScale ?? 1}
                     onChange={(e) =>
                       setSettings({
                         ...settings,
@@ -3311,7 +3311,7 @@ export default function Settings() {
                 <Field label={t('kitchenHeaderTextScale')}>
                   <select
                     className="input"
-                    value={settings.posPrintSettings?.kitchenHeaderTextScale || 2}
+                    value={settings.posPrintSettings?.kitchenHeaderTextScale ?? 1}
                     onChange={(e) =>
                       setSettings({
                         ...settings,
@@ -3330,7 +3330,7 @@ export default function Settings() {
                 <label className="inline-flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={settings.posPrintSettings?.kitchenBoldText !== false}
+                    checked={settings.posPrintSettings?.kitchenBoldText === true}
                     onChange={(e) =>
                       setSettings({
                         ...settings,
