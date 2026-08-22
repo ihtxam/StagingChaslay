@@ -1713,6 +1713,7 @@ router.get(
         | "today"
         | "yesterday"
         | "last_week"
+        | "this_month"
         | "last_month"
         | "last_3_months"
         | "custom";
@@ -1804,6 +1805,7 @@ router.get(
         | "today"
         | "yesterday"
         | "last_week"
+        | "this_month"
         | "last_month"
         | "last_3_months"
         | "custom";
@@ -1858,16 +1860,20 @@ router.get(
         | "today"
         | "yesterday"
         | "last_week"
+        | "this_month"
         | "last_month"
         | "last_3_months"
         | "custom";
       const format = String(req.query.format || "xlsx").toLowerCase();
+      const rawLang = String(req.query.language || req.query.lang || "en").slice(0, 2).toLowerCase();
+      const language = rawLang === "fr" || rawLang === "de" ? rawLang : "en";
       const opts = {
         preset,
         from: req.query.from ? String(req.query.from) : undefined,
         to: req.query.to ? String(req.query.to) : undefined,
         staffId: scope.staffId,
         staffName: scope.staffName,
+        language,
       };
       const file =
         format === "csv"

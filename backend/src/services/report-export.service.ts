@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { paymentMethodLabelEn } from "@/lib/payment-breakdown";
+import { reportExportLabels, normalizeReportExportLang, type ReportExportLang } from "@/lib/report-export-labels";
 import {
   PosReportsService,
   type ReportPreset,
@@ -10,14 +10,19 @@ function money(n: number | undefined | null): string {
   return (Number(n) || 0).toFixed(2);
 }
 
+export type ReportExportOpts = {
+  preset?: ReportPreset;
+  from?: string;
+  to?: string;
+  language?: ReportExportLang | string;
+} & SalesScopeOpts;
+
 /**
  * Build OrderPin-inspired multi-sheet workbook (or CSV) from overview/EOD data.
  */
 export class ReportExportService {
-  static async buildOverviewWorkbook(
-    merchantId: string,
-    opts: { preset?: ReportPreset; from?: string; to?: string } & SalesScopeOpts
-  ) {
+  static async buildOverviewWorkbook(merchantId: string, opts: ReportExportOpts) {
+    const L = reportExportLabels(normalizeReportExportLang(opts.language));
     const overview = await PosReportsService.getOverviewDashboard(merchantId, opts);
     const eod = overview.eod;
     const store = overview.businessName || "Store";
@@ -26,110 +31,114 @@ export class ReportExportService {
 
     const wb = XLSX.utils.book_new();
 
-    // --- Report Info ---
     const infoSheet = XLSX.utils.aoa_to_sheet([
-      ["Report Info"],
-      ["Store Name", "Generation Time", "Time Period"],
+      [L.reportInfo],
+      [L.storeName, L.generationTime, L.timePeriod],
       [store, generated, period],
     ]);
-    XLSX.utils.book_append_sheet(wb, infoSheet, "Report Info");
+    XLSX.utils.book_append_sheet(wb, infoSheet, L.reportInfo.slice(0, 31));
 
-    // --- Store orders overview ---
     const overviewRows: (string | number)[][] = [
-      ["Sales summary"],
-      ["", "Amount", "Qty"],
-      ["Paid orders Qty", "-", eod.salesCount],
-      ["Total paid", money(eod.revenue), "-"],
-      ["Tax", money(eod.taxTotal), "-"],
-      ["Total refund", money(eod.refundTotal), "-"],
-      ["Actual sales", money(eod.netTotal), "-"],
-      ["Refunded orders Qty", "-", eod.refundCount],
-      ["Tips", money(eod.tipsTotal), "-"],
+      [L.salesSummary],
+      ["", L.amount, L.qty],
+      [L.paidOrdersQty, "-", eod.salesCount],
+      [L.totalPaid, money(eod.revenue), "-"],
+      [L.tax, money(eod.taxTotal), "-"],
+      [L.totalRefund, money(eod.refundTotal), "-"],
+      [L.actualSales, money(eod.netTotal), "-"],
+      [L.refundedOrdersQty, "-", eod.refundCount],
+      [L.tips, money(eod.tipsTotal), "-"],
       [],
-      ["Fee summary"],
-      ["", "Amount", "Qty"],
-      ["Product", money(eod.netTotal), "-"],
-      ["Dishes discount", money(eod.discountTotal), "-"],
-      ["Tax", money(eod.taxTotal), "-"],
-      ["Total paid", money(eod.revenue), "-"],
-      ["Total refund", money(eod.refundTotal), "-"],
-      ["Net sales", money(eod.netTotal), "-"],
-      ["Actual sales", money(eod.netTotal), "-"],
-      ["Paid orders Qty", "-", eod.salesCount],
+      [L.feeSummary],
+      ["", L.amount, L.qty],
+      [L.product, money(eod.netTotal), "-"],
+      [L.dishesDiscount, money(eod.discountTotal), "-"],
+      [L.tax, money(eod.taxTotal), "-"],
+      [L.totalPaid, money(eod.revenue), "-"],
+      [L.totalRefund, money(eod.refundTotal), "-"],
+      [L.netSales, money(eod.netTotal), "-"],
+      [L.actualSales, money(eod.netTotal), "-"],
+      [L.paidOrdersQty, "-", eod.salesCount],
       [],
-      ["Order type report"],
-      ["Order types", "Amount", "Qty"],
-      ...(eod.orderTypeRows || []).map((r) => [r.label, money(r.total), r.count]),
-      ["Total", money(eod.revenue), eod.salesCount],
+      [L.orderTypeReport],
+      [L.orderTypes, L.amount, L.qty],
+      ...(eod.orderTypeRows || []).map((r) => [
+        L.channelLabel(r.channel),
+        money(r.total),
+        r.count,
+      ]),
+      [L.total, money(eod.revenue), eod.salesCount],
       [],
-      ["Payment Method Report"],
-      ["Payment method", "Amount", "Qty"],
+      [L.paymentMethodReport],
+      [L.paymentMethod, L.amount, L.qty],
       ...(eod.paymentRows || []).map((p) => [
-        paymentMethodLabelEn(p.method),
+        L.paymentMethodLabel(p.method),
         money(p.total),
         p.count,
       ]),
-      ["Total", money(eod.grandTotal || eod.revenue), eod.salesCount],
+      [L.total, money(eod.grandTotal || eod.revenue), eod.salesCount],
       [],
-      ["Tax"],
-      ["Notes", "Amount", "Qty"],
+      [L.tax],
+      [L.notes, L.amount, L.qty],
       ...(eod.vatRows || []).map((v) => [v.label, money(v.tva), "-"]),
-      ["Total tax", money(eod.taxTotal), "-"],
+      [L.totalTax, money(eod.taxTotal), "-"],
       [],
-      ["Order Placed By Report"],
-      ["Waiter", "Amount", "Qty"],
+      [L.orderPlacedByReport],
+      [L.waiter, L.amount, L.qty],
       ...(eod.userPerformance || []).map((u) => [u.name, money(u.total), u.salesCount]),
       [],
-      ["Cash drawer / Funding"],
-      ["Funding amount (sales + tips)", money(overview.kpis.fundingAmount), "-"],
-      ...(eod.shiftCash || []).flatMap((s, i) => [
-        [`Shift ${i + 1} opening float`, money(s.openingFloat), s.staffName || "-"],
-        [`Shift ${i + 1} cash sales`, money(s.cashSales + (s.cashRefunds || 0)), "-"],
-        [`Shift ${i + 1} cash in`, money(s.cashIn || 0), "-"],
-        ...(s.movements || [])
-          .filter((m) => String(m.type).toLowerCase() !== "out")
-          .map((m) => [
-            `  Cash in: ${m.reason || m.staffName || "—"}`,
-            money(m.amount),
-            "-",
-          ]),
-        [`Shift ${i + 1} cash out`, money(s.cashOut || 0), "-"],
-        ...(s.movements || [])
-          .filter((m) => String(m.type).toLowerCase() === "out")
-          .map((m) => [
-            `  Cash out: ${m.reason || m.staffName || "—"}`,
-            money(m.amount),
-            "-",
-          ]),
-        ...(s.cashRefunds
-          ? [[`Shift ${i + 1} cash refunds`, money(s.cashRefunds), "-"]]
-          : []),
-        [`Shift ${i + 1} expected cash`, money(s.expectedCash), "-"],
-      ]),
+      [L.cashDrawerFunding],
+      [L.fundingAmountSalesTips, money(overview.kpis.fundingAmount), "-"],
+      ...(eod.shiftCash || []).flatMap((s, i) => {
+        const n = i + 1;
+        return [
+          [L.shiftOpeningFloat(n), money(s.openingFloat), s.staffName || "-"],
+          [L.shiftCashSales(n), money(s.cashSales + (s.cashRefunds || 0)), "-"],
+          [L.shiftCashIn(n), money(s.cashIn || 0), "-"],
+          ...(s.movements || [])
+            .filter((m) => String(m.type).toLowerCase() !== "out")
+            .map((m) => [
+              `  ${L.cashInMovement}: ${m.reason || m.staffName || "—"}`,
+              money(m.amount),
+              "-",
+            ]),
+          [L.shiftCashOut(n), money(s.cashOut || 0), "-"],
+          ...(s.movements || [])
+            .filter((m) => String(m.type).toLowerCase() === "out")
+            .map((m) => [
+              `  ${L.cashOutMovement}: ${m.reason || m.staffName || "—"}`,
+              money(m.amount),
+              "-",
+            ]),
+          ...(s.cashRefunds
+            ? [[L.shiftCashRefunds(n), money(s.cashRefunds), "-"]]
+            : []),
+          [L.shiftExpectedCash(n), money(s.expectedCash), "-"],
+        ];
+      }),
     ];
     XLSX.utils.book_append_sheet(
       wb,
       XLSX.utils.aoa_to_sheet(overviewRows),
-      "Store orders overview"
+      L.storeOrdersOverview.slice(0, 31)
     );
 
-    // --- Daily Report ---
     const dailySheet = XLSX.utils.aoa_to_sheet([
       [
-        "Business Date",
-        "Paid orders Qty",
-        "Refunded orders Qty",
-        "Cash",
-        "Card/Terminal",
-        "Total paid",
-        "Total refund",
-        "Total tax",
-        "Net sales",
+        L.businessDate,
+        L.paidOrdersQty,
+        L.refundedOrdersQtyShort,
+        L.cash,
+        L.cardTerminal,
+        L.totalPaid,
+        L.totalRefund,
+        L.totalTax,
+        L.netSales,
       ],
       [
         overview.range.from === overview.range.to
           ? overview.range.from
-          : `${overview.range.from} ? ${overview.range.to}`,
+          : `${overview.range.from} – ${overview.range.to}`,
         eod.salesCount,
         eod.refundCount,
         money(eod.cashTotal),
@@ -139,23 +148,22 @@ export class ReportExportService {
         money(eod.taxTotal),
         money(eod.netTotal),
       ],
-      ["Total amount of the report", money(eod.revenue)],
+      [L.totalAmountOfReport, money(eod.revenue)],
     ]);
-    XLSX.utils.book_append_sheet(wb, dailySheet, "Daily Report");
+    XLSX.utils.book_append_sheet(wb, dailySheet, L.dailyReport.slice(0, 31));
 
-    // --- Product report ---
     const productRows: (string | number)[][] = [
-      ["Product report"],
+      [L.productReport],
       [
-        "Product",
-        "Specification",
-        "Qty",
-        "Gross Sales",
-        "Disc/Comps/Rewards",
-        "Net sale",
-        "Tax amount",
-        "Total sales",
-        "Refund",
+        L.product,
+        L.specification,
+        L.qty,
+        L.grossSales,
+        L.discCompsRewards,
+        L.netSale,
+        L.taxAmount,
+        L.totalSales,
+        L.refund,
       ],
       ...(eod.productsSold || []).map((p) => [
         p.name,
@@ -169,7 +177,7 @@ export class ReportExportService {
         "0.00",
       ]),
       [
-        "Total",
+        L.total,
         "-",
         (eod.productsSold || []).reduce((s, p) => s + Number(p.quantity || 0), 0),
         money(eod.netTotal),
@@ -180,12 +188,11 @@ export class ReportExportService {
         "0.00",
       ],
     ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(productRows), "Product report");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(productRows), L.productReport.slice(0, 31));
 
-    // --- Performance ---
     const staffTotal = (eod.userPerformance || []).reduce((s, u) => s + u.total, 0) || 1;
     const perfRows: (string | number)[][] = [
-      ["Staff", "Product amount", "Amount Ratio", "Orders", "Order ratio"],
+      [L.staff, L.productAmount, L.amountRatio, L.orders, L.orderRatio],
       ...(eod.userPerformance || []).map((u) => [
         u.name,
         money(u.total),
@@ -194,7 +201,7 @@ export class ReportExportService {
         `${((u.salesCount / (eod.salesCount || 1)) * 100).toFixed(2)}%`,
       ]),
     ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(perfRows), "Performance report");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(perfRows), L.performanceReport.slice(0, 31));
 
     const safeName = store.replace(/[^\w\- ]+/g, "").trim().slice(0, 40) || "Report";
     const filename = `Report ${safeName}_${overview.range.from}${
@@ -205,10 +212,8 @@ export class ReportExportService {
     return { buffer, filename, overview, mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
   }
 
-  static async buildOverviewCsv(
-    merchantId: string,
-    opts: { preset?: ReportPreset; from?: string; to?: string } & SalesScopeOpts
-  ) {
+  static async buildOverviewCsv(merchantId: string, opts: ReportExportOpts) {
+    const L = reportExportLabels(normalizeReportExportLang(opts.language));
     const overview = await PosReportsService.getOverviewDashboard(merchantId, opts);
     const eod = overview.eod;
     const lines: string[] = [];
@@ -218,39 +223,39 @@ export class ReportExportService {
     };
     const row = (...cells: (string | number)[]) => lines.push(cells.map(esc).join(","));
 
-    row("Section", "Label", "Amount", "Qty");
-    row("Summary", "Store", overview.businessName, "");
-    row("Summary", "Period", overview.range.label, "");
-    row("Summary", "Total Sales", money(overview.kpis.totalSales), overview.kpis.orders);
-    row("Summary", "Net Sales", money(overview.kpis.netSales), "");
-    row("Summary", "Funding Amount", money(overview.kpis.fundingAmount), "");
-    row("Summary", "Tax", money(eod.taxTotal), "");
-    row("Summary", "Tips", money(eod.tipsTotal), "");
-    row("Summary", "Customers", overview.kpis.customers, "");
+    row(L.section, L.label, L.amount, L.qty);
+    row(L.summary, L.store, overview.businessName, "");
+    row(L.summary, L.period, overview.range.label, "");
+    row(L.summary, L.totalSales, money(overview.kpis.totalSales), overview.kpis.orders);
+    row(L.summary, L.netSales, money(overview.kpis.netSales), "");
+    row(L.summary, L.cashDrawerFunding, money(overview.kpis.fundingAmount), "");
+    row(L.summary, L.tax, money(eod.taxTotal), "");
+    row(L.summary, L.tips, money(eod.tipsTotal), "");
+    row(L.summary, L.customers, overview.kpis.customers, "");
     for (const p of overview.paymentMethods) {
-      row("Payment", p.label, money(p.total), p.count);
+      row(L.payment, L.paymentMethodLabel(p.method), money(p.total), p.count);
     }
     for (const o of overview.orderTypes) {
-      row("Order type", o.label, money(o.total), o.count);
+      row(L.orderType, L.channelLabel(o.channel), money(o.total), o.count);
     }
     for (const p of overview.products) {
-      row("Product", p.name, money(p.total), p.quantity);
+      row(L.product, p.name, money(p.total), p.quantity);
     }
     for (const s of overview.staff) {
-      row("Staff", s.name, money(s.total), s.salesCount);
+      row(L.staff, s.name, money(s.total), s.salesCount);
     }
     for (const [i, s] of (eod.shiftCash || []).entries()) {
       const n = i + 1;
-      row("Cash drawer", `Shift ${n} opening float`, money(s.openingFloat), "");
-      row("Cash drawer", `Shift ${n} cash sales`, money(s.cashSales + (s.cashRefunds || 0)), "");
-      row("Cash drawer", `Shift ${n} cash in`, money(s.cashIn || 0), "");
-      row("Cash drawer", `Shift ${n} cash out`, money(s.cashOut || 0), "");
-      if (s.cashRefunds) row("Cash drawer", `Shift ${n} cash refunds`, money(s.cashRefunds), "");
-      row("Cash drawer", `Shift ${n} expected cash`, money(s.expectedCash), "");
+      row(L.cashDrawer, L.shiftOpeningFloat(n), money(s.openingFloat), "");
+      row(L.cashDrawer, L.shiftCashSales(n), money(s.cashSales + (s.cashRefunds || 0)), "");
+      row(L.cashDrawer, L.shiftCashIn(n), money(s.cashIn || 0), "");
+      row(L.cashDrawer, L.shiftCashOut(n), money(s.cashOut || 0), "");
+      if (s.cashRefunds) row(L.cashDrawer, L.shiftCashRefunds(n), money(s.cashRefunds), "");
+      row(L.cashDrawer, L.shiftExpectedCash(n), money(s.expectedCash), "");
       for (const m of s.movements || []) {
         row(
-          "Cash drawer",
-          `Shift ${n} ${m.type === "out" ? "cash out" : "cash in"}: ${m.reason || m.staffName || "—"}`,
+          L.cashDrawer,
+          `Shift ${n} ${m.type === "out" ? L.cashOutMovement : L.cashInMovement}: ${m.reason || m.staffName || "—"}`,
           money(m.amount),
           ""
         );

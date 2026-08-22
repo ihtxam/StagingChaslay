@@ -1227,9 +1227,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       counterDineInEnabled ||
       channel === 'takeaway' ||
       channel === 'delivery' ||
-      (channel === 'dine_in' && counterDineInEnabled) ||
-      !!tableLabel ||
-      !!tabNumber);
+      (channel === 'dine_in' &&
+        (!!ticketDisplay || !!tableLabel || !!tabNumber || counterDineInEnabled)));
   const cartSide = checkoutSettings.cartSide === 'left' ? 'left' : 'right';
   const courseSendMode = checkoutSettings.courseSendMode || 'fire_per_course';
 
@@ -2614,6 +2613,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     tipsTotal?: number;
     grandTotal?: number;
     refundTotal: number;
+    refundCount?: number;
+    refundedOrders?: Array<{
+      orderNumber: string;
+      refundAmount: number;
+      refundReason?: string | null;
+    }>;
+    refundRows?: Array<{ method: string; total: number }>;
     cancelledCount: number;
     cancelledTotal: number;
     cashTotal: number;
@@ -2704,6 +2710,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tipsTotal: report?.tipsTotal,
       grandTotal: report?.grandTotal ?? (reportKind === 'eod' ? 0 : totalSales),
       refundTotal: report?.refundTotal ?? 0,
+      refundCount: report?.refundedOrders?.length ?? report?.refundCount,
+      refundedOrders: report?.refundedOrders?.map((r) => ({
+        orderNumber: r.orderNumber,
+        refundAmount: r.refundAmount,
+        refundReason: r.refundReason,
+      })),
+      refundRows: report?.refundRows,
       cancelledCount: report?.cancelledCount ?? 0,
       cancelledTotal: report?.cancelledTotal ?? 0,
       cashTotal: report?.cashTotal ?? (reportKind === 'eod' ? 0 : lastClosedShift.cashSales),
@@ -2730,20 +2743,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       header: printSettings?.receiptHeader,
       footer: printSettings?.receiptFooter,
       shiftCash:
-        report?.shiftCash?.length
-          ? report.shiftCash
-          : {
-              openingFloat: lastClosedShift.openingCash,
-              cashSales: lastClosedShift.cashSales,
-              cashIn: lastClosedShift.cashIn ?? 0,
-              cashOut: lastClosedShift.cashOut ?? 0,
-              cashRefunds: lastClosedShift.cashRefunds ?? 0,
-              movements: lastClosedShift.movements ?? [],
-              expectedCash: lastClosedShift.expectedCash,
-              closingCashCounted: lastClosedShift.closingCashCounted,
-              variance: lastClosedShift.variance,
-              staffName: webposStaff?.name || null,
-            },
+        reportKind === 'shift'
+          ? report?.shiftCash?.length
+            ? report.shiftCash
+            : {
+                openingFloat: lastClosedShift.openingCash,
+                cashSales: lastClosedShift.cashSales,
+                cashIn: lastClosedShift.cashIn ?? 0,
+                cashOut: lastClosedShift.cashOut ?? 0,
+                cashRefunds: lastClosedShift.cashRefunds ?? 0,
+                movements: lastClosedShift.movements ?? [],
+                expectedCash: lastClosedShift.expectedCash,
+                closingCashCounted: lastClosedShift.closingCashCounted,
+                variance: lastClosedShift.variance,
+                staffName: webposStaff?.name || null,
+              }
+          : undefined,
       includeProductsSold,
       reportKind,
     };
@@ -2881,6 +2896,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         tipsTotal?: number;
         grandTotal?: number;
         refundTotal: number;
+        refundCount?: number;
+        refundedOrders?: Array<{
+          orderNumber: string;
+          refundAmount: number;
+          refundReason?: string | null;
+        }>;
+        refundRows?: Array<{ method: string; total: number }>;
         cancelledCount: number;
         cancelledTotal: number;
         cashTotal: number;
@@ -2932,6 +2954,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         tipsTotal: report?.tipsTotal,
         grandTotal: report?.grandTotal ?? report?.revenue ?? 0,
         refundTotal: report?.refundTotal ?? 0,
+        refundCount: report?.refundedOrders?.length ?? report?.refundCount,
+        refundedOrders: report?.refundedOrders?.map((r) => ({
+          orderNumber: r.orderNumber,
+          refundAmount: r.refundAmount,
+          refundReason: r.refundReason,
+        })),
+        refundRows: report?.refundRows,
         cancelledCount: report?.cancelledCount ?? 0,
         cancelledTotal: report?.cancelledTotal ?? 0,
         cashTotal: report?.cashTotal ?? 0,
@@ -2948,8 +2977,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         paperWidthMm: printSettings?.paperWidthMm || 80,
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
-        shiftCash: report?.shiftCash,
         includeProductsSold,
+        reportKind: 'eod',
       });
       await printEscPosToTargets(text, { role: 'eod' });
     } catch (e: any) {
@@ -4299,9 +4328,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     const channelChanged = channel !== ch;
     setChannel(ch);
-    if (ch === 'dine_in' && counterDineInEnabled) {
+    if (ch === 'dine_in') {
       setFulfillmentWhen(null);
-      if (!ticketDisplay) {
+      if (!tableId && !ticketDisplay) {
         const ticket = nextDineInCounterNumber(merchant?.id, openShift?.id);
         setTicketDisplay(ticket.display);
         setTicketOrderNumber(ticket.orderNumber);
@@ -4320,12 +4349,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setChannel('dine_in');
       setFulfillmentWhen(null);
     }
-    if (counterDineInEnabled) {
-      if (!ticketDisplay) {
-        const ticket = nextDineInCounterNumber(merchant?.id, openShift?.id);
-        setTicketDisplay(ticket.display);
-        setTicketOrderNumber(ticket.orderNumber);
-      }
+    if (!tableId && !ticketDisplay) {
+      const ticket = nextDineInCounterNumber(merchant?.id, openShift?.id);
+      setTicketDisplay(ticket.display);
+      setTicketOrderNumber(ticket.orderNumber);
+    }
+    if (!requireTableForDineIn) {
       return;
     }
     if (!tableId) {

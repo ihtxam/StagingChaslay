@@ -79,7 +79,7 @@ type EodReport = {
   shiftCash?: EodShiftCash[];
 };
 
-type Preset = 'today' | 'yesterday' | 'last_week' | 'last_month' | 'last_3_months' | 'custom';
+type Preset = 'today' | 'yesterday' | 'last_week' | 'this_month' | 'last_month' | 'last_3_months' | 'custom';
 type Tab = 'eod' | 'sales' | 'products' | 'users';
 
 export default function ReportsPage() {
@@ -172,13 +172,13 @@ export default function ReportsPage() {
         paymentRows: report.paymentRows,
         orderTypeRows: report.orderTypeRows,
         channelRows: report.channelRows,
-        shiftCash: report.shiftCash?.length ? report.shiftCash : undefined,
         businessName,
         language: lang,
         paperWidthMm,
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
         includeProductsSold: eodIncludeProductsSold,
+        reportKind: 'eod',
       });
       const names =
         targets.length > 0
@@ -230,6 +230,7 @@ export default function ReportsPage() {
     { id: 'today', label: t('reportsToday') },
     { id: 'yesterday', label: t('reportsYesterday') },
     { id: 'last_week', label: t('reportsLastWeek') },
+    { id: 'this_month', label: t('reportsThisMonth') },
     { id: 'last_month', label: t('reportsLastMonth') },
     { id: 'last_3_months', label: t('reportsLast3Months') },
     { id: 'custom', label: t('reportsCustom') },

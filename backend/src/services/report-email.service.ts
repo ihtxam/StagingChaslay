@@ -184,6 +184,7 @@ export class ReportEmailService {
         preset: opts.preset || "today",
         from: opts.from,
         to: opts.to,
+        language: opts.language || settings.language || "en",
       }
     );
 

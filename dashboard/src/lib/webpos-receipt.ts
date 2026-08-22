@@ -1817,14 +1817,14 @@ export type EodShiftCash = {
 
 const EOD_INCLUDE_PRODUCTS_KEY = 'chaslay_eod_include_products_sold';
 
-/** Persisted preference: include product breakdown on EOD thermal print (default ON). */
+/** Persisted preference: include product breakdown on EOD thermal print (default OFF — short report). */
 export function readEodIncludeProductsSold(): boolean {
   try {
     const v = localStorage.getItem(EOD_INCLUDE_PRODUCTS_KEY);
-    if (v === '0' || v === 'false') return false;
-    return true;
+    if (v === '1' || v === 'true') return true;
+    return false;
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -2079,11 +2079,12 @@ export function generateEodReportText(report: EodReportPrint): string {
     }
   }
 
-  const shiftRows = report.shiftCash
-    ? Array.isArray(report.shiftCash)
-      ? report.shiftCash
-      : [report.shiftCash]
-    : [];
+  const shiftRows =
+    report.reportKind === 'shift' && report.shiftCash
+      ? Array.isArray(report.shiftCash)
+        ? report.shiftCash
+        : [report.shiftCash]
+      : [];
   if (shiftRows.length) {
     r += '\n';
     r += thin + '\n';
