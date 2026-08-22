@@ -9,6 +9,7 @@ import {
   type StoreHours,
   parseHm,
 } from "@/lib/geo";
+import { reservationEmailCopy, resolveTxLocale } from "@/lib/transactional-email-labels";
 import { EmailService } from "@/services/email.service";
 import { FloorPlanService } from "@/services/floor-plan.service";
 import { ChaslayFloorService } from "@/services/chaslay-floor.service";
@@ -944,6 +945,8 @@ export class ReservationService {
       address?: string | null;
       city?: string | null;
       phone?: string | null;
+      shopLanguage?: string | null;
+      panelLanguage?: string | null;
       reservationSettings?: ReservationSettings | null;
     },
     reservation: typeof schema.reservations.$inferSelect,
@@ -958,47 +961,38 @@ export class ReservationService {
     const when = formatDateTimeDDMMYYYY(reservation.reservedAt);
     const shop = merchant.name || "Restaurant";
     const place = [merchant.address, merchant.city].filter(Boolean).join(", ");
-    const subjects: Record<typeof kind, string> = {
-      received: `Reservation request received — ${shop}`,
-      confirmed: `Reservation confirmed — ${shop}`,
-      rejected: `Reservation not available — ${shop}`,
-      cancelled: `Reservation cancelled — ${shop}`,
-      seated: `Welcome — ${shop}`,
-      reminder: `Reminder: your reservation at ${shop}`,
-    };
-    const bodies: Record<typeof kind, string> = {
-      received: `We received your reservation request and will confirm shortly.`,
-      confirmed: `Your table is confirmed. We look forward to seeing you!`,
-      rejected: `Unfortunately we cannot accommodate this reservation. Please try another time.`,
-      cancelled: `Your reservation has been cancelled.`,
-      seated: `Welcome! Your table is ready.`,
-      reminder: `This is a friendly reminder about your upcoming reservation.`,
-    };
+    const locale = resolveTxLocale({
+      guestLocale: (reservation as { guestLocale?: string | null }).guestLocale,
+      shopLanguage: merchant.shopLanguage,
+      panelLanguage: merchant.panelLanguage,
+    });
+    const copy = reservationEmailCopy(kind, shop, locale);
+    const labels = copy.labels;
 
     const html = `
       <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;color:#1c1917">
-        <h1 style="font-size:20px">${subjects[kind]}</h1>
-        <p>${bodies[kind]}</p>
+        <h1 style="font-size:20px">${copy.subject}</h1>
+        <p>${copy.body}</p>
         <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
-          <tr><td style="padding:6px 0;color:#78716c">Code</td><td style="padding:6px 0;text-align:right"><strong>${reservation.code}</strong></td></tr>
-          <tr><td style="padding:6px 0;color:#78716c">When</td><td style="padding:6px 0;text-align:right">${when}</td></tr>
-          <tr><td style="padding:6px 0;color:#78716c">Guests</td><td style="padding:6px 0;text-align:right">${reservation.partySize}</td></tr>
-          <tr><td style="padding:6px 0;color:#78716c">Name</td><td style="padding:6px 0;text-align:right">${reservation.guestName}</td></tr>
-          ${reservation.discountPercent ? `<tr><td style="padding:6px 0;color:#b45309">Offer</td><td style="padding:6px 0;text-align:right"><strong style="color:#b45309">${reservation.discountLabel || `${reservation.discountPercent}% off`}</strong></td></tr>` : ""}
-          ${reservation.tableLabel ? `<tr><td style="padding:6px 0;color:#78716c">Table</td><td style="padding:6px 0;text-align:right">${reservation.tableLabel}${reservation.discountPercent ? ` · <strong style="color:#b45309">${reservation.discountLabel || `${reservation.discountPercent}% off`}</strong>` : ""}</td></tr>` : ""}
-          ${place ? `<tr><td style="padding:6px 0;color:#78716c">Where</td><td style="padding:6px 0;text-align:right">${place}</td></tr>` : ""}
+          <tr><td style="padding:6px 0;color:#78716c">${labels.code}</td><td style="padding:6px 0;text-align:right"><strong>${reservation.code}</strong></td></tr>
+          <tr><td style="padding:6px 0;color:#78716c">${labels.when}</td><td style="padding:6px 0;text-align:right">${when}</td></tr>
+          <tr><td style="padding:6px 0;color:#78716c">${labels.guests}</td><td style="padding:6px 0;text-align:right">${reservation.partySize}</td></tr>
+          <tr><td style="padding:6px 0;color:#78716c">${labels.name}</td><td style="padding:6px 0;text-align:right">${reservation.guestName}</td></tr>
+          ${reservation.discountPercent ? `<tr><td style="padding:6px 0;color:#b45309">${labels.offer}</td><td style="padding:6px 0;text-align:right"><strong style="color:#b45309">${reservation.discountLabel || `${reservation.discountPercent}% off`}</strong></td></tr>` : ""}
+          ${reservation.tableLabel ? `<tr><td style="padding:6px 0;color:#78716c">${labels.table}</td><td style="padding:6px 0;text-align:right">${reservation.tableLabel}${reservation.discountPercent ? ` · <strong style="color:#b45309">${reservation.discountLabel || `${reservation.discountPercent}% off`}</strong>` : ""}</td></tr>` : ""}
+          ${place ? `<tr><td style="padding:6px 0;color:#78716c">${labels.where}</td><td style="padding:6px 0;text-align:right">${place}</td></tr>` : ""}
         </table>
         ${reservation.discountPercent ? `<p style="background:#fffbeb;border:1px solid #fcd34d;padding:10px 12px;font-size:14px;color:#92400e"><strong>${reservation.discountLabel || `${reservation.discountPercent}% off`}</strong> applies to this reservation.</p>` : ""}
-        ${merchant.phone ? `<p style="font-size:13px;color:#78716c">Questions? Call ${merchant.phone}</p>` : ""}
+        ${merchant.phone ? `<p style="font-size:13px;color:#78716c">${labels.questions} ${merchant.phone}</p>` : ""}
       </div>
     `;
 
     try {
       await EmailService.send({
         to: reservation.guestEmail,
-        subject: subjects[kind],
+        subject: copy.subject,
         html,
-        text: `${subjects[kind]}\n${bodies[kind]}\nCode: ${reservation.code}\nWhen: ${when}\nGuests: ${reservation.partySize}`,
+        text: `${copy.subject}\n${copy.body}\n${labels.code}: ${reservation.code}\n${labels.when}: ${when}\n${labels.guests}: ${reservation.partySize}`,
         merchantId: merchant.id,
       });
       const db = getDb();

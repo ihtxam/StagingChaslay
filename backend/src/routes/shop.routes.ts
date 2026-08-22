@@ -2269,6 +2269,16 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       console.warn("Shop order notification print enqueue failed:", printErr);
     }
 
+    try {
+      const { ShopOrderEmailService } = await import("@/services/shop-order-email.service");
+      const guestLocale = String((req.body as { locale?: string })?.locale || req.headers["x-shop-locale"] || "");
+      await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "received", {
+        guestLocale: guestLocale || null,
+      });
+    } catch (mailErr) {
+      console.warn("Shop order confirmation email failed:", mailErr);
+    }
+
     let paymentSession: unknown = null;
     if (payMethod === "card" && preCardTotal > 0) {
       try {

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import multer from "multer";
 import { verifyToken, requireSuperadmin } from "@/middleware/auth.middleware";
 import { MerchantService } from "@/services/merchant.service";
 import { LicenseAdminService } from "@/services/license-admin.service";
@@ -13,6 +14,10 @@ import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
 
 const router = Router();
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 // Apply superadmin middleware to all routes
 router.use(verifyToken);
@@ -1044,6 +1049,126 @@ router.post("/resellers/ensure-agency", async (req: Request, res: Response) => {
     res.json({ success: true, reseller });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+// ============================================================================
+// PLATFORM SHOP (catalog sold to merchants)
+// ============================================================================
+
+router.get("/platform-shop/products", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const products = await PlatformShopService.listProducts(false);
+    res.json({ success: true, products });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list products" });
+  }
+});
+
+router.post("/platform-shop/products", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const product = await PlatformShopService.createProduct(req.body || {});
+    res.status(201).json({ success: true, product });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create product" });
+  }
+});
+
+router.put("/platform-shop/products/:productId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const product = await PlatformShopService.updateProduct(req.params.productId, req.body || {});
+    res.json({ success: true, product });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update product" });
+  }
+});
+
+router.delete("/platform-shop/products/:productId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const product = await PlatformShopService.deleteProduct(req.params.productId);
+    res.json({ success: true, product });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate product" });
+  }
+});
+
+router.post(
+  "/platform-shop/products/:productId/image",
+  imageUpload.single("file"),
+  async (req: Request, res: Response) => {
+    try {
+      const { PlatformShopService } = await import("@/services/platform-shop.service");
+      const { isAllowedImageMime } = await import("@/services/media-upload.service");
+      if (!req.file?.buffer) return res.status(400).json({ error: "Image file is required (field: file)" });
+      if (!isAllowedImageMime(req.file.mimetype)) {
+        return res.status(400).json({ error: "Only JPEG, PNG, WebP, or GIF images are allowed" });
+      }
+      const saved = await PlatformShopService.saveProductImage(
+        req.file.buffer,
+        req.file.mimetype,
+        req.file.originalname
+      );
+      const product = await PlatformShopService.updateProduct(req.params.productId, {
+        imageUrl: saved.url,
+      });
+      res.json({ success: true, product, image: saved });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to upload image" });
+    }
+  }
+);
+
+router.get("/platform-shop/vouchers", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const vouchers = await PlatformShopService.listVouchers(false);
+    res.json({ success: true, vouchers });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list vouchers" });
+  }
+});
+
+router.post("/platform-shop/vouchers", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const voucher = await PlatformShopService.createVoucher(req.body || {});
+    res.status(201).json({ success: true, voucher });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create voucher" });
+  }
+});
+
+router.put("/platform-shop/vouchers/:voucherId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const voucher = await PlatformShopService.updateVoucher(req.params.voucherId, req.body || {});
+    res.json({ success: true, voucher });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update voucher" });
+  }
+});
+
+router.get("/platform-shop/orders", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const orders = await PlatformShopService.listAllOrders();
+    res.json({ success: true, orders });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list orders" });
+  }
+});
+
+router.patch("/platform-shop/orders/:orderId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const order = await PlatformShopService.updateOrderStatus(req.params.orderId, req.body?.status);
+    res.json({ success: true, order });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update order" });
   }
 });
 

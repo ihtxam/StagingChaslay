@@ -161,6 +161,8 @@ export default function WebsiteCms() {
         isHomepage: editing.isHomepage,
         blocks: data,
         theme: data.config.theme || editing.theme || null,
+        seoTitle: editing.seoTitle?.trim().slice(0, 200) || null,
+        seoDescription: editing.seoDescription?.trim().slice(0, 500) || null,
         status: status || editing.status,
       });
       const page = res.data.page as CmsPage;
@@ -336,13 +338,43 @@ export default function WebsiteCms() {
         >
           {t('cmsBuilderSaveHint')} {t('cmsLocaleHint').replace('{lang}', editLocale.toUpperCase())}
         </p>
-        <div className="relative min-h-0 flex-1 overflow-hidden" style={{ backgroundColor: shellBg }}>
+        <div className="relative min-h-0 flex-1 overflow-hidden flex flex-col" style={{ backgroundColor: shellBg }}>
+          <p
+            className="border-b px-3 py-2 text-[11px] shrink-0"
+            style={{ borderColor: shellBorder, color: shellMuted }}
+          >
+            {t('cmsSeoHint')}
+          </p>
+          <div
+            className="grid gap-2 border-b px-3 py-2 sm:grid-cols-2 shrink-0"
+            style={{ borderColor: shellBorder }}
+          >
+            <label className="block text-xs" style={{ color: shellMuted }}>
+              {t('cmsSeoTitle')}
+              <input
+                className="input mt-1 w-full text-sm"
+                value={editing.seoTitle || ''}
+                maxLength={200}
+                onChange={(e) => setEditing({ ...editing, seoTitle: e.target.value })}
+              />
+            </label>
+            <label className="block text-xs sm:col-span-2" style={{ color: shellMuted }}>
+              {t('cmsSeoDescription')}
+              <textarea
+                className="input mt-1 w-full text-sm min-h-[52px]"
+                value={editing.seoDescription || ''}
+                maxLength={500}
+                rows={2}
+                onChange={(e) => setEditing({ ...editing, seoDescription: e.target.value })}
+              />
+            </label>
+          </div>
           <OpenPageEmbed
             key={`${editing.id}-${editLocale}`}
             mode="page"
             title={editing.title}
             config={resolveOpenPageConfig(draft, editLocale)}
-            className="relative h-full min-h-0 w-full rounded-none border-0"
+            className="relative min-h-0 flex-1 w-full rounded-none border-0"
             shellBg={shellBg}
             onSaved={(payload) => void onBuilderSaved(payload)}
           />

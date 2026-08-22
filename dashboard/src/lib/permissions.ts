@@ -86,6 +86,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/sales/reservations': ['MANAGE_ONLINE_SHOP', 'VIEW_REPORTS'],
   '/merchant/reservations': ['MANAGE_ONLINE_SHOP', 'VIEW_REPORTS'],
   '/merchant/billing': ['MANAGE_BILLING'],
+  '/merchant/platform-shop': ['MANAGE_BILLING'],
   '/merchant/settings': ['MANAGE_SETTINGS'],
   '/merchant/users': ['MANAGE_STAFF'],
   '/merchant/inventory': ['MANAGE_INVENTORY'],

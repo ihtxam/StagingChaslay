@@ -28,7 +28,32 @@ function withPages(name: string, blocks: Block[], theme?: Record<string, unknown
   };
 }
 
-/** Amber food-truck theme (matches OpenPage amber preset). */
+/** White background + blue accent — default for new CMS pages. */
+export const CLASSIC_BLUE_THEME = {
+  bg0: '#ffffff',
+  bg1: '#f8fafc',
+  bg2: '#f1f5f9',
+  bg3: '#e2e8f0',
+  bg4: '#cbd5e1',
+  bg5: '#94a3b8',
+  text0: '#0f172a',
+  text1: '#334155',
+  text2: '#64748b',
+  text3: '#94a3b8',
+  accent: '#2563eb',
+  accentDim: '#1d4ed8',
+  borderDefault: '#e2e8f0',
+  borderSubtle: '#f1f5f9',
+  borderHover: '#cbd5e1',
+  fontSans: 'DM Sans',
+  fontDisplay: 'DM Sans',
+  fontMono: 'JetBrains Mono',
+  radius: 8,
+  radiusLg: 12,
+  presetId: 'classic-blue',
+};
+
+/** Amber food-truck theme (legacy). */
 const AMBER_THEME = {
   bg0: '#171210',
   bg1: '#1e1816',
@@ -276,9 +301,10 @@ export function renderSelfContainedStarterHtml(
     features?: Array<{ title: string; description: string }>;
     ctaHeadline: string;
     ctaSub: string;
-  }
+  },
+  theme: Record<string, string | number> = CLASSIC_BLUE_THEME
 ): string {
-  const t = AMBER_THEME;
+  const t = theme;
   const safeName = escapeHtml(name);
   const features = opts.features || [];
   const featureCards = features
@@ -438,7 +464,7 @@ function bundle(config: OpenPageSiteConfig, html: string): OpenPageBlocks {
 export function foodTruckStarter(title = 'Food truck'): OpenPageBlocks {
   const name = String(title || 'Food truck').trim() || 'Food truck';
   const blocks = foodTruckBlocks(name);
-  const config = withPages(name, blocks, { ...AMBER_THEME, presetId: 'amber' });
+  const config = withPages(name, blocks, CLASSIC_BLUE_THEME);
   const html = renderSelfContainedStarterHtml(name, {
     badge: 'Food truck',
     headline: name,
@@ -450,7 +476,7 @@ export function foodTruckStarter(title = 'Food truck'): OpenPageBlocks {
     ],
     ctaHeadline: 'Hungry now?',
     ctaSub: 'Browse the menu and we’ll have it ready.',
-  });
+  }, CLASSIC_BLUE_THEME);
   return bundle(config, html);
 }
 

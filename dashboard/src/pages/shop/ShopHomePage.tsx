@@ -31,6 +31,7 @@ export default function ShopHomePage() {
   const [html, setHtml] = useState('');
   const [merchant, setMerchant] = useState<any>(null);
   const [seoTitle, setSeoTitle] = useState('');
+  const [seoDescription, setSeoDescription] = useState('');
   const [rawBlocks, setRawBlocks] = useState<unknown>(null);
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function ShopHomePage() {
         const page = pageRes.data.data;
         setMerchant(page.merchant);
         setSeoTitle(page.seoTitle || page.title || page.merchant?.name || '');
+        setSeoDescription(page.seoDescription || page.merchant?.description || '');
         setRawBlocks(page.blocks);
         const lang = page.merchant?.language;
         if (lang === 'en' || lang === 'fr' || lang === 'de') {
@@ -82,6 +84,32 @@ export default function ShopHomePage() {
   useEffect(() => {
     if (seoTitle) document.title = shopDocumentTitle(seoTitle);
   }, [seoTitle]);
+
+  useEffect(() => {
+    const desc = seoDescription.trim();
+    if (!desc) return;
+    let el = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (!el) {
+      el = document.createElement('meta');
+      el.name = 'description';
+      document.head.appendChild(el);
+    }
+    el.content = desc.slice(0, 500);
+    let og = document.querySelector('meta[property="og:description"]') as HTMLMetaElement | null;
+    if (!og) {
+      og = document.createElement('meta');
+      og.setAttribute('property', 'og:description');
+      document.head.appendChild(og);
+    }
+    og.content = desc.slice(0, 500);
+    let ogt = document.querySelector('meta[property="og:title"]') as HTMLMetaElement | null;
+    if (!ogt) {
+      ogt = document.createElement('meta');
+      ogt.setAttribute('property', 'og:title');
+      document.head.appendChild(ogt);
+    }
+    if (seoTitle) ogt.content = seoTitle.slice(0, 200);
+  }, [seoDescription, seoTitle]);
 
   useEffect(() => {
     document.documentElement.lang = locale;

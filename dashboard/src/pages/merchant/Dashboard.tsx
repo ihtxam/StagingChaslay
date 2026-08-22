@@ -33,6 +33,7 @@ import Offers from './Offers';
 import Vouchers from './Vouchers';
 import Terminals from './Terminals';
 import Settings from './Settings';
+import PlatformShop from './PlatformShop';
 import Billing from './Billing';
 import Staff from './Staff';
 import OnlineShop from './OnlineShop';
@@ -426,6 +427,7 @@ function MerchantShell() {
       icon: '⚙️',
       children: [
         { label: t('billing'), path: '/merchant/billing', icon: '💼' },
+        { label: t('platformShopTitle'), path: '/merchant/platform-shop', icon: '🛒' },
         { label: t('settings'), path: '/merchant/settings', icon: '⚙️' },
       ].filter((item) => allow(item.path)),
     },
@@ -665,6 +667,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/billing" allow={allow}>
                   <Billing />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="platform-shop"
+              element={
+                <PanelRouteGuard path="/merchant/platform-shop" allow={allow}>
+                  <PlatformShop />
                 </PanelRouteGuard>
               }
             />
