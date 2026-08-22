@@ -40,6 +40,8 @@ import { ReservationService } from "@/services/reservation.service";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
 import { ensureMerchantSchemaAtStartup } from "@/lib/ensure-merchant-schema";
 import { ensureLicensesSchemaAtStartup } from "@/lib/ensure-licenses-schema";
+import { sql } from "drizzle-orm";
+import { getDb } from "@/db";
 
 // Load environment variables
 dotenv.config();
@@ -61,6 +63,7 @@ function buildCorsOrigins(): string[] {
     "https://app.chaslay.com",
     "https://shop.chaslay.com",
     "https://api.chaslay.com",
+    "https://status.chaslay.com",
   ].filter(Boolean) as string[];
 
   const extra = (process.env.CORS_ORIGINS || "")
@@ -152,6 +155,32 @@ app.get("/health", (_req: Request, res: Response) => {
     status: "ok",
     service: "chaslayreborn-backend",
     timestamp: new Date().toISOString(),
+  });
+});
+
+/** Public status page data (no auth). */
+app.get("/api/public/status", async (_req: Request, res: Response) => {
+  const components: Record<string, { status: "ok" | "error"; latencyMs?: number }> = {
+    api: { status: "ok" },
+    dashboard: { status: "ok" },
+    shop: { status: "ok" },
+    pay: { status: "ok" },
+  };
+  let overall: "operational" | "degraded" = "operational";
+
+  try {
+    const start = Date.now();
+    await getDb().execute(sql`SELECT 1`);
+    components.database = { status: "ok", latencyMs: Date.now() - start };
+  } catch {
+    components.database = { status: "error" };
+    overall = "degraded";
+  }
+
+  res.json({
+    status: overall,
+    updatedAt: new Date().toISOString(),
+    components,
   });
 });
 

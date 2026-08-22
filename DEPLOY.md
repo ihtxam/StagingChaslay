@@ -8,6 +8,7 @@ Server IP: **116.202.26.15**
 | `pay.chaslay.com` | Digital receipt pages (`/receipts/{id}`) |
 | `shop.chaslay.com/{clientName}` | Customer online shop per merchant |
 | `app.chaslay.com` | Merchant back office + superadmin |
+| `status.chaslay.com` | Public system status page |
 
 ---
 
@@ -19,6 +20,7 @@ Point these **A records** to `116.202.26.15`:
 - `pay.chaslay.com`
 - `shop.chaslay.com`
 - `app.chaslay.com`
+- `status.chaslay.com`
 
 ---
 
