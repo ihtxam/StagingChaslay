@@ -2713,7 +2713,7 @@ private fun VectronProductGrid(
             }
         } else {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(gridColumns.coerceIn(3, 6)),
+            columns = GridCells.Fixed(gridColumns.coerceIn(2, 6)),
             modifier = Modifier
                 .weight(1f)
                 .padding(6.dp),

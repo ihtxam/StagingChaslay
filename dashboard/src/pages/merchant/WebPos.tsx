@@ -141,6 +141,7 @@ const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
 const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
 const WEBPOS_GRID_SHOW_IMAGES_KEY = 'webpos.grid.showImages';
 const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
+const WEBPOS_GRID_MOBILE_COLS_KEY = 'webpos.grid.mobileCols';
 const WEBPOS_GRID_SORT_KEY = 'webpos.grid.sort';
 const WEBPOS_SET_PIN_HINT_KEY = 'webpos_set_pin_hint_dismissed';
 
@@ -182,6 +183,16 @@ function readStoredGridTileSize(): 'sm' | 'md' | 'lg' {
     /* ignore */
   }
   return 'md';
+}
+
+function readStoredMobileGridCols(): 2 | 3 {
+  try {
+    const v = localStorage.getItem(WEBPOS_GRID_MOBILE_COLS_KEY);
+    if (v === '2' || v === '3') return Number(v) as 2 | 3;
+  } catch {
+    /* ignore */
+  }
+  return 2;
 }
 
 function readStoredGridSort(): 'default' | 'alpha' | 'bestseller' {
@@ -597,6 +608,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [posAppearance, setPosAppearance] = useState<WebPosAppearance>(() => readStoredAppearance());
   const [gridShowImages, setGridShowImages] = useState(() => readStoredGridShowImages());
   const [gridTileSize, setGridTileSize] = useState<ProductGridTileSize>(() => readStoredGridTileSize());
+  const [gridMobileCols, setGridMobileCols] = useState<2 | 3>(() => readStoredMobileGridCols());
   const [gridSort, setGridSort] = useState<ProductGridSort>(() => readStoredGridSort());
   const [openShift, setOpenShift] = useState<{
     id: string;
@@ -7403,6 +7415,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         data-text-size={posTextSize}
         data-narrow={isNarrowViewport ? '1' : '0'}
         data-phone={isPhoneViewport ? '1' : '0'}
+        data-grid-cols={isPhoneViewport ? String(gridMobileCols) : undefined}
       >
         {pinNeedsNetwork ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-stone-100">
@@ -7493,6 +7506,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       data-text-size={posTextSize}
       data-narrow={isNarrowViewport ? '1' : '0'}
       data-phone={isPhoneViewport ? '1' : '0'}
+      data-grid-cols={isPhoneViewport ? String(gridMobileCols) : undefined}
     >
       {reservationAlertUntil > Date.now() ? (
         <div
@@ -8166,8 +8180,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     return next;
                   });
                 }}
-                tileSize={isPhoneViewport ? 'sm' : gridTileSize}
+                tileSize={gridTileSize}
+                mobileGridCols={gridMobileCols}
+                isPhoneLayout={isPhoneViewport}
                 onCycleTileSize={() => {
+                  if (isPhoneViewport) {
+                    setGridMobileCols((cur) => {
+                      const next: 2 | 3 = cur === 2 ? 3 : 2;
+                      try {
+                        localStorage.setItem(WEBPOS_GRID_MOBILE_COLS_KEY, String(next));
+                      } catch {
+                        /* ignore */
+                      }
+                      return next;
+                    });
+                    return;
+                  }
                   setGridTileSize((cur) => {
                     const next: ProductGridTileSize =
                       cur === 'sm' ? 'md' : cur === 'md' ? 'lg' : 'sm';
