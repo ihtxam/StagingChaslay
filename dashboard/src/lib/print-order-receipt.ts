@@ -59,12 +59,14 @@ async function printReceiptText(
     return;
   }
   const paper = targets[0]?.paperWidthMm || opts.printSettings?.paperWidthMm || 80;
+  const lang = resolveReceiptLanguage(opts.printSettings, opts.locale);
   const logo = opts.logoUrl
     ? await logoUrlToEscPos(String(opts.logoUrl), paper === 58 ? 240 : 384)
     : null;
   const escpos = await buildReceiptEscPos(text, {
     qrData: opts.qrUrl,
     deliveryQrData: opts.deliveryQrUrl,
+    language: lang,
     logoBytes: logo,
     paperWidthMm: paper,
   });

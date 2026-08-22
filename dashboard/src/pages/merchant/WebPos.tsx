@@ -5418,9 +5418,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ? opts.qrUrl
         : undefined;
     const barcode = opts.barcodeData || (opts.forceScannable ? opts.qrUrl : undefined);
+    const lang = resolveReceiptLanguage(printSettings, locale);
     const escpos = await buildReceiptEscPos(text, {
       qrData: qr,
       deliveryQrData: opts.deliveryQrUrl,
+      language: lang,
       logoBytes: logo,
       barcodeData: barcode,
       paperWidthMm: paper,

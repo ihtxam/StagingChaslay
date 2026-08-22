@@ -4,6 +4,8 @@ import { APP_NAME } from '@/lib/brand';
 import {
   buildReceiptUrl,
   buildGiftCardBarcodePayload,
+  buildDualReceiptQrRasterEscPos,
+  buildLabeledReceiptQrRasterEscPos,
   concatBytes,
   escposCode128,
   generateReceiptQrRasterEscPos,
@@ -1062,16 +1064,11 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
   if (tx.notes) r += `${L.note} ${tx.notes}\n`;
 
-  // QR is embedded as ESC/POS graphics by the printer layer — do not print the URL text.
-  if (tx.includeQr !== false && (tx.receiptUrl || tx.id)) {
+  // QR labels + graphics are embedded by buildReceiptEscPos.
+  const hasDigitalQr = tx.includeQr !== false && !!(tx.receiptUrl || tx.id);
+  const hasDeliveryQr = !!deliveryDirectionsUrlForReceipt(tx);
+  if (hasDigitalQr || hasDeliveryQr) {
     r += thin + '\n';
-    r += L.scanDigitalReceipt + '\n';
-  }
-
-  const deliveryQrUrl = deliveryDirectionsUrlForReceipt(tx);
-  if (deliveryQrUrl) {
-    r += thin + '\n';
-    r += centerLine('GET DIRECTIONS', width) + '\n';
   }
 
   r += formatReceiptMetaFooter(tx, L, locale, width) + '\n';
@@ -2240,6 +2237,7 @@ export async function buildReceiptEscPos(
   opts: {
     qrData?: string;
     deliveryQrData?: string;
+    language?: ReceiptLang | string;
     logoBytes?: Uint8Array | null;
     barcodeData?: string;
     barcodeLabel?: string;
@@ -2247,15 +2245,40 @@ export async function buildReceiptEscPos(
   } = {}
 ): Promise<Uint8Array> {
   const paper = opts.paperWidthMm ?? 80;
-  let qrRaster = opts.qrData
-    ? await generateReceiptQrRasterEscPos(opts.qrData, paper)
-    : null;
-  if (!qrRaster?.length && opts.qrData) {
-    qrRaster = escposQrCode(opts.qrData, paper === 58 ? 4 : 5);
+  const langCode = String(opts.language || 'en').toLowerCase().slice(0, 2);
+  const lang: ReceiptLang = langCode === 'fr' || langCode === 'de' ? langCode : 'en';
+  const L = receiptLabels(lang);
+  const qrData = opts.qrData?.trim();
+  const deliveryQrData = opts.deliveryQrData?.trim();
+
+  let qrRaster: Uint8Array | null = null;
+  let deliveryQrRaster: Uint8Array | null = null;
+
+  if (qrData && deliveryQrData) {
+    qrRaster =
+      (await buildDualReceiptQrRasterEscPos({
+        left: { label: L.digitalReceiptQrTitle, data: qrData },
+        right: { label: L.scanDeliveryDirections, data: deliveryQrData },
+        paperWidthMm: paper,
+      })) || null;
+  } else if (qrData) {
+    qrRaster =
+      (await buildLabeledReceiptQrRasterEscPos({
+        label: L.digitalReceiptQrTitle,
+        data: qrData,
+        paperWidthMm: paper,
+      })) ||
+      (await generateReceiptQrRasterEscPos(qrData, paper)) ||
+      escposQrCode(qrData, paper === 58 ? 4 : 5);
+  } else if (deliveryQrData) {
+    deliveryQrRaster =
+      (await buildLabeledReceiptQrRasterEscPos({
+        label: L.scanDeliveryDirections,
+        data: deliveryQrData,
+        paperWidthMm: paper,
+      })) || (await generateReceiptQrRasterEscPos(deliveryQrData, paper));
   }
-  const deliveryQrRaster = opts.deliveryQrData
-    ? await generateReceiptQrRasterEscPos(opts.deliveryQrData, paper)
-    : null;
+
   return textToEscPos(
     text,
     qrRaster,
