@@ -432,7 +432,6 @@ function MerchantShell() {
       children: [
         { label: t('billing'), path: '/merchant/billing', icon: '💼' },
         { label: t('platformShopTitle'), path: '/merchant/platform-shop', icon: '🛒' },
-        { label: t('settings'), path: '/merchant/settings', icon: '⚙️' },
       ].filter((item) => allow(item.path)),
     },
   ]
@@ -462,6 +461,7 @@ function MerchantShell() {
           onLanguageChange={changeLanguage}
           profileMenu={{
             settingsPath: '/merchant/settings',
+            billingPath: '/merchant/billing',
             supportPath: '/merchant/support',
           }}
         />

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, LifeBuoy, LogOut, Settings, User, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, Settings, User, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { APP_NAME, displaySidebarAccountName } from '@/lib/brand';
@@ -38,9 +38,10 @@ interface SidebarProps {
   } | null;
   language?: Locale;
   onLanguageChange?: (locale: Locale) => void;
-  /** Cliavo-style profile menu: Settings, Support, Sign out */
+  /** Cliavo-style profile menu: Settings, Billing, Support, language, Sign out */
   profileMenu?: {
     settingsPath?: string;
+    billingPath?: string;
     supportPath?: string;
   };
 }
@@ -396,6 +397,46 @@ export default function Sidebar({
                       {t('settings')}
                     </Link>
                   ) : null}
+                  {profileMenu.billingPath ? (
+                    <Link
+                      to={profileMenu.billingPath}
+                      onClick={() => {
+                        setProfileOpen(false);
+                        closeMobile();
+                      }}
+                      className="flex items-center gap-2 px-3 py-2.5 text-sm text-teal-50 hover:bg-teal-900/60"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      {t('billing')}
+                    </Link>
+                  ) : null}
+                  {onLanguageChange ? (
+                    <div className="px-3 py-2.5 border-t border-white/10">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-200/60 mb-2">
+                        {t('language')}
+                      </p>
+                      <div className="grid grid-cols-3 gap-1">
+                        {([
+                          { code: 'en' as Locale, label: 'EN' },
+                          { code: 'fr' as Locale, label: 'FR' },
+                          { code: 'de' as Locale, label: 'DE' },
+                        ]).map(({ code, label }) => (
+                          <button
+                            key={code}
+                            type="button"
+                            onClick={() => onLanguageChange(code)}
+                            className={`rounded-md px-2 py-1.5 text-xs font-semibold transition-colors ${
+                              (language || 'en') === code
+                                ? 'bg-teal-600 text-white'
+                                : 'bg-teal-900/50 text-teal-100 hover:bg-teal-900/80'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     onClick={handleLogout}
@@ -421,7 +462,7 @@ export default function Sidebar({
             </div>
           )}
 
-          {onLanguageChange && (
+          {onLanguageChange && !profileMenu ? (
             <select
               className="w-full rounded-md border border-white/25 bg-teal-900/40 px-2.5 py-1.5 text-xs text-teal-50"
               value={language || 'en'}
@@ -432,7 +473,7 @@ export default function Sidebar({
               <option value="fr">Français</option>
               <option value="de">Deutsch</option>
             </select>
-          )}
+          ) : null}
 
           {!profileMenu ? (
             <button
