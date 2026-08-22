@@ -5024,9 +5024,11 @@ class PosViewModel @Inject constructor(
 
     fun cycleProductGridColumns() = updateExtras {
         val next = when (it.productGridColumns) {
+            2 -> 3
+            3 -> 4
             4 -> 5
             5 -> 6
-            else -> 4
+            else -> 2
         }
         it.copy(productGridColumns = next)
     }
