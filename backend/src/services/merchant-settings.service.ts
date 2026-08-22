@@ -5,7 +5,7 @@ import type {
   MerchantBrevoSettings,
   MarketingSettings,
 } from "@/db/schema";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, ne } from "drizzle-orm";
 import { normalizeCustomDomain } from "@/lib/domain";
 import { normalizeVacationSettings } from "@/lib/vacation";
 import { MarketingService } from "@/services/marketing.service";
@@ -243,6 +243,7 @@ export class MerchantSettingsService {
     merchantId: string,
     updates: {
       name?: string;
+      email?: string;
       phone?: string;
       address?: string;
       city?: string;
@@ -324,6 +325,18 @@ export class MerchantSettingsService {
       const name = String(updates.name || "").trim().slice(0, 255);
       if (!name) throw new Error("Business name is required");
       patch.name = name;
+    }
+    if (updates.email !== undefined) {
+      const email = String(updates.email || "").trim().toLowerCase().slice(0, 255);
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new Error("Valid email is required");
+      }
+      const dup = await db.query.merchants.findFirst({
+        where: and(eq(schema.merchants.email, email), ne(schema.merchants.id, merchantId)),
+        columns: { id: true },
+      });
+      if (dup) throw new Error("This email is already used by another account");
+      patch.email = email;
     }
     if (updates.phone !== undefined) patch.phone = updates.phone;
     if (updates.address !== undefined) patch.address = updates.address;

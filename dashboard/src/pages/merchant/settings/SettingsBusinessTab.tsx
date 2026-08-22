@@ -220,9 +220,10 @@ export default function SettingsBusinessTab<T extends BusinessSettingsSlice>({
                 aria-hidden
               />
               <input
-                className="input bg-[var(--bg-muted)]/60 pl-9 font-medium"
-                value={settings.email}
-                disabled
+                className="input pl-9"
+                type="email"
+                value={settings.email || ''}
+                onChange={(e) => setSettings({ ...settings, email: e.target.value })}
               />
             </div>
           </SettingsField>

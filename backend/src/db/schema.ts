@@ -1193,8 +1193,12 @@ export const signageScreens = pgTable(
       .references(() => merchants.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 255 }).notNull(),
     token: varchar("token", { length: 128 }).notNull(),
+    /** Short public code for TV URL (4–6 digits), e.g. /tv/48291 */
+    shortCode: varchar("short_code", { length: 8 }),
     orientation: varchar("orientation", { length: 20 }).default("landscape").notNull(),
     template: varchar("template", { length: 40 }).default("dark_pizza").notNull(),
+    /** Physical screen diagonal in inches (preview sizing) */
+    screenSizeIn: integer("screen_size_in").default(32).notNull(),
     playlistId: uuid("playlist_id").references(() => signagePlaylists.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -1202,6 +1206,7 @@ export const signageScreens = pgTable(
   (table) => ({
     merchantIdx: index("signage_screens_merchant_id_idx").on(table.merchantId),
     tokenIdx: uniqueIndex("signage_screens_token_uidx").on(table.token),
+    shortCodeIdx: uniqueIndex("signage_screens_short_code_uidx").on(table.shortCode),
   })
 );
 

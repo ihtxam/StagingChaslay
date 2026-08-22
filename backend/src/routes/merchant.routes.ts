@@ -102,6 +102,26 @@ router.get("/products/import/template", async (_req: Request, res: Response) => 
 });
 
 /**
+ * GET /api/merchant/products/export
+ * Download Excel export of categories + products
+ */
+router.get("/products/export", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const buffer = await CatalogImportService.exportWorkbook(merchantId);
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", 'attachment; filename="chaslay-catalog-export.xlsx"');
+    res.send(buffer);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to export catalog" });
+  }
+});
+
+/**
  * POST /api/merchant/products/barcodes/generate
  * Assign numeric-only barcodes (12-digit 20 + 10 internal series) to products missing a barcode.
  * Never overwrites existing EAN/UPC or other barcodes. Optional useSku only if SKU is 8–12 digits.
