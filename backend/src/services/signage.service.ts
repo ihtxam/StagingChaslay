@@ -107,24 +107,46 @@ function clampDuration(raw: unknown): number {
   return Math.min(30, Math.max(5, n));
 }
 
+function normalizeWeekdays(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.map((d) => Math.round(Number(d))).filter((d) => d >= 1 && d <= 7))].sort(
+    (a, b) => a - b
+  );
+}
+
+function normalizeHm(raw: unknown, fallback: string): string {
+  return typeof raw === "string" && /^\d{1,2}:\d{2}$/.test(raw) ? raw : fallback;
+}
+
 function normalizeSchedule(raw: unknown): SignageSchedule {
   if (!raw || typeof raw !== "object") return { type: "always" };
   const o = raw as Record<string, unknown>;
-  const type = o.type === "weekdays" || o.type === "daypart" ? o.type : "always";
-  const weekdays = Array.isArray(o.weekdays)
-    ? o.weekdays.map((d) => Math.round(Number(d))).filter((d) => d >= 1 && d <= 7)
-    : [];
+  const type =
+    o.type === "weekdays" || o.type === "daypart" || o.type === "windows" ? o.type : "always";
+  const weekdays = normalizeWeekdays(o.weekdays);
   const daypart = o.daypart === "dinner" ? "dinner" : "lunch";
-  const startTime = typeof o.startTime === "string" && /^\d{1,2}:\d{2}$/.test(o.startTime)
-    ? o.startTime
-    : daypart === "dinner"
-      ? "17:00"
-      : "11:00";
-  const endTime = typeof o.endTime === "string" && /^\d{1,2}:\d{2}$/.test(o.endTime)
-    ? o.endTime
-    : daypart === "dinner"
-      ? "22:00"
-      : "14:30";
+  const startTime = normalizeHm(o.startTime, daypart === "dinner" ? "17:00" : "11:00");
+  const endTime = normalizeHm(o.endTime, daypart === "dinner" ? "22:00" : "14:30");
+  if (type === "windows") {
+    const windows = Array.isArray(o.windows)
+      ? o.windows
+          .map((w) => {
+            if (!w || typeof w !== "object") return null;
+            const win = w as Record<string, unknown>;
+            const wDays = normalizeWeekdays(win.weekdays);
+            if (!wDays.length) return null;
+            return {
+              label: typeof win.label === "string" ? win.label.slice(0, 40) : undefined,
+              weekdays: wDays,
+              startTime: normalizeHm(win.startTime, "11:00"),
+              endTime: normalizeHm(win.endTime, "14:30"),
+            };
+          })
+          .filter((w): w is NonNullable<typeof w> => Boolean(w))
+      : [];
+    if (windows.length) return { type: "windows", windows };
+    return { type: "always" };
+  }
   if (type === "weekdays") return { type, weekdays };
   if (type === "daypart") return { type, daypart, startTime, endTime };
   return { type: "always" };
@@ -152,12 +174,28 @@ function parseHm(raw?: string): number {
   return Number(m[1]) * 60 + Number(m[2]);
 }
 
+function windowIsActive(
+  weekdays: number[],
+  startTime: string | undefined,
+  endTime: string | undefined,
+  z: { weekday: number; minutes: number }
+): boolean {
+  if (!weekdays.includes(z.weekday)) return false;
+  const start = parseHm(startTime);
+  const end = parseHm(endTime);
+  if (end > start) return z.minutes >= start && z.minutes < end;
+  return z.minutes >= start || z.minutes < end;
+}
+
 export function scheduleIsActive(schedule: SignageSchedule | null | undefined, now = new Date()): boolean {
   const s = normalizeSchedule(schedule);
   if (s.type === "always") return true;
   const z = zurichParts(now);
   if (s.type === "weekdays") {
     return (s.weekdays || []).includes(z.weekday);
+  }
+  if (s.type === "windows") {
+    return (s.windows || []).some((w) => windowIsActive(w.weekdays, w.startTime, w.endTime, z));
   }
   const start = parseHm(s.startTime);
   const end = parseHm(s.endTime);

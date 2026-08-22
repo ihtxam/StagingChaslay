@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Copy, Plus, QrCode, RefreshCw, Trash2 } from 'lucide-react';
+import { Copy, LayoutGrid, Pencil, Plus, QrCode, RefreshCw, Trash2, Type, Image as ImageIcon } from 'lucide-react';
 import api from '@/lib/api';
 import { compressImageIfNeeded } from '@/lib/compress-image';
 import { useI18n } from '@/lib/i18n';
@@ -9,6 +9,16 @@ import { signageScreenLimitOf } from '@/lib/signage-addon';
 
 import SignageTemplatePreview, { SIGNAGE_SCREEN_SIZES, SIGNAGE_TEMPLATES } from '@/components/signage/SignageTemplatePreview';
 import SignagePlaylistWizard from '@/components/signage/SignagePlaylistWizard';
+import SignageScheduleEditor, {
+  buildScheduleFromEditor,
+  scheduleEditorStateFromSchedule,
+} from '@/components/signage/SignageScheduleEditor';
+import SignageSlideWizard, {
+  emptySlideDraft,
+  slideDraftLabel,
+  type SlideDraft,
+} from '@/components/signage/SignageSlideWizard';
+import { scheduleSummaryKey, type SignageSchedule, type SignageScheduleWindow } from '@/lib/signage-schedule';
 
 type Screen = {
   id: string;
@@ -21,13 +31,7 @@ type Screen = {
   playlistId: string | null;
 };
 
-type Schedule = {
-  type: 'always' | 'weekdays' | 'daypart';
-  weekdays?: number[];
-  daypart?: 'lunch' | 'dinner';
-  startTime?: string;
-  endTime?: string;
-};
+type Schedule = SignageSchedule;
 
 type Slide = {
   id: string;
@@ -54,15 +58,19 @@ type Category = { id: string; name: string };
 
 const TEMPLATES = SIGNAGE_TEMPLATES;
 
-const WEEKDAYS = [
-  { n: 1, key: 'signageMon' },
-  { n: 2, key: 'signageTue' },
-  { n: 3, key: 'signageWed' },
-  { n: 4, key: 'signageThu' },
-  { n: 5, key: 'signageFri' },
-  { n: 6, key: 'signageSat' },
-  { n: 7, key: 'signageSun' },
-] as const;
+function slideToDraft(slide: Slide): SlideDraft {
+  return {
+    tempId: slide.id,
+    type: slide.type,
+    durationSec: slide.durationSec,
+    categoryIds: slide.categoryIds || [],
+    headline: slide.headline || '',
+    body: slide.body || '',
+    showPrices: slide.showPrices,
+    showPhotos: slide.showPhotos,
+    imageUrl: slide.imageUrl || undefined,
+  };
+}
 
 function signagePublicUrl(screen: Pick<Screen, 'shortCode' | 'token'>): string {
   const origin =
@@ -97,6 +105,9 @@ export default function SignagePage() {
   const [daypart, setDaypart] = useState<'lunch' | 'dinner'>('lunch');
   const [startTime, setStartTime] = useState('11:00');
   const [endTime, setEndTime] = useState('14:30');
+  const [windows, setWindows] = useState<SignageScheduleWindow[]>([]);
+  const [slideWizardOpen, setSlideWizardOpen] = useState(false);
+  const [editingSlide, setEditingSlide] = useState<SlideDraft | null>(null);
 
   const activePlaylist = useMemo(
     () => playlists.find((p) => p.id === activePlaylistId) || null,
@@ -204,12 +215,14 @@ export default function SignagePage() {
   const savePlaylistMeta = async () => {
     const name = playlistName.trim() || activePlaylist?.name;
     if (!name) return;
-    const schedule: Schedule =
-      scheduleType === 'weekdays'
-        ? { type: 'weekdays', weekdays }
-        : scheduleType === 'daypart'
-          ? { type: 'daypart', daypart, startTime, endTime }
-          : { type: 'always' };
+    const schedule = buildScheduleFromEditor({
+      scheduleType,
+      weekdays,
+      daypart,
+      startTime,
+      endTime,
+      windows,
+    });
     setBusy(true);
     try {
       if (activePlaylist) {
@@ -252,38 +265,56 @@ export default function SignagePage() {
     if (!activePlaylist) return;
     setPlaylistName(activePlaylist.name);
     setPlaylistTemplate(activePlaylist.template || 'dark_pizza');
-    const s = activePlaylist.schedule || { type: 'always' };
-    setScheduleType(s.type || 'always');
-    setWeekdays(s.weekdays?.length ? s.weekdays : [1, 2, 3, 4, 5]);
-    setDaypart(s.daypart === 'dinner' ? 'dinner' : 'lunch');
-    setStartTime(s.startTime || (s.daypart === 'dinner' ? '17:00' : '11:00'));
-    setEndTime(s.endTime || (s.daypart === 'dinner' ? '22:00' : '14:30'));
+    const st = scheduleEditorStateFromSchedule(activePlaylist.schedule);
+    setScheduleType(st.scheduleType);
+    setWeekdays(st.weekdays);
+    setDaypart(st.daypart);
+    setStartTime(st.startTime);
+    setEndTime(st.endTime);
+    setWindows(st.windows);
   }, [activePlaylist]);
 
-  const addSlide = async (type: Slide['type']) => {
+  const saveSlideFromWizard = async (draft: SlideDraft) => {
     if (!activePlaylist) {
       toast.error(t('signageSavePlaylistFirst'));
       return;
     }
     try {
-      await api.post(`/merchant/signage/playlists/${activePlaylist.id}/slides`, {
-        type,
-        durationSec: type === 'menu' ? 12 : 8,
-        showPrices: true,
-        showPhotos: true,
-        categoryIds: type === 'menu' ? categories.slice(0, 3).map((c) => c.id) : [],
-      });
-      toast.success(t('signageSaved'));
-      await load();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || t('signageSaveFailed'));
-    }
-  };
+      let imageUrl = draft.imageUrl;
+      if (draft.imageFile) {
+        if (draft.imageFile.size > 5 * 1024 * 1024) {
+          toast.error(t('signageImageTooLarge'));
+          return;
+        }
+        const compressed = await compressImageIfNeeded(draft.imageFile, {
+          maxBytes: 400 * 1024,
+          maxWidth: 1920,
+          targetBytes: 700 * 1024,
+        });
+        const fd = new FormData();
+        fd.append('file', compressed);
+        const res = await api.post('/merchant/media', fd);
+        imageUrl = res.data?.url as string;
+      }
 
-  const patchSlide = async (id: string, patch: Partial<Slide>) => {
-    try {
-      await api.put(`/merchant/signage/slides/${id}`, patch);
+      const body = {
+        type: draft.type,
+        durationSec: draft.durationSec,
+        showPrices: draft.showPrices,
+        showPhotos: draft.showPhotos,
+        categoryIds: draft.type === 'menu' ? draft.categoryIds : [],
+        headline: draft.type !== 'menu' ? draft.headline || t('signageDefaultHeadline') : undefined,
+        body: draft.type === 'image_text' ? draft.body : undefined,
+        imageUrl: draft.type !== 'menu' ? imageUrl : undefined,
+      };
+
+      const isEdit = activePlaylist.slides.some((s) => s.id === draft.tempId);
+      if (isEdit) {
+        await api.put(`/merchant/signage/slides/${draft.tempId}`, body);
+      } else {
+        await api.post(`/merchant/signage/playlists/${activePlaylist.id}/slides`, body);
+      }
+      toast.success(t('signageSaved'));
       await load();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
@@ -314,38 +345,10 @@ export default function SignagePage() {
     }
   };
 
-  const uploadSlideImage = async (slideId: string, file: File) => {
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error(t('signageImageTooLarge'));
-      return;
-    }
-    try {
-      const compressed = await compressImageIfNeeded(file, {
-        maxBytes: 400 * 1024,
-        maxWidth: 1920,
-        targetBytes: 700 * 1024,
-      });
-      const fd = new FormData();
-      fd.append('file', compressed);
-      const res = await api.post('/merchant/media', fd);
-      const url = res.data?.url as string;
-      await patchSlide(slideId, { imageUrl: url });
-      toast.success(t('signageSaved'));
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || t('signageSaveFailed'));
-    }
-  };
-
-  const toggleWeekday = (n: number) => {
-    setWeekdays((prev) => (prev.includes(n) ? prev.filter((d) => d !== n) : [...prev, n]));
-  };
-
-  const toggleCategory = (slide: Slide, catId: string) => {
-    const next = slide.categoryIds.includes(catId)
-      ? slide.categoryIds.filter((id) => id !== catId)
-      : [...slide.categoryIds, catId];
-    void patchSlide(slide.id, { categoryIds: next });
+  const slideTypeIcon = (type: Slide['type']) => {
+    if (type === 'menu') return LayoutGrid;
+    if (type === 'image_text') return Type;
+    return ImageIcon;
   };
 
   return (
@@ -539,7 +542,6 @@ export default function SignagePage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {playlists.map((p) => {
                 const slideCount = p.slides?.length || 0;
-                const sched = p.schedule?.type || 'always';
                 return (
                   <button
                     key={p.id}
@@ -554,8 +556,7 @@ export default function SignagePage() {
                       {t(TEMPLATES.find((x) => x.id === p.template)?.key || 'signageTemplateDarkPizza')}
                     </p>
                     <p className="mt-2 text-xs text-stone-600">
-                      {slideCount} {t('signageSlides').toLowerCase()} ·{' '}
-                      {sched === 'always' ? t('signageScheduleAlways') : sched === 'weekdays' ? t('signageScheduleWeekdays') : t('signageScheduleDaypart')}
+                      {slideCount} {t('signageSlides').toLowerCase()} · {t(scheduleSummaryKey(p.schedule))}
                     </p>
                   </button>
                 );
@@ -589,61 +590,20 @@ export default function SignagePage() {
               </label>
             </div>
             <SignageTemplatePreview templateId={playlistTemplate} className="max-w-xs" />
-            <label className="text-sm block">
-              {t('signageSchedule')}
-              <select
-                className="input mt-1"
-                value={scheduleType}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setScheduleType(v === 'weekdays' || v === 'daypart' ? v : 'always');
-                }}
-              >
-                <option value="always">{t('signageScheduleAlways')}</option>
-                <option value="weekdays">{t('signageScheduleWeekdays')}</option>
-                <option value="daypart">{t('signageScheduleDaypart')}</option>
-              </select>
-            </label>
-            {scheduleType === 'weekdays' ? (
-              <div className="flex flex-wrap gap-2">
-                {WEEKDAYS.map((d) => (
-                  <button
-                    key={d.n}
-                    type="button"
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                      weekdays.includes(d.n) ? 'bg-teal-600 text-white' : 'bg-stone-100'
-                    }`}
-                    onClick={() => toggleWeekday(d.n)}
-                  >
-                    {t(d.key)}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            {scheduleType === 'daypart' ? (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <select
-                  className="input"
-                  value={daypart}
-                  onChange={(e) => {
-                    const next = e.target.value === 'dinner' ? 'dinner' : 'lunch';
-                    setDaypart(next);
-                    if (next === 'dinner') {
-                      setStartTime('17:00');
-                      setEndTime('22:00');
-                    } else {
-                      setStartTime('11:00');
-                      setEndTime('14:30');
-                    }
-                  }}
-                >
-                  <option value="lunch">{t('signageLunch')}</option>
-                  <option value="dinner">{t('signageDinner')}</option>
-                </select>
-                <input className="input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-                <input className="input" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-              </div>
-            ) : null}
+            <SignageScheduleEditor
+              scheduleType={scheduleType}
+              onScheduleTypeChange={setScheduleType}
+              weekdays={weekdays}
+              onWeekdaysChange={setWeekdays}
+              daypart={daypart}
+              onDaypartChange={setDaypart}
+              startTime={startTime}
+              endTime={endTime}
+              onStartTimeChange={setStartTime}
+              onEndTimeChange={setEndTime}
+              windows={windows}
+              onWindowsChange={setWindows}
+            />
             <div className="flex gap-2">
               <button type="button" className="btn-primary text-sm" disabled={busy} onClick={() => void savePlaylistMeta()}>
                 {t('save')}
@@ -662,125 +622,59 @@ export default function SignagePage() {
             {activePlaylist ? (
               <div className="space-y-3 border-t pt-4">
                 <p className="text-sm font-medium">{t('signageSlides')}</p>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" className="btn-secondary text-xs" onClick={() => void addSlide('menu')}>
-                    {t('signageAddMenuSlide')}
-                  </button>
-                  <button type="button" className="btn-secondary text-xs" onClick={() => void addSlide('image')}>
-                    {t('signageAddImageSlide')}
-                  </button>
-                  <button type="button" className="btn-secondary text-xs" onClick={() => void addSlide('image_text')}>
-                    {t('signageAddImageTextSlide')}
-                  </button>
-                </div>
-                {(activePlaylist.slides || []).map((slide) => (
-                  <div key={slide.id} className="rounded-lg border border-stone-200 p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-                        {slide.type === 'menu'
-                          ? t('signageAddMenuSlide')
-                          : slide.type === 'image'
-                            ? t('signageAddImageSlide')
-                            : t('signageAddImageTextSlide')}
-                      </p>
-                      <button
-                        type="button"
-                        className="text-red-600 p-1"
-                        onClick={() => void removeSlide(slide.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <label className="text-xs">
-                      {t('signageDuration')}
-                      <input
-                        className="input mt-1"
-                        type="number"
-                        min={5}
-                        max={30}
-                        defaultValue={slide.durationSec}
-                        onBlur={(e) => {
-                          const n = Number(e.target.value);
-                          if (n !== slide.durationSec) void patchSlide(slide.id, { durationSec: n });
-                        }}
-                      />
-                    </label>
-                    {slide.type === 'menu' ? (
-                      <>
-                        <div className="flex flex-wrap gap-2">
-                          {categories.map((c) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              className={`rounded-lg px-2 py-1 text-xs ${
-                                slide.categoryIds.includes(c.id)
-                                  ? 'bg-teal-600 text-white'
-                                  : 'bg-stone-100'
-                              }`}
-                              onClick={() => toggleCategory(slide, c.id)}
-                            >
-                              {c.name}
-                            </button>
-                          ))}
-                        </div>
-                        <label className="flex items-center gap-2 text-xs">
-                          <input
-                            type="checkbox"
-                            checked={slide.showPrices}
-                            onChange={(e) => {
-                              void patchSlide(slide.id, { showPrices: e.target.checked });
+                {(activePlaylist.slides || []).length ? (
+                  <ul className="space-y-2">
+                    {(activePlaylist.slides || []).map((slide, idx) => {
+                      const Icon = slideTypeIcon(slide.type);
+                      const draft = slideToDraft(slide);
+                      return (
+                        <li
+                          key={slide.id}
+                          className="flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2"
+                        >
+                          <Icon className="h-4 w-4 shrink-0 text-teal-600" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-stone-500">
+                              {t('signageSlideN').replace('{n}', String(idx + 1))}
+                            </p>
+                            <p className="text-sm truncate">{slideDraftLabel(draft, t, categories)}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-lg hover:bg-stone-100"
+                            title={t('edit')}
+                            onClick={() => {
+                              setEditingSlide(draft);
+                              setSlideWizardOpen(true);
                             }}
-                          />
-                          {t('signageShowPrices')}
-                        </label>
-                        <label className="flex items-center gap-2 text-xs">
-                          <input
-                            type="checkbox"
-                            checked={slide.showPhotos}
-                            onChange={(e) => {
-                              void patchSlide(slide.id, { showPhotos: e.target.checked });
-                            }}
-                          />
-                          {t('signageShowPhotos')}
-                        </label>
-                      </>
-                    ) : (
-                      <>
-                        <input
-                          className="input"
-                          placeholder={t('signageHeadline')}
-                          defaultValue={slide.headline || ''}
-                          onBlur={(e) => {
-                            if (e.target.value !== (slide.headline || '')) {
-                              void patchSlide(slide.id, { headline: e.target.value });
-                            }
-                          }}
-                        />
-                        {slide.type === 'image_text' ? (
-                          <textarea
-                            className="input"
-                            rows={3}
-                            placeholder={t('signageBody')}
-                            defaultValue={slide.body || ''}
-                            onBlur={(e) => {
-                              if (e.target.value !== (slide.body || '')) {
-                                void patchSlide(slide.id, { body: e.target.value });
-                              }
-                            }}
-                          />
-                        ) : null}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) void uploadSlideImage(slide.id, file);
-                          }}
-                        />
-                      </>
-                    )}
-                  </div>
-                ))}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                            title={t('delete')}
+                            onClick={() => void removeSlide(slide.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-stone-500">{t('signageSlideListEmpty')}</p>
+                )}
+                <button
+                  type="button"
+                  className="btn-secondary text-sm inline-flex items-center gap-1"
+                  onClick={() => {
+                    setEditingSlide(null);
+                    setSlideWizardOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4" /> {t('signageAddSlide')}
+                </button>
               </div>
             ) : (
               <p className="text-sm text-stone-500">{t('signageNoPlaylists')}</p>
@@ -797,6 +691,17 @@ export default function SignagePage() {
           setActivePlaylistId(id);
           void load();
         }}
+      />
+
+      <SignageSlideWizard
+        open={slideWizardOpen}
+        categories={categories}
+        initial={editingSlide}
+        onClose={() => {
+          setSlideWizardOpen(false);
+          setEditingSlide(null);
+        }}
+        onSave={(draft) => void saveSlideFromWizard(draft)}
       />
 
       {qrToken ? (
