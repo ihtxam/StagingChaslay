@@ -20,13 +20,15 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
+import { BarcodePreview } from '@/components/BarcodePreview';
 import {
-  barcodeSvg,
+  labelMetaLine,
   normalizeLabelOptions,
   printLabelsHtml,
   printLabelsViaAgentOrQueue,
   type LabelHeightMm,
   type LabelPrintOptions,
+  type LabelProduct,
   type LabelWidthMm,
 } from '@/lib/barcode-labels';
 
@@ -271,7 +273,7 @@ export default function Products() {
   const imageFileRef = useRef<HTMLInputElement>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [printOpen, setPrintOpen] = useState(false);
-  const [printTargets, setPrintTargets] = useState<Product[]>([]);
+  const [printTargets, setPrintTargets] = useState<LabelProduct[]>([]);
   const [labelOpts, setLabelOpts] = useState<LabelPrintOptions>({
     heightMm: 20,
     widthMm: 40,
@@ -752,7 +754,12 @@ export default function Products() {
         productIds: ids?.length ? ids : undefined,
         useSku,
       });
-      toast.success(t('barcodeGeneratedCount').replace('{n}', String(res.data.generated || 0)));
+      const generated = Number(res.data.generated) || 0;
+      if (generated > 0) {
+        toast.success(t('barcodeGeneratedCount').replace('{n}', String(generated)));
+      } else {
+        toast(t('barcodeNoneMissing'));
+      }
       const updated = (res.data.products || []) as Array<{ id: string; barcode: string }>;
       if (editingId) {
         const mine = updated.find((p) => p.id === editingId);
@@ -764,13 +771,21 @@ export default function Products() {
     }
   };
 
-  const openPrintFor = (list: Product[]) => {
+  const openPrintFor = (list: Array<Pick<Product, 'id' | 'name' | 'barcode' | 'price' | 'sku'>>) => {
     const withCodes = list.filter((p) => String(p.barcode || '').trim());
     if (!withCodes.length) {
       toast.error(t('barcodePrintNone'));
       return;
     }
-    setPrintTargets(withCodes);
+    setPrintTargets(
+      withCodes.map((p) => ({
+        id: p.id,
+        name: p.name,
+        barcode: String(p.barcode || ''),
+        price: p.price,
+        sku: p.sku,
+      }))
+    );
     setPrintOpen(true);
   };
 
@@ -1174,12 +1189,11 @@ export default function Products() {
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
                       <span className="font-semibold text-emerald-700">{money(product.price)}</span>
                       {product.barcode ? (
-                        <span
-                          className="inline-flex items-center gap-1 text-slate-600"
-                          dangerouslySetInnerHTML={{
-                            __html: barcodeSvg(String(product.barcode), { height: 18, width: 90 }),
-                          }}
-                          title={product.barcode}
+                        <BarcodePreview
+                          value={String(product.barcode)}
+                          height={18}
+                          width={90}
+                          className="inline-flex items-center text-slate-600"
                         />
                       ) : null}
                       <span className="text-slate-500">{t('skuColon').replace('{sku}', product.sku || '-')}</span>
@@ -1785,11 +1799,11 @@ export default function Products() {
                         }}
                       />
                       {form.barcode ? (
-                        <div
-                          className="mt-2"
-                          dangerouslySetInnerHTML={{
-                            __html: barcodeSvg(form.barcode, { height: 36, width: 160 }),
-                          }}
+                        <BarcodePreview
+                          value={form.barcode}
+                          height={36}
+                          width={160}
+                          className="mt-2 flex justify-center"
                         />
                       ) : null}
                       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -2137,14 +2151,17 @@ export default function Products() {
                 {labelOpts.showStoreName !== false && (labelOpts.storeName || storeName) ? (
                   <div className="text-[11px] font-bold">{labelOpts.storeName || storeName}</div>
                 ) : null}
-                {labelOpts.showProductName !== false ? (
+                {labelOpts.showProductName !== false && printTargets[0].name ? (
                   <div className="text-sm font-semibold">{printTargets[0].name}</div>
                 ) : null}
-                <div
+                {labelMetaLine(printTargets[0], labelOpts) ? (
+                  <div className="text-xs text-slate-600">{labelMetaLine(printTargets[0], labelOpts)}</div>
+                ) : null}
+                <BarcodePreview
+                  value={String(printTargets[0].barcode)}
+                  height={36}
+                  width={160}
                   className="mt-1 flex justify-center"
-                  dangerouslySetInnerHTML={{
-                    __html: barcodeSvg(String(printTargets[0].barcode), { height: 36, width: 160 }),
-                  }}
                 />
                 {labelOpts.showBarcodeNumber !== false ? (
                   <div className="text-xs font-mono">{printTargets[0].barcode}</div>
