@@ -690,15 +690,21 @@ button {
   /* Compact phone register — fits without pinch-zoom. */
   @media (max-width: 639px) {
     .webpos-shell[data-narrow='1'] .webpos-cat-scroll {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      padding-bottom: 0.125rem;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.375rem;
+      overflow: visible;
+      padding-bottom: 0;
     }
     .webpos-shell[data-narrow='1'] .webpos-category-chip {
-      width: 4.75rem;
-      height: 2rem;
-      font-size: 0.625rem;
+      width: 100%;
+      min-height: 2.25rem;
+      height: auto;
+      flex-shrink: 1;
+      font-size: 0.6875rem;
+      white-space: normal;
+      line-height: 1.15;
+      padding: 0.3125rem 0.375rem;
     }
     .webpos-shell[data-narrow='1'] .webpos-accent-chip {
       display: none;
