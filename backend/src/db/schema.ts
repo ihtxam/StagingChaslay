@@ -2980,3 +2980,92 @@ export const platformShopOrdersRelations = relations(platformShopOrders, ({ one 
     references: [merchants.id],
   }),
 }));
+
+// ============================================================================
+// PLATFORM LOGS & MESSAGES (superadmin system logs, merchant/reseller alerts)
+// ============================================================================
+
+export type PlatformLogLevel = "debug" | "info" | "warn" | "error";
+export type PlatformMessageKind = "announcement" | "incident" | "whats_new";
+export type PlatformMessageAudience =
+  | "all_merchants"
+  | "all_resellers"
+  | "all"
+  | "merchant"
+  | "reseller";
+export type PlatformMessageSeverity = "info" | "warning" | "critical";
+
+/** System-level event log for superadmin */
+export const platformEventLogs = pgTable(
+  "platform_event_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    level: varchar("level", { length: 10 }).notNull().default("info"),
+    category: varchar("category", { length: 80 }).notNull().default("system"),
+    message: text("message").notNull(),
+    metadata: json("metadata").$type<Record<string, unknown>>(),
+    actorRole: varchar("actor_role", { length: 20 }),
+    actorId: uuid("actor_id"),
+    merchantId: uuid("merchant_id"),
+    resellerId: uuid("reseller_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    levelIdx: index("platform_event_logs_level_idx").on(table.level),
+    categoryIdx: index("platform_event_logs_category_idx").on(table.category),
+    createdIdx: index("platform_event_logs_created_idx").on(table.createdAt),
+  })
+);
+
+/** Platform announcements, incidents, and what's-new entries */
+export const platformMessages = pgTable(
+  "platform_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: varchar("kind", { length: 20 }).notNull().default("announcement"),
+    audience: varchar("audience", { length: 30 }).notNull().default("all_merchants"),
+    targetMerchantId: uuid("target_merchant_id"),
+    targetResellerId: uuid("target_reseller_id"),
+    title: varchar("title", { length: 255 }).notNull(),
+    body: text("body").notNull(),
+    severity: varchar("severity", { length: 20 }).notNull().default("info"),
+    externalUrl: varchar("external_url", { length: 500 }),
+    externalLabel: varchar("external_label", { length: 120 }),
+    showOnLogin: boolean("show_on_login").notNull().default(true),
+    showInBanner: boolean("show_in_banner").notNull().default(false),
+    isActive: boolean("is_active").notNull().default(true),
+    startsAt: timestamp("starts_at"),
+    endsAt: timestamp("ends_at"),
+    createdBySuperadminId: uuid("created_by_superadmin_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    kindIdx: index("platform_messages_kind_idx").on(table.kind),
+    audienceIdx: index("platform_messages_audience_idx").on(table.audience),
+    activeIdx: index("platform_messages_active_idx").on(table.isActive),
+    createdIdx: index("platform_messages_created_idx").on(table.createdAt),
+  })
+);
+
+/** Per-viewer dismissals (merchant/reseller/superadmin) */
+export const platformMessageDismissals = pgTable(
+  "platform_message_dismissals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => platformMessages.id, { onDelete: "cascade" }),
+    viewerRole: varchar("viewer_role", { length: 20 }).notNull(),
+    viewerId: uuid("viewer_id").notNull(),
+    dismissedAt: timestamp("dismissed_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueDismiss: uniqueIndex("platform_message_dismissals_unique").on(
+      table.messageId,
+      table.viewerRole,
+      table.viewerId
+    ),
+    viewerIdx: index("platform_message_dismissals_viewer_idx").on(table.viewerRole, table.viewerId),
+  })
+);

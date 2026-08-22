@@ -17,6 +17,9 @@ import Header from '@/components/Header';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
 import { APP_PANEL_TITLE } from '@/lib/brand';
+import PlatformMessagesProvider, {
+  PlatformStatusBannerSlot,
+} from '@/components/platform/PlatformMessagesProvider';
 import { useAuthStore } from '@/store/auth';
 import {
   ALL_EDITION_FEATURES,
@@ -1605,9 +1608,10 @@ function ResellerShell() {
       />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
         <Header
-          title={`${user?.name || 'Reseller'} ? Agency`}
+          title={`${user?.name || 'Reseller'} — Agency`}
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
         />
+        <PlatformStatusBannerSlot />
         <main className="panel-main flex-1 p-3 sm:p-4">
           <Routes>
             <Route index element={<Overview />} />
@@ -1624,7 +1628,9 @@ function ResellerShell() {
 export default function ResellerDashboard() {
   return (
     <I18nProvider>
-      <ResellerShell />
+      <PlatformMessagesProvider>
+        <ResellerShell />
+      </PlatformMessagesProvider>
     </I18nProvider>
   );
 }
