@@ -1,6 +1,6 @@
 import { getDb, schema } from "@/db";
 import { repairCatalogText } from "@/lib/text-encoding";
-import { eq, and, like, desc, asc, or, max, sql, lt } from "drizzle-orm";
+import { eq, and, like, desc, asc, or, max, sql, lt, count } from "drizzle-orm";
 
 export class ProductService {
   /**
@@ -103,6 +103,41 @@ export class ProductService {
     }
   }
 
+  private static productListWhere(
+    merchantId: string,
+    search?: string,
+    categoryId?: string
+  ) {
+    const whereConditions: any[] = [eq(schema.products.merchantId, merchantId)];
+    if (categoryId) {
+      whereConditions.push(eq(schema.products.categoryId, categoryId));
+    }
+    if (search) {
+      whereConditions.push(
+        or(
+          like(schema.products.name, `%${search}%`),
+          like(schema.products.sku, `%${search}%`),
+          like(schema.products.barcode, `%${search}%`)
+        )
+      );
+    }
+    return whereConditions.length > 0 ? and(...whereConditions) : undefined;
+  }
+
+  static async countProducts(
+    merchantId: string,
+    search?: string,
+    categoryId?: string
+  ): Promise<number> {
+    const db = getDb();
+    const where = this.productListWhere(merchantId, search, categoryId);
+    const [row] = await db
+      .select({ total: count() })
+      .from(schema.products)
+      .where(where);
+    return Number(row?.total) || 0;
+  }
+
   /**
    * Get all products for merchant
    */
@@ -117,24 +152,10 @@ export class ProductService {
 
     try {
       const offset = (page - 1) * limit;
-      let whereConditions: any[] = [eq(schema.products.merchantId, merchantId)];
-
-      if (categoryId) {
-        whereConditions.push(eq(schema.products.categoryId, categoryId));
-      }
-
-      if (search) {
-        whereConditions.push(
-          or(
-            like(schema.products.name, `%${search}%`),
-            like(schema.products.sku, `%${search}%`),
-            like(schema.products.barcode, `%${search}%`)
-          )
-        );
-      }
+      const where = this.productListWhere(merchantId, search, categoryId);
 
       const products = await db.query.products.findMany({
-        where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
+        where,
         with: {
           category: true,
         },

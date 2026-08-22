@@ -215,7 +215,8 @@ router.get("/products", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 100;
+    const requestedLimit = parseInt(req.query.limit as string) || 100;
+    const limit = Math.min(Math.max(requestedLimit, 1), 5000);
     const search = req.query.search as string;
     const categoryId = req.query.categoryId as string;
 
@@ -223,7 +224,14 @@ router.get("/products", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Merchant ID is required" });
     }
 
-    const products = await ProductService.getProducts(merchantId, page, limit, search, categoryId);
+    const [products, total, productLimit] = await Promise.all([
+      ProductService.getProducts(merchantId, page, limit, search, categoryId),
+      ProductService.countProducts(merchantId, search, categoryId),
+      (async () => {
+        const { ProductEntitlementsService } = await import("@/services/product-entitlements.service");
+        return ProductEntitlementsService.getLimitInfo(merchantId);
+      })(),
+    ]);
     const pageList = products || [];
 
     // Resolve combo option products that may not be on the current page
@@ -303,7 +311,13 @@ router.get("/products", async (req: Request, res: Response) => {
     res.json({
       success: true,
       products: withCatalog,
-      pagination: { page, limit },
+      pagination: { page, limit, total },
+      productLimit: {
+        maxProducts: productLimit.maxProducts,
+        currentCount: productLimit.currentCount,
+        planSlug: productLimit.planSlug,
+        planName: productLimit.planName,
+      },
     });
   } catch (error) {
     console.error("Error getting products:", error);
@@ -415,6 +429,21 @@ router.post("/products", async (req: Request, res: Response) => {
     const priceDigits = String(price).replace(/[^\d]/g, "");
     if (priceDigits.length > 10) {
       return res.status(400).json({ error: "Price must be at most 10 digits" });
+    }
+
+    const { ProductEntitlementsService } = await import("@/services/product-entitlements.service");
+    try {
+      await ProductEntitlementsService.assertCanAddProducts(merchantId, 1);
+    } catch (error) {
+      const err = error as Error & { statusCode?: number; code?: string; limit?: unknown };
+      if (err.code === "PRODUCT_LIMIT_REACHED") {
+        return res.status(err.statusCode || 403).json({
+          error: err.message,
+          code: err.code,
+          productLimit: err.limit,
+        });
+      }
+      throw error;
     }
 
     let normalizedLoyaltyReward: number | null | undefined = undefined;

@@ -189,6 +189,19 @@ export class CatalogImportService {
           await db.update(schema.products).set(values).where(eq(schema.products.id, existing.id));
           productsUpdated++;
         } else {
+          const { ProductEntitlementsService } = await import(
+            "@/services/product-entitlements.service"
+          );
+          try {
+            await ProductEntitlementsService.assertCanAddProducts(merchantId, 1);
+          } catch (error) {
+            const err = error as Error & { code?: string };
+            if (err.code === "PRODUCT_LIMIT_REACHED") {
+              errors.push({ sheet: "Products", row: i + 2, message: err.message });
+              break;
+            }
+            throw error;
+          }
           await db.insert(schema.products).values(values);
           productsCreated++;
         }
