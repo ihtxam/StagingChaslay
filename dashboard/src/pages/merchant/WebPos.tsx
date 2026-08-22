@@ -627,6 +627,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
   const [billDiscountOpen, setBillDiscountOpen] = useState(false);
   const [setTabOpen, setSetTabOpen] = useState(false);
+  const [manualTableOpen, setManualTableOpen] = useState(false);
   const [newOrderConfirmOpen, setNewOrderConfirmOpen] = useState(false);
   const resumedHeldIdRef = useRef<string | null>(null);
   /** Last kitchen shout printed for this cart — hurry/follow-up must reuse it. */
@@ -3491,8 +3492,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setBillDiscount(draft.billDiscount || { percent: 0, amount: 0 });
   };
 
+  /** Customer-facing shout from tab number (delivery / takeaway order #). */
+  const tabOrderShout = useCallback((tab: string | null | undefined) => {
+    const n = String(tab || '')
+      .trim()
+      .replace(/^#/, '');
+    return n ? `#${n}` : '';
+  }, []);
+
   /** One arbitrary ticket per open cart (kitchen + receipt share the same shout #). */
   const ensureCartTicket = useCallback(() => {
+    const tabShout = tabOrderShout(tabNumber);
+    if (tabShout) {
+      if (ticketOrderNumber?.trim()) {
+        return { display: tabShout, orderNumber: ticketOrderNumber.trim() };
+      }
+      const orderNumber = webPosBackendOrderId(merchant?.id);
+      setTicketDisplay(tabShout);
+      setTicketOrderNumber(orderNumber);
+      lastKitchenTicketRef.current = tabShout;
+      return { display: tabShout, orderNumber };
+    }
     const display = ticketDisplay?.trim();
     if (display) {
       if (ticketOrderNumber?.trim()) {
@@ -3519,6 +3539,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     counterDineInEnabled,
     tableId,
     openShift?.id,
+    tabNumber,
+    tabOrderShout,
   ]);
 
   const clearCartTicket = useCallback(() => {
@@ -3526,9 +3548,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTicketOrderNumber(null);
   }, []);
 
-  /** Kitchen shout number — one #6457 for kitchen send, message, and receipt. */
+  /** Kitchen shout number — tab # when set, else ticket #6457 for kitchen / message / receipt. */
   const kitchenOrderNumber = useCallback(
     (opts?: { ticket?: { display: string; orderNumber: string }; allowNew?: boolean }) => {
+      const tabShout = tabOrderShout(tabNumber);
+      if (tabShout) {
+        lastKitchenTicketRef.current = tabShout;
+        return tabShout;
+      }
       const ticket =
         opts?.ticket ??
         (ticketDisplay?.trim()
@@ -3548,10 +3575,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       lastKitchenTicketRef.current = created.display;
       return created.display;
     },
-    [ticketDisplay, ticketOrderNumber, ensureCartTicket]
+    [tabNumber, tabOrderShout, ticketDisplay, ticketOrderNumber, ensureCartTicket]
   );
 
   const kdsTicketKey =
+    tabOrderShout(tabNumber) ||
     ticketDisplay?.trim() ||
     lastKitchenTicketRef.current?.trim() ||
     '';
@@ -4365,7 +4393,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  /** Menu: switch to dine-in; table picker only when tables are required. */
+  /** Menu: switch to dine-in (floor-plan table selection is on the Tables tab only). */
   const switchToDineIn = () => {
     if (channel !== 'dine_in') {
       setChannel('dine_in');
@@ -4378,12 +4406,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     if (!requireTableForDineIn) {
       return;
-    }
-    if (!tableId) {
-      setTablePickerPurpose('set');
-      setMoveSourceTable(null);
-      setMoveLineId(null);
-      setSetTableOpen(true);
     }
   };
 
@@ -6980,6 +7002,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         noteOpen ||
         setTableOpen ||
         setTabOpen ||
+        manualTableOpen ||
         cancelModal ||
         expressSuccessOpen
       ) {
@@ -7045,6 +7068,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       noteOpen,
       setTableOpen,
       setTabOpen,
+      manualTableOpen,
       cancelModal,
       expressSuccessOpen,
       findProductByScanCode,
@@ -7254,7 +7278,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       null
     : null;
   const checkoutDueTotal = collectOrderRef?.total ?? activeSale.totals.total;
-  const checkoutKitchenNumber = ticketDisplay?.trim() || null;
+  const checkoutKitchenNumber =
+    tabOrderShout(tabNumber) || ticketDisplay?.trim() || null;
   const checkoutOrderRef = formatCheckoutOrderRef(
     collectOrderRef?.orderNumber || ticketOrderNumber,
     checkoutKitchenNumber
@@ -7868,12 +7893,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onSwitchToDineIn={switchToDineIn}
                 onCourse={advanceCourse}
                 onKitchenMessage={() => setKitchenMsgOpen(true)}
-                onSetTable={() => {
-                  setTablePickerPurpose('set');
-                  setMoveSourceTable(null);
-                  setMoveLineId(null);
-                  setSetTableOpen(true);
-                }}
+                onSetTable={() => setManualTableOpen(true)}
                 onSetTab={() => setSetTabOpen(true)}
                 onSend={() => void sendCoursesToKitchen()}
                 onNewOrder={startNewOrder}
@@ -8346,8 +8366,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         current={tabNumber}
         onConfirm={(tab) => {
           saveOpenCartDraft();
-          // Tabs are walk-in takeaway (not dine-in tables).
-          const tabChannel: Channel = 'takeaway';
+          const tabChannel: Channel =
+            channel === 'delivery' || channel === 'takeaway' ? channel : 'takeaway';
+          const shout = tabOrderShout(tab);
           const key = openCartDraftKey({ tabNumber: tab, channel: tabChannel });
           const existing = openCartDraftsRef.current.get(key);
           if (existing) {
@@ -8357,8 +8378,35 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             setTableId(null);
             setTableLabel(null);
             setChannel(tabChannel);
-            setFulfillmentWhen(asapFulfillment());
-            if (!ticketDisplay) ensureCartTicket();
+            setFulfillmentWhen(
+              tabChannel === 'delivery' || tabChannel === 'takeaway'
+                ? fulfillmentWhen || asapFulfillment()
+                : asapFulfillment()
+            );
+            if (shout) {
+              setTicketDisplay(shout);
+              lastKitchenTicketRef.current = shout;
+              if (!ticketOrderNumber) {
+                setTicketOrderNumber(webPosBackendOrderId(merchant?.id));
+              }
+            } else if (!ticketDisplay) {
+              ensureCartTicket();
+            }
+          }
+        }}
+      />
+      <WebPosSetTabModal
+        open={manualTableOpen}
+        onClose={() => setManualTableOpen(false)}
+        current={tableLabel}
+        title={t('webPosSetTable')}
+        onConfirm={(num) => {
+          saveOpenCartDraft();
+          setTableLabel(num);
+          setTableId(null);
+          if (channel !== 'dine_in') {
+            setChannel('dine_in');
+            setFulfillmentWhen(null);
           }
         }}
       />
