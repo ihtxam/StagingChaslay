@@ -114,6 +114,22 @@ pay.chaslay.com {
 	}
 }
 
+status.chaslay.com {
+	encode gzip zstd
+
+	handle /health {
+		reverse_proxy api:3000
+	}
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy dashboard:80
+	}
+}
+
 # Merchant subdomains: https://{subdomain}.chaslay.com
 *.chaslay.com {
 	tls {

@@ -26,6 +26,7 @@ import PosEmbedPage from '@/pages/PosEmbedPage';
 import PosViewportManager from '@/components/PosViewportManager';
 import KdsDisplayPage from '@/pages/KdsDisplayPage';
 import SignageDisplayPage from '@/pages/SignageDisplayPage';
+import StatusPage from '@/pages/StatusPage';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 
@@ -110,7 +111,7 @@ const MAIN_HOST = (
 ).toLowerCase();
 
 /** Reserved hosts that must never be treated as a merchant shop subdomain. */
-const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel']);
+const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'status']);
 
 function hostParts() {
   const host = window.location.hostname.toLowerCase();
@@ -118,6 +119,7 @@ function hostParts() {
   if (!host.endsWith(`.${MAIN_HOST}`)) return { host, kind: 'custom_domain' as const, label: host };
   const label = host.slice(0, -(MAIN_HOST.length + 1));
   if (label === 'shop') return { host, kind: 'shop_hub' as const, label };
+  if (label === 'status') return { host, kind: 'status' as const, label };
   if (RESERVED_SUBDOMAINS.has(label)) return { host, kind: 'reserved' as const, label };
   return { host, kind: 'merchant_subdomain' as const, label };
 }
@@ -125,6 +127,7 @@ function hostParts() {
 function App() {
   const { hydrate } = useAuthStore();
   const { kind } = hostParts();
+  const statusMode = kind === 'status';
   const shopHub = kind === 'shop_hub';
   const merchantSubdomain = kind === 'merchant_subdomain';
   const customDomain = kind === 'custom_domain';
@@ -139,7 +142,14 @@ function App() {
       <BrowserRouter>
         <PosViewportManager />
         <Routes>
-          {!shopMode && (
+          {statusMode && (
+            <>
+              <Route path="/" element={<StatusPage />} />
+              <Route path="*" element={<StatusPage />} />
+            </>
+          )}
+
+          {!shopMode && !statusMode && (
             <Route
               path="/login"
               element={
@@ -189,8 +199,8 @@ function App() {
               }
             />
           )}
-          {!shopMode && <Route path="/set-password" element={<SetPasswordPage />} />}
-          {!shopMode && (
+          {!shopMode && !statusMode && <Route path="/set-password" element={<SetPasswordPage />} />}
+          {!shopMode && !statusMode && (
             <Route
               path="/reset-password"
               element={
@@ -200,7 +210,7 @@ function App() {
               }
             />
           )}
-          {!shopMode && (
+          {!shopMode && !statusMode && (
             <Route
               path="/forgot-password"
               element={
@@ -210,7 +220,7 @@ function App() {
               }
             />
           )}
-          {!shopMode && <Route path="/pos-embed" element={<PosEmbedPage />} />}
+          {!shopMode && !statusMode && <Route path="/pos-embed" element={<PosEmbedPage />} />}
           <Route
             path="/receipt/:saleId"
             element={
@@ -567,7 +577,7 @@ function App() {
             </>
           )}
 
-          {!shopMode && (
+          {!shopMode && !statusMode && (
             <>
               <Route
                 path="/superadmin/*"
