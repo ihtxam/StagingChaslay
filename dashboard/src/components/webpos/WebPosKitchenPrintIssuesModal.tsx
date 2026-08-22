@@ -4,6 +4,7 @@ import { useI18n } from '@/lib/i18n';
 import { repairCatalogText } from '@/lib/text-encoding';
 import { shortPrintErrorMessage } from '@/lib/webpos-print-toast';
 import type { PendingPrintJob } from '@/lib/webpos-print-queue';
+import { getPrintQueueRetryConfig } from '@/lib/webpos-print-queue';
 import type { CartLine } from './types';
 
 type Props = {
@@ -39,6 +40,7 @@ export default function WebPosKitchenPrintIssuesModal({
   onRetryAll,
 }: Props) {
   const { t } = useI18n();
+  const retryConfig = getPrintQueueRetryConfig();
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const jobIds = useMemo(() => jobs.map((j) => j.id), [jobs]);
@@ -105,13 +107,21 @@ export default function WebPosKitchenPrintIssuesModal({
                   {kindLabel(job.kind, t)}
                 </p>
                 <p className="truncate text-sm font-semibold text-stone-800">{job.label}</p>
-                <p className="mt-0.5 text-xs font-medium text-rose-700">
-                  {t('webPosPrintNotPrinted')}
-                  {job.lastError
-                    ? ` — ${shortPrintErrorMessage(job.lastError, t, 'webPosPrinterNotFoundGeneric')}`
-                    : ''}
-                </p>
-                {job.attempts > 1 ? (
+                {!job.exhausted ? (
+                  <p className="mt-0.5 text-xs font-medium text-amber-800">
+                    {t('webPosKitchenPrintRetryingStatus')
+                      .replace('{n}', String(job.attempts || 1))
+                      .replace('{max}', String(retryConfig.maxAttempts))}
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-xs font-medium text-rose-700">
+                    {t('webPosPrintNotPrinted')}
+                    {job.lastError
+                      ? ` — ${shortPrintErrorMessage(job.lastError, t, 'webPosPrinterNotFoundGeneric')}`
+                      : ''}
+                  </p>
+                )}
+                {job.exhausted && job.attempts > 1 ? (
                   <p className="text-[11px] text-stone-500">
                     {t('webPosPrintRetryCount').replace('{n}', String(job.attempts))}
                   </p>
