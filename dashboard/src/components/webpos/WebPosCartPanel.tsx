@@ -1,9 +1,7 @@
 import {
-  ArrowDownUp,
   ArrowLeft,
   ArrowRight,
   Ban,
-  CalendarClock,
   MessageSquare,
   MoreHorizontal,
   Printer,
@@ -370,6 +368,10 @@ export default function WebPosCartPanel({
     isRetail && showChannelTabs && channelTabOptions.includes('dine_in');
   const showFulfillmentTime =
     !!onEditFulfillment && (channel === 'takeaway' || channel === 'delivery');
+  const cartMenuItemClass =
+    'flex w-full min-h-[3rem] touch-manipulation items-center gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-left text-sm font-semibold text-stone-800 hover:bg-stone-100 active:scale-[0.98] disabled:opacity-40';
+  const cartMenuItemDangerClass =
+    'flex w-full min-h-[3rem] touch-manipulation items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-left text-sm font-semibold text-red-700 hover:bg-red-100 active:scale-[0.98] disabled:opacity-40';
   const showMetaStrip = membershipName || giftCardLabel || orderNote;
   const lineMenuTarget = lineMenu ? cart.find((l) => l.lineId === lineMenu.lineId) : null;
 
@@ -563,64 +565,44 @@ export default function WebPosCartPanel({
             />
             <div
               role="menu"
-              className="absolute right-2 left-2 top-full z-[40] mt-1 rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
+              className="absolute right-2 left-2 top-full z-[40] mt-1 space-y-2 rounded-xl border border-stone-200 bg-white p-2 shadow-lg"
             >
               <button
                 type="button"
                 role="menuitem"
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                className={cartMenuItemClass}
                 onClick={() => {
                   setMoreOpen(false);
                   onCustomer();
                 }}
               >
-                <User size={14} className="shrink-0 text-stone-500" />
+                <User size={18} className="shrink-0 text-stone-500" />
                 <span className="truncate">{customerLabel || t('webPosAddClient')}</span>
               </button>
               <button
                 type="button"
                 role="menuitem"
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                className={cartMenuItemClass}
                 disabled={!hasItems || busy || !onOrderPrint}
                 onClick={() => {
                   setMoreOpen(false);
                   onOrderPrint?.();
                 }}
               >
-                <Printer size={14} className="shrink-0 text-stone-500" />
+                <Printer size={18} className="shrink-0 text-stone-500" />
                 {t('webPosPrint')}
               </button>
-              {onEditFulfillment && (channel === 'takeaway' || channel === 'delivery') ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    onEditFulfillment();
-                  }}
-                >
-                  <CalendarClock size={14} className="shrink-0 text-stone-500" />
-                  <span className="min-w-0 truncate">
-                    {t('webPosProgrammedOrder')}
-                    {' · '}
-                    {fulfillmentIsLater && fulfillmentLabel
-                      ? fulfillmentLabel
-                      : t('webPosAsap')}
-                  </span>
-                </button>
-              ) : null}
               {kitchenEnabled && requireTableForDineIn && tablesEnabled ? (
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                  className={cartMenuItemClass}
                   onClick={() => {
                     setMoreOpen(false);
                     onSwitchToDineIn();
                   }}
                 >
-                  <UtensilsCrossed size={14} className="shrink-0 text-stone-500" />
+                  <UtensilsCrossed size={18} className="shrink-0 text-stone-500" />
                   <span className="min-w-0 truncate">
                     {channel === 'dine_in' && tableLabel
                       ? `${t('dineIn')} · ${t('table')} ${tableLabel}`
@@ -632,13 +614,13 @@ export default function WebPosCartPanel({
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-red-700 hover:bg-red-50"
+                  className={cartMenuItemDangerClass}
                   onClick={() => {
                     setMoreOpen(false);
                     onReleaseTable();
                   }}
                 >
-                  <Ban size={14} className="shrink-0" />
+                  <Ban size={18} className="shrink-0" />
                   {t('webPosReleaseTable')}
                 </button>
               ) : null}
@@ -646,13 +628,13 @@ export default function WebPosCartPanel({
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                  className={cartMenuItemClass}
                   onClick={() => {
                     setMoreOpen(false);
                     onKitchenMessage();
                   }}
                 >
-                  <MessageSquare size={14} className="shrink-0 text-stone-500" />
+                  <MessageSquare size={18} className="shrink-0 text-stone-500" />
                   {t('webPosKitchenMessage')}
                 </button>
               ) : null}
@@ -660,7 +642,7 @@ export default function WebPosCartPanel({
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                  className={cartMenuItemClass}
                   disabled={!hasItems || busy}
                   onClick={() => {
                     setMoreOpen(false);
@@ -674,7 +656,7 @@ export default function WebPosCartPanel({
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                  className={cartMenuItemClass}
                   disabled={!hasItems || busy || !tableLabel}
                   onClick={() => {
                     setMoreOpen(false);
@@ -688,7 +670,7 @@ export default function WebPosCartPanel({
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                  className={cartMenuItemClass}
                   disabled={!selectedLineId || busy || !tableLabel}
                   onClick={() => {
                     setMoreOpen(false);
@@ -698,32 +680,17 @@ export default function WebPosCartPanel({
                   {t('webPosMoveDishTo')}
                 </button>
               ) : null}
-              {onCashMovement ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    onCashMovement();
-                  }}
-                >
-                  <ArrowDownUp size={14} className="shrink-0 text-stone-500" />
-                  {t('webPosCashMovementTitle')}
-                </button>
-              ) : null}
-              <div className="my-1 border-t border-stone-100" />
               <button
                 type="button"
                 role="menuitem"
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-40"
+                className={cartMenuItemDangerClass}
                 disabled={!canCancelOrder || busy}
                 onClick={() => {
                   setMoreOpen(false);
                   onCancelOrder();
                 }}
               >
-                <Ban size={14} className="shrink-0" />
+                <Ban size={18} className="shrink-0" />
                 {t('webPosCancelOrder')}
               </button>
             </div>
