@@ -289,6 +289,7 @@ export default function Products() {
   const [recipeYield, setRecipeYield] = useState('1');
   const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
   const [storeName, setStoreName] = useState('');
+  const [importingPhotos, setImportingPhotos] = useState(false);
   const [productLimit, setProductLimit] = useState<{
     maxProducts: number | null;
     currentCount: number;
@@ -823,6 +824,27 @@ export default function Products() {
     }
   };
 
+  const importMissingPhotos = async (ids?: string[]) => {
+    setImportingPhotos(true);
+    try {
+      const res = await api.post('/merchant/products/photos/import-missing', {
+        productIds: ids?.length ? ids : undefined,
+        limit: 50,
+      });
+      const n = Number(res.data.updated) || 0;
+      if (n > 0) {
+        toast.success(t('productPhotosImported').replace('{n}', String(n)));
+      } else {
+        toast(t('productPhotosNoneMissing'));
+      }
+      await load();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('productPhotosImportFailed'));
+    } finally {
+      setImportingPhotos(false);
+    }
+  };
+
   const openPrintFor = (list: Array<Pick<Product, 'id' | 'name' | 'barcode' | 'price' | 'sku'>>) => {
     const withCodes = list.filter((p) => String(p.barcode || '').trim());
     if (!withCodes.length) {
@@ -1053,6 +1075,15 @@ export default function Products() {
           </button>
           <button
             type="button"
+            disabled={importingPhotos}
+            onClick={() => void importMissingPhotos(selectedIds.length ? selectedIds : undefined)}
+            className="btn-secondary"
+          >
+            <Package size={14} />
+            {importingPhotos ? t('productPhotosImporting') : t('productPhotosImportMissing')}
+          </button>
+          <button
+            type="button"
             onClick={() => void generateMissing(selectedIds.length ? selectedIds : undefined)}
             className="btn-secondary"
           >
@@ -1247,14 +1278,35 @@ export default function Products() {
                       <p className="mt-0.5 text-sm text-slate-500 line-clamp-1">{product.description}</p>
                     )}
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                      <span className="font-semibold text-emerald-700">{money(product.price)}</span>
+                      <button
+                        type="button"
+                        className="font-semibold text-emerald-700 hover:underline disabled:no-underline"
+                        disabled={!product.barcode}
+                        title={product.barcode ? t('barcodePrintLabels') : undefined}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (product.barcode) openPrintFor([product]);
+                        }}
+                      >
+                        {money(product.price)}
+                      </button>
                       {product.barcode ? (
-                        <BarcodePreview
-                          value={String(product.barcode)}
-                          height={18}
-                          width={90}
-                          className="inline-flex items-center text-slate-600"
-                        />
+                        <button
+                          type="button"
+                          className="inline-flex items-center rounded hover:opacity-80"
+                          title={t('barcodePrintLabels')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openPrintFor([product]);
+                          }}
+                        >
+                          <BarcodePreview
+                            value={String(product.barcode)}
+                            height={18}
+                            width={90}
+                            className="inline-flex items-center text-slate-600"
+                          />
+                        </button>
                       ) : null}
                       <span className="text-slate-500">{t('skuColon').replace('{sku}', product.sku || '-')}</span>
                       <span className={stockOk ? 'text-emerald-600' : 'text-amber-600'}>

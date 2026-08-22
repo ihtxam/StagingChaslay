@@ -125,6 +125,28 @@ router.post("/products/barcodes/generate", async (req: Request, res: Response) =
 });
 
 /**
+ * POST /api/merchant/products/photos/import-missing
+ * Assign royalty-free food photos (Foodish API) to products without an image.
+ */
+router.post("/products/photos/import-missing", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { ProductPhotoImportService } = await import("@/services/product-photo-import.service");
+    const result = await ProductPhotoImportService.importMissing(merchantId, {
+      productIds: Array.isArray(req.body?.productIds) ? req.body.productIds : undefined,
+      limit: Number(req.body?.limit) || 50,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Product photo import failed:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to import product photos",
+    });
+  }
+});
+
+/**
  * POST /api/merchant/products/import
  * One-click Excel import for categories + products
  */
@@ -2668,6 +2690,71 @@ router.post("/billing/confirm", async (req: Request, res: Response) => {
     res.json({ success: true, ...result });
   } catch (error) {
     console.error("Error confirming billing payment:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to confirm payment",
+    });
+  }
+});
+
+// ============================================================================
+// PLATFORM SHOP (buy supplies from Chaslay)
+// ============================================================================
+
+router.get("/platform-shop/products", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const products = await PlatformShopService.listProducts(true);
+    res.json({ success: true, products });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list products" });
+  }
+});
+
+router.get("/platform-shop/orders", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const orders = await PlatformShopService.listMerchantOrders(merchantId);
+    res.json({ success: true, orders });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list orders" });
+  }
+});
+
+router.post("/platform-shop/checkout", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const result = await PlatformShopService.startCheckout(merchantId, items, {
+      notes: req.body?.notes,
+      voucherCode: req.body?.voucherCode,
+      returnUrl: req.body?.returnUrl,
+    });
+    res.status(201).json({ success: true, ...result });
+  } catch (error) {
+    console.error("Platform shop checkout failed:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Checkout failed",
+    });
+  }
+});
+
+router.post("/platform-shop/confirm", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { orderId, resultCode, pspReference } = req.body || {};
+    if (!orderId) return res.status(400).json({ error: "orderId is required" });
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const result = await PlatformShopService.confirmPayment(merchantId, orderId, {
+      resultCode,
+      pspReference,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
     res.status(400).json({
       error: error instanceof Error ? error.message : "Failed to confirm payment",
     });

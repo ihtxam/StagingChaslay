@@ -2887,3 +2887,96 @@ export const subscriptionPaymentsRelations = relations(subscriptionPayments, ({ 
     references: [subscriptionPlans.id],
   }),
 }));
+
+// ============================================================================
+// PLATFORM SHOP (superadmin sells supplies to merchants)
+// ============================================================================
+
+export type PlatformShopOrderLine = {
+  productId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
+/** Catalog items sold by Chaslay to merchants */
+export const platformShopProducts = pgTable(
+  "platform_shop_products",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    price: decimal("price", { precision: 10, scale: 2 }).notNull().default("0"),
+    discountPercent: integer("discount_percent"),
+    imageUrl: varchar("image_url", { length: 500 }),
+    isActive: boolean("is_active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    activeIdx: index("platform_shop_products_active_idx").on(table.isActive),
+    sortIdx: index("platform_shop_products_sort_idx").on(table.sortOrder),
+  })
+);
+
+/** Voucher codes for the platform shop checkout */
+export const platformShopVouchers = pgTable(
+  "platform_shop_vouchers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    code: varchar("code", { length: 50 }).notNull().unique(),
+    label: varchar("label", { length: 255 }),
+    discountPercent: integer("discount_percent"),
+    discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }),
+    isActive: boolean("is_active").notNull().default(true),
+    maxUses: integer("max_uses"),
+    usedCount: integer("used_count").notNull().default(0),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    codeIdx: uniqueIndex("platform_shop_vouchers_code_idx").on(table.code),
+    activeIdx: index("platform_shop_vouchers_active_idx").on(table.isActive),
+  })
+);
+
+/** Merchant purchases from the platform shop */
+export const platformShopOrders = pgTable(
+  "platform_shop_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 30 }).notNull().default("pending"), // pending | paid | cancelled | fulfilled
+    paymentStatus: varchar("payment_status", { length: 30 }).notNull().default("pending"),
+    subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().default("0"),
+    discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+    total: decimal("total", { precision: 10, scale: 2 }).notNull().default("0"),
+    currency: varchar("currency", { length: 3 }).notNull().default("CHF"),
+    voucherCode: varchar("voucher_code", { length: 50 }),
+    items: json("items").$type<PlatformShopOrderLine[]>().notNull().default([]),
+    notes: text("notes"),
+    adyenSessionId: varchar("adyen_session_id", { length: 255 }),
+    adyenPspReference: varchar("adyen_psp_reference", { length: 255 }),
+    adyenResultCode: varchar("adyen_result_code", { length: 50 }),
+    paidAt: timestamp("paid_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("platform_shop_orders_merchant_idx").on(table.merchantId),
+    statusIdx: index("platform_shop_orders_status_idx").on(table.status),
+    createdIdx: index("platform_shop_orders_created_idx").on(table.createdAt),
+  })
+);
+
+export const platformShopOrdersRelations = relations(platformShopOrders, ({ one }) => ({
+  merchant: one(merchants, {
+    fields: [platformShopOrders.merchantId],
+    references: [merchants.id],
+  }),
+}));

@@ -9,6 +9,7 @@ import Editions from './Editions';
 import Resellers from './Resellers';
 import Analytics from './Analytics';
 import Settings from './Settings';
+import PlatformShop from './PlatformShop';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
 import { APP_PANEL_TITLE } from '@/lib/brand';
 
@@ -43,6 +44,7 @@ function SuperadminShell() {
       ],
     },
     { label: t('analytics'), path: '/superadmin/analytics', icon: '📈' },
+    { label: t('platformShopAdminTitle'), path: '/superadmin/platform-shop', icon: '🛒' },
     { label: t('settings'), path: '/superadmin/settings', icon: '⚙️' },
   ];
 
@@ -71,6 +73,7 @@ function SuperadminShell() {
             <Route path="editions" element={<Editions />} />
             <Route path="resellers" element={<Resellers />} />
             <Route path="analytics" element={<Analytics />} />
+            <Route path="platform-shop" element={<PlatformShop />} />
             <Route path="settings" element={<Settings />} />
           </Routes>
         </main>
