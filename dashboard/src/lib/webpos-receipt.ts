@@ -1440,6 +1440,10 @@ function formatKitchenItemLines(
   return lines;
 }
 
+function kitchenTextScaleOrDefault(scale: 1 | 2 | 3 | undefined): 1 | 2 | 3 {
+  return scale === 1 || scale === 2 || scale === 3 ? scale : 1;
+}
+
 function buildKitchenTicketLines(
   opts: KitchenTicketOpts,
   forEscPos = false
@@ -1448,12 +1452,8 @@ function buildKitchenTicketLines(
   L: ReturnType<typeof receiptLabels>;
   lines: KitchenLine[];
 } {
-  const headerScale = (opts.headerTextScale === 1 || opts.headerTextScale === 3
-    ? opts.headerTextScale
-    : 2) as 1 | 2 | 3;
-  const itemScale = (opts.itemTextScale === 1 || opts.itemTextScale === 3
-    ? opts.itemTextScale
-    : 2) as 1 | 2 | 3;
+  const headerScale = kitchenTextScaleOrDefault(opts.headerTextScale);
+  const itemScale = kitchenTextScaleOrDefault(opts.itemTextScale);
   const headerWidth = kitchenColsForScale(opts.paperWidthMm, headerScale);
   const itemWidth = kitchenColsForScale(opts.paperWidthMm, itemScale);
   const footWidth = lineWidthForPaper(opts.paperWidthMm ?? 80);
@@ -1584,16 +1584,12 @@ function escUnderline(on: boolean): Uint8Array {
   return new Uint8Array([0x1b, 0x2d, on ? 1 : 0]);
 }
 
-/** Kitchen ticket as ESC/POS with bold + enlarged text (default scale 2 ≈ 12pt tall). */
+/** Kitchen ticket as ESC/POS (default scale 1 = plain normal-height text). */
 export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array {
   const { lines } = buildKitchenTicketLines(opts, true);
-  const headerScale = (opts.headerTextScale === 1 || opts.headerTextScale === 3
-    ? opts.headerTextScale
-    : 2) as 1 | 2 | 3;
-  const itemScale = (opts.itemTextScale === 1 || opts.itemTextScale === 3
-    ? opts.itemTextScale
-    : 2) as 1 | 2 | 3;
-  const bold = opts.boldText !== false;
+  const headerScale = kitchenTextScaleOrDefault(opts.headerTextScale);
+  const itemScale = kitchenTextScaleOrDefault(opts.itemTextScale);
+  const bold = opts.boldText === true;
   const parts: Uint8Array[] = [new Uint8Array([0x1b, 0x40]), ESC_CODEPAGE_CP850];
   const lf = new Uint8Array([0x0a]);
   const feedLine = (blankAfter = 0) => {

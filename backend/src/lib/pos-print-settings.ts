@@ -31,11 +31,11 @@ export type PosPrintSettings = {
   receiptFooter?: string;
   kitchenTicketHeader?: string;
   kitchenTicketFooter?: string;
-  /** Kitchen item text scale: 1=normal, 2=double height (~12pt tall), 3=double width+height */
+  /** Kitchen item text scale: 1=normal (plain), 2=double height, 3=double width+height */
   kitchenItemTextScale?: 1 | 2 | 3;
-  /** Kitchen header text scale */
+  /** Kitchen header text scale: 1=normal (plain), 2=double height, 3=double width+height */
   kitchenHeaderTextScale?: 1 | 2 | 3;
-  /** Bold kitchen item/header text (default true when scale > 1) */
+  /** Bold kitchen item/header text (default false for plain tickets) */
   kitchenBoldText?: boolean;
   receiptShowVatTable?: boolean;
   receiptShowStaffLine?: boolean;
@@ -86,9 +86,9 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   receiptFooter: "Merci / Danke / Thank you",
   kitchenTicketHeader: "",
   kitchenTicketFooter: "",
-  kitchenItemTextScale: 2,
-  kitchenHeaderTextScale: 2,
-  kitchenBoldText: true,
+  kitchenItemTextScale: 1,
+  kitchenHeaderTextScale: 1,
+  kitchenBoldText: false,
   receiptShowVatTable: true,
   receiptShowStaffLine: true,
   receiptShowQrCode: true,
@@ -180,11 +180,21 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
 
   const itemScale = Number(src.kitchenItemTextScale);
   const headerScale = Number(src.kitchenHeaderTextScale);
-  const kitchenItemTextScale = (itemScale === 1 || itemScale === 3 ? itemScale : 2) as 1 | 2 | 3;
-  const kitchenHeaderTextScale = (headerScale === 1 || headerScale === 3 ? headerScale : 2) as
+  let kitchenItemTextScale = (itemScale === 1 || itemScale === 2 || itemScale === 3 ? itemScale : 1) as
     | 1
     | 2
     | 3;
+  let kitchenHeaderTextScale = (headerScale === 1 || headerScale === 2 || headerScale === 3
+    ? headerScale
+    : 1) as 1 | 2 | 3;
+  let kitchenBoldText = src.kitchenBoldText === true;
+
+  // Legacy default was double-height (2) + bold — migrate to plain full-width tickets.
+  if (kitchenItemTextScale === 2 && kitchenHeaderTextScale === 2 && src.kitchenBoldText !== false) {
+    kitchenItemTextScale = 1;
+    kitchenHeaderTextScale = 1;
+    kitchenBoldText = false;
+  }
 
   return {
     receiptHeader: String(src.receiptHeader ?? "").slice(0, 2000),
@@ -193,7 +203,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     kitchenTicketFooter: String(src.kitchenTicketFooter ?? "").slice(0, 2000),
     kitchenItemTextScale,
     kitchenHeaderTextScale,
-    kitchenBoldText: src.kitchenBoldText !== false,
+    kitchenBoldText,
     receiptShowVatTable: src.receiptShowVatTable !== false,
     receiptShowStaffLine: src.receiptShowStaffLine !== false,
     receiptShowQrCode: src.receiptShowQrCode !== false,

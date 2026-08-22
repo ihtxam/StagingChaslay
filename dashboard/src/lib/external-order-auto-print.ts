@@ -159,9 +159,9 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
       channel: order.fulfillmentChannel || order.channel || 'takeaway',
       orderedAt: order.createdAt ? Date.parse(order.createdAt) : Date.now(),
       language: lang,
-      itemTextScale: printSettings?.kitchenItemTextScale || 2,
-      headerTextScale: printSettings?.kitchenHeaderTextScale || 2,
-      boldText: printSettings?.kitchenBoldText !== false,
+      itemTextScale: printSettings?.kitchenItemTextScale ?? 1,
+      headerTextScale: printSettings?.kitchenHeaderTextScale ?? 1,
+      boldText: printSettings?.kitchenBoldText === true,
     };
 
     let printedAny = false;
