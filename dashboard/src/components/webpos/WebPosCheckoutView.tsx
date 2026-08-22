@@ -5,6 +5,7 @@ import {
   Coins,
   CreditCard,
   Gift,
+  History,
   MonitorSmartphone,
   Percent,
   UserCircle2,
@@ -309,30 +310,30 @@ export default function WebPosCheckoutView({
     icon: ReactNode;
     show: boolean;
   }> = [
-    { id: 'cash', label: t('webPosCash'), icon: <Banknote size={22} />, show: methods.cash },
-    { id: 'card', label: t('webPosCard'), icon: <CreditCard size={22} />, show: methods.card },
+    { id: 'cash', label: t('webPosCash'), icon: <Banknote size={20} />, show: methods.cash },
+    { id: 'card', label: t('webPosCard'), icon: <CreditCard size={20} />, show: methods.card },
     {
       id: 'terminal',
       label: t('webPosTerminal'),
-      icon: <MonitorSmartphone size={22} />,
+      icon: <MonitorSmartphone size={20} />,
       show: methods.terminal,
     },
     {
       id: 'gift_card',
       label: t('giftCard'),
-      icon: <Gift size={22} />,
+      icon: <Gift size={20} />,
       show: !!methods.giftCard,
     },
     {
       id: 'pay_later',
       label: t('webPosPayLater'),
-      icon: <UserCircle2 size={22} />,
+      icon: <History size={20} />,
       show: methods.payLater,
     },
     {
       id: 'invoice',
       label: t('webPosInvoice'),
-      icon: <FileText size={22} />,
+      icon: <FileText size={20} />,
       show: !!methods.invoice,
     },
   ];
@@ -748,7 +749,7 @@ export default function WebPosCheckoutView({
 
           {/* Methods + compact icon actions + keypad */}
           <div className="order-2 flex shrink-0 flex-col gap-2 border-b border-stone-100 p-3 lg:order-1 lg:h-full lg:w-[min(20rem,36vw)] lg:overflow-y-auto lg:border-b-0 lg:border-r">
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+            <div className="grid grid-cols-3 gap-1.5 lg:grid-cols-1 lg:gap-2">
               {payButtons
                 .filter((b) => b.show)
                 .map((b) => {
@@ -759,14 +760,16 @@ export default function WebPosCheckoutView({
                       type="button"
                       disabled={busy}
                       onClick={() => applyMethod(b.id)}
-                      className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border px-3 py-3 text-center text-sm font-semibold disabled:opacity-40 lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-3.5 lg:text-left ${
+                      className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center text-[10px] font-semibold leading-tight disabled:opacity-40 sm:min-h-[3.5rem] sm:text-[11px] lg:min-h-0 lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-3.5 lg:text-left lg:text-sm ${
                         selected
                           ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
                           : 'border-stone-200 bg-stone-50 hover:bg-stone-100'
                       }`}
                     >
-                      {b.icon}
-                      {b.label}
+                      <span className="shrink-0 [&_svg]:h-[18px] [&_svg]:w-[18px] lg:[&_svg]:h-[22px] lg:[&_svg]:w-[22px]">
+                        {b.icon}
+                      </span>
+                      <span className="max-w-full truncate px-0.5">{b.label}</span>
                     </button>
                   );
                 })}
