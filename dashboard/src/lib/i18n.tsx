@@ -780,6 +780,10 @@ const en: Dict = {
   addProduct: 'Add product',
 
   productsHint: 'Catalog, sizes, modifiers, Excel import',
+  productCountUnlimited: '{n} products',
+  productCountLimited: '{n} / {max} products',
+  productLimitReached: 'Product limit reached for your subscription plan',
+  productLimitUpgradeHint: 'Upgrade your plan in Billing to add more',
   templateShort: 'Template',
   addShort: 'Add',
   loadingProducts: 'Loading products…',
@@ -3475,6 +3479,10 @@ const fr: Dict = {
   addProduct: 'Ajouter un produit',
 
   productsHint: 'Catalogue, tailles, modificateurs, import Excel',
+  productCountUnlimited: '{n} produits',
+  productCountLimited: '{n} / {max} produits',
+  productLimitReached: 'Limite de produits atteinte pour votre abonnement',
+  productLimitUpgradeHint: 'Passez à un forfait supérieur dans Facturation',
   templateShort: 'Modèle',
   addShort: 'Ajouter',
   loadingProducts: 'Chargement des produits…',
@@ -6180,6 +6188,10 @@ const de: Dict = {
   addProduct: 'Produkt hinzufügen',
 
   productsHint: 'Katalog, Grössen, Modifikatoren, Excel-Import',
+  productCountUnlimited: '{n} Produkte',
+  productCountLimited: '{n} / {max} Produkte',
+  productLimitReached: 'Produktlimit für Ihr Abonnement erreicht',
+  productLimitUpgradeHint: 'Upgrade unter Abrechnung für mehr Produkte',
   templateShort: 'Vorlage',
   addShort: 'Hinzufügen',
   loadingProducts: 'Produkte werden geladen…',

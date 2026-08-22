@@ -287,6 +287,27 @@ export default function Products() {
   const [recipeYield, setRecipeYield] = useState('1');
   const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
   const [storeName, setStoreName] = useState('');
+  const [productLimit, setProductLimit] = useState<{
+    maxProducts: number | null;
+    currentCount: number;
+    planSlug: string | null;
+    planName: string | null;
+  } | null>(null);
+
+  const atProductLimit =
+    productLimit?.maxProducts != null &&
+    (productLimit.currentCount ?? products.length) >= productLimit.maxProducts;
+
+  const productLimitLabel = useMemo(() => {
+    if (!productLimit) return null;
+    const count = productLimit.currentCount ?? products.length;
+    if (productLimit.maxProducts == null) {
+      return t('productCountUnlimited').replace('{n}', String(count));
+    }
+    return t('productCountLimited')
+      .replace('{n}', String(count))
+      .replace('{max}', String(productLimit.maxProducts));
+  }, [productLimit, products.length, t]);
 
   const onUploadProductImage = async (file: File | null) => {
     if (!file) return;
@@ -313,12 +334,31 @@ export default function Products() {
 
   const load = async () => {
     try {
+      const fetchAllProducts = async () => {
+        const pageSize = 500;
+        let page = 1;
+        let all: Product[] = [];
+        let total = 0;
+        let limitInfo: typeof productLimit = null;
+        for (;;) {
+          const res = await api.get('/merchant/products', { params: { limit: pageSize, page } });
+          const batch = (res.data.products || []) as Product[];
+          all = all.concat(batch);
+          total = Number(res.data.pagination?.total) || all.length;
+          limitInfo = res.data.productLimit || limitInfo;
+          if (batch.length < pageSize || all.length >= total) break;
+          page += 1;
+        }
+        return { products: all, productLimit: limitInfo, total };
+      };
+
       const [p, c, m] = await Promise.all([
-        api.get('/merchant/products?limit=200'),
+        fetchAllProducts(),
         api.get('/merchant/categories'),
         api.get('/merchant/modifiers'),
       ]);
-      setProducts(p.data.products || []);
+      setProducts(p.products || []);
+      setProductLimit(p.productLimit || null);
       setCategories(c.data.categories || []);
       setAllModifierGroups(m.data.groups || []);
       try {
@@ -432,6 +472,10 @@ export default function Products() {
   }, [products, selectedCategory, search, categories]);
 
   const openCreate = () => {
+    if (atProductLimit) {
+      toast.error(t('productLimitReached'));
+      return;
+    }
     setEditingId(null);
     const base = emptyForm();
     setForm({
@@ -734,7 +778,15 @@ export default function Products() {
       closeModal();
       await load();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || t('failedSaveProduct'));
+      const code = error.response?.data?.code;
+      if (code === 'PRODUCT_LIMIT_REACHED') {
+        toast.error(error.response?.data?.error || t('productLimitReached'));
+        if (error.response?.data?.productLimit) {
+          setProductLimit(error.response.data.productLimit);
+        }
+      } else {
+        toast.error(error.response?.data?.error || t('failedSaveProduct'));
+      }
     } finally {
       setSaving(false);
     }
@@ -938,6 +990,12 @@ export default function Products() {
           <p className="page-sub">
             {t('productsHint')}
           </p>
+          {productLimitLabel ? (
+            <p className={`text-xs mt-1 ${atProductLimit ? 'text-amber-700 font-medium' : 'muted'}`}>
+              {productLimitLabel}
+              {atProductLimit ? ` · ${t('productLimitUpgradeHint')}` : ''}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-1.5">
           <button
@@ -999,7 +1057,9 @@ export default function Products() {
           <button
             type="button"
             onClick={openCreate}
-            className="btn-primary"
+            disabled={atProductLimit}
+            className="btn-primary disabled:opacity-50"
+            title={atProductLimit ? t('productLimitReached') : undefined}
           >
             <Plus size={14} />
             {t('addShort')}
