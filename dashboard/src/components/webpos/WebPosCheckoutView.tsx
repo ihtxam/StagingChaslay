@@ -583,6 +583,26 @@ export default function WebPosCheckoutView({
   const showKeypad = !!selectedPaymentId || payments.length > 0;
   const showQuickAdd = quickAddAmounts.length > 0;
 
+  const remainingSummary =
+    total > 0.001 ? (
+      <div className="space-y-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm">
+        <div
+          className={`flex justify-between font-semibold ${
+            remaining > 0.001 ? 'text-[var(--webpos-accent-text)]' : 'text-stone-700'
+          }`}
+        >
+          <span>{t('webPosRemaining')}</span>
+          <span className="tabular-nums">CHF {remaining.toFixed(2)}</span>
+        </div>
+        {changeDue > 0.001 ? (
+          <div className="flex justify-between font-semibold text-emerald-700">
+            <span>{t('webPosChangeDue')}</span>
+            <span className="tabular-nums">CHF {changeDue.toFixed(2)}</span>
+          </div>
+        ) : null}
+      </div>
+    ) : null;
+
   const actionBtnClass = (active?: boolean) =>
     `inline-flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1.5 text-[10px] font-semibold leading-tight disabled:opacity-40 ${
       active
@@ -974,6 +994,7 @@ export default function WebPosCheckoutView({
               className="mt-auto space-y-2 border-t border-stone-100 pt-2 lg:mt-auto"
               onClick={(e) => e.stopPropagation()}
             >
+              {remainingSummary}
               <div className={showKeypad ? '' : 'hidden lg:block'}>
                 <WebPosNumericKeypad
                   mode="qty"
@@ -1102,22 +1123,6 @@ export default function WebPosCheckoutView({
                 ) : null}
               </div>
 
-              <div className="mt-4 w-full max-w-md space-y-1 text-sm lg:hidden">
-                <div
-                  className={`flex justify-between font-semibold ${
-                    remaining > 0.001 ? 'text-[var(--webpos-accent-text)]' : ''
-                  }`}
-                >
-                  <span>{t('webPosRemaining')}</span>
-                  <span className="tabular-nums">CHF {remaining.toFixed(2)}</span>
-                </div>
-                {changeDue > 0 ? (
-                  <div className="flex justify-between font-semibold text-emerald-700">
-                    <span>{t('webPosChangeDue')}</span>
-                    <span className="tabular-nums">CHF {changeDue.toFixed(2)}</span>
-                  </div>
-                ) : null}
-              </div>
             </div>
 
             {footerBar({ desktopOnly: true })}

@@ -134,7 +134,7 @@ function formatError(err: unknown): string {
   return String(err);
 }
 
-/** Log an error and optionally auto-send to superadmin (rate-limited, silent). */
+/** Log an error and optionally auto-send a support ticket (rate-limited). */
 export function logWebPosError(
   category: WebPosLogCategory | string,
   message: string,
@@ -212,7 +212,7 @@ export type SendWebPosLogsOptions = {
   reason?: string;
 };
 
-/** POST session logs to superadmin support inbox (not merchant-visible). Silent — no UI feedback. */
+/** POST session logs to merchant support (no modal). */
 export async function sendWebPosLogsToSupport(
   diagnostics: Partial<WebPosDiagnostics> & { appVersion?: string },
   opts?: SendWebPosLogsOptions
@@ -230,17 +230,18 @@ export async function sendWebPosLogsToSupport(
   const subject = opts?.auto
     ? `WebPOS auto-report — ${opts.reason || 'error'} (${when})`
     : `WebPOS logs — ${when}`;
-  await api.post('/merchant/support/diagnostic-report', {
-    source: 'webpos',
+  await api.post('/merchant/support/tickets', {
+    category: 'technical',
+    subcategory: 'webpos',
     subject,
     body,
-    auto: !!opts?.auto,
   });
 }
 
 let consoleHooked = false;
 let globalErrorsHooked = false;
 let diagnosticsGetter: (() => Partial<WebPosDiagnostics>) | null = null;
+let onAutoSendComplete: ((ok: boolean) => void) | null = null;
 
 async function triggerAutoSend(reason: string, err?: unknown) {
   if (err != null) {
@@ -259,9 +260,14 @@ async function triggerAutoSend(reason: string, err?: unknown) {
   }
 
   try {
-    await sendWebPosLogsToSupport(diagnosticsGetter?.() || {}, { auto: true, reason });
+    await sendWebPosLogsToSupport(
+      diagnosticsGetter?.() || {},
+      { auto: true, reason }
+    );
+    onAutoSendComplete?.(true);
   } catch (sendErr) {
     appendWebPosLog(`Auto-report send failed: ${formatError(sendErr)}`, 'error', 'error');
+    onAutoSendComplete?.(false);
   }
 }
 
@@ -307,8 +313,10 @@ let loggingInitialized = false;
 /** Start WebPOS logging: console, global errors, online/offline. */
 export function initWebPosLogging(opts: {
   getDiagnostics: () => Partial<WebPosDiagnostics>;
+  onAutoSend?: (ok: boolean) => void;
 }) {
   diagnosticsGetter = opts.getDiagnostics;
+  onAutoSendComplete = opts.onAutoSend ?? null;
   if (!loggingInitialized) {
     loggingInitialized = true;
     hookWebPosConsole();

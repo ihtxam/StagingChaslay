@@ -1,4 +1,5 @@
 import api from '@/lib/api';
+import { logWebPosError, logWebPosEvent } from '@/lib/webpos-log';
 import { getCatalogCachedAt } from './catalog-cache';
 import { isFatalPushStatus, isNetworkError, pushErrorMessage } from './network';
 import {
@@ -108,10 +109,12 @@ async function pushOne(sale: OutboxSale): Promise<'ok' | 'fatal' | 'retry'> {
     if (isFatalPushStatus(status) || (!isNetworkError(err) && status != null && status < 500)) {
       await updateOutboxSale(sale.clientId, { status: 'failed', lastError: msg });
       lastError = msg;
+      logWebPosError('sync', `Offline sale sync failed (fatal) clientId=${sale.clientId}`, err);
       return 'fatal';
     }
     await updateOutboxSale(sale.clientId, { status: 'pending', lastError: msg });
     lastError = msg;
+    logWebPosEvent('sync', `Offline sale sync retry clientId=${sale.clientId}: ${msg}`, 'warn');
     return 'retry';
   }
 }
@@ -163,6 +166,13 @@ export async function flushOfflineOutbox(): Promise<{
     await pruneSyncedOutbox();
     lastSyncAt = Date.now();
     if (synced > 0 && failed === 0) lastError = null;
+    if (synced > 0 || failed > 0) {
+      logWebPosEvent(
+        'sync',
+        `Outbox flush synced=${synced} failed=${failed}`,
+        failed > 0 ? 'warn' : 'info'
+      );
+    }
   } finally {
     syncing = false;
     await emit();
