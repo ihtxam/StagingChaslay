@@ -8,6 +8,14 @@ import { useAuthStore } from '@/store/auth';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import DeliveryQrScanModal from '@/components/delivery/DeliveryQrScanModal';
 import {
+  acquireDriverPosition,
+  geolocationErrorKey,
+  isIosSafari,
+  isStandalonePwa,
+  startDriverPositionWatch,
+  type GeolocationErrorKey,
+} from '@/lib/driver-geolocation';
+import {
   loadWebPosStaffSession,
   saveWebPosStaffSession,
   type WebPosStaffSession,
@@ -63,6 +71,8 @@ export default function DeliveryDriverPage() {
   const [lastPing, setLastPing] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [geoHint, setGeoHint] = useState<string | null>(null);
+  const [geoEnabling, setGeoEnabling] = useState(false);
   const watchIdRef = useRef<number | null>(null);
 
   const staffAccessToken = pinStaff?.accessToken;
@@ -156,7 +166,21 @@ export default function DeliveryDriverPage() {
     [clockedIn, apiHeaders, t]
   );
 
-  const startTracking = () => {
+  const showGeoError = useCallback(
+    (key: GeolocationErrorKey) => {
+      toast.error(t(key === 'deliveryGeoDeniedHint' ? 'deliveryGeoDenied' : key));
+      if (key === 'deliveryGeoDenied' || key === 'deliveryGeoDeniedHint') {
+        setGeoHint(
+          isIosSafari() || isStandalonePwa() ? t('deliveryGeoDeniedHint') : t('deliveryGeoDenied')
+        );
+      } else {
+        setGeoHint(t(key));
+      }
+    },
+    [t]
+  );
+
+  const startTracking = async () => {
     if (!clockedIn) {
       setPinOpen(true);
       return;
@@ -165,14 +189,38 @@ export default function DeliveryDriverPage() {
       toast.error(t('deliveryGeoUnsupported'));
       return;
     }
-    setTracking(true);
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        void postLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-      },
-      () => toast.error(t('deliveryGeoDenied')),
-      { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 }
-    );
+    setGeoHint(null);
+    setGeoEnabling(true);
+    try {
+      const pos = await acquireDriverPosition();
+      await postLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+      setTracking(true);
+      watchIdRef.current = startDriverPositionWatch(
+        (next) => {
+          void postLocation(next.coords.latitude, next.coords.longitude, next.coords.accuracy);
+        },
+        () => {
+          setTracking(false);
+          if (watchIdRef.current != null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+          }
+          showGeoError('deliveryGeoDenied');
+        }
+      );
+    } catch (e: unknown) {
+      setTracking(false);
+      const geoErr = e as GeolocationPositionError & { geoKey?: GeolocationErrorKey };
+      if (geoErr.geoKey) {
+        showGeoError(geoErr.geoKey);
+      } else if (typeof geoErr.code === 'number') {
+        showGeoError(geolocationErrorKey(geoErr));
+      } else {
+        showGeoError('deliveryGeoUnavailable');
+      }
+    } finally {
+      setGeoEnabling(false);
+    }
   };
 
   const stopTracking = async () => {
@@ -280,14 +328,23 @@ export default function DeliveryDriverPage() {
         </div>
         <button
           type="button"
-          className={`mt-3 w-full rounded-lg px-4 py-2.5 text-sm font-bold text-white ${
+          disabled={geoEnabling}
+          className={`mt-3 w-full rounded-lg px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60 ${
             tracking ? 'bg-stone-600 hover:bg-stone-700' : 'bg-teal-600 hover:bg-teal-700'
           }`}
-          onClick={() => (tracking ? void stopTracking() : startTracking())}
+          onClick={() => (tracking ? void stopTracking() : void startTracking())}
         >
-          {tracking ? t('deliveryStopTracking') : t('deliveryStartTracking')}
+          {geoEnabling
+            ? t('deliveryGeoEnabling')
+            : tracking
+              ? t('deliveryStopTracking')
+              : t('deliveryStartTracking')}
         </button>
-        <p className="mt-2 text-[11px] leading-snug text-stone-500">{t('deliveryTrackingNote')}</p>
+        {geoHint ? (
+          <p className="mt-2 text-[11px] leading-snug text-amber-800">{geoHint}</p>
+        ) : (
+          <p className="mt-2 text-[11px] leading-snug text-stone-500">{t('deliveryTrackingNote')}</p>
+        )}
       </div>
 
       <div className="flex gap-1 rounded-lg bg-stone-100 p-1">
