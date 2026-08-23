@@ -41,6 +41,7 @@ import OnlineShop from './OnlineShop';
 import Reservations from './Reservations';
 import Newsletter from './Newsletter';
 import WebPos from './WebPos';
+import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
 import WaiterApp from './WaiterApp';
 import DeliveryTrackingPage from './DeliveryTracking';
 import DeliveryDriverPage from './DeliveryDriver';
@@ -548,7 +549,14 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
-            <Route path="pos" element={<WebPos appMode={hideChrome} />} />
+            <Route
+              path="pos"
+              element={
+                <WebPosErrorBoundary>
+                  <WebPos appMode={hideChrome} />
+                </WebPosErrorBoundary>
+              }
+            />
             <Route path="waiter" element={<WaiterApp appMode={hideChrome} />} />
             <Route
               path="reports"
