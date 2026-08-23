@@ -677,6 +677,38 @@ export function WebPosSettingsDropdown({
     const next = WEBPOS_TEXT_SIZES[Math.max(0, Math.min(WEBPOS_TEXT_SIZES.length - 1, idx + dir))];
     if (next) onTextSizeChange(next);
   };
+
+  const autoPrintToggles = (
+    <div className="space-y-2">
+      <label className="flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          className="rounded"
+          checked={autoPrint}
+          onChange={(e) => onAutoPrintChange(e.target.checked)}
+        />
+        {t('webPosAutoPrint')}
+      </label>
+      <p className="text-[10px] leading-snug text-stone-500">
+        {isLocalPrintStation ? t('webPosAutoPrintHint') : t('webPosAutoPrintHintRemote')}
+      </p>
+      {!isLocalPrintStation && onAutoPrintKitchenChange != null && autoPrintKitchen != null ? (
+        <>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              className="rounded"
+              checked={autoPrintKitchen}
+              onChange={(e) => onAutoPrintKitchenChange(e.target.checked)}
+            />
+            {t('autoPrintKitchen')}
+          </label>
+          <p className="text-[10px] leading-snug text-stone-500">{t('webPosAutoPrintKitchenHintRemote')}</p>
+        </>
+      ) : null}
+    </div>
+  );
+
   return (
     <div className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-50 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl">
       <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
@@ -891,7 +923,9 @@ export function WebPosSettingsDropdown({
             {shiftOpen ? t('webPosShiftOpenHint') : t('webPosShiftClosedHint')}
           </p>
         </div>
-      ) : showEodButton ? (
+      ) : null}
+
+      {!shiftsEnabled && showEodButton ? (
         <div className="space-y-2 border-b border-stone-100 pb-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
             {t('webPosEodReport')}
@@ -906,6 +940,8 @@ export function WebPosSettingsDropdown({
           <p className="text-[10px] text-stone-500">{t('webPosEodWhenShiftsOff')}</p>
         </div>
       ) : null}
+
+      <div className="space-y-2 border-b border-stone-100 pb-3">{autoPrintToggles}</div>
 
       {terminalEnabled && terminals.length > 0 && onTerminalChange ? (
         <div className="space-y-2 border-b border-stone-100 pb-3">
@@ -983,34 +1019,6 @@ export function WebPosSettingsDropdown({
       <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
         <MoreHorizontal size={14} />
         {t('webPosPrinting')}
-      </div>
-      <div className="space-y-2 border-b border-stone-100 pb-3">
-        <label className="flex items-center gap-2 text-xs">
-          <input
-            type="checkbox"
-            className="rounded"
-            checked={autoPrint}
-            onChange={(e) => onAutoPrintChange(e.target.checked)}
-          />
-          {t('webPosAutoPrint')}
-        </label>
-        <p className="text-[10px] leading-snug text-stone-500">
-          {isLocalPrintStation ? t('webPosAutoPrintHint') : t('webPosAutoPrintHintRemote')}
-        </p>
-        {!isLocalPrintStation && onAutoPrintKitchenChange != null && autoPrintKitchen != null ? (
-          <>
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                className="rounded"
-                checked={autoPrintKitchen}
-                onChange={(e) => onAutoPrintKitchenChange(e.target.checked)}
-              />
-              {t('autoPrintKitchen')}
-            </label>
-            <p className="text-[10px] leading-snug text-stone-500">{t('webPosAutoPrintKitchenHintRemote')}</p>
-          </>
-        ) : null}
       </div>
       {isLocalPrintStation ? (
         <>
