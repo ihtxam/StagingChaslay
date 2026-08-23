@@ -89,9 +89,17 @@ export default function Newsletter() {
   }, [audience, filter]);
 
   const selectedEmails = useMemo(
-    () => Object.keys(selected).filter((e) => selected[e]),
+    () =>
+      Object.keys(selected)
+        .filter((e) => selected[e])
+        .map((e) => e.trim().toLowerCase()),
     [selected]
   );
+
+  const toggleRecipient = (email: string, checked: boolean) => {
+    const key = email.trim().toLowerCase();
+    setSelected((prev) => ({ ...prev, [key]: checked }));
+  };
 
   const patchDesign = (partial: Partial<NativeNewsletterDesign>) => {
     setDesign((prev) => ({ ...prev, ...partial, engine: 'native' }));
@@ -147,7 +155,10 @@ export default function Newsletter() {
     setSending(true);
     try {
       const { id } = await persistCampaign();
-      const res = await api.post(`/merchant/marketing/campaigns/${id}/send`);
+      const res = await api.post(`/merchant/marketing/campaigns/${id}/send`, {
+        audience: audienceMode,
+        selectedEmails: audienceMode === 'selected' ? selectedEmails : undefined,
+      });
       toast.success(
         t('newsletterSent')
           .replace('{sent}', String(res.data.campaign.sentCount || 0))
@@ -169,7 +180,7 @@ export default function Newsletter() {
     setAudienceMode(c.audience === 'selected' ? 'selected' : 'all');
     const next: Record<string, boolean> = {};
     (c.selectedEmails || []).forEach((e) => {
-      next[e] = true;
+      next[String(e || '').trim().toLowerCase()] = true;
     });
     setSelected(next);
   };
@@ -338,10 +349,8 @@ export default function Newsletter() {
                   <label key={row.email} className="flex items-center gap-2 px-3 py-2 text-sm">
                     <input
                       type="checkbox"
-                      checked={!!selected[row.email]}
-                      onChange={(e) =>
-                        setSelected((prev) => ({ ...prev, [row.email]: e.target.checked }))
-                      }
+                      checked={!!selected[row.email.trim().toLowerCase()]}
+                      onChange={(e) => toggleRecipient(row.email, e.target.checked)}
                     />
                     <span className="truncate">{row.name || row.email}</span>
                     <span className="ml-auto text-xs muted truncate">{row.email}</span>

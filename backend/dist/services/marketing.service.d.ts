@@ -80,7 +80,10 @@ export declare class MarketingService {
         selectedEmails: string[] | null;
         sentAt: Date | null;
     }>;
-    static sendCampaign(merchantId: string, campaignId: string): Promise<{
+    static sendCampaign(merchantId: string, campaignId: string, options?: {
+        audience?: "all" | "selected";
+        selectedEmails?: string[];
+    }): Promise<{
         id: string;
         merchantId: string;
         title: string;

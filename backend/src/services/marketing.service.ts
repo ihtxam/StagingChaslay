@@ -125,6 +125,43 @@ function htmlWrap(body: string) {
   return `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#1c1917;max-width:560px;margin:0 auto;padding:24px">${content}</body></html>`;
 }
 
+/** Normalize audience/selected email payloads from API bodies or JSON columns. */
+function normalizeAudienceMode(raw: unknown): "all" | "selected" {
+  return String(raw || "")
+    .trim()
+    .toLowerCase() === "selected"
+    ? "selected"
+    : "all";
+}
+
+function normalizeSelectedEmails(raw: unknown): string[] {
+  let list: unknown[] = [];
+  if (Array.isArray(raw)) {
+    list = raw;
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) list = parsed;
+      } catch {
+        list = [trimmed];
+      }
+    } else if (trimmed.includes("@")) {
+      list = [trimmed];
+    }
+  } else if (raw && typeof raw === "object") {
+    list = Object.values(raw as Record<string, unknown>);
+  }
+  return Array.from(
+    new Set(
+      list
+        .map((e) => String(e || "").trim().toLowerCase())
+        .filter((e) => e.includes("@"))
+    )
+  );
+}
+
 export class MarketingService {
   static getSmtpPublic(raw: MerchantSmtpSettings | null | undefined) {
     const s = normalizeSmtp(raw);
@@ -275,17 +312,8 @@ export class MarketingService {
     if (!subject) throw new Error("Subject is required");
     if (!bodyHtml) throw new Error("Newsletter body is required");
 
-    const audience = input.audience === "selected" ? "selected" : "all";
-    const selectedEmails =
-      audience === "selected"
-        ? Array.from(
-            new Set(
-              (input.selectedEmails || [])
-                .map((e) => String(e || "").trim().toLowerCase())
-                .filter((e) => e.includes("@"))
-            )
-          )
-        : null;
+    const audience = normalizeAudienceMode(input.audience);
+    const selectedEmails = audience === "selected" ? normalizeSelectedEmails(input.selectedEmails) : null;
     const designJson =
       input.designJson && typeof input.designJson === "object"
         ? (input.designJson as Record<string, unknown>)
@@ -333,7 +361,14 @@ export class MarketingService {
     return created;
   }
 
-  static async sendCampaign(merchantId: string, campaignId: string) {
+  static async sendCampaign(
+    merchantId: string,
+    campaignId: string,
+    options?: {
+      audience?: "all" | "selected";
+      selectedEmails?: string[];
+    }
+  ) {
     const db = getDb();
     const campaign = await db.query.newsletterCampaigns.findFirst({
       where: and(
@@ -354,16 +389,41 @@ export class MarketingService {
     });
     if (!merchant) throw new Error("Merchant not found");
 
+    const audienceMode =
+      options?.audience != null
+        ? normalizeAudienceMode(options.audience)
+        : normalizeAudienceMode(campaign.audience);
+    const selectedFromRequest =
+      options?.selectedEmails !== undefined
+        ? normalizeSelectedEmails(options.selectedEmails)
+        : null;
+    const selectedFromCampaign = normalizeSelectedEmails(campaign.selectedEmails);
+    const selected =
+      audienceMode === "selected"
+        ? selectedFromRequest && selectedFromRequest.length
+          ? selectedFromRequest
+          : selectedFromCampaign
+        : [];
+
+    if (
+      audienceMode === "selected" &&
+      selectedFromRequest &&
+      (normalizeAudienceMode(campaign.audience) !== audienceMode ||
+        JSON.stringify(selectedFromCampaign) !== JSON.stringify(selectedFromRequest))
+    ) {
+      await db
+        .update(schema.newsletterCampaigns)
+        .set({
+          audience: audienceMode,
+          selectedEmails: selectedFromRequest,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.newsletterCampaigns.id, campaignId));
+    }
+
     const audience = await this.listAudience(merchantId);
     let recipients: typeof audience = [];
-    if (campaign.audience === "selected") {
-      const selected = Array.from(
-        new Set(
-          (campaign.selectedEmails || [])
-            .map((e) => String(e || "").trim().toLowerCase())
-            .filter((e) => e.includes("@"))
-        )
-      );
+    if (audienceMode === "selected") {
       const audienceByEmail = new Map(audience.map((a) => [a.email.toLowerCase(), a]));
       recipients = selected.map((email) => {
         const hit = audienceByEmail.get(email);
@@ -381,7 +441,17 @@ export class MarketingService {
     } else {
       recipients = audience;
     }
-    if (!recipients.length) throw new Error("No recipients selected");
+    if (!recipients.length) {
+      throw new Error(
+        audienceMode === "selected"
+          ? "No recipients selected — choose at least one customer email"
+          : "No recipients — add customers with email addresses first"
+      );
+    }
+
+    console.log(
+      `[marketing] newsletter send campaign=${campaignId} merchant=${merchantId} audience=${audienceMode} recipients=${recipients.length} emails=${recipients.map((r) => r.email).join(",")}`
+    );
 
     await db
       .update(schema.newsletterCampaigns)

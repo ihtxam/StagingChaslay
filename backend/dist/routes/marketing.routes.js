@@ -59,7 +59,10 @@ router.post("/campaigns", async (req, res) => {
  */
 router.post("/campaigns/:id/send", async (req, res) => {
     try {
-        const campaign = await marketing_service_1.MarketingService.sendCampaign(req.merchantId, req.params.id);
+        const campaign = await marketing_service_1.MarketingService.sendCampaign(req.merchantId, req.params.id, {
+            audience: req.body.audience,
+            selectedEmails: req.body.selectedEmails,
+        });
         res.json({ success: true, campaign });
     }
     catch (error) {

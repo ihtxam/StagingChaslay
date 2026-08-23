@@ -60,7 +60,10 @@ router.post("/campaigns", async (req: Request, res: Response) => {
  */
 router.post("/campaigns/:id/send", async (req: Request, res: Response) => {
   try {
-    const campaign = await MarketingService.sendCampaign(req.merchantId!, req.params.id);
+    const campaign = await MarketingService.sendCampaign(req.merchantId!, req.params.id, {
+      audience: req.body.audience,
+      selectedEmails: req.body.selectedEmails,
+    });
     res.json({ success: true, campaign });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to send" });
