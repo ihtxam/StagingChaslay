@@ -385,10 +385,9 @@ function MerchantShell() {
       id: 'sales',
       label: t('navSales'),
       icon: '📈',
-      children: [
-        { label: t('invoicesNav'), path: '/merchant/invoices', icon: '🧾' },
-        { label: t('reports'), path: '/merchant/reports', icon: '📈' },
-      ].filter((item) => allow(item.path)),
+      children: [{ label: t('reports'), path: '/merchant/reports', icon: '📈' }].filter((item) =>
+        allow(item.path)
+      ),
     },
     {
       id: 'catalog',
@@ -548,11 +547,7 @@ function MerchantShell() {
             />
             <Route
               path="invoices"
-              element={
-                <PanelRouteGuard path="/merchant/invoices" allow={allow}>
-                  <Orders invoiceLedger />
-                </PanelRouteGuard>
-              }
+              element={<Navigate to="/merchant/orders?type=invoice" replace />}
             />
             <Route
               path="pos"

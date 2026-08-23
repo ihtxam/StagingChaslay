@@ -224,7 +224,7 @@ export type HeldRow = {
   createdAt?: string | null;
 };
 type StatusFilter = 'active' | 'completed' | 'all' | 'held';
-type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online' | 'invoice';
+type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
 type Props = {
   open: boolean;
   /** Full-width in-tab layout instead of slide-over overlay */
@@ -290,7 +290,6 @@ function matchesChannelFilter(
 ) {
   if (filter === 'all') return true;
   if (filter === 'online') return isOnlineShopOrder(o as PosOrder);
-  if (filter === 'invoice') return isInvoiceOrder(o);
   const ch =
     o.cartJson != null
       ? resolveHeldChannel({ channel: o.channel, cartJson: o.cartJson })
@@ -542,11 +541,7 @@ export default function WebPosOrdersPanel({
     if (searchQ) params.set('q', searchQ);
     const heldPromise = api.get('/merchant/pos/held');
     const ordersPromise = api.get(`/merchant/pos/orders?${params.toString()}`);
-    const invoiceUrl =
-      channelFilter === 'invoice'
-        ? '/merchant/invoices?limit=200'
-        : '/merchant/invoices?status=unpaid&limit=200';
-    const invoicePromise = api.get(invoiceUrl);
+    const invoicePromise = api.get('/merchant/invoices?status=unpaid&limit=200');
     const [heldRes, ordersRes, invoiceRes] = await Promise.allSettled([
       heldPromise,
       ordersPromise,
@@ -1149,7 +1144,6 @@ export default function WebPosOrdersPanel({
     { id: 'takeaway', label: t('takeaway') },
     { id: 'delivery', label: t('delivery') },
     { id: 'online', label: t('webPosOnlineOrders') },
-    { id: 'invoice', label: t('webPosInvoice') },
   ];
 
   const cancelModalOpen = !!(cancelFor || cancelHeldFor);
