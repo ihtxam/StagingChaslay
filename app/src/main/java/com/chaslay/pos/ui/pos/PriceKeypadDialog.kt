@@ -1,22 +1,29 @@
 package com.chaslay.pos.ui.pos
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
-import androidx.compose.material.icons.filled.Backspace
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,14 +31,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.chaslay.pos.R
 import com.chaslay.pos.ui.theme.VectronColors
+
+private val KeyRowHeight = 44.dp
+private val KeySpacing = 4.dp
+private val ActionColumnWidth = 56.dp
+// Enter spans the last two digit rows (44 + spacing + 44).
+private val EnterKeyHeight = KeyRowHeight * 2 + KeySpacing
 
 @Composable
 fun PriceKeypadDialog(
@@ -57,27 +75,67 @@ fun PriceKeypadDialog(
         }.take(12)
     }
 
-    AlertDialog(
+    fun confirm() {
+        buffer.toDoubleOrNull()?.let(onConfirm)
+    }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Column {
-                Text(title, fontWeight = FontWeight.Bold)
-                Text(subtitle, fontSize = 12.sp, color = Color.Gray)
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = if (buffer.isEmpty()) "$currencySymbol 0.00" else "$currencySymbol $buffer",
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .widthIn(min = 340.dp, max = 420.dp)
+                .fillMaxWidth(0.92f),
+            shape = RoundedCornerShape(20.dp),
+            color = Color.White,
+            shadowElevation = 10.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(18.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(title, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Text(subtitle, fontSize = 12.sp, color = Color.Gray)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.5.dp, Color(0xFF9CA3AF), RoundedCornerShape(12.dp))
+                        .background(Color(0xFFF8FAFC), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        text = if (buffer.isEmpty()) "$currencySymbol 0.00" else "$currencySymbol $buffer",
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.End,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 24.sp
+                    )
+                }
+
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.End,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp
-                )
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(listOf("7", "8", "9"), listOf("4", "5", "6"), listOf("1", "2", "3"), listOf("0", "00", ".")).forEach { row ->
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    horizontalArrangement = Arrangement.spacedBy(KeySpacing)
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(KeySpacing)
+                    ) {
+                        listOf(
+                            listOf("7", "8", "9"),
+                            listOf("4", "5", "6"),
+                            listOf("1", "2", "3"),
+                            listOf("0", "00", ".")
+                        ).forEach { row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(KeySpacing)
+                            ) {
                                 row.forEach { key ->
                                     PriceKey(
                                         label = key,
@@ -88,44 +146,67 @@ fun PriceKeypadDialog(
                             }
                         }
                     }
-                    Column(modifier = Modifier.weight(0.35f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(
+                        modifier = Modifier.width(ActionColumnWidth),
+                        verticalArrangement = Arrangement.spacedBy(KeySpacing)
+                    ) {
                         PriceKey(
                             label = "",
-                            icon = Icons.Default.Backspace,
+                            icon = Icons.AutoMirrored.Filled.Backspace,
+                            modifier = Modifier.fillMaxWidth(),
                             onClick = { buffer = buffer.dropLast(1) }
                         )
                         PriceKey(
                             label = stringResource(R.string.keypad_clear),
+                            modifier = Modifier.fillMaxWidth(),
                             onClick = { buffer = "" }
                         )
                         PriceKey(
                             label = "",
                             icon = Icons.AutoMirrored.Filled.KeyboardReturn,
+                            modifier = Modifier.fillMaxWidth(),
+                            keyHeight = EnterKeyHeight,
                             highlight = true,
-                            onClick = {
-                                buffer.toDoubleOrNull()?.let(onConfirm)
-                            }
+                            onClick = ::confirm
                         )
                     }
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(stringResource(R.string.cancel), fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = ::confirm,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = VectronColors.CashGreen)
+                    ) {
+                        Text(confirmLabel, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
             }
-        },
-        confirmButton = {
-            Button(onClick = { buffer.toDoubleOrNull()?.let(onConfirm) }) {
-                Text(confirmLabel)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         }
-    )
+    }
 }
 
 @Composable
 private fun PriceKey(
     label: String,
     modifier: Modifier = Modifier,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    icon: ImageVector? = null,
+    keyHeight: Dp = KeyRowHeight,
     highlight: Boolean = false,
     onClick: () -> Unit
 ) {
@@ -133,19 +214,26 @@ private fun PriceKey(
         highlight -> VectronColors.CashGreen
         else -> VectronColors.KeypadButton
     }
-    Column(
+    Box(
         modifier = modifier
-            .height(44.dp)
-            .background(bg, RoundedCornerShape(4.dp))
-            .clickable(onClick = onClick)
-            .padding(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .height(keyHeight)
+            .clip(RoundedCornerShape(4.dp))
+            .background(bg)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = if (highlight) Color.White else VectronColors.TextPrimary)
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (highlight) Color.White else VectronColors.TextPrimary
+            )
         } else {
-            Text(label, fontWeight = FontWeight.Bold, color = if (highlight) Color.White else VectronColors.TextPrimary)
+            Text(
+                label,
+                fontWeight = FontWeight.Bold,
+                color = if (highlight) Color.White else VectronColors.TextPrimary
+            )
         }
     }
 }
