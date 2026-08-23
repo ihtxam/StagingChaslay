@@ -467,6 +467,9 @@ fun PosScreen(
                 activeTableName = state.activeTableName,
                 activeCourse = state.cart.activeCourse,
                 activeCourseHasItems = state.cart.items.any { it.courseNumber == state.cart.activeCourse },
+                activeCourseHasUnsentItems = orderingItemsForRail.any {
+                    it.courseNumber == state.cart.activeCourse
+                },
                 hasUnsentItems = orderingItemsForRail.isNotEmpty(),
                 onPickup = {
                     mainTab = PosMainTab.REGISTER
@@ -1455,11 +1458,15 @@ private fun buildCartRows(
         activeCourse.coerceAtLeast(1),
         grouped.keys.maxOrNull() ?: 1
     )
-    if (items.isEmpty() && maxCourse <= 1) return emptyList()
+    if (items.isEmpty() && maxCourse <= 1 && activeCourse <= 1) return emptyList()
     return (1..maxCourse).flatMap { course ->
         val courseItems = grouped[course].orEmpty()
-        listOf(CartRowModel.CourseHeader(course, course == activeCourse)) +
-            courseItems.map { CartRowModel.Line(it) }
+        if (courseItems.isEmpty() && course != activeCourse) {
+            emptyList()
+        } else {
+            listOf(CartRowModel.CourseHeader(course, course == activeCourse)) +
+                courseItems.map { CartRowModel.Line(it) }
+        }
     }
 }
 
@@ -1689,6 +1696,8 @@ private fun VectronOrderPanel(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = 36.dp)
+                    .horizontalScroll(rememberScrollState())
                     .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -2060,6 +2069,7 @@ private fun CartActionSidebar(
     activeTableName: String?,
     activeCourse: Int,
     activeCourseHasItems: Boolean,
+    activeCourseHasUnsentItems: Boolean,
     hasUnsentItems: Boolean,
     onPickup: () -> Unit,
     onDelivery: () -> Unit,
@@ -2130,14 +2140,25 @@ private fun CartActionSidebar(
                 onClick = onAddCourse
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
-            if (activeCourseHasItems) {
-                CartSidebarButton(
-                    label = stringResource(R.string.fire_course_n, activeCourse),
-                    shortLabel = "Fire",
-                    icon = Icons.Default.Send,
-                    color = VectronColors.CashGreen,
-                    onClick = onSendActiveCourse
-                )
+            when {
+                activeCourseHasUnsentItems || (activeCourseHasItems && !hasUnsentItems) -> {
+                    CartSidebarButton(
+                        label = stringResource(R.string.fire_course_n, activeCourse),
+                        shortLabel = "Fire",
+                        icon = Icons.Default.Send,
+                        color = VectronColors.CashGreen,
+                        onClick = onSendActiveCourse
+                    )
+                }
+                hasUnsentItems -> {
+                    CartSidebarButton(
+                        label = stringResource(R.string.send_to_kitchen),
+                        shortLabel = "Send",
+                        icon = Icons.Default.Send,
+                        color = VectronColors.CashGreen,
+                        onClick = if (isTableMode) onSendAllCourses else onSend
+                    )
+                }
             }
             if (isTableMode) {
                 CartSidebarButton(
