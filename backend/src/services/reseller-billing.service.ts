@@ -16,7 +16,9 @@ export type BillableFeatureKey =
   | "offers"
   | "reservations"
   | "inventory"
-  | "digital_signage";
+  | "digital_signage"
+  | "kds"
+  | "ods";
 
 export const BILLABLE_FEATURE_KEYS: BillableFeatureKey[] = [
   "online_shop",
@@ -29,6 +31,8 @@ export const BILLABLE_FEATURE_KEYS: BillableFeatureKey[] = [
   "reservations",
   "inventory",
   "digital_signage",
+  "kds",
+  "ods",
 ];
 
 export type ResellerBillingPrices = {
@@ -52,6 +56,8 @@ const DEFAULT_PRICES: ResellerBillingPrices = {
     reservations: 10,
     inventory: 29,
     digital_signage: 19,
+    kds: 19,
+    ods: 15,
   },
 };
 
@@ -77,6 +83,8 @@ export function detectActiveBillableFeatures(merchant: {
   reservationsEnabled?: boolean | null;
   inventoryAddonEnabled?: boolean | null;
   signageAddonEnabled?: boolean | null;
+  kdsAddonEnabled?: boolean | null;
+  odsAddonEnabled?: boolean | null;
   adyenApiKey?: string | null;
   customDomain?: string | null;
   editionFeatures?: string[] | null;
@@ -102,6 +110,8 @@ export function detectActiveBillableFeatures(merchant: {
   if (merchant.reservationsEnabled || features.includes("reservations")) out.push("reservations");
   if (merchant.inventoryAddonEnabled) out.push("inventory");
   if (merchant.signageAddonEnabled) out.push("digital_signage");
+  if (merchant.kdsAddonEnabled) out.push("kds");
+  if (merchant.odsAddonEnabled) out.push("ods");
 
   return [...new Set(out)];
 }
@@ -261,6 +271,8 @@ export class ResellerBillingService {
       reservations: 0,
       inventory: 0,
       digital_signage: 0,
+      kds: 0,
+      ods: 0,
     };
 
     let billableMerchants = 0;
@@ -278,6 +290,8 @@ export class ResellerBillingService {
             reservationsEnabled: m.reservationsEnabled,
             inventoryAddonEnabled: (m as { inventoryAddonEnabled?: boolean }).inventoryAddonEnabled,
             signageAddonEnabled: (m as { signageAddonEnabled?: boolean }).signageAddonEnabled,
+            kdsAddonEnabled: (m as { kdsAddonEnabled?: boolean }).kdsAddonEnabled,
+            odsAddonEnabled: (m as { odsAddonEnabled?: boolean }).odsAddonEnabled,
             adyenApiKey: m.adyenApiKey,
             customDomain: m.customDomain,
             editionFeatures,

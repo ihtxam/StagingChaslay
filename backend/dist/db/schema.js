@@ -1,8 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.giftCardPurchases = exports.giftCards = exports.loyaltyTransactions = exports.loyaltyCards = exports.paymentTransactions = exports.deliveryZones = exports.rfidReaders = exports.paymentTerminals = exports.chaslayFloorPrintJobs = exports.chaslayFloorTableOrders = exports.chaslayFloorDevices = exports.reservations = exports.tableQrCodes = exports.diningTables = exports.floorPlans = exports.orderRefunds = exports.orderItems = exports.signageSlides = exports.signageScreens = exports.signagePlaylists = exports.SIGNAGE_SLIDE_TYPES = exports.SIGNAGE_ORIENTATIONS = exports.SIGNAGE_TEMPLATES = exports.kdsTicketItems = exports.kdsTickets = exports.kdsStations = exports.posSessions = exports.heldOrders = exports.orders = exports.customerAddresses = exports.customers = exports.productModifierGroups = exports.modifierOptions = exports.modifierGroups = exports.products = exports.categories = exports.vatSettings = exports.licenseTransactions = exports.licenses = exports.devices = exports.subscriptionPayments = exports.passwordResetTokens = exports.platformSettings = exports.subscriptionPlans = exports.merchantStaff = exports.merchantRoles = exports.merchants = exports.editions = exports.resellers = exports.superadmins = void 0;
-exports.inventorySuppliers = exports.posCashMovements = exports.posShifts = exports.marketingEmailLog = exports.newsletterCampaigns = exports.paymentTerminalsRelations = exports.deliveryZonesRelations = exports.rfidReadersRelations = exports.loyaltyPointEventsRelations = exports.loyaltyPointLotsRelations = exports.giftCardTransactionsRelations = exports.giftCardPurchasesRelations = exports.giftCardsRelations = exports.loyaltyCardsRelations = exports.orderRefundsRelations = exports.orderItemsRelations = exports.customerAddressesRelations = exports.signageSlidesRelations = exports.signagePlaylistsRelations = exports.signageScreensRelations = exports.kdsTicketItemsRelations = exports.kdsTicketsRelations = exports.kdsStationsRelations = exports.heldOrdersRelations = exports.paymentTransactionsRelations = exports.ordersRelations = exports.productModifierGroupsRelations = exports.modifierOptionsRelations = exports.modifierGroupsRelations = exports.productsRelations = exports.licensesRelations = exports.devicesRelations = exports.tableQrCodesRelations = exports.diningTablesRelations = exports.floorPlansRelations = exports.reservationsRelations = exports.voucherRedemptionsRelations = exports.vouchersRelations = exports.merchantsRelations = exports.editionsRelations = exports.resellersRelations = exports.cmsPagesRelations = exports.cmsPages = exports.dailyReports = exports.voucherRedemptions = exports.vouchers = exports.offers = exports.loyaltyPointEvents = exports.loyaltyPointLots = exports.giftCardTransactions = void 0;
-exports.supportTicketMessagesRelations = exports.supportTicketsRelations = exports.supportTicketMessages = exports.supportTickets = exports.platformMessageDismissals = exports.platformMessages = exports.platformEventLogs = exports.platformShopOrdersRelations = exports.platformShopOrders = exports.platformShopVouchers = exports.platformShopProducts = exports.subscriptionPaymentsRelations = exports.subscriptionPlansRelations = exports.productRecipesRelations = exports.inventoryMovementsRelations = exports.inventoryUnitRatiosRelations = exports.inventoryUnitsRelations = exports.inventoryCategoriesRelations = exports.inventoryItemsRelations = exports.inventorySuppliersRelations = exports.productRecipes = exports.inventoryMovements = exports.inventoryUnitRatios = exports.inventoryUnits = exports.inventoryCategories = exports.inventoryItems = void 0;
+exports.deliveryZones = exports.rfidReaders = exports.paymentTerminals = exports.chaslayFloorPrintJobs = exports.chaslayFloorTableOrders = exports.chaslayFloorDevices = exports.reservations = exports.tableQrCodes = exports.diningTables = exports.floorPlans = exports.orderRefunds = exports.orderItems = exports.signageSlides = exports.signageScreens = exports.signagePlaylists = exports.SIGNAGE_SLIDE_TYPES = exports.SIGNAGE_ORIENTATIONS = exports.SIGNAGE_TEMPLATES = exports.odsOrders = exports.odsDisplays = exports.ODS_THEMES = exports.kdsTicketItems = exports.kdsTickets = exports.kdsStations = exports.deliveryDriverShifts = exports.deliveryDriverLocations = exports.posSessions = exports.heldOrders = exports.orders = exports.customerAddresses = exports.customers = exports.productModifierGroups = exports.modifierOptions = exports.modifierGroups = exports.products = exports.categories = exports.vatSettings = exports.licenseTransactions = exports.licenses = exports.devices = exports.subscriptionPayments = exports.passwordResetTokens = exports.platformSettings = exports.subscriptionPlans = exports.merchantStaff = exports.merchantRoles = exports.merchants = exports.editions = exports.resellers = exports.superadmins = void 0;
+exports.rfidReadersRelations = exports.loyaltyPointEventsRelations = exports.loyaltyPointLotsRelations = exports.giftCardTransactionsRelations = exports.giftCardPurchasesRelations = exports.giftCardsRelations = exports.loyaltyCardsRelations = exports.orderRefundsRelations = exports.orderItemsRelations = exports.customerAddressesRelations = exports.signageSlidesRelations = exports.signagePlaylistsRelations = exports.signageScreensRelations = exports.kdsTicketItemsRelations = exports.kdsTicketsRelations = exports.odsOrdersRelations = exports.odsDisplaysRelations = exports.kdsStationsRelations = exports.heldOrdersRelations = exports.paymentTransactionsRelations = exports.ordersRelations = exports.productModifierGroupsRelations = exports.modifierOptionsRelations = exports.modifierGroupsRelations = exports.productsRelations = exports.licensesRelations = exports.devicesRelations = exports.tableQrCodesRelations = exports.diningTablesRelations = exports.floorPlansRelations = exports.reservationsRelations = exports.voucherRedemptionsRelations = exports.vouchersRelations = exports.merchantsRelations = exports.editionsRelations = exports.resellersRelations = exports.cmsPagesRelations = exports.cmsPages = exports.dailyReports = exports.voucherRedemptions = exports.vouchers = exports.offers = exports.loyaltyPointEvents = exports.loyaltyPointLots = exports.giftCardTransactions = exports.giftCardPurchases = exports.giftCards = exports.loyaltyTransactions = exports.loyaltyCards = exports.paymentTransactions = void 0;
+exports.supportTicketMessagesRelations = exports.supportTicketsRelations = exports.supportTicketMessages = exports.supportTickets = exports.platformMessageDismissals = exports.platformMessages = exports.platformEventLogs = exports.platformShopOrdersRelations = exports.platformShopOrders = exports.platformShopVouchers = exports.platformShopProducts = exports.subscriptionPaymentsRelations = exports.subscriptionPlansRelations = exports.productRecipesRelations = exports.inventoryMovementsRelations = exports.inventoryUnitRatiosRelations = exports.inventoryUnitsRelations = exports.inventoryCategoriesRelations = exports.inventoryItemsRelations = exports.inventorySuppliersRelations = exports.productRecipes = exports.inventoryMovements = exports.inventoryUnitRatios = exports.inventoryUnits = exports.inventoryCategories = exports.inventoryItems = exports.inventorySuppliers = exports.posCashMovements = exports.posShifts = exports.marketingEmailLog = exports.emailSendLog = exports.newsletterCampaigns = exports.paymentTerminalsRelations = exports.deliveryZonesRelations = void 0;
 const pg_core_1 = require("drizzle-orm/pg-core");
 const drizzle_orm_1 = require("drizzle-orm");
 // ============================================================================
@@ -152,6 +152,12 @@ exports.merchants = (0, pg_core_1.pgTable)("merchants", {
      * (e.g. 2 → delivery item prices = takeaway + 2.00).
      */
     deliveryMenuMarkup: (0, pg_core_1.decimal)("delivery_menu_markup", { precision: 10, scale: 2 }).default("0"),
+    /** Driver pay: hourly | per_order | both */
+    deliveryDriverPayMode: (0, pg_core_1.varchar)("delivery_driver_pay_mode", { length: 20 })
+        .default("both")
+        .notNull(),
+    deliveryDriverHourlyRate: (0, pg_core_1.decimal)("delivery_driver_hourly_rate", { precision: 10, scale: 2 }).default("0"),
+    deliveryPerOrderFee: (0, pg_core_1.decimal)("delivery_per_order_fee", { precision: 10, scale: 2 }).default("0"),
     // Adyen credentials (merchant-level; shared by online shop + payment terminals)
     adyenMerchantAccount: (0, pg_core_1.varchar)("adyen_merchant_account", { length: 255 }),
     adyenApiKey: (0, pg_core_1.text)("adyen_api_key"),
@@ -232,6 +238,10 @@ exports.merchants = (0, pg_core_1.pgTable)("merchants", {
     signageAddonEnabled: (0, pg_core_1.boolean)("signage_addon_enabled").default(false).notNull(),
     /** Max TV screens when the signage addon is on. Default 2. */
     signageScreenLimit: (0, pg_core_1.integer)("signage_screen_limit").default(2).notNull(),
+    /** Paid kitchen display (KDS) addon. Superadmin/reseller only. */
+    kdsAddonEnabled: (0, pg_core_1.boolean)("kds_addon_enabled").default(false).notNull(),
+    /** Paid order display system (ODS) addon. Superadmin/reseller only. */
+    odsAddonEnabled: (0, pg_core_1.boolean)("ods_addon_enabled").default(false).notNull(),
     /**
      * Extra yield / waste factor applied to recipe usage on sale (0–0.50). Default 20%.
      */
@@ -274,6 +284,13 @@ exports.merchants = (0, pg_core_1.pgTable)("merchants", {
     emailSmtpSettings: (0, pg_core_1.json)("email_smtp_settings").$type(),
     /** Per-merchant Brevo API key + from + usage counters */
     emailBrevoSettings: (0, pg_core_1.json)("email_brevo_settings").$type(),
+    /**
+     * Email delivery: platform = Superadmin Brevo; own = merchant SMTP/Brevo.
+     * Default platform for new merchants; existing merchants with own SMTP/Brevo stay on own.
+     */
+    emailDeliveryMode: (0, pg_core_1.varchar)("email_delivery_mode", { length: 20 })
+        .default("platform")
+        .notNull(),
     /**
      * Marketing automation:
      * { reorderReminderEnabled, reorderReminderDays, reorderReminderSubject, reorderReminderBody }
@@ -373,6 +390,12 @@ exports.merchantStaff = (0, pg_core_1.pgTable)("merchant_staff", {
     passwordHash: (0, pg_core_1.varchar)("password_hash", { length: 255 }),
     /** Can sign in to merchant backend panel (email + password) */
     canAccessPanel: (0, pg_core_1.boolean)("can_access_panel").default(false).notNull(),
+    /** Adyen POI terminal id preferred by this staff member on WebPOS/waiter. */
+    preferredTerminalId: (0, pg_core_1.varchar)("preferred_terminal_id", { length: 255 }),
+    /** Optional override for delivery driver hourly wage (CHF/h). */
+    deliveryHourlyRateOverride: (0, pg_core_1.decimal)("delivery_hourly_rate_override", { precision: 10, scale: 2 }),
+    /** Optional override for per-delivery fee (CHF). */
+    deliveryPerOrderFeeOverride: (0, pg_core_1.decimal)("delivery_per_order_fee_override", { precision: 10, scale: 2 }),
     isActive: (0, pg_core_1.boolean)("is_active").default(true).notNull(),
     createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
     updatedAt: (0, pg_core_1.timestamp)("updated_at").defaultNow().notNull(),
@@ -787,6 +810,15 @@ exports.orders = (0, pg_core_1.pgTable)("orders", {
     adyenCashierReceiptJson: (0, pg_core_1.text)("adyen_cashier_receipt_json"),
     notes: (0, pg_core_1.text)("notes"),
     shippingAddress: (0, pg_core_1.text)("shipping_address"),
+    /** Geocoded destination for delivery map (shop checkout / assign). */
+    deliveryLatitude: (0, pg_core_1.decimal)("delivery_latitude", { precision: 10, scale: 7 }),
+    deliveryLongitude: (0, pg_core_1.decimal)("delivery_longitude", { precision: 10, scale: 7 }),
+    /** Delivery driver assigned from the panel (distinct from staffId = cashier). */
+    assignedDeliveryStaffId: (0, pg_core_1.uuid)("assigned_delivery_staff_id").references(() => exports.merchantStaff.id, {
+        onDelete: "set null",
+    }),
+    /** Public token for guest order tracking (no login). */
+    deliveryTrackingToken: (0, pg_core_1.varchar)("delivery_tracking_token", { length: 64 }),
     deliveryZoneId: (0, pg_core_1.uuid)("delivery_zone_id"),
     scheduledFor: (0, pg_core_1.timestamp)("scheduled_for"), // null = ASAP
     customerName: (0, pg_core_1.varchar)("customer_name", { length: 255 }),
@@ -871,6 +903,8 @@ exports.posSessions = (0, pg_core_1.pgTable)("pos_sessions", {
     deviceLabel: (0, pg_core_1.varchar)("device_label", { length: 255 }),
     staffId: (0, pg_core_1.uuid)("staff_id"),
     staffName: (0, pg_core_1.varchar)("staff_name", { length: 255 }),
+    /** Main till only: local Print Agent reachable on last heartbeat */
+    printAgentOnline: (0, pg_core_1.boolean)("print_agent_online"),
     lastHeartbeat: (0, pg_core_1.timestamp)("last_heartbeat").defaultNow().notNull(),
     revokedAt: (0, pg_core_1.timestamp)("revoked_at"),
     createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
@@ -878,6 +912,41 @@ exports.posSessions = (0, pg_core_1.pgTable)("pos_sessions", {
     merchantIdx: (0, pg_core_1.index)("pos_sessions_merchant_id_idx").on(table.merchantId),
     deviceIdx: (0, pg_core_1.index)("pos_sessions_merchant_device_idx").on(table.merchantId, table.deviceId, table.sessionKind),
     activeIdx: (0, pg_core_1.index)("pos_sessions_active_idx").on(table.merchantId, table.sessionKind, table.lastHeartbeat),
+}));
+/** Latest GPS ping per delivery driver (upserted on each location post). */
+exports.deliveryDriverLocations = (0, pg_core_1.pgTable)("delivery_driver_locations", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    merchantId: (0, pg_core_1.uuid)("merchant_id")
+        .notNull()
+        .references(() => exports.merchants.id, { onDelete: "cascade" }),
+    staffId: (0, pg_core_1.uuid)("staff_id")
+        .notNull()
+        .references(() => exports.merchantStaff.id, { onDelete: "cascade" }),
+    latitude: (0, pg_core_1.decimal)("latitude", { precision: 10, scale: 7 }).notNull(),
+    longitude: (0, pg_core_1.decimal)("longitude", { precision: 10, scale: 7 }).notNull(),
+    accuracyM: (0, pg_core_1.decimal)("accuracy_m", { precision: 10, scale: 2 }),
+    heading: (0, pg_core_1.decimal)("heading", { precision: 6, scale: 2 }),
+    speedMps: (0, pg_core_1.decimal)("speed_mps", { precision: 8, scale: 3 }),
+    recordedAt: (0, pg_core_1.timestamp)("recorded_at").defaultNow().notNull(),
+    updatedAt: (0, pg_core_1.timestamp)("updated_at").defaultNow().notNull(),
+}, (table) => ({
+    merchantStaffUnique: (0, pg_core_1.uniqueIndex)("delivery_driver_locations_merchant_staff_uidx").on(table.merchantId, table.staffId),
+    merchantRecordedIdx: (0, pg_core_1.index)("delivery_driver_locations_merchant_recorded_idx").on(table.merchantId, table.recordedAt),
+}));
+/** Driver clock-in windows for hourly wage (started when GPS tracking starts). */
+exports.deliveryDriverShifts = (0, pg_core_1.pgTable)("delivery_driver_shifts", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    merchantId: (0, pg_core_1.uuid)("merchant_id")
+        .notNull()
+        .references(() => exports.merchants.id, { onDelete: "cascade" }),
+    staffId: (0, pg_core_1.uuid)("staff_id")
+        .notNull()
+        .references(() => exports.merchantStaff.id, { onDelete: "cascade" }),
+    startedAt: (0, pg_core_1.timestamp)("started_at").defaultNow().notNull(),
+    endedAt: (0, pg_core_1.timestamp)("ended_at"),
+    createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
+}, (table) => ({
+    merchantStaffIdx: (0, pg_core_1.index)("delivery_driver_shifts_merchant_staff_idx").on(table.merchantId, table.staffId, table.startedAt),
 }));
 // ============================================================================
 // KITCHEN DISPLAY (browser KDS)
@@ -936,6 +1005,37 @@ exports.kdsTicketItems = (0, pg_core_1.pgTable)("kds_ticket_items", {
 }, (table) => ({
     ticketIdx: (0, pg_core_1.index)("kds_ticket_items_ticket_id_idx").on(table.ticketId),
     lineIdx: (0, pg_core_1.index)("kds_ticket_items_line_id_idx").on(table.ticketId, table.lineId),
+}));
+exports.ODS_THEMES = ["light", "teal", "dark"];
+exports.odsDisplays = (0, pg_core_1.pgTable)("ods_displays", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    merchantId: (0, pg_core_1.uuid)("merchant_id")
+        .notNull()
+        .references(() => exports.merchants.id, { onDelete: "cascade" }),
+    name: (0, pg_core_1.varchar)("name", { length: 255 }).notNull(),
+    token: (0, pg_core_1.varchar)("token", { length: 128 }).notNull(),
+    /** Customer board color theme */
+    theme: (0, pg_core_1.varchar)("theme", { length: 32 }).default("light").notNull(),
+    isActive: (0, pg_core_1.boolean)("is_active").default(true).notNull(),
+    createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
+    updatedAt: (0, pg_core_1.timestamp)("updated_at").defaultNow().notNull(),
+}, (table) => ({
+    merchantIdx: (0, pg_core_1.index)("ods_displays_merchant_id_idx").on(table.merchantId),
+    tokenIdx: (0, pg_core_1.uniqueIndex)("ods_displays_token_uidx").on(table.token),
+}));
+exports.odsOrders = (0, pg_core_1.pgTable)("ods_orders", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    merchantId: (0, pg_core_1.uuid)("merchant_id")
+        .notNull()
+        .references(() => exports.merchants.id, { onDelete: "cascade" }),
+    orderNumber: (0, pg_core_1.varchar)("order_number", { length: 64 }).notNull(),
+    status: (0, pg_core_1.varchar)("status", { length: 20 }).default("preparing").notNull(),
+    readyAt: (0, pg_core_1.timestamp)("ready_at"),
+    createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
+    updatedAt: (0, pg_core_1.timestamp)("updated_at").defaultNow().notNull(),
+}, (table) => ({
+    merchantIdx: (0, pg_core_1.index)("ods_orders_merchant_id_idx").on(table.merchantId),
+    merchantOrderIdx: (0, pg_core_1.uniqueIndex)("ods_orders_merchant_order_uidx").on(table.merchantId, table.orderNumber),
 }));
 exports.SIGNAGE_TEMPLATES = [
     "dark_pizza",
@@ -1729,6 +1829,12 @@ exports.heldOrdersRelations = (0, drizzle_orm_1.relations)(exports.heldOrders, (
 exports.kdsStationsRelations = (0, drizzle_orm_1.relations)(exports.kdsStations, ({ one }) => ({
     merchant: one(exports.merchants, { fields: [exports.kdsStations.merchantId], references: [exports.merchants.id] }),
 }));
+exports.odsDisplaysRelations = (0, drizzle_orm_1.relations)(exports.odsDisplays, ({ one }) => ({
+    merchant: one(exports.merchants, { fields: [exports.odsDisplays.merchantId], references: [exports.merchants.id] }),
+}));
+exports.odsOrdersRelations = (0, drizzle_orm_1.relations)(exports.odsOrders, ({ one }) => ({
+    merchant: one(exports.merchants, { fields: [exports.odsOrders.merchantId], references: [exports.merchants.id] }),
+}));
 exports.kdsTicketsRelations = (0, drizzle_orm_1.relations)(exports.kdsTickets, ({ one, many }) => ({
     merchant: one(exports.merchants, { fields: [exports.kdsTickets.merchantId], references: [exports.merchants.id] }),
     items: many(exports.kdsTicketItems),
@@ -1849,6 +1955,24 @@ exports.newsletterCampaigns = (0, pg_core_1.pgTable)("newsletter_campaigns", {
 }, (table) => ({
     merchantIdx: (0, pg_core_1.index)("newsletter_campaigns_merchant_idx").on(table.merchantId),
     statusIdx: (0, pg_core_1.index)("newsletter_campaigns_status_idx").on(table.merchantId, table.status),
+}));
+/** Platform-wide transactional email send log (superadmin usage + per-merchant attribution). */
+exports.emailSendLog = (0, pg_core_1.pgTable)("email_send_log", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    merchantId: (0, pg_core_1.uuid)("merchant_id").references(() => exports.merchants.id, { onDelete: "set null" }),
+    provider: (0, pg_core_1.varchar)("provider", { length: 20 }).notNull(), // smtp | brevo | sendgrid
+    source: (0, pg_core_1.varchar)("source", { length: 30 }).notNull(), // platform | merchant_smtp | merchant_brevo | env
+    emailType: (0, pg_core_1.varchar)("email_type", { length: 50 }).notNull().default("general"),
+    recipient: (0, pg_core_1.varchar)("recipient", { length: 255 }).notNull(),
+    subject: (0, pg_core_1.varchar)("subject", { length: 500 }),
+    status: (0, pg_core_1.varchar)("status", { length: 20 }).notNull().default("sent"), // sent | failed
+    error: (0, pg_core_1.text)("error"),
+    createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
+}, (table) => ({
+    merchantIdx: (0, pg_core_1.index)("email_send_log_merchant_idx").on(table.merchantId),
+    typeIdx: (0, pg_core_1.index)("email_send_log_type_idx").on(table.emailType),
+    createdIdx: (0, pg_core_1.index)("email_send_log_created_idx").on(table.createdAt),
+    merchantCreatedIdx: (0, pg_core_1.index)("email_send_log_merchant_created_idx").on(table.merchantId, table.createdAt),
 }));
 /** Log of marketing emails (newsletter + reorder reminders) */
 exports.marketingEmailLog = (0, pg_core_1.pgTable)("marketing_email_log", {
@@ -2243,6 +2367,8 @@ exports.supportTickets = (0, pg_core_1.pgTable)("support_tickets", {
     subcategory: (0, pg_core_1.varchar)("subcategory", { length: 80 }),
     subject: (0, pg_core_1.varchar)("subject", { length: 255 }).notNull(),
     status: (0, pg_core_1.varchar)("status", { length: 20 }).notNull().default("open"),
+    /** When false, ticket is visible in superadmin support inbox only (POS diagnostic auto-reports). */
+    merchantVisible: (0, pg_core_1.boolean)("merchant_visible").notNull().default(true),
     assignedToSuperadminId: (0, pg_core_1.uuid)("assigned_to_superadmin_id"),
     lastMessageAt: (0, pg_core_1.timestamp)("last_message_at").defaultNow().notNull(),
     closedAt: (0, pg_core_1.timestamp)("closed_at"),

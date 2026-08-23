@@ -172,20 +172,35 @@ export class PosOrdersService {
     }
 
     const q = String(opts.q || "").trim();
-    const searchCond = q
-      ? or(
+    const bareQ = q.replace(/^#/, "");
+    const searchParts = q
+      ? [
           ilike(schema.orders.orderNumber, `%${q}%`),
           ilike(schema.orders.clientId, `%${q}%`),
           ilike(schema.orders.invoiceNumber, `%${q}%`),
           ilike(schema.orders.customerName, `%${q}%`),
-          ilike(schema.orders.paymentMethod, `%${q}%`)
-        )
-      : null;
+          ilike(schema.orders.paymentMethod, `%${q}%`),
+          ilike(schema.orders.tableLabel, `%${q}%`),
+          ilike(schema.orders.notes, `%${q}%`),
+        ]
+      : [];
+    if (bareQ && bareQ !== q) {
+      searchParts.push(
+        ilike(schema.orders.orderNumber, `%${bareQ}%`),
+        ilike(schema.orders.notes, `%${bareQ}%`)
+      );
+    }
+    if (/^\d{1,6}$/.test(bareQ)) {
+      searchParts.push(
+        ilike(schema.orders.notes, `%[ticket:${bareQ}]%`),
+        ilike(schema.orders.notes, `%[tab:${bareQ}]%`)
+      );
+    }
+    const searchCond = searchParts.length ? or(...searchParts) : null;
 
     // Include orders created in range OR scheduled (pickup/delivery) in range so a
     // future delivery time does not hide a ticket from today's history.
-    // A ref search (WP-… / INV-…) also matches outside the date window — invoice
-    // and awaiting_payment POS sales were otherwise invisible when staff searched.
+    // A ref search (WP-… / INV-… / kitchen #1001) also matches outside the date window.
     if (opts.from || opts.to) {
       const start = opts.from ? zurichDayBounds(opts.from).start : new Date(0);
       const end = opts.to ? zurichDayBounds(opts.to).end : new Date("9999-12-31T23:59:59.999Z");
@@ -199,7 +214,9 @@ export class PosOrdersService {
       );
       const inRange = or(createdInRange, scheduledInRange)!;
       const looksLikeRef =
-        /^(WP-|INV-|ORD-|#)/i.test(q) || q.replace(/[^A-Za-z0-9-]/g, "").length >= 8;
+        /^(WP-|INV-|ORD-|TX-|WEB-|DI-|#)/i.test(q) ||
+        /^\d{1,6}$/.test(bareQ) ||
+        q.replace(/[^A-Za-z0-9-]/g, "").length >= 8;
       if (searchCond && looksLikeRef) {
         conditions.push(or(inRange, searchCond)!);
       } else if (searchCond) {

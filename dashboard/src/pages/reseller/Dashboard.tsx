@@ -110,6 +110,8 @@ function MerchantsPage() {
     inventoryAddonEnabled: false,
     signageAddonEnabled: false,
     signageScreenLimit: 2,
+    kdsAddonEnabled: false,
+    odsAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
     id: string;
@@ -119,6 +121,8 @@ function MerchantsPage() {
     inventoryAddonEnabled: boolean;
     signageAddonEnabled: boolean;
     signageScreenLimit: number;
+    kdsAddonEnabled: boolean;
+    odsAddonEnabled: boolean;
   } | null>(null);
   const [planFor, setPlanFor] = useState<{
     id: string;
@@ -241,6 +245,8 @@ function MerchantsPage() {
         impersonatedBy: 'reseller',
         inventoryAddonEnabled: !!(merchant.inventoryAddonEnabled || merchant.inventoryEnabled),
         signageAddonEnabled: !!(merchant.signageAddonEnabled || merchant.signageEnabled),
+        kdsAddonEnabled: !!(merchant.kdsAddonEnabled || merchant.kdsEnabled),
+        odsAddonEnabled: !!(merchant.odsAddonEnabled || merchant.odsEnabled),
       });
       toast.success(t('resellerOpenMerchant'));
       navigate('/merchant');
@@ -259,6 +265,8 @@ function MerchantsPage() {
         inventoryAddonEnabled: !!limitsFor.inventoryAddonEnabled,
         signageAddonEnabled: !!limitsFor.signageAddonEnabled,
         signageScreenLimit: Number(limitsFor.signageScreenLimit) || 2,
+        kdsAddonEnabled: !!limitsFor.kdsAddonEnabled,
+        odsAddonEnabled: !!limitsFor.odsAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
       setLimitsFor(null);
@@ -532,6 +540,30 @@ function MerchantsPage() {
                 <span className="text-xs text-stone-500">{t('signageAddonReadOnly')}</span>
               </span>
             </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!form.kdsAddonEnabled}
+                onChange={(e) => setForm((f) => ({ ...f, kdsAddonEnabled: e.target.checked }))}
+              />
+              <span>
+                <span className="font-medium block">{t('kdsSettingsTitle')}</span>
+                <span className="text-xs text-stone-500">{t('kdsAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!form.odsAddonEnabled}
+                onChange={(e) => setForm((f) => ({ ...f, odsAddonEnabled: e.target.checked }))}
+              />
+              <span>
+                <span className="font-medium block">{t('odsSettingsTitle')}</span>
+                <span className="text-xs text-stone-500">{t('odsAddonReadOnly')}</span>
+              </span>
+            </label>
             <label className="text-sm">
               {t('signageScreenLimit')}
               <input
@@ -652,6 +684,8 @@ function MerchantsPage() {
                         inventoryAddonEnabled: m.inventoryAddonEnabled === true,
                         signageAddonEnabled: m.signageAddonEnabled === true,
                         signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
+                        kdsAddonEnabled: m.kdsAddonEnabled === true,
+                        odsAddonEnabled: m.odsAddonEnabled === true,
                       })
                     }
                   >
@@ -764,6 +798,34 @@ function MerchantsPage() {
               <span>
                 <span className="font-medium block">{t('signageTitle')}</span>
                 <span className="text-xs text-stone-500">{t('signageAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.kdsAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, kdsAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('kdsSettingsTitle')}</span>
+                <span className="text-xs text-stone-500">{t('kdsAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.odsAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, odsAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('odsSettingsTitle')}</span>
+                <span className="text-xs text-stone-500">{t('odsAddonReadOnly')}</span>
               </span>
             </label>
             <label className="text-sm">

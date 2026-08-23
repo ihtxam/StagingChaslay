@@ -1,8 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.ensureMerchantTables = ensureMerchantTables;
 exports.ensureInventoryAddonColumn = ensureInventoryAddonColumn;
 exports.ensureInventoryDemoColumns = ensureInventoryDemoColumns;
 exports.ensureSignageAddonColumn = ensureSignageAddonColumn;
+exports.ensureKdsAddonColumn = ensureKdsAddonColumn;
+exports.ensureOdsAddonColumn = ensureOdsAddonColumn;
 exports.ensureMerchantSchemaAtStartup = ensureMerchantSchemaAtStartup;
 exports.withMerchantSchemaRetry = withMerchantSchemaRetry;
 exports.patchMerchantSchemaFromError = patchMerchantSchemaFromError;
@@ -23,6 +26,8 @@ const MERCHANT_COLUMN_PATCHES = {
     reseller_id: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reseller_id uuid",
     report_email_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS report_email_settings jsonb",
     email_brevo_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS email_brevo_settings jsonb",
+    email_smtp_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS email_smtp_settings jsonb",
+    email_delivery_mode: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS email_delivery_mode varchar(20) NOT NULL DEFAULT 'platform'",
     gift_card_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS gift_card_settings jsonb",
     pos_checkout_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_checkout_settings jsonb",
     pos_print_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_print_settings jsonb",
@@ -57,6 +62,8 @@ const MERCHANT_COLUMN_PATCHES = {
     inventory_auto_reorder_email_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_auto_reorder_email_enabled boolean NOT NULL DEFAULT false",
     signage_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS signage_addon_enabled boolean NOT NULL DEFAULT false",
     signage_screen_limit: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS signage_screen_limit integer NOT NULL DEFAULT 2",
+    kds_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kds_addon_enabled boolean NOT NULL DEFAULT false",
+    ods_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ods_addon_enabled boolean NOT NULL DEFAULT false",
 };
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
 const EXTRA_COLUMN_PATCHES = {
@@ -71,6 +78,16 @@ const EXTRA_COLUMN_PATCHES = {
     inventory_units_is_demo: "ALTER TABLE inventory_units ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
     inventory_unit_ratios_is_demo: "ALTER TABLE inventory_unit_ratios ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
     product_recipes_is_demo: "ALTER TABLE product_recipes ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
+    preferred_terminal_id: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS preferred_terminal_id varchar(255)",
+    assigned_delivery_staff_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_delivery_staff_id uuid REFERENCES merchant_staff(id) ON DELETE SET NULL",
+    delivery_latitude: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_latitude numeric(10,7)",
+    delivery_longitude: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_longitude numeric(10,7)",
+    delivery_tracking_token: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_tracking_token varchar(64)",
+    delivery_driver_pay_mode: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_driver_pay_mode varchar(20) NOT NULL DEFAULT 'both'",
+    delivery_driver_hourly_rate: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_driver_hourly_rate numeric(10,2) DEFAULT 0",
+    delivery_per_order_fee: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_per_order_fee numeric(10,2) DEFAULT 0",
+    delivery_hourly_rate_override: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS delivery_hourly_rate_override numeric(10,2)",
+    delivery_per_order_fee_override: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS delivery_per_order_fee_override numeric(10,2)",
 };
 /** Idempotent CREATE TABLE for features added after initial deploy. */
 const TABLE_PATCHES = [
@@ -153,6 +170,29 @@ const TABLE_PATCHES = [
     revoked_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now()
   )`,
+    `CREATE TABLE IF NOT EXISTS delivery_driver_locations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    staff_id uuid NOT NULL REFERENCES merchant_staff(id) ON DELETE CASCADE,
+    latitude numeric(10,7) NOT NULL,
+    longitude numeric(10,7) NOT NULL,
+    accuracy_m numeric(10,2),
+    heading numeric(6,2),
+    speed_mps numeric(8,3),
+    recorded_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS delivery_driver_locations_merchant_staff_uidx ON delivery_driver_locations (merchant_id, staff_id)`,
+    `CREATE INDEX IF NOT EXISTS delivery_driver_locations_merchant_recorded_idx ON delivery_driver_locations (merchant_id, recorded_at DESC)`,
+    `CREATE TABLE IF NOT EXISTS delivery_driver_shifts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    staff_id uuid NOT NULL REFERENCES merchant_staff(id) ON DELETE CASCADE,
+    started_at timestamptz NOT NULL DEFAULT now(),
+    ended_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+    `CREATE INDEX IF NOT EXISTS delivery_driver_shifts_merchant_staff_idx ON delivery_driver_shifts (merchant_id, staff_id, started_at DESC)`,
     `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_id_idx ON pos_sessions(merchant_id)`,
     `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_device_idx ON pos_sessions(merchant_id, device_id, session_kind)`,
     `CREATE INDEX IF NOT EXISTS pos_sessions_active_idx ON pos_sessions(merchant_id, session_kind, last_heartbeat)`,
@@ -202,6 +242,29 @@ const TABLE_PATCHES = [
   )`,
     `CREATE INDEX IF NOT EXISTS kds_ticket_items_ticket_id_idx ON kds_ticket_items(ticket_id)`,
     `CREATE INDEX IF NOT EXISTS kds_ticket_items_line_id_idx ON kds_ticket_items(ticket_id, line_id)`,
+    `CREATE TABLE IF NOT EXISTS ods_displays (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(255) NOT NULL,
+    token varchar(128) NOT NULL,
+    theme varchar(32) NOT NULL DEFAULT 'light',
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS ods_displays_token_uidx ON ods_displays(token)`,
+    `CREATE INDEX IF NOT EXISTS ods_displays_merchant_id_idx ON ods_displays(merchant_id)`,
+    `CREATE TABLE IF NOT EXISTS ods_orders (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    order_number varchar(64) NOT NULL,
+    status varchar(20) NOT NULL DEFAULT 'preparing',
+    ready_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+    `CREATE INDEX IF NOT EXISTS ods_orders_merchant_id_idx ON ods_orders(merchant_id)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS ods_orders_merchant_order_uidx ON ods_orders(merchant_id, order_number)`,
     `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_number varchar(50)`,
     `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_issued_at timestamptz`,
     `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_due_at timestamptz`,
@@ -527,6 +590,23 @@ const TABLE_PATCHES = [
   )`,
     `CREATE INDEX IF NOT EXISTS support_ticket_messages_ticket_idx ON support_ticket_messages(ticket_id)`,
     `CREATE INDEX IF NOT EXISTS support_ticket_messages_created_idx ON support_ticket_messages(created_at)`,
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS merchant_visible boolean NOT NULL DEFAULT true`,
+    `CREATE TABLE IF NOT EXISTS email_send_log (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid REFERENCES merchants(id) ON DELETE SET NULL,
+    provider varchar(20) NOT NULL,
+    source varchar(30) NOT NULL,
+    email_type varchar(50) NOT NULL DEFAULT 'general',
+    recipient varchar(255) NOT NULL,
+    subject varchar(500),
+    status varchar(20) NOT NULL DEFAULT 'sent',
+    error text,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+    `CREATE INDEX IF NOT EXISTS email_send_log_merchant_idx ON email_send_log(merchant_id)`,
+    `CREATE INDEX IF NOT EXISTS email_send_log_type_idx ON email_send_log(email_type)`,
+    `CREATE INDEX IF NOT EXISTS email_send_log_created_idx ON email_send_log(created_at)`,
+    `CREATE INDEX IF NOT EXISTS email_send_log_merchant_created_idx ON email_send_log(merchant_id, created_at)`,
     `ALTER TABLE signage_screens ADD COLUMN IF NOT EXISTS short_code varchar(8)`,
     `ALTER TABLE signage_screens ADD COLUMN IF NOT EXISTS screen_size_in integer NOT NULL DEFAULT 32`,
     `CREATE UNIQUE INDEX IF NOT EXISTS signage_screens_short_code_uidx ON signage_screens(short_code) WHERE short_code IS NOT NULL`,
@@ -567,6 +647,19 @@ async function ensureMerchantTables() {
     patchedTables = true;
     if (applied)
         console.info("[schema] voucher/inventory tables ensured");
+    try {
+        await db.execute(drizzle_orm_1.sql.raw(`
+      UPDATE merchants SET email_delivery_mode = 'own'
+      WHERE email_delivery_mode = 'platform'
+      AND (
+        COALESCE((email_smtp_settings->>'enabled')::boolean, false) = true
+        OR COALESCE((email_brevo_settings->>'enabled')::boolean, false) = true
+      )
+    `));
+    }
+    catch {
+        /* column may not exist yet */
+    }
     return applied;
 }
 async function ensureInventoryAddonColumn() {
@@ -592,6 +685,14 @@ async function ensureInventoryDemoColumns() {
 async function ensureSignageAddonColumn() {
     await runPatch("signage_addon_enabled");
     await runPatch("signage_screen_limit");
+    await ensureMerchantTables();
+}
+async function ensureKdsAddonColumn() {
+    await runPatch("kds_addon_enabled");
+    await ensureMerchantTables();
+}
+async function ensureOdsAddonColumn() {
+    await runPatch("ods_addon_enabled");
     await ensureMerchantTables();
 }
 /** Apply all known optional merchant columns once at startup (non-blocking). */

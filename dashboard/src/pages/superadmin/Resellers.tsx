@@ -64,6 +64,10 @@ const FEATURE_KEYS = [
   'online_payments',
   'offers',
   'reservations',
+  'inventory',
+  'digital_signage',
+  'kds',
+  'ods',
 ] as const;
 
 export default function Resellers() {

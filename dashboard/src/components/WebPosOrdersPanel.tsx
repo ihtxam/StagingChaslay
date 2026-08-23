@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import {
   Ban,
+  ChefHat,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -58,6 +59,7 @@ import {
   sameHeldIdentity,
   ticketQueryMatches,
 } from '@/lib/webpos-held';
+import { fetchKdsBoardStatus, type KdsBoardTicket } from '@/lib/kds-push';
 import { hasTerminalPortion, parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
@@ -82,6 +84,35 @@ function orderTimeMs(o: PosOrderForReceipt & { completedAt?: string | number | D
 
 function heldTimeMs(h: { updatedAt?: string | null; createdAt?: string | null }) {
   return Math.max(toMs(h.updatedAt), toMs(h.createdAt));
+}
+
+function heldTicketKeys(h: HeldRow): string[] {
+  const meta = parseHeldCartJson(h.cartJson);
+  const keys = new Set<string>();
+  const display = String(meta.ticketDisplay || '').trim();
+  if (display) keys.add(display);
+  const tab = String(meta.tabNumber || '').trim();
+  if (tab) keys.add(tab.startsWith('#') ? tab : `#${tab}`);
+  return [...keys];
+}
+
+function buildKdsReadyMap(tickets: KdsBoardTicket[]): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const ticket of tickets) {
+    map.set(ticket.ticketKey, new Set(ticket.readyLineIds));
+  }
+  return map;
+}
+
+function lineKitchenReady(
+  lineId: string,
+  ticketKeys: string[],
+  readyMap: Map<string, Set<string>>
+): boolean {
+  for (const key of ticketKeys) {
+    if (readyMap.get(key)?.has(lineId)) return true;
+  }
+  return false;
 }
 
 /** Portaled menu so ⋮ actions are not clipped by the orders list scrollport. */
@@ -453,6 +484,23 @@ export default function WebPosOrdersPanel({
   const [rowMenuAnchor, setRowMenuAnchor] = useState<HTMLElement | null>(null);
   const [detailMenuAnchor, setDetailMenuAnchor] = useState<HTMLElement | null>(null);
   const [salesAdjOpen, setSalesAdjOpen] = useState(false);
+  const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const sync = async () => {
+      const board = await fetchKdsBoardStatus();
+      if (cancelled) return;
+      setKdsReadyMap(buildKdsReadyMap(board));
+    };
+    void sync();
+    const timer = window.setInterval(() => void sync(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [open, refreshToken]);
 
   useEffect(() => {
     try {
@@ -1296,6 +1344,12 @@ export default function WebPosOrdersPanel({
                     const total = heldTotal(h);
                     const lines = heldCartLines(h);
                     const sentCount = lines.filter((l: any) => l.sentToKitchen).length;
+                    const ticketKeys = heldTicketKeys(h);
+                    const readyCount = lines.filter(
+                      (l: any) =>
+                        l.sentToKitchen &&
+                        lineKitchenReady(String(l.lineId || ''), ticketKeys, kdsReadyMap)
+                    ).length;
                     const heldMeta = parseHeldCartJson(h.cartJson);
                     const idLabel =
                       heldMeta.tableLabel ||
@@ -1323,7 +1377,7 @@ export default function WebPosOrdersPanel({
                         </div>
                         <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-3">
                           <p className="text-[11px] text-stone-500">
-                            {sentCount}/{lines.length || 0}
+                            {sentCount > 0 ? `${readyCount}/${sentCount}` : `${sentCount}/${lines.length || 0}`}
                           </p>
                           <p className="text-lg font-bold tabular-nums tracking-tight">
                             <span className="text-sm font-semibold text-stone-500">CHF </span>
@@ -1653,14 +1707,29 @@ export default function WebPosOrdersPanel({
                     {channelLabel(selectedHeld.channel)}
                   </p>
                   <ul className="mt-4 space-y-2 text-sm">
-                    {heldCartLines(selectedHeld).map((l, idx) => (
-                      <li key={idx} className="flex justify-between gap-2">
-                        <span>
-                          {l.quantity}× {resolveOrderItemName(l.name)}
-                        </span>
-                        <span className="tabular-nums">{money(l.lineTotal)}</span>
-                      </li>
-                    ))}
+                    {heldCartLines(selectedHeld).map((l, idx) => {
+                      const ready = lineKitchenReady(
+                        String(l.lineId || ''),
+                        heldTicketKeys(selectedHeld),
+                        kdsReadyMap
+                      );
+                      return (
+                        <li key={idx} className="flex justify-between gap-2">
+                          <span className="inline-flex min-w-0 items-start gap-1">
+                            {ready ? (
+                              <ChefHat
+                                className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600"
+                                aria-label={t('webPosReadyBadge')}
+                              />
+                            ) : null}
+                            <span>
+                              {l.quantity}× {resolveOrderItemName(l.name)}
+                            </span>
+                          </span>
+                          <span className="tabular-nums">{money(l.lineTotal)}</span>
+                        </li>
+                      );
+                    })}
                   </ul>
                   <div className="mt-4 flex justify-between border-t border-stone-200 pt-3 text-base font-bold">
                     <span>{t('webPosTotal')}</span>

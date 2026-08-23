@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import PosPostsSection from '@/components/settings/PosPostsSection';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
+import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
 import api from '@/lib/api';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
@@ -510,6 +511,7 @@ export default function Settings() {
         { id: 'payments' as const, label: t('settingsPayments'), icon: CreditCard },
         { id: 'receipt' as const, label: t('settingsReceipt'), icon: Printer },
         { id: 'kds' as const, label: t('kdsSettingsTitle'), icon: ChefHat },
+        { id: 'ods' as const, label: t('odsSettingsTitle'), icon: Monitor },
         { id: 'email' as const, label: t('settingsEmail'), icon: Mail },
         { id: 'language' as const, label: t('language'), icon: Languages },
       ] as const,
@@ -3923,6 +3925,15 @@ export default function Settings() {
               <SettingsPageHeader title={t('kdsSettingsTitle')} subtitle={t('kdsSettingsHint')} />
               <Section icon={ChefHat} accent={settingsDash.accent} title={t('kdsSettingsTitle')} description={t('kdsSettingsHint')}>
                 <KdsSettingsPanel />
+              </Section>
+            </div>
+          )}
+
+          {tab === 'ods' && (
+            <div className="space-y-5">
+              <SettingsPageHeader title={t('odsSettingsTitle')} subtitle={t('odsSettingsHint')} />
+              <Section icon={Monitor} accent={settingsDash.accent} title={t('odsSettingsTitle')} description={t('odsSettingsHint')}>
+                <OdsSettingsPanel />
               </Section>
             </div>
           )}

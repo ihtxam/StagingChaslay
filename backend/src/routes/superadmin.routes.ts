@@ -12,6 +12,8 @@ import { ResellerService } from "@/services/reseller.service";
 import { EDITION_FEATURE_GROUPS, ALL_EDITION_FEATURES } from "@/lib/edition-features";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
+import { isKdsAddonEnabled } from "@/lib/kds-addon";
+import { isOdsAddonEnabled } from "@/lib/ods-addon";
 
 const router = Router();
 const imageUpload = multer({
@@ -294,6 +296,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
       inventoryAddonEnabled,
       signageAddonEnabled,
       signageScreenLimit,
+      kdsAddonEnabled,
+      odsAddonEnabled,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -326,6 +330,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
         signageAddonEnabled: isSignageAddonEnabled(signageAddonEnabled),
         signageScreenLimit:
           signageScreenLimit != null ? normalizeSignageScreenLimit(signageScreenLimit) : undefined,
+        kdsAddonEnabled: isKdsAddonEnabled(kdsAddonEnabled),
+        odsAddonEnabled: isOdsAddonEnabled(odsAddonEnabled),
       }
     );
 
@@ -385,7 +391,11 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.inventoryEnabled != null ||
       updates.signageAddonEnabled != null ||
       updates.signageEnabled != null ||
-      updates.signageScreenLimit != null
+      updates.signageScreenLimit != null ||
+      updates.kdsAddonEnabled != null ||
+      updates.kdsEnabled != null ||
+      updates.odsAddonEnabled != null ||
+      updates.odsEnabled != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
@@ -406,6 +416,18 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
           updates.signageScreenLimit != null
             ? normalizeSignageScreenLimit(updates.signageScreenLimit)
             : undefined,
+        kdsAddonEnabled:
+          updates.kdsAddonEnabled != null
+            ? isKdsAddonEnabled(updates.kdsAddonEnabled)
+            : updates.kdsEnabled != null
+              ? isKdsAddonEnabled(updates.kdsEnabled)
+              : undefined,
+        odsAddonEnabled:
+          updates.odsAddonEnabled != null
+            ? isOdsAddonEnabled(updates.odsAddonEnabled)
+            : updates.odsEnabled != null
+              ? isOdsAddonEnabled(updates.odsEnabled)
+              : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
@@ -414,6 +436,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.signageAddonEnabled;
       delete updates.signageEnabled;
       delete updates.signageScreenLimit;
+      delete updates.kdsAddonEnabled;
+      delete updates.kdsEnabled;
+      delete updates.odsAddonEnabled;
+      delete updates.odsEnabled;
     }
 
     const merchant =

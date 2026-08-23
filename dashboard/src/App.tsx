@@ -25,6 +25,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import PosEmbedPage from '@/pages/PosEmbedPage';
 import PosViewportManager from '@/components/PosViewportManager';
 import KdsDisplayPage from '@/pages/KdsDisplayPage';
+import OdsDisplayPage from '@/pages/OdsDisplayPage';
 import SignageDisplayPage from '@/pages/SignageDisplayPage';
 import StatusPage from '@/pages/StatusPage';
 
@@ -235,6 +236,14 @@ function App() {
             element={
               <I18nProvider storageKey={PANEL_LANG_KEY}>
                 <KdsDisplayPage />
+              </I18nProvider>
+            }
+          />
+          <Route
+            path="/ods/:token"
+            element={
+              <I18nProvider storageKey={PANEL_LANG_KEY}>
+                <OdsDisplayPage />
               </I18nProvider>
             }
           />

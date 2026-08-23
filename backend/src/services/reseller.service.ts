@@ -350,6 +350,8 @@ export class ResellerService {
         inventoryAddonEnabled: schema.merchants.inventoryAddonEnabled,
         signageAddonEnabled: schema.merchants.signageAddonEnabled,
         signageScreenLimit: schema.merchants.signageScreenLimit,
+        kdsAddonEnabled: schema.merchants.kdsAddonEnabled,
+        odsAddonEnabled: schema.merchants.odsAddonEnabled,
         createdAt: schema.merchants.createdAt,
       })
       .from(schema.merchants)
@@ -363,6 +365,8 @@ export class ResellerService {
       inventoryAddonEnabled: isInventoryAddonEnabled(r.inventoryAddonEnabled),
       signageAddonEnabled: isSignageAddonEnabled(r.signageAddonEnabled),
       signageScreenLimit: normalizeSignageScreenLimit(r.signageScreenLimit),
+      kdsAddonEnabled: r.kdsAddonEnabled === true,
+      odsAddonEnabled: r.odsAddonEnabled === true,
     }));
   }
 
@@ -388,6 +392,8 @@ export class ResellerService {
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
+      kdsAddonEnabled?: boolean;
+      odsAddonEnabled?: boolean;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -429,6 +435,8 @@ export class ResellerService {
         inventoryAddonEnabled: input.inventoryAddonEnabled,
         signageAddonEnabled: input.signageAddonEnabled,
         signageScreenLimit: input.signageScreenLimit,
+        kdsAddonEnabled: input.kdsAddonEnabled,
+        odsAddonEnabled: input.odsAddonEnabled,
       }
     );
     return created;
@@ -443,6 +451,8 @@ export class ResellerService {
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
+      kdsAddonEnabled?: boolean;
+      odsAddonEnabled?: boolean;
     }
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
@@ -453,6 +463,8 @@ export class ResellerService {
       inventoryAddonEnabled: limits.inventoryAddonEnabled,
       signageAddonEnabled: limits.signageAddonEnabled,
       signageScreenLimit: limits.signageScreenLimit,
+      kdsAddonEnabled: limits.kdsAddonEnabled,
+      odsAddonEnabled: limits.odsAddonEnabled,
     });
     return MerchantService.getMerchantById(merchantId);
   }

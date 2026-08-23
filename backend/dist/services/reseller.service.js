@@ -342,6 +342,8 @@ class ResellerService {
             inventoryAddonEnabled: db_1.schema.merchants.inventoryAddonEnabled,
             signageAddonEnabled: db_1.schema.merchants.signageAddonEnabled,
             signageScreenLimit: db_1.schema.merchants.signageScreenLimit,
+            kdsAddonEnabled: db_1.schema.merchants.kdsAddonEnabled,
+            odsAddonEnabled: db_1.schema.merchants.odsAddonEnabled,
             createdAt: db_1.schema.merchants.createdAt,
         })
             .from(db_1.schema.merchants)
@@ -355,6 +357,8 @@ class ResellerService {
             inventoryAddonEnabled: (0, inventory_addon_1.isInventoryAddonEnabled)(r.inventoryAddonEnabled),
             signageAddonEnabled: (0, signage_addon_1.isSignageAddonEnabled)(r.signageAddonEnabled),
             signageScreenLimit: (0, signage_addon_1.normalizeSignageScreenLimit)(r.signageScreenLimit),
+            kdsAddonEnabled: r.kdsAddonEnabled === true,
+            odsAddonEnabled: r.odsAddonEnabled === true,
         }));
     }
     static async createMerchantForReseller(resellerId, input) {
@@ -387,6 +391,8 @@ class ResellerService {
             inventoryAddonEnabled: input.inventoryAddonEnabled,
             signageAddonEnabled: input.signageAddonEnabled,
             signageScreenLimit: input.signageScreenLimit,
+            kdsAddonEnabled: input.kdsAddonEnabled,
+            odsAddonEnabled: input.odsAddonEnabled,
         });
         return created;
     }
@@ -399,6 +405,8 @@ class ResellerService {
             inventoryAddonEnabled: limits.inventoryAddonEnabled,
             signageAddonEnabled: limits.signageAddonEnabled,
             signageScreenLimit: limits.signageScreenLimit,
+            kdsAddonEnabled: limits.kdsAddonEnabled,
+            odsAddonEnabled: limits.odsAddonEnabled,
         });
         return MerchantService.getMerchantById(merchantId);
     }

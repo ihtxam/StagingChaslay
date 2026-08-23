@@ -1,6 +1,29 @@
 import api from '@/lib/api';
 import type { CartLine, PosChannel } from '@/components/webpos/types';
 
+export type KdsBoardTicket = {
+  ticketKey: string;
+  status: string;
+  completedAt?: string | null;
+  readyLineIds: string[];
+  total: number;
+  ready: number;
+};
+
+export function resolveKdsTicketKey(opts: {
+  ticketDisplay?: string | null;
+  tabNumber?: string | null;
+  ticketOrderNumber?: string | null;
+  orderNumber?: string | null;
+}): string {
+  const display = String(opts.ticketDisplay || '').trim();
+  if (display) return display;
+  const tab = String(opts.tabNumber || '').trim();
+  if (tab) return tab.startsWith('#') ? tab : `#${tab}`;
+  const orderNum = String(opts.ticketOrderNumber || opts.orderNumber || '').trim();
+  return orderNum;
+}
+
 export async function pushCartLinesToKds(opts: {
   ticketKey: string;
   orderNumber?: string | null;
@@ -34,6 +57,15 @@ export async function pushCartLinesToKds(opts: {
     });
   } catch (e) {
     console.warn('[kds] push failed', e);
+  }
+}
+
+export async function fetchKdsBoardStatus(): Promise<KdsBoardTicket[]> {
+  try {
+    const res = await api.get('/merchant/kds/board-status');
+    return (res.data?.tickets || []) as KdsBoardTicket[];
+  } catch {
+    return [];
   }
 }
 

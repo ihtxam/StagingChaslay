@@ -1,7 +1,10 @@
+export declare function ensureMerchantTables(): Promise<boolean>;
 export declare function ensureInventoryAddonColumn(): Promise<void>;
 /** Ensure is_demo columns exist on inventory tables (demo import/delete). */
 export declare function ensureInventoryDemoColumns(): Promise<void>;
 export declare function ensureSignageAddonColumn(): Promise<void>;
+export declare function ensureKdsAddonColumn(): Promise<void>;
+export declare function ensureOdsAddonColumn(): Promise<void>;
 /** Apply all known optional merchant columns once at startup (non-blocking). */
 export declare function ensureMerchantSchemaAtStartup(): void;
 /** Retry a merchants query after applying missing-column/table patches. */

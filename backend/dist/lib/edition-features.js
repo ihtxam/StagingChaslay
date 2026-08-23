@@ -56,14 +56,17 @@ exports.EDITION_FEATURE_GROUPS = [
             { key: "website_cms", label: "Website / CMS" },
             { key: "inventory", label: "Restaurant inventory (paid addon)" },
             { key: "digital_signage", label: "Digital signage / menu boards (paid addon)" },
+            { key: "kds", label: "Kitchen display / KDS (paid addon)" },
+            { key: "ods", label: "Order display / ODS (paid addon)" },
         ],
     },
 ];
 exports.ALL_EDITION_FEATURES = exports.EDITION_FEATURE_GROUPS.flatMap((g) => g.features.map((f) => f.key));
 /**
  * Merchant panel routes gated by edition features.
- * Do not add /merchant/inventory or /merchant/signage here ? those are paid
+ * Do not add /merchant/inventory or /merchant/signage here — those are paid
  * merchant addons (inventory_addon_enabled / signage_addon_enabled), not edition entitlements.
+ * Same for KDS / ODS (kds_addon_enabled / ods_addon_enabled).
  */
 exports.EDITION_ROUTE_FEATURES = {
     "/merchant/floor-plan": ["pos_tables"],
