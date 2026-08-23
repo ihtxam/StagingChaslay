@@ -594,6 +594,8 @@ fun PosScreen(
                         expressEnabled = state.settings.expressEnabled,
                         showScanButton = isRetailMode,
                         isGiftCardCategory = state.isGiftCardCategory,
+                        membershipEnabled = state.giftCardsEnabled &&
+                            state.giftCardSettings?.membershipEnabled == true,
                         highlightedProductId = state.lastClickedProductId,
                         onProductClick = viewModel::onProductClick,
                         onMiscClick = viewModel::addMiscItemQuick,
@@ -603,6 +605,7 @@ fun PosScreen(
                         onTerminal = { viewModel.initiateTerminalPayment(activity) },
                         onOpenCheckout = { viewModel.openCheckout() },
                         onSellGiftCard = viewModel::showGiftCardOpsMenu,
+                        onSellMembership = viewModel::showMembershipSellDialog,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
@@ -693,6 +696,16 @@ fun PosScreen(
                 viewModel.dismissMembershipDialog()
                 viewModel.showGiftCardReloadDialog()
             }
+        )
+    }
+
+    if (state.showMembershipSellDialog) {
+        MembershipSellDialog(
+            plans = state.giftCardSettings?.membershipPlans.orEmpty(),
+            busy = state.membershipSellBusy,
+            error = state.membershipSellError,
+            onDismiss = viewModel::dismissMembershipSellDialog,
+            onSubmit = viewModel::sellMembership
         )
     }
 
@@ -2684,6 +2697,7 @@ private fun VectronProductGrid(
     gridColumns: Int = 5,
     showProductImages: Boolean = false,
     isGiftCardCategory: Boolean = false,
+    membershipEnabled: Boolean = false,
     highlightedProductId: Long? = null,
     onProductClick: (Long) -> Unit,
     onMiscClick: () -> Unit,
@@ -2693,6 +2707,7 @@ private fun VectronProductGrid(
     onTerminal: () -> Unit = {},
     onOpenCheckout: () -> Unit = {},
     onSellGiftCard: () -> Unit = {},
+    onSellMembership: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val vc = vectronColors()
@@ -2720,6 +2735,23 @@ private fun VectronProductGrid(
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
                         )
+                    }
+                }
+                if (membershipEnabled) {
+                    item(key = "membership_sell") {
+                        Button(
+                            onClick = onSellMembership,
+                            modifier = Modifier.fillMaxWidth().height(120.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5))
+                        ) {
+                            Text(
+                                stringResource(R.string.membership_sell_title),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }

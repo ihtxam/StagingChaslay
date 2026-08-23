@@ -199,6 +199,9 @@ data class PosUiState(
     val attachedGiftCard: AttachedGiftCard? = null,
     val loyaltyProgram: LoyaltyProgramSettings = LoyaltyProgramSettings(),
     val showMembershipDialog: Boolean = false,
+    val showMembershipSellDialog: Boolean = false,
+    val membershipSellBusy: Boolean = false,
+    val membershipSellError: String? = null,
     val giftCardsEnabled: Boolean = false,
     val shiftsEnabled: Boolean = false,
     val membershipBusy: Boolean = false,
@@ -405,6 +408,9 @@ class PosViewModel @Inject constructor(
             attachedGiftCard = extras.attachedGiftCard,
             loyaltyProgram = extras.loyaltyProgram,
             showMembershipDialog = extras.showMembershipDialog,
+            showMembershipSellDialog = extras.showMembershipSellDialog,
+            membershipSellBusy = extras.membershipSellBusy,
+            membershipSellError = extras.membershipSellError,
             giftCardsEnabled = giftCardsOn,
             membershipBusy = extras.membershipBusy,
             membershipLookupError = extras.membershipLookupError,
@@ -2645,6 +2651,113 @@ class PosViewModel @Inject constructor(
         refreshGiftCardFeature()
         updateExtras {
             it.copy(showMembershipDialog = true, membershipLookupError = null)
+        }
+    }
+
+    fun showMembershipSellDialog() {
+        if (!_uiExtras.value.giftCardsEnabled) return
+        viewModelScope.launch {
+            if (!ensureOpenShiftForGiftCardSell()) return@launch
+            updateExtras { it.copy(membershipSellBusy = true, membershipSellError = null) }
+            giftCardRepository.fetchSettings()
+                .onSuccess { settings ->
+                    if (!settings.membershipEnabled) {
+                        updateExtras { it.copy(membershipSellBusy = false) }
+                        showError(
+                            appContext.getString(R.string.membership_sell_title),
+                            appContext.getString(R.string.membership_sell_no_plans)
+                        )
+                        return@onSuccess
+                    }
+                    val activePlans = settings.membershipPlans.filter { it.active }
+                    if (activePlans.isEmpty()) {
+                        updateExtras { it.copy(membershipSellBusy = false) }
+                        showError(
+                            appContext.getString(R.string.membership_sell_title),
+                            appContext.getString(R.string.membership_sell_no_plans)
+                        )
+                        return@onSuccess
+                    }
+                    updateExtras {
+                        it.copy(
+                            giftCardSettings = settings,
+                            showMembershipSellDialog = true,
+                            membershipSellBusy = false,
+                            membershipSellError = null
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    updateExtras {
+                        it.copy(
+                            membershipSellBusy = false,
+                            membershipSellError = e.message
+                                ?: appContext.getString(R.string.membership_sell_failed)
+                        )
+                    }
+                }
+        }
+    }
+
+    fun dismissMembershipSellDialog() {
+        updateExtras {
+            it.copy(
+                showMembershipSellDialog = false,
+                membershipSellBusy = false,
+                membershipSellError = null
+            )
+        }
+    }
+
+    fun sellMembership(
+        planId: String,
+        name: String,
+        email: String?,
+        phone: String?,
+        cardNumber: String
+    ) {
+        val rfid = LoyaltyMath.normalizeRfidUid(cardNumber)
+        if (planId.isBlank() || name.isBlank() || rfid.isBlank()) {
+            updateExtras {
+                it.copy(membershipSellError = appContext.getString(R.string.membership_sell_missing_fields))
+            }
+            return
+        }
+        if (email.isNullOrBlank() && phone.isNullOrBlank()) {
+            updateExtras {
+                it.copy(membershipSellError = appContext.getString(R.string.membership_sell_contact_required))
+            }
+            return
+        }
+        viewModelScope.launch {
+            if (!ensureOpenShiftForGiftCardSell()) return@launch
+            updateExtras { it.copy(membershipSellBusy = true, membershipSellError = null) }
+            giftCardRepository.sellMembership(
+                cardNumber = rfid,
+                planId = planId,
+                name = name,
+                email = email,
+                phone = phone
+            ).onSuccess { card ->
+                val membership = giftCardRepository.toAttachedMembership(card)
+                attachMembershipCard(membership)
+                updateExtras {
+                    it.copy(
+                        membershipSellBusy = false,
+                        showMembershipSellDialog = false,
+                        membershipSellError = null,
+                        snackbarMessage = appContext.getString(R.string.membership_sell_success)
+                    )
+                }
+            }.onFailure { e ->
+                updateExtras {
+                    it.copy(
+                        membershipSellBusy = false,
+                        membershipSellError = e.message
+                            ?: appContext.getString(R.string.membership_sell_failed)
+                    )
+                }
+            }
         }
     }
 
@@ -5092,6 +5205,9 @@ class PosViewModel @Inject constructor(
         val attachedGiftCard: AttachedGiftCard? = null,
         val loyaltyProgram: LoyaltyProgramSettings = LoyaltyProgramSettings(),
         val showMembershipDialog: Boolean = false,
+        val showMembershipSellDialog: Boolean = false,
+        val membershipSellBusy: Boolean = false,
+        val membershipSellError: String? = null,
         val giftCardsEnabled: Boolean = false,
     val shiftsEnabled: Boolean = false,
         val membershipBusy: Boolean = false,

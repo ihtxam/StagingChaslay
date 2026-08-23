@@ -658,6 +658,19 @@
     <string name="enter_tip_amount">Saisir le pourboire</string>
     <string name="custom_tip">Montant</string>
     <string name="membership_lookup_failed">Échec de la recherche de carte</string>
+    <string name="membership_sell_title">Vendre une adhésion</string>
+    <string name="membership_sell_missing_fields">Nom et carte RFID requis</string>
+    <string name="membership_sell_contact_required">E-mail ou téléphone requis</string>
+    <string name="membership_sell_failed">Échec enregistrement adhésion</string>
+    <string name="membership_sell_success">Carte adhésion enregistrée</string>
+    <string name="membership_sell_no_plans">Aucune formule adhésion active configurée</string>
+    <string name="membership_sell_saving">Enregistrement…</string>
+    <string name="membership_plan">Formule adhésion</string>
+    <string name="membership_scan_card">Scanner ou saisir la carte RFID</string>
+    <string name="membership_register_card">Enregistrer la carte</string>
+    <string name="membership_stamp_hint">Chaque vente qualifiante = 1 tampon ; récompense quand complet.</string>
+    <string name="membership_stamps">tampons</string>
+    <string name="membership_off">de réduction</string>
     <string name="gift_card_attached">Carte cadeau associée · CHF %1$.2f</string>
     <string name="gift_card_empty">Cette carte cadeau n’a plus de solde</string>
     <string name="receipt_order_gave_you_points">Cette commande vous a rapporté : %1$d points</string>

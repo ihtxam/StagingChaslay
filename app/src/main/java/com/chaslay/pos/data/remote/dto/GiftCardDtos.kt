@@ -89,7 +89,8 @@ data class GiftCardSettingsDto(
     @SerializedName("maxAmount") val maxAmount: Double = 500.0,
     @SerializedName("reloadEnabled") val reloadEnabled: Boolean = true,
     @SerializedName("customAmountEnabled") val customAmountEnabled: Boolean = true,
-    @SerializedName("membershipEnabled") val membershipEnabled: Boolean = false
+    @SerializedName("membershipEnabled") val membershipEnabled: Boolean = false,
+    @SerializedName("membershipPlans") val membershipPlans: List<GiftCardMembershipPlanDto> = emptyList()
 )
 
 data class GiftCardPointsRequest(

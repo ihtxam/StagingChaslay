@@ -11,6 +11,7 @@ import com.chaslay.pos.domain.model.AttachedMembership
 import com.chaslay.pos.domain.model.MembershipPlanInfo
 import com.chaslay.pos.domain.model.GiftCardOp
 import com.chaslay.pos.domain.model.LoyaltyMath
+import com.chaslay.pos.data.remote.dto.GiftCardSellMembershipRequest
 import com.chaslay.pos.data.remote.dto.GiftCardSendEcardEmailRequest
 import com.chaslay.pos.domain.model.GiftCardCode
 import javax.inject.Inject
@@ -140,6 +141,27 @@ class GiftCardRepository @Inject constructor(
             amountRedeemed = response.amountRedeemed?.toDoubleOrNull() ?: amount,
             remainingBalance = response.remainingBalance?.toDoubleOrNull() ?: card.balanceAmount
         )
+    }
+
+    suspend fun sellMembership(
+        cardNumber: String,
+        planId: String,
+        name: String,
+        email: String? = null,
+        phone: String? = null
+    ): Result<GiftCardDto> = runCatching {
+        val normalized = LoyaltyMath.normalizeRfidUid(cardNumber).ifBlank { cardNumber.trim() }
+        val response = giftCardApi.sellMembership(
+            bearer(),
+            GiftCardSellMembershipRequest(
+                cardNumber = normalized,
+                planId = planId,
+                name = name.trim(),
+                email = email,
+                phone = phone
+            )
+        )
+        response.card ?: throw IllegalStateException(response.error ?: "Failed to register membership")
     }
 
     fun toAttachedMembership(card: GiftCardDto): AttachedMembership =
