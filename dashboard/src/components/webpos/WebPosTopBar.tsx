@@ -1053,6 +1053,23 @@ export function WebPosSettingsDropdown({
       {printerName && isUnsuitableRawPrinter(printerName) ? (
         <p className="text-[10px] leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
       ) : null}
+        </>
+      ) : (
+        <div className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5">
+          <p className="text-[10px] leading-snug text-stone-600">{t('webPosRemotePrintHint')}</p>
+          <p
+            className={`text-[10px] font-semibold leading-snug ${
+              !mainTillOnline || !mainTillPrintAgentOnline ? 'text-amber-800' : 'text-emerald-700'
+            }`}
+          >
+            {!mainTillOnline
+              ? t('webPosMainTillOfflineShort')
+              : !mainTillPrintAgentOnline
+                ? t('webPosMainTillPrintOfflineShort')
+                : t('webPosMainTillPrintRunningShort')}
+          </p>
+        </div>
+      )}
       <label className="flex items-center gap-2 text-xs">
         <input
           type="checkbox"
@@ -1073,23 +1090,6 @@ export function WebPosSettingsDropdown({
           <option value="tables">{t('webPosTabTables')}</option>
         </select>
       </label>
-        </>
-      ) : (
-        <div className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5">
-          <p className="text-[10px] leading-snug text-stone-600">{t('webPosRemotePrintHint')}</p>
-          <p
-            className={`text-[10px] font-semibold leading-snug ${
-              !mainTillOnline || !mainTillPrintAgentOnline ? 'text-amber-800' : 'text-emerald-700'
-            }`}
-          >
-            {!mainTillOnline
-              ? t('webPosMainTillOfflineShort')
-              : !mainTillPrintAgentOnline
-                ? t('webPosMainTillPrintOfflineShort')
-                : t('webPosMainTillPrintRunningShort')}
-          </p>
-        </div>
-      )}
       {onSendLogs ? (
         <button
           type="button"
