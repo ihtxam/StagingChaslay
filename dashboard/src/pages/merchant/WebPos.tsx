@@ -7814,17 +7814,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }}
             showEodButton={showEodButton}
             onEodReport={openEodPrint}
-            onlinePendingCount={onlinePendingCount}
-            reservationPendingCount={reservationPendingCount}
-            onOnlineOrders={() => {
+            canShowPanel={canShowBackOffice}
+            appMode={appMode}
+            onShowPanel={() => {
               setSettingsOpen(false);
-              openOnlineOrdersInTab();
+              showPanelMenus();
             }}
-            onSwitchUser={() => {
-              setSettingsOpen(false);
-              openSwitchUserPin();
-            }}
-            staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
             colorTheme={posColorTheme}
             onColorThemeChange={(theme) => void changePosColorTheme(theme)}
             appearance={posAppearance}
@@ -7851,17 +7846,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   toast.success(t('webPosSyncOk'));
                 }
               });
-            }}
-            canDrawer={canDrawer}
-            onOpenDrawer={() => {
-              setSettingsOpen(false);
-              void openCashDrawer();
-            }}
-            canShowPanel={canShowBackOffice}
-            appMode={appMode}
-            onShowPanel={() => {
-              setSettingsOpen(false);
-              showPanelMenus();
             }}
             locale={locale}
             onLanguageChange={(lang) => void changePosLanguage(lang)}

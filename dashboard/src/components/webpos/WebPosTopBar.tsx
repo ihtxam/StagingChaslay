@@ -20,7 +20,7 @@ import {
   X,
   ArrowDownUp,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
 import { isStandalonePwa } from '@/lib/pwa';
@@ -260,6 +260,10 @@ export default function WebPosTopBar({
   const { t } = useI18n();
   const inCheckout = posView === 'checkout' || posView === 'success';
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const closeUserMenu = () => setUserMenuOpen(false);
 
   const closeMobileSearch = () => {
     setMobileSearchOpen(false);
@@ -281,6 +285,26 @@ export default function WebPosTopBar({
       onSearchChange('');
     }
   }, [showSearch, onSearchChange]);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onDoc = (e: PointerEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        closeUserMenu();
+      }
+    };
+    document.addEventListener('pointerdown', onDoc);
+    return () => document.removeEventListener('pointerdown', onDoc);
+  }, [userMenuOpen]);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeUserMenu();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [userMenuOpen]);
 
   const tabs: Array<{ id: PosTab; label: string; Icon: typeof Pencil }> = [
     ...(!hideTablesTab
@@ -383,10 +407,10 @@ export default function WebPosTopBar({
             </>
           ) : null}
 
-          {/* Desktop / tablet: shift + tools visible. Mobile: overflow into hamburger. */}
+          {/* Desktop / tablet: online orders bell. Mobile: orders tab badge only. */}
           <button
             type="button"
-            className={`relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9 ${
+            className={`relative hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:inline-flex ${
               orderAlertRing
                 ? 'ring-2 ring-red-400 ring-offset-1 animate-pulse'
                 : ''
@@ -406,6 +430,50 @@ export default function WebPosTopBar({
               </span>
             ) : null}
           </button>
+
+          <div className="relative lg:hidden" ref={userMenuRef}>
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50"
+              aria-expanded={userMenuOpen}
+              aria-label={staffName || t('webPosSwitchUser')}
+              title={staffName || t('webPosSwitchUser')}
+              onClick={() => {
+                closeMobileSearch();
+                if (settingsOpen) onCloseSettings();
+                setUserMenuOpen((v) => !v);
+              }}
+            >
+              <UserCircle2 size={18} />
+            </button>
+            {userMenuOpen ? (
+              <>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={t('close')}
+                  className="fixed inset-0 z-[48] cursor-default border-0 bg-black/10 p-0"
+                  onClick={closeUserMenu}
+                />
+                <WebPosUserDropdown
+                  staffName={staffName}
+                  onSwitchUser={() => {
+                    closeUserMenu();
+                    onSwitchUser();
+                  }}
+                  canDrawer={canDrawer}
+                  onOpenDrawer={
+                    canDrawer
+                      ? () => {
+                          closeUserMenu();
+                          onOpenDrawer();
+                        }
+                      : undefined
+                  }
+                />
+              </>
+            ) : null}
+          </div>
 
           <button
             type="button"
@@ -436,6 +504,7 @@ export default function WebPosTopBar({
               aria-label={t('webPosMoreShort')}
               onClick={() => {
                 closeMobileSearch();
+                closeUserMenu();
                 onToggleSettings();
               }}
             >
@@ -556,12 +625,6 @@ export function WebPosSettingsDropdown({
   onCashMovement,
   showEodButton,
   onEodReport,
-  onlinePendingCount = 0,
-  onOnlineOrders,
-  onSwitchUser,
-  staffName,
-  canDrawer,
-  onOpenDrawer,
   canShowPanel,
   appMode = true,
   onShowPanel,
@@ -610,13 +673,6 @@ export function WebPosSettingsDropdown({
   onCashMovement?: () => void;
   showEodButton?: boolean;
   onEodReport?: () => void;
-  /** Mobile overflow actions (hidden on desktop top bar). */
-  onlinePendingCount?: number;
-  onOnlineOrders?: () => void;
-  onSwitchUser?: () => void;
-  staffName?: string | null;
-  canDrawer?: boolean;
-  onOpenDrawer?: () => void;
   canShowPanel?: boolean;
   appMode?: boolean;
   onShowPanel?: () => void;
@@ -661,7 +717,7 @@ export function WebPosSettingsDropdown({
         {canShowPanel && onShowPanel ? (
           <button
             type="button"
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2 py-2.5 text-xs font-semibold text-teal-900 hover:bg-teal-100"
             onClick={onShowPanel}
           >
             <PanelLeft size={16} />
@@ -831,45 +887,6 @@ export function WebPosSettingsDropdown({
           ) : null}
         </div>
       )}
-      <div className="space-y-1.5 border-b border-stone-100 pb-3 lg:hidden">
-        {onOnlineOrders ? (
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-            onClick={onOnlineOrders}
-          >
-            <span className="inline-flex items-center gap-2">
-              <Bell size={16} />
-              {t('webPosOnlineOrders')}
-            </span>
-            {onlinePendingCount > 0 ? (
-              <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                {onlinePendingCount}
-              </span>
-            ) : null}
-          </button>
-        ) : null}
-        {onSwitchUser ? (
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-            onClick={onSwitchUser}
-          >
-            <UserCircle2 size={16} />
-            <span className="truncate">{staffName || t('webPosSwitchUser')}</span>
-          </button>
-        ) : null}
-        {canDrawer && onOpenDrawer ? (
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-            onClick={onOpenDrawer}
-          >
-            <Vault size={16} />
-            {t('webPosOpenDrawer')}
-          </button>
-        ) : null}
-      </div>
 
       {shiftsEnabled ? (
         <div className="space-y-2 border-b border-stone-100 pb-3">
@@ -1091,21 +1108,62 @@ export function WebPosSettingsDropdown({
       {agentOk && printerMissing ? (
         <p className="text-[10px] leading-snug text-amber-800">{t('webPosPrinterRenamedHint')}</p>
       ) : null}
+      {onSendLogs ? (
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2 py-2 text-left text-xs font-semibold text-teal-900 hover:bg-teal-100"
+          onClick={onSendLogs}
+        >
+          <FileText size={16} />
+          {t('webPosSendLogs')}
+        </button>
+      ) : null}
       <p className="border-t border-stone-100 pt-2 text-center text-[10px] text-stone-400">
         {webPosVersionLabel}
       </p>
       </div>
-      {onSendLogs ? (
-        <div className="shrink-0 border-t border-stone-200 p-3">
-          <button
-            type="button"
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2 py-2.5 text-xs font-semibold text-teal-900 hover:bg-teal-100"
-            onClick={onSendLogs}
-          >
-            <FileText size={16} />
-            {t('webPosSendLogs')}
-          </button>
-        </div>
+    </div>
+  );
+}
+
+export function WebPosUserDropdown({
+  staffName,
+  onSwitchUser,
+  canDrawer = false,
+  onOpenDrawer,
+}: {
+  staffName?: string | null;
+  onSwitchUser: () => void;
+  canDrawer?: boolean;
+  onOpenDrawer?: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div
+      className="absolute right-0 top-[calc(100%+6px)] z-50 w-[min(16rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-xl"
+    >
+      {staffName ? (
+        <p className="truncate px-3 py-2 text-xs font-semibold text-stone-800 border-b border-stone-100">
+          {staffName}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+        onClick={onSwitchUser}
+      >
+        <UserCircle2 size={16} />
+        {t('webPosSwitchUser')}
+      </button>
+      {canDrawer && onOpenDrawer ? (
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
+          onClick={onOpenDrawer}
+        >
+          <Vault size={16} />
+          {t('webPosOpenDrawer')}
+        </button>
       ) : null}
     </div>
   );
