@@ -1373,10 +1373,8 @@ class BluetoothPrinterService @Inject constructor(
             sb.appendLine(center("PRODUCTS SOLD", lineWidth))
             sb.appendLine(dashes)
             sb.appendLine(leftRight("Total qty", report.productsSold.sumOf { it.quantitySold }.toString(), lineWidth))
-            val nameWidth = (lineWidth - 6).coerceAtLeast(10)
             report.productsSold.forEach { product ->
-                val name = product.productName.take(nameWidth).padEnd(nameWidth.coerceAtMost(lineWidth - 6))
-                sb.appendLine(leftRight(name, product.quantitySold.toString(), lineWidth))
+                sb.appendLine(productQtyRow(product.productName, product.quantitySold.toString(), lineWidth))
             }
         }
         sb.appendLine("\n\n\n")
@@ -1667,6 +1665,13 @@ class BluetoothPrinterService @Inject constructor(
         val labelWidth = (lineWidth - amountWidth - percentWidth).coerceAtLeast(10)
         val l = label.take(labelWidth).padEnd(labelWidth)
         return l + percent.padStart(percentWidth) + amount.padStart(amountWidth)
+    }
+
+    private fun productQtyRow(name: String, qty: String, lineWidth: Int): String {
+        val qtyWidth = if (lineWidth <= LINE_WIDTH_58) 5 else 6
+        val value = qty.takeLast(qtyWidth).padStart(qtyWidth)
+        val nameWidth = (lineWidth - qtyWidth).coerceAtLeast(1)
+        return name.take(nameWidth).padEnd(nameWidth) + value
     }
 
     private fun orderTypeRow(

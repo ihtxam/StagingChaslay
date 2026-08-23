@@ -533,6 +533,16 @@ function padLine(left: string, right: string, width: number): string {
   return left + ' '.repeat(gap) + right;
 }
 
+/** Name left, quantity right-aligned in a fixed column (thermal EOD product rows). */
+export function reportNameQtyRow(name: string, qty: string | number, width: number): string {
+  const qtyWidth = width <= 32 ? 5 : 6;
+  const qtyStr = String(qty);
+  const value =
+    qtyStr.length > qtyWidth ? qtyStr.slice(-qtyWidth) : qtyStr.padStart(qtyWidth);
+  const nameWidth = Math.max(1, width - qtyWidth);
+  return name.slice(0, nameWidth).padEnd(nameWidth) + value;
+}
+
 function formatLoyaltyReceiptLines(
   tx: Pick<WebPosReceipt, 'loyaltyPointsEarned' | 'loyaltyPointsBalance'>,
   L: ReturnType<typeof receiptLabels>,
@@ -2075,10 +2085,8 @@ export function generateEodReportText(report: EodReportPrint): string {
     r += thin + '\n';
     const qtySum = report.productsSold.reduce((s, p) => s + p.quantity, 0);
     r += padLine(L.totalQty, String(Math.round(qtySum * 1000) / 1000), width) + '\n';
-    const nameWidth = width <= 32 ? 22 : 30;
     for (const p of report.productsSold.slice(0, 60)) {
-      const name = p.name.slice(0, nameWidth).padEnd(Math.min(nameWidth, width - 6));
-      r += (name + String(p.quantity).padStart(6)).slice(0, width) + '\n';
+      r += reportNameQtyRow(p.name, p.quantity, width) + '\n';
     }
   }
 
