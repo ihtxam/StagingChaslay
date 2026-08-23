@@ -409,9 +409,9 @@ fun RefundWizardDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .widthIn(max = 560.dp),
-            shape = RoundedCornerShape(16.dp),
+                .fillMaxWidth(0.47f)
+                .widthIn(max = 300.dp),
+            shape = RoundedCornerShape(12.dp),
             color = CardBg
         ) {
             Column(modifier = Modifier.padding(0.dp)) {
@@ -434,7 +434,7 @@ fun RefundWizardDialog(
                             },
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+                            fontSize = 14.sp
                         )
                         IconButton(onClick = onDismiss) {
                             Icon(Icons.Default.Close, contentDescription = null, tint = Color.White)
@@ -477,9 +477,9 @@ fun RefundWizardDialog(
 
                         Column(
                             modifier = Modifier
-                                .padding(20.dp)
+                                .padding(12.dp)
                                 .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             when (RefundAmountTab.entries.find { it.index == amountTab }) {
                                 RefundAmountTab.ENTIRE_BILL -> {

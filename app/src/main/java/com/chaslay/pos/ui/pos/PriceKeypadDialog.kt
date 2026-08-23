@@ -45,9 +45,9 @@ import androidx.compose.ui.window.DialogProperties
 import com.chaslay.pos.R
 import com.chaslay.pos.ui.theme.VectronColors
 
-private val KeyRowHeight = 44.dp
-private val KeySpacing = 4.dp
-private val ActionColumnWidth = 56.dp
+private val KeyRowHeight = 28.dp
+private val KeySpacing = 3.dp
+private val ActionColumnWidth = 44.dp
 // Enter spans the last two digit rows (44 + spacing + 44).
 private val EnterKeyHeight = KeyRowHeight * 2 + KeySpacing
 
@@ -85,36 +85,36 @@ fun PriceKeypadDialog(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(min = 340.dp, max = 420.dp)
-                .fillMaxWidth(0.92f),
-            shape = RoundedCornerShape(20.dp),
+                .widthIn(min = 220.dp, max = 280.dp)
+                .fillMaxWidth(0.46f),
+            shape = RoundedCornerShape(14.dp),
             color = Color.White,
-            shadowElevation = 10.dp
+            shadowElevation = 8.dp
         ) {
             Column(
                 modifier = Modifier
-                    .padding(18.dp)
+                    .padding(12.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(title, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                    Text(subtitle, fontSize = 12.sp, color = Color.Gray)
+                    Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(subtitle, fontSize = 11.sp, color = Color.Gray)
                 }
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.5.dp, Color(0xFF9CA3AF), RoundedCornerShape(12.dp))
-                        .background(Color(0xFFF8FAFC), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                        .border(1.5.dp, Color(0xFF9CA3AF), RoundedCornerShape(10.dp))
+                        .background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = if (buffer.isEmpty()) "$currencySymbol 0.00" else "$currencySymbol $buffer",
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.End,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 24.sp
+                        fontSize = 18.sp
                     )
                 }
 
@@ -180,20 +180,20 @@ fun PriceKeypadDialog(
                         onClick = onDismiss,
                         modifier = Modifier
                             .weight(1f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(12.dp)
+                            .height(40.dp),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text(stringResource(R.string.cancel), fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.cancel), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                     Button(
                         onClick = ::confirm,
                         modifier = Modifier
                             .weight(1f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(12.dp),
+                            .height(40.dp),
+                        shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = VectronColors.CashGreen)
                     ) {
-                        Text(confirmLabel, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(confirmLabel, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
                     }
                 }
             }

@@ -384,6 +384,7 @@
     <string name="add_category">Kategorie hinzufügen</string>
     <string name="edit_category">Kategorie bearbeiten</string>
     <string name="category_saved">Kategorie gespeichert</string>
+    <string name="order_saved">Reihenfolge gespeichert</string>
     <string name="product_saved">Produkt gespeichert</string>
     <string name="category_removed">Kategorie entfernt</string>
     <string name="product_removed">Produkt entfernt</string>

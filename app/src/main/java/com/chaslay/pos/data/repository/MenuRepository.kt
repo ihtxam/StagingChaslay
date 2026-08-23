@@ -177,9 +177,12 @@ class MenuRepository @Inject constructor(
         productAddonGroupDao.getGroupsForProduct(productId).map { it.id }
 
     suspend fun reorderCategories(orderedIds: List<Long>) {
+        val now = System.currentTimeMillis()
         val categories = categoryDao.observeActive().first()
         orderedIds.forEachIndexed { index, id ->
-            categories.find { it.id == id }?.let { categoryDao.update(it.copy(sortOrder = index)) }
+            categories.find { it.id == id }?.let {
+                categoryDao.update(it.copy(sortOrder = index, updatedAt = now))
+            }
         }
     }
 

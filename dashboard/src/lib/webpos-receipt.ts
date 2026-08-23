@@ -2018,37 +2018,7 @@ export function generateEodReportText(report: EodReportPrint): string {
         width
       ) + '\n';
   }
-  if (report.refundTotal > 0) {
-    r += '\n';
-    r += thin + '\n';
-    r += centerLine(L.refunds, width) + '\n';
-    r += thin + '\n';
-    r += padLine(L.refunds, money(report.refundTotal), width) + '\n';
-    if (report.refundCount != null) {
-      r += padLine(L.refundCount, String(report.refundCount), width) + '\n';
-    }
-    for (const row of report.refundedOrders || []) {
-      r +=
-        padLine(
-          String(row.orderNumber || '').slice(0, Math.max(8, width - 14)),
-          `-${money(row.refundAmount)}`,
-          width
-        ) + '\n';
-      if (row.refundReason?.trim()) {
-        for (const line of wrapKitchenWords(row.refundReason.trim(), width)) {
-          r += line + '\n';
-        }
-      }
-    }
-    if (report.refundRows?.length) {
-      r += '\n';
-      r += centerLine(L.refundsByPayment, width) + '\n';
-      for (const row of report.refundRows) {
-        r +=
-          padLine(paymentLabel(L, row.method), money(row.total), width) + '\n';
-      }
-    }
-  }
+  // Refunds are shown on screen but omitted from thermal report prints.
   r += '\n';
   r += thin + '\n';
   r += centerLine(L.paymentMethods, width) + '\n';

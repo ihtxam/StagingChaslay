@@ -33,7 +33,6 @@ import javax.inject.Inject
 
 enum class MenuSection {
     PRODUCT_LIST,
-    MENU_TEMPLATE,
     IMPORT_EXPORT,
     MODIFIERS,
     ADDONS,

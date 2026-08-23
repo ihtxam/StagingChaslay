@@ -451,28 +451,49 @@ private fun CatalogToggleRow(
     label: String,
     help: String? = null,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    accentWhenChecked: Boolean = false
 ) {
+    val borderColor = when {
+        accentWhenChecked && checked -> CatalogTeal
+        checked -> CatalogTeal.copy(alpha = 0.65f)
+        else -> CatalogBorder
+    }
+    val background = when {
+        accentWhenChecked && checked -> Color(0xFFCCFBF1)
+        checked -> Color(0xFFF0FDFA)
+        else -> CatalogSurface
+    }
     Surface(
         shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, CatalogBorder),
-        color = CatalogSurface,
-        modifier = Modifier.fillMaxWidth()
+        border = BorderStroke(1.dp, borderColor),
+        color = background,
+        modifier = modifier
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                Text(label, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                Text(
+                    label,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    color = if (accentWhenChecked && checked) CatalogTeal else Color(0xFF1F2937)
+                )
                 if (!help.isNullOrBlank()) {
-                    Text(help, fontSize = 11.sp, color = CatalogMuted)
+                    Text(help, fontSize = 10.sp, color = CatalogMuted)
                 }
             }
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                modifier = Modifier.height(28.dp)
+            )
         }
     }
 }
@@ -554,7 +575,7 @@ private fun ProductDialog(
     ) -> Unit
 ) {
     var name by remember(product) { mutableStateOf(product?.name ?: "") }
-    var barcode by remember(product) { mutableStateOf(product?.barcode.orEmpty()) }
+    var barcode by remember(product) { mutableStateOf(digitsOnly(product?.barcode.orEmpty())) }
     var sku by remember(product) { mutableStateOf(product?.sku.orEmpty()) }
     var stockQuantity by remember(product) { mutableStateOf(product?.stockQuantity?.toString().orEmpty()) }
     var lowStockThreshold by remember(product) { mutableStateOf(product?.lowStockThreshold?.toString().orEmpty()) }
@@ -611,85 +632,119 @@ private fun ProductDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    CatalogField(value = name, onValueChange = { name = it }, label = stringResource(R.string.product_name))
-
-                    ExposedDropdownMenuBox(
-                        expanded = categoryExpanded,
-                        onExpandedChange = { categoryExpanded = it },
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        OutlinedTextField(
-                            value = selectedCategory?.name.orEmpty(),
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text(stringResource(R.string.category)) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CatalogTeal,
-                                unfocusedBorderColor = CatalogBorder,
-                                focusedLabelColor = CatalogTeal
-                            )
+                        CatalogField(
+                            value = name,
+                            onValueChange = { name = it },
+                            label = stringResource(R.string.product_name),
+                            modifier = Modifier.weight(1f)
                         )
-                        ExposedDropdownMenu(
+                        ExposedDropdownMenuBox(
                             expanded = categoryExpanded,
-                            onDismissRequest = { categoryExpanded = false }
+                            onExpandedChange = { categoryExpanded = it },
+                            modifier = Modifier.weight(1f)
                         ) {
-                            categories.forEach { category ->
-                                DropdownMenuItem(
-                                    text = { Text(category.name) },
-                                    onClick = {
-                                        selectedCategoryId = category.id
-                                        categoryExpanded = false
-                                    }
+                            OutlinedTextField(
+                                value = selectedCategory?.name.orEmpty(),
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(stringResource(R.string.category)) },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CatalogTeal,
+                                    unfocusedBorderColor = CatalogBorder,
+                                    focusedLabelColor = CatalogTeal
                                 )
+                            )
+                            ExposedDropdownMenu(
+                                expanded = categoryExpanded,
+                                onDismissRequest = { categoryExpanded = false }
+                            ) {
+                                categories.forEach { category ->
+                                    DropdownMenuItem(
+                                        text = { Text(category.name) },
+                                        onClick = {
+                                            selectedCategoryId = category.id
+                                            categoryExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
 
-                    CatalogToggleRow(
-                        label = stringResource(R.string.open_price),
-                        checked = openPrice,
-                        onCheckedChange = {
-                            openPrice = it
-                            if (it) isWeighed = false
-                        }
-                    )
-                    CatalogToggleRow(
-                        label = stringResource(R.string.sold_by_weight),
-                        help = stringResource(R.string.sold_by_weight_help),
-                        checked = isWeighed,
-                        onCheckedChange = {
-                            isWeighed = it
-                            if (it) openPrice = false
-                        }
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CatalogToggleRow(
+                            label = stringResource(R.string.open_price),
+                            checked = openPrice,
+                            onCheckedChange = {
+                                openPrice = it
+                                if (it) isWeighed = false
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        CatalogToggleRow(
+                            label = stringResource(R.string.sold_by_weight),
+                            help = stringResource(R.string.sold_by_weight_help),
+                            checked = isWeighed,
+                            onCheckedChange = {
+                                isWeighed = it
+                                if (it) openPrice = false
+                            },
+                            modifier = Modifier.weight(1f),
+                            accentWhenChecked = true
+                        )
+                    }
 
-                    if (isWeighed) {
+                    if (isWeighed || (!openPrice && !isWeighed)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            if (isWeighed) {
+                                CatalogField(
+                                    value = price,
+                                    onValueChange = { price = it },
+                                    label = stringResource(R.string.price_per_kg),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            } else if (!openPrice) {
+                                CatalogField(
+                                    value = price,
+                                    onValueChange = { price = it },
+                                    label = stringResource(R.string.price),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            CatalogField(
+                                value = tax,
+                                onValueChange = { tax = it },
+                                label = stringResource(R.string.tax_rate),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    } else if (!isWeighed) {
                         CatalogField(
-                            value = price,
-                            onValueChange = { price = it },
-                            label = stringResource(R.string.price_per_kg),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                            value = tax,
+                            onValueChange = { tax = it },
+                            label = stringResource(R.string.tax_rate),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(0.5f)
                         )
                     }
-                    if (!openPrice && !isWeighed) {
-                        CatalogField(
-                            value = price,
-                            onValueChange = { price = it },
-                            label = stringResource(R.string.price),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                        )
-                    }
-                    CatalogField(
-                        value = tax,
-                        onValueChange = { tax = it },
-                        label = stringResource(R.string.tax_rate),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                    )
 
                     Surface(
                         shape = RoundedCornerShape(8.dp),
@@ -774,7 +829,7 @@ private fun ProductDialog(
                                         onValueChange = { barcode = digitsOnly(it) },
                                         label = { Text(stringResource(R.string.barcode)) },
                                         singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         modifier = Modifier.weight(1f)
                                     )
                                     IconButton(onClick = { showScanner = true }) {

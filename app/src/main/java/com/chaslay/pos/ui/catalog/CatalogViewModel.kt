@@ -77,6 +77,9 @@ class CatalogViewModel @Inject constructor(
         if (name.isBlank()) return
         viewModelScope.launch {
             val existing = if (id > 0) productRepository.getProduct(id) else null
+            val sanitizedBarcode = barcode
+                ?.filter { it.isDigit() }
+                ?.takeIf { it.isNotEmpty() }
             val productId = productRepository.upsertProduct(
                 ProductEntity(
                     id = id,
@@ -87,7 +90,7 @@ class CatalogViewModel @Inject constructor(
                     isOpenPrice = isOpenPrice,
                     isWeighed = isWeighed,
                     sortOrder = sortOrder,
-                    barcode = barcode?.trim()?.takeIf { it.isNotEmpty() },
+                    barcode = sanitizedBarcode,
                     sku = sku?.trim()?.takeIf { it.isNotEmpty() },
                     stockQuantity = stockQuantity,
                     lowStockThreshold = lowStockThreshold,
@@ -141,6 +144,7 @@ class CatalogViewModel @Inject constructor(
             val item = categories.removeAt(fromIndex)
             categories.add(toIndex, item)
             menuRepository.reorderCategories(categories.map { it.id })
+            _messageRes.value = R.string.order_saved
         }
     }
 
@@ -156,6 +160,7 @@ class CatalogViewModel @Inject constructor(
             val item = products.removeAt(fromIndex)
             products.add(toIndex, item)
             menuRepository.reorderProductsInCategory(categoryId, products.map { it.id })
+            _messageRes.value = R.string.order_saved
         }
     }
 

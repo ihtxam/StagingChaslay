@@ -421,6 +421,7 @@
     <string name="add_category">Add category</string>
     <string name="edit_category">Edit Category</string>
     <string name="category_saved">Category saved</string>
+    <string name="order_saved">Order saved</string>
     <string name="product_saved">Product saved</string>
     <string name="category_removed">Category removed</string>
     <string name="product_removed">Product removed</string>

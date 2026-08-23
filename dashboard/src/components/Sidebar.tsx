@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, Settings, User, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, Settings, Store, User, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { displaySidebarAccountName, displaySidebarShopName } from '@/lib/brand';
@@ -46,6 +46,8 @@ interface SidebarProps {
   };
   /** Merchant shop name in the sidebar header (defaults to "Shop"). */
   shopName?: string | null;
+  /** Optional online shop shortcut pinned above the footer. */
+  shopPath?: string | null;
 }
 
 const STORAGE_PREFIX = 'sidebar_groups_open:';
@@ -87,6 +89,7 @@ export default function Sidebar({
   onLanguageChange,
   profileMenu,
   shopName,
+  shopPath,
 }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -138,6 +141,32 @@ export default function Sidebar({
   }, [activeGroupIds, panelKey]);
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!profileOpen) return;
+    const onDoc = (e: PointerEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onDoc, true);
+    return () => document.removeEventListener('pointerdown', onDoc, true);
+  }, [profileOpen]);
+
+  useEffect(() => {
+    if (openGroups.size === 0) return;
+    const onDoc = (e: PointerEvent) => {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) {
+        const next = new Set<string>();
+        saveOpenGroups(panelKey, next);
+        setOpenGroups(next);
+      }
+    };
+    document.addEventListener('pointerdown', onDoc, true);
+    return () => document.removeEventListener('pointerdown', onDoc, true);
+  }, [openGroups, panelKey]);
 
   const toggleGroup = (id: string) => {
     setOpenGroups((prev) => {
@@ -241,7 +270,7 @@ export default function Sidebar({
           </div>
         )}
 
-        <nav className="flex-1 min-h-0 p-2 space-y-0.5 overflow-y-auto">
+        <nav ref={navRef} className="flex-1 min-h-0 p-2 space-y-0.5 overflow-y-auto">
           {menuItems.map((entry) => {
             const children = entry.children?.filter(Boolean) ?? [];
 
@@ -344,6 +373,23 @@ export default function Sidebar({
         </nav>
 
         <div className="panel-sidebar-footer p-3 border-t space-y-2 shrink-0">
+          {shopPath ? (
+            <Link
+              to={shopPath}
+              onClick={closeMobile}
+              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
+                isPathActive(location.pathname, shopPath)
+                  ? 'bg-teal-900 text-white shadow-sm'
+                  : 'text-teal-50/95 hover:bg-teal-900/45 hover:text-white'
+              }`}
+            >
+              <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
+                <Store />
+              </span>
+              <span className="font-medium truncate">{t('shop')}</span>
+            </Link>
+          ) : null}
+
           {impersonating && (
             <button
               type="button"
@@ -356,7 +402,7 @@ export default function Sidebar({
           )}
 
           {profileMenu ? (
-            <div className="relative">
+            <div className="relative" ref={profileRef}>
               <button
                 type="button"
                 onClick={() => setProfileOpen((v) => !v)}

@@ -467,6 +467,7 @@ function MerchantShell() {
             supportPath: '/merchant/support',
           }}
           shopName={merchantShopName}
+          shopPath={allow('/merchant/online-shop') ? '/merchant/online-shop' : null}
         />
       )}
 

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -98,12 +99,13 @@ fun WeightProductDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(16.dp)),
-            shape = RoundedCornerShape(16.dp),
+                .widthIn(max = 300.dp)
+                .fillMaxWidth(0.46f)
+                .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(12.dp)),
+            shape = RoundedCornerShape(12.dp),
             color = Color.White
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -113,11 +115,11 @@ fun WeightProductDialog(
                         Text(
                             text = stringResource(R.string.weighed_product_title),
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+                            fontSize = 14.sp
                         )
                         Text(
                             text = productName,
-                            fontSize = 14.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF374151)
                         )
@@ -173,7 +175,7 @@ fun WeightProductDialog(
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.End,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 28.sp
+                        fontSize = 20.sp
                     )
                     Text(
                         text = stringResource(
@@ -324,10 +326,10 @@ private fun WeightUnitChip(
     Text(
         text = label,
         modifier = modifier
-            .height(36.dp)
+            .height(28.dp)
             .background(bg, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 4.dp),
         textAlign = TextAlign.Center,
         fontWeight = FontWeight.Bold,
         fontSize = 12.sp,
@@ -350,7 +352,7 @@ private fun WeightKey(
     }
     Column(
         modifier = modifier
-            .height(44.dp)
+            .height(28.dp)
             .background(bg, RoundedCornerShape(4.dp))
             .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(4.dp),
@@ -365,7 +367,7 @@ private fun WeightKey(
                 highlight -> Color.White
                 else -> VectronColors.TextPrimary
             },
-            fontSize = if (label.length > 2) 11.sp else 14.sp
+            fontSize = if (label.length > 2) 10.sp else 12.sp
         )
     }
 }

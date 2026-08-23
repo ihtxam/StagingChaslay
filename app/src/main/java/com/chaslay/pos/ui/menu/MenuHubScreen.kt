@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -70,7 +69,6 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
                         stringResource(
                             when (section) {
                                 MenuSection.PRODUCT_LIST -> R.string.product_list
-                                MenuSection.MENU_TEMPLATE -> R.string.menu_template
                                 MenuSection.IMPORT_EXPORT -> R.string.menu_import_export
                                 MenuSection.MODIFIERS -> R.string.modifiers
                                 MenuSection.ADDONS -> R.string.addons
@@ -86,7 +84,6 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             when (state.section) {
                 MenuSection.PRODUCT_LIST -> CatalogScreen()
-                MenuSection.MENU_TEMPLATE -> MenuTemplateSection()
                 MenuSection.IMPORT_EXPORT -> MenuImportSection(
                     importMode = state.importMode,
                     importPreview = state.importPreview,
@@ -128,26 +125,4 @@ private fun CombosSectionHost(viewModel: MenuViewModel) {
             categories = viewModel.getAllCategories()
         }
     )
-}
-
-@Composable
-private fun MenuTemplateSection() {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(stringResource(R.string.menu_template), fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text(
-            stringResource(R.string.menu_template_hint),
-            color = Color.Gray,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(vertical = 12.dp)
-        )
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.receipt_template), fontWeight = FontWeight.SemiBold)
-                Text("• ${stringResource(R.string.receipt_show_vat)}", fontSize = 13.sp)
-                Text("• ${stringResource(R.string.kitchen_large_items)}", fontSize = 13.sp)
-                Text("• ${stringResource(R.string.kitchen_large_header)}", fontSize = 13.sp)
-                Text(stringResource(R.string.receipt_design), fontSize = 12.sp, color = Color.Gray)
-            }
-        }
-    }
 }

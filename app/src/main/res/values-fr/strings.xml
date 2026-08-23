@@ -387,6 +387,7 @@
     <string name="add_category">Ajouter une catégorie</string>
     <string name="edit_category">Editer Catégorie</string>
     <string name="category_saved">Catégorie enregistrée</string>
+    <string name="order_saved">Ordre enregistré</string>
     <string name="product_saved">Produit enregistré</string>
     <string name="category_removed">Catégorie supprimée</string>
     <string name="product_removed">Produit supprimé</string>
