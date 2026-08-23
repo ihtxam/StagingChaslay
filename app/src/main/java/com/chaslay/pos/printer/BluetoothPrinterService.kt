@@ -1728,16 +1728,14 @@ class BluetoothPrinterService @Inject constructor(
         settings: BusinessSettingsEntity,
         lineWidth: Int = LINE_WIDTH_80,
         receiptUrl: String? = null,
-        deliveryDirectionsUrl: String? = null
+        @Suppress("UNUSED_PARAMETER") deliveryDirectionsUrl: String? = null
     ): ByteArray {
         val body = EscPosEncoder.encode(text)
         val qrParts = mutableListOf<ByteArray>()
         if (settings.receiptShowQrCode && !receiptUrl.isNullOrBlank()) {
             qrParts.add(receiptQrRaster(receiptUrl, lineWidth))
         }
-        if (settings.receiptDeliveryDirectionsQr && !deliveryDirectionsUrl.isNullOrBlank()) {
-            qrParts.add(receiptQrRaster(deliveryDirectionsUrl, lineWidth))
-        }
+        // Delivery directions QR removed — customer receipt shows digital receipt QR only.
         val qrBytes = qrParts.fold(byteArrayOf()) { acc, part -> acc + part }
         val cutFeed = if (qrBytes.isNotEmpty()) 2 else 4
         return buildPrintPayload(body, settings, lineWidth, qrBytes, cutFeed)

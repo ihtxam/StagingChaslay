@@ -1,6 +1,5 @@
 import api from '@/lib/api';
 import {
-  deliveryDirectionsUrlForReceipt,
   generateDeliverySlipEscPos,
   printersForRole,
   resolveReceiptLanguage,
@@ -56,11 +55,6 @@ export async function printDeliverySlipForOrder(
   const printSettings = ctx.printSettings || null;
   const lang = resolveReceiptLanguage(printSettings, ctx.locale || 'en');
   const paper = (printSettings?.paperWidthMm === 58 ? 58 : 80) as 58 | 80;
-  const directionsUrl = deliveryDirectionsUrlForReceipt({
-    channel: 'delivery',
-    shippingAddress: order.shippingAddress,
-    deliveryDirectionsQr: printSettings?.receiptDeliveryDirectionsQr !== false,
-  });
 
   const escpos = await generateDeliverySlipEscPos({
     businessName: ctx.merchant.name || 'Store',
@@ -82,7 +76,6 @@ export async function printDeliverySlipForOrder(
     language: lang,
     paperWidthMm: paper,
     driverClaimUrl,
-    directionsUrl: directionsUrl || null,
   });
 
   const targets = printersForRole(printSettings, 'receipt');

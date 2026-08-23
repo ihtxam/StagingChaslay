@@ -5,7 +5,7 @@ import { APP_NAME } from '@/lib/brand';
 import {
   buildReceiptUrl,
   buildGiftCardBarcodePayload,
-  buildDualReceiptQrRasterEscPos,
+  buildDeliverySlipQrRasterEscPos,
   buildLabeledReceiptQrRasterEscPos,
   concatBytes,
   escposCode128,
@@ -1102,10 +1102,9 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
   if (tx.notes) r += `${L.note} ${tx.notes}\n`;
 
-  // QR labels + graphics are embedded by buildReceiptEscPos.
+  // QR label + graphic embedded by buildReceiptEscPos (digital receipt only).
   const hasDigitalQr = tx.includeQr !== false && !!(tx.receiptUrl || tx.id);
-  const hasDeliveryQr = !!deliveryDirectionsUrlForReceipt(tx);
-  if (hasDigitalQr || hasDeliveryQr) {
+  if (hasDigitalQr) {
     r += thin + '\n';
   }
 
@@ -2232,11 +2231,12 @@ export function textToEscPos(
   return concatBytes(...parts);
 }
 
-/** Build receipt ESC/POS with bitmap QRs (web / print-agent path). */
+/** Build receipt ESC/POS with bitmap QR (web / print-agent path). Digital receipt QR only. */
 export async function buildReceiptEscPos(
   text: string,
   opts: {
     qrData?: string;
+    /** @deprecated Directions QR removed — kept for call-site compat, ignored. */
     deliveryQrData?: string;
     language?: ReceiptLang | string;
     logoBytes?: Uint8Array | null;
@@ -2250,19 +2250,10 @@ export async function buildReceiptEscPos(
   const lang: ReceiptLang = langCode === 'fr' || langCode === 'de' ? langCode : 'en';
   const L = receiptLabels(lang);
   const qrData = opts.qrData?.trim();
-  const deliveryQrData = opts.deliveryQrData?.trim();
 
   let qrRaster: Uint8Array | null = null;
-  let deliveryQrRaster: Uint8Array | null = null;
 
-  if (qrData && deliveryQrData) {
-    qrRaster =
-      (await buildDualReceiptQrRasterEscPos({
-        left: { label: L.digitalReceiptQrTitle, data: qrData },
-        right: { label: L.scanDeliveryDirections, data: deliveryQrData },
-        paperWidthMm: paper,
-      })) || null;
-  } else if (qrData) {
+  if (qrData) {
     qrRaster =
       (await buildLabeledReceiptQrRasterEscPos({
         label: L.digitalReceiptQrTitle,
@@ -2271,23 +2262,9 @@ export async function buildReceiptEscPos(
       })) ||
       (await generateReceiptQrRasterEscPos(qrData, paper)) ||
       escposQrCode(qrData, paper === 58 ? 4 : 5);
-  } else if (deliveryQrData) {
-    deliveryQrRaster =
-      (await buildLabeledReceiptQrRasterEscPos({
-        label: L.scanDeliveryDirections,
-        data: deliveryQrData,
-        paperWidthMm: paper,
-      })) || (await generateReceiptQrRasterEscPos(deliveryQrData, paper));
   }
 
-  return textToEscPos(
-    text,
-    qrRaster,
-    opts.logoBytes,
-    opts.barcodeData,
-    opts.barcodeLabel,
-    deliveryQrRaster
-  );
+  return textToEscPos(text, qrRaster, opts.logoBytes, opts.barcodeData, opts.barcodeLabel);
 }
 
 export function uint8ToBase64(bytes: Uint8Array): string {
@@ -2869,6 +2846,7 @@ export type DeliverySlipOpts = {
   language?: string;
   paperWidthMm?: 58 | 80;
   driverClaimUrl: string;
+  /** @deprecated Directions QR removed from delivery slip — driver claim QR only. */
   directionsUrl?: string | null;
 };
 
@@ -2876,6 +2854,26 @@ function extractPostalCode(address?: string | null): string {
   if (!address) return '';
   const m = String(address).match(/\b(\d{4})\b/);
   return m?.[1] || '';
+}
+
+function wrapLeftText(text: string, width: number): string[] {
+  const out: string[] = [];
+  for (const para of String(text || '').split(/\r?\n/)) {
+    const chunk = para.trim();
+    if (!chunk) continue;
+    let line = '';
+    for (const word of chunk.split(/\s+/)) {
+      const next = line ? `${line} ${word}` : word;
+      if (next.length > width && line) {
+        out.push(line);
+        line = word;
+      } else {
+        line = next;
+      }
+    }
+    if (line) out.push(line.slice(0, width));
+  }
+  return out;
 }
 
 /** Separate delivery slip for drivers (LIVRAISON + SCAN LIVREUR QR). */
@@ -2894,99 +2892,96 @@ export async function generateDeliverySlipEscPos(opts: DeliverySlipOpts): Promis
     opts.paymentStatus === 'paid' ||
     opts.paymentMethod === 'card' ||
     opts.paymentMethod === 'terminal';
+  const totalStr = `CHF ${roundMoney2(Number(opts.total) || 0).toFixed(2)}`;
+  const whenLabel = opts.scheduledFor ? formatTimeHHMM(new Date(opts.scheduledFor)) : L.asap;
 
-  const lines: string[] = [
-    centerLine(`* ${(opts.businessName || APP_NAME).toUpperCase()} *`, width),
-    centerLine(source, width),
-    centerLine(L.delivery.toUpperCase(), width),
-    centerLine(when.slice(0, width), width),
-    sep,
-  ];
+  const parts: Uint8Array[] = [new Uint8Array([0x1b, 0x40]), ESC_CODEPAGE_CP850];
+  const lf = new Uint8Array([0x0a]);
+  const appendText = (text: string) => {
+    parts.push(escposCp850Encode(text));
+  };
+  const appendLine = (text = '') => {
+    appendText(text);
+    parts.push(lf);
+  };
 
-  if (opts.customerName?.trim()) {
-    lines.push(String(opts.customerName).slice(0, width));
-  }
-  if (opts.customerPhone?.trim()) {
-    lines.push(padLine('Tel', String(opts.customerPhone).slice(0, width - 5), width));
-  }
-  if (opts.shippingAddress?.trim()) {
-    lines.push(padLine(L.deliveryAddress, String(opts.shippingAddress).slice(0, width - 8), width));
-  }
-  if (zip) {
-    lines.push(padLine(L.postalCode, `${zip}`, width));
-  }
-  lines.push(
-    padLine(
-      L.forWhen,
-      opts.scheduledFor ? formatTimeHHMM(new Date(opts.scheduledFor)) : L.asap,
-      width
-    ),
-    thin
-  );
+  // Header — centered, bold, double height
+  parts.push(escAlign(1), escKitchenSize(2), escBold(true));
+  appendLine(centerLine(`* ${(opts.businessName || APP_NAME).toUpperCase()} *`, width));
+  appendLine(centerLine(source, width));
+  parts.push(escKitchenSize(1));
+  appendLine(padLine(L.delivery.toUpperCase(), when.slice(0, width - 12), width));
+  parts.push(escBold(false), escAlign(0));
+  appendLine(sep);
 
+  // Category / item summary
   const byCat = new Map<string, number>();
   for (const item of opts.items || []) {
     const cat = item.categoryLabel || 'ITEMS';
     byCat.set(cat, (byCat.get(cat) || 0) + (Number(item.quantity) || 1));
   }
   for (const [cat, qty] of byCat) {
-    lines.push(padLine(`${cat}:`, String(qty), width));
+    appendLine(padLine(`${cat}:`, String(qty), width));
   }
   if (!byCat.size && opts.items?.length) {
     for (const item of opts.items.slice(0, 8)) {
-      lines.push(`${item.quantity}x ${item.name}`.slice(0, width));
+      appendLine(`${item.quantity}x ${item.name}`.slice(0, width));
     }
   }
 
-  lines.push(
-    thin,
-    padLine(L.total, `CHF ${roundMoney2(Number(opts.total) || 0).toFixed(2)}`, width),
-    padLine(L.payment, `${payLabel}${paid ? ` (${L.paid})` : ''}`.slice(0, width - 10), width),
-    centerLine(`#${opts.orderNumber}`, width),
-    thin,
-    centerLine(L.scanDriver, width),
-    centerLine(L.nonFiscalTicket, width),
-    '',
-    ''
+  appendLine(thin);
+
+  // Customer name + phone — left, bold, double width+height
+  parts.push(escAlign(0), escKitchenSize(3), escBold(true));
+  if (opts.customerName?.trim()) {
+    appendLine(String(opts.customerName).trim().slice(0, width));
+  }
+  if (opts.customerPhone?.trim()) {
+    appendLine(`Tel: ${String(opts.customerPhone).trim()}`.slice(0, width));
+  }
+  parts.push(escKitchenSize(1), escBold(false));
+
+  // Address — left aligned, normal size
+  if (opts.shippingAddress?.trim()) {
+    const addrLines = wrapLeftText(opts.shippingAddress.trim(), width);
+    if (addrLines.length) {
+      appendLine(`${L.deliveryAddress}: ${addrLines[0]}`.slice(0, width));
+      for (const ln of addrLines.slice(1)) {
+        appendLine(ln);
+      }
+    }
+  }
+  if (zip) {
+    appendLine(`${L.postalCode}: ${zip}`.slice(0, width));
+  }
+  appendLine(`${L.forWhen}: ${whenLabel}`.slice(0, width));
+
+  appendLine(thin);
+  appendLine(
+    padLine(
+      L.total,
+      `${totalStr} ${payLabel.toUpperCase()}${paid ? ` (${L.paid})` : ''}`.slice(0, width - 8),
+      width
+    )
   );
+  appendLine(centerLine(`#${opts.orderNumber}`, width));
 
-  const headerText = lines.slice(0, 4).join('\n') + '\n';
-  const bodyText = lines.slice(4).join('\n');
-
-  const textPart = concatBytes(
-    new Uint8Array([0x1b, 0x40]),
-    ESC_CODEPAGE_CP850,
-    escAlign(1),
-    escKitchenSize(2),
-    escBold(true),
-    escposCp850Encode(headerText),
-    escAlign(0),
-    escKitchenSize(1),
-    escBold(false),
-    escposCp850Encode(bodyText)
-  );
-
+  // Single large driver claim QR
   const driverQr =
-    (await buildLabeledReceiptQrRasterEscPos({
+    (await buildDeliverySlipQrRasterEscPos({
       label: L.scanDriver,
       data: opts.driverClaimUrl,
       paperWidthMm: opts.paperWidthMm ?? 80,
-    })) || (await generateReceiptQrRasterEscPos(opts.driverClaimUrl, opts.paperWidthMm ?? 80));
+    })) ||
+    (await generateReceiptQrRasterEscPos(opts.driverClaimUrl, opts.paperWidthMm ?? 80));
 
-  let directionsQr: Uint8Array | null = null;
-  if (opts.directionsUrl?.trim()) {
-    directionsQr =
-      (await buildLabeledReceiptQrRasterEscPos({
-        label: L.scanDeliveryDirections,
-        data: opts.directionsUrl.trim(),
-        paperWidthMm: opts.paperWidthMm ?? 80,
-      })) || null;
+  parts.push(escAlign(1));
+  if (driverQr?.length) {
+    parts.push(driverQr, lf);
   }
+  parts.push(escAlign(0));
+  appendLine(centerLine(L.nonFiscalTicket, width));
+  parts.push(lf, lf, lf, new Uint8Array([0x1d, 0x56, 0x00]));
 
-  return concatBytes(
-    textPart,
-    driverQr || new Uint8Array(),
-    directionsQr ? concatBytes(new Uint8Array([0x0a]), directionsQr) : new Uint8Array(),
-    new Uint8Array([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00])
-  );
+  return concatBytes(...parts);
 }
