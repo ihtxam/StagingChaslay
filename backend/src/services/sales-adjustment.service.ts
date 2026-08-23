@@ -7,50 +7,87 @@ import {
   parsePaymentBreakdown,
   paymentBreakdownTotals,
 } from "@/lib/payment-breakdown";
+import { resolveReportRange, type ReportPreset } from "@/services/pos-reports.service";
 
-const ALLOWED_PERCENTS = [20, 40] as const;
+export type SalesAdjustmentPeriodPreset =
+  | "today"
+  | "last_week"
+  | "this_month"
+  | "last_month"
+  | "custom";
 
 export type SalesAdjustmentPreview = {
-  monthKey: string;
+  periodLabel: string;
+  from: string;
+  to: string;
   targetPercent: number;
   currentCashTotal: number;
   targetCashTotal: number;
   reductionNeeded: number;
   eligibleOrderCount: number;
   adjustableItemCount: number;
+  /** @deprecated use periodLabel */
+  monthKey?: string;
 };
 
 export type SalesAdjustmentResult = {
-  monthKey: string;
+  periodLabel: string;
+  from: string;
+  to: string;
   targetPercent: number;
   beforeCashTotal: number;
   afterCashTotal: number;
   reductionApplied: number;
   ordersAdjusted: number;
   itemsAdjusted: number;
+  /** @deprecated use periodLabel */
+  monthKey?: string;
 };
 
-function zurichMonthBounds(monthKey?: string): { start: Date; end: Date; monthKey: string } {
-  let year: number;
-  let month: number;
-  if (monthKey && /^\d{4}-\d{2}$/.test(monthKey)) {
-    [year, month] = monthKey.split("-").map(Number);
-  } else {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Zurich",
-      year: "numeric",
-      month: "2-digit",
-    }).formatToParts(new Date());
-    year = Number(parts.find((p) => p.type === "year")!.value);
-    month = Number(parts.find((p) => p.type === "month")!.value);
+function validatePercent(targetPercent: number): number {
+  const p = Math.round(Number(targetPercent));
+  if (!Number.isFinite(p) || p < 1 || p > 99) {
+    throw new Error("Target percent must be between 1 and 99");
   }
-  const key = `${year}-${String(month).padStart(2, "0")}`;
+  return p;
+}
+
+function calendarMonthBounds(monthKey: string): { start: Date; end: Date; from: string; to: string; label: string } {
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) {
+    throw new Error("month must be YYYY-MM");
+  }
+  const [year, month] = monthKey.split("-").map(Number);
   const lastDay = new Date(year, month, 0).getDate();
+  const from = `${monthKey}-01`;
+  const to = `${monthKey}-${String(lastDay).padStart(2, "0")}`;
   return {
-    monthKey: key,
-    start: zurichDayBounds(`${key}-01`).start,
-    end: zurichDayBounds(`${key}-${String(lastDay).padStart(2, "0")}`).end,
+    from,
+    to,
+    label: monthKey,
+    start: zurichDayBounds(from).start,
+    end: zurichDayBounds(to).end,
   };
+}
+
+export function resolveSalesAdjustmentRange(opts: {
+  preset?: string;
+  from?: string;
+  to?: string;
+  month?: string;
+}): { start: Date; end: Date; from: string; to: string; label: string } {
+  if (opts.month) {
+    return calendarMonthBounds(opts.month);
+  }
+  const preset = (opts.preset || "this_month") as ReportPreset;
+  if (!["today", "last_week", "this_month", "last_month", "custom"].includes(preset)) {
+    throw new Error("Invalid period preset");
+  }
+  if (preset === "custom") {
+    const range = resolveReportRange("custom", opts.from, opts.to);
+    return { start: range.start, end: range.end, from: range.from, to: range.to, label: range.label };
+  }
+  const range = resolveReportRange(preset);
+  return { start: range.start, end: range.end, from: range.from, to: range.to, label: range.label };
 }
 
 function orderNetTotal(order: { total: unknown; refundAmount?: unknown | null }): number {
@@ -126,8 +163,8 @@ function scaleOrderAmounts(
   const subtotal = roundMoney2(Number(order.subtotal) * r);
   const taxAmount = roundMoney2(Number(order.taxAmount) * r);
   const discountAmount = roundMoney2(Number(order.discountAmount || 0) * r);
-  const tip = roundMoney2(Number(order.tipAmount || 0));
-  const rounding = roundMoney2(Number(order.roundingAmount || 0));
+  const tip = roundMoney2(Number(order.tipAmount || 0) * r);
+  const rounding = roundMoney2(Number(order.roundingAmount || 0) * r);
   const total = roundMoney2(subtotal + taxAmount - discountAmount + tip + rounding);
   return {
     subtotal: subtotal.toFixed(2),
@@ -164,19 +201,21 @@ function scalePaymentBreakdown(order: OrderRow, newTotal: number): unknown {
 
 export class SalesAdjustmentService {
   static allowedPercents(): readonly number[] {
-    return ALLOWED_PERCENTS;
+    return [10, 20, 30, 40, 50, 60, 70, 80];
   }
 
   static async preview(
     merchantId: string,
     targetPercent: number,
-    monthKey?: string
-  ): Promise<SalesAdjustmentPreview> {
-    if (!ALLOWED_PERCENTS.includes(targetPercent as (typeof ALLOWED_PERCENTS)[number])) {
-      throw new Error("Target percent must be 20 or 40");
+    rangeOpts?: {
+      preset?: string;
+      from?: string;
+      to?: string;
+      month?: string;
     }
-
-    const { start, end, monthKey: key } = zurichMonthBounds(monthKey);
+  ): Promise<SalesAdjustmentPreview> {
+    const percent = validatePercent(targetPercent);
+    const { start, end, from, to, label } = resolveSalesAdjustmentRange(rangeOpts || {});
     const orders = await SalesAdjustmentService.loadEligibleOrders(merchantId, start, end);
 
     let currentCashTotal = 0;
@@ -195,34 +234,43 @@ export class SalesAdjustmentService {
       }
     }
 
-    const reductionNeeded = roundMoney2(currentCashTotal * (targetPercent / 100));
+    const reductionNeeded = roundMoney2(currentCashTotal * (percent / 100));
     const targetCashTotal = roundMoney2(currentCashTotal - reductionNeeded);
 
     return {
-      monthKey: key,
-      targetPercent,
+      periodLabel: label,
+      from,
+      to,
+      targetPercent: percent,
       currentCashTotal,
       targetCashTotal,
       reductionNeeded,
       eligibleOrderCount,
       adjustableItemCount,
+      monthKey: from.slice(0, 7),
     };
   }
 
   static async apply(
     merchantId: string,
     targetPercent: number,
-    monthKey?: string
+    rangeOpts?: {
+      preset?: string;
+      from?: string;
+      to?: string;
+      month?: string;
+    }
   ): Promise<SalesAdjustmentResult> {
-    const preview = await SalesAdjustmentService.preview(merchantId, targetPercent, monthKey);
+    const percent = validatePercent(targetPercent);
+    const preview = await SalesAdjustmentService.preview(merchantId, percent, rangeOpts);
     if (preview.reductionNeeded <= 0.01) {
       throw new Error("Nothing to adjust — cash sales are already at or below the target.");
     }
     if (preview.adjustableItemCount === 0) {
-      throw new Error("No adjustable cash order lines found for this month.");
+      throw new Error("No adjustable cash order lines found for this period.");
     }
 
-    const { start, end, monthKey: key } = zurichMonthBounds(monthKey);
+    const { start, end, from, to, label } = resolveSalesAdjustmentRange(rangeOpts || {});
     const orders = await SalesAdjustmentService.loadEligibleOrders(merchantId, start, end);
     const db = getDb();
 
@@ -327,18 +375,21 @@ export class SalesAdjustmentService {
         .where(eq(schema.orders.id, orderId));
     }
 
-    const afterPreview = await SalesAdjustmentService.preview(merchantId, targetPercent, key);
+    const afterPreview = await SalesAdjustmentService.preview(merchantId, percent, rangeOpts);
     const beforeCashTotal = preview.currentCashTotal;
     const afterCashTotal = afterPreview.currentCashTotal;
 
     return {
-      monthKey: key,
-      targetPercent,
+      periodLabel: label,
+      from,
+      to,
+      targetPercent: percent,
       beforeCashTotal,
       afterCashTotal,
       reductionApplied: roundMoney2(beforeCashTotal - afterCashTotal),
       ordersAdjusted,
       itemsAdjusted,
+      monthKey: from.slice(0, 7),
     };
   }
 
@@ -353,11 +404,11 @@ export class SalesAdjustmentService {
         eq(schema.orders.merchantId, merchantId),
         inArray(schema.orders.orderType, ["pos"]),
         eq(schema.orders.status, "completed"),
-        gte(schema.orders.completedAt, start),
-        lte(schema.orders.completedAt, end)
+        gte(schema.orders.createdAt, start),
+        lte(schema.orders.createdAt, end)
       ),
       with: { items: true },
-      orderBy: (orders, { desc }) => [desc(orders.completedAt)],
+      orderBy: (orders, { desc }) => [desc(orders.createdAt)],
     }) as Promise<OrderRow[]>;
   }
 }
