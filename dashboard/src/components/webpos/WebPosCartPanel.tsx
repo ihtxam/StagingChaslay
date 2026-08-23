@@ -593,7 +593,7 @@ export default function WebPosCartPanel({
                 <Printer size={18} className="shrink-0 text-stone-500" />
                 {t('webPosPrint')}
               </button>
-              {kitchenEnabled && requireTableForDineIn && tablesEnabled ? (
+              {!isRetail && kitchenEnabled && requireTableForDineIn && tablesEnabled ? (
                 <button
                   type="button"
                   role="menuitem"
@@ -1219,7 +1219,7 @@ export default function WebPosCartPanel({
                     {t('webPosResendKitchen')}
                   </button>
                 ) : null}
-                {onLineCancel ? (
+                {!isRetail && onLineCancel ? (
                   <button
                     type="button"
                     role="menuitem"

@@ -1584,7 +1584,7 @@ private fun VectronOrderPanel(
             CartOrderMenuButton(
                 enabled = !cart.isEmpty,
                 isRestaurantMode = isRestaurantMode,
-                showOrderTypeToggle = isRestaurantMode || showRetailDineInToggle,
+                showOrderTypeToggle = isRestaurantMode,
                 isDineIn = serviceType == ServiceType.DINE_IN || isTableMode,
                 isTableMode = isTableMode,
                 showFulfillmentActions = cart.fulfillmentType == FulfillmentType.PICKUP ||
@@ -1998,14 +1998,16 @@ private fun CartOrderMenuButton(
                     }
                 )
             }
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.cancel_item), color = Color(0xFFC0392B)) },
-                onClick = {
-                    expanded = false
-                    onCancelItem()
-                },
-                enabled = canCancelItem
-            )
+            if (isRestaurantMode) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.cancel_item), color = Color(0xFFC0392B)) },
+                    onClick = {
+                        expanded = false
+                        onCancelItem()
+                    },
+                    enabled = canCancelItem
+                )
+            }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.cancel_order), color = Color(0xFFC0392B)) },
                 onClick = {
