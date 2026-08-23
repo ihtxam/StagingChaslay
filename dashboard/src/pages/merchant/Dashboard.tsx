@@ -381,9 +381,6 @@ function MerchantShell() {
     ...(allow('/merchant/delivery')
       ? [{ label: t('deliveryMapNav'), path: '/merchant/delivery', icon: '🛵' }]
       : []),
-    ...(allow('/merchant/delivery/driver')
-      ? [{ label: t('deliveryDriverTitle'), path: '/merchant/delivery/driver', icon: '📍' }]
-      : []),
     {
       id: 'sales',
       label: t('navSales'),
