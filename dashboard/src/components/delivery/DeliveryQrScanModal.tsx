@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Camera, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { parseDriverClaimUrl } from '@/lib/delivery-claim-url';
+import { startQrCameraScan } from '@/lib/qr-camera-scan';
 
 type Props = {
   open: boolean;
@@ -10,24 +11,18 @@ type Props = {
   onScan: (orderId: string, token: string) => void;
 };
 
-type BarcodeDetectorLike = {
-  detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
-};
-
 export default function DeliveryQrScanModal({ open, onClose, onScan }: Props) {
   const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const loopRef = useRef<number | null>(null);
+  const scanRef = useRef<{ stop: () => void } | null>(null);
   const [pasteValue, setPasteValue] = useState('');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
 
   const stopCamera = useCallback(() => {
-    if (loopRef.current != null) {
-      window.cancelAnimationFrame(loopRef.current);
-      loopRef.current = null;
-    }
+    scanRef.current?.stop();
+    scanRef.current = null;
     if (streamRef.current) {
       for (const track of streamRef.current.getTracks()) track.stop();
       streamRef.current = null;
@@ -55,9 +50,7 @@ export default function DeliveryQrScanModal({ open, onClose, onScan }: Props) {
       return;
     }
 
-    const Detector = (window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => BarcodeDetectorLike })
-      .BarcodeDetector;
-    if (!Detector || !navigator.mediaDevices?.getUserMedia) {
+    if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError(t('deliveryScanCameraUnavailable'));
       return;
     }
@@ -76,24 +69,11 @@ export default function DeliveryQrScanModal({ open, onClose, onScan }: Props) {
         streamRef.current = stream;
         const video = videoRef.current;
         if (!video) return;
+        video.setAttribute('playsinline', 'true');
         video.srcObject = stream;
         await video.play();
         setScanning(true);
-        const detector = new Detector({ formats: ['qr_code'] });
-
-        const tick = async () => {
-          if (cancelled || !videoRef.current) return;
-          try {
-            const codes = await detector.detect(videoRef.current);
-            for (const code of codes) {
-              if (code.rawValue && handleParsed(code.rawValue)) return;
-            }
-          } catch {
-            /* frame skip */
-          }
-          loopRef.current = window.requestAnimationFrame(() => void tick());
-        };
-        loopRef.current = window.requestAnimationFrame(() => void tick());
+        scanRef.current = startQrCameraScan(video, handleParsed);
       } catch {
         if (!cancelled) setCameraError(t('deliveryScanCameraDenied'));
       }
