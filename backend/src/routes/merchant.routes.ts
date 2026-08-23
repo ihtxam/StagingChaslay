@@ -1957,16 +1957,20 @@ router.get(
         });
       }
       const mode = String(req.query.mode || "days").toLowerCase();
-      if (mode !== "days" && mode !== "weeks" && mode !== "months") {
-        return res.status(400).json({ error: "mode must be days, weeks, or months" });
+      if (mode !== "days" && mode !== "weeks" && mode !== "months" && mode !== "custom") {
+        return res.status(400).json({ error: "mode must be days, weeks, months, or custom" });
       }
       const year = Number(req.query.year) || new Date().getFullYear();
       const month = req.query.month != null ? Number(req.query.month) : undefined;
+      const from = req.query.from ? String(req.query.from) : undefined;
+      const to = req.query.to ? String(req.query.to) : undefined;
       const { PosReportsService } = await import("@/services/pos-reports.service");
       const breakdown = await PosReportsService.getRevenueBreakdown(merchantId, {
-        mode: mode as "days" | "weeks" | "months",
+        mode: mode as "days" | "weeks" | "months" | "custom",
         year,
         month,
+        from,
+        to,
         staffId: scope.staffId,
         staffName: scope.staffName,
       });
@@ -2396,8 +2400,16 @@ router.get("/pos/sales-adjustment/preview", requirePermission("VIEW_ALL_SALES"),
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
     const { SalesAdjustmentService } = await import("@/services/sales-adjustment.service");
     const percent = Number(req.query.percent);
+    const preset = req.query.preset ? String(req.query.preset) : undefined;
+    const from = req.query.from ? String(req.query.from) : undefined;
+    const to = req.query.to ? String(req.query.to) : undefined;
     const month = req.query.month ? String(req.query.month) : undefined;
-    const preview = await SalesAdjustmentService.preview(merchantId, percent, month);
+    const preview = await SalesAdjustmentService.preview(merchantId, percent, {
+      preset,
+      from,
+      to,
+      month,
+    });
     res.json({ success: true, preview, allowedPercents: SalesAdjustmentService.allowedPercents() });
   } catch (error) {
     res.status(400).json({
@@ -2413,8 +2425,16 @@ router.post("/pos/sales-adjustment/apply", requirePermission("VIEW_ALL_SALES"), 
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
     const { SalesAdjustmentService } = await import("@/services/sales-adjustment.service");
     const percent = Number(req.body?.percent);
+    const preset = req.body?.preset ? String(req.body.preset) : undefined;
+    const from = req.body?.from ? String(req.body.from) : undefined;
+    const to = req.body?.to ? String(req.body.to) : undefined;
     const month = req.body?.month ? String(req.body.month) : undefined;
-    const result = await SalesAdjustmentService.apply(merchantId, percent, month);
+    const result = await SalesAdjustmentService.apply(merchantId, percent, {
+      preset,
+      from,
+      to,
+      month,
+    });
     res.json({ success: true, result });
   } catch (error) {
     res.status(400).json({

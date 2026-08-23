@@ -883,9 +883,11 @@ export class PosReportsService {
   static async getRevenueBreakdown(
     merchantId: string,
     opts: {
-      mode: "days" | "weeks" | "months";
+      mode: "days" | "weeks" | "months" | "custom";
       year: number;
       month?: number;
+      from?: string;
+      to?: string;
     } & SalesScopeOpts
   ) {
     const year = Math.max(2020, Math.min(2100, opts.year || new Date().getFullYear()));
@@ -895,7 +897,11 @@ export class PosReportsService {
     let rangeStart: Date;
     let rangeEnd: Date;
 
-    if (opts.mode === "months") {
+    if (opts.mode === "custom") {
+      const range = resolveReportRange("custom", opts.from, opts.to);
+      rangeStart = range.start;
+      rangeEnd = range.end;
+    } else if (opts.mode === "months") {
       rangeStart = zurichDayBounds(`${year}-01-01`).start;
       rangeEnd = zurichDayBounds(`${year}-12-31`).end;
     } else {
@@ -971,17 +977,34 @@ export class PosReportsService {
       return Math.ceil(((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
     };
 
-    type Row = { id: string; label: string; sublabel?: string; total: number; sortKey: string };
+    type Row = {
+      id: string;
+      label: string;
+      sublabel?: string;
+      total: number;
+      sortKey: string;
+      from: string;
+      to: string;
+    };
     const rows: Row[] = [];
 
-    if (opts.mode === "days") {
+    if (opts.mode === "days" || opts.mode === "custom") {
       const byDay = new Map<string, number>();
-      const m = month || 1;
-      const mm = String(m).padStart(2, "0");
-      const lastDay = new Date(year, m, 0).getDate();
-      for (let d = lastDay; d >= 1; d--) {
-        const ymd = `${year}-${mm}-${String(d).padStart(2, "0")}`;
-        byDay.set(ymd, 0);
+      if (opts.mode === "custom") {
+        const cur = new Date(rangeStart);
+        while (cur <= rangeEnd) {
+          const ymd = fmtDay(cur);
+          byDay.set(ymd, 0);
+          cur.setDate(cur.getDate() + 1);
+        }
+      } else {
+        const m = month || 1;
+        const mm = String(m).padStart(2, "0");
+        const lastDay = new Date(year, m, 0).getDate();
+        for (let d = lastDay; d >= 1; d--) {
+          const ymd = `${year}-${mm}-${String(d).padStart(2, "0")}`;
+          byDay.set(ymd, 0);
+        }
       }
       for (const o of scoped) {
         const day = fmtDay(o.createdAt);
@@ -989,7 +1012,7 @@ export class PosReportsService {
       }
       for (const [ymd, total] of byDay) {
         const { label, sublabel, sortKey } = fmtDisplayDay(ymd);
-        rows.push({ id: ymd, label, sublabel, total: round2(total), sortKey });
+        rows.push({ id: ymd, label, sublabel, total: round2(total), sortKey, from: ymd, to: ymd });
       }
       rows.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
     } else if (opts.mode === "weeks") {
@@ -1029,6 +1052,8 @@ export class PosReportsService {
           sublabel: `${fmtShort(v.from)} - ${fmtEnd(v.to)}`,
           total: round2(v.total),
           sortKey: String(v.week).padStart(2, "0"),
+          from: v.from,
+          to: v.to,
         });
       }
       rows.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
@@ -1058,11 +1083,16 @@ export class PosReportsService {
       ];
       for (const [mo, total] of byMonth) {
         const idx = Number(mo) - 1;
+        const lastDay = new Date(year, Number(mo), 0).getDate();
+        const from = `${year}-${mo}-01`;
+        const to = `${year}-${mo}-${String(lastDay).padStart(2, "0")}`;
         rows.push({
           id: `${year}-${mo}`,
           label: monthNames[idx] || mo,
           total: round2(total),
           sortKey: mo,
+          from,
+          to,
         });
       }
       rows.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
