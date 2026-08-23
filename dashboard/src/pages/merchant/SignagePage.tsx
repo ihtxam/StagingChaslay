@@ -1,24 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Copy, LayoutGrid, Pencil, Plus, QrCode, RefreshCw, Trash2, Type, Image as ImageIcon } from 'lucide-react';
+import { Copy, Plus, QrCode, RefreshCw, Trash2 } from 'lucide-react';
 import api from '@/lib/api';
-import { compressImageIfNeeded } from '@/lib/compress-image';
 import { useI18n } from '@/lib/i18n';
 import { qrImageUrl } from '@/lib/qr';
 import { signageScreenLimitOf } from '@/lib/signage-addon';
 
 import SignageTemplatePreview, { SIGNAGE_SCREEN_SIZES, SIGNAGE_TEMPLATES } from '@/components/signage/SignageTemplatePreview';
+import SignagePlaylistEditModal, { type SignagePlaylist } from '@/components/signage/SignagePlaylistEditModal';
 import SignagePlaylistWizard from '@/components/signage/SignagePlaylistWizard';
-import SignageScheduleEditor, {
-  buildScheduleFromEditor,
-  scheduleEditorStateFromSchedule,
-} from '@/components/signage/SignageScheduleEditor';
-import SignageSlideWizard, {
-  emptySlideDraft,
-  slideDraftLabel,
-  type SlideDraft,
-} from '@/components/signage/SignageSlideWizard';
-import { scheduleSummaryKey, type SignageSchedule, type SignageScheduleWindow } from '@/lib/signage-schedule';
+import { scheduleSummaryKey } from '@/lib/signage-schedule';
 
 type Screen = {
   id: string;
@@ -31,46 +22,9 @@ type Screen = {
   playlistId: string | null;
 };
 
-type Schedule = SignageSchedule;
-
-type Slide = {
-  id: string;
-  type: 'menu' | 'image' | 'image_text';
-  durationSec: number;
-  sortOrder: number;
-  categoryIds: string[];
-  headline?: string | null;
-  body?: string | null;
-  imageUrl?: string | null;
-  showPrices: boolean;
-  showPhotos: boolean;
-};
-
-type Playlist = {
-  id: string;
-  name: string;
-  template: string;
-  schedule: Schedule;
-  slides: Slide[];
-};
-
 type Category = { id: string; name: string };
 
 const TEMPLATES = SIGNAGE_TEMPLATES;
-
-function slideToDraft(slide: Slide): SlideDraft {
-  return {
-    tempId: slide.id,
-    type: slide.type,
-    durationSec: slide.durationSec,
-    categoryIds: slide.categoryIds || [],
-    headline: slide.headline || '',
-    body: slide.body || '',
-    showPrices: slide.showPrices,
-    showPhotos: slide.showPhotos,
-    imageUrl: slide.imageUrl || undefined,
-  };
-}
 
 function signagePublicUrl(screen: Pick<Screen, 'shortCode' | 'token'>): string {
   const origin =
@@ -84,7 +38,7 @@ export default function SignagePage() {
   const { t } = useI18n();
   const [tab, setTab] = useState<'screens' | 'playlists'>('screens');
   const [screens, setScreens] = useState<Screen[]>([]);
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [playlists, setPlaylists] = useState<SignagePlaylist[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [screenLimit, setScreenLimit] = useState(2);
   const [loading, setLoading] = useState(true);
@@ -97,21 +51,11 @@ export default function SignagePage() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editingScreenId, setEditingScreenId] = useState<string | null>(null);
   const [qrToken, setQrToken] = useState<string | null>(null);
-  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
-  const [playlistName, setPlaylistName] = useState('');
-  const [playlistTemplate, setPlaylistTemplate] = useState('dark_pizza');
-  const [scheduleType, setScheduleType] = useState<Schedule['type']>('always');
-  const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [daypart, setDaypart] = useState<'lunch' | 'dinner'>('lunch');
-  const [startTime, setStartTime] = useState('11:00');
-  const [endTime, setEndTime] = useState('14:30');
-  const [windows, setWindows] = useState<SignageScheduleWindow[]>([]);
-  const [slideWizardOpen, setSlideWizardOpen] = useState(false);
-  const [editingSlide, setEditingSlide] = useState<SlideDraft | null>(null);
+  const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
 
-  const activePlaylist = useMemo(
-    () => playlists.find((p) => p.id === activePlaylistId) || null,
-    [playlists, activePlaylistId]
+  const editingPlaylist = useMemo(
+    () => playlists.find((p) => p.id === editingPlaylistId) || null,
+    [playlists, editingPlaylistId]
   );
 
   const load = useCallback(async () => {
@@ -124,10 +68,9 @@ export default function SignagePage() {
       ]);
       setScreens(sRes.data?.screens || []);
       setScreenLimit(signageScreenLimitOf(sRes.data));
-      const pls = (pRes.data?.playlists || []) as Playlist[];
+      const pls = (pRes.data?.playlists || []) as SignagePlaylist[];
       setPlaylists(pls);
       setCategories(cRes.data?.categories || []);
-      setActivePlaylistId((prev) => prev || pls[0]?.id || null);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || t('signageLoadFailed'));
@@ -139,6 +82,12 @@ export default function SignagePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (editingPlaylistId && !editingPlaylist && !loading) {
+      setEditingPlaylistId(null);
+    }
+  }, [editingPlaylistId, editingPlaylist, loading]);
 
   const copyUrl = async (screen: Pick<Screen, 'shortCode' | 'token'>) => {
     const url = signagePublicUrl(screen);
@@ -210,145 +159,6 @@ export default function SignagePage() {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || t('signageSaveFailed'));
     }
-  };
-
-  const savePlaylistMeta = async () => {
-    const name = playlistName.trim() || activePlaylist?.name;
-    if (!name) return;
-    const schedule = buildScheduleFromEditor({
-      scheduleType,
-      weekdays,
-      daypart,
-      startTime,
-      endTime,
-      windows,
-    });
-    setBusy(true);
-    try {
-      if (activePlaylist) {
-        await api.put(`/merchant/signage/playlists/${activePlaylist.id}`, {
-          name,
-          template: playlistTemplate,
-          schedule,
-        });
-      } else {
-        const res = await api.post('/merchant/signage/playlists', {
-          name,
-          template: playlistTemplate,
-          schedule,
-        });
-        setActivePlaylistId(res.data?.playlist?.id || null);
-      }
-      toast.success(t('signageSaved'));
-      await load();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || t('signageSaveFailed'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const startNewPlaylist = () => {
-    setActivePlaylistId(null);
-    setPlaylistName('');
-    setPlaylistTemplate('dark_pizza');
-    setScheduleType('always');
-    setWeekdays([1, 2, 3, 4, 5]);
-    setDaypart('lunch');
-    setStartTime('11:00');
-    setEndTime('14:30');
-    setTab('playlists');
-  };
-
-  useEffect(() => {
-    if (!activePlaylist) return;
-    setPlaylistName(activePlaylist.name);
-    setPlaylistTemplate(activePlaylist.template || 'dark_pizza');
-    const st = scheduleEditorStateFromSchedule(activePlaylist.schedule);
-    setScheduleType(st.scheduleType);
-    setWeekdays(st.weekdays);
-    setDaypart(st.daypart);
-    setStartTime(st.startTime);
-    setEndTime(st.endTime);
-    setWindows(st.windows);
-  }, [activePlaylist]);
-
-  const saveSlideFromWizard = async (draft: SlideDraft) => {
-    if (!activePlaylist) {
-      toast.error(t('signageSavePlaylistFirst'));
-      return;
-    }
-    try {
-      let imageUrl = draft.imageUrl;
-      if (draft.imageFile) {
-        if (draft.imageFile.size > 5 * 1024 * 1024) {
-          toast.error(t('signageImageTooLarge'));
-          return;
-        }
-        const compressed = await compressImageIfNeeded(draft.imageFile, {
-          maxBytes: 400 * 1024,
-          maxWidth: 1920,
-          targetBytes: 700 * 1024,
-        });
-        const fd = new FormData();
-        fd.append('file', compressed);
-        const res = await api.post('/merchant/media', fd);
-        imageUrl = res.data?.url as string;
-      }
-
-      const body = {
-        type: draft.type,
-        durationSec: draft.durationSec,
-        showPrices: draft.showPrices,
-        showPhotos: draft.showPhotos,
-        categoryIds: draft.type === 'menu' ? draft.categoryIds : [],
-        headline: draft.type !== 'menu' ? draft.headline || t('signageDefaultHeadline') : undefined,
-        body: draft.type === 'image_text' ? draft.body : undefined,
-        imageUrl: draft.type !== 'menu' ? imageUrl : undefined,
-      };
-
-      const isEdit = activePlaylist.slides.some((s) => s.id === draft.tempId);
-      if (isEdit) {
-        await api.put(`/merchant/signage/slides/${draft.tempId}`, body);
-      } else {
-        await api.post(`/merchant/signage/playlists/${activePlaylist.id}/slides`, body);
-      }
-      toast.success(t('signageSaved'));
-      await load();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || t('signageSaveFailed'));
-    }
-  };
-
-  const removeSlide = async (id: string) => {
-    if (!window.confirm(t('signageDeleteSlideConfirm'))) return;
-    try {
-      await api.delete(`/merchant/signage/slides/${id}`);
-      await load();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || t('signageSaveFailed'));
-    }
-  };
-
-  const removePlaylist = async (id: string) => {
-    if (!window.confirm(t('signageDeletePlaylistConfirm'))) return;
-    try {
-      await api.delete(`/merchant/signage/playlists/${id}`);
-      setActivePlaylistId(null);
-      await load();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || t('signageSaveFailed'));
-    }
-  };
-
-  const slideTypeIcon = (type: Slide['type']) => {
-    if (type === 'menu') return LayoutGrid;
-    if (type === 'image_text') return Type;
-    return ImageIcon;
   };
 
   return (
@@ -543,143 +353,33 @@ export default function SignagePage() {
               {playlists.map((p) => {
                 const slideCount = p.slides?.length || 0;
                 return (
-                  <button
+                  <div
                     key={p.id}
-                    type="button"
-                    onClick={() => setActivePlaylistId(p.id)}
-                    className={`text-left rounded-xl border p-4 transition-shadow hover:shadow-md ${
-                      p.id === activePlaylistId ? 'border-teal-500 ring-2 ring-teal-200 bg-teal-50/30' : 'border-stone-200 bg-white'
-                    }`}
+                    className="rounded-xl border border-stone-200 bg-white p-4 flex flex-col gap-3"
                   >
-                    <p className="font-semibold text-stone-900">{p.name}</p>
-                    <p className="mt-1 text-xs text-stone-500">
-                      {t(TEMPLATES.find((x) => x.id === p.template)?.key || 'signageTemplateDarkPizza')}
-                    </p>
-                    <p className="mt-2 text-xs text-stone-600">
-                      {slideCount} {t('signageSlides').toLowerCase()} · {t(scheduleSummaryKey(p.schedule))}
-                    </p>
-                  </button>
+                    <div>
+                      <p className="font-semibold text-stone-900">{p.name}</p>
+                      <p className="mt-1 text-xs text-stone-500">
+                        {t(TEMPLATES.find((x) => x.id === p.template)?.key || 'signageTemplateDarkPizza')}
+                      </p>
+                      <p className="mt-2 text-xs text-stone-600">
+                        {slideCount} {t('signageSlides').toLowerCase()} · {t(scheduleSummaryKey(p.schedule))}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 mt-auto">
+                      <button
+                        type="button"
+                        className="rounded-lg border border-stone-300 px-2 py-1.5 text-xs font-semibold hover:bg-stone-50"
+                        onClick={() => setEditingPlaylistId(p.id)}
+                      >
+                        {t('edit')}
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
             </div>
           )}
-
-          <div className="rounded-xl border border-stone-200 bg-white p-4 space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-sm">
-                {t('signagePlaylistName')}
-                <input
-                  className="input mt-1"
-                  value={playlistName}
-                  onChange={(e) => setPlaylistName(e.target.value)}
-                />
-              </label>
-              <label className="text-sm">
-                {t('signageTemplate')}
-                <select
-                  className="input mt-1"
-                  value={playlistTemplate}
-                  onChange={(e) => setPlaylistTemplate(e.target.value)}
-                >
-                  {TEMPLATES.map((tpl) => (
-                    <option key={tpl.id} value={tpl.id}>
-                      {t(tpl.key)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <SignageTemplatePreview templateId={playlistTemplate} className="max-w-xs" />
-            <SignageScheduleEditor
-              scheduleType={scheduleType}
-              onScheduleTypeChange={setScheduleType}
-              weekdays={weekdays}
-              onWeekdaysChange={setWeekdays}
-              daypart={daypart}
-              onDaypartChange={setDaypart}
-              startTime={startTime}
-              endTime={endTime}
-              onStartTimeChange={setStartTime}
-              onEndTimeChange={setEndTime}
-              windows={windows}
-              onWindowsChange={setWindows}
-            />
-            <div className="flex gap-2">
-              <button type="button" className="btn-primary text-sm" disabled={busy} onClick={() => void savePlaylistMeta()}>
-                {t('save')}
-              </button>
-              {activePlaylist ? (
-                <button
-                  type="button"
-                  className="btn-secondary text-sm text-red-700"
-                  onClick={() => void removePlaylist(activePlaylist.id)}
-                >
-                  {t('delete')}
-                </button>
-              ) : null}
-            </div>
-
-            {activePlaylist ? (
-              <div className="space-y-3 border-t pt-4">
-                <p className="text-sm font-medium">{t('signageSlides')}</p>
-                {(activePlaylist.slides || []).length ? (
-                  <ul className="space-y-2">
-                    {(activePlaylist.slides || []).map((slide, idx) => {
-                      const Icon = slideTypeIcon(slide.type);
-                      const draft = slideToDraft(slide);
-                      return (
-                        <li
-                          key={slide.id}
-                          className="flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2"
-                        >
-                          <Icon className="h-4 w-4 shrink-0 text-teal-600" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-stone-500">
-                              {t('signageSlideN').replace('{n}', String(idx + 1))}
-                            </p>
-                            <p className="text-sm truncate">{slideDraftLabel(draft, t, categories)}</p>
-                          </div>
-                          <button
-                            type="button"
-                            className="p-1.5 rounded-lg hover:bg-stone-100"
-                            title={t('edit')}
-                            onClick={() => {
-                              setEditingSlide(draft);
-                              setSlideWizardOpen(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
-                            title={t('delete')}
-                            onClick={() => void removeSlide(slide.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-stone-500">{t('signageSlideListEmpty')}</p>
-                )}
-                <button
-                  type="button"
-                  className="btn-secondary text-sm inline-flex items-center gap-1"
-                  onClick={() => {
-                    setEditingSlide(null);
-                    setSlideWizardOpen(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4" /> {t('signageAddSlide')}
-                </button>
-              </div>
-            ) : (
-              <p className="text-sm text-stone-500">{t('signageNoPlaylists')}</p>
-            )}
-          </div>
         </div>
       )}
 
@@ -688,20 +388,17 @@ export default function SignagePage() {
         categories={categories}
         onClose={() => setWizardOpen(false)}
         onCreated={(id) => {
-          setActivePlaylistId(id);
+          setEditingPlaylistId(id);
           void load();
         }}
       />
 
-      <SignageSlideWizard
-        open={slideWizardOpen}
+      <SignagePlaylistEditModal
+        open={editingPlaylistId !== null}
+        playlist={editingPlaylist}
         categories={categories}
-        initial={editingSlide}
-        onClose={() => {
-          setSlideWizardOpen(false);
-          setEditingSlide(null);
-        }}
-        onSave={(draft) => void saveSlideFromWizard(draft)}
+        onClose={() => setEditingPlaylistId(null)}
+        onChanged={() => void load()}
       />
 
       {qrToken ? (
