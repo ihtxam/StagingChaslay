@@ -147,8 +147,16 @@ export const RECEIPT_QR_RASTER_PX_80 = 180;
 /** 58mm thermal QR — same visual ratio as 80mm 180px (was 112 @ 150). */
 export const RECEIPT_QR_RASTER_PX_58 = 136;
 
+/** Delivery slip QR — full paper width (400px target; 80mm thermal caps at 384 dots). */
+export const DELIVERY_SLIP_QR_RASTER_PX_80 = 384;
+export const DELIVERY_SLIP_QR_RASTER_PX_58 = 280;
+
 export function receiptQrRasterPx(paperWidthMm?: 58 | 80): number {
   return paperWidthMm === 58 ? RECEIPT_QR_RASTER_PX_58 : RECEIPT_QR_RASTER_PX_80;
+}
+
+export function deliverySlipQrRasterPx(paperWidthMm?: 58 | 80): number {
+  return paperWidthMm === 58 ? DELIVERY_SLIP_QR_RASTER_PX_58 : DELIVERY_SLIP_QR_RASTER_PX_80;
 }
 
 /** Canvas/image pixels → ESC/POS GS v 0 monochrome raster (width padded to 8-dot boundary). */
@@ -267,12 +275,14 @@ export async function buildLabeledReceiptQrRasterEscPos(opts: {
   label: string;
   data: string;
   paperWidthMm?: 58 | 80;
+  /** Override QR pixel size (defaults to receipt size). */
+  qrSizePx?: number;
 }): Promise<Uint8Array | null> {
   const raw = String(opts.data || '').trim();
   if (!raw || typeof document === 'undefined') return null;
   const paper = opts.paperWidthMm ?? 80;
   const canvasWidth = paper === 58 ? 280 : 384;
-  const qrSize = paper === 58 ? 120 : 160;
+  const qrSize = opts.qrSizePx ?? (paper === 58 ? 120 : 160);
   const labelLineHeight = 14;
   const gap = 6;
   try {
@@ -296,6 +306,19 @@ export async function buildLabeledReceiptQrRasterEscPos(opts: {
   } catch {
     return null;
   }
+}
+
+/** Large labeled QR for delivery driver slip (full paper width). */
+export async function buildDeliverySlipQrRasterEscPos(opts: {
+  label: string;
+  data: string;
+  paperWidthMm?: 58 | 80;
+}): Promise<Uint8Array | null> {
+  const paper = opts.paperWidthMm ?? 80;
+  return buildLabeledReceiptQrRasterEscPos({
+    ...opts,
+    qrSizePx: deliverySlipQrRasterPx(paper),
+  });
 }
 
 /** Two labeled QRs side-by-side (digital receipt + delivery directions). */

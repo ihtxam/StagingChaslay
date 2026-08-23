@@ -47,4 +47,10 @@ console.log(`  Android 58mm: ${and58} (expected ${EXPECT_58})`);
 console.log(`  WebPOS ECC-M: ${webEccM}`);
 console.log(`  Android ECC-M: ${androidEccM}`);
 
-if (!ok) process.exit(1);
+const slip80 = readConst(qrTs, 'DELIVERY_SLIP_QR_RASTER_PX_80');
+const slip58 = readConst(qrTs, 'DELIVERY_SLIP_QR_RASTER_PX_58');
+const slipOk = slip80 === 384 && slip58 === 280;
+console.log(`  Delivery slip QR 80mm: ${slip80} (expected 384)`);
+console.log(`  Delivery slip QR 58mm: ${slip58} (expected 280)`);
+
+if (!ok || !slipOk) process.exit(1);
