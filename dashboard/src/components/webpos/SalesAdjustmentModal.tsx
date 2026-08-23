@@ -11,6 +11,7 @@ type Preview = {
   from: string;
   to: string;
   targetPercent: number;
+  reportCashTotal?: number;
   currentCashTotal: number;
   targetCashTotal: number;
   reductionNeeded: number;
@@ -28,7 +29,7 @@ const PERCENT_PRESETS = [10, 20, 30, 40, 50, 60, 70, 80] as const;
 
 export default function SalesAdjustmentModal({ open, onClose, onApplied }: Props) {
   const { t } = useI18n();
-  const [period, setPeriod] = useState<PeriodPreset>('this_month');
+  const [period, setPeriod] = useState<PeriodPreset>('today');
   const [percentPreset, setPercentPreset] = useState<number>(40);
   const [customPercent, setCustomPercent] = useState('');
   const [useCustomPercent, setUseCustomPercent] = useState(false);
@@ -223,6 +224,15 @@ export default function SalesAdjustmentModal({ open, onClose, onApplied }: Props
                   CHF {preview.currentCashTotal.toFixed(2)}
                 </dd>
               </div>
+              {preview.reportCashTotal != null &&
+              Math.abs(preview.reportCashTotal - preview.currentCashTotal) > 0.01 ? (
+                <div className="flex justify-between gap-3 text-xs text-amber-900">
+                  <dt>{t('salesAdjReportCash')}</dt>
+                  <dd className="font-semibold tabular-nums">
+                    CHF {preview.reportCashTotal.toFixed(2)} ({t('salesAdjReportCashHint')})
+                  </dd>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-3">
                 <dt className="text-[var(--text-muted)]">{t('salesAdjTargetCash')}</dt>
                 <dd className="font-extrabold tabular-nums text-amber-800">
