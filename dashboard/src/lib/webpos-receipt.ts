@@ -2887,7 +2887,7 @@ export async function generateDeliverySlipEscPos(opts: DeliverySlipOpts): Promis
   const when = formatDateTimeDDMMYYYY(new Date());
   const zip = extractPostalCode(opts.shippingAddress);
   const source = String(opts.orderSource || 'DELIVERY').toUpperCase().replace(/_/g, ' ');
-  const payLabel = paymentLabel(opts.paymentMethod || '', L) || opts.paymentMethod || '-';
+  const payLabel = paymentLabel(L, opts.paymentMethod) || opts.paymentMethod || '-';
   const paid =
     opts.paymentStatus === 'completed' ||
     opts.paymentStatus === 'paid' ||
