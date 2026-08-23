@@ -772,8 +772,11 @@ class SettingsViewModel @Inject constructor(
     fun updateExpressEnabled(enabled: Boolean) = _uiState.update {
         it.copy(expressEnabled = enabled, paymentMethodsManagedByCloud = false)
     }
-    fun updateGiftCardsEnabled(enabled: Boolean) = _uiState.update {
-        it.copy(giftCardsEnabled = enabled, paymentMethodsManagedByCloud = false)
+    fun updateGiftCardsEnabled(enabled: Boolean) {
+        _uiState.update {
+            it.copy(giftCardsEnabled = enabled, paymentMethodsManagedByCloud = false)
+        }
+        saveSettings()
     }
     fun updatePrinterPrintReceipts(enabled: Boolean) = _uiState.update { it.copy(printerPrintReceipts = enabled) }
     fun updatePrinterPrintReports(enabled: Boolean) = _uiState.update { it.copy(printerPrintReports = enabled) }
