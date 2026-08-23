@@ -46,7 +46,7 @@ import com.chaslay.pos.domain.model.ProgrammedOrderCard
 import com.chaslay.pos.domain.model.ProgrammedOrderSource
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.ui.theme.vectronColors
-import java.text.SimpleDateFormat
+import com.chaslay.pos.util.ScheduledOrderDateFormat
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -153,17 +153,26 @@ fun ProgrammedOrdersScreen(
 
 @Composable
 private fun ProgrammedDayHeader(group: ProgrammedDayGroup) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    val colors = vectronColors()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(colors.header)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
         Text(
             group.dayLabel,
-            color = Color.White,
+            color = colors.textPrimary,
             fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
+            fontSize = 15.sp,
+            maxLines = 2
         )
         Text(
-            "${group.orders.size} order(s)",
-            color = Color(0xFFAAAAAA),
-            fontSize = 12.sp
+            stringResource(R.string.programmed_orders_count, group.orders.size),
+            color = colors.textSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 2.dp)
         )
     }
 }
@@ -191,7 +200,8 @@ private fun ProgrammedOrderCardView(
     }
     val paidColor = if (order.isPaid) Color(0xFF2ECC71) else Color(0xFFE74C3C)
     val paidLabel = if (order.isPaid) stringResource(R.string.paid) else stringResource(R.string.not_paid)
-    val timeLabel = SimpleDateFormat("HH:mm", Locale.getDefault()).format(java.util.Date(order.pickupTimeMs))
+    val scheduleLabel = ScheduledOrderDateFormat.formatDateTime(order.pickupTimeMs)
+    val timeLabel = ScheduledOrderDateFormat.formatTime(order.pickupTimeMs)
 
     Box(
         modifier = Modifier
@@ -221,10 +231,12 @@ private fun ProgrammedOrderCardView(
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = formatMoney(order.total, currencySymbol),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp
+                    scheduleLabel,
+                    color = Color(0xFFE67E22),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -242,6 +254,12 @@ private fun ProgrammedOrderCardView(
                         )
                     }
                 }
+                Text(
+                    text = formatMoney(order.total, currencySymbol),
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp
+                )
                 order.customerLabel?.let { label ->
                     Text(
                         label,
@@ -252,7 +270,7 @@ private fun ProgrammedOrderCardView(
                     )
                 }
                 Text(order.statusLabel, color = Color(0xFFF1C40F), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                Text("${order.itemCount} items", color = Color(0xFFAAAAAA), fontSize = 11.sp)
+                Text(stringResource(R.string.order_items_count, order.itemCount), color = Color(0xFFAAAAAA), fontSize = 11.sp)
             }
             if (order.source == ProgrammedOrderSource.TRANSACTION) {
                 Row(

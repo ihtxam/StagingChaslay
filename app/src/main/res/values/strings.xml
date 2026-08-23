@@ -222,6 +222,7 @@
     <string name="table_busy">Busy</string>
     <string name="ongoing_orders">Ongoing Orders</string>
     <string name="programmed_orders">Programmed Orders</string>
+    <string name="programmed_orders_count">%1$d order(s)</string>
     <string name="no_programmed_orders">No scheduled orders</string>
     <string name="paid">Paid</string>
     <string name="not_paid">Not paid</string>

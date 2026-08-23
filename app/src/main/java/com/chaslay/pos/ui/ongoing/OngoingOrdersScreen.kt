@@ -65,7 +65,7 @@ import com.chaslay.pos.domain.model.OngoingOrderCard
 import com.chaslay.pos.domain.model.OngoingOrderSource
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.ui.theme.vectronColors
-import java.text.SimpleDateFormat
+import com.chaslay.pos.util.ScheduledOrderDateFormat
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -479,10 +479,8 @@ private fun channelHeaderColor(order: OngoingOrderCard): Color = when (order.ful
 private fun formatMoney(amount: Double, symbol: String): String =
     String.format(Locale.getDefault(), "%s %.2f", symbol, amount)
 
-private fun formatScheduledTime(pickupTimeMs: Long): String {
-    val fmt = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault())
-    return fmt.format(pickupTimeMs)
-}
+private fun formatScheduledTime(pickupTimeMs: Long): String =
+    ScheduledOrderDateFormat.formatDateTime(pickupTimeMs)
 
 @Composable
 private fun formatElapsedLabel(updatedAt: Long): String {

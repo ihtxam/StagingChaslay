@@ -12,7 +12,10 @@ import com.chaslay.pos.domain.model.HeldOrderStatus
 import com.chaslay.pos.domain.model.ProgrammedOrderCard
 import com.chaslay.pos.domain.model.ProgrammedOrderSource
 import com.chaslay.pos.printer.BluetoothPrinterService
+import android.content.Context
+import com.chaslay.pos.util.ScheduledOrderDateFormat
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +41,7 @@ data class ProgrammedOrdersUiState(
 
 @HiltViewModel
 class ProgrammedOrdersViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val heldOrderRepository: HeldOrderRepository,
     private val transactionRepository: TransactionRepository,
     private val settingsRepository: SettingsRepository,
@@ -63,7 +67,7 @@ class ProgrammedOrdersViewModel @Inject constructor(
                         fulfillmentType = order.fulfillmentType,
                         total = if (items.isEmpty()) order.total else CartSummary(items.map { it.toCartItem() }).total,
                         itemCount = items.sumOf { it.quantity },
-                        pickupTimeMs = order.pickupTimeMs ?: order.createdAt,
+                        pickupTimeMs = order.pickupTimeMs?.takeIf { it > 0 } ?: order.createdAt,
                         isPaid = false,
                         source = ProgrammedOrderSource.HELD,
                         customerLabel = order.deliveryName ?: order.deliveryPhone,
@@ -82,7 +86,7 @@ class ProgrammedOrdersViewModel @Inject constructor(
                         fulfillmentType = FulfillmentType.PICKUP,
                         total = tx.total,
                         itemCount = items.sumOf { it.quantity },
-                        pickupTimeMs = tx.pickupTimeMs ?: tx.createdAt,
+                        pickupTimeMs = tx.pickupTimeMs?.takeIf { it > 0 } ?: tx.createdAt,
                         isPaid = true,
                         source = ProgrammedOrderSource.TRANSACTION,
                         statusLabel = "Paid"
@@ -90,12 +94,15 @@ class ProgrammedOrdersViewModel @Inject constructor(
                 }
                 val grouped = (held + paid)
                     .sortedBy { it.pickupTimeMs }
-                    .groupBy { dayKey(it.pickupTimeMs) }
+                    .groupBy { ScheduledOrderDateFormat.dayKey(it.pickupTimeMs) }
                     .toSortedMap()
                     .map { (key, orders) ->
                         ProgrammedDayGroup(
                             dayKey = key,
-                            dayLabel = formatDayLabel(orders.first().pickupTimeMs),
+                            dayLabel = ScheduledOrderDateFormat.formatDayHeader(
+                                appContext,
+                                orders.first().pickupTimeMs
+                            ),
                             orders = orders.sortedBy { it.pickupTimeMs }
                         )
                     }
@@ -151,16 +158,6 @@ class ProgrammedOrdersViewModel @Inject constructor(
 
     fun clearMessage() {
         _uiState.value = _uiState.value.copy(message = null)
-    }
-
-    private fun dayKey(timeMs: Long): Long {
-        val cal = Calendar.getInstance().apply { timeInMillis = timeMs }
-        return cal.get(Calendar.YEAR) * 1000L + cal.get(Calendar.DAY_OF_YEAR)
-    }
-
-    private fun formatDayLabel(timeMs: Long): String {
-        val fmt = java.text.SimpleDateFormat("EEEE, dd MMM yyyy", java.util.Locale.getDefault())
-        return fmt.format(java.util.Date(timeMs))
     }
 
     private fun startOfTodayMs(): Long {

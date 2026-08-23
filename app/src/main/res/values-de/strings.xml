@@ -187,6 +187,7 @@
     <string name="table_busy">beschäftigt</string>
     <string name="ongoing_orders">Laufende Bestellungen</string>
     <string name="programmed_orders">Programmierte Bestellungen</string>
+    <string name="programmed_orders_count">%1$d Bestellung(en)</string>
     <string name="no_programmed_orders">Geplante Bestellungen</string>
     <string name="paid">Bezahlt .</string>
     <string name="not_paid">Nicht bezahlt</string>
