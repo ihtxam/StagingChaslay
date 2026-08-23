@@ -30,10 +30,13 @@ import {
   extractZipFromAddress,
   isDeliveryHubSpeechEnabled,
   newOrderSpeechLine,
-  playNewOrderBell,
   setDeliveryHubSpeechEnabled,
   speakDeliveryAlert,
 } from '@/lib/delivery-hub-alerts';
+import { startOrderAlertLoop, stopOrderAlertLoop } from '@/lib/order-alert';
+import DeliveryPrintedSlipModal, {
+  type DeliverySlipAckOrder,
+} from '@/components/webpos/DeliveryPrintedSlipModal';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,7 +132,8 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
   const [storeLng, setStoreLng] = useState<number | null>(null);
   const alertedPendingRef = useRef<Set<string>>(new Set());
   const staleAlertedRef = useRef<Set<string>>(new Set());
-  const ringIntervalRef = useRef<number | null>(null);
+  const ticketAckedRef = useRef<Set<string>>(new Set());
+  const [ticketAckQueue, setTicketAckQueue] = useState<DeliverySlipAckOrder[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -176,26 +180,49 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
     [orders]
   );
 
-  useEffect(() => {
-    if (ringIntervalRef.current) {
-      window.clearInterval(ringIntervalRef.current);
-      ringIntervalRef.current = null;
-    }
-    if (!speechOn || pendingApproval.length === 0) return;
+  const enqueueTicketAck = useCallback((order: DeliveryRow, itemCount?: number | null) => {
+    if (ticketAckedRef.current.has(order.id)) return;
+    const entry: DeliverySlipAckOrder = {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      shippingAddress: order.shippingAddress,
+      total: order.total,
+      orderSource: order.orderSource,
+      itemCount: itemCount ?? null,
+    };
+    setTicketAckQueue((prev) => (prev.some((o) => o.id === order.id) ? prev : [...prev, entry]));
+  }, []);
 
-    const tick = () => {
-      for (const o of pendingApproval) {
-        const zip = extractZipFromAddress(o.shippingAddress);
-        speakDeliveryAlert(newOrderSpeechLine(o.orderSource, zip));
-        playNewOrderBell();
-      }
-    };
-    tick();
-    ringIntervalRef.current = window.setInterval(tick, 12000);
-    return () => {
-      if (ringIntervalRef.current) window.clearInterval(ringIntervalRef.current);
-    };
+  const acknowledgeTicket = useCallback((orderId: string) => {
+    ticketAckedRef.current.add(orderId);
+    alertedPendingRef.current.delete(orderId);
+    setTicketAckQueue((prev) => prev.filter((o) => o.id !== orderId));
+  }, []);
+
+  const activeSlipModal = ticketAckQueue[0] ?? null;
+
+  useEffect(() => {
+    if (!speechOn) return;
+    for (const o of pendingApproval) {
+      if (alertedPendingRef.current.has(o.id)) continue;
+      alertedPendingRef.current.add(o.id);
+      const zip = extractZipFromAddress(o.shippingAddress);
+      speakDeliveryAlert(newOrderSpeechLine(o.orderSource, zip));
+    }
   }, [pendingApproval, speechOn]);
+
+  const needsAlertRing = pendingApproval.length > 0 || ticketAckQueue.length > 0;
+
+  useEffect(() => {
+    if (needsAlertRing) {
+      startOrderAlertLoop(4500);
+    } else {
+      stopOrderAlertLoop();
+    }
+    return () => stopOrderAlertLoop();
+  }, [needsAlertRing]);
 
   useEffect(() => {
     if (!speechOn) return;
@@ -238,11 +265,11 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
   };
 
   const runAction = async (orderId: string, action: string) => {
+    const orderRow = orders.find((o) => o.id === orderId);
     setBusyId(orderId);
     try {
       await api.post(`/merchant/orders/${orderId}/action`, { action });
       if (action === 'accept') {
-        alertedPendingRef.current.delete(orderId);
         try {
           await printDeliverySlipForOrder(orderId, {
             merchant: merchant || {},
@@ -250,9 +277,23 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
             locale,
             fallbackPrinterName: localStorage.getItem('manupos_webpos_printer') || '',
           });
+          if (orderRow) {
+            let itemCount: number | null = null;
+            try {
+              const detail = await api.get(`/merchant/orders/${orderId}`);
+              const items = (detail.data?.order || detail.data)?.items;
+              itemCount = Array.isArray(items) ? items.length : null;
+            } catch {
+              /* optional */
+            }
+            enqueueTicketAck(orderRow, itemCount);
+          }
         } catch {
           /* print optional */
         }
+      }
+      if (action === 'reject') {
+        acknowledgeTicket(orderId);
       }
       toast.success(t('updated'));
       await load();
@@ -280,15 +321,24 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
     }
   };
 
-  const printSlip = async (orderId: string) => {
-    setBusyId(orderId);
+  const printSlip = async (order: DeliveryRow) => {
+    setBusyId(order.id);
     try {
-      await printDeliverySlipForOrder(orderId, {
+      await printDeliverySlipForOrder(order.id, {
         merchant: merchant || {},
         printSettings,
         locale,
         fallbackPrinterName: localStorage.getItem('manupos_webpos_printer') || '',
       });
+      let itemCount: number | null = null;
+      try {
+        const detail = await api.get(`/merchant/orders/${order.id}`);
+        const items = (detail.data?.order || detail.data)?.items;
+        itemCount = Array.isArray(items) ? items.length : null;
+      } catch {
+        /* optional */
+      }
+      enqueueTicketAck(order, itemCount);
       toast.success(t('deliveryHubSlipPrinted'));
       await load();
     } catch {
@@ -361,7 +411,7 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
               type="button"
               className="inline-flex items-center gap-1 text-xs font-semibold text-stone-600 hover:text-stone-900"
               disabled={busy}
-              onClick={() => void printSlip(o.id)}
+              onClick={() => void printSlip(o)}
             >
               <Printer size={14} />
               {o.printCount > 0 ? o.printCount : ''}
@@ -557,6 +607,12 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
           <div className="space-y-2">{orders.map(renderOrderRow)}</div>
         )}
       </div>
+
+      <DeliveryPrintedSlipModal
+        order={activeSlipModal}
+        queueCount={ticketAckQueue.length}
+        onAcknowledge={(o) => acknowledgeTicket(o.id)}
+      />
     </div>
   );
 }
