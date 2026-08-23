@@ -9,6 +9,7 @@ class AnalyticsService {
      */
     static async getPlatformOverview() {
         const db = (0, db_1.getDb)();
+        const now = new Date();
         try {
             // Get merchant counts
             const merchants = await db.query.merchants.findMany();
@@ -27,7 +28,6 @@ class AnalyticsService {
             const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
             const staffRows = await db.query.merchantStaff.findMany();
             const merchantUserCount = staffRows.filter((s) => s.isActive).length;
-            const now = new Date();
             const thisMonthKey = now.toISOString().substring(0, 7);
             const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             const prevMonthKey = prev.toISOString().substring(0, 7);

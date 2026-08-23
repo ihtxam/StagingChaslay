@@ -7,6 +7,7 @@ export class AnalyticsService {
    */
   static async getPlatformOverview() {
     const db = getDb();
+    const now = new Date();
 
     try {
       // Get merchant counts
@@ -33,7 +34,6 @@ export class AnalyticsService {
       const staffRows = await db.query.merchantStaff.findMany();
       const merchantUserCount = staffRows.filter((s) => s.isActive).length;
 
-      const now = new Date();
       const thisMonthKey = now.toISOString().substring(0, 7);
       const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const prevMonthKey = prev.toISOString().substring(0, 7);
