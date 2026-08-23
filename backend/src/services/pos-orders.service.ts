@@ -329,6 +329,7 @@ export class PosOrdersService {
         o.deliveryLongitude != null && o.deliveryLongitude !== ""
           ? Number(o.deliveryLongitude)
           : null,
+      deliveryTrackingToken: o.deliveryTrackingToken || null,
       scheduledFor: o.scheduledFor,
       createdAt: o.createdAt,
       completedAt: o.completedAt,

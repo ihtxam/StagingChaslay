@@ -37,6 +37,7 @@ export type MerchantOrder = PosOrderForReceipt & {
   deliveryLongitude?: number | null;
   assignedDeliveryStaffId?: string | null;
   assignedDriverName?: string | null;
+  deliveryTrackingToken?: string | null;
   items?: Array<{
     id?: string;
     name?: string | null;
@@ -57,6 +58,14 @@ export type MerchantOrder = PosOrderForReceipt & {
 
 export function orderChannel(o: MerchantOrder): string {
   return o.channel || o.fulfillmentChannel || 'takeaway';
+}
+
+/** Delivery fulfillment (POS or online shop). */
+export function isDeliveryOrder(o: {
+  channel?: string | null;
+  fulfillmentChannel?: string | null;
+}): boolean {
+  return orderChannel(o as MerchantOrder) === 'delivery';
 }
 
 /** Takeaway / delivery channels used by in-store POS (not JustEat / Uber). */

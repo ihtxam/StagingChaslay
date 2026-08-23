@@ -181,7 +181,9 @@ export class DeliveryTrackingService {
         or(
           eq(schema.orders.status, "ready"),
           eq(schema.orders.status, "out_for_delivery"),
-          eq(schema.orders.status, "preparing")
+          eq(schema.orders.status, "preparing"),
+          eq(schema.orders.status, "accepted"),
+          eq(schema.orders.status, "pending_approval")
         )
       ),
       orderBy: [desc(schema.orders.createdAt)],
