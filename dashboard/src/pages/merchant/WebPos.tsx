@@ -136,7 +136,12 @@ import WebPosTopBar, {
   type WebPosColorTheme,
   type WebPosTextSize,
 } from '@/components/webpos/WebPosTopBar';
-import { appendWebPosLog, hookWebPosConsole, sendWebPosLogsToSupport } from '@/lib/webpos-log';
+import {
+  initWebPosLogging,
+  logWebPosError,
+  logWebPosEvent,
+  sendWebPosLogsToSupport,
+} from '@/lib/webpos-log';
 
 const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
 const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
@@ -572,6 +577,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const notifyPrintError = (raw: unknown, fallbackKey = 'webPosPrintFailed') => {
     if (isPrinterDisconnectedError(raw)) setPrinterDisconnected(true);
     const short = shortPrintErrorMessage(raw, t, fallbackKey);
+    logWebPosError(
+      fallbackKey.includes('Kitchen') ? 'kitchen' : 'print',
+      short,
+      raw
+    );
     const now = Date.now();
     if (
       lastPrintErrorRef.current?.key === short &&
@@ -1947,6 +1957,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         cacheReady = hydrated;
       }
       if (!cacheReady) {
+        logWebPosError('load', 'WebPOS catalog load failed', e, { autoSend: true });
         toast.error(e.response?.data?.error || t('webPosLoadFailed'));
       }
     } finally {
@@ -1968,9 +1979,38 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [load]);
 
   useEffect(() => {
-    hookWebPosConsole();
-    appendWebPosLog('WebPOS session started');
-  }, []);
+    initWebPosLogging({
+      getDiagnostics: () => ({
+        locale,
+        staffName: webposStaff?.name,
+        staffRole: webposStaff?.roleName,
+        merchantName: merchant?.name || merchant?.businessName,
+      }),
+      onAutoSend: (ok) => {
+        if (ok) toast.success(t('webPosLogsSent'));
+      },
+    });
+  }, [locale, webposStaff?.name, webposStaff?.roleName, merchant?.name, merchant?.businessName, t]);
+
+  const offlineSyncSigRef = useRef('');
+  useEffect(() => {
+    const sig = `${offlineSync.online}|${offlineSync.pendingCount}|${offlineSync.failedCount}|${offlineSync.lastError || ''}`;
+    if (offlineSyncSigRef.current && offlineSyncSigRef.current !== sig) {
+      logWebPosEvent(
+        'offline',
+        `Sync state online=${offlineSync.online} pending=${offlineSync.pendingCount} failed=${offlineSync.failedCount}${offlineSync.lastError ? ` err=${offlineSync.lastError}` : ''}`,
+        offlineSync.failedCount > 0 || offlineSync.lastError ? 'warn' : 'info'
+      );
+    }
+    offlineSyncSigRef.current = sig;
+  }, [offlineSync]);
+
+  const agentOkLoggedRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (agentOkLoggedRef.current === agentOk) return;
+    agentOkLoggedRef.current = agentOk;
+    logWebPosEvent('print', agentOk ? 'Print agent online' : 'Print agent offline', agentOk ? 'info' : 'warn');
+  }, [agentOk]);
 
   useEffect(() => {
     if (!shiftsEnabled || !offlineSync.online) return;
@@ -2734,6 +2774,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         return;
       }
       toast.error(msg || t('webPosShiftStartFailed'));
+      logWebPosError('shift', 'Shift start failed', e);
     } finally {
       setShiftBusy(false);
     }
@@ -2789,6 +2830,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setShiftClosedOpen(true);
       toast.success(t('webPosShiftClosedToast'));
     } catch (e: any) {
+      logWebPosError('shift', 'Shift close failed', e);
       toast.error(e.response?.data?.error || t('webPosShiftCloseFailed'));
     } finally {
       setShiftBusy(false);
@@ -4731,6 +4773,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         toast.success(t('webPosOrderCancelled'));
       }
     } catch (e: any) {
+      logWebPosError('order', 'Cancel order/item failed', e);
       toast.error(e.response?.data?.error || e.message || t('webPosCancelFailed'));
     } finally {
       setBusy(false);
@@ -5564,6 +5607,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setSplitIndex((i) => i + 1);
       }
     } catch (e: any) {
+      logWebPosError('payment', 'Collect payment failed', e, { autoSend: true });
       toast.error(e.response?.data?.error || e.message || t('webPosSaleFailed'));
     } finally {
       setBusy(false);
@@ -5610,6 +5654,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setSuccessInfo({ amount: paidAmount, changeDue: 0 });
       setExpressSuccessOpen(true);
     } catch (e: any) {
+      logWebPosError('payment', 'Express pay failed', e, { autoSend: true });
       toast.error(e.response?.data?.error || e.message || t('webPosSaleFailed'));
     } finally {
       setBusy(false);
@@ -6396,7 +6441,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (offlineEligible && isNetworkError(err)) {
           await enqueueOutboxSale(sale);
           queuedOffline = true;
+          logWebPosEvent(
+            'offline',
+            `Sale queued offline method=${method} total=${sale.total} clientId=${clientId}`,
+            'warn'
+          );
         } else {
+          logWebPosError('payment', `Sale push failed method=${method}`, err, { autoSend: true });
           throw err;
         }
       }
@@ -6614,6 +6665,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ].slice(0, 30)
     );
     setOrdersRefreshToken((n) => n + 1);
+    logWebPosEvent(
+      'payment',
+      `Sale completed method=${method} total=${sale.total} order=${ticket.orderNumber || clientId} offline=${queuedOffline}`
+    );
     if (!queuedOffline) void refreshBestsellers();
     if (shiftsEnabled) void refreshCurrentShift(true);
     const moreSplits = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
@@ -6812,6 +6867,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           changeDue: 0,
         }, true);
       } catch (e: any) {
+        logWebPosError('payment', 'Express checkout failed', e, { autoSend: true });
         toast.error(e.response?.data?.error || e.message || t('webPosSaleFailed'));
       } finally {
         setBusy(false);
@@ -6856,6 +6912,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setPosView('checkout');
       }
     } catch (e: any) {
+      logWebPosError('payment', 'Checkout completion failed', e, { autoSend: true });
       toast.error(e.response?.data?.error || e.message || t('webPosSaleFailed'));
       setPosView('checkout');
     } finally {
@@ -6961,19 +7018,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
 
       if (result.status === 'cancelled') {
+        logWebPosEvent('terminal', 'Terminal payment cancelled', 'warn');
         setPaymentPhase('cancelled');
         setPaymentMessage(result.message || t('webPosPayCancelledMsg'));
         return;
       }
 
+      logWebPosError('terminal', 'Terminal payment declined', result.message || result.status);
       setPaymentPhase('failed');
       setPaymentMessage(result.message || t('webPosPayFailedMsg'));
     } catch (e: any) {
       if (e.code === 'ERR_CANCELED' || e.name === 'CanceledError') {
+        logWebPosEvent('terminal', 'Terminal payment aborted by user', 'warn');
         setPaymentPhase('cancelled');
         setPaymentMessage(t('webPosPayCancelled'));
         return;
       }
+      logWebPosError('terminal', 'Terminal payment failed', e, { autoSend: true });
       setPaymentPhase('failed');
       setPaymentMessage(e.response?.data?.error || e.message || t('webPosPayFailedMsg'));
     } finally {
@@ -7194,6 +7255,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setWebposStaff(session);
     saveWebPosStaffSession(session);
     notifyWebPosStaffSessionChanged();
+    logWebPosEvent('staff', `Signed in as ${staff.name} (${staff.roleName || 'staff'})`);
     if (reg.kickedSessionIds.length > 0) {
       toast.info(t('webPosSessionReclaimed'));
     }
