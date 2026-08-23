@@ -55,7 +55,10 @@ data class ReceiptLabels(
     val sourcePos: String,
     val sourceWaiter: String,
     val sourceWeb: String,
-    val sourceOnline: String
+    val sourceOnline: String,
+    val refunded: String,
+    val netPaid: String,
+    val refundReason: String
 ) {
     fun fulfillmentLabel(fulfillmentType: FulfillmentType, serviceType: ServiceType): String =
         when (fulfillmentType) {
@@ -152,7 +155,10 @@ data class ReceiptLabels(
             sourcePos = "POS",
             sourceWaiter = "Waiter app",
             sourceWeb = "WebPOS",
-            sourceOnline = "Online"
+            sourceOnline = "Online",
+            refunded = "Refunded:",
+            netPaid = "Net paid:",
+            refundReason = "Refund reason:"
         )
 
         private fun french() = ReceiptLabels(
@@ -203,7 +209,10 @@ data class ReceiptLabels(
             sourcePos = "Caisse",
             sourceWaiter = "App serveur",
             sourceWeb = "WebPOS",
-            sourceOnline = "En ligne"
+            sourceOnline = "En ligne",
+            refunded = "Remboursé :",
+            netPaid = "Net payé :",
+            refundReason = "Motif :"
         )
 
         private fun german() = ReceiptLabels(
@@ -254,7 +263,10 @@ data class ReceiptLabels(
             sourcePos = "Kasse",
             sourceWaiter = "Kellner-App",
             sourceWeb = "WebPOS",
-            sourceOnline = "Online"
+            sourceOnline = "Online",
+            refunded = "Erstattet:",
+            netPaid = "Netto bezahlt:",
+            refundReason = "Grund:"
         )
 
         private fun italian() = ReceiptLabels(
@@ -305,7 +317,10 @@ data class ReceiptLabels(
             sourcePos = "POS",
             sourceWaiter = "App cameriere",
             sourceWeb = "WebPOS",
-            sourceOnline = "Online"
+            sourceOnline = "Online",
+            refunded = "Rimborsato:",
+            netPaid = "Netto pagato:",
+            refundReason = "Motivo:"
         )
     }
 }

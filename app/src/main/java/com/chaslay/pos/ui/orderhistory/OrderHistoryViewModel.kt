@@ -26,7 +26,7 @@ import javax.inject.Inject
 
 enum class HistoryDateFilter { TODAY, YESTERDAY, WEEK, MONTH, THREE_MONTHS, ALL }
 
-enum class HistorySourceFilter { ALL, IN_STORE, ONLINE, KIOSK }
+enum class HistoryChannelTab { IN_STORE, THIRD_PARTY }
 
 data class OrderHistoryUiState(
     val orders: List<TransactionEntity> = emptyList(),
@@ -37,12 +37,13 @@ data class OrderHistoryUiState(
     val splitOrders: List<TransactionEntity> = emptyList(),
     val splitItemsByOrderId: Map<String, List<TransactionItemEntity>> = emptyMap(),
     val dateFilter: HistoryDateFilter = HistoryDateFilter.TODAY,
-    val sourceFilter: HistorySourceFilter = HistorySourceFilter.ALL,
+    val channelTab: HistoryChannelTab = HistoryChannelTab.IN_STORE,
     val paymentFilter: PaymentMethod? = null,
     val serviceFilter: ServiceType? = null,
     val statusFilter: PaymentStatus? = null,
     val searchQuery: String = "",
     val currencySymbol: String = "CHF",
+    val languageCode: String = "en",
     val dateRangeLabel: String = "",
     val cancelReasons: List<String> = emptyList(),
     val showCancelDialog: Boolean = false,
@@ -84,6 +85,7 @@ class OrderHistoryViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 cancelReasons = reasons,
                 currencySymbol = currency,
+                languageCode = settings.defaultLanguage,
                 isAdminUser = access?.canAccessSettings() == true
             )
             refresh()
@@ -115,9 +117,11 @@ class OrderHistoryViewModel @Inject constructor(
                 serviceType = _uiState.value.serviceFilter
             ).filter { it.paymentStatus != PaymentStatus.PENDING }
 
-            when (_uiState.value.sourceFilter) {
-                HistorySourceFilter.ALL, HistorySourceFilter.IN_STORE -> Unit
-                HistorySourceFilter.ONLINE, HistorySourceFilter.KIOSK -> orders = emptyList()
+            when (_uiState.value.channelTab) {
+                HistoryChannelTab.IN_STORE ->
+                    orders = orders.filter { !com.chaslay.pos.domain.model.isThirdPartyOrder(it) }
+                HistoryChannelTab.THIRD_PARTY ->
+                    orders = orders.filter { com.chaslay.pos.domain.model.isThirdPartyOrder(it) }
             }
 
             _uiState.value.statusFilter?.let { status ->
@@ -149,8 +153,8 @@ class OrderHistoryViewModel @Inject constructor(
         refresh()
     }
 
-    fun setSourceFilter(filter: HistorySourceFilter) {
-        _uiState.value = _uiState.value.copy(sourceFilter = filter)
+    fun setChannelTab(tab: HistoryChannelTab) {
+        _uiState.value = _uiState.value.copy(channelTab = tab)
         refresh()
     }
 
@@ -282,7 +286,6 @@ class OrderHistoryViewModel @Inject constructor(
                 transactionRepository.recordGoodwillCompensation(orderId, compensation, reason)
                 val detail = transactionRepository.getTransaction(orderId)
                 _uiState.value = _uiState.value.copy(
-                    showRefundDialog = false,
                     selectedOrder = detail?.first,
                     selectedItems = detail?.second.orEmpty(),
                     message = "Goodwill compensation recorded"
@@ -381,7 +384,6 @@ class OrderHistoryViewModel @Inject constructor(
             )
             val detail = transactionRepository.getTransaction(orderId)
             _uiState.value = _uiState.value.copy(
-                showRefundDialog = false,
                 selectedOrder = detail?.first,
                 selectedItems = detail?.second.orEmpty(),
                 message = if (fullRefund) "Full refund processed" else "Partial refund processed"

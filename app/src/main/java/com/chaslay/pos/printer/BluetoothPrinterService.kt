@@ -1143,6 +1143,22 @@ class BluetoothPrinterService @Inject constructor(
 
         appendReceiptTotal(sb, labels.total, transaction.total, settings.currencySymbol, lineWidth)
 
+        val refundTotal = transaction.refundAmount.coerceAtLeast(0.0)
+        val netPaid = (transaction.total - refundTotal).coerceAtLeast(0.0)
+        if (refundTotal > 0.001) {
+            sb.appendLine(
+                leftRight(
+                    labels.refunded,
+                    "-${formatMoney(refundTotal, settings.currencySymbol)}",
+                    lineWidth
+                )
+            )
+            sb.appendLine(leftRight(labels.netPaid, formatMoney(netPaid, settings.currencySymbol), lineWidth))
+            transaction.refundReason?.takeIf { it.isNotBlank() }?.let { reason ->
+                sb.appendLine("${labels.refundReason} ${reason.take(lineWidth)}")
+            }
+        }
+
         appendLoyaltyReceiptLines(sb, loyaltyPointsEarned, loyaltyPointsBalance, lineWidth)
 
         parseGiftCardPaymentAmount(transaction.notes)?.let { giftPaid ->
@@ -1165,7 +1181,7 @@ class BluetoothPrinterService @Inject constructor(
             )
         }
 
-        appendReceiptPaymentLines(sb, labels, transaction, settings.currencySymbol, lineWidth)
+        appendReceiptPaymentLines(sb, labels, transaction, settings.currencySymbol, lineWidth, netPaid)
 
         // VAT after payment — compact Net / Tax / Gross table (guest receipt).
         if (settings.receiptShowVatTable && vatRows.isNotEmpty()) {
@@ -1472,7 +1488,8 @@ class BluetoothPrinterService @Inject constructor(
         labels: ReceiptLabels,
         transaction: TransactionEntity,
         currencySymbol: String,
-        lineWidth: Int
+        lineWidth: Int,
+        paidAmount: Double = transaction.total
     ) {
         val splitTenders = PaymentTenderNotes.parse(transaction.notes)
             .filter { it.method != PaymentMethod.GIFT_CARD && it.amount > 0.001 }
@@ -1501,7 +1518,7 @@ class BluetoothPrinterService @Inject constructor(
                 }
             }
         }
-        sb.appendLine(leftRight(labels.paid, twoDp(transaction.total), lineWidth))
+        sb.appendLine(leftRight(labels.paid, twoDp(paidAmount), lineWidth))
     }
 
     private fun appendReceiptTotal(

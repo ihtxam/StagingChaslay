@@ -79,6 +79,7 @@ private val HeaderBg = Color(0xFFFAFAFA)
 private val TextPrimary = Color(0xFF111827)
 private val TextMuted = Color(0xFF6B7280)
 private val AccentGreen = Color(0xFF059669)
+private val ChaslayTeal = Color(0xFF0F766E)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -137,6 +138,7 @@ fun OrderHistoryScreen(
             splitOrders = state.splitOrders,
             splitItemsByOrderId = state.splitItemsByOrderId,
             currencySymbol = state.currencySymbol,
+            languageCode = state.languageCode,
             canCancel = order.paymentStatus == PaymentStatus.COMPLETED,
             canRefund = order.paymentStatus == PaymentStatus.COMPLETED ||
                 order.paymentStatus == PaymentStatus.PARTIALLY_REFUNDED,
@@ -163,10 +165,12 @@ fun OrderHistoryScreen(
 
     if (state.showRefundDialog) {
         val order = state.selectedOrder
-        RefundOrderDialog(
+        RefundWizardDialog(
             maxAmount = ((order?.total ?: 0.0) - (order?.refundAmount ?: 0.0)).coerceAtLeast(0.0),
+            paymentMethodLabel = order?.paymentMethod?.name?.replace('_', ' ') ?: "",
             items = state.selectedItems,
             currencySymbol = state.currencySymbol,
+            languageCode = state.languageCode,
             onDismiss = viewModel::dismissRefundDialog,
             onConfirm = { amount, full, itemRefunds, reason, refundKind, goodwillMethod ->
                 viewModel.refundSelectedOrder(
@@ -177,7 +181,8 @@ fun OrderHistoryScreen(
                     refundKind,
                     goodwillMethod
                 )
-            }
+            },
+            onPrintReceipt = viewModel::printSelectedOrder
         )
     }
 
@@ -247,7 +252,7 @@ fun OrderHistoryScreen(
                 TopAppBar(
                     title = {
                         Column {
-                            Text("ORDER RECORDS", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text(stringResource(R.string.order_records), fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             Text(
                                 stringResource(R.string.order_history),
                                 fontSize = 11.sp,
@@ -308,6 +313,11 @@ private fun OrderHistoryContent(
                 }
             }
         }
+            RecordsChannelTabs(
+                selected = state.channelTab,
+                onSelect = viewModel::setChannelTab
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             RecordsFilterBar(
                 state = state,
                 onDate = viewModel::setDateFilter,
@@ -350,7 +360,7 @@ private fun OrderHistoryContent(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("No orders found", color = TextMuted)
+                            Text(stringResource(R.string.no_orders_found), color = TextMuted)
                         }
                     } else {
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -372,6 +382,31 @@ private fun OrderHistoryContent(
                     }
                 }
             }
+    }
+}
+
+@Composable
+private fun RecordsChannelTabs(
+    selected: HistoryChannelTab,
+    onSelect: (HistoryChannelTab) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        HistoryChannelTab.entries.forEach { tab ->
+            val label = when (tab) {
+                HistoryChannelTab.IN_STORE -> stringResource(R.string.orders_in_store)
+                HistoryChannelTab.THIRD_PARTY -> stringResource(R.string.orders_third_party)
+            }
+            RecordsTabChip(
+                label = label,
+                selected = selected == tab,
+                compact = false,
+                onClick = { onSelect(tab) },
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
@@ -418,7 +453,7 @@ private fun RecordsFilterBar(
             FilterDivider()
 
             FilterSectionLabel("STATUS")
-            RecordsTabChip(label = "All", selected = state.statusFilter == null, compact = true, onClick = { onStatus(null) })
+            RecordsTabChip(label = stringResource(R.string.all), selected = state.statusFilter == null, compact = true, onClick = { onStatus(null) })
             PaymentStatus.entries
                 .filter { it != PaymentStatus.PENDING && it != PaymentStatus.FAILED }
                 .forEach { status ->
@@ -429,36 +464,6 @@ private fun RecordsFilterBar(
                         onClick = { onStatus(status) }
                     )
                 }
-
-            FilterDivider()
-
-            FilterSectionLabel("TYPE")
-            RecordsTabChip(label = "All", selected = state.serviceFilter == null, compact = true, onClick = { onType(null) })
-            RecordsTabChip(
-                label = "Dine In",
-                selected = state.serviceFilter == ServiceType.DINE_IN,
-                compact = true,
-                onClick = { onType(ServiceType.DINE_IN) }
-            )
-            RecordsTabChip(
-                label = "Takeaway",
-                selected = state.serviceFilter == ServiceType.TAKEAWAY,
-                compact = true,
-                onClick = { onType(ServiceType.TAKEAWAY) }
-            )
-
-            FilterDivider()
-
-            FilterSectionLabel("PAY")
-            RecordsTabChip(label = "All", selected = state.paymentFilter == null, compact = true, onClick = { onPayment(null) })
-            PaymentMethod.entries.forEach { method ->
-                RecordsTabChip(
-                    label = paymentShortLabel(method),
-                    selected = state.paymentFilter == method,
-                    compact = true,
-                    onClick = { onPayment(method) }
-                )
-            }
         }
     }
 }
@@ -507,15 +512,21 @@ private fun RecordsTabChip(
     label: String,
     selected: Boolean,
     compact: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(if (compact) 8.dp else 20.dp),
-        color = if (selected) Color(0xFF111827) else Color.White,
+        modifier = modifier,
+        shape = RoundedCornerShape(if (compact) 8.dp else 12.dp),
+        color = if (selected) {
+            if (compact) Color(0xFF111827) else ChaslayTeal
+        } else Color.White,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (selected) Color(0xFF111827) else Color(0xFFE5E7EB)
+            if (selected) {
+                if (compact) Color(0xFF111827) else ChaslayTeal
+            } else Color(0xFFE5E7EB)
         )
     ) {
         Text(
@@ -537,32 +548,32 @@ private fun RecordsTableHeader(onAdminUnlockTap: () -> Unit = {}) {
         modifier = Modifier
             .fillMaxWidth()
             .background(HeaderBg)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            "#",
-            modifier = Modifier
-                .width(28.dp)
-                .clickable(onClick = onAdminUnlockTap),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextMuted
+        HeaderCell(stringResource(R.string.time), 76.dp)
+        HeaderCell(stringResource(R.string.order_number_short), 80.dp)
+        HeaderCell(stringResource(R.string.type), 68.dp)
+        HeaderCell(stringResource(R.string.status), 88.dp)
+        HeaderCell(stringResource(R.string.amount), 76.dp)
+        HeaderCell(stringResource(R.string.payment_method), 56.dp)
+        HeaderCell(
+            stringResource(R.string.staff),
+            72.dp,
+            modifier = Modifier.clickable(onClick = onAdminUnlockTap)
         )
-        HeaderCell("ORDER", 88.dp)
-        HeaderCell("TIME", 72.dp)
-        HeaderCell("TABLE", 100.dp)
-        HeaderCell("TYPE", 72.dp)
-        HeaderCell("STATUS", 88.dp)
-        HeaderCell("SRC", 44.dp)
-        HeaderCell("AMOUNT", 80.dp)
-        HeaderCell("PAY", 52.dp)
     }
 }
 
 @Composable
-private fun HeaderCell(text: String, width: Dp) {
-    Text(text, modifier = Modifier.width(width), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+private fun HeaderCell(text: String, width: Dp, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        modifier = modifier.width(width),
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        color = TextMuted
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -577,73 +588,69 @@ private fun RecordsTableRow(
     onClick: () -> Unit,
     onDeleteRequest: () -> Unit
 ) {
+    val displayAmount = if (order.refundAmount > 0) {
+        (order.total - order.refundAmount).coerceAtLeast(0.0)
+    } else {
+        order.total
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .background(if (index % 2 == 0) Color.White else Color(0xFFFAFAFA))
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        CellText(index.toString(), 28.dp, fontWeight = FontWeight.SemiBold)
-        Row(
-            modifier = Modifier
-                .width(88.dp)
-                .then(
-                    if (canDelete) {
-                        Modifier.combinedClickable(
-                            onClick = onDeleteRequest,
-                            onLongClick = onDeleteRequest
-                        )
-                    } else {
-                        Modifier
-                    }
-                ),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        CellText(
+            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(order.createdAt)),
+            76.dp,
+            color = TextMuted
+        )
+        Row(modifier = Modifier.width(80.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 shortOrderId(order.transactionNumber),
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (canDelete) Color(0xFFDC2626) else TextPrimary,
+                color = TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             if (isSplit) {
                 Spacer(Modifier.width(4.dp))
-                StatusPill("SPLIT", Color(0xFFF97316), compact = true)
+                StatusPill("S", Color(0xFFF97316), compact = true)
             }
         }
+        Box(modifier = Modifier.width(68.dp)) {
+            StatusPill(orderTypeLabel(order.serviceType), orderTypeColor(order.serviceType), compact = true)
+        }
+        Box(modifier = Modifier.width(88.dp)) {
+            StatusPill(orderStatusShort(order.paymentStatus), statusColor(order.paymentStatus), compact = true)
+        }
         CellText(
-            SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date(order.createdAt)),
+            formatMoney(displayAmount, currencySymbol),
+            76.dp,
+            fontWeight = FontWeight.Bold
+        )
+        CellText(paymentShortLabel(order.paymentMethod), 56.dp, color = TextMuted)
+        CellText(
+            order.userName.take(8),
             72.dp,
-            color = if (canDelete) Color(0xFFDC2626) else TextMuted,
+            color = TextMuted,
             modifier = if (canDelete) {
-                Modifier.combinedClickable(
-                    onClick = onDeleteRequest,
-                    onLongClick = onDeleteRequest
-                )
+                Modifier.combinedClickable(onClick = onDeleteRequest, onLongClick = onDeleteRequest)
             } else {
                 Modifier
             }
         )
-        CellText(tableLabel ?: "—", 100.dp, color = TextMuted)
-        Box(modifier = Modifier.width(72.dp)) {
-            StatusPill(orderTypeLabel(order.serviceType), orderTypeColor(order.serviceType))
-        }
-        Box(modifier = Modifier.width(88.dp)) {
-            StatusPill(order.paymentStatus.name.replace('_', ' '), statusColor(order.paymentStatus))
-        }
-        Box(modifier = Modifier.width(44.dp)) {
-            StatusPill("POS", AccentGreen, compact = true)
-        }
-        CellText(
-            formatMoney(order.total, currencySymbol),
-            80.dp,
-            fontWeight = FontWeight.Bold
-        )
-        CellText(paymentLabel(order.paymentMethod), 52.dp, color = TextMuted)
     }
+}
+
+private fun orderStatusShort(status: PaymentStatus): String = when (status) {
+    PaymentStatus.COMPLETED -> "Done"
+    PaymentStatus.REFUNDED -> "Refund"
+    PaymentStatus.CANCELLED -> "Cancel"
+    PaymentStatus.PARTIALLY_REFUNDED -> "Part"
+    else -> status.name.take(5)
 }
 
 @Composable
@@ -720,206 +727,6 @@ private fun paymentLabel(method: PaymentMethod): String = when (method) {
     PaymentMethod.GIFT_CARD -> "Gift card"
 }
 
-private fun resolveOrderDiscount(order: TransactionEntity): Double {
-    if (order.discountAmount > 0.0) return order.discountAmount
-    if (order.discountPercent > 0.0) {
-        return order.subtotal * (order.discountPercent / 100.0)
-    }
-    return 0.0
-}
-
-@Composable
-private fun OrderDetailDialog(
-    order: TransactionEntity,
-    items: List<com.chaslay.pos.data.local.entity.TransactionItemEntity>,
-    splitOrders: List<TransactionEntity>,
-    splitItemsByOrderId: Map<String, List<com.chaslay.pos.data.local.entity.TransactionItemEntity>>,
-    currencySymbol: String,
-    canCancel: Boolean,
-    canRefund: Boolean,
-    canDelete: Boolean,
-    onDismiss: () -> Unit,
-    onPrint: () -> Unit,
-    onPrintCustomerCard: () -> Unit,
-    onPrintMerchantCard: () -> Unit,
-    onPrintAllSplits: () -> Unit,
-    onPrintSplit: (String) -> Unit,
-    onCancel: () -> Unit,
-    onRefund: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val isSplit = splitOrders.size > 1
-    val hasCustomerCard = AdyenPaymentReceiptStorage.customerReceipt(order) != null
-    val hasMerchantCard = AdyenPaymentReceiptStorage.cashierReceipt(order) != null
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("#${shortOrderId(order.transactionNumber)}")
-                IconButton(onClick = onPrint) {
-                    Icon(Icons.Default.Print, contentDescription = stringResource(R.string.print_receipt))
-                }
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                if (hasCustomerCard || hasMerchantCard) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (hasCustomerCard) {
-                            OutlinedButton(
-                                onClick = onPrintCustomerCard,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Default.CreditCard, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(stringResource(R.string.print_customer_card_receipt), fontSize = 11.sp, maxLines = 2)
-                            }
-                        }
-                        if (hasMerchantCard) {
-                            OutlinedButton(
-                                onClick = onPrintMerchantCard,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Default.Receipt, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(stringResource(R.string.print_merchant_card_receipt), fontSize = 11.sp, maxLines = 2)
-                            }
-                        }
-                    }
-                }
-                Text("Payment: ${order.paymentMethod.name}", fontSize = 12.sp)
-                if (isSplit) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Split order (${splitOrders.size} bills)", fontWeight = FontWeight.Bold)
-                        TextButton(onClick = onPrintAllSplits) {
-                            Text(stringResource(R.string.print_receipt))
-                        }
-                    }
-                    splitOrders.forEachIndexed { index, split ->
-                        val splitItems = splitItemsByOrderId[split.id].orEmpty()
-                        Surface(
-                            color = Color(0xFFF5F5F5),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        split.splitCheckNumber?.let {
-                                            stringResource(R.string.split_bill_n, it)
-                                        } ?: stringResource(R.string.split_bill_n, index + 1),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(formatMoney(split.total, currencySymbol), fontWeight = FontWeight.Bold)
-                                        IconButton(onClick = { onPrintSplit(split.id) }, modifier = Modifier.size(32.dp)) {
-                                            Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        }
-                                    }
-                                }
-                                splitItems.forEach { item ->
-                                    Text("${item.quantity}x ${item.productName}")
-                                }
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Order total: ${formatMoney(splitOrders.sumOf { it.total }, currencySymbol)}",
-                        fontWeight = FontWeight.Bold
-                    )
-                } else {
-                    items.forEach { item ->
-                        Text("${item.quantity}x ${item.productName} - ${formatMoney(item.lineTotal, currencySymbol)}")
-                    }
-                    val orderDiscount = resolveOrderDiscount(order)
-                    if (orderDiscount > 0.0) {
-                        val discountLabel = if (order.discountPercent > 0) {
-                            "Discount (${order.discountPercent.toInt()}%)"
-                        } else {
-                            "Discount"
-                        }
-                        Text("$discountLabel: -${formatMoney(orderDiscount, currencySymbol)}")
-                    }
-                    Text("Total: ${formatMoney(order.total, currencySymbol)}", fontWeight = FontWeight.Bold)
-                    if (order.refundAmount > 0.0) {
-                        Text(
-                            "Refunded: -${formatMoney(order.refundAmount, currencySymbol)}",
-                            color = Color(0xFFDC2626),
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            "Net: ${formatMoney((order.total - order.refundAmount).coerceAtLeast(0.0), currencySymbol)}",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                        order.refundReason?.takeIf { it.isNotBlank() }?.let { refundReason ->
-                            Text(
-                                "${stringResource(R.string.refund_reason)}: $refundReason",
-                                color = Color(0xFFDC2626),
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                    items.forEach { item ->
-                        if (item.refundedQuantity > 0) {
-                            Text(
-                                "${item.productName}: ${item.refundedQuantity} refunded",
-                                color = Color(0xFFDC2626),
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                    if (order.paymentStatus == PaymentStatus.CANCELLED) {
-                        order.cancelReason?.takeIf { it.isNotBlank() }?.let { reason ->
-                            Text(
-                                "${stringResource(R.string.cancel_reason)}: $reason",
-                                color = Color(0xFFDC2626),
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (canDelete) {
-                    TextButton(onClick = onDelete) {
-                        Text(stringResource(R.string.delete_order_permanently), color = Color(0xFFDC2626))
-                    }
-                }
-                if (canCancel) {
-                    TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel_order)) }
-                }
-                if (canRefund) {
-                    Button(onClick = onRefund) { Text(stringResource(R.string.refund_order)) }
-                }
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } }
-    )
-}
-
 @Composable
 private fun CancelOrderDialog(
     reasons: List<String>,
@@ -949,167 +756,6 @@ private fun CancelOrderDialog(
             Button(onClick = { onConfirm(selected) }, enabled = selected.isNotBlank()) {
                 Text(stringResource(R.string.confirm))
             }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } }
-    )
-}
-
-@Composable
-private fun RefundOrderDialog(
-    maxAmount: Double,
-    items: List<com.chaslay.pos.data.local.entity.TransactionItemEntity>,
-    currencySymbol: String,
-    onDismiss: () -> Unit,
-    onConfirm: (
-        Double,
-        Boolean,
-        List<Pair<Long, Int>>,
-        String?,
-        String,
-        String
-    ) -> Unit
-) {
-    var refundKind by remember { mutableStateOf("referenced") }
-    var mode by remember { mutableStateOf("full") }
-    var partial by remember { mutableStateOf(false) }
-    var amountText by remember { mutableStateOf("") }
-    var reasonText by remember { mutableStateOf("") }
-    var goodwillMethod by remember { mutableStateOf("cash") }
-    val refundableItems = items.mapNotNull { item ->
-        val left = (item.quantity - item.refundedQuantity).coerceAtLeast(0)
-        if (left <= 0) null else item to left
-    }
-    val selectedQty = remember(refundableItems) {
-        mutableStateMapOf<Long, Int>().apply {
-            refundableItems.forEach { (item, _) -> this[item.id] = 0 }
-        }
-    }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.refund_order)) },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = refundKind == "referenced",
-                        onClick = { refundKind = "referenced" },
-                        label = { Text("Refund payment") }
-                    )
-                    FilterChip(
-                        selected = refundKind == "goodwill",
-                        onClick = { refundKind = "goodwill"; mode = "amount"; partial = true },
-                        label = { Text("Goodwill") }
-                    )
-                }
-                if (refundKind == "goodwill") {
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = { amountText = it },
-                        label = { Text("Compensation amount") },
-                        singleLine = true
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = goodwillMethod == "cash",
-                            onClick = { goodwillMethod = "cash" },
-                            label = { Text("Cash") }
-                        )
-                        FilterChip(
-                            selected = goodwillMethod == "terminal",
-                            onClick = { goodwillMethod = "terminal" },
-                            label = { Text("Terminal") }
-                        )
-                    }
-                } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = mode == "full",
-                        onClick = { mode = "full"; partial = false },
-                        label = { Text(stringResource(R.string.refund_full)) }
-                    )
-                    FilterChip(
-                        selected = mode == "amount",
-                        onClick = { mode = "amount"; partial = true },
-                        label = { Text(stringResource(R.string.refund_partial)) }
-                    )
-                    if (refundableItems.isNotEmpty()) {
-                        FilterChip(
-                            selected = mode == "items",
-                            onClick = { mode = "items"; partial = false },
-                            label = { Text(stringResource(R.string.refund_by_item)) }
-                        )
-                    }
-                }
-                if (mode == "amount") {
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = { amountText = it },
-                        label = { Text(formatMoney(maxAmount, currencySymbol)) },
-                        singleLine = true
-                    )
-                }
-                if (mode == "items") {
-                    refundableItems.forEach { (item, left) ->
-                        val qty = selectedQty[item.id] ?: 0
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(item.productName, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                Text("$left left", fontSize = 11.sp, color = Color.Gray)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(onClick = {
-                                    selectedQty[item.id] = (qty - 1).coerceAtLeast(0)
-                                }) { Text("−") }
-                                Text(qty.toString(), modifier = Modifier.padding(horizontal = 8.dp))
-                                TextButton(onClick = {
-                                    selectedQty[item.id] = (qty + 1).coerceAtMost(left)
-                                }) { Text("+") }
-                            }
-                        }
-                    }
-                }
-                }
-                OutlinedTextField(
-                    value = reasonText,
-                    onValueChange = { reasonText = it },
-                    label = { Text(stringResource(R.string.refund_reason)) },
-                    singleLine = false,
-                    minLines = 2
-                )
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                val reason = reasonText.trim().takeIf { it.isNotBlank() }
-                when {
-                    refundKind == "goodwill" ->
-                        onConfirm(
-                            amountText.toDoubleOrNull() ?: 0.0,
-                            false,
-                            emptyList(),
-                            reason,
-                            "goodwill",
-                            goodwillMethod
-                        )
-                    mode == "full" ->
-                        onConfirm(maxAmount, true, emptyList(), reason, "referenced", "cash")
-                    mode == "items" -> {
-                        val picks = selectedQty.mapNotNull { (id, qty) ->
-                            if (qty > 0) id to qty else null
-                        }
-                        onConfirm(0.0, false, picks, reason, "referenced", "cash")
-                    }
-                    else ->
-                        onConfirm(amountText.toDoubleOrNull() ?: 0.0, false, emptyList(), reason, "referenced", "cash")
-                }
-            }) { Text(stringResource(R.string.confirm)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } }
     )

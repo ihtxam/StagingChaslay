@@ -364,6 +364,9 @@ export type WebPosReceipt = {
   /** Running / lifetime points after this sale. */
   loyaltyPointsBalance?: number | null;
   /** Provisional / preview receipt — no payment block. */
+  /** Cumulative refunded amount on this order (for reprint receipts). */
+  refundAmount?: number;
+  refundReason?: string | null;
   isProvisional?: boolean;
 };
 
@@ -1011,6 +1014,15 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
   r += sep + '\n';
   r += padLine(`${L.total}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
+  const refundTotal = Number(tx.refundAmount || 0);
+  const netPaid = Math.max(0, Number(tx.total || 0) - refundTotal);
+  if (refundTotal > 0.001) {
+    r += padLine('Refunded:', `-CHF ${refundTotal.toFixed(2)}`, width) + '\n';
+    r += padLine('Net paid:', `CHF ${netPaid.toFixed(2)}`, width) + '\n';
+    if (tx.refundReason?.trim()) {
+      r += `${L.note} ${tx.refundReason.trim().slice(0, width)}\n`;
+    }
+  }
   r += sep + '\n';
   if (!tx.isProvisional) {
     const payMethodRaw = String(tx.paymentMethod || '');
@@ -1038,7 +1050,7 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
       tx.payLaterCollected === true ||
       /pay[_-]?later[:_\s]+(cash|card|terminal)/i.test(payMethodRaw);
     if (!isPayLater || payLaterCollected) {
-      r += padLine(`${L.paid}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
+      r += padLine(`${L.paid}:`, `CHF ${netPaid.toFixed(2)}`, width) + '\n';
     }
     if (
       (!isPayLater || payLaterCollected) &&
@@ -2584,6 +2596,7 @@ export type PosOrderForReceipt = {
       selectedExtras?: Array<{ name?: string | null }>;
     }> | null;
   }>;
+  refundAmount?: number;
   refundReason?: string | null;
 };
 
@@ -2709,6 +2722,8 @@ export function posOrderToWebPosReceipt(
     adyenCustomerReceipt: adyen.customer,
     printAdyenReceiptOnTicket: shouldPrintAdyenReceiptOnTicket(ctx.printSettings),
     giftCardRemainingBalance,
+    refundAmount: Number(order.refundAmount ?? 0),
+    refundReason: order.refundReason,
   };
 }
 
