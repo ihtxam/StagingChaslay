@@ -220,6 +220,23 @@ export function hasPermission(
   return !!permissions?.includes(required);
 }
 
+/** Delivery-only staff (livreur) — driver app, not register POS. */
+export function isDeliveryDriverOnlyStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  if (!hasPermission(permissions, 'DELIVERY_ORDERS', false)) return false;
+  if (hasPermission(permissions, 'USE_WEBPOS', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_TABLES', false)) return false;
+  if (hasPermission(permissions, 'ACCESS_PANEL', false)) return false;
+  return true;
+}
+
+export function deliveryDriverHomePath(): string {
+  return '/merchant/delivery/driver';
+}
+
 /**
  * Prominent sidebar WebPOS shortcut — uses JWT identity, not PIN-scoped panel access.
  * Merchant owners always see it; panel staff need USE_WEBPOS on their login role.
