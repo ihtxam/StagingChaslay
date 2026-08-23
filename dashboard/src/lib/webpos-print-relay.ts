@@ -39,6 +39,7 @@ export type EscPosPrintJobPayload = {
 
 const AUTO_PRINT_RECEIPT_KEY = 'manupos_webpos_autoprint';
 const AUTO_PRINT_KITCHEN_KEY = 'manupos_webpos_autoprint_kitchen';
+const AUTO_PRINT_KITCHEN_DEVICE_KEY = 'manupos_webpos_autoprint_kitchen_device';
 
 /** Main till: auto-print customer receipts (local sales + relayed jobs). */
 export function readMainTillAutoPrintReceipt(): boolean {
@@ -49,12 +50,45 @@ export function readMainTillAutoPrintReceipt(): boolean {
   }
 }
 
+/** Per-device receipt auto-print (mobile / waiter WebPOS checkout). */
+export function readDeviceAutoPrintReceipt(): boolean {
+  return readMainTillAutoPrintReceipt();
+}
+
+export function writeDeviceAutoPrintReceipt(enabled: boolean): void {
+  try {
+    localStorage.setItem(AUTO_PRINT_RECEIPT_KEY, enabled ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Main till: auto-print kitchen tickets relayed from waiter phones / mobile WebPOS. */
 export function readMainTillAutoPrintKitchen(): boolean {
   try {
     return localStorage.getItem(AUTO_PRINT_KITCHEN_KEY) !== '0';
   } catch {
     return true;
+  }
+}
+
+/** Per-device kitchen auto-print when sending from phone / waiter app. */
+export function readDeviceAutoPrintKitchen(merchantDefault = true): boolean {
+  try {
+    const v = localStorage.getItem(AUTO_PRINT_KITCHEN_DEVICE_KEY);
+    if (v === '0') return false;
+    if (v === '1') return true;
+    return merchantDefault;
+  } catch {
+    return merchantDefault;
+  }
+}
+
+export function writeDeviceAutoPrintKitchen(enabled: boolean): void {
+  try {
+    localStorage.setItem(AUTO_PRINT_KITCHEN_DEVICE_KEY, enabled ? '1' : '0');
+  } catch {
+    /* ignore */
   }
 }
 

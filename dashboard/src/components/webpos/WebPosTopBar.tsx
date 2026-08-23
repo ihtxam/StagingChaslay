@@ -572,9 +572,11 @@ export function WebPosSettingsDropdown({
   mainTillOnline = false,
   mainTillPrintAgentOnline = false,
   autoPrint,
+  autoPrintKitchen,
   postSuccessTarget,
   onPrinterChange,
   onAutoPrintChange,
+  onAutoPrintKitchenChange,
   onPostSuccessChange,
   onRefreshPrinters,
   onReloadCatalog,
@@ -623,9 +625,11 @@ export function WebPosSettingsDropdown({
   mainTillOnline?: boolean;
   mainTillPrintAgentOnline?: boolean;
   autoPrint: boolean;
+  autoPrintKitchen?: boolean;
   postSuccessTarget: 'register' | 'tables';
   onPrinterChange: (name: string) => void;
   onAutoPrintChange: (v: boolean) => void;
+  onAutoPrintKitchenChange?: (v: boolean) => void;
   onPostSuccessChange: (v: 'register' | 'tables') => void;
   onRefreshPrinters: () => void;
   onReloadCatalog: () => void;
@@ -980,6 +984,34 @@ export function WebPosSettingsDropdown({
         <MoreHorizontal size={14} />
         {t('webPosPrinting')}
       </div>
+      <div className="space-y-2 border-b border-stone-100 pb-3">
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            className="rounded"
+            checked={autoPrint}
+            onChange={(e) => onAutoPrintChange(e.target.checked)}
+          />
+          {t('webPosAutoPrint')}
+        </label>
+        <p className="text-[10px] leading-snug text-stone-500">
+          {isLocalPrintStation ? t('webPosAutoPrintHint') : t('webPosAutoPrintHintRemote')}
+        </p>
+        {!isLocalPrintStation && onAutoPrintKitchenChange != null && autoPrintKitchen != null ? (
+          <>
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={autoPrintKitchen}
+                onChange={(e) => onAutoPrintKitchenChange(e.target.checked)}
+              />
+              {t('autoPrintKitchen')}
+            </label>
+            <p className="text-[10px] leading-snug text-stone-500">{t('webPosAutoPrintKitchenHintRemote')}</p>
+          </>
+        ) : null}
+      </div>
       {isLocalPrintStation ? (
         <>
       <label className="block space-y-1 text-xs">
@@ -1070,27 +1102,19 @@ export function WebPosSettingsDropdown({
           </p>
         </div>
       )}
-      <label className="flex items-center gap-2 text-xs">
-        <input
-          type="checkbox"
-          className="rounded"
-          checked={autoPrint}
-          onChange={(e) => onAutoPrintChange(e.target.checked)}
-        />
-        {t('webPosAutoPrint')}
-      </label>
-      <p className="text-[10px] leading-snug text-stone-500">{t('webPosAutoPrintHint')}</p>
-      <label className="block space-y-1 text-xs">
-        <span className="text-[11px] text-stone-500">{t('webPosPostSuccessNav')}</span>
-        <select
-          className="input w-full text-xs"
-          value={postSuccessTarget}
-          onChange={(e) => onPostSuccessChange(e.target.value as 'register' | 'tables')}
-        >
-          <option value="register">{t('webPosTabRegister')}</option>
-          <option value="tables">{t('webPosTabTables')}</option>
-        </select>
-      </label>
+      {isLocalPrintStation ? (
+        <label className="block space-y-1 text-xs">
+          <span className="text-[11px] text-stone-500">{t('webPosPostSuccessNav')}</span>
+          <select
+            className="input w-full text-xs"
+            value={postSuccessTarget}
+            onChange={(e) => onPostSuccessChange(e.target.value as 'register' | 'tables')}
+          >
+            <option value="register">{t('webPosTabRegister')}</option>
+            <option value="tables">{t('webPosTabTables')}</option>
+          </select>
+        </label>
+      ) : null}
       {onSendLogs ? (
         <button
           type="button"
