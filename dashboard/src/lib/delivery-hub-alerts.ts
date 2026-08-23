@@ -66,3 +66,9 @@ export function newOrderSpeechLine(
   const zipPart = zip ? t('deliveryHubNewOrderZipPart').replace('{zip}', zip) : '';
   return t('deliveryHubNewOrderSpeech').replace('{platform}', platform).replace('{zipPart}', zipPart);
 }
+
+/** WebPOS till announcement for a new online shop order. */
+export function onlineShopOrderSpeechLine(t: (key: string) => string, zip?: string): string {
+  const code = zip?.trim() || t('deliveryHubUnknownZip');
+  return t('webPosOnlineShopOrderSpeech').replace('{zip}', code);
+}

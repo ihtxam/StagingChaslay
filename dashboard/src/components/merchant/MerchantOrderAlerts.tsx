@@ -4,7 +4,7 @@ import { useI18n } from '@/lib/i18n';
 import { playOrderAlertOnce, startOrderAlertLoop, stopOrderAlertLoop } from '@/lib/order-alert';
 import {
   extractZipFromAddress,
-  newOrderSpeechLine,
+  onlineShopOrderSpeechLine,
   speakDeliveryAlert,
 } from '@/lib/delivery-hub-alerts';
 import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
@@ -103,7 +103,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
           for (const o of needsManual) {
             unactionedRef.current.add(o.id);
             const zip = extractZipFromAddress(o.shippingAddress);
-            speakDeliveryAlert(newOrderSpeechLine(t, o.orderSource, zip));
+            speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
             showBrowserNotification(
               t('panelNewOrderNotificationTitle'),
               t('panelNewOrderNotificationBody').replace(
@@ -157,6 +157,13 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
     }
   }, [queue.length]);
 
+  const acknowledgeOrder = useCallback(
+    (order: OnlineOrder) => {
+      markActioned(order.id);
+    },
+    [markActioned]
+  );
+
   const acceptOrder = useCallback(
     async (order: OnlineOrder) => {
       setBusy(true);
@@ -190,6 +197,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
       order={queue[0] ?? null}
       queueCount={queue.length}
       busy={busy}
+      onAcknowledge={acknowledgeOrder}
       onAccept={(o) => void acceptOrder(o)}
       onReject={(o) => void rejectOrder(o)}
     />

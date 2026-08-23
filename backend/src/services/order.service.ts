@@ -87,17 +87,19 @@ function usesExternalKitchenLifecycle(order: {
 async function enqueueOnlineOrderReceiptPrint(
   merchantId: string,
   orderId: string,
-  order: { orderSource?: string | null }
+  order: { orderSource?: string | null; fulfillmentChannel?: string | null }
 ) {
   const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
   const source =
     order.orderSource === "justeat" || order.orderSource === "ubereats"
       ? order.orderSource
       : "online_shop";
+  const isDelivery = order.fulfillmentChannel === "delivery";
   await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
     printKitchen: false,
-    printNotification: false,
-    printReceipt: true,
+    printNotification: !isDelivery,
+    printDeliveryReceipt: isDelivery,
+    printReceipt: !isDelivery,
   });
 }
 
@@ -520,6 +522,7 @@ export class OrderService {
               : "online_shop";
           await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
             printKitchen: true,
+            printDeliveryReceipt: false,
             printReceipt: false,
             printNotification: false,
           });

@@ -8,7 +8,6 @@ import {
   BellOff,
   Car,
   ChevronDown,
-  ExternalLink,
   Minus,
   Plus,
   Printer,
@@ -31,6 +30,7 @@ import {
   extractZipFromAddress,
   isDeliveryHubSpeechEnabled,
   newOrderSpeechLine,
+  onlineShopOrderSpeechLine,
   setDeliveryHubSpeechEnabled,
   speakDeliveryAlert,
 } from '@/lib/delivery-hub-alerts';
@@ -92,7 +92,9 @@ type Props = {
   } | null;
   printSettings?: PosPrintSettingsClient | null;
   onClose?: () => void;
+  onMinimize?: () => void;
   standalone?: boolean;
+  hidden?: boolean;
 };
 
 const DEFAULT_CENTER: [number, number] = [47.3769, 8.5417];
@@ -118,7 +120,7 @@ function rowColorClass(order: DeliveryRow): string {
   return 'border-l-amber-400 bg-white';
 }
 
-export default function WebPosDeliveryHub({ merchant, printSettings, onClose, standalone }: Props) {
+export default function WebPosDeliveryHub({ merchant, printSettings, onClose, onMinimize, standalone, hidden }: Props) {
   const { t, formatTime, locale } = useI18n();
   const [tab, setTab] = useState<HubTab>('active');
   const [orders, setOrders] = useState<DeliveryRow[]>([]);
@@ -215,7 +217,12 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
       if (alertedPendingRef.current.has(o.id)) continue;
       alertedPendingRef.current.add(o.id);
       const zip = extractZipFromAddress(o.shippingAddress);
-      speakDeliveryAlert(newOrderSpeechLine(t, o.orderSource, zip));
+      const src = String(o.orderSource || '').toLowerCase();
+      const line =
+        src === 'online_shop'
+          ? onlineShopOrderSpeechLine(t, zip)
+          : newOrderSpeechLine(t, o.orderSource, zip);
+      speakDeliveryAlert(line);
     }
   }, [pendingApproval, speechOn]);
 
@@ -360,10 +367,6 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
     if (drivers[0]) return [drivers[0].latitude, drivers[0].longitude];
     return DEFAULT_CENTER;
   }, [storeLat, storeLng, drivers]);
-
-  const openStandalone = () => {
-    window.open('/merchant/pos?delivery=1', '_blank', 'noopener,noreferrer');
-  };
 
   const toggleExpanded = (orderId: string) => {
     setExpandedIds((prev) => {
@@ -555,7 +558,7 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-stone-100">
+    <div className={`flex h-full min-h-0 flex-col bg-stone-100 ${hidden ? 'pointer-events-none invisible' : ''}`}>
       <header className="shrink-0 border-b border-stone-200 bg-white px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -617,9 +620,14 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
             <button type="button" className="rounded-lg border border-stone-200 p-1.5" onClick={() => void load()} disabled={loading}>
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             </button>
-            {!standalone ? (
-              <button type="button" className="rounded-lg border border-stone-200 p-1.5" onClick={openStandalone} title={t('deliveryHubOpenWindow')}>
-                <ExternalLink size={16} />
+            {!standalone && onMinimize ? (
+              <button
+                type="button"
+                className="rounded-lg border border-stone-200 p-1.5"
+                onClick={onMinimize}
+                title={t('deliveryHubMinimize')}
+              >
+                <Minus size={16} />
               </button>
             ) : null}
           </div>

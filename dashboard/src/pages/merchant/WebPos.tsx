@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Truck } from 'lucide-react';
 import api from '@/lib/api';
 import { repairCatalogText } from '@/lib/text-encoding';
 import { useI18n, type Locale } from '@/lib/i18n';
@@ -398,6 +398,11 @@ import {
   startOrderAlertForDuration,
   stopOrderAlertLoop,
 } from '@/lib/order-alert';
+import {
+  extractZipFromAddress,
+  onlineShopOrderSpeechLine,
+  speakDeliveryAlert,
+} from '@/lib/delivery-hub-alerts';
 import { isMainTillRegister, shouldRingWaiterTillBell } from '@/lib/waiter-till-bell';
 import {
   backOfficeHomePath,
@@ -595,6 +600,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   notifyPrintErrorRef.current = notifyPrintError;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [deliveryHubOpen, setDeliveryHubOpen] = useState(false);
+  const [deliveryHubMinimized, setDeliveryHubMinimized] = useState(false);
 
   useEffect(() => {
     document.title = APP_NAME;
@@ -602,10 +609,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     if (searchParams.get('delivery') === '1') {
-      setPosTab('delivery');
-      setPosView('delivery');
+      setDeliveryHubOpen(true);
+      setDeliveryHubMinimized(false);
+      const next = new URLSearchParams(searchParams);
+      next.delete('delivery');
+      setSearchParams(next, { replace: true });
     }
-  }, [searchParams]);
+  }, [searchParams, setSearchParams]);
 
   const authUser = useAuthStore((s) => s.user);
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
@@ -2191,6 +2201,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (freshOrders.length > 0) {
         for (const o of freshOrders) {
           unactionedOrderIdsRef.current.add(o.id);
+          const zip = extractZipFromAddress(o.shippingAddress);
+          speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
         }
         setUnactionedOrderCount(unactionedOrderIdsRef.current.size);
         setNewOrderAlertQueue((prev) => {
@@ -2202,9 +2214,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           return next;
         });
         playOrderAlertOnce();
-        if (!onlinePanelOpenRef.current) {
-          startOrderAlertLoop(5000);
-        }
+        startOrderAlertLoop(5000);
       } else {
         setUnactionedOrderCount(unactionedOrderIdsRef.current.size);
       }
@@ -2215,7 +2225,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     } catch {
       /* ignore poll errors */
     }
-  }, []);
+  }, [t]);
 
   const markOnlineOrderActioned = useCallback((orderId: string) => {
     unactionedOrderIdsRef.current.delete(orderId);
@@ -2229,6 +2239,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const dismissNewOrderAlert = useCallback((orderId: string) => {
     setNewOrderAlertQueue((prev) => prev.filter((o) => o.id !== orderId));
   }, []);
+
+  const acknowledgeNewOrderAlert = useCallback(
+    (order: OnlineOrder) => {
+      markOnlineOrderActioned(order.id);
+      dismissNewOrderAlert(order.id);
+    },
+    [dismissNewOrderAlert, markOnlineOrderActioned]
+  );
 
   const openOnlineOrdersInTab = useCallback((orderId?: string | null) => {
     setOrdersChannelPref('online');
@@ -2330,7 +2348,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     const viewing = posView === 'orders' && ordersChannelPref === 'online';
     onlinePanelOpenRef.current = viewing;
-    if (viewing) stopOrderAlertLoop();
   }, [posView, ordersChannelPref]);
 
   useEffect(() => {
@@ -8065,16 +8082,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           />
         ) : posView === 'bookings' ? (
           <WebPosBookingsView />
-        ) : posView === 'delivery' ? (
-          <WebPosDeliveryHub
-            merchant={merchant}
-            printSettings={printSettings}
-            standalone={searchParams.get('delivery') === '1'}
-            onClose={() => {
-              setPosTab('register');
-              setPosView('register');
-            }}
-          />
         ) : posView === 'orders' ? (
           <WebPosOrdersPanel
             embedded
@@ -8186,8 +8193,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               }
             }}
             onOpenDeliveryHub={() => {
-              setPosTab('delivery');
-              setPosView('delivery');
+              setDeliveryHubOpen(true);
+              setDeliveryHubMinimized(false);
             }}
             canSalesAdjust={canViewAllSales}
           />
@@ -9025,8 +9032,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         order={currentNewOrderAlert}
         queueCount={newOrderAlertQueue.length}
         busy={alertActionBusy}
+        onAcknowledge={acknowledgeNewOrderAlert}
         onAccept={acceptFromNewOrderAlert}
         onReject={rejectFromNewOrderAlert}
+        onOpen={(order) => openOnlineOrdersInTab(order.id)}
       />
 
       <WebPosRejectOrderModal
@@ -9040,6 +9049,43 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onClose={() => setAlertRejectOrder(null)}
         onConfirm={confirmRejectFromAlert}
       />
+
+      {(deliveryHubOpen || deliveryHubMinimized) ? (
+        <>
+          <div
+            className={`fixed inset-0 z-[240] flex flex-col bg-stone-100 ${
+              deliveryHubMinimized ? 'pointer-events-none invisible' : ''
+            }`}
+            aria-hidden={deliveryHubMinimized}
+          >
+            <WebPosDeliveryHub
+              merchant={merchant}
+              printSettings={printSettings}
+              hidden={deliveryHubMinimized}
+              onMinimize={() => setDeliveryHubMinimized(true)}
+              onClose={() => {
+                setDeliveryHubOpen(false);
+                setDeliveryHubMinimized(false);
+              }}
+            />
+          </div>
+          {deliveryHubMinimized ? (
+            <button
+              type="button"
+              className="fixed bottom-4 right-4 z-[241] inline-flex items-center gap-2 rounded-full border border-teal-300 bg-teal-700 px-4 py-3 text-sm font-bold text-white shadow-lg hover:bg-teal-800"
+              onClick={() => setDeliveryHubMinimized(false)}
+            >
+              <Truck size={18} aria-hidden />
+              {t('deliveryHubRestore')}
+              {onlinePendingCount > 0 ? (
+                <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                  {onlinePendingCount}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
+        </>
+      ) : null}
 
       {(effectiveChannel === 'takeaway' || effectiveChannel === 'delivery') && (
         <WebPosFulfillmentModal

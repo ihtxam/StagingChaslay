@@ -547,9 +547,11 @@ export class DeliveryPlatformService {
 
     await DeliveryPlatformService.enqueueAutoPrint(merchantId, order.id, source, {
       printKitchen: status === "preparing",
-      printNotification: status !== "preparing",
+      printDeliveryReceipt: channel === "delivery",
+      printNotification: channel !== "delivery" && status !== "preparing",
       printReceipt:
-        order.paymentStatus === "completed" || order.paymentStatus === "paid",
+        channel !== "delivery" &&
+        (order.paymentStatus === "completed" || order.paymentStatus === "paid"),
     });
 
     return { order, created: true };
@@ -559,7 +561,12 @@ export class DeliveryPlatformService {
     merchantId: string,
     orderId: string,
     orderSource: OrderSource,
-    opts?: { printKitchen?: boolean; printReceipt?: boolean; printNotification?: boolean }
+    opts?: {
+      printKitchen?: boolean;
+      printReceipt?: boolean;
+      printDeliveryReceipt?: boolean;
+      printNotification?: boolean;
+    }
   ) {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
@@ -575,8 +582,9 @@ export class DeliveryPlatformService {
       printSettings.autoPrintKitchen !== false;
     const printReceipt =
       opts?.printReceipt === true && printSettings.autoPrintReceipt !== false;
+    const printDeliveryReceipt = opts?.printDeliveryReceipt === true;
     const printNotification = opts?.printNotification === true;
-    if (!printKitchen && !printReceipt && !printNotification) return;
+    if (!printKitchen && !printReceipt && !printDeliveryReceipt && !printNotification) return;
 
     await ChaslayFloorService.createPrintJob(merchantId, {
       jobType: "ESCPOS",
@@ -585,6 +593,7 @@ export class DeliveryPlatformService {
         orderId,
         printKitchen,
         printReceipt,
+        printDeliveryReceipt,
         printNotification,
         orderSource,
       },

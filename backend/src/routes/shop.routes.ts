@@ -2293,7 +2293,8 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     try {
       const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
       await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
-        printNotification: true,
+        printDeliveryReceipt: order.fulfillmentChannel === "delivery",
+        printNotification: order.fulfillmentChannel !== "delivery",
         printKitchen: false,
         printReceipt: false,
       });
@@ -2547,8 +2548,9 @@ router.post("/:slug/orders/:orderId/confirm-payment", async (req: Request, res: 
       const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
       await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
         printKitchen: false,
+        printDeliveryReceipt: updated.fulfillmentChannel === "delivery",
         printNotification: false,
-        printReceipt: true,
+        printReceipt: updated.fulfillmentChannel !== "delivery",
       });
     } catch (printErr) {
       console.warn("Confirm-payment receipt print enqueue failed:", printErr);
