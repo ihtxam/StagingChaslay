@@ -455,9 +455,6 @@ function MerchantShell() {
     ...(allow('/merchant/delivery')
       ? [{ label: t('deliveryMapNav'), path: '/merchant/delivery', icon: '🛵' }]
       : []),
-    ...(allow('/merchant/delivery/driver')
-      ? [{ label: t('deliveryDriverTitle'), path: '/merchant/delivery/driver', icon: '📍' }]
-      : []),
   ]
     .filter((entry) => {
       if ('children' in entry && Array.isArray(entry.children)) {
