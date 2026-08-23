@@ -27,6 +27,16 @@ enum class PaymentMethod {
     GIFT_CARD
 }
 
+enum class CourseSendMode {
+    FIRE_PER_COURSE,
+    SEND_ALL_ONCE;
+
+    companion object {
+        fun fromKey(key: String?): CourseSendMode =
+            if (key == "send_all_once") SEND_ALL_ONCE else FIRE_PER_COURSE
+    }
+}
+
 enum class PaymentStatus {
     PENDING,
     COMPLETED,

@@ -43,7 +43,8 @@ data class LoyaltyProgramSettings(
 
 enum class GiftCardOp {
     SELL,
-    RELOAD
+    RELOAD,
+    CHECK_BALANCE
 }
 
 /** Metadata for gift-card sell/reload lines in the cart (credited after payment). */

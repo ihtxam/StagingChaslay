@@ -121,6 +121,7 @@ import com.chaslay.pos.ui.scanner.BarcodeWedgeHub
 import com.chaslay.pos.ui.scanner.BarcodeWedgeListener
 import com.chaslay.pos.domain.model.ProductVariantModel
 import com.chaslay.pos.domain.model.FulfillmentType
+import com.chaslay.pos.domain.model.CourseSendMode
 import com.chaslay.pos.domain.model.GiftCardOp
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.TableStatus
@@ -208,7 +209,8 @@ fun PosScreen(
         !showBarcodeScanner &&
             !state.showOrderComplete &&
             !state.showMembershipDialog &&
-            !state.showGiftCardOpsDialog
+            !state.showGiftCardOpsDialog &&
+            !state.showGiftCardPayDialog
 
     DisposableEffect(hardwareScanEnabled) {
         BarcodeWedgeHub.enabled = hardwareScanEnabled
@@ -290,7 +292,8 @@ fun PosScreen(
             giftCardsEnabled = state.giftCardsEnabled,
             redeemThresholdPoints = state.loyaltyProgram.redeemThreshold,
             onTogglePayWithPoints = viewModel::updateCheckoutPayWithPoints,
-            onTogglePayWithGiftCard = viewModel::updateCheckoutPayWithGiftCard
+            onTogglePayWithGiftCard = viewModel::updateCheckoutPayWithGiftCard,
+            onGiftCardPay = viewModel::openGiftCardPayDialog
         )
         if (state.showOrderComplete) {
             state.completedTransaction?.let { transaction ->
@@ -421,6 +424,7 @@ fun PosScreen(
         }
 
         val coursesEnabled = state.settings.coursesEnabled
+        val courseSendMode = CourseSendMode.fromKey(state.settings.courseSendMode)
         OdooPosNavBar(
             businessName = state.settings.businessName,
             isTableServiceEnabled = isTableServiceEnabled,
@@ -464,6 +468,8 @@ fun PosScreen(
                     state.activeTableName != null &&
                     state.cart.isEmpty,
                 coursesEnabled = coursesEnabled,
+                courseSendMode = courseSendMode,
+                coursesBulkSent = state.coursesBulkSent,
                 activeTableName = state.activeTableName,
                 activeCourse = state.cart.activeCourse,
                 activeCourseHasItems = state.cart.items.any { it.courseNumber == state.cart.activeCourse },
@@ -714,7 +720,8 @@ fun PosScreen(
             reloadEnabled = state.giftCardSettings?.reloadEnabled != false,
             onDismiss = viewModel::dismissGiftCardOpsMenu,
             onSell = { viewModel.startGiftCardOpFromMenu(GiftCardOp.SELL) },
-            onReload = { viewModel.startGiftCardOpFromMenu(GiftCardOp.RELOAD) }
+            onReload = { viewModel.startGiftCardOpFromMenu(GiftCardOp.RELOAD) },
+            onCheckBalance = { viewModel.startGiftCardOpFromMenu(GiftCardOp.CHECK_BALANCE) }
         )
     }
 
@@ -732,6 +739,19 @@ fun PosScreen(
                 onAddToCart = viewModel::addGiftCardLineToCart
             )
         }
+    }
+
+    if (state.showGiftCardPayDialog) {
+        GiftCardPayDialog(
+            amountDue = state.giftCardPayDue,
+            currencySymbol = state.currencySymbol,
+            busy = state.giftCardPayBusy,
+            lookupError = state.giftCardPayError,
+            lookedUpCard = state.giftCardPayLookedUpCard,
+            onDismiss = viewModel::dismissGiftCardPayDialog,
+            onLookup = viewModel::lookupGiftCardForPay,
+            onConfirm = viewModel::confirmGiftCardPayment
+        )
     }
 
     if (state.showCartCancelSimpleDialog) {
@@ -2079,6 +2099,8 @@ private fun CartActionSidebar(
     fulfillmentType: com.chaslay.pos.domain.model.FulfillmentType,
     canReleaseEmptyTable: Boolean,
     coursesEnabled: Boolean,
+    courseSendMode: CourseSendMode = CourseSendMode.FIRE_PER_COURSE,
+    coursesBulkSent: Boolean = false,
     activeTableName: String?,
     activeCourse: Int,
     activeCourseHasItems: Boolean,
@@ -2153,8 +2175,12 @@ private fun CartActionSidebar(
                 onClick = onAddCourse
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
+            val showFireCourseButton = courseSendMode == CourseSendMode.FIRE_PER_COURSE &&
+                coursesBulkSent &&
+                activeCourse > 1 &&
+                activeCourseHasUnsentItems
             when {
-                activeCourseHasUnsentItems || (activeCourseHasItems && !hasUnsentItems) -> {
+                showFireCourseButton -> {
                     CartSidebarButton(
                         label = stringResource(R.string.fire_course_n, activeCourse),
                         shortLabel = "Fire",
@@ -2164,8 +2190,13 @@ private fun CartActionSidebar(
                     )
                 }
                 hasUnsentItems -> {
+                    val sendLabel = if (courseSendMode == CourseSendMode.SEND_ALL_ONCE) {
+                        stringResource(R.string.send_all_courses)
+                    } else {
+                        stringResource(R.string.send_to_kitchen)
+                    }
                     CartSidebarButton(
-                        label = stringResource(R.string.send_to_kitchen),
+                        label = sendLabel,
                         shortLabel = "Send",
                         icon = Icons.Default.Send,
                         color = VectronColors.CashGreen,

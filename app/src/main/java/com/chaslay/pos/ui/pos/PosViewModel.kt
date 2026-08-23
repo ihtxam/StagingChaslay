@@ -39,6 +39,7 @@ import com.chaslay.pos.domain.model.FloorDeviceRole
 import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.KitchenMessagePreset
+import com.chaslay.pos.domain.model.CourseSendMode
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentTender
 import com.chaslay.pos.domain.model.AddonGroupModel
@@ -218,6 +219,12 @@ data class PosUiState(
     val giftCardOpsBusy: Boolean = false,
     val giftCardOpsError: String? = null,
     val giftCardOpsLookedUpCard: com.chaslay.pos.data.remote.dto.GiftCardDto? = null,
+    val showGiftCardPayDialog: Boolean = false,
+    val giftCardPayDue: Double = 0.0,
+    val giftCardPayBusy: Boolean = false,
+    val giftCardPayError: String? = null,
+    val giftCardPayLookedUpCard: com.chaslay.pos.data.remote.dto.GiftCardDto? = null,
+    val coursesBulkSent: Boolean = false,
     val productGridShowImages: Boolean = false,
     val productGridColumns: Int = 5,
     val productGridSortAlpha: Boolean = false,
@@ -426,6 +433,12 @@ class PosViewModel @Inject constructor(
             giftCardOpsBusy = extras.giftCardOpsBusy,
             giftCardOpsError = extras.giftCardOpsError,
             giftCardOpsLookedUpCard = extras.giftCardOpsLookedUpCard,
+            showGiftCardPayDialog = extras.showGiftCardPayDialog,
+            giftCardPayDue = extras.giftCardPayDue,
+            giftCardPayBusy = extras.giftCardPayBusy,
+            giftCardPayError = extras.giftCardPayError,
+            giftCardPayLookedUpCard = extras.giftCardPayLookedUpCard,
+            coursesBulkSent = extras.coursesBulkSent,
             productGridShowImages = extras.productGridShowImages,
             productGridColumns = extras.productGridColumns,
             productGridSortAlpha = extras.productGridSortAlpha,
@@ -1143,8 +1156,7 @@ class PosViewModel @Inject constructor(
                 } else {
                     updateExtras {
                         it.copy(
-                            snackbarMessage = error.message
-                                ?: appContext.getString(R.string.membership_lookup_failed)
+                            snackbarMessage = mapGiftCardError(error)
                         )
                     }
                     CardScanResult.HARD_ERROR
@@ -1186,6 +1198,7 @@ class PosViewModel @Inject constructor(
     }
 
     private fun isCardNotFound(error: Throwable): Boolean {
+        if (isGiftCardAuthError(error)) return true
         if (error is IllegalArgumentException &&
             error.message.orEmpty().contains("Cloud login required", ignoreCase = true)
         ) {
@@ -1199,6 +1212,46 @@ class PosViewModel @Inject constructor(
         val msg = error.message.orEmpty()
         return msg.contains("not found", ignoreCase = true)
     }
+
+    private suspend fun hasCloudGiftCardSession(): Boolean =
+        !syncPreferences.getDashboardToken().isNullOrBlank()
+
+    private suspend fun ensureCloudGiftCardSession(): Boolean {
+        if (hasCloudGiftCardSession()) return true
+        updateExtras {
+            it.copy(snackbarMessage = appContext.getString(R.string.gift_card_cloud_login_required))
+        }
+        return false
+    }
+
+    private fun isGiftCardAuthError(error: Throwable): Boolean {
+        if (error is IllegalArgumentException &&
+            error.message.orEmpty().contains("Cloud login required", ignoreCase = true)
+        ) {
+            return true
+        }
+        if (error is retrofit2.HttpException) {
+            when (error.code()) {
+                401, 403 -> return true
+            }
+        }
+        val msg = error.message.orEmpty()
+        return msg.contains("HTTP 401", ignoreCase = true) ||
+            msg.contains("HTTP 403", ignoreCase = true) ||
+            msg.contains("Unauthorized", ignoreCase = true)
+    }
+
+    private fun mapGiftCardError(error: Throwable, fallbackRes: Int = R.string.membership_lookup_failed): String {
+        if (isGiftCardAuthError(error)) {
+            return appContext.getString(R.string.gift_card_cloud_login_required)
+        }
+        return error.message?.takeIf { it.isNotBlank() }
+            ?: appContext.getString(fallbackRes)
+    }
+
+    private fun resolveGiftCardSettings(): com.chaslay.pos.data.remote.dto.GiftCardSettingsDto =
+        _uiExtras.value.giftCardSettings
+            ?: com.chaslay.pos.data.remote.dto.GiftCardSettingsDto.DEFAULT
 
     private suspend fun addScannedProduct(lookup: com.chaslay.pos.domain.model.BarcodeLookupResult) {
         val product = productRepository.getProductWithVariants(lookup.productId) ?: return
@@ -1579,8 +1632,13 @@ class PosViewModel @Inject constructor(
             showError("Kitchen", "Add items before sending to kitchen")
             return
         }
+        val settings = cachedSettings
+        if (settings.coursesEnabled && courseSendMode(settings) == CourseSendMode.FIRE_PER_COURSE) {
+            sendCoursesInitialBulk()
+            return
+        }
         if (cart.tableId != null) {
-            sendToKitchen(courseNumber = null)
+            sendToKitchen(courseNumber = null, markCoursesBulkSent = settings.coursesEnabled)
             return
         }
         viewModelScope.launch {
@@ -1618,6 +1676,7 @@ class PosViewModel @Inject constructor(
                 updateExtras {
                     it.copy(
                         orderCommittedForCancel = true,
+                        coursesBulkSent = settings.coursesEnabled,
                         snackbarMessage = "Sent ${unsent.size} item(s) to kitchen",
                         selectedCartItemId = null,
                         keypadBuffer = ""
@@ -1627,7 +1686,64 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    fun sendToKitchen(courseNumber: Int? = null) {
+    private fun sendCoursesInitialBulk() {
+        val cart = cartManager.snapshot()
+        val unsent = cart.items.filter { !it.sentToKitchen }
+        if (unsent.isEmpty()) {
+            showError("Kitchen", "No new items to send")
+            return
+        }
+        val course1 = unsent.filter { it.courseNumber == 1 }
+        val toSend = course1.ifEmpty {
+            val minCourse = unsent.minOf { it.courseNumber }
+            unsent.filter { it.courseNumber == minCourse }
+        }
+        if (cart.tableId != null) {
+            sendToKitchen(
+                courseNumber = null,
+                targetItemIds = toSend.map { it.id }.toSet(),
+                markCoursesBulkSent = true
+            )
+            return
+        }
+        viewModelScope.launch {
+            val userId = sessionManager.currentUserId.first() ?: 0L
+            val userName = sessionManager.currentUserName.first() ?: "Cashier"
+            val numbered = if (!cart.orderNumber.isNullOrBlank()) cart
+            else cart.copy(orderNumber = "P-${System.currentTimeMillis().toString().takeLast(6)}")
+            if (cart.orderNumber.isNullOrBlank()) cartManager.setOrderNumber(numbered.orderNumber!!)
+            runCatching {
+                printWalkInKitchenTicket(numbered.copy(items = toSend))
+                cartManager.refreshSentFlags(
+                    cart.items.associate { item ->
+                        item.id to (item.sentToKitchen || toSend.any { it.id == item.id })
+                    }
+                )
+                heldOrderRepository.createHeldOrder(
+                    cart = cartManager.snapshot().copy(orderNumber = numbered.orderNumber),
+                    sendToKitchen = true,
+                    userId = userId,
+                    userName = userName
+                )
+            }.onSuccess {
+                updateExtras {
+                    it.copy(
+                        orderCommittedForCancel = true,
+                        coursesBulkSent = true,
+                        snackbarMessage = appContext.getString(R.string.courses_sent_fire_when_ready),
+                        selectedCartItemId = null,
+                        keypadBuffer = ""
+                    )
+                }
+            }.onFailure { e -> handleKitchenDeliverFailure(e) }
+        }
+    }
+
+    fun sendToKitchen(
+        courseNumber: Int? = null,
+        targetItemIds: Set<String>? = null,
+        markCoursesBulkSent: Boolean = false
+    ) {
         if (!isRestaurantMode()) return
         val cart = cartManager.snapshot()
         if (cart.tableId == null) {
@@ -1655,7 +1771,7 @@ class PosViewModel @Inject constructor(
                     .filter { it.sentToKitchenAt == null && (courseNumber == null || it.courseNumber == courseNumber) }
                     .map { it.id }
                     .toSet()
-                val targetIds = cartUnsentIds + dbUnsentIds
+                val targetIds = targetItemIds ?: (cartUnsentIds + dbUnsentIds)
                 Log.i(
                     "KITCHEN_SEND",
                     "order=$orderId cartItems=${cart.items.size} cartUnsent=${cartUnsentIds.size} " +
@@ -1698,7 +1814,12 @@ class PosViewModel @Inject constructor(
                         it.copy(
                             kitchenSentToPrinter = true,
                             orderCommittedForCancel = true,
-                            snackbarMessage = "Sent ${unsent.size} item(s) to kitchen",
+                            coursesBulkSent = it.coursesBulkSent || markCoursesBulkSent,
+                            snackbarMessage = if (markCoursesBulkSent) {
+                                appContext.getString(R.string.courses_sent_fire_when_ready)
+                            } else {
+                                "Sent ${unsent.size} item(s) to kitchen"
+                            },
                             selectedCartItemId = null,
                             keypadBuffer = ""
                         )
@@ -1710,15 +1831,29 @@ class PosViewModel @Inject constructor(
     }
 
     fun sendAllCoursesToKitchen() {
-        sendToKitchen(courseNumber = null)
-        updateExtras {
-            it.copy(snackbarMessage = "All courses sent. Switch course tab and tap Fire to send each course when ready.")
+        val settings = cachedSettings
+        if (settings.coursesEnabled && courseSendMode(settings) == CourseSendMode.FIRE_PER_COURSE) {
+            if (_uiExtras.value.coursesBulkSent) {
+                sendActiveCourseToKitchen()
+            } else {
+                sendCoursesInitialBulk()
+            }
+            return
         }
+        sendToKitchen(courseNumber = null, markCoursesBulkSent = settings.coursesEnabled)
     }
 
     fun sendActiveCourseToKitchen() {
         val cart = cartManager.snapshot()
         val active = cart.activeCourse
+        val settings = cachedSettings
+        if (settings.coursesEnabled &&
+            courseSendMode(settings) == CourseSendMode.FIRE_PER_COURSE &&
+            !_uiExtras.value.coursesBulkSent
+        ) {
+            sendCoursesInitialBulk()
+            return
+        }
         val courseItems = cart.items.filter { it.courseNumber == active }
         if (courseItems.isEmpty()) {
             showError("Kitchen", "No items in course $active")
@@ -2535,6 +2670,11 @@ class PosViewModel @Inject constructor(
         }
     }
 
+    private fun courseSendMode(settings: BusinessSettingsEntity = cachedSettings): CourseSendMode =
+        CourseSendMode.fromKey(settings.courseSendMode)
+
+    private fun resetCoursesBulkSent() = updateExtras { it.copy(coursesBulkSent = false) }
+
     fun refreshGiftCardFeature() {
         viewModelScope.launch {
             val token = syncPreferences.getDashboardToken()
@@ -2657,6 +2797,7 @@ class PosViewModel @Inject constructor(
     fun showMembershipSellDialog() {
         if (!_uiExtras.value.giftCardsEnabled) return
         viewModelScope.launch {
+            if (!ensureCloudGiftCardSession()) return@launch
             if (!ensureOpenShiftForGiftCardSell()) return@launch
             updateExtras { it.copy(membershipSellBusy = true, membershipSellError = null) }
             giftCardRepository.fetchSettings()
@@ -2691,8 +2832,10 @@ class PosViewModel @Inject constructor(
                     updateExtras {
                         it.copy(
                             membershipSellBusy = false,
-                            membershipSellError = e.message
-                                ?: appContext.getString(R.string.membership_sell_failed)
+                            membershipSellError = mapGiftCardError(
+                                e,
+                                R.string.membership_sell_failed
+                            )
                         )
                     }
                 }
@@ -2753,8 +2896,10 @@ class PosViewModel @Inject constructor(
                 updateExtras {
                     it.copy(
                         membershipSellBusy = false,
-                        membershipSellError = e.message
-                            ?: appContext.getString(R.string.membership_sell_failed)
+                        membershipSellError = mapGiftCardError(
+                            e,
+                            R.string.membership_sell_failed
+                        )
                     )
                 }
             }
@@ -2764,12 +2909,18 @@ class PosViewModel @Inject constructor(
     fun showGiftCardOpsMenu() {
         refreshGiftCardFeature()
         viewModelScope.launch {
+            if (!ensureCloudGiftCardSession()) return@launch
             giftCardRepository.fetchSettings()
                 .onSuccess { settings ->
                     updateExtras { it.copy(giftCardSettings = settings, showGiftCardOpsMenu = true) }
                 }
                 .onFailure {
-                    updateExtras { it.copy(showGiftCardOpsMenu = true) }
+                    updateExtras {
+                        it.copy(
+                            giftCardSettings = resolveGiftCardSettings(),
+                            showGiftCardOpsMenu = true
+                        )
+                    }
                 }
         }
     }
@@ -2835,6 +2986,13 @@ class PosViewModel @Inject constructor(
         when (mode) {
             GiftCardOp.SELL -> showGiftCardSellDialog()
             GiftCardOp.RELOAD -> showGiftCardReloadDialog()
+            GiftCardOp.CHECK_BALANCE -> showGiftCardBalanceDialog()
+        }
+    }
+
+    fun showGiftCardBalanceDialog() {
+        viewModelScope.launch {
+            openGiftCardOpsDialog(GiftCardOp.CHECK_BALANCE)
         }
     }
 
@@ -2845,7 +3003,11 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    fun showGiftCardReloadDialog() = openGiftCardOpsDialog(GiftCardOp.RELOAD)
+    fun showGiftCardReloadDialog() {
+        viewModelScope.launch {
+            openGiftCardOpsDialog(GiftCardOp.RELOAD)
+        }
+    }
 
     private suspend fun ensureOpenShiftForGiftCardSell(): Boolean {
         if (!_uiExtras.value.shiftsEnabled) return true
@@ -2866,33 +3028,29 @@ class PosViewModel @Inject constructor(
         return true
     }
 
-    private fun openGiftCardOpsDialog(mode: GiftCardOp) {
+    private suspend fun openGiftCardOpsDialog(mode: GiftCardOp) {
+        if (!ensureCloudGiftCardSession()) return
         refreshGiftCardFeature()
+        val cachedSettings = resolveGiftCardSettings()
         updateExtras {
             it.copy(
                 showGiftCardOpsDialog = true,
                 giftCardOpsMode = mode,
                 giftCardOpsBusy = true,
                 giftCardOpsError = null,
-                giftCardOpsLookedUpCard = null
+                giftCardOpsLookedUpCard = null,
+                giftCardSettings = cachedSettings
             )
         }
-        viewModelScope.launch {
-            giftCardRepository.fetchSettings()
-                .onSuccess { settings ->
-                    updateExtras {
-                        it.copy(giftCardSettings = settings, giftCardOpsBusy = false)
-                    }
+        giftCardRepository.fetchSettings()
+            .onSuccess { settings ->
+                updateExtras {
+                    it.copy(giftCardSettings = settings, giftCardOpsBusy = false)
                 }
-                .onFailure { e ->
-                    updateExtras {
-                        it.copy(
-                            giftCardOpsBusy = false,
-                            giftCardOpsError = e.message ?: "Gift card settings unavailable"
-                        )
-                    }
-                }
-        }
+            }
+            .onFailure {
+                updateExtras { it.copy(giftCardOpsBusy = false) }
+            }
     }
 
     fun dismissGiftCardOpsDialog() {
@@ -2902,6 +3060,91 @@ class PosViewModel @Inject constructor(
                 giftCardOpsMode = null,
                 giftCardOpsError = null,
                 giftCardOpsLookedUpCard = null
+            )
+        }
+    }
+
+    fun openGiftCardPayDialog() {
+        if (!_uiExtras.value.giftCardsEnabled) return
+        val extras = _uiExtras.value
+        val cart = cartManager.paymentSnapshot()
+        val equalSplitCount = if (cart.splitCount > 1 && !cart.splitByItems) cart.splitCount else 1
+        val shareTotal = if (equalSplitCount > 1) {
+            cart.merchandiseTotal(extras.checkoutState.discountPercent, extras.checkoutState.discountAmount) / equalSplitCount
+        } else {
+            cart.merchandiseTotal(extras.checkoutState.discountPercent, extras.checkoutState.discountAmount)
+        }
+        val afterPoints = (shareTotal + extras.checkoutState.tipAmount - extras.checkoutState.pointsDiscount)
+            .coerceAtLeast(0.0)
+        val giftApplied = if (extras.checkoutState.payWithGiftCard) extras.checkoutState.giftCardRedeemAmount else 0.0
+        val due = (afterPoints - giftApplied).coerceAtLeast(0.0)
+        updateExtras {
+            it.copy(
+                showGiftCardPayDialog = true,
+                giftCardPayDue = due,
+                giftCardPayBusy = false,
+                giftCardPayError = null,
+                giftCardPayLookedUpCard = null
+            )
+        }
+    }
+
+    fun dismissGiftCardPayDialog() {
+        updateExtras {
+            it.copy(
+                showGiftCardPayDialog = false,
+                giftCardPayBusy = false,
+                giftCardPayError = null,
+                giftCardPayLookedUpCard = null
+            )
+        }
+    }
+
+    fun lookupGiftCardForPay(code: String, mediaType: String) {
+        viewModelScope.launch {
+            updateExtras { it.copy(giftCardPayBusy = true, giftCardPayError = null) }
+            giftCardRepository.lookupCode(code, mediaType)
+                .onSuccess { card ->
+                    updateExtras {
+                        it.copy(
+                            giftCardPayBusy = false,
+                            giftCardPayLookedUpCard = card,
+                            giftCardPayError = null
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    updateExtras {
+                        it.copy(
+                            giftCardPayBusy = false,
+                            giftCardPayLookedUpCard = null,
+                            giftCardPayError = e.message ?: appContext.getString(R.string.membership_lookup_failed)
+                        )
+                    }
+                }
+        }
+    }
+
+    fun confirmGiftCardPayment(amount: Double, card: com.chaslay.pos.data.remote.dto.GiftCardDto) {
+        val redeem = amount.coerceAtLeast(0.0)
+        if (redeem <= 0.001) return
+        val attached = giftCardRepository.toAttachedMembership(card)
+        updateExtras {
+            it.copy(
+                attachedGiftCard = AttachedGiftCard(
+                    cardId = attached.cardId,
+                    cardNumber = attached.cardNumber,
+                    balance = attached.giftBalance
+                ),
+                checkoutState = it.checkoutState.copy(
+                    payWithGiftCard = true,
+                    giftCardRedeemAmount = redeem
+                ),
+                showGiftCardPayDialog = false,
+                giftCardPayBusy = false,
+                giftCardPayError = null,
+                giftCardPayLookedUpCard = null,
+                snackbarMessage = appContext.getString(R.string.gift_card_attached, redeem)
             )
         }
     }
@@ -2925,7 +3168,7 @@ class PosViewModel @Inject constructor(
                     updateExtras {
                         it.copy(
                             giftCardOpsBusy = false,
-                            giftCardOpsError = e.message ?: "Card not found",
+                            giftCardOpsError = mapGiftCardError(e),
                             giftCardOpsLookedUpCard = null
                         )
                     }
@@ -3007,6 +3250,7 @@ class PosViewModel @Inject constructor(
         val productId = when (mode) {
             GiftCardOp.SELL -> GiftCardProducts.SELL_PRODUCT_ID
             GiftCardOp.RELOAD -> GiftCardProducts.RELOAD_PRODUCT_ID
+            GiftCardOp.CHECK_BALANCE -> return
         }
         cartManager.addItem(
             CartItem(
@@ -3102,8 +3346,7 @@ class PosViewModel @Inject constructor(
                     updateExtras {
                         it.copy(
                             membershipBusy = false,
-                            membershipLookupError = e.message
-                                ?: appContext.getString(R.string.membership_lookup_failed)
+                            membershipLookupError = mapGiftCardError(e)
                         )
                     }
                 }
@@ -3969,6 +4212,7 @@ class PosViewModel @Inject constructor(
                 val equalSplitCount = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart.splitCount else 1
                 val saleDiscount = checkoutSaleDiscount(saleCart, checkout, equalSplitCount)
                 val clientId = UUID.randomUUID().toString()
+                var publishError: String? = null
                 val published = if (isDeviceOnline()) {
                     runCatching {
                         receiptRepository.publishInvoiceSale(
@@ -3987,6 +4231,8 @@ class PosViewModel @Inject constructor(
                                 saleCart.deliveryZip
                             ).joinToString(", ").ifBlank { null }
                         )
+                    }.onFailure { e ->
+                        publishError = e.message ?: "Could not publish invoice"
                     }.getOrNull()
                 } else {
                     null
@@ -4007,10 +4253,10 @@ class PosViewModel @Inject constructor(
                 }.onSuccess {
                     cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
                     cartManager.resetSplit()
-                    val snack = if (published?.id != null) {
-                        appContext.getString(com.chaslay.pos.R.string.invoice_created)
-                    } else {
-                        appContext.getString(com.chaslay.pos.R.string.invoice_offline_queued)
+                    val snack = when {
+                        published?.id != null -> appContext.getString(com.chaslay.pos.R.string.invoice_created)
+                        publishError != null -> publishError!!
+                        else -> appContext.getString(com.chaslay.pos.R.string.invoice_offline_queued)
                     }
                     updateExtras {
                         it.copy(
@@ -4027,15 +4273,19 @@ class PosViewModel @Inject constructor(
                         )
                     }
                     published?.id?.let { orderId ->
+                        val pdfContext = activity ?: appContext
                         viewModelScope.launch {
                             invoiceRepository.downloadAndOpen(
-                                appContext,
+                                pdfContext,
                                 orderId,
                                 "${saleCart.orderNumber ?: "invoice"}.pdf"
                             ).onFailure { e ->
                                 Log.w("POS", "Invoice PDF failed", e)
                                 updateExtras {
-                                    it.copy(snackbarMessage = appContext.getString(com.chaslay.pos.R.string.invoice_pdf_failed))
+                                    it.copy(
+                                        snackbarMessage = e.message
+                                            ?: appContext.getString(com.chaslay.pos.R.string.invoice_pdf_failed)
+                                    )
                                 }
                             }
                         }
@@ -4541,6 +4791,7 @@ class PosViewModel @Inject constructor(
             it.copy(
                 showClearCartDialog = false,
                 orderCommittedForCancel = false,
+                coursesBulkSent = false,
                 receiptPrintedForOrder = false,
                 kitchenSentToPrinter = false,
                 snackbarMessage = "Cart cleared"
@@ -5224,6 +5475,12 @@ class PosViewModel @Inject constructor(
         val giftCardOpsBusy: Boolean = false,
         val giftCardOpsError: String? = null,
         val giftCardOpsLookedUpCard: com.chaslay.pos.data.remote.dto.GiftCardDto? = null,
+        val showGiftCardPayDialog: Boolean = false,
+        val giftCardPayDue: Double = 0.0,
+        val giftCardPayBusy: Boolean = false,
+        val giftCardPayError: String? = null,
+        val giftCardPayLookedUpCard: com.chaslay.pos.data.remote.dto.GiftCardDto? = null,
+        val coursesBulkSent: Boolean = false,
         val productGridShowImages: Boolean = false,
         val productGridColumns: Int = 5,
         val productGridSortAlpha: Boolean = false,

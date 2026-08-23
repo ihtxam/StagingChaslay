@@ -272,7 +272,9 @@ data class SyncCheckoutDto(
     val retailTakeawayEnabled: Boolean = false,
     val retailDeliveryEnabled: Boolean = false,
     val retailDineInEnabled: Boolean = false,
-    val requireTableForDineIn: Boolean? = null
+    val requireTableForDineIn: Boolean? = null,
+    /** fire_per_course | send_all_once */
+    val courseSendMode: String? = null
 )
 
 data class SyncScaleDto(

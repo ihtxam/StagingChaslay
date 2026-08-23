@@ -283,6 +283,8 @@ data class BusinessSettingsEntity(
     val requireTableForDineIn: Boolean = true,
     /** Synced from merchant panel — multi-course firing on dine-in tables. */
     val coursesEnabled: Boolean = false,
+    /** fire_per_course (Send then Fire each course) or send_all_once. */
+    val courseSendMode: String = "fire_per_course",
     val receiptBaseUrl: String = "https://pay.chaslay.com/receipt",
     val receiptHeader: String = "",
     val receiptFooter: String = "Merci / Thank you!",

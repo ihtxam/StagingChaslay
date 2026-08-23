@@ -37,6 +37,11 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(checkout: SyncCheckoutDto): 
         retailDineInEnabled = checkout.retailDineInEnabled,
         retailTakeawayEnabled = checkout.retailTakeawayEnabled,
         retailDeliveryEnabled = checkout.retailDeliveryEnabled,
-        requireTableForDineIn = requireTable
+        requireTableForDineIn = requireTable,
+        courseSendMode = if (checkout.courseSendMode == "send_all_once") {
+            "send_all_once"
+        } else {
+            "fire_per_course"
+        }
     )
 }

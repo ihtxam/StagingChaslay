@@ -1,5 +1,6 @@
 package com.chaslay.pos.data.repository
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -19,23 +20,57 @@ class InvoiceRepository @Inject constructor(
         if (!res.success) error("Could not record invoice payment")
     }
 
-    suspend fun downloadAndOpen(context: Context, orderRef: String, filename: String = "invoice.pdf"): Result<Unit> =
-        runCatching {
-            val body = invoiceApi.downloadPdf(orderRef)
-            val dir = File(context.cacheDir, "invoices").apply { mkdirs() }
-            val file = File(dir, filename.ifBlank { "invoice.pdf" })
-            body.byteStream().use { input ->
-                file.outputStream().use { output -> input.copyTo(output) }
-            }
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/pdf")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(Intent.createChooser(intent, filename))
-        }.onFailure { e ->
-            Log.w(TAG, "Invoice PDF open failed", e)
+    suspend fun downloadAndOpen(
+        context: Context,
+        orderRef: String,
+        filename: String = "invoice.pdf"
+    ): Result<File> = runCatching {
+        val body = invoiceApi.downloadPdf(orderRef)
+        val dir = File(context.cacheDir, "invoices").apply { mkdirs() }
+        val safeName = filename.ifBlank { "invoice.pdf" }.replace(Regex("""[^\w.\-]"""), "_")
+        val file = File(dir, safeName)
+        body.byteStream().use { input ->
+            file.outputStream().use { output -> input.copyTo(output) }
         }
+        if (!file.exists() || file.length() <= 0L) {
+            error("Invoice PDF is empty")
+        }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/pdf")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (context !is android.app.Activity) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+        try {
+            val chooser = Intent.createChooser(viewIntent, safeName).apply {
+                if (context !is android.app.Activity) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+            context.startActivity(chooser)
+        } catch (_: ActivityNotFoundException) {
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/pdf"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                if (context !is android.app.Activity) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+            context.startActivity(
+                Intent.createChooser(shareIntent, safeName).apply {
+                    if (context !is android.app.Activity) {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                }
+            )
+        }
+        file
+    }.onFailure { e ->
+        Log.w(TAG, "Invoice PDF open failed", e)
+    }
 
     companion object {
         private const val TAG = "InvoiceRepository"

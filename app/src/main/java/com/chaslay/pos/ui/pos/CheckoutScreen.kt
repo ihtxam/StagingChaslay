@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sell
+import androidx.compose.material.icons.filled.Redeem
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -134,7 +135,8 @@ fun CheckoutScreen(
     onNextSplitBill: () -> Unit = {},
     onScanBarcode: () -> Unit = {},
     onTogglePayWithPoints: (Boolean) -> Unit = {},
-    onTogglePayWithGiftCard: (Boolean) -> Unit = {}
+    onTogglePayWithGiftCard: (Boolean) -> Unit = {},
+    onGiftCardPay: () -> Unit = {}
 ) {
     val equalSplitCount = if (isEqualSplit) splitBillCount ?: 1 else 1
     val totals = rememberCheckoutTotals(cart, checkoutState, equalSplitCount)
@@ -331,6 +333,15 @@ fun CheckoutScreen(
                     onSelectMethod(PaymentMethod.INVOICE)
                 }
             )
+            if (giftCardsEnabled) {
+                CheckoutMethodButton(
+                    title = stringResource(R.string.gift_card_pay),
+                    icon = Icons.Default.Redeem,
+                    selected = checkoutState.payWithGiftCard && checkoutState.giftCardRedeemAmount > 0.001,
+                    accent = CheckoutTeal,
+                    onClick = onGiftCardPay
+                )
+            }
 
             if (discountsEnabled || tipsEnabled) {
                 Row(
@@ -385,7 +396,7 @@ fun CheckoutScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            if (giftCardsEnabled && (membershipGiftBalance ?: 0.0) > 0.0) {
+            if (giftCardsEnabled && (membershipGiftBalance ?: 0.0) > 0.0 && !checkoutState.payWithGiftCard) {
                 CheckoutActionChip(
                     icon = Icons.Default.CreditCard,
                     label = stringResource(
