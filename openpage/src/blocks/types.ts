@@ -19,6 +19,9 @@ export type BlockType =
   | 'video'
   | 'gallery'
   | 'featured'
+  | 'menu'
+  | 'hours'
+  | 'reservations'
 
 export type BlockVariant = string
 

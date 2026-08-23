@@ -554,6 +554,11 @@ router.get("/:slug", async (req: Request, res: Response) => {
     };
     const displayHours = getDisplayHoursNow(hours, "takeaway");
 
+    const cmsTheme =
+      merchant.cmsHomepageEnabled
+        ? await CmsService.getPublishedTheme(merchant.id)
+        : null;
+
     res.json({
       success: true,
       data: {
@@ -563,6 +568,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
         subdomain: merchant.subdomain,
         customDomain: merchant.customDomain,
         cmsHomepageEnabled: !!merchant.cmsHomepageEnabled,
+        cmsTheme,
         address: merchant.address,
         city: merchant.city,
         phone: merchant.phone,

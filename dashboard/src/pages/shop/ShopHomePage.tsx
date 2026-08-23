@@ -8,17 +8,23 @@ import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import { CalendarDays, ShoppingBag } from 'lucide-react';
 import {
   emptyOpenPageBlocks,
-  isFullHtmlDocument,
   isOpenPageBlocks,
+  resolveOpenPageConfig,
   resolveOpenPageHtml,
   rewriteOpenPageHtml,
 } from '@/lib/cms/openpage-types';
+import {
+  extractOpenPageBody,
+  splitOpenPageHtml,
+  isDynamicCmsBlock,
+} from '@/lib/cms/split-openpage-html';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
+import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import { CmsDynamicBlock, fetchCmsMenuCatalog } from '@/components/shop/cms/CmsDynamicBlocks';
+import { useCmsTailwindCdn } from '@/hooks/useCmsTailwindCdn';
 
 /**
- * Public CMS homepage — one surface with the designed OpenPage document.
- * No second site header (avoids double chrome) and no nested page scroll
- * (iframe is viewport-locked; only the designed page scrolls).
+ * Public CMS homepage — static OpenPage HTML + live menu/hours/reservation blocks.
  */
 export default function ShopHomePage() {
   const { t, locale, setLocale } = useI18n();
@@ -28,11 +34,12 @@ export default function ShopHomePage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [html, setHtml] = useState('');
+  const [fullHtml, setFullHtml] = useState('');
   const [merchant, setMerchant] = useState<any>(null);
   const [seoTitle, setSeoTitle] = useState('');
   const [seoDescription, setSeoDescription] = useState('');
   const [rawBlocks, setRawBlocks] = useState<unknown>(null);
+  const [menuCatalog, setMenuCatalog] = useState<Awaited<ReturnType<typeof fetchCmsMenuCatalog>>>(null);
 
   useEffect(() => {
     if (!shopKey) {
@@ -59,6 +66,16 @@ export default function ShopHomePage() {
             setLocale(lang);
           }
         }
+        const blocks = isOpenPageBlocks(page.blocks) ? page.blocks : null;
+        const config = blocks ? resolveOpenPageConfig(blocks, locale as 'en' | 'fr' | 'de') : null;
+        const needsMenu =
+          config?.blocks?.some(
+            (b) => b.type === 'menu' || (b.type === 'featured' && isDynamicCmsBlock(b))
+          ) ?? false;
+        if (needsMenu) {
+          const menu = await fetchCmsMenuCatalog(shopKey);
+          if (!cancelled) setMenuCatalog(menu);
+        }
       } catch {
         if (!cancelled) setError(t('cmsHomeUnavailable'));
       } finally {
@@ -70,16 +87,30 @@ export default function ShopHomePage() {
     };
   }, [shopKey, t, setLocale]);
 
-  // Resolve locale-specific HTML when language changes
   useEffect(() => {
     if (!merchant) return;
     if (isOpenPageBlocks(rawBlocks)) {
-      setHtml(rewriteOpenPageHtml(resolveOpenPageHtml(rawBlocks, locale), base));
+      setFullHtml(rewriteOpenPageHtml(resolveOpenPageHtml(rawBlocks, locale), base));
     } else {
       const fallback = emptyOpenPageBlocks(seoTitle || merchant.name || 'Welcome');
-      setHtml(rewriteOpenPageHtml(fallback.html, base));
+      setFullHtml(rewriteOpenPageHtml(fallback.html, base));
     }
   }, [rawBlocks, locale, base, merchant, seoTitle]);
+
+  const pageConfig = useMemo(() => {
+    if (!isOpenPageBlocks(rawBlocks)) return null;
+    return resolveOpenPageConfig(rawBlocks, locale as 'en' | 'fr' | 'de');
+  }, [rawBlocks, locale]);
+
+  const segments = useMemo(() => {
+    if (!pageConfig || !fullHtml) return null;
+    const body = extractOpenPageBody(fullHtml);
+    return splitOpenPageHtml(body, pageConfig);
+  }, [pageConfig, fullHtml]);
+
+  const theme = pageConfig?.theme;
+  const hasDynamic = pageConfig?.blocks?.some((b) => isDynamicCmsBlock(b)) ?? false;
+  useCmsTailwindCdn(Boolean(segments?.length));
 
   useEffect(() => {
     if (seoTitle) document.title = shopDocumentTitle(seoTitle);
@@ -95,46 +126,29 @@ export default function ShopHomePage() {
       document.head.appendChild(el);
     }
     el.content = desc.slice(0, 500);
-    let og = document.querySelector('meta[property="og:description"]') as HTMLMetaElement | null;
-    if (!og) {
-      og = document.createElement('meta');
-      og.setAttribute('property', 'og:description');
-      document.head.appendChild(og);
-    }
-    og.content = desc.slice(0, 500);
-    let ogt = document.querySelector('meta[property="og:title"]') as HTMLMetaElement | null;
-    if (!ogt) {
-      ogt = document.createElement('meta');
-      ogt.setAttribute('property', 'og:title');
-      document.head.appendChild(ogt);
-    }
-    if (seoTitle) ogt.content = seoTitle.slice(0, 200);
-  }, [seoDescription, seoTitle]);
+  }, [seoDescription]);
 
   useEffect(() => {
     document.documentElement.lang = locale;
+    document.documentElement.classList.add('shop-shell');
+    return () => document.documentElement.classList.remove('shop-shell');
   }, [locale]);
 
-  // Lock outer document scroll so only the designed page scrolls (no double scrollbar).
-  useEffect(() => {
-    const htmlEl = document.documentElement;
-    const body = document.body;
-    const prevHtml = htmlEl.style.overflow;
-    const prevBody = body.style.overflow;
-    htmlEl.style.overflow = 'hidden';
-    body.style.overflow = 'hidden';
-    return () => {
-      htmlEl.style.overflow = prevHtml;
-      body.style.overflow = prevBody;
-    };
-  }, []);
+  const money = (n: number) =>
+    new Intl.NumberFormat(locale === 'de' ? 'de-CH' : locale === 'fr' ? 'fr-CH' : 'en-CH', {
+      style: 'currency',
+      currency: 'CHF',
+    }).format(n);
 
   const showReservationsNav = Boolean(merchant?.reservationsEnabled);
-  const useIframe = isFullHtmlDocument(html);
+  const hideFloatingBar = hasDynamic && pageConfig?.blocks?.some((b) => b.type === 'menu');
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-950 text-stone-300">
+      <div
+        className="flex min-h-screen items-center justify-center"
+        style={{ background: 'var(--shop-bg, #fafaf9)', color: 'var(--shop-text-muted, #78716c)' }}
+      >
         {t('loading')}
       </div>
     );
@@ -152,47 +166,55 @@ export default function ShopHomePage() {
   }
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-stone-950">
+    <ShopThemeShell theme={theme} className="min-h-dvh" style={{ background: 'var(--color-bg-0)' }}>
       <ShopVacationPopup shopKey={shopKey} />
 
-      {useIframe ? (
-        <iframe
-          key={locale}
-          title={seoTitle || merchant.name || 'Homepage'}
-          srcDoc={html}
-          className="absolute inset-0 h-full w-full border-0"
-          sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-top-navigation-by-user-activation"
-        />
-      ) : (
-        <div
-          key={locale}
-          className="absolute inset-0 overflow-auto"
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-      )}
-
-      {/* Shop controls — bottom bar avoids overlapping the designed navbar */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end">
-        <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-stone-950/85 p-1.5 shadow-2xl backdrop-blur-md">
-          <ShopLangSwitcher menuPlacement="top" />
-          {showReservationsNav ? (
-            <Link
-              to={`${base}/reservations`}
-              className="inline-flex items-center gap-1 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-stone-900"
-            >
-              <CalendarDays size={14} />
-              {t('shopReservations')}
-            </Link>
-          ) : null}
-          <Link
-            to={`${base}/menu`}
-            className="inline-flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-bold text-emerald-950"
-          >
-            <ShoppingBag size={14} />
-            {t('shopOrderNow')}
-          </Link>
-        </div>
+      <div className="cms-homepage pb-24">
+        {segments?.length ? (
+          segments.map((seg, idx) =>
+            seg.kind === 'dynamic' ? (
+              <CmsDynamicBlock
+                key={seg.blockId}
+                blockType={seg.blockType}
+                props={seg.props}
+                base={base}
+                menu={menuCatalog}
+                storeHours={merchant.storeHours}
+                reservationsEnabled={merchant.reservationsEnabled}
+                money={money}
+              />
+            ) : (
+              <div key={`static-${idx}`} dangerouslySetInnerHTML={{ __html: seg.html }} />
+            )
+          )
+        ) : (
+          <div dangerouslySetInnerHTML={{ __html: extractOpenPageBody(fullHtml) }} />
+        )}
       </div>
-    </div>
+
+      {!hideFloatingBar ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end">
+          <div
+            className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl border p-1.5 shadow-2xl backdrop-blur-md"
+            style={{
+              borderColor: 'var(--color-border-default)',
+              background: 'color-mix(in srgb, var(--color-bg-0) 88%, transparent)',
+            }}
+          >
+            <ShopLangSwitcher menuPlacement="top" />
+            {showReservationsNav ? (
+              <Link to={`${base}/reservations`} className="shop-btn-secondary inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold">
+                <CalendarDays size={14} />
+                {t('shopReservations')}
+              </Link>
+            ) : null}
+            <Link to={`${base}/menu`} className="shop-btn-primary inline-flex items-center gap-1 px-3 py-2 text-xs font-bold">
+              <ShoppingBag size={14} />
+              {t('shopOrderNow')}
+            </Link>
+          </div>
+        </div>
+      ) : null}
+    </ShopThemeShell>
   );
 }

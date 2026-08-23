@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchant, setMerchantContext } from "@/middleware/auth.middleware";
 import { CmsService, type CmsTemplateKey } from "@/services/cms.service";
 import { getDb, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 
 const router = Router();
 
@@ -139,6 +139,48 @@ router.delete("/pages/:pageId", async (req: Request, res: Response) => {
     res.json({ success: true });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete page" });
+  }
+});
+
+/**
+ * GET /api/merchant/cms/catalog — lightweight product/category list for homepage builder blocks
+ */
+router.get("/catalog", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const db = getDb();
+    const [categories, products] = await Promise.all([
+      db.query.categories.findMany({
+        where: eq(schema.categories.merchantId, merchantId),
+        orderBy: [asc(schema.categories.sortOrder), asc(schema.categories.name)],
+        columns: { id: true, name: true },
+      }),
+      db.query.products.findMany({
+        where: eq(schema.products.merchantId, merchantId),
+        orderBy: [asc(schema.products.name)],
+        columns: {
+          id: true,
+          name: true,
+          categoryId: true,
+          price: true,
+          imageUrl: true,
+        },
+        limit: 5000,
+      }),
+    ]);
+    res.json({
+      success: true,
+      categories,
+      products: products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        categoryId: p.categoryId,
+        price: p.price,
+        image: p.imageUrl,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load catalog" });
   }
 });
 

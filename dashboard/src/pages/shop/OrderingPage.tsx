@@ -40,6 +40,8 @@ import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
 import ShopChannelPrompt, { type ShopFulfillmentConfirmPayload } from '@/components/shop/ShopChannelPrompt';
 import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
+import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import ShopOfferPicker, {
   type ShopOfferForPicker,
   type ShopOfferProduct,
@@ -100,6 +102,7 @@ export default function OrderingPage() {
   const { merchantSlug } = useParams<{ merchantSlug: string }>();
   const [searchParams] = useSearchParams();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
+  const cmsTheme = useShopCmsTheme(shopKey);
   const navigate = useNavigate();
 
   const [merchant, setMerchant] = useState<any>(null);
@@ -1338,7 +1341,8 @@ export default function OrderingPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#f6f5f2] text-stone-900">
+    <ShopThemeShell theme={cmsTheme} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
+    <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <header className="sticky top-0 z-30 bg-white border-b border-stone-200">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
@@ -1880,6 +1884,7 @@ export default function OrderingPage() {
         zones={deliveryZones}
       />
     </div>
+    </ShopThemeShell>
   );
 }
 

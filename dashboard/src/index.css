@@ -842,6 +842,38 @@ button {
   animation: shop-cart-bump 0.35s ease-out;
 }
 
+/* Unified shop + CMS theme tokens (from homepage builder) */
+.shop-themed {
+  color: var(--shop-text, #1c1917);
+}
+
+.shop-btn-primary {
+  background: var(--shop-accent, #0d9488);
+  color: #fff;
+  border-radius: var(--shop-radius-lg, 12px);
+  transition: filter 0.15s ease;
+}
+
+.shop-btn-primary:hover {
+  filter: brightness(0.95);
+}
+
+.shop-btn-secondary {
+  background: var(--shop-bg, #fff);
+  color: var(--shop-text, #1c1917);
+  border: 1px solid var(--shop-border, #e7e5e4);
+  border-radius: var(--shop-radius-lg, 12px);
+}
+
+.cms-homepage .bg-bg-0 { background-color: var(--color-bg-0) !important; }
+.cms-homepage .bg-bg-1 { background-color: var(--color-bg-1) !important; }
+.cms-homepage .bg-bg-2 { background-color: var(--color-bg-2) !important; }
+.cms-homepage .text-text-0 { color: var(--color-text-0) !important; }
+.cms-homepage .text-text-1 { color: var(--color-text-1) !important; }
+.cms-homepage .text-text-2 { color: var(--color-text-2) !important; }
+.cms-homepage .text-green { color: var(--color-green) !important; }
+.cms-homepage .border-border-default { border-color: var(--color-border-default) !important; }
+
 @keyframes shop-slide-in-right {
   from {
     transform: translateX(100%);
