@@ -2,7 +2,7 @@
  * Caches the app shell /assets so the installed window can open offline.
  * API/data are never cached; WebPOS catalog/sales use IndexedDB in the page.
  */
-const CACHE = 'chaslay-shell-v5';
+const CACHE = 'chaslay-shell-v6';
 
 /** Static files that must not depend on auth or SPA routing. */
 const PRECACHE = [
@@ -129,21 +129,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first, then network (populate cache while online).
+  // Hashed build assets: network-first so deploys never serve stale JS/CSS (blank POS after update).
   if (isCacheableAsset(url.pathname)) {
     event.respondWith(
       (async () => {
-        const cached = await caches.match(request);
-        if (cached) return cached;
+        const cache = await caches.open(CACHE);
         try {
           const res = await fetch(request);
           if (res.ok) {
-            const cache = await caches.open(CACHE);
             await cachePutSafe(cache, request, res.clone());
           }
           return res;
         } catch {
-          return cached;
+          const cached = await cache.match(request);
+          if (cached) return cached;
+          throw new Error('offline');
         }
       })()
     );
