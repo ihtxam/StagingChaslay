@@ -1053,26 +1053,6 @@ export function WebPosSettingsDropdown({
       {printerName && isUnsuitableRawPrinter(printerName) ? (
         <p className="text-[10px] leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
       ) : null}
-      <label className="flex items-center gap-2 text-xs">
-        <input
-          type="checkbox"
-          className="rounded"
-          checked={autoPrint}
-          onChange={(e) => onAutoPrintChange(e.target.checked)}
-        />
-        {t('webPosAutoPrint')}
-      </label>
-      <label className="block space-y-1 text-xs">
-        <span className="text-[11px] text-stone-500">{t('webPosPostSuccessNav')}</span>
-        <select
-          className="input w-full text-xs"
-          value={postSuccessTarget}
-          onChange={(e) => onPostSuccessChange(e.target.value as 'register' | 'tables')}
-        >
-          <option value="register">{t('webPosTabRegister')}</option>
-          <option value="tables">{t('webPosTabTables')}</option>
-        </select>
-      </label>
         </>
       ) : (
         <div className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5">
@@ -1090,6 +1070,27 @@ export function WebPosSettingsDropdown({
           </p>
         </div>
       )}
+      <label className="flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          className="rounded"
+          checked={autoPrint}
+          onChange={(e) => onAutoPrintChange(e.target.checked)}
+        />
+        {t('webPosAutoPrint')}
+      </label>
+      <p className="text-[10px] leading-snug text-stone-500">{t('webPosAutoPrintHint')}</p>
+      <label className="block space-y-1 text-xs">
+        <span className="text-[11px] text-stone-500">{t('webPosPostSuccessNav')}</span>
+        <select
+          className="input w-full text-xs"
+          value={postSuccessTarget}
+          onChange={(e) => onPostSuccessChange(e.target.value as 'register' | 'tables')}
+        >
+          <option value="register">{t('webPosTabRegister')}</option>
+          <option value="tables">{t('webPosTabTables')}</option>
+        </select>
+      </label>
       {onSendLogs ? (
         <button
           type="button"

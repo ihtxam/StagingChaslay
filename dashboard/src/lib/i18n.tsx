@@ -2139,6 +2139,8 @@ const en: Dict = {
   webPosDefaultPrinter: 'Default printer',
   webPosDefaultSuffix: ' (default)',
   webPosAutoPrint: 'Auto-print after sale',
+  webPosAutoPrintHint:
+    'On the main till this also blocks receipt prints relayed from waiter phones and mobile WebPOS.',
   webPosRefreshPrinters: 'Refresh printers',
   webPosReloadCatalog: 'Reload catalog',
   webPosPrintersRefreshed: 'Printers refreshed',
@@ -5267,6 +5269,8 @@ const fr: Dict = {
   webPosDefaultPrinter: 'Imprimante par défaut',
   webPosDefaultSuffix: ' (défaut)',
   webPosAutoPrint: 'Impression auto après vente',
+  webPosAutoPrintHint:
+    'Sur la caisse principale, bloque aussi les reçus envoyés depuis les téléphones serveur et WebPOS mobile.',
   webPosRefreshPrinters: 'Actualiser les imprimantes',
   webPosReloadCatalog: 'Recharger le catalogue',
   webPosPrintersRefreshed: 'Imprimantes actualisées',
@@ -8369,6 +8373,8 @@ const de: Dict = {
   webPosDefaultPrinter: 'Standarddrucker',
   webPosDefaultSuffix: ' (Standard)',
   webPosAutoPrint: 'Nach Verkauf automatisch drucken',
+  webPosAutoPrintHint:
+    'An der Hauptkasse blockiert dies auch Kundenbelege von Kellner-Handys und mobilem WebPOS.',
   webPosRefreshPrinters: 'Drucker aktualisieren',
   webPosReloadCatalog: 'Katalog neu laden',
   webPosPrintersRefreshed: 'Drucker aktualisiert',

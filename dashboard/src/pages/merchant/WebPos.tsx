@@ -81,6 +81,7 @@ import {
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
   resolvePrintRetryLocally,
+  syncMainTillAutoPrintKitchen,
 } from '@/lib/webpos-print-relay';
 import {
   applyKitchenPrintRetryFromSettings,
@@ -2493,6 +2494,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     localStorage.setItem('manupos_webpos_autoprint', autoPrint ? '1' : '0');
   }, [autoPrint]);
+
+  useEffect(() => {
+    syncMainTillAutoPrintKitchen(printSettings?.autoPrintKitchen !== false);
+  }, [printSettings?.autoPrintKitchen]);
 
   const ensureShift = useCallback(
     async (action: () => void) => {
