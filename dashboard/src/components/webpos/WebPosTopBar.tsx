@@ -260,10 +260,6 @@ export default function WebPosTopBar({
   const { t } = useI18n();
   const inCheckout = posView === 'checkout' || posView === 'success';
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
-
-  const closeUserMenu = () => setUserMenuOpen(false);
 
   const closeMobileSearch = () => {
     setMobileSearchOpen(false);
@@ -285,26 +281,6 @@ export default function WebPosTopBar({
       onSearchChange('');
     }
   }, [showSearch, onSearchChange]);
-
-  useEffect(() => {
-    if (!userMenuOpen) return;
-    const onDoc = (e: PointerEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        closeUserMenu();
-      }
-    };
-    document.addEventListener('pointerdown', onDoc);
-    return () => document.removeEventListener('pointerdown', onDoc);
-  }, [userMenuOpen]);
-
-  useEffect(() => {
-    if (!userMenuOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeUserMenu();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [userMenuOpen]);
 
   const tabs: Array<{ id: PosTab; label: string; Icon: typeof Pencil }> = [
     ...(!hideTablesTab
@@ -431,66 +407,29 @@ export default function WebPosTopBar({
             ) : null}
           </button>
 
-          <div className="relative lg:hidden" ref={userMenuRef}>
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50"
-              aria-expanded={userMenuOpen}
-              aria-label={staffName || t('webPosSwitchUser')}
-              title={staffName || t('webPosSwitchUser')}
-              onClick={() => {
-                closeMobileSearch();
-                if (settingsOpen) onCloseSettings();
-                setUserMenuOpen((v) => !v);
-              }}
-            >
-              <UserCircle2 size={18} />
-            </button>
-            {userMenuOpen ? (
-              <>
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label={t('close')}
-                  className="fixed inset-0 z-[48] cursor-default border-0 bg-black/10 p-0"
-                  onClick={closeUserMenu}
-                />
-                <WebPosUserDropdown
-                  staffName={staffName}
-                  onSwitchUser={() => {
-                    closeUserMenu();
-                    onSwitchUser();
-                  }}
-                  canDrawer={canDrawer}
-                  onOpenDrawer={
-                    canDrawer
-                      ? () => {
-                          closeUserMenu();
-                          onOpenDrawer();
-                        }
-                      : undefined
-                  }
-                />
-              </>
-            ) : null}
-          </div>
-
           <button
             type="button"
-            className="hidden h-9 max-w-[7rem] items-center gap-1 truncate rounded-lg border border-stone-200 px-2 text-xs font-medium lg:inline-flex"
-            onClick={onSwitchUser}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-auto lg:max-w-[7rem] lg:gap-1 lg:px-2 lg:text-xs lg:font-medium"
+            aria-label={staffName || t('webPosSwitchUser')}
             title={staffName || t('webPosSwitchUser')}
+            onClick={() => {
+              closeMobileSearch();
+              if (settingsOpen) onCloseSettings();
+              onSwitchUser();
+            }}
           >
-            <UserCircle2 size={16} className="shrink-0" />
-            <span className="truncate">{staffName || t('webPosSwitchUser')}</span>
+            <UserCircle2 size={18} className="shrink-0 lg:hidden" />
+            <UserCircle2 size={16} className="hidden shrink-0 lg:inline" />
+            <span className="hidden truncate lg:inline">{staffName || t('webPosSwitchUser')}</span>
           </button>
 
           {canDrawer ? (
             <button
               type="button"
-              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:inline-flex"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
               onClick={onOpenDrawer}
               title={t('webPosOpenDrawer')}
+              aria-label={t('webPosOpenDrawer')}
             >
               <Vault size={17} />
             </button>
@@ -504,7 +443,6 @@ export default function WebPosTopBar({
               aria-label={t('webPosMoreShort')}
               onClick={() => {
                 closeMobileSearch();
-                closeUserMenu();
                 onToggleSettings();
               }}
             >
@@ -1122,49 +1060,6 @@ export function WebPosSettingsDropdown({
         {webPosVersionLabel}
       </p>
       </div>
-    </div>
-  );
-}
-
-export function WebPosUserDropdown({
-  staffName,
-  onSwitchUser,
-  canDrawer = false,
-  onOpenDrawer,
-}: {
-  staffName?: string | null;
-  onSwitchUser: () => void;
-  canDrawer?: boolean;
-  onOpenDrawer?: () => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <div
-      className="absolute right-0 top-[calc(100%+6px)] z-50 w-[min(16rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-xl"
-    >
-      {staffName ? (
-        <p className="truncate px-3 py-2 text-xs font-semibold text-stone-800 border-b border-stone-100">
-          {staffName}
-        </p>
-      ) : null}
-      <button
-        type="button"
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-        onClick={onSwitchUser}
-      >
-        <UserCircle2 size={16} />
-        {t('webPosSwitchUser')}
-      </button>
-      {canDrawer && onOpenDrawer ? (
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-          onClick={onOpenDrawer}
-        >
-          <Vault size={16} />
-          {t('webPosOpenDrawer')}
-        </button>
-      ) : null}
     </div>
   );
 }

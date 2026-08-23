@@ -120,8 +120,8 @@ export default function WebPosModifierTabPanel({
                     onClick={() => setActiveTabId(g.id)}
                     className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
                       active
-                        ? 'bg-stone-900 text-white'
-                        : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                        ? 'bg-[var(--webpos-accent)] text-white'
+                        : 'bg-[var(--webpos-surface-2,#f5f5f4)] text-[var(--webpos-text-muted,#78716c)] hover:bg-stone-200'
                     }`}
                   >
                     {translateTitle(g.title)}
@@ -150,8 +150,8 @@ export default function WebPosModifierTabPanel({
                       onClick={() => handleToggle(activeGroup, opt.id)}
                       className={`flex min-h-[4.5rem] flex-col items-center justify-center rounded-xl border-2 px-2 py-2.5 text-center transition-colors ${
                         checked
-                          ? 'border-stone-900 bg-stone-900 text-white shadow-sm'
-                          : 'border-stone-200 bg-white text-stone-900 hover:border-stone-400'
+                          ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] shadow-sm ring-1 ring-[var(--webpos-accent-ring)]'
+                          : 'border-[var(--webpos-border,#e7e5e4)] bg-[var(--webpos-surface,#fff)] text-[var(--webpos-text,#1c1917)] hover:border-[var(--webpos-accent-border)]'
                       }`}
                     >
                       {showProductImages && imageSrc ? (
@@ -166,7 +166,7 @@ export default function WebPosModifierTabPanel({
                       ) : null}
                       <span
                         className={`text-xs font-semibold tabular-nums ${
-                          checked ? 'text-white/90' : 'text-stone-500'
+                          checked ? 'text-[var(--webpos-accent-text)]' : 'text-[var(--webpos-text-muted,#78716c)]'
                         }`}
                       >
                         {formatExtraPrice(Number(opt.price) || 0, t('shopIncluded'))}
