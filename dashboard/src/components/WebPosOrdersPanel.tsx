@@ -224,6 +224,8 @@ type Props = {
   onRefreshOnline?: () => void;
   /** Notify parent when channel filter changes (e.g. stop bell loop on online view) */
   onChannelFilterChange?: (filter: ChannelFilter) => void;
+  /** Open full delivery management hub (map + drivers) */
+  onOpenDeliveryHub?: () => void;
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
@@ -429,6 +431,7 @@ export default function WebPosOrdersPanel({
   onlineOrders = [],
   onRefreshOnline,
   onChannelFilterChange,
+  onOpenDeliveryHub,
 }: Props) {
   const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -1173,6 +1176,15 @@ export default function WebPosOrdersPanel({
                 {f.label}
               </button>
             ))}
+            {onOpenDeliveryHub ? (
+              <button
+                type="button"
+                onClick={onOpenDeliveryHub}
+                className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1.5 text-xs font-bold text-teal-900 hover:bg-teal-100"
+              >
+                🛵 {t('deliveryHubTabDrivers')}
+              </button>
+            ) : null}
           </div>
           {!isOnlineMode ? (
             <div className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">

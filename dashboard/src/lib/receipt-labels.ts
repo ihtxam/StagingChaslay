@@ -23,6 +23,11 @@ export type ReceiptLabels = {
   digitalReceiptQrTitle: string;
   /** Title above delivery directions QR on thermal */
   scanDeliveryDirections: string;
+  /** Title above driver claim QR on delivery slip */
+  scanDriver: string;
+  postalCode: string;
+  forWhen: string;
+  nonFiscalTicket: string;
   thankYou: string;
   kitchen: string;
   /** Kitchen void / cancel ticket title */
@@ -118,6 +123,10 @@ const EN: ReceiptLabels = {
   scanDigitalReceipt: 'Scan for digital receipt',
   digitalReceiptQrTitle: 'Digital receipt',
   scanDeliveryDirections: 'Scan for directions',
+  scanDriver: 'SCAN DRIVER',
+  postalCode: 'Postal code',
+  forWhen: 'For',
+  nonFiscalTicket: 'Non-fiscal ticket',
   thankYou: 'Thank you',
   kitchen: 'KITCHEN',
   cancelledTicket: 'CANCELLED',
@@ -209,6 +218,10 @@ const FR: ReceiptLabels = {
   scanDigitalReceipt: 'Scannez pour le recu digital',
   digitalReceiptQrTitle: 'Reçu digital',
   scanDeliveryDirections: "Scannez pour l'itinéraire",
+  scanDriver: 'SCAN LIVREUR',
+  postalCode: 'Code postal',
+  forWhen: 'Pour',
+  nonFiscalTicket: 'Ticket non fiscal',
   thankYou: 'Merci',
   kitchen: 'CUISINE',
   cancelledTicket: 'ANNULE',
@@ -300,6 +313,10 @@ const DE: ReceiptLabels = {
   scanDigitalReceipt: 'Scannen fuer digitalen Beleg',
   digitalReceiptQrTitle: 'Digitaler Beleg',
   scanDeliveryDirections: 'Scan fuer Wegbeschreibung',
+  scanDriver: 'FAHRER SCAN',
+  postalCode: 'PLZ',
+  forWhen: 'Fuer',
+  nonFiscalTicket: 'Kein Fiskalbeleg',
   thankYou: 'Danke',
   kitchen: 'KUECHE',
   cancelledTicket: 'STORNIERT',

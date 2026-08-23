@@ -242,4 +242,58 @@ router.get(
   }
 );
 
+/** POST /api/merchant/delivery/orders/:orderId/claim — driver scanned delivery slip QR */
+router.post(
+  "/orders/:orderId/claim",
+  requirePermission("DELIVERY_ORDERS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      const staffId = req.user?.staffId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      if (!staffId) return res.status(403).json({ error: "Clock in with your staff PIN" });
+      const token = String(req.body?.token || req.query?.token || "").trim();
+      if (!token) return res.status(400).json({ error: "Scan token is required" });
+      const result = await DeliveryTrackingService.claimOrderAsDriver(
+        merchantId,
+        staffId,
+        req.params.orderId,
+        token
+      );
+      res.json(result);
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to claim delivery",
+      });
+    }
+  }
+);
+
+/** GET /api/merchant/delivery/orders/:orderId/slip — driver claim URL for printing */
+router.get(
+  "/orders/:orderId/slip",
+  requirePermission("VIEW_DELIVERY_TRACKING", "VIEW_ORDER_HISTORY"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const token = await DeliveryTrackingService.ensureDeliveryTrackingToken(
+        merchantId,
+        req.params.orderId
+      );
+      const { buildDriverClaimUrl } = await import("@/lib/delivery-tracking-url");
+      res.json({
+        success: true,
+        orderId: req.params.orderId,
+        token,
+        driverClaimUrl: buildDriverClaimUrl(req.params.orderId, token),
+      });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to build slip URL",
+      });
+    }
+  }
+);
+
 export default router;

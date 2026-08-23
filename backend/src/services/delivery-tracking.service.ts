@@ -35,6 +35,7 @@ export type DeliveryOrderOnMap = {
   orderNumber: string;
   status: string;
   customerName: string | null;
+  customerPhone: string | null;
   shippingAddress: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -42,6 +43,12 @@ export type DeliveryOrderOnMap = {
   assignedDriverName: string | null;
   total: number;
   createdAt: string | null;
+  orderSource: string | null;
+  orderType: string | null;
+  paymentStatus: string | null;
+  paymentMethod: string | null;
+  printCount: number;
+  deliveryTrackingToken: string | null;
 };
 
 export class DeliveryTrackingService {
@@ -193,12 +200,19 @@ export class DeliveryTrackingService {
         orderNumber: true,
         status: true,
         customerName: true,
+        customerPhone: true,
         shippingAddress: true,
         deliveryLatitude: true,
         deliveryLongitude: true,
         assignedDeliveryStaffId: true,
         total: true,
         createdAt: true,
+        orderSource: true,
+        orderType: true,
+        paymentStatus: true,
+        paymentMethod: true,
+        printCount: true,
+        deliveryTrackingToken: true,
       },
     });
 
@@ -222,6 +236,7 @@ export class DeliveryTrackingService {
       orderNumber: r.orderNumber,
       status: r.status,
       customerName: r.customerName,
+      customerPhone: r.customerPhone,
       shippingAddress: r.shippingAddress,
       latitude: num(r.deliveryLatitude),
       longitude: num(r.deliveryLongitude),
@@ -231,7 +246,35 @@ export class DeliveryTrackingService {
         : null,
       total: num(r.total) ?? 0,
       createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
+      orderSource: r.orderSource,
+      orderType: r.orderType,
+      paymentStatus: r.paymentStatus,
+      paymentMethod: r.paymentMethod,
+      printCount: Number(r.printCount || 0),
+      deliveryTrackingToken: r.deliveryTrackingToken,
     }));
+  }
+
+  /** Ensure delivery orders have a tracking / driver-scan token. */
+  static async ensureDeliveryTrackingToken(merchantId: string, orderId: string): Promise<string> {
+    await this.ensureSchema();
+    const db = getDb();
+    const order = await db.query.orders.findFirst({
+      where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
+      columns: { deliveryTrackingToken: true, fulfillmentChannel: true },
+    });
+    if (!order) throw new Error("Order not found");
+    if (order.fulfillmentChannel !== "delivery") {
+      throw new Error("Not a delivery order");
+    }
+    if (order.deliveryTrackingToken) return order.deliveryTrackingToken;
+    const { generateDeliveryTrackingToken } = await import("@/lib/delivery-tracking-url");
+    const token = generateDeliveryTrackingToken();
+    await db
+      .update(schema.orders)
+      .set({ deliveryTrackingToken: token })
+      .where(eq(schema.orders.id, orderId));
+    return token;
   }
 
   static async assignDriver(merchantId: string, orderId: string, staffId: string | null) {
@@ -261,7 +304,54 @@ export class DeliveryTrackingService {
       .set({ assignedDeliveryStaffId: staffId })
       .where(eq(schema.orders.id, orderId));
 
+    await this.ensureDeliveryTrackingToken(merchantId, orderId);
+
     return { success: true as const, orderId, assignedDeliveryStaffId: staffId };
+  }
+
+  /** Driver scans delivery slip QR — assigns order to clocked-in driver. */
+  static async claimOrderAsDriver(
+    merchantId: string,
+    staffId: string,
+    orderId: string,
+    token: string
+  ) {
+    await this.ensureSchema();
+    const db = getDb();
+    const order = await db.query.orders.findFirst({
+      where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
+    });
+    if (!order) throw new Error("Order not found");
+    if (order.fulfillmentChannel !== "delivery") {
+      throw new Error("Not a delivery order");
+    }
+    const expected = order.deliveryTrackingToken || (await this.ensureDeliveryTrackingToken(merchantId, orderId));
+    if (expected !== token) throw new Error("Invalid delivery scan code");
+    if (["cancelled", "refunded", "completed"].includes(String(order.status))) {
+      throw new Error("Order is no longer active");
+    }
+
+    await db
+      .update(schema.orders)
+      .set({ assignedDeliveryStaffId: staffId })
+      .where(eq(schema.orders.id, orderId));
+
+    if (order.status === "ready") {
+      const { OrderService } = await import("@/services/order.service");
+      await OrderService.applyOrderAction(merchantId, orderId, "out_for_delivery", {});
+    }
+
+    const staff = await db.query.merchantStaff.findFirst({
+      where: eq(schema.merchantStaff.id, staffId),
+      columns: { id: true, name: true },
+    });
+
+    return {
+      success: true as const,
+      orderId,
+      assignedDeliveryStaffId: staffId,
+      assignedDriverName: staff?.name || null,
+    };
   }
 
   /** List delivery-role staff for assign dropdown. */

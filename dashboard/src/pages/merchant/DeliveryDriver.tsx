@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CheckCircle, MapPin, Navigation, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -47,6 +48,9 @@ type Tab = 'active' | 'completed' | 'wage';
 
 export default function DeliveryDriverPage() {
   const { t } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const claimOrderId = searchParams.get('claim') || '';
+  const claimToken = searchParams.get('token') || '';
   const user = useAuthStore((s) => s.user);
   const [pinStaff, setPinStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [pinOpen, setPinOpen] = useState(false);
@@ -79,6 +83,29 @@ export default function DeliveryDriverPage() {
       /* staff session required */
     }
   }, [clockedIn, apiHeaders]);
+
+  const tryClaimFromScan = useCallback(async () => {
+    if (!claimOrderId || !claimToken || !clockedIn) return;
+    try {
+      await api.post(
+        `/merchant/delivery/orders/${claimOrderId}/claim`,
+        { token: claimToken },
+        { headers: apiHeaders }
+      );
+      toast.success(t('deliveryClaimSuccess'));
+      setSearchParams({}, { replace: true });
+      await loadOrders();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('actionFailed'));
+    }
+  }, [claimOrderId, claimToken, clockedIn, apiHeaders, t, setSearchParams, loadOrders]);
+
+  useEffect(() => {
+    if (claimOrderId && claimToken && clockedIn) {
+      void tryClaimFromScan();
+    }
+  }, [claimOrderId, claimToken, clockedIn, tryClaimFromScan]);
 
   const loadCompleted = useCallback(async () => {
     if (!clockedIn) return;

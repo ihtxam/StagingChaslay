@@ -210,6 +210,19 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
       fallbackPrinterName: localStorage.getItem('manupos_webpos_printer') || '',
     });
   }
+
+  if (
+    (order.fulfillmentChannel || order.channel) === 'delivery' &&
+    (payload.printKitchen === true || payload.printNotification === true || payload.printReceipt === true)
+  ) {
+    const { printDeliverySlipForOrder } = await import('@/lib/print-delivery-slip');
+    await printDeliverySlipForOrder(orderId, {
+      merchant,
+      printSettings,
+      locale,
+      fallbackPrinterName: localStorage.getItem('manupos_webpos_printer') || '',
+    });
+  }
 }
 
 export type AutoPrintReservationPayload = {

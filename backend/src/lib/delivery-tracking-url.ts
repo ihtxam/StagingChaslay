@@ -26,3 +26,18 @@ export function buildGuestOrderTrackingUrl(
 export function generateDeliveryTrackingToken(): string {
   return randomBytes(24).toString("hex");
 }
+
+function appBaseUrl(): string {
+  return (
+    process.env.PUBLIC_APP_URL ||
+    process.env.MERCHANT_DASHBOARD_URL ||
+    process.env.WEB_SHOP_URL ||
+    "http://localhost:5173"
+  ).replace(/\/$/, "");
+}
+
+/** QR on delivery slip — driver scans to claim the order. */
+export function buildDriverClaimUrl(orderId: string, token: string): string {
+  const params = new URLSearchParams({ claim: orderId, token });
+  return `${appBaseUrl()}/merchant/delivery/driver?${params.toString()}`;
+}
