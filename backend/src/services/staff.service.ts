@@ -254,7 +254,7 @@ export class StaffService {
 
     const pin = input.pin?.trim();
     if (pin && (pin.length < 4 || pin.length > 8)) {
-      throw new Error("PIN must be 4ù8 digits");
+      throw new Error("PIN must be 4-8 digits");
     }
 
     const password = input.password?.trim() || "";
@@ -332,7 +332,7 @@ export class StaffService {
         patch.pinHash = null;
       } else {
         const pin = String(input.pin).trim();
-        if (pin.length < 4 || pin.length > 8) throw new Error("PIN must be 4ù8 digits");
+        if (pin.length < 4 || pin.length > 8) throw new Error("PIN must be 4-8 digits");
         patch.pinHash = await AuthService.hashPassword(pin);
       }
     }
