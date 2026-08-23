@@ -399,7 +399,8 @@ class BluetoothPrinterService @Inject constructor(
                 isFollowUp = isFollowUp,
                 message = message,
                 meta = meta,
-                lineWidth = lineWidth
+                lineWidth = lineWidth,
+                products = products
             )
             val mac = settings.kitchenPrinterMacAddress
                 ?: settings.printerMacAddress
@@ -407,7 +408,7 @@ class BluetoothPrinterService @Inject constructor(
             lastResult = sendBytes(mac, settings, payload, "Kitchen ticket")
         }
         if (posItems.isNotEmpty() && !isFollowUp) {
-            val barPayload = buildBarTicket(settings, tableName, round, posItems, lineWidth)
+            val barPayload = buildBarTicket(settings, tableName, round, posItems, lineWidth, products)
             val mac = settings.printerMacAddress ?: SIMULATED_ADDRESS
             lastResult = sendBytes(mac, settings, barPayload, "Bar ticket")
         }
@@ -448,7 +449,7 @@ class BluetoothPrinterService @Inject constructor(
             if (!isFollowUp && subset.isEmpty()) continue
             val lineWidth = lineWidthFor(defaultKitchenPaperWidthMm())
             val payload = buildKitchenTicket(
-                settings, tableName, serviceType, round, subset, isFollowUp, message, meta, lineWidth
+                settings, tableName, serviceType, round, subset, isFollowUp, message, meta, lineWidth, products
             )
             last = sendBytes(printer.address, settings, payload, "Kitchen ${printer.name}")
             printedAny = true
@@ -689,7 +690,8 @@ class BluetoothPrinterService @Inject constructor(
         tableName: String,
         round: Int,
         items: List<TableOrderItemEntity>,
-        lineWidth: Int = LINE_WIDTH_80
+        lineWidth: Int = LINE_WIDTH_80,
+        products: List<ProductEntity> = emptyList()
     ): ByteArray {
         val sb = StringBuilder()
         appendHeader(sb, settings.kitchenTicketHeader, lineWidth)
@@ -700,7 +702,7 @@ class BluetoothPrinterService @Inject constructor(
         if (tableName.isNotBlank()) sb.appendLine(formatKitchenTableLine(tableName, "Table"))
         sb.appendLine(center(sepDash(lineWidth), lineWidth))
         items.forEach { item ->
-            appendKitchenItemBlock(sb, item, settings, lineWidth)
+            appendKitchenItemBlock(sb, item, settings, lineWidth, products = products)
         }
         appendFooter(sb, settings.kitchenTicketFooter, lineWidth)
         sb.appendLine("\n\n\n")
@@ -716,7 +718,8 @@ class BluetoothPrinterService @Inject constructor(
         isFollowUp: Boolean,
         message: String?,
         meta: KitchenPrintMeta = KitchenPrintMeta(),
-        lineWidth: Int = LINE_WIDTH_80
+        lineWidth: Int = LINE_WIDTH_80,
+        products: List<ProductEntity> = emptyList()
     ): ByteArray {
         val sb = StringBuilder()
         val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
@@ -804,7 +807,7 @@ class BluetoothPrinterService @Inject constructor(
         }
 
         sb.appendLine(center(sepEq, lineWidth))
-        val itemCount = items.sumOf { if (it.isWeighed) 1 else it.quantity }
+        val itemCount = items.sumOf { if (resolveItemWeighed(it, products)) 1 else it.quantity }
         val numsLabel = "($itemCount)"
         sb.appendLine(
             "${labels.itemsHeader}${" ".repeat((lineWidth - labels.itemsHeader.length - numsLabel.length).coerceAtLeast(1))}$numsLabel"
@@ -820,7 +823,7 @@ class BluetoothPrinterService @Inject constructor(
         val courses = items.groupBy { it.courseNumber }.toSortedMap()
         if (courses.size <= 1) {
             items.forEach { item ->
-                appendKitchenItemBlock(sb, item, settings, lineWidth, meta.cancelled)
+                appendKitchenItemBlock(sb, item, settings, lineWidth, meta.cancelled, products)
             }
         } else {
             courses.forEach { (course, courseItems) ->
@@ -828,7 +831,7 @@ class BluetoothPrinterService @Inject constructor(
                 sb.appendLine(center("--- ${labels.courseLabel} $course ---", lineWidth))
                 sb.appendLine(escBold(false))
                 courseItems.forEach { item ->
-                    appendKitchenItemBlock(sb, item, settings, lineWidth, meta.cancelled)
+                    appendKitchenItemBlock(sb, item, settings, lineWidth, meta.cancelled, products)
                 }
                 sb.appendLine(dash)
             }
@@ -1877,12 +1880,18 @@ class BluetoothPrinterService @Inject constructor(
         }
     }
 
-    private fun formatKitchenItemQtyLabel(item: TableOrderItemEntity): String {
+    private fun resolveItemWeighed(item: TableOrderItemEntity, products: List<ProductEntity>): Boolean =
+        item.isWeighed || products.find { it.id == item.productId }?.isWeighed == true
+
+    private fun formatKitchenItemQtyLabel(
+        item: TableOrderItemEntity,
+        products: List<ProductEntity> = emptyList()
+    ): String {
         val label = buildString {
             append(item.productName)
             if (item.variantName != null) append(" (${item.variantName})")
         }
-        return if (item.isWeighed) {
+        return if (resolveItemWeighed(item, products)) {
             val kg = item.quantity / 1000.0
             String.format(Locale.US, "%.3f kg %s", kg, label)
         } else {
@@ -1895,9 +1904,14 @@ class BluetoothPrinterService @Inject constructor(
         item: TableOrderItemEntity,
         settings: BusinessSettingsEntity,
         lineWidth: Int,
-        cancelled: Boolean = false
+        cancelled: Boolean = false,
+        products: List<ProductEntity> = emptyList()
     ) {
-        val line = if (cancelled) "- ${formatKitchenItemQtyLabel(item)}" else formatKitchenItemQtyLabel(item)
+        val line = if (cancelled) {
+            "- ${formatKitchenItemQtyLabel(item, products)}"
+        } else {
+            formatKitchenItemQtyLabel(item, products)
+        }
         sb.append(escAlignLeft())
         val itemScale = effectiveKitchenItemScale(settings)
         val wrapped = wrapText(line, lineWidth)

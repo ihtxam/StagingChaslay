@@ -1871,7 +1871,8 @@ class PosViewModel @Inject constructor(
                 quantity = item.quantity,
                 taxRate = item.taxRate,
                 notes = item.notes ?: item.optionNotes(),
-                courseNumber = item.courseNumber
+                courseNumber = item.courseNumber,
+                isWeighed = item.isWeighed
             )
         }
         printerService.routeKitchen(

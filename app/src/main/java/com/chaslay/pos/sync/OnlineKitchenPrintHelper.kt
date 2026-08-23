@@ -116,7 +116,8 @@ class OnlineKitchenPrintHelper @Inject constructor(
             quantity = quantity,
             taxRate = taxRate,
             notes = notes,
-            courseNumber = courseNumber
+            courseNumber = courseNumber,
+            isWeighed = isWeighed
         )
     }
 }

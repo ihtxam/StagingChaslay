@@ -422,7 +422,8 @@ class OngoingOrdersViewModel @Inject constructor(
                             quantity = heldItem.quantity,
                             taxRate = heldItem.taxRate,
                             notes = heldItem.notes,
-                            courseNumber = heldItem.courseNumber
+                            courseNumber = heldItem.courseNumber,
+                            isWeighed = heldItem.isWeighed
                         )
                     },
                     meta = OnlineKitchenPrintHelper.buildKitchenMeta(order, "ONLINE").copy(
