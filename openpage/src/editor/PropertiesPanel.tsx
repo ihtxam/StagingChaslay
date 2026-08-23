@@ -2,12 +2,16 @@ import { useState } from 'react'
 import { ChevronDown, ChevronRight, Code } from 'lucide-react'
 import type { BlockConfig, BlockType } from '@/blocks/types'
 import { useConfigStore } from '@/store/configStore'
+import { CatalogIdPicker } from '@/editor/CatalogIdPicker'
+import { parseIdList } from '@/lib/id-list'
 
 interface FieldDef {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'select' | 'array-strings' | 'array-items'
+  type: 'text' | 'textarea' | 'select' | 'array-strings' | 'array-items' | 'catalog-categories' | 'catalog-products'
   options?: string[]
+  /** Only render when block props match (e.g. source=pos). */
+  when?: (props: Record<string, unknown>) => boolean
 }
 
 const blockFields: Partial<Record<BlockType, { sections: { title: string; fields: FieldDef[] }[] }>> = {
@@ -309,7 +313,13 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
         fields: [
           { key: 'title', label: 'Title', type: 'text' },
           { key: 'source', label: 'Source', type: 'select', options: ['manual', 'pos'] },
-          { key: 'productIds', label: 'Product IDs (comma-separated, POS mode)', type: 'text' },
+          {
+            key: 'productIds',
+            label: 'Products from POS',
+            type: 'catalog-products',
+            when: (p) => p.source === 'pos',
+          },
+          { key: 'productIds', label: 'Product IDs (comma-separated, POS mode)', type: 'text', when: (p) => p.source !== 'pos' },
           { key: 'viewAllText', label: 'View all label', type: 'text' },
           { key: 'viewAllUrl', label: 'View all URL', type: 'text' },
           { key: 'items', label: 'Manual items', type: 'array-items' },
@@ -338,8 +348,8 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
       {
         title: 'Filters',
         fields: [
-          { key: 'categoryIds', label: 'Category IDs (comma-separated)', type: 'text' },
-          { key: 'productIds', label: 'Product IDs (comma-separated)', type: 'text' },
+          { key: 'categoryIds', label: 'Categories', type: 'catalog-categories' },
+          { key: 'productIds', label: 'Products', type: 'catalog-products' },
           { key: 'showPrices', label: 'Show prices (true/false)', type: 'text' },
         ],
       },
@@ -400,6 +410,9 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
 function PropertyField({ field, block }: { field: FieldDef; block: BlockConfig }) {
   const updateBlockProps = useConfigStore((s) => s.updateBlockProps)
   const updateBlock = useConfigStore((s) => s.updateBlock)
+  const blockProps = (block.props || {}) as Record<string, unknown>
+
+  if (field.when && !field.when(blockProps)) return null
 
   // For variant field, it's on the block itself
   const value = field.key === 'variant'
@@ -557,6 +570,29 @@ function PropertyField({ field, block }: { field: FieldDef; block: BlockConfig }
       )
     }
 
+    case 'catalog-categories':
+      return (
+        <CatalogIdPicker
+          label={field.label}
+          mode="categories"
+          value={value}
+          onChange={(next) => onChange(next)}
+        />
+      )
+
+    case 'catalog-products':
+      return (
+        <CatalogIdPicker
+          label={field.label}
+          mode="products"
+          value={value}
+          onChange={(next) => onChange(next)}
+          categoryFilter={
+            block.type === 'menu' ? parseIdList(blockProps.categoryIds) : undefined
+          }
+        />
+      )
+
     default:
       return null
   }
@@ -597,9 +633,10 @@ export function PropertiesPanel({ block }: { block: BlockConfig }) {
       {/* Property sections */}
       {schema?.sections.map((section) => (
         <Section key={section.title} title={section.title}>
-          {section.fields.map((field) => (
-            <PropertyField key={field.key} field={field} block={block} />
-          ))}
+          {section.fields.map((field) => {
+            if (field.when && !field.when((block.props || {}) as Record<string, unknown>)) return null
+            return <PropertyField key={`${field.key}-${field.type}`} field={field} block={block} />
+          })}
         </Section>
       )) || (
         <div className="p-3.5 text-[11px] text-text-3">

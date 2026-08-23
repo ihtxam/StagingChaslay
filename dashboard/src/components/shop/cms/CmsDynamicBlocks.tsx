@@ -1,7 +1,9 @@
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
 import { parseIdList } from '@/lib/cms/split-openpage-html';
+import { resolveShopKey } from '@/lib/shop-cart';
+import InlineReservationsWidget from '@/components/shop/InlineReservationsWidget';
 
 export type CmsMenuCategory = {
   id: string;
@@ -293,27 +295,22 @@ export function CmsReservationsBlock({
   base: string;
   reservationsEnabled?: boolean;
 }) {
-  const { t } = useI18n();
-  if (!reservationsEnabled) return null;
+  const { merchantSlug } = useParams<{ merchantSlug?: string }>();
+  const shopKey = resolveShopKey(merchantSlug);
+  if (!reservationsEnabled || !shopKey) return null;
 
   return (
     <section className="px-6 py-10 md:px-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
       <div
-        className="mx-auto max-w-xl rounded-2xl border p-6 text-center shadow-sm"
+        className="mx-auto max-w-xl rounded-2xl border p-5 md:p-6 shadow-sm"
         style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-1)' }}
       >
-        <h2 className="text-xl font-semibold md:text-2xl" style={{ color: 'var(--color-text-0)' }}>
-          {props.title || t('shopReservations')}
-        </h2>
-        <p className="mt-2 text-sm" style={{ color: 'var(--color-text-2)' }}>
-          {t('reservationsEmbedHint')}
-        </p>
-        <Link
-          to={`${base}/reservations`}
-          className="shop-btn-primary mt-5 inline-flex px-6 py-3 text-sm font-semibold"
-        >
-          {t('shopBookTable')}
-        </Link>
+        <InlineReservationsWidget
+          shopKey={shopKey}
+          base={base}
+          title={props.title}
+          embedded
+        />
       </div>
     </section>
   );

@@ -102,6 +102,16 @@ export function splitOpenPageHtml(
   return segments;
 }
 
+/** True when exported HTML is missing CHASLAY_BLOCK markers for any configured block. */
+export function needsChaslayBlockMigration(html: string, config: OpenPageSiteConfig): boolean {
+  const blocks = config.blocks || [];
+  if (!blocks.length || !html.trim()) return false;
+  return blocks.some((block) => {
+    const start = `<!-- CHASLAY_BLOCK:${block.id}:${block.type} -->`;
+    return !html.includes(start);
+  });
+}
+
 /** Extract `<body>...</body>` inner HTML from a full OpenPage export document. */
 export function extractOpenPageBody(html: string): string {
   const m = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);

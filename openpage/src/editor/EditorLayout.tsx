@@ -25,6 +25,7 @@ import {
 } from '@/lib/embed-bridge'
 import { foodTruckStarter } from '@/lib/food-truck-starter'
 import { resolveTheme, themeToCSS } from '@/lib/theme-presets'
+import { useCatalogStore } from '@/store/catalogStore'
 import type { SiteConfig } from '@/blocks/types'
 
 const templateIcons: Record<string, typeof Briefcase> = {
@@ -176,10 +177,12 @@ function EditorEmptyState() {
 function useEmbedHostBridge() {
   const setConfig = useConfigStore((s) => s.setConfig)
   const config = useConfigStore((s) => s.config)
+  const setCatalog = useCatalogStore((s) => s.setCatalog)
   const addProject = useProjectsStore((s) => s.addProject)
   const setActiveProject = useEditorStore((s) => s.setActiveProject)
   const activeProjectId = useEditorStore((s) => s.activeProjectId)
   const readySent = useRef(false)
+  const migrateRequested = useRef(false)
 
   useEffect(() => {
     if (!isEmbedMode()) return
@@ -210,6 +213,23 @@ function useEmbedHostBridge() {
         }
         if (data.title) next = { ...next, name: data.title }
         setConfig(next)
+        if (data.catalog?.categories && data.catalog?.products) {
+          setCatalog(data.catalog.categories, data.catalog.products)
+        }
+        if (data.migrateHtml && !migrateRequested.current) {
+          migrateRequested.current = true
+          window.setTimeout(() => {
+            const current = useConfigStore.getState().config
+            const html = exportConfigHtml(current)
+            postToParent({
+              source: 'openpage',
+              type: 'openpage:saved',
+              config: current,
+              html,
+              migrateHtml: true,
+            })
+          }, 120)
+        }
         return
       }
 
