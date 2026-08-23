@@ -4067,6 +4067,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setTableLabel(table.label);
       setChannel('dine_in');
     }
+    // Mobile register: land on the product grid so staff can add items (not an empty cart page).
+    setMobileCartOpen(false);
     setPosTab('register');
     setPosView('register');
   };
