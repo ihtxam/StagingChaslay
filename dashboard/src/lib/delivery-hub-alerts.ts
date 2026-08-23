@@ -14,7 +14,10 @@ export function speakDeliveryAlert(text: string) {
   if (!speechEnabled || typeof window === 'undefined') return;
   try {
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = document.documentElement.lang || 'fr-FR';
+    u.lang =
+      document.documentElement.lang.length === 2
+        ? `${document.documentElement.lang}-${document.documentElement.lang === 'en' ? 'US' : document.documentElement.lang === 'fr' ? 'FR' : 'DE'}`
+        : document.documentElement.lang || 'en-US';
     u.rate = 0.95;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
@@ -54,8 +57,12 @@ export function platformSpeechName(source?: string | null): string {
   return 'online';
 }
 
-export function newOrderSpeechLine(source?: string | null, zip?: string): string {
+export function newOrderSpeechLine(
+  t: (key: string) => string,
+  source?: string | null,
+  zip?: string
+): string {
   const platform = platformSpeechName(source);
-  const zipPart = zip ? ` for zip code ${zip}` : '';
-  return `New order from ${platform}${zipPart}`;
+  const zipPart = zip ? t('deliveryHubNewOrderZipPart').replace('{zip}', zip) : '';
+  return t('deliveryHubNewOrderSpeech').replace('{platform}', platform).replace('{zipPart}', zipPart);
 }

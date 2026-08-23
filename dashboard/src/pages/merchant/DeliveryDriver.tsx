@@ -253,6 +253,28 @@ export default function DeliveryDriverPage() {
     }
   };
 
+  const startDelivery = async (orderId: string, address?: string | null) => {
+    setBusyId(orderId);
+    try {
+      await api.post(`/merchant/delivery/orders/${orderId}/start`, {}, { headers: apiHeaders });
+      toast.success(t('deliveryStarted'));
+      await loadOrders();
+      if (address) window.open(mapsUrl(address), '_blank', 'noopener,noreferrer');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('actionFailed'));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const isAwaitingTill = (status: string) =>
+    status === 'pending_approval' || status === 'pending';
+  const canStartDelivery = (status: string) =>
+    status === 'preparing' || status === 'accepted' || status === 'ready';
+  const canMarkDelivered = (status: string) =>
+    status === 'out_for_delivery' || status === 'ready';
+
   useEffect(() => {
     void loadOrders();
     void loadCompleted();
@@ -380,27 +402,43 @@ export default function DeliveryDriverPage() {
                 <div className="font-bold text-stone-900">#{o.orderNumber}</div>
                 <div className="text-sm text-stone-700">{o.customerName || t('deliveryMapGuest')}</div>
                 <div className="mt-1 text-xs text-stone-500">{o.shippingAddress || '—'}</div>
+                {isAwaitingTill(o.status) ? (
+                  <p className="mt-2 text-[11px] font-medium text-amber-800">{t('deliveryWaitingTillAccept')}</p>
+                ) : null}
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {o.shippingAddress ? (
+                  {o.shippingAddress && !isAwaitingTill(o.status) ? (
                     <a
                       href={mapsUrl(o.shippingAddress)}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:underline"
+                      className="inline-flex items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-100"
                     >
                       <Navigation size={14} />
                       {t('deliveryNavigate')}
                     </a>
                   ) : null}
-                  <button
-                    type="button"
-                    disabled={busyId === o.id}
-                    className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-bold text-white disabled:opacity-50"
-                    onClick={() => void markDelivered(o.id)}
-                  >
-                    <CheckCircle size={14} />
-                    {t('deliveryMarkDelivered')}
-                  </button>
+                  {canStartDelivery(o.status) ? (
+                    <button
+                      type="button"
+                      disabled={busyId === o.id}
+                      className="inline-flex items-center gap-1 rounded-md bg-teal-600 px-2 py-1 text-xs font-bold text-white disabled:opacity-50"
+                      onClick={() => void startDelivery(o.id, o.shippingAddress)}
+                    >
+                      <Navigation size={14} />
+                      {t('deliveryStartDelivery')}
+                    </button>
+                  ) : null}
+                  {canMarkDelivered(o.status) ? (
+                    <button
+                      type="button"
+                      disabled={busyId === o.id}
+                      className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-bold text-white disabled:opacity-50"
+                      onClick={() => void markDelivered(o.id)}
+                    >
+                      <CheckCircle size={14} />
+                      {t('deliveryMarkDelivered')}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))

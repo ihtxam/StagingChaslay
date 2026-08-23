@@ -44,6 +44,7 @@ import WebPos from './WebPos';
 import WaiterApp from './WaiterApp';
 import DeliveryTrackingPage from './DeliveryTracking';
 import DeliveryDriverPage from './DeliveryDriver';
+import MerchantOrderAlerts from '@/components/merchant/MerchantOrderAlerts';
 import Reports from './Reports';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
@@ -367,6 +368,8 @@ function MerchantShell() {
     () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
     [jwtIsOwner, user?.permissions]
   );
+
+  const orderAlertsEnabled = !isPosLikeRoute && allow('/merchant/orders');
 
   const menuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
@@ -748,6 +751,7 @@ function MerchantShell() {
             />
           </Routes>
         </main>
+        <MerchantOrderAlerts enabled={orderAlertsEnabled} />
       </div>
     </div>
   );

@@ -2128,6 +2128,11 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       customerId = authCustomer.customerId;
     }
 
+    const { normalizeDeliveryPlatformSettings } = await import("@/lib/delivery-platform-settings");
+    const shopAutoAccept = normalizeDeliveryPlatformSettings(merchant.deliveryPlatformSettings)
+      .onlineShopAutoAccept;
+    const initialOrderStatus = shopAutoAccept ? "preparing" : "pending_approval";
+
     const [order] = await db
       .insert(schema.orders)
       .values({
@@ -2137,7 +2142,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         orderType: "web_shop",
         orderSource: "online_shop",
         fulfillmentChannel: channel,
-        status: "pending_approval",
+        status: initialOrderStatus,
         subtotal: subtotal.toFixed(2),
         taxAmount: taxAmount.toFixed(2),
         discountAmount: roundMoney2(offerDiscount + voucherDiscount + pointsDiscount + giftCardDiscount).toFixed(2),

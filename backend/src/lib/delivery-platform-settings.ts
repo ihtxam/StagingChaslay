@@ -20,6 +20,8 @@ export type DeliveryPlatformCredentials = {
 export type DeliveryPlatformSettings = {
   justEat?: DeliveryPlatformCredentials;
   uberEats?: DeliveryPlatformCredentials;
+  /** Online shop orders skip pending_approval and go straight to preparing. */
+  onlineShopAutoAccept?: boolean;
 };
 
 function maskSecret(value?: string | null): string | null {
@@ -52,6 +54,7 @@ export function normalizeDeliveryPlatformSettings(raw: unknown): DeliveryPlatfor
   return {
     justEat: normalizeCreds(o.justEat),
     uberEats: normalizeCreds(o.uberEats),
+    onlineShopAutoAccept: o.onlineShopAutoAccept === true,
   };
 }
 
@@ -127,6 +130,10 @@ export function mergeDeliveryPlatformSettings(
   return {
     justEat: mergeOne("justEat", updates.justEat),
     uberEats: mergeOne("uberEats", updates.uberEats),
+    onlineShopAutoAccept:
+      updates.onlineShopAutoAccept !== undefined
+        ? updates.onlineShopAutoAccept === true
+        : prev.onlineShopAutoAccept,
   };
 }
 

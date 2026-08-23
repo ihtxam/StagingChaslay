@@ -197,6 +197,30 @@ router.post("/shift/end", requirePermission("DELIVERY_ORDERS"), async (req: Requ
   }
 });
 
+/** POST /api/merchant/delivery/orders/:orderId/start — driver starts delivery run */
+router.post(
+  "/orders/:orderId/start",
+  requirePermission("DELIVERY_ORDERS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      const staffId = req.user?.staffId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      if (!staffId) return res.status(403).json({ error: "Clock in with your staff PIN" });
+      const order = await DeliveryTrackingService.startDeliveryAsDriver(
+        merchantId,
+        staffId,
+        req.params.orderId
+      );
+      res.json({ success: true, order });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to start delivery",
+      });
+    }
+  }
+);
+
 /** POST /api/merchant/delivery/orders/:orderId/complete — driver marks delivered */
 router.post(
   "/orders/:orderId/complete",
