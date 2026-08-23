@@ -226,6 +226,8 @@ type Props = {
   onChannelFilterChange?: (filter: ChannelFilter) => void;
   /** Open full delivery management hub (map + drivers) */
   onOpenDeliveryHub?: () => void;
+  /** Owner/manager only — unlock cash sales adjustment via search icon taps */
+  canSalesAdjust?: boolean;
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
@@ -432,6 +434,7 @@ export default function WebPosOrdersPanel({
   onRefreshOnline,
   onChannelFilterChange,
   onOpenDeliveryHub,
+  canSalesAdjust = false,
 }: Props) {
   const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -1137,7 +1140,9 @@ export default function WebPosOrdersPanel({
       >
         <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-2 py-2 sm:px-3 sm:py-2.5">
           <div className="flex min-w-0 flex-1 basis-full items-center gap-1.5 sm:min-w-[14rem] sm:basis-auto">
-            <SecretSearchTapButton onUnlock={() => setSalesAdjOpen(true)} />
+            {canSalesAdjust ? (
+              <SecretSearchTapButton onUnlock={() => setSalesAdjOpen(true)} />
+            ) : null}
             <input
               type="search"
               className="min-w-0 w-full rounded-lg border border-stone-200 bg-stone-50 py-2 px-3 text-sm"

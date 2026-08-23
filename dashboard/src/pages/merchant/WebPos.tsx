@@ -8172,6 +8172,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setPosTab('delivery');
               setPosView('delivery');
             }}
+            canSalesAdjust={canViewAllSales}
           />
         ) : (
           <div
