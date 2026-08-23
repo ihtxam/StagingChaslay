@@ -14,7 +14,6 @@ import {
   RefreshCw,
   Search,
   Sun,
-  Truck,
   UserCircle2,
   Vault,
   X,
@@ -288,7 +287,6 @@ export default function WebPosTopBar({
       : []),
     { id: 'register', label: t('webPosTabRegister'), Icon: Pencil },
     { id: 'orders', label: t('webPosTabOrders'), Icon: ClipboardList },
-    { id: 'delivery', label: t('deliveryHubTabDrivers'), Icon: Truck },
     ...(!hideBookingsTab
       ? [{ id: 'bookings' as const, label: t('webPosTabBookings'), Icon: BookOpen }]
       : []),

@@ -1185,9 +1185,10 @@ export default function WebPosOrdersPanel({
               <button
                 type="button"
                 onClick={onOpenDeliveryHub}
-                className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1.5 text-xs font-bold text-teal-900 hover:bg-teal-100"
+                className="inline-flex items-center gap-1 rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1.5 text-xs font-bold text-teal-900 hover:bg-teal-100"
               >
-                🛵 {t('deliveryHubTabDrivers')}
+                <Truck size={14} aria-hidden />
+                {t('ordersFilterPortal')}
               </button>
             ) : null}
           </div>
