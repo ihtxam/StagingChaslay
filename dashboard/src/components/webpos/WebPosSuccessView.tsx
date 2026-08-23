@@ -12,8 +12,6 @@ export type SuccessSplitPart = {
 type Props = {
   amount: number;
   changeDue?: number | null;
-  orderNumber?: string | null;
-  paymentMethod?: string | null;
   /** Digital receipt URL for single-ticket QR (same payload as thermal receipt). */
   receiptUrl?: string | null;
   /** Per-ticket breakdown after a split bill checkout. */
@@ -132,8 +130,6 @@ function ReceiptQr({
 export default function WebPosSuccessView({
   amount,
   changeDue,
-  orderNumber,
-  paymentMethod,
   receiptUrl,
   splitParts,
   onContinue,
@@ -163,16 +159,9 @@ export default function WebPosSuccessView({
     >
       <CheckCircle2
         size={compact ? 80 : 72}
-        className="text-emerald-500"
+        className="mt-5 text-emerald-500"
         strokeWidth={1.5}
       />
-      <p
-        className={`mt-5 font-bold text-stone-800 ${
-          compact ? 'text-2xl' : 'text-3xl'
-        }`}
-      >
-        {t('webPosOrderCompleted')}
-      </p>
 
       {isSplit ? (
         <p className={`mt-4 text-sm font-medium text-stone-500 ${compact ? 'px-2' : ''}`}>
@@ -259,21 +248,6 @@ export default function WebPosSuccessView({
             }`}
           >
             {t('webPosChangeDue')}: CHF {changeDue.toFixed(2)}
-          </p>
-        ) : null}
-
-        {orderNumber ? (
-          <p
-            className={`mt-4 font-semibold text-stone-800 ${
-              compact ? 'text-base' : 'text-lg'
-            }`}
-          >
-            {orderNumber}
-          </p>
-        ) : null}
-        {paymentMethod ? (
-          <p className={`mt-1 font-medium text-stone-500 ${compact ? 'text-sm' : 'text-base'}`}>
-            {paymentMethod}
           </p>
         ) : null}
       </div>

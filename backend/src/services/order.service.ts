@@ -461,6 +461,8 @@ export class OrderService {
       rejectReason?: string | null;
       estimatedReadyAt?: string | Date | null;
       etaAdjustMinutes?: number | null;
+      /** WebPOS already printed the guest receipt locally on collect. */
+      skipReceiptPrint?: boolean;
     }
   ) {
     const db = getDb();
@@ -591,9 +593,9 @@ export class OrderService {
             console.warn("Inventory deduct after collect_payment failed:", invErr);
           }
           // Invoice A4 was printed at sale — do not print a second receipt/invoice.
-          // POS Pay Later: WebPOS prints the guest receipt on collect (one copy).
+          // POS Pay Later / WebPOS collect: till prints locally (one copy).
           const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
-          if (!invoiceOrder && !wasPayLater) {
+          if (!invoiceOrder && !wasPayLater && !opts?.skipReceiptPrint) {
             try {
               await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
             } catch (printErr) {
@@ -663,9 +665,9 @@ export class OrderService {
             console.warn("Inventory deduct after complete_and_collect failed:", invErr);
           }
           // Invoice A4 was printed at sale — do not print a second receipt/invoice.
-          // POS Pay Later: WebPOS prints the guest receipt on collect (one copy).
+          // POS Pay Later / WebPOS collect: till prints locally (one copy).
           const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
-          if (!invoiceOrder && !wasPayLater) {
+          if (!invoiceOrder && !wasPayLater && !opts?.skipReceiptPrint) {
             try {
               await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
             } catch (printErr) {
