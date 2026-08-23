@@ -2240,6 +2240,10 @@ const en: Dict = {
   kdsAddStation: 'Add KDS station',
   kdsStationNamePlaceholder: 'e.g. Pizza station',
   kdsChannelFilterHint: 'Leave all channels off to show every order type on this screen.',
+  kdsOrderTypesLabel: 'Order types',
+  kdsCategoriesLabel: 'Categories',
+  kdsCategoryFilterHint:
+    'Leave all categories off to show every item. Select one or more to limit this station (e.g. pizza station).',
   kdsStationCreated: 'KDS station created',
   kdsStationDeleted: 'KDS station removed',
   kdsDeleteConfirm: 'Delete this KDS station?',

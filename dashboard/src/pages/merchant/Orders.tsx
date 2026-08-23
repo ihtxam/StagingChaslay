@@ -419,7 +419,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   }, [orders]);
 
   const list = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = searchQ.trim().toLowerCase();
     return orders
       .filter((o) => {
         if (paymentFilter === 'invoice') {
@@ -448,7 +448,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     channelFilter,
     staffFilter,
     staffList,
-    search,
+    searchQ,
     showingInvoices,
   ]);
 
