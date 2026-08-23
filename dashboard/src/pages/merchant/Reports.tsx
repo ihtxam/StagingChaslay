@@ -29,6 +29,7 @@ import {
   CashDrawerBreakdown,
   type CashDrawerShift,
 } from '@/components/reports/CashDrawerBreakdown';
+import { loadWebPosStaffSession } from '@/lib/permissions';
 
 type EodShiftCash = CashDrawerShift;
 
@@ -103,8 +104,13 @@ export default function ReportsPage() {
         if (from) params.set('from', from);
         if (to) params.set('to', to);
       }
+      const pinSession = loadWebPosStaffSession();
+      const reportHeaders =
+        pinSession?.accessToken
+          ? { 'X-WebPos-Staff-Access': pinSession.accessToken }
+          : undefined;
       const [repRes, setRes] = await Promise.all([
-        api.get(`/merchant/reports/eod?${params}`),
+        api.get(`/merchant/reports/eod?${params}`, { headers: reportHeaders }),
         api.get('/merchant/settings'),
       ]);
       setReport(repRes.data.report);

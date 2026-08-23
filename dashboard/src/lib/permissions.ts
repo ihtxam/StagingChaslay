@@ -125,6 +125,18 @@ export function isOrdersPanelPath(path: string): boolean {
   return path === '/merchant/orders' || path.startsWith('/merchant/orders/');
 }
 
+export function isReportsPanelPath(path: string): boolean {
+  return path === '/merchant/reports' || path.startsWith('/merchant/reports/');
+}
+
+export function canOpenReportsPanel(permissions: Permission[] | undefined, isOwner: boolean): boolean {
+  if (isOwner) return true;
+  return (
+    hasPermission(permissions, 'VIEW_REPORTS', false) ||
+    hasPermission(permissions, 'END_OF_DAY', false)
+  );
+}
+
 function normalizePanelPath(path: string): string {
   return path.split('?')[0].replace(/\/$/, '') || '/merchant';
 }
@@ -144,9 +156,11 @@ export function resolvePanelRoutePermissions(path: string): Permission[] | null 
   return [];
 }
 
-/** Catalog and/or orders — not Sales, invoices, or reports. */
+/** Catalog, orders, and/or reports — limited back office without full ACCESS_PANEL. */
 export function isLimitedBackOfficePath(path: string): boolean {
-  return isCatalogPanelPath(path) || isOrdersPanelPath(path);
+  return (
+    isCatalogPanelPath(path) || isOrdersPanelPath(path) || isReportsPanelPath(path)
+  );
 }
 
 /**
@@ -544,9 +558,11 @@ export function getEffectivePanelAccess(opts: {
   canOpenPanel: boolean;
   /** Products / categories / modifiers only — not Sales, Settings, Users. */
   canOpenCatalog: boolean;
-  /** Backend Orders list — not invoices, reports, or Sales overview. */
+  /** Backend Orders list — not invoices or Sales overview. */
   canOpenOrders: boolean;
-  /** At least one back-office page (panel, menu, or orders). */
+  /** Sales reports / EOD (VIEW_REPORTS or END_OF_DAY). */
+  canOpenReports: boolean;
+  /** At least one back-office page (panel, menu, orders, or reports). */
   canOpenBackOffice: boolean;
   pinActive: boolean;
 } {
@@ -558,13 +574,16 @@ export function getEffectivePanelAccess(opts: {
     const canOpenPanel = hasPermission(permissions, 'ACCESS_PANEL', false);
     const canOpenCatalog = hasPermission(permissions, 'MANAGE_PRODUCTS', false);
     const canOpenOrders = hasPermission(permissions, 'VIEW_ORDER_HISTORY', false);
+    const canOpenReports = canOpenReportsPanel(permissions, false);
     return {
       permissions,
       isOwner: false,
       canOpenPanel,
       canOpenCatalog,
       canOpenOrders,
-      canOpenBackOffice: canOpenPanel || canOpenCatalog || canOpenOrders,
+      canOpenReports,
+      canOpenBackOffice:
+        canOpenPanel || canOpenCatalog || canOpenOrders || canOpenReports,
       pinActive: true,
     };
   }
@@ -574,13 +593,16 @@ export function getEffectivePanelAccess(opts: {
     ownerEffective || hasPermission(opts.jwtPermissions, 'MANAGE_PRODUCTS', false);
   const canOpenOrders =
     ownerEffective || hasPermission(opts.jwtPermissions, 'VIEW_ORDER_HISTORY', false);
+  const canOpenReports = canOpenReportsPanel(opts.jwtPermissions, ownerEffective);
   return {
     permissions: opts.jwtPermissions,
     isOwner: ownerEffective,
     canOpenPanel,
     canOpenCatalog,
     canOpenOrders,
-    canOpenBackOffice: canOpenPanel || canOpenCatalog || canOpenOrders,
+    canOpenReports,
+    canOpenBackOffice:
+      canOpenPanel || canOpenCatalog || canOpenOrders || canOpenReports,
     pinActive: false,
   };
 }

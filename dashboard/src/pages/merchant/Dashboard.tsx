@@ -65,6 +65,7 @@ import {
   isCatalogPanelPath,
   isDeliveryDriverOnlyStaff,
   isOrdersPanelPath,
+  isReportsPanelPath,
   isStaffJwt,
   loadWebPosStaffSession,
   notifyWebPosStaffSessionChanged,
@@ -292,11 +293,12 @@ function MerchantShell() {
     };
   }, [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, t, navigate]);
 
-  // Restricted PIN: stay in POS unless they may open menu / orders pages.
+  // Restricted PIN: stay in POS unless they may open menu / orders / reports pages.
   useEffect(() => {
     if (!effective.pinActive || effective.canOpenPanel) return;
     if (effective.canOpenCatalog && isCatalogPanelPath(location.pathname)) return;
     if (effective.canOpenOrders && isOrdersPanelPath(location.pathname)) return;
+    if (effective.canOpenReports && isReportsPanelPath(location.pathname)) return;
     if (!posAppMode) setPosAppMode(true);
     if (!isPosLikeRoute) {
       navigate('/merchant/pos', { replace: true });
@@ -306,6 +308,7 @@ function MerchantShell() {
     effective.canOpenPanel,
     effective.canOpenCatalog,
     effective.canOpenOrders,
+    effective.canOpenReports,
     posAppMode,
     isPosLikeRoute,
     location.pathname,
