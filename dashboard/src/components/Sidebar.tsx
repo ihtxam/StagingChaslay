@@ -46,7 +46,7 @@ interface SidebarProps {
   };
   /** Merchant shop name in the sidebar header (defaults to "Shop"). */
   shopName?: string | null;
-  /** Optional online shop shortcut pinned above the footer. */
+  /** Optional Chaslay platform shop shortcut pinned above the footer. */
   shopPath?: string | null;
 }
 
@@ -386,7 +386,7 @@ export default function Sidebar({
               <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
                 <Store />
               </span>
-              <span className="font-medium truncate">{t('shop')}</span>
+              <span className="font-medium truncate">{t('platformShopTitle')}</span>
             </Link>
           ) : null}
 
