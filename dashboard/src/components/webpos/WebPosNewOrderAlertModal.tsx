@@ -4,20 +4,23 @@ import { Bell, CalendarClock, Zap } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
+import { extractZipFromAddress } from '@/lib/delivery-hub-alerts';
 import {
   orderPlatformBadgeClass,
   orderPlatformLabel,
   type MerchantOrder,
 } from '@/lib/order-management';
-import { startOrderAlertLoop, stopOrderAlertLoop } from '@/lib/order-alert';
+import { startOrderAlertLoop } from '@/lib/order-alert';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 
 type Props = {
   order: OnlineOrder | null;
   queueCount?: number;
   busy?: boolean;
-  onAccept: (order: OnlineOrder) => void;
-  onReject: (order: OnlineOrder) => void;
+  onAcknowledge: (order: OnlineOrder) => void;
+  onAccept?: (order: OnlineOrder) => void;
+  onReject?: (order: OnlineOrder) => void;
+  onOpen?: (order: OnlineOrder) => void;
 };
 
 function asMerchantOrder(o: OnlineOrder): MerchantOrder {
@@ -28,8 +31,10 @@ export default function WebPosNewOrderAlertModal({
   order,
   queueCount = 1,
   busy,
+  onAcknowledge,
   onAccept,
   onReject,
+  onOpen,
 }: Props) {
   const { t, formatDateTime } = useI18n();
 
@@ -37,9 +42,6 @@ export default function WebPosNewOrderAlertModal({
     if (order) {
       startOrderAlertLoop(4500);
     }
-    return () => {
-      /* parent stops loop when queue empty */
-    };
   }, [order?.id]);
 
   if (!order) return null;
@@ -55,6 +57,7 @@ export default function WebPosNewOrderAlertModal({
   const platform = orderPlatformLabel(asMerchantOrder(order), t);
   const platformClass = orderPlatformBadgeClass(asMerchantOrder(order));
   const isScheduled = !!order.scheduledFor;
+  const zip = extractZipFromAddress(order.shippingAddress);
 
   return createPortal(
     <div
@@ -120,6 +123,11 @@ export default function WebPosNewOrderAlertModal({
               {order.shippingAddress ? (
                 <p className="text-xs text-stone-600">{order.shippingAddress}</p>
               ) : null}
+              {zip ? (
+                <p className="text-xs font-bold text-sky-800">
+                  {t('deliveryHubNewOrderZipPart').replace('{zip}', zip).replace(/^ for /, '').replace(/^ — /, '')}
+                </p>
+              ) : null}
             </div>
           )}
 
@@ -142,34 +150,49 @@ export default function WebPosNewOrderAlertModal({
           ) : null}
         </div>
 
-        <p className="mt-3 text-center text-xs font-medium text-violet-800">
-          {t('webPosNewOrderAlertActionHint')}
-        </p>
+        <button
+          type="button"
+          className="mt-4 w-full rounded-xl bg-emerald-600 py-4 text-base font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+          disabled={busy}
+          onClick={() => onAcknowledge(order)}
+        >
+          {t('webPosOrderTaken')}
+        </button>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            className="rounded-xl border-2 border-red-300 bg-red-50 py-4 text-sm font-bold text-red-800 hover:bg-red-100 disabled:opacity-50"
-            disabled={busy}
-            onClick={() => {
-              stopOrderAlertLoop();
-              onReject(order);
-            }}
-          >
-            {t('orderRejectConfirm')}
-          </button>
-          <button
-            type="button"
-            className="rounded-xl bg-emerald-600 py-4 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-            disabled={busy}
-            onClick={() => {
-              stopOrderAlertLoop();
-              onAccept(order);
-            }}
-          >
-            {t('webPosWorkflowAccept')}
-          </button>
-        </div>
+        {onAccept || onReject || onOpen ? (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {onReject ? (
+              <button
+                type="button"
+                className="rounded-xl border-2 border-red-300 bg-red-50 py-3 text-sm font-bold text-red-800 hover:bg-red-100 disabled:opacity-50"
+                disabled={busy}
+                onClick={() => onReject(order)}
+              >
+                {t('orderRejectConfirm')}
+              </button>
+            ) : null}
+            {onAccept ? (
+              <button
+                type="button"
+                className="rounded-xl bg-violet-700 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-50"
+                disabled={busy}
+                onClick={() => onAccept(order)}
+              >
+                {t('webPosWorkflowAccept')}
+              </button>
+            ) : null}
+            {onOpen ? (
+              <button
+                type="button"
+                className={`rounded-xl border border-stone-300 py-3 text-sm font-bold text-stone-800 hover:bg-stone-50 disabled:opacity-50 ${!onAccept && !onReject ? 'col-span-2' : ''}`}
+                disabled={busy}
+                onClick={() => onOpen(order)}
+              >
+                {t('webPosNewOrderAlertOpen')}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>,
     document.body

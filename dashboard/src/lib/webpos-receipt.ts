@@ -2776,7 +2776,7 @@ export function generateOrderNotificationTicketEscPos(opts: OrderNotificationTic
     escKitchenSize(1),
     escBold(false),
     escposCp850Encode(lines.slice(1).join('\n')),
-    new Uint8Array([0x0a, 0x0a, 0x0a]),
+    new Uint8Array([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]),
   ];
   return concatBytes(...parts);
 }
@@ -2838,17 +2838,126 @@ export type DeliverySlipOpts = {
   customerName?: string | null;
   customerPhone?: string | null;
   shippingAddress?: string | null;
+  orderNotes?: string | null;
   scheduledFor?: string | null;
   total: number;
   paymentMethod?: string | null;
   paymentStatus?: string | null;
-  items?: Array<{ name: string; quantity: number; categoryLabel?: string | null }>;
+  items?: Array<{ name: string; quantity: number; categoryLabel?: string | null; note?: string | null }>;
   language?: string;
   paperWidthMm?: 58 | 80;
-  driverClaimUrl: string;
+  driverClaimUrl?: string;
   /** @deprecated Directions QR removed from delivery slip — driver claim QR only. */
   directionsUrl?: string | null;
 };
+
+export type DeliveryReceiptOpts = Omit<DeliverySlipOpts, 'driverClaimUrl' | 'directionsUrl'>;
+
+function deliveryReceiptPaymentLine(
+  L: ReturnType<typeof receiptLabels>,
+  paymentMethod?: string | null,
+  paymentStatus?: string | null
+): string {
+  const paid =
+    paymentStatus === 'completed' ||
+    paymentStatus === 'paid' ||
+    paymentMethod === 'card' ||
+    paymentMethod === 'terminal' ||
+    paymentMethod === 'online';
+  if (paid) return L.paid;
+  const method = String(paymentMethod || '').toLowerCase();
+  if (method === 'cash' || method === 'cod' || !paymentMethod) return 'COD';
+  return paymentLabel(L, paymentMethod) || String(paymentMethod).toUpperCase();
+}
+
+/** POS delivery receipt — customer details + items for the main till printer (no driver QR). */
+export function generateDeliveryReceiptEscPos(opts: DeliveryReceiptOpts): Uint8Array {
+  const width = lineWidthForPaper(opts.paperWidthMm ?? 80);
+  const lang = (opts.language || 'en').slice(0, 2) as ReceiptLang;
+  const L = receiptLabels(lang);
+  const sep = '='.repeat(width);
+  const thin = '-'.repeat(width);
+  const when = formatDateTimeDDMMYYYY(new Date());
+  const zip = extractPostalCode(opts.shippingAddress);
+  const source = String(opts.orderSource || 'ONLINE SHOP').toUpperCase().replace(/_/g, ' ');
+  const payLine = deliveryReceiptPaymentLine(L, opts.paymentMethod, opts.paymentStatus);
+
+  const lines: string[] = [
+    centerLine(`* ${(opts.businessName || APP_NAME).toUpperCase()} *`, width),
+    centerLine('DELIVERY RECEIPT', width),
+    centerLine(source, width),
+    centerLine(when.slice(0, width), width),
+    sep,
+    centerLine(`#${opts.orderNumber}`, width),
+  ];
+
+  if (opts.customerName?.trim()) {
+    lines.push(padLine(L.customer, String(opts.customerName).slice(0, width - 10), width));
+  }
+  if (opts.customerPhone?.trim()) {
+    lines.push(padLine('Tel', String(opts.customerPhone).slice(0, width - 5), width));
+  }
+  if (opts.shippingAddress?.trim()) {
+    lines.push(padLine(L.deliveryAddress, String(opts.shippingAddress).slice(0, width - 8), width));
+  }
+  if (zip) {
+    lines.push(padLine(L.postalCode, zip, width));
+  }
+  lines.push(
+    padLine(
+      L.forWhen,
+      opts.scheduledFor ? formatTimeHHMM(new Date(opts.scheduledFor)) : L.asap,
+      width
+    ),
+    thin
+  );
+
+  for (const item of opts.items || []) {
+    const qtyPrefix = formatQtyArticlePrefix({ quantity: item.quantity });
+    const { product, modifiers } = splitReceiptArticle(String(item.name || 'Item'));
+    lines.push(`${qtyPrefix}${product}`.slice(0, width));
+    for (const mod of modifiers) {
+      lines.push(formatReceiptExtraLine(qtyPrefix, mod).slice(0, width));
+    }
+    if (item.note?.trim()) {
+      lines.push(`  * ${item.note.trim()}`.slice(0, width));
+    }
+  }
+
+  if (opts.orderNotes?.trim()) {
+    lines.push(thin, `${L.note}:`.slice(0, width));
+    for (const w of wrapKitchenWords(opts.orderNotes.trim(), width)) {
+      lines.push(w);
+    }
+  }
+
+  lines.push(
+    thin,
+    padLine(L.total, `CHF ${roundMoney2(Number(opts.total) || 0).toFixed(2)}`, width),
+    padLine(L.payment, payLine.slice(0, width - 10), width),
+    sep,
+    centerLine(L.nonFiscalTicket, width),
+    '',
+    ''
+  );
+
+  const headerText = lines.slice(0, 5).join('\n') + '\n';
+  const bodyText = lines.slice(5).join('\n');
+
+  return concatBytes(
+    new Uint8Array([0x1b, 0x40]),
+    ESC_CODEPAGE_CP850,
+    escAlign(1),
+    escKitchenSize(2),
+    escBold(true),
+    escposCp850Encode(headerText),
+    escAlign(0),
+    escKitchenSize(1),
+    escBold(false),
+    escposCp850Encode(bodyText),
+    new Uint8Array([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00])
+  );
+}
 
 function extractPostalCode(address?: string | null): string {
   if (!address) return '';
@@ -2966,14 +3075,15 @@ export async function generateDeliverySlipEscPos(opts: DeliverySlipOpts): Promis
   );
   appendLine(centerLine(`#${opts.orderNumber}`, width));
 
-  // Single large driver claim QR
-  const driverQr =
-    (await buildDeliverySlipQrRasterEscPos({
-      label: L.scanDriver,
-      data: opts.driverClaimUrl,
-      paperWidthMm: opts.paperWidthMm ?? 80,
-    })) ||
-    (await generateReceiptQrRasterEscPos(opts.driverClaimUrl, opts.paperWidthMm ?? 80));
+  const claimUrl = opts.driverClaimUrl?.trim();
+  const driverQr = claimUrl
+    ? (await buildDeliverySlipQrRasterEscPos({
+        label: L.scanDriver,
+        data: claimUrl,
+        paperWidthMm: opts.paperWidthMm ?? 80,
+      })) ||
+      (await generateReceiptQrRasterEscPos(claimUrl, opts.paperWidthMm ?? 80))
+    : null;
 
   parts.push(escAlign(1));
   if (driverQr?.length) {
