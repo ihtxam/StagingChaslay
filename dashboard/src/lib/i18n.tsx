@@ -2546,6 +2546,8 @@ const en: Dict = {
   webPosShiftExpectedFormula: '{float} float + {sales} cash sales + {in} cash in − {out} cash out',
   webPosShiftCashRefunds: 'Cash refunds',
   reportsCashDrawer: 'Cash drawer',
+  reportsDetailSections: 'Order & shift details',
+  reportsShiftCashEmpty: 'No closed shifts in this period.',
   reportsCashRefunds: 'Cash refunds',
   reportsExpectedFormula: 'Opening + cash sales + cash in − cash out − cash refunds',
   webPosShiftFloatCarriesForward:
@@ -5632,6 +5634,8 @@ const fr: Dict = {
   webPosShiftExpectedFormula: '{float} fond de base + {sales} ventes espèces + {in} entrées − {out} sorties',
   webPosShiftCashRefunds: 'Remboursements espèces',
   reportsCashDrawer: 'Tiroir-caisse',
+  reportsDetailSections: 'Détail commandes & caisses',
+  reportsShiftCashEmpty: 'Aucune caisse clôturée sur cette période.',
   reportsCashRefunds: 'Remboursements espèces',
   reportsExpectedFormula: 'Fond + ventes espèces + entrées − sorties − remboursements',
   webPosShiftFloatCarriesForward:
@@ -8725,6 +8729,8 @@ const de: Dict = {
   webPosShiftExpectedFormula: '{float} Anfangsbestand + {sales} Barverkäufe + {in} Einlagen − {out} Entnahmen',
   webPosShiftCashRefunds: 'Barrückerstattungen',
   reportsCashDrawer: 'Kassenschublade',
+  reportsDetailSections: 'Bestell- & Schichtdetails',
+  reportsShiftCashEmpty: 'Keine geschlossenen Schichten in diesem Zeitraum.',
   reportsCashRefunds: 'Barrückerstattungen',
   reportsExpectedFormula: 'Anfangsbestand + Barverkäufe + Einlagen − Entnahmen − Rückerstattungen',
   webPosShiftFloatCarriesForward:
