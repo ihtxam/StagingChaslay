@@ -10,6 +10,7 @@ import {
   canCollectPayment,
   isAwaitingApproval,
   isAwaitingPaymentOrder,
+  isActiveOnlineOrder,
   isPaidOrder,
   orderPlatformBadgeClass,
   orderPlatformBorderClass,
@@ -49,10 +50,6 @@ type Props = {
   highlightOrderId?: string | null;
   search?: string;
 };
-
-function isActiveStatus(status: string) {
-  return !['completed', 'cancelled', 'refunded'].includes(status);
-}
 
 function isArchiveStatus(status: string) {
   const s = status.toLowerCase();
@@ -159,9 +156,9 @@ export default function WebPosOnlineOrdersView({
       });
     }
     if (tab === 'active') {
-      list = list.filter((o) => isActiveStatus(o.status));
+      list = list.filter((o) => isActiveOnlineOrder(o));
     } else if (tab === 'completed') {
-      list = list.filter((o) => o.status === 'completed');
+      list = list.filter((o) => o.status?.toLowerCase().trim() === 'completed');
     } else {
       list = list.filter((o) => isArchiveStatus(o.status));
     }
@@ -441,7 +438,7 @@ export default function WebPosOnlineOrdersView({
                       </ul>
                     ) : null}
 
-                    {o.estimatedReadyAt && isActiveStatus(o.status) ? (
+                    {o.estimatedReadyAt && isActiveOnlineOrder(o) ? (
                       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-stone-50 px-3 py-2">
                         <Clock size={14} className="text-stone-500" />
                         <span className="text-xs font-semibold text-stone-700">

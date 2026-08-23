@@ -122,6 +122,56 @@ export function isKitchenTypeOrder(o: MerchantOrder): boolean {
   return isAwaitingPaymentOrder(o);
 }
 
+const TERMINAL_ORDER_STATUSES = new Set([
+  'cancelled',
+  'refunded',
+  'completed',
+  'partially_refunded',
+]);
+
+function normalizeOrderStatus(status?: string | null): string {
+  return String(status || '')
+    .toLowerCase()
+    .trim()
+    .replace(/-/g, '_');
+}
+
+/** Order lifecycle is closed — no longer belongs in Active / kitchen queues. */
+export function isTerminalOrderStatus(status?: string | null): boolean {
+  return TERMINAL_ORDER_STATUSES.has(normalizeOrderStatus(status));
+}
+
+/**
+ * WebPOS Orders panel — still in kitchen / fulfillment.
+ * Paid internal POS closes after payment; online / 3P stay open until status=completed.
+ */
+export function isOpenWebPosOrder(o: MerchantOrder): boolean {
+  if (isTerminalOrderStatus(o.status)) return false;
+  if (!isOnlineShopOrder(o) && isPaidOrder(o)) return false;
+  return true;
+}
+
+/**
+ * Paid in-store POS delivery/takeaway with a future slot — kitchen ticket stays in
+ * Active until the slot passes. Online / 3P orders use their own lifecycle and must
+ * leave Active once status=completed even when scheduledFor is still in the future.
+ */
+export function isScheduledPosKitchenTicket(o: MerchantOrder): boolean {
+  const status = normalizeOrderStatus(o.status);
+  if (status !== 'completed' && status !== 'partially_refunded') return false;
+  if (isOnlineShopOrder(o)) return false;
+  const ch = orderChannel(o).toLowerCase();
+  if (ch !== 'delivery' && ch !== 'takeaway') return false;
+  if (o.scheduledFor == null || o.scheduledFor === '') return false;
+  const when = new Date(o.scheduledFor as string | number | Date).getTime();
+  return Number.isFinite(when) && when > Date.now();
+}
+
+/** Online order center — Active tab (pending through out_for_delivery). */
+export function isActiveOnlineOrder(o: { status?: string | null }): boolean {
+  return !isTerminalOrderStatus(o.status);
+}
+
 export function isOnlineShopOrder(o: {
   orderType?: string | null;
   orderSource?: string | null;

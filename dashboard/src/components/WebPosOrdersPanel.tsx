@@ -39,7 +39,9 @@ import {
   isAwaitingApproval,
   isInvoiceOrder,
   isOnlineShopOrder,
+  isOpenWebPosOrder,
   isPaidOrder,
+  isScheduledPosKitchenTicket,
   orderChannelBadgeClass,
   orderChannelBorderClass,
   orderChannelHeaderClass,
@@ -243,25 +245,6 @@ function canCancelOrder(o: PosOrder): boolean {
   if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) return false;
   if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(pay)) return false;
   return true;
-}
-
-/** Still in kitchen / fulfillment — paid online/3P stay open; paid internal POS does not. */
-function isOpenFulfillmentOrder(o: PosOrder): boolean {
-  const status = (o.status || '').toLowerCase();
-  if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) return false;
-  if (!isOnlineShopOrder(o) && isPaidOrder(o)) return false;
-  return true;
-}
-
-/** Paid delivery/takeaway with a future slot — still a kitchen ticket, also in history. */
-function isScheduledKitchenTicket(o: PosOrder): boolean {
-  const status = (o.status || '').toLowerCase();
-  if (status !== 'completed' && status !== 'partially_refunded') return false;
-  const ch = String(o.channel || o.fulfillmentChannel || '').toLowerCase();
-  if (ch !== 'delivery' && ch !== 'takeaway') return false;
-  if (o.scheduledFor == null || o.scheduledFor === '') return false;
-  const when = new Date(o.scheduledFor as string | number | Date).getTime();
-  return Number.isFinite(when) && when > Date.now();
 }
 
 function isUnpaidInvoice(o: PosOrder): boolean {
@@ -566,7 +549,7 @@ export default function WebPosOrdersPanel({
       held: nextHeld.length,
       localAdded: localRows.length,
       posOrders: nextOrders.length,
-      openPos: nextOrders.filter((o) => isOpenFulfillmentOrder(o)).length,
+      openPos: nextOrders.filter((o) => isOpenWebPosOrder(o)).length,
     });
     setHeld(nextHeld);
     setOrders(nextOrders);
@@ -592,7 +575,7 @@ export default function WebPosOrdersPanel({
     if (!open || !highlightOrderId || orders.length === 0) return;
     const match = orders.find((o) => o.id === highlightOrderId || o.clientId === highlightOrderId);
     if (match) {
-      setStatusFilter(isOpenFulfillmentOrder(match) ? 'active' : 'completed');
+      setStatusFilter(isOpenWebPosOrder(match) ? 'active' : 'completed');
       if (isOnlineShopOrder(match)) setChannelFilter('online');
       setSelectedOrder(match);
       setSelectedHeld(null);
@@ -648,8 +631,8 @@ export default function WebPosOrdersPanel({
       if (view !== 'held') {
       for (const o of orders) {
         const showOnActive =
-          isOpenFulfillmentOrder(o) ||
-          (view === 'active' && isScheduledKitchenTicket(o)) ||
+          isOpenWebPosOrder(o) ||
+          (view === 'active' && isScheduledPosKitchenTicket(o)) ||
           (view === 'active' && isUnpaidInvoice(o));
         if (!showOnActive) continue;
         if (!matchesChannelFilter(o, channelFilter)) continue;
@@ -682,9 +665,9 @@ export default function WebPosOrdersPanel({
         // Ongoing orders already listed under Active; skip them here (including "All").
         // Invoice sales stay in history even when unpaid / still "preparing".
         const listedInActive =
-          isOpenFulfillmentOrder(o) || (view === 'all' && isUnpaidInvoice(o));
+          isOpenWebPosOrder(o) || (view === 'all' && isUnpaidInvoice(o));
         if (listedInActive && view === 'all') continue;
-        if (isOpenFulfillmentOrder(o) && !isInvoiceOrder(o)) continue;
+        if (isOpenWebPosOrder(o) && !isInvoiceOrder(o)) continue;
         if (!matchesChannelFilter(o, channelFilter)) continue;
         if (q) {
           const refs = orderPublicRefs(o);
@@ -1861,7 +1844,7 @@ export default function WebPosOrdersPanel({
                     totalRefunded={Number(selectedOrder.refundAmount || 0)}
                   />
                 </div>
-                {isOpenFulfillmentOrder(selectedOrder) &&
+                {isOpenWebPosOrder(selectedOrder) &&
                 (showsKitchenFulfillmentStages(selectedOrder) ||
                   canCollectPayment(selectedOrder) ||
                   canAdminCollectPayment(selectedOrder)) ? (
