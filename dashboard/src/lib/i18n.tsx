@@ -5285,7 +5285,7 @@ const fr: Dict = {
   webPosPrintRelayHint:
     'Laissez ChaslayReborn ouvert sur le PC avec l\'agent d\'impression — cette caisse imprime automatiquement les tickets des téléphones serveurs.',
   webPosPrintQueuedMainTill:
-    'Envoyé à l\'imprimante de la caisse principale. Gardez ChaslayReborn ouvert sur le PC avec l\'agent d\'impression.',
+    'Envoyé à la caisse principale — gardez ChaslayReborn ouvert sur le PC.',
   webPosWaiterOrderAtTill: 'Commande serveur reçue — impression sur cette caisse',
   webPosWaiterOrderAtTillNamed: 'Commande serveur reçue — {label}',
   webPosAgentOffline: 'Agent d\'impression hors ligne.',
