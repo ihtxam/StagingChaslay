@@ -335,11 +335,6 @@ export default function WebPosTopBar({
             );
           })}
 
-          {!inCheckout && activeTab === 'register' ? (
-            <span className="webpos-accent-chip mb-0 ml-1 shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide lg:mb-1">
-              {t('webPosDirectSale')}
-            </span>
-          ) : null}
           {tableBadge ? (
             <span className="mb-0 ml-1 shrink-0 rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200 lg:mb-1">
               {tableBadge}
