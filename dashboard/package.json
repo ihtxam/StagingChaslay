@@ -21,6 +21,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "jsbarcode": "^3.12.3",
+    "jsqr": "^1.4.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.408.0",
     "motion-dom": "12.23.20",
