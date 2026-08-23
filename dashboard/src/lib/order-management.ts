@@ -33,6 +33,10 @@ export type MerchantOrder = PosOrderForReceipt & {
   fulfillmentChannel?: string | null;
   scheduledFor?: string | null;
   shippingAddress?: string | null;
+  deliveryLatitude?: number | null;
+  deliveryLongitude?: number | null;
+  assignedDeliveryStaffId?: string | null;
+  assignedDriverName?: string | null;
   items?: Array<{
     id?: string;
     name?: string | null;

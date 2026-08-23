@@ -44,6 +44,7 @@ import {
 } from '@/components/settings/SettingsReportUi';
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
+import DeliveryLiveMap from '@/components/delivery/DeliveryLiveMap';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
 type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online' | 'invoice';
@@ -112,6 +113,90 @@ function canRefundMerchantOrder(o: MerchantOrder): boolean {
 
 type InvoicePayFilter = 'all' | 'unpaid' | 'paid';
 
+type DriverPing = {
+  staffId: string;
+  staffName: string;
+  latitude: number | null;
+  longitude: number | null;
+  stale?: boolean;
+  recordedAt?: string;
+};
+
+function OrderDriverLiveMap({
+  order,
+  storeLat,
+  storeLng,
+}: {
+  order: MerchantOrder;
+  storeLat: number | null;
+  storeLng: number | null;
+}) {
+  const { t } = useI18n();
+  const [driver, setDriver] = useState<DriverPing | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await api.get(`/merchant/delivery/orders/${order.id}/driver`);
+        if (!cancelled) setDriver(res.data.driver || null);
+      } catch {
+        if (!cancelled) setDriver(null);
+      }
+    };
+    void load();
+    const id = window.setInterval(() => void load(), 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [order.id]);
+
+  const destLat = order.deliveryLatitude != null ? Number(order.deliveryLatitude) : NaN;
+  const destLng = order.deliveryLongitude != null ? Number(order.deliveryLongitude) : NaN;
+  const destination =
+    Number.isFinite(destLat) && Number.isFinite(destLng)
+      ? { latitude: destLat, longitude: destLng }
+      : null;
+  const store =
+    storeLat != null && storeLng != null && Number.isFinite(storeLat) && Number.isFinite(storeLng)
+      ? { latitude: storeLat, longitude: storeLng }
+      : null;
+  const driverPoint =
+    driver &&
+    driver.latitude != null &&
+    driver.longitude != null &&
+    Number.isFinite(driver.latitude) &&
+    Number.isFinite(driver.longitude)
+      ? {
+          latitude: driver.latitude,
+          longitude: driver.longitude,
+          name: driver.staffName,
+          stale: driver.stale,
+        }
+      : null;
+
+  return (
+    <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+      <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+        {t('deliveryLiveTracking')}
+      </p>
+      <p className="text-sm text-stone-800">
+        <span className="text-[var(--text-muted)]">{t('deliveryAssignedDriver')}:</span>{' '}
+        {driver?.staffName || order.assignedDriverName || t('deliveryUnassigned')}
+      </p>
+      {driverPoint && !driverPoint.stale ? (
+        <p className="text-xs text-emerald-800">
+          {t('deliveryDriverOnWay').replace('{name}', driverPoint.name || '')}
+        </p>
+      ) : (
+        <p className="text-xs text-stone-500">{t('deliveryTrackingWaiting')}</p>
+      )}
+      <DeliveryLiveMap store={store} destination={destination} driver={driverPoint} heightClass="h-44" />
+    </div>
+  );
+}
+
 export default function Orders({ invoiceLedger = false }: { invoiceLedger?: boolean }) {
   const { t, formatDateTime, locale } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -144,6 +229,8 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     vatRate?: string;
     taxIncludedInPrice?: boolean;
     shopLogoUrl?: string;
+    latitude?: number | null;
+    longitude?: number | null;
   } | null>(null);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [printing, setPrinting] = useState(false);
@@ -170,6 +257,8 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         vatRate: s.vatRate,
         taxIncludedInPrice: s.taxIncludedInPrice,
         shopLogoUrl: s.shopLogoUrl,
+        latitude: s.latitude != null ? Number(s.latitude) : null,
+        longitude: s.longitude != null ? Number(s.longitude) : null,
       });
       setPrintSettings(s.posPrintSettings || null);
       setStaffList(
@@ -760,6 +849,11 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                     {order.staffName}
                   </span>
                 ) : null}
+                {ch === 'delivery' && order.assignedDriverName ? (
+                  <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-emerald-900 truncate max-w-[8rem]">
+                    🛵 {order.assignedDriverName}
+                  </span>
+                ) : null}
                 <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5 font-extrabold tabular-nums">
                   CHF {Number(order.total || 0).toFixed(2)}
                 </span>
@@ -839,6 +933,19 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                     <span className="text-[var(--text-muted)]">{t('ordersAddress')}:</span>{' '}
                     {selected.shippingAddress}
                   </p>
+                ) : null}
+                {(orderChannel(selected) === 'delivery' ||
+                  selected.fulfillmentChannel === 'delivery' ||
+                  selected.channel === 'delivery') &&
+                (selected.assignedDriverName ||
+                  selected.status === 'out_for_delivery' ||
+                  selected.status === 'ready' ||
+                  selected.status === 'preparing') ? (
+                  <OrderDriverLiveMap
+                    order={selected}
+                    storeLat={merchant?.latitude ?? null}
+                    storeLng={merchant?.longitude ?? null}
+                  />
                 ) : null}
                 {isInvoiceOrder(selected) ? (
                   <p>

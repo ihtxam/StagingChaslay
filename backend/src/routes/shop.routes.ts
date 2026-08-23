@@ -2099,6 +2099,30 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       ? new Date(scheduledFor)
       : new Date(Date.now() + prepMinutes * 60 * 1000);
 
+    let deliveryLat: string | null = null;
+    let deliveryLng: string | null = null;
+    let deliveryTrackingToken: string | null = null;
+    if (channel === "delivery") {
+      const { generateDeliveryTrackingToken } = await import("@/lib/delivery-tracking-url");
+      deliveryTrackingToken = generateDeliveryTrackingToken();
+      const latNum = lat != null ? Number(lat) : NaN;
+      const lngNum = lng != null ? Number(lng) : NaN;
+      if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+        deliveryLat = String(latNum);
+        deliveryLng = String(lngNum);
+      } else if (addressText) {
+        try {
+          const geo = await geocodeQuery(addressText);
+          if (geo?.lat != null && geo?.lng != null) {
+            deliveryLat = String(geo.lat);
+            deliveryLng = String(geo.lng);
+          }
+        } catch {
+          /* geocode optional */
+        }
+      }
+    }
+
     // Prefer logged-in customer for loyalty redemptions
     if ((totalPointsRedeemed > 0 || requestedCashPoints > 0) && authCustomer.customerId) {
       customerId = authCustomer.customerId;
@@ -2141,6 +2165,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         customerEmail: emailNorm || null,
+        deliveryLatitude: deliveryLat,
+        deliveryLongitude: deliveryLng,
+        deliveryTrackingToken,
       })
       .returning();
 
@@ -2337,6 +2364,28 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Shop order error:", error);
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create order" });
+  }
+});
+
+/**
+ * GET /api/shop/:slug/orders/:orderId/tracking?token= — guest live driver map
+ */
+router.get("/:slug/orders/:orderId/tracking", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    const token = String(req.query.token || "").trim();
+    if (!token) return res.status(400).json({ error: "Tracking token required" });
+    const { DeliveryTrackingService } = await import("@/services/delivery-tracking.service");
+    const payload = await DeliveryTrackingService.getPublicTracking(
+      merchant.id,
+      req.params.orderId,
+      token
+    );
+    res.json({ success: true, ...payload });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to load tracking";
+    res.status(msg.includes("Invalid") ? 403 : 404).json({ error: msg });
   }
 });
 

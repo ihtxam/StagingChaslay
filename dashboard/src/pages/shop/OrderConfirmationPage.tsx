@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import DeliveryLiveMap from '@/components/delivery/DeliveryLiveMap';
 import { clearCart, resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
@@ -82,7 +83,23 @@ export default function OrderConfirmationPage() {
   const { merchantSlug, orderId = '' } = useParams<{ merchantSlug?: string; orderId?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const [searchParams] = useSearchParams();
+  const trackToken = searchParams.get('track') || '';
   const wantPay = searchParams.get('pay') === '1' || searchParams.get('paid') === '1';
+
+  const [trackingLive, setTrackingLive] = useState<{
+    store: { latitude: number | null; longitude: number | null; name: string };
+    order: {
+      destination: { latitude: number | null; longitude: number | null };
+      status: string;
+      shippingAddress: string | null;
+    };
+    driver: {
+      name: string;
+      latitude: number;
+      longitude: number;
+      stale: boolean;
+    } | null;
+  } | null>(null);
 
   const [order, setOrder] = useState<OrderView | null>(null);
   const [error, setError] = useState('');
@@ -120,6 +137,26 @@ export default function OrderConfirmationPage() {
     const poll = window.setInterval(() => void load(), 15000);
     return () => window.clearInterval(poll);
   }, [load]);
+
+  const loadTracking = useCallback(async () => {
+    if (!shopKey || !orderId || !trackToken) return;
+    if (order?.fulfillmentChannel !== 'delivery') return;
+    try {
+      const res = await axios.get(
+        `/api/shop/${shopKey}/orders/${orderId}/tracking?token=${encodeURIComponent(trackToken)}`
+      );
+      setTrackingLive(res.data);
+    } catch {
+      setTrackingLive(null);
+    }
+  }, [shopKey, orderId, trackToken, order?.fulfillmentChannel]);
+
+  useEffect(() => {
+    if (!trackToken || order?.fulfillmentChannel !== 'delivery') return;
+    void loadTracking();
+    const id = window.setInterval(() => void loadTracking(), 10000);
+    return () => window.clearInterval(id);
+  }, [loadTracking, trackToken, order?.fulfillmentChannel]);
 
   const [countdownSec, setCountdownSec] = useState<number | null>(null);
 
@@ -365,6 +402,51 @@ export default function OrderConfirmationPage() {
               {formatDateTime(order.scheduledFor)}
             </p>
           )}
+          {order.fulfillmentChannel === 'delivery' && trackToken ? (
+            <div className="space-y-2 border-t border-stone-100 pt-3">
+              <p className="text-sm font-semibold text-stone-800">{t('deliveryLiveTracking')}</p>
+              {trackingLive?.driver && !trackingLive.driver.stale ? (
+                <p className="text-xs text-teal-700">
+                  {t('deliveryDriverOnWay').replace('{name}', trackingLive.driver.name)}
+                </p>
+              ) : (
+                <p className="text-xs text-stone-500">{t('deliveryTrackingWaiting')}</p>
+              )}
+              <DeliveryLiveMap
+                store={
+                  trackingLive?.store?.latitude != null && trackingLive.store.longitude != null
+                    ? {
+                        latitude: trackingLive.store.latitude,
+                        longitude: trackingLive.store.longitude,
+                      }
+                    : null
+                }
+                destination={
+                  trackingLive?.order?.destination?.latitude != null &&
+                  trackingLive.order.destination.longitude != null
+                    ? {
+                        latitude: trackingLive.order.destination.latitude,
+                        longitude: trackingLive.order.destination.longitude,
+                      }
+                    : null
+                }
+                driver={
+                  trackingLive?.driver
+                    ? {
+                        latitude: trackingLive.driver.latitude,
+                        longitude: trackingLive.driver.longitude,
+                        name: trackingLive.driver.name,
+                        stale: trackingLive.driver.stale,
+                      }
+                    : null
+                }
+                heightClass="h-64"
+              />
+              {order.shippingAddress ? (
+                <p className="text-xs text-stone-500">{order.shippingAddress}</p>
+              ) : null}
+            </div>
+          ) : null}
           {order.estimatedReadyAt && !isOrderEtaComplete(order.status) ? (
             <div className="flex items-center gap-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <div

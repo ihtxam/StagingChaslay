@@ -181,6 +181,9 @@ export class MerchantSettingsService {
       deliveryEtaMinutes: merchant.deliveryEtaMinutes,
       minPreOrderDelayMinutes: merchant.minPreOrderDelayMinutes ?? 30,
       deliveryMenuMarkup: merchant.deliveryMenuMarkup ?? "0",
+      deliveryDriverPayMode: merchant.deliveryDriverPayMode || "both",
+      deliveryDriverHourlyRate: merchant.deliveryDriverHourlyRate ?? "0",
+      deliveryPerOrderFee: merchant.deliveryPerOrderFee ?? "0",
       vacationSettings: normalizeVacationSettings(merchant.vacationSettings),
       emailSmtpSettings: MarketingService.getSmtpPublic(merchant.emailSmtpSettings),
       emailBrevoSettings: MarketingService.getBrevoPublic(merchant.emailBrevoSettings),
@@ -285,6 +288,9 @@ export class MerchantSettingsService {
       deliveryEtaMinutes?: number;
       minPreOrderDelayMinutes?: number;
       deliveryMenuMarkup?: number;
+      deliveryDriverPayMode?: string;
+      deliveryDriverHourlyRate?: number;
+      deliveryPerOrderFee?: number;
       vacationSettings?: VacationSettings | null;
       emailSmtpSettings?: MerchantSmtpSettings | null;
       emailBrevoSettings?: MerchantBrevoSettings | null;
@@ -401,6 +407,23 @@ export class MerchantSettingsService {
       const n = Number(updates.deliveryMenuMarkup);
       if (!Number.isFinite(n) || n < 0) throw new Error("deliveryMenuMarkup must be >= 0");
       patch.deliveryMenuMarkup = n.toFixed(2);
+    }
+    if (updates.deliveryDriverPayMode !== undefined) {
+      const mode = String(updates.deliveryDriverPayMode);
+      if (!["hourly", "per_order", "both"].includes(mode)) {
+        throw new Error("deliveryDriverPayMode must be hourly, per_order, or both");
+      }
+      patch.deliveryDriverPayMode = mode;
+    }
+    if (updates.deliveryDriverHourlyRate !== undefined) {
+      const n = Number(updates.deliveryDriverHourlyRate);
+      if (!Number.isFinite(n) || n < 0) throw new Error("deliveryDriverHourlyRate must be >= 0");
+      patch.deliveryDriverHourlyRate = n.toFixed(2);
+    }
+    if (updates.deliveryPerOrderFee !== undefined) {
+      const n = Number(updates.deliveryPerOrderFee);
+      if (!Number.isFinite(n) || n < 0) throw new Error("deliveryPerOrderFee must be >= 0");
+      patch.deliveryPerOrderFee = n.toFixed(2);
     }
     if (updates.adyenMerchantAccount !== undefined) patch.adyenMerchantAccount = updates.adyenMerchantAccount;
     if (updates.adyenClientId !== undefined) patch.adyenClientId = updates.adyenClientId;

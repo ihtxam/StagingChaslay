@@ -93,6 +93,10 @@ export interface SyncSalePayload {
   customerPhone?: string | null;
   customerEmail?: string | null;
   shippingAddress?: string | null;
+  deliveryLatitude?: number | string | null;
+  deliveryLongitude?: number | string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
   tableId?: string | null;
   tableLabel?: string | null;
   guestCount?: number | null;
@@ -492,6 +496,33 @@ export class SyncService {
         throw new Error("Invalid completedAt on sale");
       }
 
+      let deliveryLat: string | null = null;
+      let deliveryLng: string | null = null;
+      let deliveryTrackingToken: string | null = null;
+      if (channel === "delivery") {
+        const { generateDeliveryTrackingToken } = await import("@/lib/delivery-tracking-url");
+        deliveryTrackingToken = generateDeliveryTrackingToken();
+        const latRaw = sale.deliveryLatitude ?? sale.lat;
+        const lngRaw = sale.deliveryLongitude ?? sale.lng;
+        const latNum = latRaw != null ? Number(latRaw) : NaN;
+        const lngNum = lngRaw != null ? Number(lngRaw) : NaN;
+        if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+          deliveryLat = String(latNum);
+          deliveryLng = String(lngNum);
+        } else if (sale.shippingAddress?.trim()) {
+          try {
+            const { geocodeQuery } = await import("@/lib/geocode");
+            const geo = await geocodeQuery(sale.shippingAddress.trim());
+            if (geo.found) {
+              deliveryLat = String(geo.lat);
+              deliveryLng = String(geo.lng);
+            }
+          } catch {
+            /* geocode optional */
+          }
+        }
+      }
+
       const orderValuesBase = {
         merchantId,
         orderType: "pos" as const,
@@ -559,6 +590,9 @@ export class SyncService {
         customerPhone: sale.customerPhone || null,
         customerEmail: sale.customerEmail || null,
         shippingAddress: sale.shippingAddress || null,
+        deliveryLatitude: deliveryLat,
+        deliveryLongitude: deliveryLng,
+        deliveryTrackingToken,
         tableId: asUuidOrNull(sale.tableId),
         tableLabel: sale.tableLabel || null,
         guestCount:

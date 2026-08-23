@@ -531,7 +531,16 @@ export class OrderService {
       case "out_for_delivery": {
         if (channel !== "delivery") throw new Error("Only delivery orders can go out for delivery");
         if (status !== "ready") throw new Error("Order must be ready before delivery");
-        return set({ status: "out_for_delivery" });
+        const updated = await set({ status: "out_for_delivery" });
+        if (order.orderType === "web_shop" && order.customerEmail) {
+          try {
+            const { ShopOrderEmailService } = await import("@/services/shop-order-email.service");
+            await ShopOrderEmailService.sendGuestOrderEmail(merchantId, orderId, "out_for_delivery");
+          } catch (emailErr) {
+            console.warn("Out for delivery email failed:", emailErr);
+          }
+        }
+        return updated;
       }
       case "collect_payment": {
         if (paymentDone) throw new Error("Payment already completed");

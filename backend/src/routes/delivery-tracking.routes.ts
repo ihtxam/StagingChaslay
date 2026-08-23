@@ -57,6 +57,8 @@ router.post("/location", requirePermission("DELIVERY_ORDERS"), async (req: Reque
       heading: body.heading != null ? Number(body.heading) : null,
       speedMps: body.speedMps != null ? Number(body.speedMps) : null,
     });
+    const { DeliveryDriverPayService } = await import("@/services/delivery-driver-pay.service");
+    await DeliveryDriverPayService.startShift(merchantId, staffId);
     res.json(result);
   } catch (error) {
     res.status(400).json({
@@ -131,5 +133,113 @@ router.get("/my-orders", requirePermission("DELIVERY_ORDERS"), async (req: Reque
     });
   }
 });
+
+/** GET /api/merchant/delivery/wage — driver daily pay summary */
+router.get("/wage", requirePermission("DELIVERY_ORDERS"), async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    const staffId = req.user?.staffId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    if (!staffId) return res.status(403).json({ error: "Clock in with your staff PIN" });
+    const { DeliveryDriverPayService } = await import("@/services/delivery-driver-pay.service");
+    const summary = await DeliveryDriverPayService.getDailySummary(
+      merchantId,
+      staffId,
+      req.query.date ? String(req.query.date) : undefined
+    );
+    res.json({ success: true, summary });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load wage summary",
+    });
+  }
+});
+
+/** GET /api/merchant/delivery/completed — driver completed deliveries today */
+router.get(
+  "/completed",
+  requirePermission("DELIVERY_ORDERS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      const staffId = req.user?.staffId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      if (!staffId) return res.status(403).json({ error: "Clock in with your staff PIN" });
+      const orders = await DeliveryTrackingService.listCompletedForDriver(
+        merchantId,
+        staffId,
+        req.query.date ? String(req.query.date) : undefined
+      );
+      res.json({ success: true, orders });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load completed orders",
+      });
+    }
+  }
+);
+
+/** POST /api/merchant/delivery/shift/end — end hourly shift when stopping GPS */
+router.post("/shift/end", requirePermission("DELIVERY_ORDERS"), async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    const staffId = req.user?.staffId;
+    if (!merchantId || !staffId) {
+      return res.status(403).json({ error: "Clock in with your staff PIN" });
+    }
+    const { DeliveryDriverPayService } = await import("@/services/delivery-driver-pay.service");
+    await DeliveryDriverPayService.endShift(merchantId, staffId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to end shift",
+    });
+  }
+});
+
+/** POST /api/merchant/delivery/orders/:orderId/complete — driver marks delivered */
+router.post(
+  "/orders/:orderId/complete",
+  requirePermission("DELIVERY_ORDERS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      const staffId = req.user?.staffId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      if (!staffId) return res.status(403).json({ error: "Clock in with your staff PIN" });
+      const order = await DeliveryTrackingService.completeDeliveryAsDriver(
+        merchantId,
+        staffId,
+        req.params.orderId
+      );
+      res.json({ success: true, order });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to complete delivery",
+      });
+    }
+  }
+);
+
+/** GET /api/merchant/delivery/orders/:orderId/driver — driver ping for orders board */
+router.get(
+  "/orders/:orderId/driver",
+  requirePermission("VIEW_DELIVERY_TRACKING", "VIEW_ORDER_HISTORY"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const driver = await DeliveryTrackingService.getDriverPingForOrder(
+        merchantId,
+        req.params.orderId
+      );
+      res.json({ success: true, driver });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load driver location",
+      });
+    }
+  }
+);
 
 export default router;

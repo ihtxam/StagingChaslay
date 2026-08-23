@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapPin, Navigation } from 'lucide-react';
+import { CheckCircle, MapPin, Navigation, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -22,14 +22,41 @@ type DeliveryOrder = {
   total: number;
 };
 
+type CompletedOrder = {
+  id: string;
+  orderNumber: string;
+  total: number;
+  completedAt: string | null;
+  customerName: string | null;
+  shippingAddress: string | null;
+};
+
+type WageSummary = {
+  date: string;
+  payMode: 'hourly' | 'per_order' | 'both';
+  hourlyRate: number;
+  perOrderFee: number;
+  hoursWorked: number;
+  deliveryCount: number;
+  hourlyPay: number;
+  orderPay: number;
+  totalPay: number;
+};
+
+type Tab = 'active' | 'completed' | 'wage';
+
 export default function DeliveryDriverPage() {
   const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const [pinStaff, setPinStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [pinOpen, setPinOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>('active');
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
+  const [completed, setCompleted] = useState<CompletedOrder[]>([]);
+  const [wage, setWage] = useState<WageSummary | null>(null);
   const [tracking, setTracking] = useState(false);
   const [lastPing, setLastPing] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
 
   const staffAccessToken = pinStaff?.accessToken;
@@ -41,19 +68,41 @@ export default function DeliveryDriverPage() {
     [staffAccessToken]
   );
 
+  const clockedIn = !!pinStaff || user?.role === 'staff';
+
   const loadOrders = useCallback(async () => {
-    if (!staffAccessToken && user?.role !== 'staff') return;
+    if (!clockedIn) return;
     try {
       const res = await api.get('/merchant/delivery/my-orders', { headers: apiHeaders });
       setOrders(res.data.orders || []);
     } catch {
       /* staff session required */
     }
-  }, [staffAccessToken, user?.role, apiHeaders]);
+  }, [clockedIn, apiHeaders]);
+
+  const loadCompleted = useCallback(async () => {
+    if (!clockedIn) return;
+    try {
+      const res = await api.get('/merchant/delivery/completed', { headers: apiHeaders });
+      setCompleted(res.data.orders || []);
+    } catch {
+      /* ignore */
+    }
+  }, [clockedIn, apiHeaders]);
+
+  const loadWage = useCallback(async () => {
+    if (!clockedIn) return;
+    try {
+      const res = await api.get('/merchant/delivery/wage', { headers: apiHeaders });
+      setWage(res.data.summary || null);
+    } catch {
+      /* ignore */
+    }
+  }, [clockedIn, apiHeaders]);
 
   const postLocation = useCallback(
     async (latitude: number, longitude: number, accuracyM?: number) => {
-      if (!staffAccessToken && user?.role !== 'staff') {
+      if (!clockedIn) {
         toast.error(t('deliveryPinRequired'));
         return;
       }
@@ -69,11 +118,11 @@ export default function DeliveryDriverPage() {
         toast.error(err.response?.data?.error || t('deliveryLocationFailed'));
       }
     },
-    [staffAccessToken, user?.role, apiHeaders, t]
+    [clockedIn, apiHeaders, t]
   );
 
   const startTracking = () => {
-    if (!pinStaff && user?.role !== 'staff') {
+    if (!clockedIn) {
       setPinOpen(true);
       return;
     }
@@ -84,36 +133,62 @@ export default function DeliveryDriverPage() {
     setTracking(true);
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        void postLocation(
-          pos.coords.latitude,
-          pos.coords.longitude,
-          pos.coords.accuracy
-        );
+        void postLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
       },
       () => toast.error(t('deliveryGeoDenied')),
       { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 }
     );
   };
 
-  const stopTracking = () => {
+  const stopTracking = async () => {
     setTracking(false);
     if (watchIdRef.current != null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
+    if (clockedIn) {
+      try {
+        await api.post('/merchant/delivery/shift/end', {}, { headers: apiHeaders });
+        void loadWage();
+      } catch {
+        /* optional */
+      }
+    }
+  };
+
+  const markDelivered = async (orderId: string) => {
+    setBusyId(orderId);
+    try {
+      await api.post(`/merchant/delivery/orders/${orderId}/complete`, {}, { headers: apiHeaders });
+      toast.success(t('deliveryMarkedDelivered'));
+      await Promise.all([loadOrders(), loadCompleted(), loadWage()]);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('actionFailed'));
+    } finally {
+      setBusyId(null);
+    }
   };
 
   useEffect(() => {
     void loadOrders();
-    const id = window.setInterval(() => void loadOrders(), 15000);
+    void loadCompleted();
+    void loadWage();
+    const id = window.setInterval(() => {
+      void loadOrders();
+      if (tab === 'completed') void loadCompleted();
+      if (tab === 'wage') void loadWage();
+    }, 15000);
     return () => {
       window.clearInterval(id);
-      stopTracking();
+      void stopTracking();
     };
-  }, [loadOrders]);
+  }, [loadOrders, loadCompleted, loadWage, tab]);
 
   const mapsUrl = (address: string) =>
     `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+
+  const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
 
   return (
     <div className="mx-auto max-w-lg space-y-4 p-4">
@@ -124,7 +199,7 @@ export default function DeliveryDriverPage() {
             ? t('deliveryDriverHello').replace('{name}', displayName)
             : t('deliveryDriverHint')}
         </p>
-        {!pinStaff && user?.role !== 'staff' ? (
+        {!clockedIn ? (
           <button
             type="button"
             className="mt-2 text-sm font-semibold text-teal-700 hover:underline"
@@ -152,42 +227,126 @@ export default function DeliveryDriverPage() {
           className={`mt-3 w-full rounded-lg px-4 py-2.5 text-sm font-bold text-white ${
             tracking ? 'bg-stone-600 hover:bg-stone-700' : 'bg-teal-600 hover:bg-teal-700'
           }`}
-          onClick={() => (tracking ? stopTracking() : startTracking())}
+          onClick={() => (tracking ? void stopTracking() : startTracking())}
         >
           {tracking ? t('deliveryStopTracking') : t('deliveryStartTracking')}
         </button>
         <p className="mt-2 text-[11px] leading-snug text-stone-500">{t('deliveryTrackingNote')}</p>
       </div>
 
-      <div className="space-y-2">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-stone-500">
-          {t('deliveryMyOrders')} ({orders.length})
-        </h2>
-        {orders.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-200 bg-stone-50 p-4 text-sm text-stone-600">
-            {t('deliveryNoAssignedOrders')}
-          </p>
-        ) : (
-          orders.map((o) => (
-            <div key={o.id} className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-              <div className="font-bold text-stone-900">#{o.orderNumber}</div>
-              <div className="text-sm text-stone-700">{o.customerName || t('deliveryMapGuest')}</div>
-              <div className="mt-1 text-xs text-stone-500">{o.shippingAddress || '—'}</div>
-              {o.shippingAddress ? (
-                <a
-                  href={mapsUrl(o.shippingAddress)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:underline"
-                >
-                  <Navigation size={14} />
-                  {t('deliveryNavigate')}
-                </a>
-              ) : null}
-            </div>
-          ))
-        )}
+      <div className="flex gap-1 rounded-lg bg-stone-100 p-1">
+        {(
+          [
+            ['active', t('deliveryMyOrders')],
+            ['completed', t('deliveryCompletedTab')],
+            ['wage', t('deliveryWageTab')],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`flex-1 rounded-md px-2 py-1.5 text-xs font-semibold ${
+              tab === id ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
+
+      {tab === 'active' ? (
+        <div className="space-y-2">
+          {orders.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-stone-200 bg-stone-50 p-4 text-sm text-stone-600">
+              {t('deliveryNoAssignedOrders')}
+            </p>
+          ) : (
+            orders.map((o) => (
+              <div key={o.id} className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
+                <div className="font-bold text-stone-900">#{o.orderNumber}</div>
+                <div className="text-sm text-stone-700">{o.customerName || t('deliveryMapGuest')}</div>
+                <div className="mt-1 text-xs text-stone-500">{o.shippingAddress || '—'}</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {o.shippingAddress ? (
+                    <a
+                      href={mapsUrl(o.shippingAddress)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:underline"
+                    >
+                      <Navigation size={14} />
+                      {t('deliveryNavigate')}
+                    </a>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={busyId === o.id}
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-bold text-white disabled:opacity-50"
+                    onClick={() => void markDelivered(o.id)}
+                  >
+                    <CheckCircle size={14} />
+                    {t('deliveryMarkDelivered')}
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
+
+      {tab === 'completed' ? (
+        <div className="space-y-2">
+          {completed.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-stone-200 bg-stone-50 p-4 text-sm text-stone-600">
+              {t('deliveryNoCompletedOrders')}
+            </p>
+          ) : (
+            completed.map((o) => (
+              <div key={o.id} className="rounded-xl border border-stone-200 bg-white p-3 text-sm shadow-sm">
+                <div className="font-bold">#{o.orderNumber}</div>
+                <div className="text-stone-600">{o.customerName || '—'}</div>
+                <div className="text-xs text-stone-500">{money(o.total)}</div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
+
+      {tab === 'wage' && wage ? (
+        <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-sm font-bold text-stone-900">
+            <Wallet size={18} className="text-teal-600" />
+            {t('deliveryWageToday')}
+          </div>
+          <dl className="mt-3 space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-stone-600">{t('deliveryHoursWorked')}</dt>
+              <dd className="font-semibold">{wage.hoursWorked.toFixed(2)} h</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-stone-600">{t('deliveryCompletedCount')}</dt>
+              <dd className="font-semibold">{wage.deliveryCount}</dd>
+            </div>
+            {wage.payMode !== 'per_order' ? (
+              <div className="flex justify-between">
+                <dt className="text-stone-600">{t('deliveryHourlyPay')}</dt>
+                <dd>{money(wage.hourlyPay)}</dd>
+              </div>
+            ) : null}
+            {wage.payMode !== 'hourly' ? (
+              <div className="flex justify-between">
+                <dt className="text-stone-600">{t('deliveryPerOrderPay')}</dt>
+                <dd>{money(wage.orderPay)}</dd>
+              </div>
+            ) : null}
+            <div className="flex justify-between border-t border-stone-100 pt-2 text-base font-extrabold">
+              <dt>{t('deliveryTotalPay')}</dt>
+              <dd className="text-teal-700">{money(wage.totalPay)}</dd>
+            </div>
+          </dl>
+        </div>
+      ) : null}
 
       <WebPosPinModal
         open={pinOpen}
@@ -207,6 +366,7 @@ export default function DeliveryDriverPage() {
           setPinOpen(false);
           toast.success(t('webPosSignedInAs').replace('{name}', staff.name));
           void loadOrders();
+          void loadWage();
         }}
       />
     </div>
