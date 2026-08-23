@@ -314,15 +314,19 @@ button {
   /* Station text size — zoom + viewport compensation (see .webpos-shell--fill) */
   .webpos-shell[data-text-size='sm'] {
     --webpos-zoom: 0.9;
+    --webpos-text-scale: 0.9;
   }
   .webpos-shell[data-text-size='md'] {
     --webpos-zoom: 1;
+    --webpos-text-scale: 1;
   }
   .webpos-shell[data-text-size='lg'] {
     --webpos-zoom: 1.12;
+    --webpos-text-scale: 1.12;
   }
   .webpos-shell[data-text-size='xl'] {
     --webpos-zoom: 1.2;
+    --webpos-text-scale: 1.2;
   }
 
   /* Night / black POS — surface theme (independent of accent color swatches) */
@@ -681,9 +685,23 @@ button {
       display: block;
     }
     /*
-     * Station text-size uses CSS zoom (Windows / tablet). On phones that
-     * overflows the visual viewport and forces pinch-zoom. Keep 1×.
+     * CSS zoom overflows the visual viewport on phones. Scale rem-based UI
+     * via html font-size instead (see data-webpos-text-size on <html>).
      */
+    html.webpos-lock[data-webpos-text-size='sm'] {
+      font-size: 90%;
+    }
+    html.webpos-lock[data-webpos-text-size='md'],
+    html.webpos-lock:not([data-webpos-text-size]) {
+      font-size: 100%;
+    }
+    html.webpos-lock[data-webpos-text-size='lg'] {
+      font-size: 112%;
+    }
+    html.webpos-lock[data-webpos-text-size='xl'] {
+      font-size: 120%;
+    }
+
     .webpos-shell[data-narrow='1'] {
       --webpos-zoom: 1;
       zoom: 1;

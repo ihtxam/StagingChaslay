@@ -19,6 +19,12 @@
             );
           }
           document.documentElement.classList.add('webpos-lock');
+          try {
+            var ts = localStorage.getItem('webpos_text_size');
+            if (ts === 'sm' || ts === 'md' || ts === 'lg' || ts === 'xl') {
+              document.documentElement.setAttribute('data-webpos-text-size', ts);
+            }
+          } catch (e) {}
         }
       })();
     </script>
