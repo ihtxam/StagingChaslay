@@ -78,8 +78,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -467,6 +470,13 @@ class PosViewModel @Inject constructor(
                 cartManager.setVatIncludedInPrice(settings.vatIncludedInPrice)
                 cartManager.setVatAfterDiscount(settings.vatAfterDiscount)
             }
+        }
+        viewModelScope.launch {
+            settingsRepository.observeSettings()
+                .map { it.giftCardsEnabled to it.paymentMethodsManagedByCloud }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { refreshGiftCardFeature() }
         }
         viewModelScope.launch {
             scaleService.reading.collect { reading ->
@@ -2506,25 +2516,46 @@ class PosViewModel @Inject constructor(
 
     fun dismissAttachCustomerDialog() = updateExtras { it.copy(showAttachCustomerDialog = false) }
 
+    private fun resolveGiftCardsEnabled(
+        settings: BusinessSettingsEntity,
+        cloudGiftCardEnabled: Boolean,
+        hasCloudSession: Boolean
+    ): Boolean {
+        if (!hasCloudSession) return false
+        return if (settings.paymentMethodsManagedByCloud) {
+            cloudGiftCardEnabled
+        } else {
+            settings.giftCardsEnabled
+        }
+    }
+
     fun refreshGiftCardFeature() {
         viewModelScope.launch {
             val token = syncPreferences.getDashboardToken()
-            val cloudEnabled = runCatching {
-                syncApi.paymentConfig().methods?.giftCard == true && !token.isNullOrBlank()
-            }.getOrDefault(false)
-            val localEnabled = settingsRepository.getSettings().giftCardsEnabled
-            val settings = if (!token.isNullOrBlank()) {
+            val hasCloudSession = !token.isNullOrBlank()
+            val cloudGiftCardEnabled = if (hasCloudSession) {
+                runCatching { syncApi.paymentConfig().methods?.giftCard == true }.getOrDefault(false)
+            } else {
+                false
+            }
+            val localSettings = settingsRepository.getSettings()
+            val giftCardsEnabled = resolveGiftCardsEnabled(
+                localSettings,
+                cloudGiftCardEnabled,
+                hasCloudSession
+            )
+            val settings = if (hasCloudSession) {
                 giftCardRepository.fetchSettings().getOrNull()
             } else {
                 null
             }
             updateExtras {
                 it.copy(
-                    giftCardsEnabled = localEnabled && cloudEnabled,
+                    giftCardsEnabled = giftCardsEnabled,
                     giftCardSettings = settings ?: it.giftCardSettings
                 )
             }
-            if (!localEnabled || !cloudEnabled) {
+            if (!giftCardsEnabled) {
                 if (_selectedCategoryId.value == PosVirtualCategories.GIFT_CARDS_ID) {
                     _selectedCategoryId.value = PosVirtualCategories.ALL_CATEGORIES_ID
                 }
@@ -2588,13 +2619,14 @@ class PosViewModel @Inject constructor(
             cfg.checkout?.let { checkout ->
                 merged = merged.mergePosCheckoutSettings(checkout)
             }
-            merged = merged.copy(giftCardsEnabled = cfg.methods?.giftCard == true)
+            if (current.paymentMethodsManagedByCloud) {
+                merged = merged.copy(giftCardsEnabled = cfg.methods?.giftCard == true)
+            }
             if (merged != current) {
                 settingsRepository.saveSettings(merged)
             }
             updateExtras {
                 it.copy(
-                    giftCardsEnabled = merged.giftCardsEnabled,
                     shiftsEnabled = cfg.features?.shiftsEnabled == true,
                     loyaltyProgram = cfg.loyalty?.let { loy ->
                         LoyaltyProgramSettings(
@@ -3659,6 +3691,7 @@ class PosViewModel @Inject constructor(
             decrementStockForCartItems(payable.items)
             if (cartManager.snapshot().items.isEmpty()) {
                 cartManager.snapshot().tableOrderId?.let { tableOrderRepository.closeOrder(it) }
+                finalizeHeldOrderAfterPayment(kitchenCart)
                 cartManager.clear()
             }
             refreshTables()
@@ -4191,6 +4224,7 @@ class PosViewModel @Inject constructor(
                     }
                     if (remaining.items.isEmpty()) {
                         remaining.tableOrderId?.let { tableOrderRepository.closeOrder(it) }
+                        finalizeHeldOrderAfterPayment(kitchenCart)
                         if (!isEqualSplit || equalSplitPaid >= fullCart.splitCount) {
                             cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
                             cartManager.resetSplit()
@@ -4373,6 +4407,11 @@ class PosViewModel @Inject constructor(
     private suspend fun refreshOnlineOrderAlertState() {
         val heldIds = heldOrderRepository.getOngoingHeldOrders().map { it.id }.toSet()
         onlineOrderAlertCoordinator.pruneMissingHeldOrderIds(heldIds)
+    }
+
+    private suspend fun finalizeHeldOrderAfterPayment(cart: CartSummary) {
+        heldOrderRepository.completeAfterPayment(cart)
+        refreshOnlineOrderAlertState()
     }
 
     fun showNewOrderDialog() {
