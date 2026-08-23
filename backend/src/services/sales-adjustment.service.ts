@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { roundMoney2 } from "@/lib/money";
 import { zurichDayBounds } from "@/lib/vacation";
 import {
@@ -8,11 +8,7 @@ import {
   parsePaymentBreakdown,
   paymentBreakdownTotals,
 } from "@/lib/payment-breakdown";
-import {
-  isCountableSale,
-  resolveReportRange,
-  type ReportPreset,
-} from "@/services/pos-reports.service";
+import { resolveReportRange, type ReportPreset } from "@/services/pos-reports.service";
 
 export type SalesAdjustmentPeriodPreset =
   | "today"
@@ -121,6 +117,60 @@ export function orderCashNet(order: {
   );
 }
 
+/** Completed POS sale paid in full — excludes open tickets, pay later, and invoices. */
+export function isCompletedPaidCashAdjustmentOrder(order: {
+  status?: string | null;
+  paymentStatus?: string | null;
+  paymentMethod?: string | null;
+  paymentBreakdown?: unknown;
+  invoiceNumber?: string | null;
+  total: unknown;
+}): boolean {
+  const status = String(order.status || "").toLowerCase();
+  const payStatus = String(order.paymentStatus || "").toLowerCase();
+  if (status !== "completed") return false;
+  if (!["completed", "paid"].includes(payStatus)) return false;
+  if (order.invoiceNumber) return false;
+
+  const rawMethod = String(order.paymentMethod || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  if (
+    rawMethod === "pay_later" ||
+    rawMethod.startsWith("pay_later:") ||
+    rawMethod.startsWith("pay_later_") ||
+    rawMethod === "invoice" ||
+    rawMethod === "bank_transfer" ||
+    rawMethod === "bank"
+  ) {
+    return false;
+  }
+
+  const tenders = parsePaymentBreakdown(
+    order.paymentBreakdown,
+    order.paymentMethod,
+    Number(order.total) || 0
+  );
+  for (const t of tenders) {
+    const raw = String(t.method || "")
+      .trim()
+      .toLowerCase()
+      .replace(/-/g, "_");
+    const method = normalizePaymentMethod(t.method);
+    if (
+      method === "pay_later" ||
+      method === "invoice" ||
+      method === "bank_transfer" ||
+      raw.startsWith("pay_later")
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 /** True when the order was paid entirely in cash (card/terminal/gift portions excluded). */
 export function isCashOnlyOrder(order: {
   paymentMethod?: string | null;
@@ -150,6 +200,7 @@ type OrderRow = {
   id: string;
   status?: string | null;
   paymentStatus?: string | null;
+  invoiceNumber?: string | null;
   subtotal: string;
   taxAmount: string;
   discountAmount: string | null;
@@ -251,6 +302,7 @@ export class SalesAdjustmentService {
     let adjustableItemCount = 0;
 
     for (const o of orders) {
+      if (!isCompletedPaidCashAdjustmentOrder(o)) continue;
       const cashNet = orderCashNet(o);
       if (cashNet > 0.001) {
         reportCashTotal = roundMoney2(reportCashTotal + cashNet);
@@ -455,12 +507,14 @@ export class SalesAdjustmentService {
     const rows = (await db.query.orders.findMany({
       where: and(
         eq(schema.orders.merchantId, merchantId),
+        eq(schema.orders.status, "completed"),
+        inArray(schema.orders.paymentStatus, ["completed", "paid"]),
         gte(schema.orders.createdAt, start),
         lte(schema.orders.createdAt, end)
       ),
       with: { items: true },
       orderBy: (orders, { desc }) => [desc(orders.createdAt)],
     })) as OrderRow[];
-    return rows.filter(isCountableSale);
+    return rows.filter(isCompletedPaidCashAdjustmentOrder);
   }
 }

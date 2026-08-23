@@ -1859,7 +1859,8 @@ const en: Dict = {
   salesAdjPeriod: 'Period',
   salesAdjPercentLabel: 'Reduce cash sales by',
   salesAdjCustomPercent: 'Custom percent',
-  salesAdjCashOnlyNote: 'Only fully cash-paid POS orders are adjusted. Card and terminal payments are never changed.',
+  salesAdjCashOnlyNote:
+    'Only completed, fully paid cash orders are adjusted. Open tickets, pay later, invoice, and card/terminal payments are excluded.',
   salesAdjLoading: 'Calculating…',
   salesAdjMonth: 'Month',
   salesAdjCurrentCash: 'Current cash sales',
@@ -4988,7 +4989,8 @@ const fr: Dict = {
   salesAdjPeriod: 'Période',
   salesAdjPercentLabel: 'Réduire les ventes espèces de',
   salesAdjCustomPercent: 'Pourcentage personnalisé',
-  salesAdjCashOnlyNote: 'Seules les commandes POS entièrement payées en espèces sont modifiées. Carte et terminal ne sont jamais touchés.',
+  salesAdjCashOnlyNote:
+    'Seules les commandes terminées et entièrement payées en espèces sont modifiées. Tickets ouverts, payer plus tard, facture et carte/terminal sont exclus.',
   salesAdjLoading: 'Calcul…',
   salesAdjMonth: 'Mois',
   salesAdjCurrentCash: 'Ventes espèces actuelles',
@@ -8092,7 +8094,8 @@ const de: Dict = {
   salesAdjPeriod: 'Zeitraum',
   salesAdjPercentLabel: 'Bargeldumsatz reduzieren um',
   salesAdjCustomPercent: 'Eigener Prozentsatz',
-  salesAdjCashOnlyNote: 'Nur vollständig bar bezahlte POS-Bestellungen werden angepasst. Karte und Terminal werden nie geändert.',
+  salesAdjCashOnlyNote:
+    'Nur abgeschlossene, vollständig bar bezahlte Bestellungen werden angepasst. Offene Tickets, Später bezahlen, Rechnung sowie Karte/Terminal sind ausgeschlossen.',
   salesAdjLoading: 'Berechnung…',
   salesAdjMonth: 'Monat',
   salesAdjCurrentCash: 'Aktueller Bargeldumsatz',
