@@ -981,6 +981,32 @@ export function WebPosSettingsDropdown({
           })}
         </select>
       </label>
+      <button
+        type="button"
+        className="btn-secondary justify-start w-full text-xs"
+        onClick={onRefreshPrinters}
+      >
+        <RefreshCw size={14} />
+        {t('webPosRefreshPrinters')}
+      </button>
+      <p
+        className={`text-[10px] leading-snug ${
+          !agentOk || printerMissing || agentOutdated
+            ? 'text-amber-800'
+            : 'text-center text-emerald-700'
+        }`}
+      >
+        {!agentOk
+          ? t('webPosAgentOffline')
+          : printerMissing
+            ? t('webPosPrinterDisconnectedShort')
+            : agentOutdated
+              ? t('webPosPrintAgentOutdatedHint')
+              : t('webPosAgentOnline')}
+      </p>
+      {agentOk && printerMissing ? (
+        <p className="text-[10px] leading-snug text-amber-800">{t('webPosPrinterRenamedHint')}</p>
+      ) : null}
       {printerMissing && agentOk ? (
         <div className="space-y-1.5">
           {suggestedPrinters
@@ -1020,32 +1046,6 @@ export function WebPosSettingsDropdown({
           <option value="tables">{t('webPosTabTables')}</option>
         </select>
       </label>
-      <button
-        type="button"
-        className="btn-secondary justify-start w-full text-xs"
-        onClick={onRefreshPrinters}
-      >
-        <RefreshCw size={14} />
-        {t('webPosRefreshPrinters')}
-      </button>
-      <p
-        className={`text-[10px] leading-snug ${
-          !agentOk || printerMissing || agentOutdated
-            ? 'text-amber-800'
-            : 'text-center text-emerald-700'
-        }`}
-      >
-        {!agentOk
-          ? t('webPosAgentOffline')
-          : printerMissing
-            ? t('webPosPrinterDisconnectedShort')
-            : agentOutdated
-              ? t('webPosPrintAgentOutdatedHint')
-              : t('webPosAgentOnline')}
-      </p>
-      {agentOk && printerMissing ? (
-        <p className="text-[10px] leading-snug text-amber-800">{t('webPosPrinterRenamedHint')}</p>
-      ) : null}
       {onSendLogs ? (
         <button
           type="button"
