@@ -89,6 +89,26 @@ export function buildSupportLogPayload(
   return `${header}${body || '(no log entries yet)'}`;
 }
 
+/** POST session logs to merchant support (no modal). */
+export async function sendWebPosLogsToSupport(
+  diagnostics: Partial<WebPosDiagnostics> & { appVersion?: string }
+): Promise<void> {
+  const { default: api } = await import('@/lib/api');
+  const { webPosVersionLabel } = await import('@/lib/app-version');
+  const entries = readWebPosLogs();
+  const full = buildWebPosDiagnostics({
+    appVersion: webPosVersionLabel,
+    ...diagnostics,
+  });
+  const body = buildSupportLogPayload(entries, full);
+  await api.post('/merchant/support/tickets', {
+    category: 'technical',
+    subcategory: 'webpos',
+    subject: `WebPOS logs — ${new Date().toLocaleString()}`,
+    body,
+  });
+}
+
 let consoleHooked = false;
 
 /** Capture console.warn/error into the session log ring buffer. */

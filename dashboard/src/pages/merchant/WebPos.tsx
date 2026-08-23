@@ -136,9 +136,7 @@ import WebPosTopBar, {
   type WebPosColorTheme,
   type WebPosTextSize,
 } from '@/components/webpos/WebPosTopBar';
-import WebPosLogsModal from '@/components/webpos/WebPosLogsModal';
-import WebPosOnboardingTour, { readWebPosOnboardingDone } from '@/components/webpos/WebPosOnboardingTour';
-import { appendWebPosLog, hookWebPosConsole } from '@/lib/webpos-log';
+import { appendWebPosLog, hookWebPosConsole, sendWebPosLogsToSupport } from '@/lib/webpos-log';
 
 const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
 const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
@@ -819,9 +817,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     scope: CancelScope;
     lineId?: string;
   } | null>(null);
-  const [logsOpen, setLogsOpen] = useState(false);
-  const [logsAutoSend, setLogsAutoSend] = useState(false);
-  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutSeedMethod, setCheckoutSeedMethod] = useState<
     PosPaymentMethod | 'express'
@@ -1975,9 +1970,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     hookWebPosConsole();
     appendWebPosLog('WebPOS session started');
-    if (!readWebPosOnboardingDone()) {
-      setOnboardingOpen(true);
-    }
   }, []);
 
   useEffect(() => {
@@ -7766,17 +7758,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }}
             showEodButton={showEodButton}
             onEodReport={openEodPrint}
-            onlinePendingCount={onlinePendingCount}
-            reservationPendingCount={reservationPendingCount}
-            onOnlineOrders={() => {
-              setSettingsOpen(false);
-              openOnlineOrdersInTab();
-            }}
-            onSwitchUser={() => {
-              setSettingsOpen(false);
-              openSwitchUserPin();
-            }}
-            staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
             colorTheme={posColorTheme}
             onColorThemeChange={(theme) => void changePosColorTheme(theme)}
             appearance={posAppearance}
@@ -7827,19 +7808,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onReservationsEnabledChange={
               canManageOnlineShop ? (enabled) => void toggleReservationsEnabled(enabled) : undefined
             }
-            onViewLogs={() => {
-              setSettingsOpen(false);
-              setLogsAutoSend(false);
-              setLogsOpen(true);
-            }}
             onSendLogs={() => {
               setSettingsOpen(false);
-              setLogsAutoSend(true);
-              setLogsOpen(true);
-            }}
-            onShowTutorial={() => {
-              setSettingsOpen(false);
-              setOnboardingOpen(true);
+              void sendWebPosLogsToSupport({
+                locale,
+                staffName: webposStaff?.name,
+                staffRole: webposStaff?.roleName,
+                merchantName: merchant?.name || merchant?.businessName,
+              })
+                .then(() => toast.success(t('webPosLogsSent')))
+                .catch(() => toast.error(t('webPosLogsSendFailed')));
             }}
             terminalEnabled={enabledMethods.terminal}
             terminals={activeTerminals}
@@ -9014,26 +8992,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
         onClose={() => setCancelModal(null)}
         onConfirm={(reason, reasonId) => void confirmCancelCart(reason, reasonId)}
-      />
-
-      <WebPosLogsModal
-        open={logsOpen}
-        autoSend={logsAutoSend}
-        onClose={() => {
-          setLogsOpen(false);
-          setLogsAutoSend(false);
-        }}
-        diagnostics={{
-          locale,
-          staffName: webposStaff?.name,
-          staffRole: webposStaff?.roleName,
-          merchantName: merchant?.name || merchant?.businessName,
-        }}
-      />
-
-      <WebPosOnboardingTour
-        open={onboardingOpen}
-        onClose={() => setOnboardingOpen(false)}
       />
 
       <WebPosCustomerPicker

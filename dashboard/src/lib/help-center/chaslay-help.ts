@@ -20,7 +20,7 @@ const en: HelpCategory[] = [
   {
     id: 'getting-started',
     title: 'Getting started',
-    summary: 'Sign in, language, onboarding, and your first sale.',
+    summary: 'Sign in, business setup, staff PINs, and your first sale.',
     articles: [
       {
         id: 'first-login',
@@ -29,10 +29,22 @@ const en: HelpCategory[] = [
         body: 'Open app.chaslay.com and sign in with the email and password from your welcome message. The Overview shows today\'s sales, open orders, and quick links to Web POS and your online shop.',
       },
       {
+        id: 'business-info',
+        title: 'Set up business information',
+        summary: 'Name, address, VAT, hours, and receipt details.',
+        body: 'Go to Settings → Business. Enter your trading name, address, phone, VAT number, and opening hours. These details appear on receipts, kitchen tickets, and your online shop. Save changes before opening Web POS or printing your first sale.',
+      },
+      {
         id: 'language',
         title: 'Change panel language',
         summary: 'Switch between English, French, and German.',
         body: 'Use the language selector in the sidebar footer or Settings → Business. Panel language affects menus and reports; shop language is configured separately for customers.',
+      },
+      {
+        id: 'staff-pins',
+        title: 'Staff accounts & PIN login',
+        summary: 'Create waiters and managers for Web POS.',
+        body: 'Open Staff and add each team member with a role (waiter, manager, etc.). Set a 4-digit PIN per person. In Web POS, staff sign in with their PIN using the user icon in the top bar. Managers can cancel orders and run end-of-day reports.',
       },
     ],
   },
@@ -42,10 +54,16 @@ const en: HelpCategory[] = [
     summary: 'Categories, products, modifiers, barcodes, and photos.',
     articles: [
       {
+        id: 'add-categories',
+        title: 'Add categories',
+        summary: 'Organize your menu or retail catalog.',
+        body: 'Go to Categories and create groups such as Starters, Mains, or Drinks. Assign a color and sort order so they appear correctly in Web POS and your online shop. Categories can be hidden from the shop while staying available on the till.',
+      },
+      {
         id: 'add-product',
-        title: 'Add products & categories',
-        summary: 'Build your menu or retail catalog.',
-        body: 'Go to Products and Categories. Each product needs a name and price. Use modifiers for extras (size, toppings). Import missing photos from the Products page or upload your own images.',
+        title: 'Add products',
+        summary: 'Build your sellable items with prices and tax.',
+        body: 'Go to Products → Add product. Each item needs a name, price, and category. Set tax rate, kitchen print target, and barcode/SKU if needed. Use modifiers for extras (size, toppings). Import missing photos from the Products page or upload your own images.',
       },
       {
         id: 'barcodes',
@@ -61,10 +79,22 @@ const en: HelpCategory[] = [
     summary: 'Take orders, payments, kitchen tickets, and shifts.',
     articles: [
       {
+        id: 'print-agent',
+        title: 'Install printer software',
+        summary: 'Chaslay Print Agent for receipts and kitchen tickets.',
+        body: 'On the PC connected to your receipt or kitchen printer, download and install the Chaslay Print Agent from Settings → Terminals. Keep the agent running while Web POS is open. In Web POS, open the menu (⋯) → Printing, pick your thermal printer, and click Refresh printers. The status should show Print agent online.',
+      },
+      {
+        id: 'webpos-basics',
+        title: 'Web POS quick start',
+        summary: 'Register, cart, kitchen, and checkout.',
+        body: 'Open Web POS from the sidebar. Tap products on the Register tab to fill the cart. Send items to the kitchen when ready (restaurant mode). Use the bell icon for online orders. Switch staff with the user icon before the bell. Open checkout for cash, card, or terminal payment. Printer, shift, sync, and your personal terminal are in the ⋯ menu.',
+      },
+      {
         id: 'webpos',
         title: 'Using Web POS',
         summary: 'Ring up sales from browser or tablet.',
-        body: 'Open Web POS from the sidebar quick action. Add items to cart, apply discounts if permitted, choose payment method, and complete checkout. Kitchen orders appear on KDS when enabled.',
+        body: 'Add items to cart, apply discounts if permitted, choose payment method, and complete checkout. Kitchen orders appear on KDS when enabled. Use Tables for dine-in and Orders for history and online pickups.',
       },
       {
         id: 'orders',

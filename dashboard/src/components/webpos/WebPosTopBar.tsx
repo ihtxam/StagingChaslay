@@ -3,7 +3,6 @@ import {
   BookOpen,
   ClipboardList,
   FileText,
-  GraduationCap,
   LayoutGrid,
   Maximize2,
   Menu,
@@ -13,7 +12,6 @@ import {
   PanelLeft,
   Pencil,
   RefreshCw,
-  ScrollText,
   Search,
   Sun,
   UserCircle2,
@@ -383,7 +381,19 @@ export default function WebPosTopBar({
             </>
           ) : null}
 
-          {/* Desktop / tablet: shift + tools visible. Mobile: overflow into hamburger. */}
+          {onSwitchUser ? (
+            <button
+              type="button"
+              className="inline-flex h-10 max-w-[7rem] items-center justify-center gap-1 truncate rounded-lg border border-stone-200 px-2 text-xs font-medium hover:bg-stone-50 lg:h-9"
+              onClick={onSwitchUser}
+              title={staffName || t('webPosSwitchUser')}
+              aria-label={staffName || t('webPosSwitchUser')}
+            >
+              <UserCircle2 size={17} className="shrink-0" />
+              <span className="hidden truncate lg:inline">{staffName || t('webPosSwitchUser')}</span>
+            </button>
+          ) : null}
+
           <button
             type="button"
             className={`relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9 ${
@@ -405,16 +415,6 @@ export default function WebPosTopBar({
                 {onlinePendingCount > 99 ? '99+' : onlinePendingCount}
               </span>
             ) : null}
-          </button>
-
-          <button
-            type="button"
-            className="hidden h-9 max-w-[7rem] items-center gap-1 truncate rounded-lg border border-stone-200 px-2 text-xs font-medium lg:inline-flex"
-            onClick={onSwitchUser}
-            title={staffName || t('webPosSwitchUser')}
-          >
-            <UserCircle2 size={16} className="shrink-0" />
-            <span className="truncate">{staffName || t('webPosSwitchUser')}</span>
           </button>
 
           {canDrawer ? (
@@ -556,10 +556,6 @@ export function WebPosSettingsDropdown({
   onCashMovement,
   showEodButton,
   onEodReport,
-  onlinePendingCount = 0,
-  onOnlineOrders,
-  onSwitchUser,
-  staffName,
   canDrawer,
   onOpenDrawer,
   canShowPanel,
@@ -584,9 +580,7 @@ export function WebPosSettingsDropdown({
   channelsSaving = false,
   onShopEnabledChange,
   onReservationsEnabledChange,
-  onViewLogs,
   onSendLogs,
-  onShowTutorial,
   terminalEnabled = false,
   terminals = [],
   selectedTerminalId = '',
@@ -612,11 +606,7 @@ export function WebPosSettingsDropdown({
   onCashMovement?: () => void;
   showEodButton?: boolean;
   onEodReport?: () => void;
-  /** Mobile overflow actions (hidden on desktop top bar). */
-  onlinePendingCount?: number;
-  onOnlineOrders?: () => void;
-  onSwitchUser?: () => void;
-  staffName?: string | null;
+  /** Mobile overflow: cash drawer (desktop uses top bar). */
   canDrawer?: boolean;
   onOpenDrawer?: () => void;
   canShowPanel?: boolean;
@@ -641,9 +631,7 @@ export function WebPosSettingsDropdown({
   channelsSaving?: boolean;
   onShopEnabledChange?: (enabled: boolean) => void;
   onReservationsEnabledChange?: (enabled: boolean) => void;
-  onViewLogs?: () => void;
   onSendLogs?: () => void;
-  onShowTutorial?: () => void;
   terminalEnabled?: boolean;
   terminals?: Array<{ terminalId: string; terminalName: string | null }>;
   selectedTerminalId?: string;
@@ -835,35 +823,8 @@ export function WebPosSettingsDropdown({
           ) : null}
         </div>
       )}
-      <div className="space-y-1.5 border-b border-stone-100 pb-3 lg:hidden">
-        {onOnlineOrders ? (
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-            onClick={onOnlineOrders}
-          >
-            <span className="inline-flex items-center gap-2">
-              <Bell size={16} />
-              {t('webPosOnlineOrders')}
-            </span>
-            {onlinePendingCount > 0 ? (
-              <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                {onlinePendingCount}
-              </span>
-            ) : null}
-          </button>
-        ) : null}
-        {onSwitchUser ? (
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-            onClick={onSwitchUser}
-          >
-            <UserCircle2 size={16} />
-            <span className="truncate">{staffName || t('webPosSwitchUser')}</span>
-          </button>
-        ) : null}
-        {canDrawer && onOpenDrawer ? (
+      {canDrawer && onOpenDrawer ? (
+        <div className="space-y-1.5 border-b border-stone-100 pb-3 lg:hidden">
           <button
             type="button"
             className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
@@ -872,8 +833,8 @@ export function WebPosSettingsDropdown({
             <Vault size={16} />
             {t('webPosOpenDrawer')}
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {shiftsEnabled ? (
         <div className="space-y-2 border-b border-stone-100 pb-3">
@@ -926,83 +887,6 @@ export function WebPosSettingsDropdown({
           <p className="text-[10px] text-stone-500">{t('webPosEodWhenShiftsOff')}</p>
         </div>
       ) : null}
-
-      {onSyncNow ? (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-            {t('webPosSyncMenu')}
-          </p>
-          <button
-            type="button"
-            className={`flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
-              !syncOnline
-                ? 'border-amber-300 bg-amber-50 text-amber-900'
-                : syncFailedCount > 0
-                  ? 'border-red-300 bg-red-50 text-red-800'
-                  : syncPendingCount > 0
-                    ? 'border-sky-300 bg-sky-50 text-sky-900'
-                    : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
-            }`}
-            onClick={onSyncNow}
-            disabled={syncing}
-          >
-            <RefreshCw size={16} className={syncing ? 'animate-spin' : undefined} />
-            {!syncOnline
-              ? t('webPosSyncOfflineShort')
-              : syncPendingCount > 0 || syncFailedCount > 0
-                ? t('webPosSyncPendingShort').replace(
-                    '{n}',
-                    String(syncPendingCount + syncFailedCount)
-                  )
-                : t('webPosSyncOkShort')}
-          </button>
-          {syncNeedsAttention && syncOnline ? (
-            <p className="text-center text-[10px] text-stone-500">
-              {syncFailedCount > 0
-                ? t('webPosSyncFailed').replace('{n}', String(syncFailedCount))
-                : t('webPosSyncPending').replace('{n}', String(syncPendingCount))}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {(onViewLogs || onSendLogs || onShowTutorial) && (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-            {t('webPosHelpMenu')}
-          </p>
-          {onShowTutorial ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-              onClick={onShowTutorial}
-            >
-              <GraduationCap size={16} />
-              {t('webPosShowTutorial')}
-            </button>
-          ) : null}
-          {onViewLogs ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-              onClick={onViewLogs}
-            >
-              <ScrollText size={16} />
-              {t('webPosViewLogs')}
-            </button>
-          ) : null}
-          {onSendLogs ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2 py-2 text-left text-xs font-semibold text-teal-900 hover:bg-teal-100"
-              onClick={onSendLogs}
-            >
-              <FileText size={16} />
-              {t('webPosSendLogs')}
-            </button>
-          ) : null}
-        </div>
-      )}
 
       {terminalEnabled && terminals.length > 0 && onTerminalChange ? (
         <div className="space-y-2 border-b border-stone-100 pb-3">
@@ -1107,6 +991,44 @@ export function WebPosSettingsDropdown({
           {t('webPosReloadCatalog')}
         </button>
       </div>
+      {onSyncNow ? (
+        <div className="space-y-2 border-t border-stone-100 pt-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('webPosSyncMenu')}
+          </p>
+          <button
+            type="button"
+            className={`flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
+              !syncOnline
+                ? 'border-amber-300 bg-amber-50 text-amber-900'
+                : syncFailedCount > 0
+                  ? 'border-red-300 bg-red-50 text-red-800'
+                  : syncPendingCount > 0
+                    ? 'border-sky-300 bg-sky-50 text-sky-900'
+                    : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+            }`}
+            onClick={onSyncNow}
+            disabled={syncing}
+          >
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : undefined} />
+            {!syncOnline
+              ? t('webPosSyncOfflineShort')
+              : syncPendingCount > 0 || syncFailedCount > 0
+                ? t('webPosSyncPendingShort').replace(
+                    '{n}',
+                    String(syncPendingCount + syncFailedCount)
+                  )
+                : t('webPosSyncOkShort')}
+          </button>
+          {syncNeedsAttention && syncOnline ? (
+            <p className="text-center text-[10px] text-stone-500">
+              {syncFailedCount > 0
+                ? t('webPosSyncFailed').replace('{n}', String(syncFailedCount))
+                : t('webPosSyncPending').replace('{n}', String(syncPendingCount))}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <p
         className={`text-[10px] leading-snug ${
           !agentOk || printerMissing || agentOutdated
@@ -1124,6 +1046,16 @@ export function WebPosSettingsDropdown({
       </p>
       {agentOk && printerMissing ? (
         <p className="text-[10px] leading-snug text-amber-800">{t('webPosPrinterRenamedHint')}</p>
+      ) : null}
+      {onSendLogs ? (
+        <button
+          type="button"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2.5 text-xs font-semibold text-teal-900 hover:bg-teal-100"
+          onClick={onSendLogs}
+        >
+          <FileText size={16} />
+          {t('webPosSendLogs')}
+        </button>
       ) : null}
       <p className="border-t border-stone-100 pt-2 text-center text-[10px] text-stone-400">
         {webPosVersionLabel}
