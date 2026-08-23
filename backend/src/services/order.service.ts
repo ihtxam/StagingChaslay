@@ -499,6 +499,11 @@ export class OrderService {
         .set(patch)
         .where(and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)))
         .returning();
+      if (updated) {
+        void import("@/services/ods.service")
+          .then(({ OdsService }) => OdsService.syncFromOrder(merchantId, updated))
+          .catch(() => {});
+      }
       return updated;
     };
 

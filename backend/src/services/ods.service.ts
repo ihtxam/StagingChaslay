@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { and, asc, desc, eq, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { readOdsAddonEnabled } from "@/lib/ods-addon";
 import { ensureOdsAddonColumn } from "@/lib/ensure-merchant-schema";
@@ -7,6 +7,7 @@ import {
   allocateDisplayShortCode,
   ensureOdsDisplayShortCodes,
 } from "@/lib/display-short-code";
+import { guestOrderNumber, parseOrderMetaFromNotes } from "@/lib/guest-order-number";
 
 export const ODS_THEMES = ["light", "teal", "dark"] as const;
 export type OdsTheme = (typeof ODS_THEMES)[number];
@@ -31,6 +32,57 @@ export type OdsPushPayload = {
 
 const READY_RETENTION_MS = 2 * 60 * 60 * 1000;
 const PREPARING_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+/** Order Center / web shop statuses shown on the “being prepared” column. */
+const PREPARING_ORDER_STATUSES = ["accepted", "preparing", "sent_to_kitchen"] as const;
+
+/** Statuses that remove an order from the customer board. */
+const ODS_DISMISS_STATUSES = new Set([
+  "completed",
+  "cancelled",
+  "out_for_delivery",
+  "refunded",
+  "partially_refunded",
+]);
+
+export type OrderForOds = {
+  orderNumber?: string | null;
+  notes?: string | null;
+  status?: string | null;
+};
+
+export function resolveOdsDisplayNumber(order: OrderForOds): string {
+  const meta = parseOrderMetaFromNotes(order.notes);
+  return normalizeOrderNumber(
+    guestOrderNumber({
+      orderNumber: order.orderNumber,
+      orderDisplay: meta.ticketDisplay,
+      tabNumber: meta.tabNumber,
+    })
+  );
+}
+
+function mergeBoardNumbers(
+  shadow: { preparing: string[]; ready: string[] },
+  live: { preparing: string[]; ready: string[] }
+) {
+  const readySet = new Set([...live.ready, ...shadow.ready]);
+  const preparing: string[] = [];
+  const seenPrep = new Set<string>();
+  for (const num of [...shadow.preparing, ...live.preparing]) {
+    if (readySet.has(num) || seenPrep.has(num)) continue;
+    seenPrep.add(num);
+    preparing.push(num);
+  }
+  const ready: string[] = [];
+  const seenReady = new Set<string>();
+  for (const num of [...live.ready, ...shadow.ready]) {
+    if (seenReady.has(num)) continue;
+    seenReady.add(num);
+    ready.push(num);
+  }
+  return { preparing, ready };
+}
 
 function newToken(): string {
   return randomBytes(24).toString("hex");
@@ -207,8 +259,20 @@ export class OdsService {
 
   static async dismissOrder(merchantId: string, orderNumber: string) {
     await requireAddon(merchantId);
+    return this.dismissOrderSoft(merchantId, orderNumber);
+  }
+
+  /** Remove from board without throwing when addon is off (internal sync). */
+  static async dismissOrderSoft(merchantId: string, orderNumber: string) {
     const num = normalizeOrderNumber(orderNumber);
     if (!num) throw new Error("orderNumber is required");
+    let enabled = false;
+    try {
+      enabled = await readOdsAddonEnabled(merchantId);
+    } catch {
+      return { ok: false, skipped: true };
+    }
+    if (!enabled) return { ok: false, skipped: true };
     const db = getDb();
     await db
       .delete(schema.odsOrders)
@@ -216,6 +280,56 @@ export class OdsService {
         and(eq(schema.odsOrders.merchantId, merchantId), eq(schema.odsOrders.orderNumber, num))
       );
     return { ok: true };
+  }
+
+  /**
+   * Keep ODS in sync with main order lifecycle (Order Center, online shop, POS pay-later).
+   * Also used after POS kitchen send via shadow-table push — idempotent upsert/dismiss.
+   */
+  static async syncFromOrder(merchantId: string, order: OrderForOds) {
+    const num = resolveOdsDisplayNumber(order);
+    if (!num) return { ok: false, skipped: true };
+
+    const status = String(order.status || "").toLowerCase();
+    if ((PREPARING_ORDER_STATUSES as readonly string[]).includes(status)) {
+      return this.pushOrder(merchantId, { orderNumber: num, status: "preparing" });
+    }
+    if (status === "ready") {
+      return this.pushOrder(merchantId, { orderNumber: num, status: "ready" });
+    }
+    if (ODS_DISMISS_STATUSES.has(status)) {
+      return this.dismissOrderSoft(merchantId, num);
+    }
+    return { ok: false, skipped: true };
+  }
+
+  /** Live orders from the main orders table (online shop + POS pay-later / open fulfillment). */
+  static async boardFromLiveOrders(merchantId: string) {
+    const enabled = await readOdsAddonEnabled(merchantId).catch(() => false);
+    if (!enabled) return { preparing: [] as string[], ready: [] as string[] };
+
+    const db = getDb();
+    const rows = await db.query.orders.findMany({
+      where: and(
+        eq(schema.orders.merchantId, merchantId),
+        inArray(schema.orders.status, [...PREPARING_ORDER_STATUSES, "ready"])
+      ),
+      columns: { orderNumber: true, notes: true, status: true, createdAt: true },
+      orderBy: [asc(schema.orders.createdAt)],
+    });
+
+    const preparing: string[] = [];
+    const ready: string[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const num = resolveOdsDisplayNumber(row);
+      if (!num || seen.has(num)) continue;
+      seen.add(num);
+      const st = String(row.status || "").toLowerCase();
+      if (st === "ready") ready.push(num);
+      else if ((PREPARING_ORDER_STATUSES as readonly string[]).includes(st)) preparing.push(num);
+    }
+    return { preparing, ready };
   }
 
   static async boardForToken(token: string) {
@@ -244,6 +358,13 @@ export class OdsService {
       orderBy: [desc(schema.odsOrders.readyAt), desc(schema.odsOrders.updatedAt)],
     });
 
+    const shadow = {
+      preparing: preparingRows.map((r) => r.orderNumber),
+      ready: readyRows.map((r) => r.orderNumber),
+    };
+    const live = await this.boardFromLiveOrders(display.merchantId);
+    const merged = mergeBoardNumbers(shadow, live);
+
     return {
       display: {
         id: display.id,
@@ -251,8 +372,8 @@ export class OdsService {
         theme: display.theme as OdsTheme,
       },
       serverTime: new Date().toISOString(),
-      preparing: preparingRows.map((r) => r.orderNumber),
-      ready: readyRows.map((r) => r.orderNumber),
+      preparing: merged.preparing,
+      ready: merged.ready,
     };
   }
 }
