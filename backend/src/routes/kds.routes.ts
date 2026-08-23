@@ -33,6 +33,15 @@ router.patch("/:token/tickets/:ticketId/complete", async (req: Request, res: Res
   }
 });
 
+router.patch("/:token/items/:itemId/recall", async (req: Request, res: Response) => {
+  try {
+    const data = await KdsService.recallItem(req.params.token, req.params.itemId);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
 router.patch("/:token/tickets/:ticketId/recall", async (req: Request, res: Response) => {
   try {
     const data = await KdsService.recallTicket(req.params.token, req.params.ticketId);

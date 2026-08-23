@@ -55,6 +55,8 @@ function itemMatchesStation(
   return false;
 }
 
+const COMPLETED_RETENTION_MS = 24 * 60 * 60 * 1000;
+
 export class KdsService {
   static async listStations(merchantId: string) {
     const db = getDb();
@@ -203,6 +205,7 @@ export class KdsService {
 
     const db = getDb();
     const sinceDate = since ? new Date(since) : null;
+    const completedSince = new Date(Date.now() - COMPLETED_RETENTION_MS);
     const tickets = await db.query.kdsTickets.findMany({
       where: and(
         eq(schema.kdsTickets.merchantId, station.merchantId),
@@ -217,8 +220,14 @@ export class KdsService {
         const items = (t.items || []).filter((item) =>
           itemMatchesStation(item, station, t.channel)
         );
-        if (!items.length && t.status === "completed") return null;
-        if (t.status === "completed" && items.every((i) => i.status === "ready")) return null;
+        if (!items.length) return null;
+        if (
+          t.status === "completed" &&
+          t.completedAt &&
+          t.completedAt < completedSince
+        ) {
+          return null;
+        }
         return {
           id: t.id,
           ticketKey: t.ticketKey,
@@ -242,7 +251,17 @@ export class KdsService {
           })),
         };
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a!.status === "completed" && b!.status === "completed") {
+          const aAt = a!.completedAt ? new Date(a!.completedAt).getTime() : 0;
+          const bAt = b!.completedAt ? new Date(b!.completedAt).getTime() : 0;
+          return bAt - aAt;
+        }
+        if (a!.status === "completed") return 1;
+        if (b!.status === "completed") return -1;
+        return 0;
+      });
 
     const updatedSince = sinceDate
       ? tickets.some((t) => t.updatedAt > sinceDate!)
@@ -274,6 +293,33 @@ export class KdsService {
     await db
       .update(schema.kdsTickets)
       .set({ updatedAt: new Date() })
+      .where(eq(schema.kdsTickets.id, item.ticketId));
+    return { ok: true, lineId: item.lineId, ticketKey: item.ticket.ticketKey };
+  }
+
+  /** Recall one ready item from a completed (or ready) ticket back to preparation. */
+  static async recallItem(token: string, itemId: string) {
+    const station = await this.stationByToken(token);
+    if (!station) throw new Error("Invalid KDS link");
+    const db = getDb();
+    const item = await db.query.kdsTicketItems.findFirst({
+      where: eq(schema.kdsTicketItems.id, itemId),
+      with: { ticket: true },
+    });
+    if (!item?.ticket || item.ticket.merchantId !== station.merchantId) {
+      throw new Error("Item not found");
+    }
+    if (item.status !== "ready") {
+      throw new Error("Only ready items can be recalled");
+    }
+    const now = new Date();
+    await db
+      .update(schema.kdsTicketItems)
+      .set({ status: "pending", readyAt: null })
+      .where(eq(schema.kdsTicketItems.id, itemId));
+    await db
+      .update(schema.kdsTickets)
+      .set({ status: "pending", completedAt: null, updatedAt: now })
       .where(eq(schema.kdsTickets.id, item.ticketId));
     return { ok: true, lineId: item.lineId, ticketKey: item.ticket.ticketKey };
   }
