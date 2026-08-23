@@ -312,6 +312,7 @@ import {
 } from '@/lib/webpos-print-toast';
 import WebPosTablesView from '@/components/webpos/WebPosTablesView';
 import WebPosBookingsView from '@/components/webpos/WebPosBookingsView';
+import WebPosDeliveryHub from '@/components/webpos/WebPosDeliveryHub';
 import WebPosKitchenMessageModal from '@/components/webpos/WebPosKitchenMessageModal';
 import WebPosOrderNoteModal from '@/components/webpos/WebPosOrderNoteModal';
 import WebPosSetTableModal from '@/components/webpos/WebPosSetTableModal';
@@ -592,6 +593,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     document.title = APP_NAME;
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('delivery') === '1') {
+      setPosTab('delivery');
+      setPosView('delivery');
+    }
+  }, [searchParams]);
 
   const authUser = useAuthStore((s) => s.user);
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
@@ -7577,7 +7585,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       : null;
 
   const onPosTabChange = (tab: PosTab) => {
-    if (tab === 'tables' || tab === 'orders' || tab === 'bookings') {
+    if (tab === 'tables' || tab === 'orders' || tab === 'bookings' || tab === 'delivery') {
       saveOpenCartDraft();
     }
     setMobileCartOpen(false);
@@ -8008,6 +8016,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           />
         ) : posView === 'bookings' ? (
           <WebPosBookingsView />
+        ) : posView === 'delivery' ? (
+          <WebPosDeliveryHub
+            merchant={merchant}
+            printSettings={printSettings}
+            standalone={searchParams.get('delivery') === '1'}
+            onClose={() => {
+              setPosTab('register');
+              setPosView('register');
+            }}
+          />
         ) : posView === 'orders' ? (
           <WebPosOrdersPanel
             embedded
@@ -8117,6 +8135,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               } else if (ordersChannelPref === 'online') {
                 setOrdersChannelPref(null);
               }
+            }}
+            onOpenDeliveryHub={() => {
+              setPosTab('delivery');
+              setPosView('delivery');
             }}
           />
         ) : (

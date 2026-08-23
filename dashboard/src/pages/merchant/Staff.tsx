@@ -23,6 +23,8 @@ type StaffRow = {
   isActive: boolean;
   pinSet: boolean;
   passwordSet?: boolean;
+  deliveryHourlyRateOverride?: string | null;
+  deliveryPerOrderFeeOverride?: string | null;
 };
 
 type StaffEditForm = {
@@ -33,6 +35,8 @@ type StaffEditForm = {
   email: string;
   password: string;
   canAccessPanel: boolean;
+  deliveryHourlyRateOverride: string;
+  deliveryPerOrderFeeOverride: string;
 };
 
 const emptyCreateForm = {
@@ -140,6 +144,8 @@ export default function StaffPage() {
       email: row.email || '',
       password: '',
       canAccessPanel: row.canAccessPanel,
+      deliveryHourlyRateOverride: row.deliveryHourlyRateOverride ?? '',
+      deliveryPerOrderFeeOverride: row.deliveryPerOrderFeeOverride ?? '',
     });
   };
 
@@ -183,6 +189,12 @@ export default function StaffPage() {
       if (editForm.password.trim()) {
         body.password = editForm.password.trim();
       }
+      body.deliveryHourlyRateOverride = editForm.deliveryHourlyRateOverride.trim()
+        ? Number(editForm.deliveryHourlyRateOverride)
+        : null;
+      body.deliveryPerOrderFeeOverride = editForm.deliveryPerOrderFeeOverride.trim()
+        ? Number(editForm.deliveryPerOrderFeeOverride)
+        : null;
       await api.put(`/merchant/staff/${editingStaff.id}`, body);
       toast.success(t('staffUserUpdated'));
       closeStaffEdit();
@@ -538,6 +550,34 @@ export default function StaffPage() {
                     {t('staffEmailLoginHint')}
                   </span>
                 </span>
+              </label>
+              <label className="block text-sm">
+                {t('deliveryStaffHourlyOverride')}
+                <input
+                  className="input mt-1"
+                  type="number"
+                  min={0}
+                  step={0.05}
+                  placeholder={t('deliveryUnassigned')}
+                  value={editForm.deliveryHourlyRateOverride}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, deliveryHourlyRateOverride: e.target.value })
+                  }
+                />
+              </label>
+              <label className="block text-sm">
+                {t('deliveryStaffPerOrderOverride')}
+                <input
+                  className="input mt-1"
+                  type="number"
+                  min={0}
+                  step={0.05}
+                  placeholder={t('deliveryUnassigned')}
+                  value={editForm.deliveryPerOrderFeeOverride}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, deliveryPerOrderFeeOverride: e.target.value })
+                  }
+                />
               </label>
             </div>
             <div className="flex justify-end gap-2 pt-2">

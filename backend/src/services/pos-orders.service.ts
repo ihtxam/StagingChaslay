@@ -223,6 +223,20 @@ export class PosOrdersService {
     });
 
     const orderIds = rows.map((o) => o.id);
+    const assignedIds = [
+      ...new Set(rows.map((r) => r.assignedDeliveryStaffId).filter(Boolean) as string[]),
+    ];
+    const driverNameById = new Map<string, string>();
+    if (assignedIds.length) {
+      const drivers = await db.query.merchantStaff.findMany({
+        where: and(
+          eq(schema.merchantStaff.merchantId, merchantId),
+          inArray(schema.merchantStaff.id, assignedIds)
+        ),
+        columns: { id: true, name: true },
+      });
+      for (const d of drivers) driverNameById.set(d.id, d.name);
+    }
     const refundsByOrder = new Map<string, Array<Record<string, unknown>>>();
     if (orderIds.length) {
       try {
@@ -296,6 +310,10 @@ export class PosOrdersService {
       ticketDisplay,
       tabNumber,
       staffName: o.staffName,
+      assignedDeliveryStaffId: o.assignedDeliveryStaffId || null,
+      assignedDriverName: o.assignedDeliveryStaffId
+        ? driverNameById.get(o.assignedDeliveryStaffId) || null
+        : null,
       masterOrderId: o.masterOrderId,
       splitCheckNumber: o.splitCheckNumber,
       customerName: o.customerName,
@@ -303,6 +321,15 @@ export class PosOrdersService {
       pointsRedeemed: o.pointsRedeemed ?? 0,
       customerPhone: o.customerPhone,
       shippingAddress: o.shippingAddress,
+      deliveryLatitude:
+        o.deliveryLatitude != null && o.deliveryLatitude !== ""
+          ? Number(o.deliveryLatitude)
+          : null,
+      deliveryLongitude:
+        o.deliveryLongitude != null && o.deliveryLongitude !== ""
+          ? Number(o.deliveryLongitude)
+          : null,
+      deliveryTrackingToken: o.deliveryTrackingToken || null,
       scheduledFor: o.scheduledFor,
       createdAt: o.createdAt,
       completedAt: o.completedAt,

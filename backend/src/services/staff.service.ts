@@ -219,6 +219,8 @@ export class StaffService {
         isActive: s.isActive,
         pinSet: !!s.pinHash,
         passwordSet: !!s.passwordHash,
+        deliveryHourlyRateOverride: s.deliveryHourlyRateOverride ?? null,
+        deliveryPerOrderFeeOverride: s.deliveryPerOrderFeeOverride ?? null,
         createdAt: s.createdAt,
       };
     });
@@ -295,6 +297,8 @@ export class StaffService {
       password?: string | null;
       canAccessPanel?: boolean;
       isActive?: boolean;
+      deliveryHourlyRateOverride?: number | null;
+      deliveryPerOrderFeeOverride?: number | null;
     }
   ) {
     const db = getDb();
@@ -344,6 +348,19 @@ export class StaffService {
       }
     }
     if (input.isActive !== undefined) patch.isActive = !!input.isActive;
+
+    if (input.deliveryHourlyRateOverride !== undefined) {
+      patch.deliveryHourlyRateOverride =
+        input.deliveryHourlyRateOverride == null || input.deliveryHourlyRateOverride === ''
+          ? null
+          : String(Number(input.deliveryHourlyRateOverride));
+    }
+    if (input.deliveryPerOrderFeeOverride !== undefined) {
+      patch.deliveryPerOrderFeeOverride =
+        input.deliveryPerOrderFeeOverride == null || input.deliveryPerOrderFeeOverride === ''
+          ? null
+          : String(Number(input.deliveryPerOrderFeeOverride));
+    }
 
     const nextEmail =
       input.email !== undefined

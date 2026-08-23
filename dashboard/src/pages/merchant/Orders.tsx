@@ -16,6 +16,7 @@ import {
   isAwaitingPaymentOrder,
   isInvoiceOrder,
   isKitchenTypeOrder,
+  isDeliveryOrder,
   isOnlineShopOrder,
   isPaidOrder,
   orderSourceLabel,
@@ -44,6 +45,7 @@ import {
 } from '@/components/settings/SettingsReportUi';
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
+import DeliveryLiveMap from '@/components/delivery/DeliveryLiveMap';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
 type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online' | 'invoice';
@@ -112,6 +114,159 @@ function canRefundMerchantOrder(o: MerchantOrder): boolean {
 
 type InvoicePayFilter = 'all' | 'unpaid' | 'paid';
 
+type DriverPing = {
+  staffId: string;
+  staffName: string;
+  latitude: number | null;
+  longitude: number | null;
+  stale?: boolean;
+  recordedAt?: string;
+};
+
+function guestTrackingUrl(slug: string, orderId: string, token: string): string {
+  return `${window.location.origin}/shop/${encodeURIComponent(slug)}/order/${orderId}?track=${encodeURIComponent(token)}`;
+}
+
+function OrderDeliveryPanel({
+  order,
+  storeLat,
+  storeLng,
+  shopSlug,
+  deliveryStaff,
+  onDriverAssigned,
+}: {
+  order: MerchantOrder;
+  storeLat: number | null;
+  storeLng: number | null;
+  shopSlug: string | null;
+  deliveryStaff: Array<{ id: string; name: string }>;
+  onDriverAssigned: (staffId: string | null, staffName: string | null) => void;
+}) {
+  const { t } = useI18n();
+  const [driver, setDriver] = useState<DriverPing | null>(null);
+  const [assignBusy, setAssignBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await api.get(`/merchant/delivery/orders/${order.id}/driver`);
+        if (!cancelled) setDriver(res.data.driver || null);
+      } catch {
+        if (!cancelled) setDriver(null);
+      }
+    };
+    void load();
+    const id = window.setInterval(() => void load(), 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [order.id]);
+
+  const assignDriver = async (staffId: string) => {
+    setAssignBusy(true);
+    try {
+      await api.post(`/merchant/delivery/orders/${order.id}/assign`, {
+        staffId: staffId || null,
+      });
+      toast.success(t('deliveryAssignSaved'));
+      const name = staffId ? deliveryStaff.find((s) => s.id === staffId)?.name || null : null;
+      onDriverAssigned(staffId || null, name);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('deliveryAssignFailed'));
+    } finally {
+      setAssignBusy(false);
+    }
+  };
+
+  const copyTrackingLink = async () => {
+    if (!shopSlug || !order.deliveryTrackingToken) return;
+    const url = guestTrackingUrl(shopSlug, order.id, order.deliveryTrackingToken);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(t('deliveryTrackingLinkCopied'));
+    } catch {
+      toast.error(t('actionFailed'));
+    }
+  };
+
+  const destLat = order.deliveryLatitude != null ? Number(order.deliveryLatitude) : NaN;
+  const destLng = order.deliveryLongitude != null ? Number(order.deliveryLongitude) : NaN;
+  const destination =
+    Number.isFinite(destLat) && Number.isFinite(destLng)
+      ? { latitude: destLat, longitude: destLng }
+      : null;
+  const store =
+    storeLat != null && storeLng != null && Number.isFinite(storeLat) && Number.isFinite(storeLng)
+      ? { latitude: storeLat, longitude: storeLng }
+      : null;
+  const driverPoint =
+    driver &&
+    driver.latitude != null &&
+    driver.longitude != null &&
+    Number.isFinite(driver.latitude) &&
+    Number.isFinite(driver.longitude)
+      ? {
+          latitude: driver.latitude,
+          longitude: driver.longitude,
+          name: driver.staffName,
+          stale: driver.stale,
+        }
+      : null;
+
+  const assignedId = order.assignedDeliveryStaffId || driver?.staffId || '';
+
+  return (
+    <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+      <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+        {t('deliveryLiveTracking')}
+      </p>
+      {deliveryStaff.length > 0 ? (
+        <label className="block text-sm">
+          <span className="text-[var(--text-muted)]">{t('deliveryAssignDriver')}</span>
+          <select
+            className="input mt-1 w-full text-sm"
+            disabled={assignBusy}
+            value={assignedId}
+            onChange={(e) => void assignDriver(e.target.value)}
+          >
+            <option value="">{t('deliveryUnassigned')}</option>
+            {deliveryStaff.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <p className="text-sm text-stone-800">
+          <span className="text-[var(--text-muted)]">{t('deliveryAssignedDriver')}:</span>{' '}
+          {driver?.staffName || order.assignedDriverName || t('deliveryUnassigned')}
+        </p>
+      )}
+      {isOnlineShopOrder(order) && order.deliveryTrackingToken && shopSlug ? (
+        <button
+          type="button"
+          className="text-xs font-semibold text-teal-800 underline-offset-2 hover:underline"
+          onClick={() => void copyTrackingLink()}
+        >
+          {t('deliveryCopyTrackingLink')}
+        </button>
+      ) : null}
+      {driverPoint && !driverPoint.stale ? (
+        <p className="text-xs text-emerald-800">
+          {t('deliveryDriverOnWay').replace('{name}', driverPoint.name || '')}
+        </p>
+      ) : (
+        <p className="text-xs text-stone-500">{t('deliveryTrackingWaiting')}</p>
+      )}
+      <DeliveryLiveMap store={store} destination={destination} driver={driverPoint} heightClass="h-44" />
+    </div>
+  );
+}
+
 export default function Orders({ invoiceLedger = false }: { invoiceLedger?: boolean }) {
   const { t, formatDateTime, locale } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -144,6 +299,8 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     vatRate?: string;
     taxIncludedInPrice?: boolean;
     shopLogoUrl?: string;
+    latitude?: number | null;
+    longitude?: number | null;
   } | null>(null);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [printing, setPrinting] = useState(false);
@@ -153,14 +310,24 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const [refundFor, setRefundFor] = useState<MerchantOrder | null>(null);
   const [refundReasons, setRefundReasons] = useState<RefundReasonOption[]>([]);
   const [refundBusy, setRefundBusy] = useState(false);
+  const [deliveryStaff, setDeliveryStaff] = useState<Array<{ id: string; name: string }>>([]);
+  const [shopSlug, setShopSlug] = useState<string | null>(null);
 
   const loadMeta = useCallback(async () => {
     try {
-      const [settingsRes, staffRes] = await Promise.all([
+      const [settingsRes, staffRes, deliveryRes] = await Promise.all([
         api.get('/merchant/settings'),
         api.get('/merchant/staff').catch(() => ({ data: { staff: [] } })),
+        api.get('/merchant/delivery/live').catch(() => ({ data: { deliveryStaff: [] } })),
       ]);
       const s = settingsRes.data?.settings || settingsRes.data || {};
+      setShopSlug(s.slug || s.subdomain || null);
+      setDeliveryStaff(
+        (deliveryRes.data?.deliveryStaff || []).map((row: { id: string; name: string }) => ({
+          id: row.id,
+          name: row.name,
+        }))
+      );
       setMerchant({
         name: s.name,
         address: s.address,
@@ -170,6 +337,8 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         vatRate: s.vatRate,
         taxIncludedInPrice: s.taxIncludedInPrice,
         shopLogoUrl: s.shopLogoUrl,
+        latitude: s.latitude != null ? Number(s.latitude) : null,
+        longitude: s.longitude != null ? Number(s.longitude) : null,
       });
       setPrintSettings(s.posPrintSettings || null);
       setStaffList(
@@ -760,6 +929,11 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                     {order.staffName}
                   </span>
                 ) : null}
+                {isDeliveryOrder(order) && order.assignedDriverName ? (
+                  <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-emerald-900 truncate max-w-[8rem]">
+                    🛵 {order.assignedDriverName}
+                  </span>
+                ) : null}
                 <span className="rounded-md bg-[var(--bg-muted)] px-1.5 py-0.5 font-extrabold tabular-nums">
                   CHF {Number(order.total || 0).toFixed(2)}
                 </span>
@@ -839,6 +1013,28 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                     <span className="text-[var(--text-muted)]">{t('ordersAddress')}:</span>{' '}
                     {selected.shippingAddress}
                   </p>
+                ) : null}
+                {isDeliveryOrder(selected) &&
+                !['cancelled', 'refunded', 'completed'].includes(selected.status) ? (
+                  <OrderDeliveryPanel
+                    order={selected}
+                    storeLat={merchant?.latitude ?? null}
+                    storeLng={merchant?.longitude ?? null}
+                    shopSlug={shopSlug}
+                    deliveryStaff={deliveryStaff}
+                    onDriverAssigned={(staffId, staffName) => {
+                      setSelected((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              assignedDeliveryStaffId: staffId,
+                              assignedDriverName: staffName,
+                            }
+                          : prev
+                      );
+                      void load();
+                    }}
+                  />
                 ) : null}
                 {isInvoiceOrder(selected) ? (
                   <p>

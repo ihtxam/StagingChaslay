@@ -113,6 +113,18 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_delivery_staff_id uuid REFERENCES merchant_staff(id) ON DELETE SET NULL",
   delivery_latitude: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_latitude numeric(10,7)",
   delivery_longitude: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_longitude numeric(10,7)",
+  delivery_tracking_token:
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_tracking_token varchar(64)",
+  delivery_driver_pay_mode:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_driver_pay_mode varchar(20) NOT NULL DEFAULT 'both'",
+  delivery_driver_hourly_rate:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_driver_hourly_rate numeric(10,2) DEFAULT 0",
+  delivery_per_order_fee:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_per_order_fee numeric(10,2) DEFAULT 0",
+  delivery_hourly_rate_override:
+    "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS delivery_hourly_rate_override numeric(10,2)",
+  delivery_per_order_fee_override:
+    "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS delivery_per_order_fee_override numeric(10,2)",
 };
 
 /** Idempotent CREATE TABLE for features added after initial deploy. */
@@ -210,6 +222,15 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS delivery_driver_locations_merchant_staff_uidx ON delivery_driver_locations (merchant_id, staff_id)`,
   `CREATE INDEX IF NOT EXISTS delivery_driver_locations_merchant_recorded_idx ON delivery_driver_locations (merchant_id, recorded_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS delivery_driver_shifts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    staff_id uuid NOT NULL REFERENCES merchant_staff(id) ON DELETE CASCADE,
+    started_at timestamptz NOT NULL DEFAULT now(),
+    ended_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS delivery_driver_shifts_merchant_staff_idx ON delivery_driver_shifts (merchant_id, staff_id, started_at DESC)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_id_idx ON pos_sessions(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_device_idx ON pos_sessions(merchant_id, device_id, session_kind)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_active_idx ON pos_sessions(merchant_id, session_kind, last_heartbeat)`,

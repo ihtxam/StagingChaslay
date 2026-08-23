@@ -127,25 +127,28 @@ export function reservationEmailCopy(
   };
 }
 
-type ShopOrderKind = 'received' | 'confirmed' | 'ready' | 'cancelled';
+type ShopOrderKind = 'received' | 'confirmed' | 'ready' | 'out_for_delivery' | 'cancelled';
 
 const SHOP_ORDER_SUBJECTS: Record<TxLocale, Record<ShopOrderKind, (shop: string, n: string) => string>> = {
   en: {
     received: (s, n) => `Order ${n} received — ${s}`,
     confirmed: (s, n) => `Order ${n} confirmed — ${s}`,
     ready: (s, n) => `Order ${n} is ready — ${s}`,
+    out_for_delivery: (s, n) => `Order ${n} is on the way — ${s}`,
     cancelled: (s, n) => `Order ${n} cancelled — ${s}`,
   },
   fr: {
     received: (s, n) => `Commande ${n} reçue — ${s}`,
     confirmed: (s, n) => `Commande ${n} confirmée — ${s}`,
     ready: (s, n) => `Commande ${n} prête — ${s}`,
+    out_for_delivery: (s, n) => `Commande ${n} en livraison — ${s}`,
     cancelled: (s, n) => `Commande ${n} annulée — ${s}`,
   },
   de: {
     received: (s, n) => `Bestellung ${n} erhalten — ${s}`,
     confirmed: (s, n) => `Bestellung ${n} bestätigt — ${s}`,
     ready: (s, n) => `Bestellung ${n} ist bereit — ${s}`,
+    out_for_delivery: (s, n) => `Bestellung ${n} ist unterwegs — ${s}`,
     cancelled: (s, n) => `Bestellung ${n} storniert — ${s}`,
   },
 };
@@ -155,18 +158,21 @@ const SHOP_ORDER_BODIES: Record<TxLocale, Record<ShopOrderKind, string>> = {
     received: 'Thank you for your order. We will confirm it shortly.',
     confirmed: 'Your order has been confirmed and is being prepared.',
     ready: 'Your order is ready for pickup.',
+    out_for_delivery: 'Your driver is on the way. Track live delivery using the link below.',
     cancelled: 'Your order has been cancelled.',
   },
   fr: {
     received: 'Merci pour votre commande. Nous la confirmerons sous peu.',
     confirmed: 'Votre commande est confirmée et en préparation.',
     ready: 'Votre commande est prête à être récupérée.',
+    out_for_delivery: 'Votre livreur est en route. Suivez la livraison en direct via le lien ci-dessous.',
     cancelled: 'Votre commande a été annulée.',
   },
   de: {
     received: 'Vielen Dank für Ihre Bestellung. Wir bestätigen sie in Kürze.',
     confirmed: 'Ihre Bestellung ist bestätigt und wird zubereitet.',
     ready: 'Ihre Bestellung ist zur Abholung bereit.',
+    out_for_delivery: 'Ihr Fahrer ist unterwegs. Verfolgen Sie die Lieferung live über den Link unten.',
     cancelled: 'Ihre Bestellung wurde storniert.',
   },
 };

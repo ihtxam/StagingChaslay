@@ -55,6 +55,10 @@ export default function DeliveryTrackingPage() {
   const [storeLat, setStoreLat] = useState<number | null>(null);
   const [storeLng, setStoreLng] = useState<number | null>(null);
   const [assignBusy, setAssignBusy] = useState<string | null>(null);
+  const [payMode, setPayMode] = useState<'hourly' | 'per_order' | 'both'>('both');
+  const [hourlyRate, setHourlyRate] = useState('0');
+  const [perOrderFee, setPerOrderFee] = useState('0');
+  const [paySaving, setPaySaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -72,11 +76,34 @@ export default function DeliveryTrackingPage() {
         setStoreLat(lat);
         setStoreLng(lng);
       }
+      const mode = String(merch?.deliveryDriverPayMode || 'both');
+      if (mode === 'hourly' || mode === 'per_order' || mode === 'both') {
+        setPayMode(mode);
+      }
+      setHourlyRate(String(merch?.deliveryDriverHourlyRate ?? '0'));
+      setPerOrderFee(String(merch?.deliveryPerOrderFee ?? '0'));
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || t('deliveryMapLoadFailed'));
     }
   }, [t]);
+
+  const savePaySettings = async () => {
+    setPaySaving(true);
+    try {
+      await api.put('/merchant/settings', {
+        deliveryDriverPayMode: payMode,
+        deliveryDriverHourlyRate: Number(hourlyRate),
+        deliveryPerOrderFee: Number(perOrderFee),
+      });
+      toast.success(t('saved'));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('actionFailed'));
+    } finally {
+      setPaySaving(false);
+    }
+  };
 
   useEffect(() => {
     void load();
@@ -208,6 +235,61 @@ export default function DeliveryTrackingPage() {
           </section>
         </div>
       </div>
+
+      <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-bold text-stone-900">{t('deliveryPaySettings')}</h2>
+        <p className="mt-1 text-xs text-stone-500">{t('deliveryMapHint')}</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <label className="block text-sm sm:col-span-3">
+            {t('deliveryPayMode')}
+            <select
+              className="input mt-1 w-full max-w-xs"
+              value={payMode}
+              onChange={(e) =>
+                setPayMode(e.target.value as 'hourly' | 'per_order' | 'both')
+              }
+            >
+              <option value="both">{t('deliveryPayModeBoth')}</option>
+              <option value="hourly">{t('deliveryPayModeHourly')}</option>
+              <option value="per_order">{t('deliveryPayModePerOrder')}</option>
+            </select>
+          </label>
+          {(payMode === 'hourly' || payMode === 'both') && (
+            <label className="block text-sm">
+              {t('deliveryHourlyRate')}
+              <input
+                className="input mt-1"
+                type="number"
+                min={0}
+                step={0.05}
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+              />
+            </label>
+          )}
+          {(payMode === 'per_order' || payMode === 'both') && (
+            <label className="block text-sm">
+              {t('deliveryPerOrderFee')}
+              <input
+                className="input mt-1"
+                type="number"
+                min={0}
+                step={0.05}
+                value={perOrderFee}
+                onChange={(e) => setPerOrderFee(e.target.value)}
+              />
+            </label>
+          )}
+        </div>
+        <button
+          type="button"
+          className="btn-primary mt-3"
+          disabled={paySaving}
+          onClick={() => void savePaySettings()}
+        >
+          {t('save')}
+        </button>
+      </section>
     </div>
   );
 }

@@ -184,6 +184,14 @@ export const merchants = pgTable(
      * (e.g. 2 → delivery item prices = takeaway + 2.00).
      */
     deliveryMenuMarkup: decimal("delivery_menu_markup", { precision: 10, scale: 2 }).default("0"),
+    /** Driver pay: hourly | per_order | both */
+    deliveryDriverPayMode: varchar("delivery_driver_pay_mode", { length: 20 })
+      .default("both")
+      .notNull(),
+    deliveryDriverHourlyRate: decimal("delivery_driver_hourly_rate", { precision: 10, scale: 2 }).default(
+      "0"
+    ),
+    deliveryPerOrderFee: decimal("delivery_per_order_fee", { precision: 10, scale: 2 }).default("0"),
     // Adyen credentials (merchant-level; shared by online shop + payment terminals)
     adyenMerchantAccount: varchar("adyen_merchant_account", { length: 255 }),
     adyenApiKey: text("adyen_api_key"),
@@ -418,6 +426,10 @@ export const merchantStaff = pgTable(
     canAccessPanel: boolean("can_access_panel").default(false).notNull(),
     /** Adyen POI terminal id preferred by this staff member on WebPOS/waiter. */
     preferredTerminalId: varchar("preferred_terminal_id", { length: 255 }),
+    /** Optional override for delivery driver hourly wage (CHF/h). */
+    deliveryHourlyRateOverride: decimal("delivery_hourly_rate_override", { precision: 10, scale: 2 }),
+    /** Optional override for per-delivery fee (CHF). */
+    deliveryPerOrderFeeOverride: decimal("delivery_per_order_fee_override", { precision: 10, scale: 2 }),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -946,6 +958,8 @@ export const orders = pgTable(
     assignedDeliveryStaffId: uuid("assigned_delivery_staff_id").references(() => merchantStaff.id, {
       onDelete: "set null",
     }),
+    /** Public token for guest order tracking (no login). */
+    deliveryTrackingToken: varchar("delivery_tracking_token", { length: 64 }),
     deliveryZoneId: uuid("delivery_zone_id"),
     scheduledFor: timestamp("scheduled_for"), // null = ASAP
     customerName: varchar("customer_name", { length: 255 }),
@@ -1104,6 +1118,30 @@ export const deliveryDriverLocations = pgTable(
     merchantRecordedIdx: index("delivery_driver_locations_merchant_recorded_idx").on(
       table.merchantId,
       table.recordedAt
+    ),
+  })
+);
+
+/** Driver clock-in windows for hourly wage (started when GPS tracking starts). */
+export const deliveryDriverShifts = pgTable(
+  "delivery_driver_shifts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    staffId: uuid("staff_id")
+      .notNull()
+      .references(() => merchantStaff.id, { onDelete: "cascade" }),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    endedAt: timestamp("ended_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantStaffIdx: index("delivery_driver_shifts_merchant_staff_idx").on(
+      table.merchantId,
+      table.staffId,
+      table.startedAt
     ),
   })
 );
