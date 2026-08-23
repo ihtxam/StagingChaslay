@@ -390,6 +390,23 @@ export default function Sidebar({
             </Link>
           ) : null}
 
+          {profileMenu?.settingsPath ? (
+            <Link
+              to={profileMenu.settingsPath}
+              onClick={closeMobile}
+              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
+                isPathActive(location.pathname, profileMenu.settingsPath)
+                  ? 'bg-teal-900 text-white shadow-sm'
+                  : 'text-teal-50/95 hover:bg-teal-900/45 hover:text-white'
+              }`}
+            >
+              <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
+                <Settings />
+              </span>
+              <span className="font-medium truncate">{t('settings')}</span>
+            </Link>
+          ) : null}
+
           {impersonating && (
             <button
               type="button"
@@ -432,19 +449,6 @@ export default function Sidebar({
                     >
                       <LifeBuoy className="w-4 h-4" />
                       {t('support')}
-                    </Link>
-                  ) : null}
-                  {profileMenu.settingsPath ? (
-                    <Link
-                      to={profileMenu.settingsPath}
-                      onClick={() => {
-                        setProfileOpen(false);
-                        closeMobile();
-                      }}
-                      className="flex items-center gap-2 px-3 py-2.5 text-sm text-teal-50 hover:bg-teal-900/60"
-                    >
-                      <Settings className="w-4 h-4" />
-                      {t('settings')}
                     </Link>
                   ) : null}
                   {profileMenu.billingPath ? (
