@@ -124,7 +124,7 @@ function MerchantShell() {
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
   const isWaiterRoute = /^\/merchant\/waiter\/?$/.test(location.pathname);
   const isDriverRoute = /^\/merchant\/delivery\/driver\/?$/.test(location.pathname);
-  const isPosLikeRoute = isPosRoute || isWaiterRoute || isDriverRoute;
+  const isPosLikeRoute = isPosRoute || isWaiterRoute;
   const isPosEmbed =
     typeof window !== 'undefined' &&
     (new URLSearchParams(location.search).get('embed') === '1' ||

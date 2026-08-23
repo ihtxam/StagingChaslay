@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Download, FileText, Filter, Printer, RefreshCw, ShoppingBag, X } from 'lucide-react';
+import { Download, FileText, Printer, RefreshCw, ShoppingBag, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
@@ -39,13 +39,13 @@ import WebPosRefundModal, { type RefundReasonOption } from '@/components/webpos/
 import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import {
   settingsDash,
-  SettingsField,
-  SettingsPageHeader,
   SettingsReportCard,
 } from '@/components/settings/SettingsReportUi';
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
 import DeliveryLiveMap from '@/components/delivery/DeliveryLiveMap';
+import { useAuthStore } from '@/store/auth';
+import { hasPermission, type Permission } from '@/lib/permissions';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
 type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online' | 'invoice';
@@ -267,8 +267,16 @@ function OrderDeliveryPanel({
   );
 }
 
+const compactControl =
+  'h-8 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text)] shadow-sm';
+
 export default function Orders({ invoiceLedger = false }: { invoiceLedger?: boolean }) {
   const { t, formatDateTime, locale } = useI18n();
+  const user = useAuthStore((s) => s.user);
+  const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const canSalesAdjust =
+    jwtIsOwner ||
+    hasPermission(user?.permissions as Permission[] | undefined, 'VIEW_ALL_SALES', false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -613,71 +621,83 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   }
 
   return (
-    <div className="space-y-4 max-w-6xl">
-      <SettingsPageHeader
-        title={showingInvoices ? t('invoicesTitle') : t('orders')}
-        subtitle={showingInvoices ? t('invoicesHint') : t('ordersManageHint')}
-        action={
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="btn-secondary inline-flex items-center gap-2"
-            disabled={loading}
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            {t('ordersRefresh')}
-          </button>
-        }
-      />
+    <div className="space-y-2.5 max-w-6xl">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-extrabold tracking-tight text-[var(--text)]">
+          {showingInvoices ? t('invoicesTitle') : t('orders')}
+        </h2>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 text-xs font-semibold text-[var(--text)] hover:bg-[var(--bg-muted)] disabled:opacity-50"
+          disabled={loading}
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          {t('ordersRefresh')}
+        </button>
+      </div>
 
-      <SettingsReportCard
-        icon={Filter}
-        accent={settingsDash.info}
-        title={t('ordersFilterTitle')}
-        description={t('ordersFilterHint')}
-      >
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {showingInvoices ? null : (
-            <>
-          <SettingsField label={t('ordersFilterFrom')}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {showingInvoices ? null : (
+          <>
             <input
               type="date"
-              className="input w-full"
+              className={`${compactControl} w-[7.25rem]`}
               value={dateFrom}
+              aria-label={t('ordersFilterFrom')}
               onChange={(e) => setDateFrom(e.target.value)}
             />
-          </SettingsField>
-          <SettingsField label={t('ordersFilterTo')}>
             <input
               type="date"
-              className="input w-full"
+              className={`${compactControl} w-[7.25rem]`}
               value={dateTo}
+              aria-label={t('ordersFilterTo')}
               onChange={(e) => setDateTo(e.target.value)}
             />
-          </SettingsField>
-            </>
-          )}
-          <SettingsField label={t('webPosSearchOrders')}>
-            <div className="flex items-center gap-1.5">
-              <SecretSearchTapButton
-                onUnlock={() => setSalesAdjOpen(true)}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)] shadow-sm hover:bg-[var(--bg-elevated)] active:scale-95"
-              />
-              <input
-                type="search"
-                className="input w-full"
-                placeholder={t('webPosSearchOrders')}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </SettingsField>
-          {showingInvoices ? null : (
-            <>
-          <SettingsField label={t('ordersFilterStatus')}>
+          </>
+        )}
+        {canSalesAdjust ? (
+          <SecretSearchTapButton
+            onUnlock={() => setSalesAdjOpen(true)}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)] hover:bg-[var(--bg-elevated)] active:scale-95"
+          />
+        ) : null}
+        <input
+          type="search"
+          className={`${compactControl} min-w-[7rem] flex-1 sm:max-w-[11rem]`}
+          placeholder={t('webPosSearchOrders')}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {showingInvoices ? (
+          <>
+            {(
+              [
+                ['all', t('invoicesAll')],
+                ['unpaid', t('invoicesUnpaid')],
+                ['paid', t('invoicesPaid')],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setInvoicePayFilter(id)}
+                className={`h-8 shrink-0 rounded-md border px-2 text-[11px] font-semibold transition-colors ${
+                  invoicePayFilter === id
+                    ? 'border-indigo-700 bg-indigo-700 text-white'
+                    : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-indigo-400'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </>
+        ) : (
+          <>
             <select
-              className="input w-full"
+              className={`${compactControl} max-w-[6.5rem]`}
               value={statusFilter}
+              aria-label={t('ordersFilterStatus')}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="all">{t('ordersAllStatuses')}</option>
@@ -691,11 +711,10 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               <option value="refunded">{t('webPosStatusRefunded')}</option>
               <option value="partially_refunded">{t('webPosStatusPartialRefund')}</option>
             </select>
-          </SettingsField>
-          <SettingsField label={t('ordersFilterPayment')}>
             <select
-              className="input w-full"
+              className={`${compactControl} max-w-[5.5rem]`}
               value={paymentFilter}
+              aria-label={t('ordersFilterPayment')}
               onChange={(e) => setPaymentFilter(e.target.value)}
             >
               <option value="all">{t('ordersAllPayments')}</option>
@@ -706,41 +725,10 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               <option value="pay_later">{t('webPosPayLater')}</option>
               <option value="invoice">{t('webPosInvoice')}</option>
             </select>
-          </SettingsField>
-          <SettingsField label={t('ordersFilterType')}>
             <select
-              className="input w-full"
-              value={typeFilter}
-              onChange={(e) => setTypeTab(e.target.value as TypeFilter)}
-            >
-              <option value="all">{t('ordersAllTypes')}</option>
-              <option value="kitchen">{t('ordersTabKitchen')}</option>
-              <option value="delivery">{t('delivery')}</option>
-              <option value="takeaway">{t('takeaway')}</option>
-              <option value="dine_in">{t('dineIn')}</option>
-              <option value="online">{t('webPosOnlineOrders')}</option>
-              <option value="invoice">{t('webPosInvoice')}</option>
-            </select>
-          </SettingsField>
-          <SettingsField label={t('ordersFilterChannel')}>
-            <select
-              className="input w-full"
-              value={channelFilter}
-              onChange={(e) => setChannelFilter(e.target.value as ChannelFilter)}
-            >
-              <option value="all">{t('ordersAllChannels')}</option>
-              <option value="dine_in">{t('dineIn')}</option>
-              <option value="takeaway">{t('takeaway')}</option>
-              <option value="delivery">{t('delivery')}</option>
-              <option value="online">{t('webPosOnlineOrders')}</option>
-            </select>
-          </SettingsField>
-            </>
-          )}
-          <SettingsField label={t('ordersFilterStaff')}>
-            <select
-              className="input w-full"
+              className={`${compactControl} max-w-[6.5rem]`}
               value={staffFilter}
+              aria-label={t('ordersFilterStaff')}
               onChange={(e) => setStaffFilter(e.target.value)}
             >
               <option value="all">{t('ordersAllStaff')}</option>
@@ -757,88 +745,50 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   </option>
                 ))}
             </select>
-          </SettingsField>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-          <p className="text-xs font-medium text-[var(--text-muted)]">
-            {t('ordersResults').replace('{n}', String(list.length))}
-          </p>
-          {hasActiveFilters ? (
-            <button type="button" className="text-xs font-semibold text-teal-700" onClick={clearFilters}>
-              {t('ordersClearFilters')}
-            </button>
-          ) : null}
-        </div>
-      </SettingsReportCard>
+          </>
+        )}
+        <span className="shrink-0 text-[10px] font-medium tabular-nums text-[var(--text-muted)]">
+          {t('ordersResults').replace('{n}', String(list.length))}
+        </span>
+        {hasActiveFilters ? (
+          <button
+            type="button"
+            className="h-8 shrink-0 rounded-md px-1.5 text-[11px] font-semibold text-teal-700 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+            onClick={clearFilters}
+          >
+            {t('ordersClearFilters')}
+          </button>
+        ) : null}
+      </div>
 
       {invoiceLedger ? null : (
-      <div className="flex flex-wrap gap-1.5">
-        {(
-          [
-            ['all', t('ordersTabAll')],
-            ['kitchen', t('ordersTabKitchen')],
-            ['delivery', t('delivery')],
-            ['takeaway', t('takeaway')],
-            ['dine_in', t('dineIn')],
-            ['online', t('webPosOnlineOrders')],
-            ['invoice', t('webPosInvoice')],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTypeTab(id)}
-            className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-              typeFilter === id
-                ? 'border-slate-900 bg-slate-900 text-white'
-                : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-slate-400'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      )}
-
-      {showingInvoices ? (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-nowrap gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(
             [
-              ['all', t('invoicesAll')],
-              ['unpaid', t('invoicesUnpaid')],
-              ['paid', t('invoicesPaid')],
+              ['all', t('ordersTabAll')],
+              ['kitchen', t('ordersTabKitchen')],
+              ['delivery', t('delivery')],
+              ['takeaway', t('takeaway')],
+              ['dine_in', t('dineIn')],
+              ['online', t('webPosOnlineOrders')],
+              ['invoice', t('webPosInvoice')],
             ] as const
           ).map(([id, label]) => (
             <button
               key={id}
               type="button"
-              onClick={() => setInvoicePayFilter(id)}
-              className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                invoicePayFilter === id
-                  ? 'border-indigo-700 bg-indigo-700 text-white'
-                  : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-indigo-400'
+              onClick={() => setTypeTab(id)}
+              className={`h-7 shrink-0 rounded-md border px-2 text-[10px] font-semibold transition-colors ${
+                typeFilter === id
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-slate-400'
               }`}
             >
               {label}
             </button>
           ))}
         </div>
-      ) : null}
-
-      <div className="flex flex-wrap gap-2.5 text-[11px] font-medium text-[var(--text-muted)]">
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-amber-500" /> {t('takeaway')}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-sky-500" /> {t('dineIn')}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" /> {t('delivery')}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-violet-500" /> {t('webPosOnlineOrders')}
-        </span>
-      </div>
+      )}
 
       <div className="grid gap-2.5 sm:grid-cols-2">
         {list.length === 0 && (
