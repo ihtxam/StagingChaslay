@@ -9,24 +9,14 @@ import { signageScreenLimitOf } from '@/lib/signage-addon';
 import SignageTemplatePreview, { SIGNAGE_SCREEN_SIZES, SIGNAGE_TEMPLATES } from '@/components/signage/SignageTemplatePreview';
 import SignagePlaylistEditModal, { type SignagePlaylist } from '@/components/signage/SignagePlaylistEditModal';
 import SignagePlaylistWizard from '@/components/signage/SignagePlaylistWizard';
+import SignageScreenEditModal, { type SignageScreen } from '@/components/signage/SignageScreenEditModal';
 import { scheduleSummaryKey } from '@/lib/signage-schedule';
-
-type Screen = {
-  id: string;
-  name: string;
-  token: string;
-  shortCode?: string | null;
-  orientation: 'landscape' | 'portrait';
-  template: string;
-  screenSizeIn?: number;
-  playlistId: string | null;
-};
 
 type Category = { id: string; name: string };
 
 const TEMPLATES = SIGNAGE_TEMPLATES;
 
-function signagePublicUrl(screen: Pick<Screen, 'shortCode' | 'token'>): string {
+function signagePublicUrl(screen: Pick<SignageScreen, 'shortCode' | 'token'>): string {
   const origin =
     (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ||
     (typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com');
@@ -37,7 +27,7 @@ function signagePublicUrl(screen: Pick<Screen, 'shortCode' | 'token'>): string {
 export default function SignagePage() {
   const { t } = useI18n();
   const [tab, setTab] = useState<'screens' | 'playlists'>('screens');
-  const [screens, setScreens] = useState<Screen[]>([]);
+  const [screens, setScreens] = useState<SignageScreen[]>([]);
   const [playlists, setPlaylists] = useState<SignagePlaylist[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [screenLimit, setScreenLimit] = useState(2);
@@ -56,6 +46,11 @@ export default function SignagePage() {
   const editingPlaylist = useMemo(
     () => playlists.find((p) => p.id === editingPlaylistId) || null,
     [playlists, editingPlaylistId]
+  );
+
+  const editingScreen = useMemo(
+    () => screens.find((s) => s.id === editingScreenId) || null,
+    [screens, editingScreenId]
   );
 
   const load = useCallback(async () => {
@@ -89,7 +84,13 @@ export default function SignagePage() {
     }
   }, [editingPlaylistId, editingPlaylist, loading]);
 
-  const copyUrl = async (screen: Pick<Screen, 'shortCode' | 'token'>) => {
+  useEffect(() => {
+    if (editingScreenId && !editingScreen && !loading) {
+      setEditingScreenId(null);
+    }
+  }, [editingScreenId, editingScreen, loading]);
+
+  const copyUrl = async (screen: Pick<SignageScreen, 'shortCode' | 'token'>) => {
     const url = signagePublicUrl(screen);
     try {
       await navigator.clipboard.writeText(url);
@@ -111,13 +112,8 @@ export default function SignagePage() {
         screenSizeIn,
         playlistId: screenPlaylistId || null,
       };
-      if (editingScreenId) {
-        await api.put(`/merchant/signage/screens/${editingScreenId}`, body);
-      } else {
-        await api.post('/merchant/signage/screens', body);
-      }
+      await api.post('/merchant/signage/screens', body);
       setScreenName('');
-      setEditingScreenId(null);
       toast.success(t('signageSaved'));
       await load();
     } catch (e: unknown) {
@@ -126,16 +122,6 @@ export default function SignagePage() {
     } finally {
       setBusy(false);
     }
-  };
-
-  const editScreen = (s: Screen) => {
-    setEditingScreenId(s.id);
-    setScreenName(s.name);
-    setScreenOrientation(s.orientation === 'portrait' ? 'portrait' : 'landscape');
-    setScreenTemplate(s.template || 'dark_pizza');
-    setScreenSizeIn(s.screenSizeIn || 32);
-    setScreenPlaylistId(s.playlistId || '');
-    setTab('screens');
   };
 
   const rotateToken = async (id: string) => {
@@ -195,9 +181,7 @@ export default function SignagePage() {
       {tab === 'screens' ? (
         <div className="space-y-4">
           <div className="rounded-xl border border-stone-200 bg-white p-4 space-y-3">
-            <p className="text-sm font-medium">
-              {editingScreenId ? t('signageEditScreen') : t('signageAddScreen')}
-            </p>
+            <p className="text-sm font-medium">{t('signageAddScreen')}</p>
             <input
               className="input w-full"
               value={screenName}
@@ -260,27 +244,15 @@ export default function SignagePage() {
             <div className="flex gap-2">
               <button
                 type="button"
-                disabled={busy || !screenName.trim() || (!editingScreenId && screens.length >= screenLimit)}
+                disabled={busy || !screenName.trim() || screens.length >= screenLimit}
                 onClick={() => void saveScreen()}
                 className="btn-primary inline-flex items-center gap-2"
               >
                 <Plus className="h-4 w-4" aria-hidden />
-                {editingScreenId ? t('save') : t('signageAddScreen')}
+                {t('signageAddScreen')}
               </button>
-              {editingScreenId ? (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    setEditingScreenId(null);
-                    setScreenName('');
-                  }}
-                >
-                  {t('cancel')}
-                </button>
-              ) : null}
             </div>
-            {!editingScreenId && screens.length >= screenLimit ? (
+            {screens.length >= screenLimit ? (
               <p className="text-xs text-amber-700">{t('signageLimitReached')}</p>
             ) : null}
           </div>
@@ -310,7 +282,11 @@ export default function SignagePage() {
                       {t(TEMPLATES.find((x) => x.id === s.template)?.key || 'signageTemplateDarkPizza')}
                     </p>
                     <div className="flex flex-wrap gap-2 mt-auto">
-                      <button type="button" className="rounded-lg border border-stone-300 px-2 py-1.5 text-xs font-semibold hover:bg-stone-50" onClick={() => editScreen(s)}>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-stone-300 px-2 py-1.5 text-xs font-semibold hover:bg-stone-50"
+                        onClick={() => setEditingScreenId(s.id)}
+                      >
                         {t('edit')}
                       </button>
                       <button type="button" className="rounded-lg border border-stone-300 p-1.5 hover:bg-stone-50" title={t('signageCopyUrl')} onClick={() => void copyUrl(s)}>
@@ -398,6 +374,14 @@ export default function SignagePage() {
         playlist={editingPlaylist}
         categories={categories}
         onClose={() => setEditingPlaylistId(null)}
+        onChanged={() => void load()}
+      />
+
+      <SignageScreenEditModal
+        open={editingScreenId !== null}
+        screen={editingScreen}
+        playlists={playlists}
+        onClose={() => setEditingScreenId(null)}
         onChanged={() => void load()}
       />
 
