@@ -33,8 +33,6 @@ import javax.inject.Inject
 
 enum class MenuSection {
     PRODUCT_LIST,
-    MENU_SYNC,
-    MENU_ORDER,
     MENU_TEMPLATE,
     IMPORT_EXPORT,
     MODIFIERS,
@@ -48,11 +46,6 @@ data class MenuUiState(
     val products: List<ProductEntity> = emptyList(),
     val modifierGroups: List<ModifierGroupEntity> = emptyList(),
     val addonGroups: List<AddonGroupEntity> = emptyList(),
-    val modifierOptionCounts: Map<Long, Int> = emptyMap(),
-    val addonOptionCounts: Map<Long, Int> = emptyMap(),
-    val modifierLinkCounts: Map<Long, Int> = emptyMap(),
-    val addonLinkCounts: Map<Long, Int> = emptyMap(),
-    val selectedCategoryForSort: Long? = null,
     val importMode: MenuImportMode = MenuImportMode.MERGE,
     val importPreview: ParsedMenuFile? = null,
     val isImporting: Boolean = false,
@@ -67,15 +60,14 @@ class MenuViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _section = MutableStateFlow(MenuSection.PRODUCT_LIST)
-    private val _selectedCategoryForSort = MutableStateFlow<Long?>(null)
     private val _message = MutableStateFlow<String?>(null)
     private val _importMode = MutableStateFlow(MenuImportMode.MERGE)
     private val _importPreview = MutableStateFlow<ParsedMenuFile?>(null)
     private val _isImporting = MutableStateFlow(false)
 
     val uiState: StateFlow<MenuUiState> = combine(
-        combine(_section, _selectedCategoryForSort, _message) { section, sortCategory, message ->
-            Triple(section, sortCategory, message)
+        combine(_section, _message) { section, message ->
+            section to message
         },
         combine(_importMode, _importPreview, _isImporting) { importMode, importPreview, isImporting ->
             Triple(importMode, importPreview, isImporting)
@@ -85,48 +77,22 @@ class MenuViewModel @Inject constructor(
     ) { base, import, modifiers, addons ->
         MenuUiState(
             section = base.first,
-            categories = emptyList(),
-            products = emptyList(),
             modifierGroups = modifiers,
             addonGroups = addons,
-            selectedCategoryForSort = base.second,
             importMode = import.first,
             importPreview = import.second,
             isImporting = import.third,
-            message = base.third
+            message = base.second
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MenuUiState())
 
-    private val _sortState = MutableStateFlow(
-        emptyList<CategoryEntity>() to emptyList<ProductEntity>()
-    )
-    val sortState: StateFlow<Pair<List<CategoryEntity>, List<ProductEntity>>> = _sortState
-
     init {
-        refreshSortData()
         refreshGroupMeta()
     }
 
     fun setSection(section: MenuSection) {
         _section.value = section
-        if (section == MenuSection.MENU_ORDER) refreshSortData()
         if (section == MenuSection.MODIFIERS || section == MenuSection.ADDONS) refreshGroupMeta()
-    }
-
-    fun setSortCategory(categoryId: Long?) {
-        _selectedCategoryForSort.value = categoryId
-        refreshSortData()
-    }
-
-    fun refreshSortData() {
-        viewModelScope.launch {
-            val categories = menuRepository.getAllCategories()
-            val products = menuRepository.getAllProducts()
-            _sortState.value = categories to products
-            if (_selectedCategoryForSort.value == null) {
-                _selectedCategoryForSort.value = categories.firstOrNull()?.id
-            }
-        }
     }
 
     private fun refreshGroupMeta() {
@@ -186,30 +152,6 @@ class MenuViewModel @Inject constructor(
         }
     }
 
-    fun reorderCategories(fromIndex: Int, toIndex: Int) {
-        viewModelScope.launch {
-            val (categories, _) = _sortState.value
-            if (fromIndex !in categories.indices || toIndex !in categories.indices) return@launch
-            val reordered = categories.toMutableList()
-            val item = reordered.removeAt(fromIndex)
-            reordered.add(toIndex, item)
-            menuRepository.reorderCategories(reordered.map { it.id })
-            refreshSortData()
-        }
-    }
-
-    fun reorderProducts(categoryId: Long, fromIndex: Int, toIndex: Int) {
-        viewModelScope.launch {
-            val products = _sortState.value.second.filter { it.categoryId == categoryId }
-            if (fromIndex !in products.indices || toIndex !in products.indices) return@launch
-            val reordered = products.toMutableList()
-            val item = reordered.removeAt(fromIndex)
-            reordered.add(toIndex, item)
-            menuRepository.reorderProductsInCategory(categoryId, reordered.map { it.id })
-            refreshSortData()
-        }
-    }
-
     fun deleteModifierGroup(id: Long) {
         viewModelScope.launch {
             menuRepository.deleteModifierGroup(id)
@@ -221,54 +163,6 @@ class MenuViewModel @Inject constructor(
         viewModelScope.launch {
             menuRepository.deleteAddonGroup(id)
             _message.value = "Add-on removed"
-        }
-    }
-
-    fun moveCategoryUp(categoryId: Long) {
-        viewModelScope.launch {
-            val (categories, products) = _sortState.value
-            val index = categories.indexOfFirst { it.id == categoryId }
-            if (index <= 0) return@launch
-            val reordered = categories.toMutableList()
-            reordered[index - 1] = categories[index].also { reordered[index] = categories[index - 1] }
-            menuRepository.reorderCategories(reordered.map { it.id })
-            refreshSortData()
-        }
-    }
-
-    fun moveCategoryDown(categoryId: Long) {
-        viewModelScope.launch {
-            val (categories, _) = _sortState.value
-            val index = categories.indexOfFirst { it.id == categoryId }
-            if (index < 0 || index >= categories.lastIndex) return@launch
-            val reordered = categories.toMutableList()
-            reordered[index + 1] = categories[index].also { reordered[index] = categories[index + 1] }
-            menuRepository.reorderCategories(reordered.map { it.id })
-            refreshSortData()
-        }
-    }
-
-    fun moveProductUp(productId: Long, categoryId: Long) {
-        viewModelScope.launch {
-            val products = _sortState.value.second.filter { it.categoryId == categoryId }
-            val index = products.indexOfFirst { it.id == productId }
-            if (index <= 0) return@launch
-            val reordered = products.toMutableList()
-            reordered[index - 1] = products[index].also { reordered[index] = products[index - 1] }
-            menuRepository.reorderProductsInCategory(categoryId, reordered.map { it.id })
-            refreshSortData()
-        }
-    }
-
-    fun moveProductDown(productId: Long, categoryId: Long) {
-        viewModelScope.launch {
-            val products = _sortState.value.second.filter { it.categoryId == categoryId }
-            val index = products.indexOfFirst { it.id == productId }
-            if (index < 0 || index >= products.lastIndex) return@launch
-            val reordered = products.toMutableList()
-            reordered[index + 1] = products[index].also { reordered[index] = products[index + 1] }
-            menuRepository.reorderProductsInCategory(categoryId, reordered.map { it.id })
-            refreshSortData()
         }
     }
 
@@ -368,7 +262,6 @@ class MenuViewModel @Inject constructor(
             }.onSuccess { result ->
                 _importPreview.value = null
                 _message.value = formatImportResult(result)
-                refreshSortData()
             }.onFailure { e ->
                 _message.value = e.message ?: "Import failed"
             }

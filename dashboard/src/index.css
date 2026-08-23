@@ -430,6 +430,14 @@ button {
     touch-action: manipulation;
   }
 
+  /* Desktop search: smaller text + flexible width so full query stays visible. */
+  @media (min-width: 640px) {
+    .webpos-shell .webpos-search-input {
+      font-size: 13px !important;
+      line-height: 1.25;
+    }
+  }
+
   .webpos-product-grid,
   .webpos-shell [data-webpos-product-grid='1'] {
     touch-action: pan-x pan-y;

@@ -7,6 +7,7 @@ import com.chaslay.pos.data.local.entity.CategoryEntity
 import com.chaslay.pos.data.local.entity.ModifierGroupEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.data.local.entity.ProductVariantEntity
+import com.chaslay.pos.R
 import com.chaslay.pos.data.repository.MenuRepository
 import com.chaslay.pos.data.repository.ProductRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,7 +22,7 @@ import javax.inject.Inject
 data class CatalogUiState(
     val categories: List<CategoryEntity> = emptyList(),
     val products: List<ProductEntity> = emptyList(),
-    val message: String? = null,
+    val messageRes: Int? = null,
     val modifierGroups: List<ModifierGroupEntity> = emptyList(),
     val addonGroups: List<AddonGroupEntity> = emptyList()
 )
@@ -34,16 +35,16 @@ class CatalogViewModel @Inject constructor(
     private val menuRepository: MenuRepository
 ) : ViewModel() {
 
-    private val _message = MutableStateFlow<String?>(null)
+    private val _messageRes = MutableStateFlow<Int?>(null)
 
     val uiState: StateFlow<CatalogUiState> = combine(
         productRepository.observeCategories(),
         productRepository.observeAllProducts(),
         menuRepository.observeModifierGroups(),
         menuRepository.observeAddonGroups(),
-        _message
-    ) { categories, products, modifierGroups, addonGroups, message ->
-        CatalogUiState(categories, products, message, modifierGroups, addonGroups)
+        _messageRes
+    ) { categories, products, modifierGroups, addonGroups, messageRes ->
+        CatalogUiState(categories, products, messageRes, modifierGroups, addonGroups)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CatalogUiState())
 
     fun saveCategory(name: String, colorHex: String, sortOrder: Int, id: Long = 0) {
@@ -52,7 +53,7 @@ class CatalogViewModel @Inject constructor(
             productRepository.saveCategory(
                 CategoryEntity(id = id, name = name.trim(), colorHex = colorHex, sortOrder = sortOrder)
             )
-            _message.value = "Category saved"
+            _messageRes.value = R.string.category_saved
         }
     }
 
@@ -104,7 +105,7 @@ class CatalogViewModel @Inject constructor(
             menuRepository.replaceProductVariants(productId, variantEntities)
             menuRepository.setProductModifierLinks(productId, modifierGroupIds)
             menuRepository.setProductAddonLinks(productId, addonGroupIds)
-            _message.value = "Product saved"
+            _messageRes.value = R.string.product_saved
         }
     }
 
@@ -120,19 +121,46 @@ class CatalogViewModel @Inject constructor(
     fun deleteCategory(id: Long) {
         viewModelScope.launch {
             productRepository.deleteCategory(id)
-            _message.value = "Category removed"
+            _messageRes.value = R.string.category_removed
         }
     }
 
     fun deleteProduct(id: Long) {
         viewModelScope.launch {
             productRepository.deleteProduct(id)
-            _message.value = "Product removed"
+            _messageRes.value = R.string.product_removed
+        }
+    }
+
+    fun reorderCategories(fromId: Long, toId: Long) {
+        viewModelScope.launch {
+            val categories = uiState.value.categories.toMutableList()
+            val fromIndex = categories.indexOfFirst { it.id == fromId }
+            val toIndex = categories.indexOfFirst { it.id == toId }
+            if (fromIndex < 0 || toIndex < 0) return@launch
+            val item = categories.removeAt(fromIndex)
+            categories.add(toIndex, item)
+            menuRepository.reorderCategories(categories.map { it.id })
+        }
+    }
+
+    fun reorderProducts(categoryId: Long, fromId: Long, toId: Long) {
+        viewModelScope.launch {
+            val products = uiState.value.products
+                .filter { it.categoryId == categoryId }
+                .sortedBy { it.sortOrder }
+                .toMutableList()
+            val fromIndex = products.indexOfFirst { it.id == fromId }
+            val toIndex = products.indexOfFirst { it.id == toId }
+            if (fromIndex < 0 || toIndex < 0) return@launch
+            val item = products.removeAt(fromIndex)
+            products.add(toIndex, item)
+            menuRepository.reorderProductsInCategory(categoryId, products.map { it.id })
         }
     }
 
     fun clearMessage() {
-        _message.value = null
+        _messageRes.value = null
     }
 }
 

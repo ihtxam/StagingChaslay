@@ -360,7 +360,7 @@ export default function WebPosTopBar({
                   className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
                 />
                 <input
-                  className="h-9 w-44 rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2 text-sm lg:w-52"
+                  className="webpos-search-input h-9 min-w-0 w-48 max-w-[min(100%,18rem)] flex-1 rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2 lg:w-60 xl:w-72"
                   placeholder={t('webPosSearchProducts')}
                   value={search}
                   onChange={(e) => onSearchChange(e.target.value)}
@@ -467,7 +467,7 @@ export default function WebPosTopBar({
               className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
             />
             <input
-              className="h-10 w-full rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2 text-sm"
+              className="webpos-search-input h-10 w-full rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2"
               placeholder={t('webPosSearchProducts')}
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}

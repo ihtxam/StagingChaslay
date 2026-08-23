@@ -95,6 +95,7 @@ interface Product {
   allowExtras?: boolean;
   loyaltyRewardPoints?: number | null;
   sortOrder?: number;
+  isTaxable?: boolean;
   modifierGroups?: ModifierGroupSummary[];
   comboItems?: Array<{
     id?: string;
@@ -132,6 +133,7 @@ type FormState = {
   modifierGroupIds: string[];
   /** Empty = not a free reward; otherwise points cost ≥ 1 */
   loyaltyRewardPoints: string;
+  isTaxable: boolean;
 };
 
 const emptySlot = (name = 'Main'): ComboSlotForm => ({
@@ -160,6 +162,7 @@ const emptyForm = (): FormState => ({
   specifications: [{ id: 'default', name: '', price: '', saleStatus: 'in_stock', isDefault: true }],
   modifierGroupIds: [],
   loyaltyRewardPoints: '',
+  isTaxable: true,
 });
 
 function normalizeComboSlotsFromProduct(raw: Product['comboItems']): ComboSlotForm[] {
@@ -214,6 +217,9 @@ const SKU_MAX_LEN = 100; // matches DB varchar(100)
 const MAX_MONEY_DIGITS = 10;
 const MAX_STOCK_DIGITS = 5;
 const MAX_POINTS = 2_147_483_647; // PG integer max
+
+/** Barcode: digits only for easier manual entry. */
+const sanitizeBarcodeDigits = (raw: string) => raw.replace(/\D/g, '').slice(0, SKU_MAX_LEN);
 
 /** Free-points field: digits only, hard-capped at 10 (PG integer / product rule). */
 const sanitizeFreePointsInput = (raw: string) => raw.replace(/\D/g, '').slice(0, MAX_MONEY_DIGITS);
@@ -564,6 +570,7 @@ export default function Products() {
           full.loyaltyRewardPoints != null && Number(full.loyaltyRewardPoints) >= 1
             ? String(full.loyaltyRewardPoints)
             : '',
+        isTaxable: full.isTaxable !== false,
       });
     } catch {
       const comboSlots = normalizeComboSlotsFromProduct(product.comboItems);
@@ -599,6 +606,7 @@ export default function Products() {
           product.loyaltyRewardPoints != null && Number(product.loyaltyRewardPoints) >= 1
             ? String(product.loyaltyRewardPoints)
             : '',
+        isTaxable: product.isTaxable !== false,
       });
     }
   };
@@ -674,6 +682,7 @@ export default function Products() {
         const parsed = parseFreePoints(form.loyaltyRewardPoints);
         return typeof parsed === 'number' ? parsed : null;
       })(),
+      isTaxable: form.isTaxable,
     };
   };
 
@@ -1923,8 +1932,10 @@ export default function Products() {
                         placeholder={t('barcodePlaceholder')}
                         value={form.barcode}
                         maxLength={SKU_MAX_LEN}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         onChange={(e) =>
-                          setForm({ ...form, barcode: e.target.value.slice(0, SKU_MAX_LEN) })
+                          setForm({ ...form, barcode: sanitizeBarcodeDigits(e.target.value) })
                         }
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') e.preventDefault();
@@ -2027,6 +2038,23 @@ export default function Products() {
                       </p>
                     ) : null}
                   </Field>
+
+                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
+                    <div>
+                      <h3 className="text-sm font-semibold">{t('productReceiptSection')}</h3>
+                      <p className="text-[11px] muted mt-0.5">{t('productReceiptSectionHint')}</p>
+                    </div>
+                    <label className="flex items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-2.5">
+                      <span className="text-sm font-medium">{t('productIsTaxable')}</span>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={form.isTaxable}
+                        onChange={(e) => setForm({ ...form, isTaxable: e.target.checked })}
+                      />
+                    </label>
+                    <p className="text-[11px] muted">{t('productIsTaxableHint')}</p>
+                  </div>
 
                   <div>
                     <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide muted">
