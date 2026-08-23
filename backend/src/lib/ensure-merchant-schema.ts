@@ -23,6 +23,10 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS report_email_settings jsonb",
   email_brevo_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS email_brevo_settings jsonb",
+  email_smtp_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS email_smtp_settings jsonb",
+  email_delivery_mode:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS email_delivery_mode varchar(20) NOT NULL DEFAULT 'platform'",
   gift_card_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS gift_card_settings jsonb",
   pos_checkout_settings:
@@ -606,6 +610,22 @@ const TABLE_PATCHES: string[] = [
   `CREATE INDEX IF NOT EXISTS support_ticket_messages_ticket_idx ON support_ticket_messages(ticket_id)`,
   `CREATE INDEX IF NOT EXISTS support_ticket_messages_created_idx ON support_ticket_messages(created_at)`,
   `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS merchant_visible boolean NOT NULL DEFAULT true`,
+  `CREATE TABLE IF NOT EXISTS email_send_log (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid REFERENCES merchants(id) ON DELETE SET NULL,
+    provider varchar(20) NOT NULL,
+    source varchar(30) NOT NULL,
+    email_type varchar(50) NOT NULL DEFAULT 'general',
+    recipient varchar(255) NOT NULL,
+    subject varchar(500),
+    status varchar(20) NOT NULL DEFAULT 'sent',
+    error text,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS email_send_log_merchant_idx ON email_send_log(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS email_send_log_type_idx ON email_send_log(email_type)`,
+  `CREATE INDEX IF NOT EXISTS email_send_log_created_idx ON email_send_log(created_at)`,
+  `CREATE INDEX IF NOT EXISTS email_send_log_merchant_created_idx ON email_send_log(merchant_id, created_at)`,
   `ALTER TABLE signage_screens ADD COLUMN IF NOT EXISTS short_code varchar(8)`,
   `ALTER TABLE signage_screens ADD COLUMN IF NOT EXISTS screen_size_in integer NOT NULL DEFAULT 32`,
   `CREATE UNIQUE INDEX IF NOT EXISTS signage_screens_short_code_uidx ON signage_screens(short_code) WHERE short_code IS NOT NULL`,
@@ -644,6 +664,18 @@ export async function ensureMerchantTables(): Promise<boolean> {
   }
   patchedTables = true;
   if (applied) console.info("[schema] voucher/inventory tables ensured");
+  try {
+    await db.execute(sql.raw(`
+      UPDATE merchants SET email_delivery_mode = 'own'
+      WHERE email_delivery_mode = 'platform'
+      AND (
+        COALESCE((email_smtp_settings->>'enabled')::boolean, false) = true
+        OR COALESCE((email_brevo_settings->>'enabled')::boolean, false) = true
+      )
+    `));
+  } catch {
+    /* column may not exist yet */
+  }
   return applied;
 }
 

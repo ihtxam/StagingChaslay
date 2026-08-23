@@ -994,6 +994,7 @@ export class ReservationService {
         html,
         text: `${copy.subject}\n${copy.body}\n${labels.code}: ${reservation.code}\n${labels.when}: ${when}\n${labels.guests}: ${reservation.partySize}`,
         merchantId: merchant.id,
+        emailType: kind === "reminder" ? "reservation_status" : "reservation_confirmation",
       });
       const db = getDb();
       if (kind === "reminder") {
@@ -1081,6 +1082,7 @@ export class ReservationService {
         html,
         text: `${subjects[kind]}\n${reservation.guestName} · ${reservation.partySize} guests · ${when}`,
         merchantId: merchant.id,
+        emailType: "reservation_admin",
       });
     } catch (err) {
       console.error("[reservations] admin email failed", err);
@@ -1257,6 +1259,7 @@ export class ReservationService {
           html,
           text,
           merchantId: merchant.id,
+          emailType: "reservation_daily",
         });
         const nextSettings = {
           ...settings,

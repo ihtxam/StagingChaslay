@@ -1184,6 +1184,11 @@ router.post("/orders/:orderId/record-invoice-payment", async (req: Request, res:
   return merchantRecordInvoicePayment(req, res);
 });
 
+router.post("/orders/:orderId/email-invoice", async (req: Request, res: Response) => {
+  const { merchantEmailInvoice } = await import("@/routes/invoice.routes");
+  return merchantEmailInvoice(req, res);
+});
+
 /**
  * POST /api/merchant/orders/:orderId/action
  * Lifecycle action: accept | start_preparing | mark_ready | out_for_delivery |
@@ -2140,6 +2145,7 @@ router.post("/pos/send-receipt-email", async (req: Request, res: Response) => {
       subject,
       html,
       text,
+      emailType: "receipt",
     });
 
     res.json({ success: true });

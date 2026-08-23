@@ -948,6 +948,7 @@ export class GiftCardService {
       html,
       text,
       merchantId,
+      emailType: "gift_card",
     });
 
     return { sent: true, to, code };

@@ -712,6 +712,12 @@ export class SyncService {
         try {
           const { InvoiceService } = await import("@/services/invoice.service");
           invoiceNumber = await InvoiceService.ensureInvoiceNumber(merchantId, order.id);
+          const customerEmail = String(sale.customerEmail || "").trim();
+          if (customerEmail) {
+            void InvoiceService.sendEmail(merchantId, order.id, { to: customerEmail }).catch(
+              (err) => console.warn("[sync] invoice email failed:", err)
+            );
+          }
         } catch (err) {
           console.warn("[sync] invoice number assign failed:", err);
         }

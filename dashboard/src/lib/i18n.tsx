@@ -135,7 +135,16 @@ const en: Dict = {
   settingsBrevoHint:
     'Add your Brevo (Sendinblue) API key for this shop. Create a key at app.brevo.com → SMTP & API → API keys.',
   settingsBrevoPriorityHint:
-    'Priority: merchant SMTP (if enabled) → merchant Brevo → platform email. Disable SMTP above to use Brevo.',
+    'When using your own email, priority is: SMTP (if enabled) → Brevo. Use platform email to send via Superadmin Brevo.',
+  emailDeliveryMode: 'Email delivery',
+  emailDeliveryPlatform: 'Use platform email (Brevo)',
+  emailDeliveryPlatformHint:
+    'Newsletters, reservations, receipts, alerts, and reports send via the platform Brevo account configured in Superadmin.',
+  emailDeliveryOwn: 'Use my own SMTP / Brevo',
+  emailDeliveryOwnHint: 'Configure your SMTP or Brevo API key below. Your credentials are used for all merchant emails.',
+  platformEmailUsageTitle: 'Platform email usage (this shop)',
+  platformEmailUsageToday: 'Sent today via platform',
+  platformEmailUsageMonth: 'Sent this month via platform',
   brevoEnabled: 'Use Brevo API for this merchant',
   brevoEnabledHint: 'Sends via Brevo Transactional API with your key.',
   brevoApiKey: 'Brevo API key',
@@ -3137,7 +3146,16 @@ const fr: Dict = {
   settingsBrevoHint:
     'Ajoutez la clé API Brevo (Sendinblue) de cette boutique. Créez-la sur app.brevo.com → SMTP & API → Clés API.',
   settingsBrevoPriorityHint:
-    'Priorité : SMTP marchand (si activé) → Brevo marchand → email plateforme. Désactivez le SMTP pour utiliser Brevo.',
+    'Avec votre propre email : SMTP (si activé) → Brevo. Utilisez l’email plateforme pour envoyer via Brevo Superadmin.',
+  emailDeliveryMode: 'Envoi des emails',
+  emailDeliveryPlatform: 'Utiliser l’email plateforme (Brevo)',
+  emailDeliveryPlatformHint:
+    'Newsletters, réservations, reçus, alertes et rapports passent par le compte Brevo plateforme (Superadmin).',
+  emailDeliveryOwn: 'Utiliser mon SMTP / Brevo',
+  emailDeliveryOwnHint: 'Configurez votre SMTP ou clé Brevo ci-dessous. Vos identifiants servent pour tous les emails.',
+  platformEmailUsageTitle: 'Utilisation email plateforme (ce commerce)',
+  platformEmailUsageToday: 'Envoyés aujourd’hui via la plateforme',
+  platformEmailUsageMonth: 'Envoyés ce mois via la plateforme',
   brevoEnabled: 'Utiliser l’API Brevo pour ce commerçant',
   brevoEnabledHint: 'Envoi via l’API transactionnelle Brevo avec votre clé.',
   brevoApiKey: 'Clé API Brevo',
@@ -6146,7 +6164,16 @@ const de: Dict = {
   settingsBrevoHint:
     'Brevo-(Sendinblue)-API-Schlüssel für diesen Shop. Schlüssel unter app.brevo.com → SMTP & API → API-Schlüssel.',
   settingsBrevoPriorityHint:
-    'Reihenfolge: Händler-SMTP (wenn aktiv) → Händler-Brevo → Plattform-E-Mail. SMTP deaktivieren, um Brevo zu nutzen.',
+    'Bei eigenem E-Mail: SMTP (wenn aktiv) → Brevo. Plattform-E-Mail nutzt das Superadmin-Brevo-Konto.',
+  emailDeliveryMode: 'E-Mail-Versand',
+  emailDeliveryPlatform: 'Plattform-E-Mail nutzen (Brevo)',
+  emailDeliveryPlatformHint:
+    'Newsletter, Reservierungen, Belege, Alerts und Berichte laufen über das Plattform-Brevo-Konto (Superadmin).',
+  emailDeliveryOwn: 'Eigenes SMTP / Brevo nutzen',
+  emailDeliveryOwnHint: 'SMTP oder Brevo-API unten konfigurieren. Ihre Zugangsdaten gelten für alle Händler-E-Mails.',
+  platformEmailUsageTitle: 'Plattform-E-Mail-Nutzung (dieser Shop)',
+  platformEmailUsageToday: 'Heute über Plattform gesendet',
+  platformEmailUsageMonth: 'Diesen Monat über Plattform gesendet',
   brevoEnabled: 'Brevo-API für diesen Händler nutzen',
   brevoEnabledHint: 'Versand über die Brevo-Transactional-API mit Ihrem Schlüssel.',
   brevoApiKey: 'Brevo-API-Schlüssel',

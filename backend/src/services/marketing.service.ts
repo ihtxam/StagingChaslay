@@ -414,6 +414,7 @@ export class MarketingService {
             businessName: merchant.name || "us",
           }),
           html: htmlWrap(html),
+          emailType: "newsletter",
         });
         sent += 1;
         await db.insert(schema.marketingEmailLog).values({
@@ -552,6 +553,7 @@ export class MarketingService {
             to: email,
             subject,
             html: htmlWrap(body),
+            emailType: "reorder_reminder",
           });
           await db
             .update(schema.customers)
