@@ -33,14 +33,35 @@ export type KdsStationInput = {
   categoryIds?: string[];
   productIds?: string[];
   theme?: string;
+  layoutMode?: string;
+  gridColumns?: number;
+  overdueMinutes?: number;
   isActive?: boolean;
 };
 
 const KDS_THEMES = new Set(["dark", "light", "teal"]);
+const KDS_LAYOUT_MODES = new Set(["grid", "rows", "slider"]);
 
 function normalizeKdsTheme(value: unknown): string {
   const t = String(value || "dark").toLowerCase();
   return KDS_THEMES.has(t) ? t : "dark";
+}
+
+function normalizeKdsLayoutMode(value: unknown): string {
+  const m = String(value || "grid").toLowerCase();
+  return KDS_LAYOUT_MODES.has(m) ? m : "grid";
+}
+
+function clampGridColumns(value: unknown): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return 3;
+  return Math.min(6, Math.max(1, n));
+}
+
+function clampOverdueMinutes(value: unknown): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return 20;
+  return Math.min(120, Math.max(5, n));
 }
 
 export type KdsPushItem = {
@@ -115,6 +136,9 @@ export class KdsService {
         categoryIds: input.categoryIds || [],
         productIds: input.productIds || [],
         theme: normalizeKdsTheme(input.theme),
+        layoutMode: normalizeKdsLayoutMode(input.layoutMode),
+        gridColumns: clampGridColumns(input.gridColumns),
+        overdueMinutes: clampOverdueMinutes(input.overdueMinutes),
         isActive: input.isActive !== false,
       })
       .returning();
@@ -130,6 +154,9 @@ export class KdsService {
     if (input.categoryIds != null) patch.categoryIds = input.categoryIds;
     if (input.productIds != null) patch.productIds = input.productIds;
     if (input.theme != null) patch.theme = normalizeKdsTheme(input.theme);
+    if (input.layoutMode != null) patch.layoutMode = normalizeKdsLayoutMode(input.layoutMode);
+    if (input.gridColumns != null) patch.gridColumns = clampGridColumns(input.gridColumns);
+    if (input.overdueMinutes != null) patch.overdueMinutes = clampOverdueMinutes(input.overdueMinutes);
     if (input.isActive != null) patch.isActive = !!input.isActive;
     const [row] = await db
       .update(schema.kdsStations)
@@ -314,6 +341,9 @@ export class KdsService {
         id: station.id,
         name: station.name,
         theme: normalizeKdsTheme(station.theme),
+        layoutMode: normalizeKdsLayoutMode(station.layoutMode),
+        gridColumns: clampGridColumns(station.gridColumns),
+        overdueMinutes: clampOverdueMinutes(station.overdueMinutes),
       },
       serverTime: new Date().toISOString(),
       updated: updatedSince,

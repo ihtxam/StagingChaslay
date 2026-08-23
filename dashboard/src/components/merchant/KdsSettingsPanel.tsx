@@ -13,10 +13,15 @@ type KdsStation = {
   categoryIds: string[];
   productIds: string[];
   theme?: string;
+  layoutMode?: string;
+  gridColumns?: number;
+  overdueMinutes?: number;
   isActive: boolean;
 };
 
 const KDS_THEME_OPTIONS: KdsShellTheme[] = ['dark', 'light', 'teal'];
+const KDS_LAYOUT_OPTIONS = ['grid', 'rows', 'slider'] as const;
+type KdsLayoutMode = (typeof KDS_LAYOUT_OPTIONS)[number];
 
 type Category = {
   id: string;
@@ -41,6 +46,9 @@ export default function KdsSettingsPanel() {
   const [orderTypes, setOrderTypes] = useState<string[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [theme, setTheme] = useState<KdsShellTheme>('dark');
+  const [layoutMode, setLayoutMode] = useState<KdsLayoutMode>('grid');
+  const [gridColumns, setGridColumns] = useState(3);
+  const [overdueMinutes, setOverdueMinutes] = useState(20);
   const [busy, setBusy] = useState(false);
   const [licenseError, setLicenseError] = useState(false);
   const [savingStationId, setSavingStationId] = useState<string | null>(null);
@@ -86,11 +94,17 @@ export default function KdsSettingsPanel() {
         orderTypes,
         categoryIds,
         theme,
+        layoutMode,
+        gridColumns,
+        overdueMinutes,
       });
       setName('');
       setOrderTypes([]);
       setCategoryIds([]);
       setTheme('dark');
+      setLayoutMode('grid');
+      setGridColumns(3);
+      setOverdueMinutes(20);
       toast.success(t('kdsStationCreated'));
       await load();
     } catch (e: any) {
@@ -102,7 +116,14 @@ export default function KdsSettingsPanel() {
 
   const updateStationFilters = async (
     id: string,
-    patch: { orderTypes?: string[]; categoryIds?: string[]; theme?: KdsShellTheme }
+    patch: {
+      orderTypes?: string[];
+      categoryIds?: string[];
+      theme?: KdsShellTheme;
+      layoutMode?: KdsLayoutMode;
+      gridColumns?: number;
+      overdueMinutes?: number;
+    }
   ) => {
     setSavingStationId(id);
     try {
@@ -112,6 +133,9 @@ export default function KdsSettingsPanel() {
         orderTypes: patch.orderTypes ?? station.orderTypes,
         categoryIds: patch.categoryIds ?? station.categoryIds,
         theme: patch.theme ?? station.theme ?? 'dark',
+        layoutMode: patch.layoutMode ?? station.layoutMode ?? 'grid',
+        gridColumns: patch.gridColumns ?? station.gridColumns ?? 3,
+        overdueMinutes: patch.overdueMinutes ?? station.overdueMinutes ?? 20,
       });
       await load();
     } catch (e: any) {
@@ -180,6 +204,78 @@ export default function KdsSettingsPanel() {
     if (th === 'light') return t('kdsTheme_light');
     if (th === 'teal') return t('kdsTheme_teal');
     return t('kdsTheme_dark');
+  };
+
+  const layoutLabel = (mode: KdsLayoutMode) => {
+    if (mode === 'rows') return t('kdsLayout_rows');
+    if (mode === 'slider') return t('kdsLayout_slider');
+    return t('kdsLayout_grid');
+  };
+
+  const LayoutPicker = ({
+    value,
+    disabled,
+    onChange,
+  }: {
+    value: KdsLayoutMode;
+    disabled?: boolean;
+    onChange: (mode: KdsLayoutMode) => void;
+  }) => (
+    <div>
+      <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsLayoutLabel')}</p>
+      <div className="flex flex-wrap gap-2">
+        {KDS_LAYOUT_OPTIONS.map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(mode)}
+            className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+              value === mode
+                ? 'border-teal-600 bg-teal-50 text-teal-800 ring-2 ring-teal-200'
+                : 'border-stone-200 hover:border-stone-300'
+            }`}
+          >
+            {layoutLabel(mode)}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-stone-500">{t('kdsLayoutHint')}</p>
+    </div>
+  );
+
+  const GridColumnsPicker = ({
+    value,
+    layoutMode,
+    disabled,
+    onChange,
+  }: {
+    value: number;
+    layoutMode: KdsLayoutMode;
+    disabled?: boolean;
+    onChange: (n: number) => void;
+  }) => {
+    if (layoutMode !== 'grid') return null;
+    return (
+      <div>
+        <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsGridColumnsLabel')}</p>
+        <div className="flex flex-wrap gap-2">
+          {[1, 2, 3, 4, 5, 6].map((n) => (
+            <button
+              key={n}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(n)}
+              className={`h-9 w-9 rounded-lg text-sm font-bold ${
+                value === n ? 'bg-teal-600 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const ThemePicker = ({
@@ -288,6 +384,20 @@ export default function KdsSettingsPanel() {
           </div>
         ) : null}
         <ThemePicker value={theme} onChange={setTheme} />
+        <LayoutPicker value={layoutMode} onChange={setLayoutMode} />
+        <GridColumnsPicker value={gridColumns} layoutMode={layoutMode} onChange={setGridColumns} />
+        <div>
+          <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsOverdueMinutesLabel')}</p>
+          <input
+            type="number"
+            min={5}
+            max={120}
+            className="input w-24"
+            value={overdueMinutes}
+            onChange={(e) => setOverdueMinutes(Math.min(120, Math.max(5, Number(e.target.value) || 20)))}
+          />
+          <p className="mt-1 text-xs text-stone-500">{t('kdsOverdueMinutesHint')}</p>
+        </div>
         <button
           type="button"
           disabled={busy || !name.trim()}
@@ -373,6 +483,42 @@ export default function KdsSettingsPanel() {
                         disabled={saving}
                         onChange={(next) => void updateStationFilters(s.id, { theme: next })}
                       />
+                      <LayoutPicker
+                        value={
+                          (['grid', 'rows', 'slider'].includes(String(s.layoutMode || 'grid').toLowerCase())
+                            ? String(s.layoutMode).toLowerCase()
+                            : 'grid') as KdsLayoutMode
+                        }
+                        disabled={saving}
+                        onChange={(next) => void updateStationFilters(s.id, { layoutMode: next })}
+                      />
+                      <GridColumnsPicker
+                        value={Math.min(6, Math.max(1, Number(s.gridColumns) || 3))}
+                        layoutMode={
+                          (['grid', 'rows', 'slider'].includes(String(s.layoutMode || 'grid').toLowerCase())
+                            ? String(s.layoutMode).toLowerCase()
+                            : 'grid') as KdsLayoutMode
+                        }
+                        disabled={saving}
+                        onChange={(next) => void updateStationFilters(s.id, { gridColumns: next })}
+                      />
+                      <div>
+                        <p className="text-xs font-medium text-stone-600">{t('kdsOverdueMinutesLabel')}</p>
+                        <input
+                          type="number"
+                          min={5}
+                          max={120}
+                          disabled={saving}
+                          className="input mt-1 w-24 text-sm"
+                          value={Math.min(120, Math.max(5, Number(s.overdueMinutes) || 20))}
+                          onChange={(e) =>
+                            void updateStationFilters(s.id, {
+                              overdueMinutes: Math.min(120, Math.max(5, Number(e.target.value) || 20)),
+                            })
+                          }
+                        />
+                        <p className="mt-1 text-xs text-stone-500">{t('kdsOverdueMinutesHint')}</p>
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2">

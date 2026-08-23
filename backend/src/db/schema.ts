@@ -1177,6 +1177,12 @@ export const kdsStations = pgTable(
     productIds: json("product_ids").$type<string[]>().default([]).notNull(),
     /** Display theme: dark | light | teal */
     theme: varchar("theme", { length: 32 }).default("dark").notNull(),
+    /** Ticket layout: grid | rows | slider */
+    layoutMode: varchar("layout_mode", { length: 16 }).default("grid").notNull(),
+    /** Grid columns when layoutMode=grid (1–6) */
+    gridColumns: integer("grid_columns").default(3).notNull(),
+    /** Play alert when a pending ticket exceeds this many minutes */
+    overdueMinutes: integer("overdue_minutes").default(20).notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -1189,6 +1195,9 @@ export const kdsStations = pgTable(
 
 export const KDS_THEMES = ["dark", "light", "teal"] as const;
 export type KdsTheme = (typeof KDS_THEMES)[number];
+
+export const KDS_LAYOUT_MODES = ["grid", "rows", "slider"] as const;
+export type KdsLayoutMode = (typeof KDS_LAYOUT_MODES)[number];
 
 export const kdsTickets = pgTable(
   "kds_tickets",
