@@ -66,6 +66,7 @@ import com.chaslay.pos.sync.FloorSyncEvents
 import com.chaslay.pos.domain.clampBillDiscountToCart
 import com.chaslay.pos.domain.mergeBillDiscounts
 import com.chaslay.pos.domain.resolveBillDiscountAmount
+import com.chaslay.pos.sync.mergePosCheckoutSettings
 import com.chaslay.pos.sync.mergePosPrintSettings
 import com.chaslay.pos.util.DineInCounterTicket
 import com.chaslay.pos.printer.KitchenPrintMeta
