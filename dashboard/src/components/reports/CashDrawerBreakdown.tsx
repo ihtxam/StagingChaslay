@@ -41,8 +41,8 @@ export function CashDrawerBreakdown({
   if (!shifts.length) return null;
 
   return (
-    <section className="rounded-xl border border-[var(--border)] overflow-hidden">
-      <h2 className="px-3 py-2 text-sm font-semibold bg-[var(--bg-muted)]">
+    <section className="card overflow-hidden !p-0">
+      <h2 className="px-3 py-2 sm:px-4 text-sm font-semibold border-b border-[var(--border)]">
         {t('reportsCashDrawer')}
       </h2>
       <div className="divide-y divide-[var(--border)]">
