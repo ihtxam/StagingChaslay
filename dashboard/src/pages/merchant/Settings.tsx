@@ -997,7 +997,7 @@ export default function Settings() {
           enabled: !!settings.emailBrevoSettings?.enabled,
           apiKey: brevoApiKey || undefined,
           fromEmail: settings.emailBrevoSettings?.fromEmail || '',
-          fromName: settings.emailBrevoSettings?.fromName || '',
+          fromName: settings.name || '',
           dailyLimit: settings.emailBrevoSettings?.dailyLimit ?? null,
           monthlyLimit: settings.emailBrevoSettings?.monthlyLimit ?? null,
         },
@@ -2847,19 +2847,12 @@ export default function Settings() {
                       placeholder="noreply@yourshop.ch"
                     />
                   </Field>
-                  <Field label={t('smtpFromName')}>
+                  <Field label={t('smtpFromName')} hint={t('brevoSenderNameHint')}>
                     <input
-                      className="input"
-                      value={settings.emailBrevoSettings?.fromName || ''}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          emailBrevoSettings: {
-                            ...(settings.emailBrevoSettings || {}),
-                            fromName: e.target.value,
-                          },
-                        })
-                      }
+                      className="input bg-[var(--bg-muted)]"
+                      value={settings.name || ''}
+                      readOnly
+                      aria-readonly
                     />
                   </Field>
                   <Field label={t('brevoDailyLimit')} hint={t('brevoLimitHint')}>
@@ -2999,7 +2992,7 @@ export default function Settings() {
                             enabled: true,
                             apiKey: brevoApiKey || undefined,
                             fromEmail: settings.emailBrevoSettings?.fromEmail || '',
-                            fromName: settings.emailBrevoSettings?.fromName || '',
+                            fromName: settings.name || '',
                             dailyLimit: settings.emailBrevoSettings?.dailyLimit ?? null,
                             monthlyLimit: settings.emailBrevoSettings?.monthlyLimit ?? null,
                           },

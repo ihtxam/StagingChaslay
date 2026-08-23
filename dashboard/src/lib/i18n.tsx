@@ -139,7 +139,7 @@ const en: Dict = {
   emailDeliveryMode: 'Email delivery',
   emailDeliveryPlatform: 'Use platform email (Brevo)',
   emailDeliveryPlatformHint:
-    'Newsletters, reservations, receipts, alerts, and reports send via the platform Brevo account configured in Superadmin.',
+    'Newsletters, reservations, receipts, alerts, and reports send via the platform Brevo account. Recipients see your shop name as the sender; the from address is the verified Brevo email.',
   emailDeliveryOwn: 'Use my own SMTP / Brevo',
   emailDeliveryOwnHint: 'Configure your SMTP or Brevo API key below. Your credentials are used for all merchant emails.',
   platformEmailUsageTitle: 'Platform email usage (this shop)',
@@ -173,6 +173,8 @@ const en: Dict = {
   smtpPasswordSetHint: 'Password is saved. Enter a new one only to replace it.',
   smtpFromEmail: 'From email',
   smtpFromName: 'From name',
+  brevoSenderNameHint:
+    'Recipients see your shop name as the sender. The from address must be a verified email in your Brevo account.',
   smtpSecure: 'Use TLS/SSL (port 465)',
   smtpTestTo: 'Send test to',
   smtpSendTest: 'Send test email',
@@ -3156,7 +3158,7 @@ const fr: Dict = {
   emailDeliveryMode: 'Envoi des emails',
   emailDeliveryPlatform: 'Utiliser l’email plateforme (Brevo)',
   emailDeliveryPlatformHint:
-    'Newsletters, réservations, reçus, alertes et rapports passent par le compte Brevo plateforme (Superadmin).',
+    'Newsletters, réservations, reçus, alertes et rapports passent par le compte Brevo plateforme. Les destinataires voient le nom de votre boutique comme expéditeur ; l’adresse d’envoi est l’e-mail Brevo vérifié.',
   emailDeliveryOwn: 'Utiliser mon SMTP / Brevo',
   emailDeliveryOwnHint: 'Configurez votre SMTP ou clé Brevo ci-dessous. Vos identifiants servent pour tous les emails.',
   platformEmailUsageTitle: 'Utilisation email plateforme (ce commerce)',
@@ -3190,6 +3192,8 @@ const fr: Dict = {
   smtpPasswordSetHint: 'Mot de passe enregistré. Saisissez-en un nouveau pour le remplacer.',
   smtpFromEmail: 'Email expéditeur',
   smtpFromName: 'Nom expéditeur',
+  brevoSenderNameHint:
+    'Les destinataires voient le nom de votre boutique comme expéditeur. L’adresse d’envoi doit être un e-mail vérifié dans votre compte Brevo.',
   smtpSecure: 'TLS/SSL (port 465)',
   smtpTestTo: 'Test à',
   smtpSendTest: 'Envoyer un test',
@@ -6180,7 +6184,7 @@ const de: Dict = {
   emailDeliveryMode: 'E-Mail-Versand',
   emailDeliveryPlatform: 'Plattform-E-Mail nutzen (Brevo)',
   emailDeliveryPlatformHint:
-    'Newsletter, Reservierungen, Belege, Alerts und Berichte laufen über das Plattform-Brevo-Konto (Superadmin).',
+    'Newsletter, Reservierungen, Belege, Alerts und Berichte laufen über das Plattform-Brevo-Konto. Empfänger sehen Ihren Shop-Namen als Absender; die Absenderadresse ist die verifizierte Brevo-E-Mail.',
   emailDeliveryOwn: 'Eigenes SMTP / Brevo nutzen',
   emailDeliveryOwnHint: 'SMTP oder Brevo-API unten konfigurieren. Ihre Zugangsdaten gelten für alle Händler-E-Mails.',
   platformEmailUsageTitle: 'Plattform-E-Mail-Nutzung (dieser Shop)',
@@ -6214,6 +6218,8 @@ const de: Dict = {
   smtpPasswordSetHint: 'Passwort gespeichert. Nur zum Ersetzen neu eingeben.',
   smtpFromEmail: 'Absender-E-Mail',
   smtpFromName: 'Absendername',
+  brevoSenderNameHint:
+    'Empfänger sehen Ihren Shop-Namen als Absender. Die Absenderadresse muss eine in Ihrem Brevo-Konto verifizierte E-Mail sein.',
   smtpSecure: 'TLS/SSL (Port 465)',
   smtpTestTo: 'Test an',
   smtpSendTest: 'Test senden',

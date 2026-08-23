@@ -82,6 +82,12 @@ export class EmailService {
     ).trim();
   }
 
+  /** Merchant emails show the shop name as sender; Brevo/SMTP from address stays authenticated. */
+  private static merchantSenderName(merchantName: string | null | undefined): string {
+    const name = String(merchantName || "").trim();
+    return name || "Shop";
+  }
+
   static async resolveConfig(merchantId?: string | null): Promise<ResolvedEmailConfig> {
     let merchantName: string | null = null;
     let useOwnDelivery = false;
@@ -118,7 +124,7 @@ export class EmailService {
               provider: "smtp",
               apiKey: "",
               fromEmail: String(smtp.fromEmail).trim(),
-              fromName: String(smtp.fromName || merchant?.name || "Shop").trim(),
+              fromName: this.merchantSenderName(merchant?.name),
               source: "merchant_smtp",
               smtp,
               merchantId,
@@ -137,7 +143,7 @@ export class EmailService {
               provider: "brevo",
               apiKey: String(brevo.apiKey).trim(),
               fromEmail: String(brevo.fromEmail).trim(),
-              fromName: String(brevo.fromName || merchant?.name || "Shop").trim(),
+              fromName: this.merchantSenderName(merchant?.name),
               source: "merchant_brevo",
               merchantId,
             };
@@ -164,7 +170,9 @@ export class EmailService {
 
     const apiKey = dbApiKey || this.envBrevoApiKey();
     const fromEmail = dbFromEmail || this.envFromAddress();
-    const fromName = merchantName || dbFromName || this.envFromName();
+    const fromName = merchantId
+      ? this.merchantSenderName(merchantName)
+      : dbFromName || this.envFromName();
     const source: ResolvedEmailConfig["source"] = dbApiKey
       ? "database"
       : this.envBrevoApiKey() || process.env.SENDGRID_API_KEY
