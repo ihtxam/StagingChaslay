@@ -1390,7 +1390,7 @@ const en: Dict = {
     'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Printer profiles',
   printerProfilesHint:
-    'Map Windows printer names (print-agent) to receipt, kitchen, or end-of-day roles. For kitchen printers, pick which categories print on each device.',
+    'Map Windows printer names (print-agent) to receipt, kitchen, or end-of-day roles. For kitchen printers, pick categories and products in the two-column picker.',
   printerName: 'Windows printer name',
   settingsPrinterManualEntry:
     'Print agent offline — type the exact Windows printer name. Install and start the agent on this PC, then click Refresh printers.',
@@ -1402,7 +1402,16 @@ const en: Dict = {
   printerLinkedCategoriesHint:
     'Choose which menu categories print kitchen tickets here. Leave all checked (default) to print every category.',
   printerLinkedCategoriesEmpty: 'Add menu categories in Products to configure routing.',
-  printerLinkedCategoriesAll: 'All categories — uncheck to limit this printer.',
+  printerLinkedCategoriesAll: 'All categories — uncheck a category on the left to limit this printer.',
+  printerKitchenRoutingTitle: 'Kitchen items on this printer',
+  printerKitchenRoutingHint:
+    'Categories on the left, products on the right. Check Pizza on the pizza printer and Pasta on the pasta printer. Mixed table orders print each part on its station; the other station’s items appear at the bottom of the ticket.',
+  printerPickCategory: 'Select a category on the left.',
+  printerNoProductsInCategory: 'No products in this category.',
+  printerAllInCategory: 'All in category ({count}/{total})',
+  printerViaCategory: 'via category',
+  printerCrossStationHint:
+    'Example: table with pizza + pasta — pizza prints on the pizza printer with pasta listed at the bottom; pasta prints on the pasta printer with pizza listed at the bottom. Pizza-only orders go only to the pizza printer.',
   failedSaveReceipt: 'Failed to save receipt settings',
   reports: 'Reports',
   reportsHint: 'End-of-day sales statistics for POS and ChaslayReborn (synced sales).',
@@ -2220,7 +2229,7 @@ const en: Dict = {
   webPosErrorBannerHold: 'Read the message — dismiss after a few seconds.',
   webPosSessionKickedTitle: 'POS station limit reached',
   webPosReadyBadge: 'Ready',
-  kitchenOtherStationFooter: '>>> OTHER STATION <<<',
+  kitchenOtherStationFooter: '>>> THIS TABLE ALSO HAS <<<',
   kdsTitle: 'Kitchen display',
   kdsDefaultStationName: 'Kitchen',
   kdsTabPending: 'Pending',
@@ -4501,7 +4510,16 @@ const fr: Dict = {
   printerLinkedCategoriesHint:
     'Choisissez quelles catégories du menu impriment les tickets cuisine ici. Tout cocher (défaut) = toutes les catégories.',
   printerLinkedCategoriesEmpty: 'Ajoutez des catégories dans Produits pour configurer le routage.',
-  printerLinkedCategoriesAll: 'Toutes les catégories — décochez pour limiter cette imprimante.',
+  printerLinkedCategoriesAll: 'Toutes les catégories — décochez une catégorie à gauche pour limiter cette imprimante.',
+  printerKitchenRoutingTitle: 'Articles cuisine sur cette imprimante',
+  printerKitchenRoutingHint:
+    'Catégories à gauche, produits à droite. Cochez Pizza sur l’imprimante pizza et Pâtes sur l’imprimante pâtes. Les commandes mixtes impriment chaque partie sur son poste ; l’autre poste apparaît en bas du ticket.',
+  printerPickCategory: 'Sélectionnez une catégorie à gauche.',
+  printerNoProductsInCategory: 'Aucun produit dans cette catégorie.',
+  printerAllInCategory: 'Tout dans la catégorie ({count}/{total})',
+  printerViaCategory: 'via catégorie',
+  printerCrossStationHint:
+    'Exemple : table avec pizza + pâtes — la pizza s’imprime sur l’imprimante pizza avec les pâtes en bas ; les pâtes sur l’imprimante pâtes avec la pizza en bas. Pizza seule → imprimante pizza uniquement.',
   failedSaveReceipt: 'Échec de l’enregistrement des reçus',
   reports: 'Rapports',
   reportsHint: 'Statistiques de fin de journée POS et ChaslayReborn (ventes synchronisées).',
@@ -5320,7 +5338,7 @@ const fr: Dict = {
   webPosErrorBannerHold: 'Lisez le message — fermez après quelques secondes.',
   webPosSessionKickedTitle: 'Limite de postes POS atteinte',
   webPosReadyBadge: 'Prêt',
-  kitchenOtherStationFooter: '>>> AUTRE POSTE <<<',
+  kitchenOtherStationFooter: '>>> CETTE TABLE A AUSSI <<<',
   kdsTitle: 'Écran cuisine',
   kdsDefaultStationName: 'Cuisine',
   kdsTabPending: 'En attente',
@@ -7573,7 +7591,16 @@ const de: Dict = {
   printerLinkedCategoriesHint:
     'Wählen Sie, welche Menükategorien hier Küchentickets drucken. Alle aktiviert (Standard) = alle Kategorien.',
   printerLinkedCategoriesEmpty: 'Legen Sie Kategorien unter Produkte an, um das Routing zu konfigurieren.',
-  printerLinkedCategoriesAll: 'Alle Kategorien — abwählen, um diesen Drucker einzuschränken.',
+  printerLinkedCategoriesAll: 'Alle Kategorien — links abwählen, um diesen Drucker einzuschränken.',
+  printerKitchenRoutingTitle: 'Küchenartikel auf diesem Drucker',
+  printerKitchenRoutingHint:
+    'Kategorien links, Produkte rechts. Pizza auf dem Pizza-Drucker und Pasta auf dem Pasta-Drucker aktivieren. Gemischte Tischbestellungen drucken jeden Teil am jeweiligen Posten; der andere Posten erscheint unten auf dem Ticket.',
+  printerPickCategory: 'Wählen Sie links eine Kategorie.',
+  printerNoProductsInCategory: 'Keine Produkte in dieser Kategorie.',
+  printerAllInCategory: 'Alle in Kategorie ({count}/{total})',
+  printerViaCategory: 'über Kategorie',
+  printerCrossStationHint:
+    'Beispiel: Tisch mit Pizza + Pasta — Pizza auf dem Pizza-Drucker mit Pasta unten; Pasta auf dem Pasta-Drucker mit Pizza unten. Nur Pizza → nur Pizza-Drucker.',
   failedSaveReceipt: 'Belegeinstellungen speichern fehlgeschlagen',
   reports: 'Berichte',
   reportsHint: 'Tagesabschluss-Statistiken für POS und ChaslayReborn (synchronisierte Verkäufe).',
@@ -8392,7 +8419,7 @@ const de: Dict = {
   webPosErrorBannerHold: 'Melding lesen — nach ein paar Sekunden schliessen.',
   webPosSessionKickedTitle: 'POS-Platzlimit erreicht',
   webPosReadyBadge: 'Fertig',
-  kitchenOtherStationFooter: '>>> ANDERE STATION <<<',
+  kitchenOtherStationFooter: '>>> DIESER TISCH HAT AUCH <<<',
   kdsTitle: 'Küchendisplay',
   kdsDefaultStationName: 'Küche',
   kdsTabPending: 'Offen',
