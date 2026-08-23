@@ -302,6 +302,69 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
       },
     ],
   },
+  featured: {
+    sections: [
+      {
+        title: 'Content',
+        fields: [
+          { key: 'title', label: 'Title', type: 'text' },
+          { key: 'source', label: 'Source', type: 'select', options: ['manual', 'pos'] },
+          { key: 'productIds', label: 'Product IDs (comma-separated, POS mode)', type: 'text' },
+          { key: 'viewAllText', label: 'View all label', type: 'text' },
+          { key: 'viewAllUrl', label: 'View all URL', type: 'text' },
+          { key: 'items', label: 'Manual items', type: 'array-items' },
+        ],
+      },
+      {
+        title: 'Display',
+        fields: [
+          { key: 'showPrices', label: 'Show prices (true/false)', type: 'text' },
+        ],
+      },
+    ],
+  },
+  menu: {
+    sections: [
+      {
+        title: 'Content',
+        fields: [
+          { key: 'title', label: 'Title', type: 'text' },
+          { key: 'mode', label: 'Display', type: 'select', options: ['featured', 'categories', 'full'] },
+          { key: 'limit', label: 'Item limit', type: 'text' },
+          { key: 'viewAllText', label: 'View all label', type: 'text' },
+          { key: 'viewAllUrl', label: 'View all URL', type: 'text' },
+        ],
+      },
+      {
+        title: 'Filters',
+        fields: [
+          { key: 'categoryIds', label: 'Category IDs (comma-separated)', type: 'text' },
+          { key: 'productIds', label: 'Product IDs (comma-separated)', type: 'text' },
+          { key: 'showPrices', label: 'Show prices (true/false)', type: 'text' },
+        ],
+      },
+    ],
+  },
+  hours: {
+    sections: [
+      {
+        title: 'Content',
+        fields: [
+          { key: 'title', label: 'Title', type: 'text' },
+          { key: 'channel', label: 'Channel', type: 'select', options: ['all', 'takeaway', 'dine_in', 'delivery'] },
+          { key: 'showOpenBadge', label: 'Show open/closed badge (true/false)', type: 'text' },
+        ],
+      },
+    ],
+  },
+  reservations: {
+    sections: [
+      {
+        title: 'Content',
+        fields: [{ key: 'title', label: 'Title', type: 'text' }],
+      },
+    ],
+  },
   divider: {
     sections: [
       {

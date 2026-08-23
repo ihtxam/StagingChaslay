@@ -21,6 +21,9 @@ import { ImageBlock } from './image/ImageBlock'
 import { VideoBlock } from './video/VideoBlock'
 import { GalleryBlock } from './gallery/GalleryBlock'
 import { FeaturedBlock } from './featured/FeaturedBlock'
+import { MenuBlock } from './menu/MenuBlock'
+import { HoursBlock } from './hours/HoursBlock'
+import { ReservationsBlock } from './reservations/ReservationsBlock'
 
 // Error boundary for individual blocks
 class BlockErrorBoundary extends Component<
@@ -80,6 +83,9 @@ const blockRenderers: Record<string, React.ComponentType<{ block: BlockConfig }>
   video: VideoBlock,
   gallery: GalleryBlock,
   featured: FeaturedBlock,
+  menu: MenuBlock,
+  hours: HoursBlock,
+  reservations: ReservationsBlock,
 }
 
 export function RenderBlock({ block }: { block: BlockConfig }): ReactNode {

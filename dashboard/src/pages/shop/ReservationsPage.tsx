@@ -7,6 +7,8 @@ import { useI18n } from '@/lib/i18n';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
+import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 
 type Slot = {
   time: string;
@@ -41,6 +43,7 @@ export default function ReservationsPage() {
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const base = shopBasePath(shopKey);
+  const cmsTheme = useShopCmsTheme(shopKey);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -235,7 +238,8 @@ export default function ReservationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f5f2] text-stone-900 overflow-x-hidden">
+    <ShopThemeShell theme={cmsTheme} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
+    <div className="min-h-screen overflow-x-hidden">
       <ShopVacationPopup vacation={config?.vacation} shopKey={shopKey} />
       <header className="sticky top-0 z-30 bg-white border-b border-stone-200">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
@@ -546,7 +550,7 @@ export default function ReservationsPage() {
             <button
               type="submit"
               disabled={submitting || !time}
-              className="w-full bg-stone-900 text-white py-3 font-semibold disabled:opacity-40"
+              className="shop-btn-primary w-full py-3 font-semibold disabled:opacity-40"
             >
               {submitting ? t('saving') : t('shopReservationsBook')}
             </button>
@@ -554,5 +558,6 @@ export default function ReservationsPage() {
         )}
       </main>
     </div>
+    </ShopThemeShell>
   );
 }

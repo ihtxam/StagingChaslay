@@ -786,6 +786,27 @@ export class CmsService {
     return { ...page, blocks: normalizeCmsBlocks(page.blocks, page.title) };
   }
 
+  /** Theme tokens from published homepage (for shop / menu / reservations styling). */
+  static getThemeFromBlocks(blocks: unknown): Record<string, unknown> | null {
+    if (!blocks || typeof blocks !== "object") return null;
+    const raw = blocks as Record<string, unknown>;
+    if (raw.engine === "openpage" && raw.config && typeof raw.config === "object") {
+      const theme = (raw.config as Record<string, unknown>).theme;
+      if (theme && typeof theme === "object") return theme as Record<string, unknown>;
+    }
+    return null;
+  }
+
+  static async getPublishedTheme(merchantId: string): Promise<Record<string, unknown> | null> {
+    const page = await this.getPublishedHomepage(merchantId);
+    if (!page) return null;
+    return (
+      CmsService.getThemeFromBlocks(page.blocks) ||
+      (page.theme as Record<string, unknown> | null) ||
+      null
+    );
+  }
+
   static async getPublishedBySlug(merchantId: string, slug: string) {
     const db = getDb();
     const page = await db.query.cmsPages.findFirst({

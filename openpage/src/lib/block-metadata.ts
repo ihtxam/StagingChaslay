@@ -166,6 +166,43 @@ export const blockMetadata: BlockMeta[] = [
     },
   },
   {
+    type: 'menu',
+    label: 'Menu / Shop',
+    description: 'Live products from your POS online shop catalog',
+    category: 'Commerce',
+    variants: ['row', 'grid', 'full'],
+    defaultProps: {
+      title: 'Our menu',
+      mode: 'featured',
+      showPrices: true,
+      limit: 8,
+      viewAllText: 'Order online',
+      viewAllUrl: '/menu',
+    },
+  },
+  {
+    type: 'hours',
+    label: 'Opening hours',
+    description: 'Restaurant hours from Settings → Hours',
+    category: 'Commerce',
+    variants: ['table'],
+    defaultProps: {
+      title: 'Opening hours',
+      channel: 'all',
+      showOpenBadge: true,
+    },
+  },
+  {
+    type: 'reservations',
+    label: 'Reservations',
+    description: 'Book a table call-to-action / booking widget',
+    category: 'Commerce',
+    variants: ['card'],
+    defaultProps: {
+      title: 'Book a table',
+    },
+  },
+  {
     type: 'divider',
     label: 'Divider',
     description: 'Visual separator between sections',

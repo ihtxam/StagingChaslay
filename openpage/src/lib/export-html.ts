@@ -1214,39 +1214,110 @@ ${logosHtml}
 // Block dispatcher
 // ---------------------------------------------------------------------------
 
+function wrapBlock(block: BlockConfig, inner: string): string {
+  return `<!-- CHASLAY_BLOCK:${block.id}:${block.type} -->\n${inner}\n<!-- /CHASLAY_BLOCK:${block.id} -->`
+}
+
+function renderMenuPlaceholder(block: BlockConfig): string {
+  const title = escapeHtml(prop(block.props, 'title', 'Our menu'))
+  return `  <section class="px-6 md:px-10 py-10 md:py-14 bg-bg-0">
+    <div class="max-w-7xl mx-auto text-center py-8 border border-dashed border-border-default rounded-xl">
+      <p class="text-sm font-semibold text-green uppercase tracking-wider">Live menu block</p>
+      <h2 class="text-xl font-semibold text-text-0 mt-2">${title}</h2>
+      <p class="text-sm text-text-2 mt-2">Products load from your shop catalog when published.</p>
+    </div>
+  </section>`
+}
+
+function renderHoursPlaceholder(block: BlockConfig): string {
+  const title = escapeHtml(prop(block.props, 'title', 'Opening hours'))
+  return `  <section class="px-6 md:px-10 py-10 md:py-14 bg-bg-1">
+    <div class="max-w-3xl mx-auto text-center py-8 border border-dashed border-border-default rounded-xl bg-bg-0">
+      <p class="text-sm font-semibold text-green uppercase tracking-wider">Hours block</p>
+      <h2 class="text-xl font-semibold text-text-0 mt-2">${title}</h2>
+      <p class="text-sm text-text-2 mt-2">Hours sync from Settings when published.</p>
+    </div>
+  </section>`
+}
+
+function renderReservationsPlaceholder(block: BlockConfig): string {
+  const title = escapeHtml(prop(block.props, 'title', 'Book a table'))
+  return `  <section class="px-6 md:px-10 py-10 md:py-14 bg-bg-0">
+    <div class="max-w-xl mx-auto text-center py-8 border border-dashed border-border-default rounded-xl bg-bg-1">
+      <p class="text-sm font-semibold text-green uppercase tracking-wider">Reservations</p>
+      <h2 class="text-xl font-semibold text-text-0 mt-2">${title}</h2>
+    </div>
+  </section>`
+}
+
 function renderBlock(block: BlockConfig): string {
+  let inner: string
   switch (block.type) {
     case 'navbar':
-      return renderNavbar(block)
+      inner = renderNavbar(block)
+      break
     case 'hero':
-      return renderHero(block)
+      inner = renderHero(block)
+      break
     case 'features':
-      return renderFeatures(block)
+      inner = renderFeatures(block)
+      break
     case 'pricing':
-      return renderPricing(block)
+      inner = renderPricing(block)
+      break
     case 'cta':
-      return renderCta(block)
+      inner = renderCta(block)
+      break
     case 'footer':
-      return renderFooter(block)
+      inner = renderFooter(block)
+      break
     case 'testimonials':
-      return renderTestimonials(block)
+      inner = renderTestimonials(block)
+      break
     case 'stats':
-      return renderStats(block)
+      inner = renderStats(block)
+      break
     case 'faq':
-      return renderFaq(block)
+      inner = renderFaq(block)
+      break
     case 'team':
-      return renderTeam(block)
+      inner = renderTeam(block)
+      break
     case 'contact':
-      return renderContact(block)
+      inner = renderContact(block)
+      break
     case 'newsletter':
-      return renderNewsletter(block)
+      inner = renderNewsletter(block)
+      break
     case 'logocloud':
-      return renderLogoCloud(block)
-    case 'featured':
-      return renderFeatured(block)
+      inner = renderLogoCloud(block)
+      break
+    case 'featured': {
+      const src = String(prop(block.props, 'source', 'manual'))
+      const rawIds = prop(block.props, 'productIds', '')
+      const hasIds =
+        (Array.isArray(rawIds) && rawIds.length > 0) ||
+        (typeof rawIds === 'string' && rawIds.trim().length > 0)
+      if (src === 'pos' || hasIds) {
+        inner = renderMenuPlaceholder(block)
+      } else {
+        inner = renderFeatured(block)
+      }
+      break
+    }
+    case 'menu':
+      inner = renderMenuPlaceholder(block)
+      break
+    case 'hours':
+      inner = renderHoursPlaceholder(block)
+      break
+    case 'reservations':
+      inner = renderReservationsPlaceholder(block)
+      break
     default:
-      return `  <!-- Unknown block type: ${escapeHtml(block.type)} -->`
+      inner = `  <!-- Unknown block type: ${escapeHtml(block.type)} -->`
   }
+  return wrapBlock(block, inner)
 }
 
 // ---------------------------------------------------------------------------

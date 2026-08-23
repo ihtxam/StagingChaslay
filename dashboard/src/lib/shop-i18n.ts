@@ -338,6 +338,8 @@ export const shopEn: Record<string, string> = {
   shopRedeemHint: '{n} pts = CHF 1.00',
   shopLoyaltyLoginHint: 'Sign in to earn and redeem fidelity points',
   shopReservations: 'Reservations',
+  shopBookTable: 'Book a table',
+  reservationsEmbedHint: 'Choose date, time, and party size on our reservations page.',
   shopReservationsIntro: 'Book a table during our dine-in hours.',
   shopVacationTitle: 'On vacation',
   shopVacationDefaultMsg: 'We are currently on vacation. Online orders and reservations are temporarily unavailable.',
@@ -712,6 +714,8 @@ export const shopFr: Record<string, string> = {
   shopRedeemHint: '{n} pts = CHF 1.00',
   shopLoyaltyLoginHint: 'Connectez-vous pour gagner et utiliser vos points fidélité',
   shopReservations: 'Réservations',
+  shopBookTable: 'Réserver une table',
+  reservationsEmbedHint: 'Choisissez date, heure et nombre de couverts sur la page réservations.',
   shopReservationsIntro: 'Réservez une table pendant nos horaires sur place.',
   shopVacationTitle: 'En vacances',
   shopVacationDefaultMsg:
@@ -1089,6 +1093,8 @@ export const shopDe: Record<string, string> = {
   shopRedeemHint: '{n} Pkt. = CHF 1.00',
   shopLoyaltyLoginHint: 'Anmelden, um Treuepunkte zu sammeln und einzulösen',
   shopReservations: 'Reservationen',
+  shopBookTable: 'Tisch reservieren',
+  reservationsEmbedHint: 'Wählen Sie Datum, Uhrzeit und Personenzahl auf der Reservierungsseite.',
   shopReservationsIntro: 'Reservieren Sie einen Tisch während unserer Vor-Ort-Öffnungszeiten.',
   shopVacationTitle: 'In den Ferien',
   shopVacationDefaultMsg:

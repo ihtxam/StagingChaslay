@@ -4,7 +4,7 @@ import {
   Layout, Type, Grid3X3, DollarSign, Megaphone, PanelBottom,
   MessageSquare, BarChart3, HelpCircle, Users, Mail, Newspaper, Image,
   Copy, Trash2, GripVertical, Plus, Search, Minus, Flag,
-  FileText, ImageIcon, Play, GalleryHorizontalEnd, Star,
+  FileText, ImageIcon, Play, GalleryHorizontalEnd, Star, UtensilsCrossed, Clock, CalendarDays,
 } from 'lucide-react'
 import {
   DndContext,
@@ -33,7 +33,7 @@ const blockIcons: Record<BlockType, typeof Layout> = {
   stats: BarChart3, faq: HelpCircle, team: Users, contact: Mail,
   newsletter: Newspaper, logocloud: Image, divider: Minus, banner: Flag,
   content: FileText, image: ImageIcon, video: Play, gallery: GalleryHorizontalEnd,
-  featured: Star,
+  featured: Star, menu: UtensilsCrossed, hours: Clock, reservations: CalendarDays,
 }
 
 const blockLabels: Record<BlockType, string> = {
@@ -42,7 +42,7 @@ const blockLabels: Record<BlockType, string> = {
   faq: 'FAQ', team: 'Team', contact: 'Contact', newsletter: 'Newsletter',
   logocloud: 'Logo Cloud', divider: 'Divider', banner: 'Banner',
   content: 'Content', image: 'Image', video: 'Video', gallery: 'Gallery',
-  featured: 'Featured',
+  featured: 'Featured', menu: 'Menu', hours: 'Hours', reservations: 'Reservations',
 }
 
 function SortableLayer({ block, isSelected, onSelect, onDuplicate, onRemove }: {

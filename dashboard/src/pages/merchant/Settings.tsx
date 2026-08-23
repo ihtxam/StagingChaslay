@@ -25,6 +25,7 @@ import {
 import PosPostsSection from '@/components/settings/PosPostsSection';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
+import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRoutingPicker';
 import api from '@/lib/api';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
@@ -234,46 +235,6 @@ interface AdyenCreds {
   apiKeySet?: boolean;
 }
 
-type PrinterProfile = NonNullable<NonNullable<SettingsData['posPrintSettings']>['printers']>[number];
-
-function printerPrintsAllCategories(p: PrinterProfile): boolean {
-  return !(p.linkedCategoryIds?.length) && p.printAllProducts !== false;
-}
-
-function isPrinterCategoryLinked(
-  p: PrinterProfile,
-  categoryId: string
-): boolean {
-  if (printerPrintsAllCategories(p)) return true;
-  return (p.linkedCategoryIds || []).includes(categoryId);
-}
-
-function togglePrinterCategoryLink(
-  p: PrinterProfile,
-  categoryId: string,
-  allCategoryIds: string[],
-  checked: boolean
-): PrinterProfile {
-  const allMode = printerPrintsAllCategories(p);
-  let nextIds: string[];
-
-  if (allMode && !checked) {
-    nextIds = allCategoryIds.filter((id) => id !== categoryId);
-  } else if (allMode) {
-    return p;
-  } else {
-    const current = new Set(p.linkedCategoryIds || []);
-    if (checked) current.add(categoryId);
-    else current.delete(categoryId);
-    nextIds = allCategoryIds.filter((id) => current.has(id));
-  }
-
-  if (!nextIds.length || nextIds.length === allCategoryIds.length) {
-    return { ...p, linkedCategoryIds: [], printAllProducts: true };
-  }
-  return { ...p, linkedCategoryIds: nextIds, printAllProducts: false };
-}
-
 interface TerminalRow {
   id: string;
   terminalId: string;
@@ -473,6 +434,9 @@ export default function Settings() {
   const [scalePortsScanned, setScalePortsScanned] = useState(false);
   const [scaleScanError, setScaleScanError] = useState('');
   const [productCategories, setProductCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [catalogProducts, setCatalogProducts] = useState<
+    Array<{ id: string; name: string; categoryId?: string | null }>
+  >([]);
   const [savingTerminal, setSavingTerminal] = useState(false);
   const vacationImageInputRef = useRef<HTMLInputElement>(null);
   const [settingsQuery, setSettingsQuery] = useState('');
@@ -818,10 +782,11 @@ export default function Settings() {
 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const [settingsRes, terminalsRes, categoriesRes] = await Promise.all([
+        const [settingsRes, terminalsRes, categoriesRes, productsRes] = await Promise.all([
           api.get('/merchant/settings'),
           api.get('/terminals').catch(() => ({ data: { adyen: {}, terminals: [] } })),
           api.get('/merchant/categories').catch(() => ({ data: { categories: [] } })),
+          api.get('/merchant/products', { params: { limit: 5000 } }).catch(() => ({ data: { products: [] } })),
         ]);
         const s = settingsRes.data?.settings;
         if (!s) {
@@ -833,6 +798,15 @@ export default function Settings() {
             id: c.id,
             name: c.name,
           }))
+        );
+        setCatalogProducts(
+          (productsRes.data?.products || []).map(
+            (p: { id: string; name: string; categoryId?: string | null }) => ({
+              id: p.id,
+              name: p.name,
+              categoryId: p.categoryId ?? null,
+            })
+          )
         );
         setCardFeeFixed(String(s?.onlineCardFeeFixed ?? '0'));
         setCardFeePercent(String(s?.onlineCardFeePercent ?? '0'));
@@ -3747,44 +3721,19 @@ export default function Settings() {
                     </div>
                     {p.printKitchenTickets ? (
                       <div className="space-y-2 rounded-lg border border-dashed border-[var(--border)] p-3">
-                        <div>
-                          <p className="text-sm font-medium m-0">{t('printerLinkedCategories')}</p>
-                          <p className="text-xs text-[var(--muted)] m-0 mt-0.5">
-                            {t('printerLinkedCategoriesHint')}
-                          </p>
-                        </div>
-                        {productCategories.length === 0 ? (
-                          <p className="text-xs text-[var(--muted)] m-0">{t('printerLinkedCategoriesEmpty')}</p>
-                        ) : (
-                          <div className="flex flex-wrap gap-x-4 gap-y-2">
-                            {productCategories.map((cat) => (
-                              <label key={cat.id} className="inline-flex items-center gap-1.5 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={isPrinterCategoryLinked(p, cat.id)}
-                                  onChange={(e) => {
-                                    const allIds = productCategories.map((c) => c.id);
-                                    const printers = [...(settings.posPrintSettings?.printers || [])];
-                                    printers[idx] = togglePrinterCategoryLink(
-                                      p,
-                                      cat.id,
-                                      allIds,
-                                      e.target.checked
-                                    );
-                                    setSettings({
-                                      ...settings,
-                                      posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                                    });
-                                  }}
-                                />
-                                {cat.name}
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                        {printerPrintsAllCategories(p) && productCategories.length > 0 ? (
-                          <p className="text-xs text-emerald-700 m-0">{t('printerLinkedCategoriesAll')}</p>
-                        ) : null}
+                        <PrinterKitchenRoutingPicker
+                          profile={p}
+                          categories={productCategories}
+                          products={catalogProducts}
+                          onChange={(next) => {
+                            const printers = [...(settings.posPrintSettings?.printers || [])];
+                            printers[idx] = { ...p, ...next };
+                            setSettings({
+                              ...settings,
+                              posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                            });
+                          }}
+                        />
                       </div>
                     ) : null}
                     <button

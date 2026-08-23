@@ -93,10 +93,6 @@ export function withLocaleBundle(
   };
 }
 
-/**
- * Critical styles so OpenPage CDN exports remain readable if Tailwind Play CDN
- * is blocked (egress / offline). Uses theme CSS variables already in the export.
- */
 const OPENPAGE_CDN_FALLBACK_CSS = `
 html,body{height:100%;margin:0}
 body{background:var(--color-bg-0,#171210);color:var(--color-text-0,#faf6f0);font-family:var(--font-sans,system-ui,sans-serif);-webkit-font-smoothing:antialiased}
