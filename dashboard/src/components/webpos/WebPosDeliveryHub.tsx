@@ -7,6 +7,7 @@ import {
   Bell,
   BellOff,
   Car,
+  ChevronDown,
   ExternalLink,
   Minus,
   Plus,
@@ -68,6 +69,8 @@ type DeliveryRow = {
   longitude?: number | null;
   channel?: string | null;
   fulfillmentChannel?: string | null;
+  itemsPreview?: string | null;
+  itemCount?: number;
 };
 
 type DriverRow = {
@@ -134,6 +137,7 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
   const staleAlertedRef = useRef<Set<string>>(new Set());
   const ticketAckedRef = useRef<Set<string>>(new Set());
   const [ticketAckQueue, setTicketAckQueue] = useState<DeliverySlipAckOrder[]>([]);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -361,114 +365,191 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
     window.open('/merchant/pos?delivery=1', '_blank', 'noopener,noreferrer');
   };
 
-  const renderOrderRow = (o: DeliveryRow) => {
+  const toggleExpanded = (orderId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
+
+  const completeDelivery = async (order: DeliveryRow) => {
+    setBusyId(order.id);
+    try {
+      const needsCollect = !isPaidOrder(order as Parameters<typeof isPaidOrder>[0]);
+      await api.post(`/merchant/orders/${order.id}/action`, {
+        action: needsCollect ? 'complete_and_collect' : 'complete',
+        ...(needsCollect ? { paymentMethod: 'cash' } : {}),
+      });
+      toast.success(t('webPosOrderCompleted'));
+      setExpandedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(order.id);
+        return next;
+      });
+      await load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('actionFailed'));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const renderOrderRow = (o: DeliveryRow, showActions = true) => {
     const zip = extractZipFromAddress(o.shippingAddress);
     const mins = elapsedMinutes(o.createdAt);
     const platform = orderPlatformLabel(o as Parameters<typeof orderPlatformLabel>[0], t);
     const busy = busyId === o.id;
+    const expanded = expandedIds.has(o.id);
+    const itemsLine = o.itemsPreview || (o.itemCount ? t('deliveryHubItemCount').replace('{n}', String(o.itemCount)) : '');
+    const addressLine = o.shippingAddress || '—';
+    const canComplete =
+      showActions &&
+      (o.status === 'out_for_delivery' ||
+        (o.status === 'ready' &&
+          (o.fulfillmentChannel === 'delivery' || o.channel === 'delivery')));
 
     return (
       <article
         key={o.id}
-        className={`border-l-4 border border-stone-200 rounded-lg p-3 shadow-sm ${rowColorClass(o)}`}
+        className={`border-l-4 border border-stone-200 rounded-lg shadow-sm overflow-hidden ${rowColorClass(o)}`}
       >
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${orderPlatformBadgeClass(o as Parameters<typeof orderPlatformBadgeClass>[0])}`}>
-                {orderSourceLabel(o.orderSource) || platform}
-              </span>
-              <span className="text-xs font-semibold text-stone-600">
-                {o.createdAt ? formatTime(o.createdAt) : '—'} · {mins}m
-              </span>
-              {o.assignedDriverName ? (
-                <span className="text-xs font-bold text-teal-800">🛵 {o.assignedDriverName}</span>
-              ) : null}
-              {o.status === 'out_for_delivery' ? (
-                <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-900">
-                  <Car size={12} /> {t('deliveryHubOnDelivery')}
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-1 font-bold text-stone-900">{o.customerName || t('deliveryMapGuest')}</p>
-            <p className="text-xs text-stone-600">{o.shippingAddress || '—'}</p>
-            {o.customerPhone ? <p className="text-xs text-stone-500">{o.customerPhone}</p> : null}
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            {zip ? (
-              <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-bold text-sky-900">
-                {zip}
-              </span>
-            ) : null}
-            <span className="text-sm font-extrabold tabular-nums">CHF {Number(o.total || 0).toFixed(2)}</span>
-            <span
-              className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                isPaidOrder(o as Parameters<typeof isPaidOrder>[0])
-                  ? 'bg-emerald-100 text-emerald-900'
-                  : 'bg-amber-100 text-amber-900'
-              }`}
-            >
-              {isPaidOrder(o as Parameters<typeof isPaidOrder>[0]) ? t('deliveryHubPaid') : t('deliveryHubUnpaid')}
+        <button
+          type="button"
+          className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left hover:bg-black/[0.02] min-h-[34px]"
+          onClick={() => toggleExpanded(o.id)}
+        >
+          <span
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${orderPlatformBadgeClass(o as Parameters<typeof orderPlatformBadgeClass>[0])}`}
+          >
+            {orderSourceLabel(o.orderSource) || platform}
+          </span>
+          <span className="shrink-0 text-[10px] font-semibold tabular-nums text-stone-500">
+            {o.createdAt ? formatTime(o.createdAt) : '—'} · {mins}m
+          </span>
+          <span className="shrink-0 max-w-[5.5rem] truncate text-xs font-bold text-stone-900">
+            {o.customerName || t('deliveryMapGuest')}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[11px] text-stone-600">
+            {itemsLine ? <>{itemsLine} · </> : null}
+            {addressLine}
+          </span>
+          {zip ? (
+            <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-900">
+              {zip}
             </span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-stone-600 hover:text-stone-900"
-              disabled={busy}
-              onClick={() => void printSlip(o)}
-            >
-              <Printer size={14} />
-              {o.printCount > 0 ? o.printCount : ''}
-            </button>
-          </div>
-        </div>
+          ) : null}
+          <span className="shrink-0 text-xs font-extrabold tabular-nums text-stone-900">
+            CHF {Number(o.total || 0).toFixed(2)}
+          </span>
+          {o.status === 'out_for_delivery' ? (
+            <Car size={12} className="shrink-0 text-sky-700" aria-label={t('deliveryHubOnDelivery')} />
+          ) : null}
+          <span
+            className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-bold ${
+              isPaidOrder(o as Parameters<typeof isPaidOrder>[0])
+                ? 'bg-emerald-100 text-emerald-900'
+                : 'bg-amber-100 text-amber-900'
+            }`}
+          >
+            {isPaidOrder(o as Parameters<typeof isPaidOrder>[0]) ? t('deliveryHubPaid') : t('deliveryHubUnpaid')}
+          </span>
+          <ChevronDown
+            size={14}
+            className={`shrink-0 text-stone-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          />
+        </button>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {isAwaitingApproval(o.status) ? (
-            <button
-              type="button"
-              disabled={busy}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white"
-              onClick={() => void runAction(o.id, 'accept')}
-            >
-              {t('webPosWorkflowAccept')}
-            </button>
-          ) : null}
-          {o.status === 'preparing' || o.status === 'accepted' ? (
-            <button
-              type="button"
-              disabled={busy}
-              className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-bold text-white"
-              onClick={() => void runAction(o.id, 'mark_ready')}
-            >
-              {t('webPosMarkReady')}
-            </button>
-          ) : null}
-          {o.status === 'ready' ? (
-            <button
-              type="button"
-              disabled={busy}
-              className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-bold"
-              onClick={() => void runAction(o.id, 'out_for_delivery')}
-            >
-              {t('ordersActionSendDelivery')}
-            </button>
-          ) : null}
-          {staff.length > 0 ? (
-            <select
-              className="input max-w-[10rem] py-1 text-xs"
-              disabled={busy}
-              value={o.assignedDeliveryStaffId || ''}
-              onChange={(e) => void assignDriver(o.id, e.target.value)}
-            >
-              <option value="">{t('deliveryUnassigned')}</option>
-              {staff.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
-        </div>
+        {expanded ? (
+          <div className="space-y-2 border-t border-stone-200/80 bg-white/60 px-2 py-2">
+            <div className="flex flex-wrap items-start justify-between gap-2 text-xs">
+              <div className="min-w-0">
+                <p className="font-semibold text-stone-800">#{o.orderNumber}</p>
+                {o.customerPhone ? <p className="text-stone-500">{o.customerPhone}</p> : null}
+                <p className="text-stone-600">{addressLine}</p>
+                {o.assignedDriverName ? (
+                  <p className="mt-0.5 font-bold text-teal-800">🛵 {o.assignedDriverName}</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-stone-600 hover:text-stone-900"
+                disabled={busy}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void printSlip(o);
+                }}
+              >
+                <Printer size={14} />
+                {o.printCount > 0 ? `×${o.printCount}` : null}
+              </button>
+            </div>
+
+            {showActions ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {isAwaitingApproval(o.status) ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white"
+                    onClick={() => void runAction(o.id, 'accept')}
+                  >
+                    {t('webPosWorkflowAccept')}
+                  </button>
+                ) : null}
+                {o.status === 'preparing' || o.status === 'accepted' ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-bold text-white"
+                    onClick={() => void runAction(o.id, 'mark_ready')}
+                  >
+                    {t('webPosMarkReady')}
+                  </button>
+                ) : null}
+                {o.status === 'ready' ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-bold"
+                    onClick={() => void runAction(o.id, 'out_for_delivery')}
+                  >
+                    {t('ordersActionSendDelivery')}
+                  </button>
+                ) : null}
+                {canComplete ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white"
+                    onClick={() => void completeDelivery(o)}
+                  >
+                    {!isPaidOrder(o as Parameters<typeof isPaidOrder>[0])
+                      ? `${t('ordersCollectCash')} · CHF ${Number(o.total || 0).toFixed(2)}`
+                      : t('webPosCompleteOrder')}
+                  </button>
+                ) : null}
+                {staff.length > 0 ? (
+                  <select
+                    className="input max-w-[10rem] py-1 text-xs"
+                    disabled={busy}
+                    value={o.assignedDeliveryStaffId || ''}
+                    onChange={(e) => void assignDriver(o.id, e.target.value)}
+                  >
+                    <option value="">{t('deliveryUnassigned')}</option>
+                    {staff.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </article>
     );
   };
@@ -605,9 +686,9 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
             </MapContainer>
           </div>
         ) : tab === 'completed' ? (
-          <div className="space-y-2">{completed.map(renderOrderRow)}</div>
+          <div className="space-y-1">{completed.map((o) => renderOrderRow(o, false))}</div>
         ) : (
-          <div className="space-y-2">{orders.map(renderOrderRow)}</div>
+          <div className="space-y-1">{orders.map((o) => renderOrderRow(o, true))}</div>
         )}
       </div>
 

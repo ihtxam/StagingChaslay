@@ -49,6 +49,8 @@ export type DeliveryOrderOnMap = {
   paymentMethod: string | null;
   printCount: number;
   deliveryTrackingToken: string | null;
+  itemsPreview: string | null;
+  itemCount: number;
 };
 
 export class DeliveryTrackingService {
@@ -231,28 +233,56 @@ export class DeliveryTrackingService {
         : [];
     const driverName = new Map(drivers.map((d) => [d.id, d.name]));
 
-    return rows.map((r) => ({
-      id: r.id,
-      orderNumber: r.orderNumber,
-      status: r.status,
-      customerName: r.customerName,
-      customerPhone: r.customerPhone,
-      shippingAddress: r.shippingAddress,
-      latitude: num(r.deliveryLatitude),
-      longitude: num(r.deliveryLongitude),
-      assignedDeliveryStaffId: r.assignedDeliveryStaffId,
-      assignedDriverName: r.assignedDeliveryStaffId
-        ? driverName.get(r.assignedDeliveryStaffId) || null
-        : null,
-      total: num(r.total) ?? 0,
-      createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
-      orderSource: r.orderSource,
-      orderType: r.orderType,
-      paymentStatus: r.paymentStatus,
-      paymentMethod: r.paymentMethod,
-      printCount: Number(r.printCount || 0),
-      deliveryTrackingToken: r.deliveryTrackingToken,
-    }));
+    const orderIds = rows.map((r) => r.id);
+    const itemRows =
+      orderIds.length > 0
+        ? await db.query.orderItems.findMany({
+            where: inArray(schema.orderItems.orderId, orderIds),
+            columns: { orderId: true, productName: true, quantity: true },
+            orderBy: [asc(schema.orderItems.id)],
+          })
+        : [];
+    const itemsByOrder = new Map<string, Array<{ name: string; qty: number }>>();
+    for (const item of itemRows) {
+      const list = itemsByOrder.get(item.orderId) || [];
+      list.push({
+        name: String(item.productName || "Item").trim() || "Item",
+        qty: Math.max(1, Number(item.quantity) || 1),
+      });
+      itemsByOrder.set(item.orderId, list);
+    }
+
+    return rows.map((r) => {
+      const items = itemsByOrder.get(r.id) || [];
+      const itemsPreview =
+        items.length > 0
+          ? items.map((i) => `${i.qty}× ${i.name}`).join(", ")
+          : null;
+      return {
+        id: r.id,
+        orderNumber: r.orderNumber,
+        status: r.status,
+        customerName: r.customerName,
+        customerPhone: r.customerPhone,
+        shippingAddress: r.shippingAddress,
+        latitude: num(r.deliveryLatitude),
+        longitude: num(r.deliveryLongitude),
+        assignedDeliveryStaffId: r.assignedDeliveryStaffId,
+        assignedDriverName: r.assignedDeliveryStaffId
+          ? driverName.get(r.assignedDeliveryStaffId) || null
+          : null,
+        total: num(r.total) ?? 0,
+        createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
+        orderSource: r.orderSource,
+        orderType: r.orderType,
+        paymentStatus: r.paymentStatus,
+        paymentMethod: r.paymentMethod,
+        printCount: Number(r.printCount || 0),
+        deliveryTrackingToken: r.deliveryTrackingToken,
+        itemsPreview,
+        itemCount: items.length,
+      };
+    });
   }
 
   /** Ensure delivery orders have a tracking / driver-scan token. */
