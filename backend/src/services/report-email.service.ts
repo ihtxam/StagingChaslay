@@ -211,6 +211,7 @@ export class ReportEmailService {
           subject,
           html,
           merchantId,
+          emailType: "report_eod",
           attachments: [
             {
               filename,

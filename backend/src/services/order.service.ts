@@ -126,9 +126,25 @@ ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
 <p>Please contact us if you have questions.</p>
 <p>— ${merchantName}</p>`,
       text: `Your order ${order.orderNumber || ""} could not be accepted.${reason ? ` Reason: ${reason}` : ""} — ${merchantName}`,
+      emailType: "shop_order",
     });
   } catch (err) {
     console.warn("Order rejection email failed:", err);
+  }
+}
+
+async function sendGuestShopOrderEmail(
+  merchantId: string,
+  orderId: string,
+  kind: "confirmed" | "ready" | "out_for_delivery" | "cancelled" | "received",
+  order: { orderType?: string | null; customerEmail?: string | null }
+) {
+  if (String(order.orderType || "").toLowerCase() !== "web_shop" || !order.customerEmail) return;
+  try {
+    const { ShopOrderEmailService } = await import("@/services/shop-order-email.service");
+    await ShopOrderEmailService.sendGuestOrderEmail(merchantId, orderId, kind);
+  } catch (err) {
+    console.warn(`Shop order ${kind} email failed:`, err);
   }
 }
 
@@ -514,6 +530,7 @@ export class OrderService {
         } catch (printErr) {
           console.warn("Accept auto-print enqueue failed:", printErr);
         }
+        void sendGuestShopOrderEmail(merchantId, orderId, "confirmed", order);
         return set({ status: "preparing" });
       }
       case "start_preparing": {
@@ -526,7 +543,9 @@ export class OrderService {
         if (status !== "preparing" && status !== "accepted") {
           throw new Error("Order is not being prepared");
         }
-        return set({ status: "ready" });
+        const updated = await set({ status: "ready" });
+        void sendGuestShopOrderEmail(merchantId, orderId, "ready", order);
+        return updated;
       }
       case "out_for_delivery": {
         if (channel !== "delivery") throw new Error("Only delivery orders can go out for delivery");
@@ -663,11 +682,17 @@ export class OrderService {
           cancelledAt: new Date(),
         });
         if (action === "reject") {
-          void sendOrderRejectedEmail(
-            merchantId,
-            { ...order, cancelReason: reasonText },
-            merchant?.name || "Store"
-          );
+          if (order.orderType === "web_shop" && order.customerEmail) {
+            void sendGuestShopOrderEmail(merchantId, orderId, "cancelled", order);
+          } else {
+            void sendOrderRejectedEmail(
+              merchantId,
+              { ...order, cancelReason: reasonText },
+              merchant?.name || "Store"
+            );
+          }
+        } else if (order.orderType === "web_shop" && order.customerEmail) {
+          void sendGuestShopOrderEmail(merchantId, orderId, "cancelled", order);
         }
         return updated;
       }

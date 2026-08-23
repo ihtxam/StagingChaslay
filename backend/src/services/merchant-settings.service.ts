@@ -187,6 +187,11 @@ export class MerchantSettingsService {
       vacationSettings: normalizeVacationSettings(merchant.vacationSettings),
       emailSmtpSettings: MarketingService.getSmtpPublic(merchant.emailSmtpSettings),
       emailBrevoSettings: MarketingService.getBrevoPublic(merchant.emailBrevoSettings),
+      emailDeliveryMode:
+        String((merchant as { emailDeliveryMode?: string }).emailDeliveryMode || "platform")
+          .toLowerCase() === "own"
+          ? "own"
+          : "platform",
       marketingSettings: MarketingService.normalizeMarketing(merchant.marketingSettings),
       shopPathUrl: merchant.slug ? `https://${shopHost}/${merchant.slug}` : null,
       shopSubdomainUrl: merchant.subdomain ? `https://${merchant.subdomain}.${apex}` : null,
@@ -294,6 +299,7 @@ export class MerchantSettingsService {
       vacationSettings?: VacationSettings | null;
       emailSmtpSettings?: MerchantSmtpSettings | null;
       emailBrevoSettings?: MerchantBrevoSettings | null;
+      emailDeliveryMode?: "platform" | "own" | string;
       marketingSettings?: MarketingSettings | null;
       adyenMerchantAccount?: string;
       adyenApiKey?: string;
@@ -539,6 +545,10 @@ export class MerchantSettingsService {
       next.monthlySent = prev.monthlySent;
       next.monthlyPeriod = prev.monthlyPeriod;
       patch.emailBrevoSettings = next;
+    }
+    if (updates.emailDeliveryMode !== undefined) {
+      const mode = String(updates.emailDeliveryMode || "platform").toLowerCase();
+      patch.emailDeliveryMode = mode === "own" ? "own" : "platform";
     }
     if (updates.marketingSettings !== undefined) {
       patch.marketingSettings = MarketingService.normalizeMarketing(updates.marketingSettings);

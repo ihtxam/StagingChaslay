@@ -428,6 +428,7 @@ export class PasswordResetService {
         subject,
         html,
         text: `Reset your Chaslay password: ${resetUrl}`,
+        emailType: "password_reset",
       });
     } catch (error) {
       console.error("[password-reset] Brevo send failed:", error);

@@ -117,6 +117,78 @@ router.put("/platform-settings/adyen", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/superadmin/platform-settings/brevo
+ */
+router.get("/platform-settings/brevo", async (_req: Request, res: Response) => {
+  try {
+    const brevo = await PlatformSettingsService.getBrevoSettingsPublic();
+    res.json({ success: true, brevo });
+  } catch (error) {
+    console.error("Error getting platform Brevo settings:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load Brevo settings",
+    });
+  }
+});
+
+/**
+ * PUT /api/superadmin/platform-settings/brevo
+ */
+router.put("/platform-settings/brevo", async (req: Request, res: Response) => {
+  try {
+    const brevo = await PlatformSettingsService.updateBrevoSettings(req.body || {});
+    res.json({ success: true, brevo });
+  } catch (error) {
+    console.error("Error updating platform Brevo settings:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to save Brevo settings",
+    });
+  }
+});
+
+/**
+ * GET /api/superadmin/email/usage — platform email send statistics
+ */
+router.get("/email/usage", async (_req: Request, res: Response) => {
+  try {
+    const { EmailUsageService } = await import("@/services/email-usage.service");
+    const usage = await EmailUsageService.getPlatformUsageSummary();
+    res.json({ success: true, usage });
+  } catch (error) {
+    console.error("Error getting email usage:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load email usage",
+    });
+  }
+});
+
+/**
+ * POST /api/superadmin/email/test — send a test email via platform Brevo
+ */
+router.post("/email/test", async (req: Request, res: Response) => {
+  try {
+    const to = String(req.body?.to || "").trim();
+    if (!to) {
+      res.status(400).json({ error: "Recipient email is required" });
+      return;
+    }
+    const { EmailService } = await import("@/services/email.service");
+    await EmailService.send({
+      to,
+      subject: "Chaslay platform email test",
+      html: "<p>This is a test email from Chaslay platform Brevo.</p>",
+      emailType: "marketing_test",
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error sending platform test email:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to send test email",
+    });
+  }
+});
+
 // ============================================================================
 // MERCHANT MANAGEMENT
 // ============================================================================

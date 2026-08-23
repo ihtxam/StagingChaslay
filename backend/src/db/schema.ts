@@ -315,6 +315,13 @@ export const merchants = pgTable(
     /** Per-merchant Brevo API key + from + usage counters */
     emailBrevoSettings: json("email_brevo_settings").$type<MerchantBrevoSettings | null>(),
     /**
+     * Email delivery: platform = Superadmin Brevo; own = merchant SMTP/Brevo.
+     * Default platform for new merchants; existing merchants with own SMTP/Brevo stay on own.
+     */
+    emailDeliveryMode: varchar("email_delivery_mode", { length: 20 })
+      .default("platform")
+      .notNull(),
+    /**
      * Marketing automation:
      * { reorderReminderEnabled, reorderReminderDays, reorderReminderSubject, reorderReminderBody }
      */
@@ -1595,6 +1602,29 @@ export type VacationSettings = {
   periods?: VacationPeriod[];
 };
 
+export type EmailDeliveryMode = "platform" | "own";
+
+/** Known email categories for platform usage reporting. */
+export type EmailSendType =
+  | "general"
+  | "newsletter"
+  | "reorder_reminder"
+  | "reservation_confirmation"
+  | "reservation_status"
+  | "reservation_admin"
+  | "reservation_daily"
+  | "shop_order"
+  | "receipt"
+  | "gift_card"
+  | "inventory_reorder"
+  | "report_eod"
+  | "password_reset"
+  | "merchant_invite"
+  | "platform_shop_order"
+  | "marketing_test"
+  | "invoice"
+  | "alert";
+
 export type MerchantSmtpSettings = {
   enabled?: boolean;
   host?: string | null;
@@ -2651,6 +2681,32 @@ export const newsletterCampaigns = pgTable(
   (table) => ({
     merchantIdx: index("newsletter_campaigns_merchant_idx").on(table.merchantId),
     statusIdx: index("newsletter_campaigns_status_idx").on(table.merchantId, table.status),
+  })
+);
+
+/** Platform-wide transactional email send log (superadmin usage + per-merchant attribution). */
+export const emailSendLog = pgTable(
+  "email_send_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id").references(() => merchants.id, { onDelete: "set null" }),
+    provider: varchar("provider", { length: 20 }).notNull(), // smtp | brevo | sendgrid
+    source: varchar("source", { length: 30 }).notNull(), // platform | merchant_smtp | merchant_brevo | env
+    emailType: varchar("email_type", { length: 50 }).notNull().default("general"),
+    recipient: varchar("recipient", { length: 255 }).notNull(),
+    subject: varchar("subject", { length: 500 }),
+    status: varchar("status", { length: 20 }).notNull().default("sent"), // sent | failed
+    error: text("error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("email_send_log_merchant_idx").on(table.merchantId),
+    typeIdx: index("email_send_log_type_idx").on(table.emailType),
+    createdIdx: index("email_send_log_created_idx").on(table.createdAt),
+    merchantCreatedIdx: index("email_send_log_merchant_created_idx").on(
+      table.merchantId,
+      table.createdAt
+    ),
   })
 );
 

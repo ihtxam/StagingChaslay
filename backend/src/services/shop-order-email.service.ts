@@ -72,6 +72,7 @@ export class ShopOrderEmailService {
         html,
         text: `${copy.subject}\n${copy.body}\n#${orderNumber}\nTotal: ${order.total} CHF${textTrack}`,
         merchantId,
+        emailType: "shop_order",
       });
     } catch (err) {
       console.error('[shop-order-email] guest email failed', err);

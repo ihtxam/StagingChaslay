@@ -34,6 +34,21 @@ export async function merchantListInvoices(req: Request, res: Response) {
   }
 }
 
+/** POST /api/merchant/orders/:orderId/email-invoice */
+export async function merchantEmailInvoice(req: Request, res: Response) {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const to = req.body?.to ? String(req.body.to).trim() : undefined;
+    const result = await InvoiceService.sendEmail(merchantId, String(req.params.orderId), { to });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to email invoice";
+    const code = msg === "Order not found" ? 404 : 400;
+    res.status(code).json({ error: msg });
+  }
+}
+
 /** GET /api/merchant/orders/:orderId/invoice.pdf */
 export async function merchantInvoicePdf(req: Request, res: Response) {
   try {
