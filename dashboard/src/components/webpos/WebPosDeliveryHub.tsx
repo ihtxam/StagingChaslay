@@ -277,19 +277,19 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
             locale,
             fallbackPrinterName: localStorage.getItem('manupos_webpos_printer') || '',
           });
-          if (orderRow) {
-            let itemCount: number | null = null;
-            try {
-              const detail = await api.get(`/merchant/orders/${orderId}`);
-              const items = (detail.data?.order || detail.data)?.items;
-              itemCount = Array.isArray(items) ? items.length : null;
-            } catch {
-              /* optional */
-            }
-            enqueueTicketAck(orderRow, itemCount);
-          }
         } catch {
           /* print optional */
+        }
+        if (orderRow) {
+          let itemCount: number | null = null;
+          try {
+            const detail = await api.get(`/merchant/orders/${orderId}`);
+            const items = (detail.data?.order || detail.data)?.items;
+            itemCount = Array.isArray(items) ? items.length : null;
+          } catch {
+            /* optional */
+          }
+          enqueueTicketAck(orderRow, itemCount);
         }
       }
       if (action === 'reject') {
