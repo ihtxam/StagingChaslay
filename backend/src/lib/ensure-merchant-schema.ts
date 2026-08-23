@@ -256,6 +256,11 @@ const TABLE_PATCHES: string[] = [
     updated_at timestamptz NOT NULL DEFAULT now()
   )`,
   `ALTER TABLE kds_stations ADD COLUMN IF NOT EXISTS theme varchar(32) NOT NULL DEFAULT 'dark'`,
+  `ALTER TABLE kds_stations ADD COLUMN IF NOT EXISTS layout_mode varchar(16) NOT NULL DEFAULT 'grid'`,
+  `ALTER TABLE kds_stations ADD COLUMN IF NOT EXISTS grid_columns integer NOT NULL DEFAULT 3`,
+  `ALTER TABLE kds_stations ADD COLUMN IF NOT EXISTS overdue_minutes integer NOT NULL DEFAULT 20`,
+  `ALTER TABLE kds_stations ADD COLUMN IF NOT EXISTS short_code varchar(8)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS kds_stations_short_code_uidx ON kds_stations(short_code) WHERE short_code IS NOT NULL`,
   `CREATE UNIQUE INDEX IF NOT EXISTS kds_stations_token_uidx ON kds_stations(token)`,
   `CREATE INDEX IF NOT EXISTS kds_stations_merchant_id_idx ON kds_stations(merchant_id)`,
   `CREATE TABLE IF NOT EXISTS kds_tickets (
@@ -302,6 +307,8 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS ods_displays_token_uidx ON ods_displays(token)`,
   `CREATE INDEX IF NOT EXISTS ods_displays_merchant_id_idx ON ods_displays(merchant_id)`,
+  `ALTER TABLE ods_displays ADD COLUMN IF NOT EXISTS short_code varchar(8)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS ods_displays_short_code_uidx ON ods_displays(short_code) WHERE short_code IS NOT NULL`,
   `CREATE TABLE IF NOT EXISTS ods_orders (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,

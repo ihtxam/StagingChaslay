@@ -1172,11 +1172,19 @@ export const kdsStations = pgTable(
       .references(() => merchants.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 255 }).notNull(),
     token: varchar("token", { length: 128 }).notNull(),
+    /** Short numeric code for /kds/{code} URLs (like TV signage) */
+    shortCode: varchar("short_code", { length: 8 }),
     orderTypes: json("order_types").$type<string[]>().default([]).notNull(),
     categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
     productIds: json("product_ids").$type<string[]>().default([]).notNull(),
     /** Display theme: dark | light | teal */
     theme: varchar("theme", { length: 32 }).default("dark").notNull(),
+    /** Ticket layout: grid | rows | slider */
+    layoutMode: varchar("layout_mode", { length: 16 }).default("grid").notNull(),
+    /** Grid columns when layoutMode=grid (1–6) */
+    gridColumns: integer("grid_columns").default(3).notNull(),
+    /** Play alert when a pending ticket exceeds this many minutes */
+    overdueMinutes: integer("overdue_minutes").default(20).notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -1184,11 +1192,15 @@ export const kdsStations = pgTable(
   (table) => ({
     merchantIdx: index("kds_stations_merchant_id_idx").on(table.merchantId),
     tokenIdx: index("kds_stations_token_idx").on(table.token),
+    shortCodeIdx: uniqueIndex("kds_stations_short_code_uidx").on(table.shortCode),
   })
 );
 
 export const KDS_THEMES = ["dark", "light", "teal"] as const;
 export type KdsTheme = (typeof KDS_THEMES)[number];
+
+export const KDS_LAYOUT_MODES = ["grid", "rows", "slider"] as const;
+export type KdsLayoutMode = (typeof KDS_LAYOUT_MODES)[number];
 
 export const kdsTickets = pgTable(
   "kds_tickets",
@@ -1250,6 +1262,8 @@ export const odsDisplays = pgTable(
       .references(() => merchants.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 255 }).notNull(),
     token: varchar("token", { length: 128 }).notNull(),
+    /** Short numeric code for /ods/{code} URLs (like TV signage) */
+    shortCode: varchar("short_code", { length: 8 }),
     /** Customer board color theme */
     theme: varchar("theme", { length: 32 }).default("light").notNull(),
     isActive: boolean("is_active").default(true).notNull(),
@@ -1259,6 +1273,7 @@ export const odsDisplays = pgTable(
   (table) => ({
     merchantIdx: index("ods_displays_merchant_id_idx").on(table.merchantId),
     tokenIdx: uniqueIndex("ods_displays_token_uidx").on(table.token),
+    shortCodeIdx: uniqueIndex("ods_displays_short_code_uidx").on(table.shortCode),
   })
 );
 

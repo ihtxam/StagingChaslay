@@ -1,8 +1,12 @@
 import { randomBytes } from "crypto";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { readKdsAddonEnabled } from "@/lib/kds-addon";
 import { ensureKdsAddonColumn } from "@/lib/ensure-merchant-schema";
+import {
+  allocateDisplayShortCode,
+  ensureKdsStationShortCodes,
+} from "@/lib/display-short-code";
 
 export class KdsLicenseError extends Error {
   code = "KDS_ADDON_REQUIRED";
@@ -33,14 +37,35 @@ export type KdsStationInput = {
   categoryIds?: string[];
   productIds?: string[];
   theme?: string;
+  layoutMode?: string;
+  gridColumns?: number;
+  overdueMinutes?: number;
   isActive?: boolean;
 };
 
 const KDS_THEMES = new Set(["dark", "light", "teal"]);
+const KDS_LAYOUT_MODES = new Set(["grid", "rows", "slider"]);
 
 function normalizeKdsTheme(value: unknown): string {
   const t = String(value || "dark").toLowerCase();
   return KDS_THEMES.has(t) ? t : "dark";
+}
+
+function normalizeKdsLayoutMode(value: unknown): string {
+  const m = String(value || "grid").toLowerCase();
+  return KDS_LAYOUT_MODES.has(m) ? m : "grid";
+}
+
+function clampGridColumns(value: unknown): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return 3;
+  return Math.min(6, Math.max(1, n));
+}
+
+function clampOverdueMinutes(value: unknown): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return 20;
+  return Math.min(120, Math.max(5, n));
 }
 
 export type KdsPushItem = {
@@ -94,6 +119,7 @@ export class KdsService {
   static async listStations(merchantId: string) {
     await requireAddon(merchantId);
     const db = getDb();
+    await ensureKdsStationShortCodes(db, merchantId);
     return db.query.kdsStations.findMany({
       where: eq(schema.kdsStations.merchantId, merchantId),
       orderBy: [asc(schema.kdsStations.name)],
@@ -111,10 +137,14 @@ export class KdsService {
         merchantId,
         name,
         token: newToken(),
+        shortCode: await allocateDisplayShortCode(db),
         orderTypes: input.orderTypes || [],
         categoryIds: input.categoryIds || [],
         productIds: input.productIds || [],
         theme: normalizeKdsTheme(input.theme),
+        layoutMode: normalizeKdsLayoutMode(input.layoutMode),
+        gridColumns: clampGridColumns(input.gridColumns),
+        overdueMinutes: clampOverdueMinutes(input.overdueMinutes),
         isActive: input.isActive !== false,
       })
       .returning();
@@ -130,6 +160,9 @@ export class KdsService {
     if (input.categoryIds != null) patch.categoryIds = input.categoryIds;
     if (input.productIds != null) patch.productIds = input.productIds;
     if (input.theme != null) patch.theme = normalizeKdsTheme(input.theme);
+    if (input.layoutMode != null) patch.layoutMode = normalizeKdsLayoutMode(input.layoutMode);
+    if (input.gridColumns != null) patch.gridColumns = clampGridColumns(input.gridColumns);
+    if (input.overdueMinutes != null) patch.overdueMinutes = clampOverdueMinutes(input.overdueMinutes);
     if (input.isActive != null) patch.isActive = !!input.isActive;
     const [row] = await db
       .update(schema.kdsStations)
@@ -154,17 +187,26 @@ export class KdsService {
     const db = getDb();
     const [row] = await db
       .update(schema.kdsStations)
-      .set({ token: newToken(), updatedAt: new Date() })
+      .set({
+        token: newToken(),
+        shortCode: await allocateDisplayShortCode(db),
+        updatedAt: new Date(),
+      })
       .where(and(eq(schema.kdsStations.id, id), eq(schema.kdsStations.merchantId, merchantId)))
       .returning();
     if (!row) throw new Error("KDS station not found");
     return row;
   }
 
-  static async stationByToken(token: string) {
+  static async stationByToken(accessKey: string) {
+    const trimmed = String(accessKey || "").trim();
+    if (!trimmed) return null;
     const db = getDb();
     return db.query.kdsStations.findFirst({
-      where: and(eq(schema.kdsStations.token, token), eq(schema.kdsStations.isActive, true)),
+      where: and(
+        or(eq(schema.kdsStations.shortCode, trimmed), eq(schema.kdsStations.token, trimmed)),
+        eq(schema.kdsStations.isActive, true)
+      ),
     });
   }
 
@@ -314,6 +356,9 @@ export class KdsService {
         id: station.id,
         name: station.name,
         theme: normalizeKdsTheme(station.theme),
+        layoutMode: normalizeKdsLayoutMode(station.layoutMode),
+        gridColumns: clampGridColumns(station.gridColumns),
+        overdueMinutes: clampOverdueMinutes(station.overdueMinutes),
       },
       serverTime: new Date().toISOString(),
       updated: updatedSince,

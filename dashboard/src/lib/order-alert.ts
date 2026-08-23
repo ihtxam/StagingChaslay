@@ -83,6 +83,17 @@ export function playKdsNewOrderOnce(): void {
   tone(ctx, 1320, t0 + 0.36, 0.24, 0.24);
 }
 
+/** Pending ticket exceeded kitchen time limit — urgent double buzz (~0.9s). */
+export function playKitchenOverdueOnce(): void {
+  const ctx = getCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + 0.02;
+  tone(ctx, 440, t0, 0.22, 0.28);
+  tone(ctx, 330, t0 + 0.28, 0.22, 0.28);
+  tone(ctx, 440, t0 + 0.56, 0.32, 0.3);
+  tone(ctx, 330, t0 + 0.78, 0.28, 0.26);
+}
+
 /** Repeat ringtone until stopOrderAlertLoop() — used while new orders are waiting. */
 export function startOrderAlertLoop(intervalMs = 4500): void {
   if (loopTimer) return;

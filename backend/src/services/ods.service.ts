@@ -1,8 +1,12 @@
 import { randomBytes } from "crypto";
-import { and, asc, desc, eq, lt } from "drizzle-orm";
+import { and, asc, desc, eq, lt, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { readOdsAddonEnabled } from "@/lib/ods-addon";
 import { ensureOdsAddonColumn } from "@/lib/ensure-merchant-schema";
+import {
+  allocateDisplayShortCode,
+  ensureOdsDisplayShortCodes,
+} from "@/lib/display-short-code";
 
 export const ODS_THEMES = ["light", "teal", "dark"] as const;
 export type OdsTheme = (typeof ODS_THEMES)[number];
@@ -77,6 +81,7 @@ export class OdsService {
   static async listDisplays(merchantId: string) {
     await requireAddon(merchantId);
     const db = getDb();
+    await ensureOdsDisplayShortCodes(db, merchantId);
     return db.query.odsDisplays.findMany({
       where: eq(schema.odsDisplays.merchantId, merchantId),
       orderBy: [asc(schema.odsDisplays.name)],
@@ -94,6 +99,7 @@ export class OdsService {
         merchantId,
         name,
         token: newToken(),
+        shortCode: await allocateDisplayShortCode(db),
         theme: normalizeTheme(input.theme),
         isActive: input.isActive !== false,
       })
@@ -131,17 +137,26 @@ export class OdsService {
     const db = getDb();
     const [row] = await db
       .update(schema.odsDisplays)
-      .set({ token: newToken(), updatedAt: new Date() })
+      .set({
+        token: newToken(),
+        shortCode: await allocateDisplayShortCode(db),
+        updatedAt: new Date(),
+      })
       .where(and(eq(schema.odsDisplays.id, id), eq(schema.odsDisplays.merchantId, merchantId)))
       .returning();
     if (!row) throw new Error("ODS display not found");
     return row;
   }
 
-  static async displayByToken(token: string) {
+  static async displayByToken(accessKey: string) {
+    const trimmed = String(accessKey || "").trim();
+    if (!trimmed) return null;
     const db = getDb();
     return db.query.odsDisplays.findFirst({
-      where: and(eq(schema.odsDisplays.token, token), eq(schema.odsDisplays.isActive, true)),
+      where: and(
+        or(eq(schema.odsDisplays.shortCode, trimmed), eq(schema.odsDisplays.token, trimmed)),
+        eq(schema.odsDisplays.isActive, true)
+      ),
     });
   }
 

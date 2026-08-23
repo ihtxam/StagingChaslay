@@ -8,17 +8,19 @@ type OdsDisplay = {
   id: string;
   name: string;
   token: string;
+  shortCode?: string | null;
   theme: 'light' | 'teal' | 'dark';
   isActive: boolean;
 };
 
 const THEMES = ['light', 'teal', 'dark'] as const;
 
-function odsPublicUrl(token: string): string {
+function odsPublicUrl(display: Pick<OdsDisplay, 'shortCode' | 'token'>): string {
   const origin =
     (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ||
     (typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com');
-  return `${origin.replace(/\/$/, '')}/ods/${token}`;
+  const code = (display.shortCode || display.token).trim();
+  return `${origin.replace(/\/$/, '')}/ods/${code}`;
 }
 
 export default function OdsSettingsPanel() {
@@ -100,8 +102,8 @@ export default function OdsSettingsPanel() {
     }
   };
 
-  const copyUrl = async (token: string) => {
-    const url = odsPublicUrl(token);
+  const copyUrl = async (display: Pick<OdsDisplay, 'shortCode' | 'token'>) => {
+    const url = odsPublicUrl(display);
     try {
       await navigator.clipboard.writeText(url);
       toast.success(t('odsUrlCopied'));
@@ -166,12 +168,14 @@ export default function OdsSettingsPanel() {
       ) : (
         <ul className="space-y-3">
           {displays.map((d) => {
-            const url = odsPublicUrl(d.token);
+            const url = odsPublicUrl(d);
+            const code = d.shortCode || d.token.slice(0, 8);
             return (
               <li key={d.id} className="rounded-xl border border-stone-200 bg-white p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">{d.name}</p>
+                    <p className="mt-1 text-2xl font-mono font-bold tracking-wider text-teal-700">{code}</p>
                     <p className="mt-1 break-all font-mono text-xs text-stone-500">{url}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {THEMES.map((th) => (
@@ -195,7 +199,7 @@ export default function OdsSettingsPanel() {
                       type="button"
                       className="rounded-lg border border-stone-300 p-2 hover:bg-stone-50"
                       title={t('odsCopyUrl')}
-                      onClick={() => void copyUrl(d.token)}
+                      onClick={() => void copyUrl(d)}
                     >
                       <Copy className="h-4 w-4" />
                     </button>
