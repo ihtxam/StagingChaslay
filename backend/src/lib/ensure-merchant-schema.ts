@@ -629,7 +629,7 @@ async function runPatch(column: string): Promise<boolean> {
   }
 }
 
-async function ensureMerchantTables(): Promise<boolean> {
+export async function ensureMerchantTables(): Promise<boolean> {
   if (patchedTables) return false;
   const db = getDb();
   let applied = false;

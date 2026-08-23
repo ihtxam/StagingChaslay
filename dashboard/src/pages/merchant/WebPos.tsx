@@ -398,8 +398,10 @@ import {
 import { isMainTillRegister, shouldRingWaiterTillBell } from '@/lib/waiter-till-bell';
 import {
   backOfficeHomePath,
+  deliveryDriverHomePath,
   getEffectivePanelAccess,
   hasPermission,
+  isDeliveryDriverOnlyStaff,
   isMerchantOwnerJwt,
   clearWebPosStaffSession,
   loadWebPosStaffSession,
@@ -997,6 +999,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     },
     [authUser?.staffId, authUser?.role, authUser?.permissions, authUser?.isOwner]
   );
+
+  useEffect(() => {
+    if (!webposStaff) return;
+    if (isDeliveryDriverOnlyStaff(webposStaff.permissions, false)) {
+      navigate(deliveryDriverHomePath(), { replace: true });
+    }
+  }, [webposStaff, navigate]);
 
   useEffect(() => {
     if (!staffPinsKnown) return;
@@ -7254,6 +7263,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     setPinModalOpen(false);
     toast.success(t('webPosSignedInAs').replace('{name}', staff.name));
+    if (isDeliveryDriverOnlyStaff(session.permissions, false)) {
+      navigate(deliveryDriverHomePath(), { replace: true });
+      return;
+    }
     if (paymentConfig?.terminals?.length) {
       const terminalId = resolveActiveTerminalId(paymentConfig.terminals, {
         preferred: staff.preferredTerminalId,

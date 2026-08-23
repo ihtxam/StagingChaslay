@@ -57,9 +57,11 @@ import {
   canAccessRoute,
   canShowWebPosQuickAction,
   backOfficeHomePath,
+  deliveryDriverHomePath,
   getEffectivePanelAccess,
   getEffectiveRegisterDisplay,
   isCatalogPanelPath,
+  isDeliveryDriverOnlyStaff,
   isOrdersPanelPath,
   isStaffJwt,
   loadWebPosStaffSession,
@@ -120,7 +122,8 @@ function MerchantShell() {
   const navigate = useNavigate();
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
   const isWaiterRoute = /^\/merchant\/waiter\/?$/.test(location.pathname);
-  const isPosLikeRoute = isPosRoute || isWaiterRoute;
+  const isDriverRoute = /^\/merchant\/delivery\/driver\/?$/.test(location.pathname);
+  const isPosLikeRoute = isPosRoute || isWaiterRoute || isDriverRoute;
   const isPosEmbed =
     typeof window !== 'undefined' &&
     (new URLSearchParams(location.search).get('embed') === '1' ||
@@ -348,6 +351,17 @@ function MerchantShell() {
     const dest = backOfficeHomePath(effective.permissions, false);
     if (dest !== path) navigate(dest, { replace: true });
   }, [effective.isOwner, effective.permissions, isPosLikeRoute, location.pathname, allow, navigate]);
+
+  // Delivery-only staff must use the driver app, not register POS.
+  useEffect(() => {
+    if (effective.isOwner) return;
+    if (!isDeliveryDriverOnlyStaff(effective.permissions, false)) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (path === deliveryDriverHomePath()) return;
+    if (path === '/merchant/pos' || path === '/merchant/waiter' || path.startsWith('/merchant/pos/')) {
+      navigate(deliveryDriverHomePath(), { replace: true });
+    }
+  }, [effective.isOwner, effective.permissions, location.pathname, navigate]);
 
   const showWebPosQuickAction = useMemo(
     () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),

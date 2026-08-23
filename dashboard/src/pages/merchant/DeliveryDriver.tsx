@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CheckCircle, MapPin, Navigation, Wallet } from 'lucide-react';
+import { CheckCircle, MapPin, Navigation, QrCode, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useAuthStore } from '@/store/auth';
 import WebPosPinModal from '@/components/WebPosPinModal';
+import DeliveryQrScanModal from '@/components/delivery/DeliveryQrScanModal';
 import {
   loadWebPosStaffSession,
   saveWebPosStaffSession,
@@ -61,6 +62,7 @@ export default function DeliveryDriverPage() {
   const [tracking, setTracking] = useState(false);
   const [lastPing, setLastPing] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
   const watchIdRef = useRef<number | null>(null);
 
   const staffAccessToken = pinStaff?.accessToken;
@@ -84,28 +86,34 @@ export default function DeliveryDriverPage() {
     }
   }, [clockedIn, apiHeaders]);
 
-  const tryClaimFromScan = useCallback(async () => {
-    if (!claimOrderId || !claimToken || !clockedIn) return;
-    try {
-      await api.post(
-        `/merchant/delivery/orders/${claimOrderId}/claim`,
-        { token: claimToken },
-        { headers: apiHeaders }
-      );
-      toast.success(t('deliveryClaimSuccess'));
-      setSearchParams({}, { replace: true });
-      await loadOrders();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || t('actionFailed'));
-    }
-  }, [claimOrderId, claimToken, clockedIn, apiHeaders, t, setSearchParams, loadOrders]);
+  const claimOrder = useCallback(
+    async (orderId: string, token: string) => {
+      if (!clockedIn) {
+        setPinOpen(true);
+        return;
+      }
+      try {
+        await api.post(
+          `/merchant/delivery/orders/${orderId}/claim`,
+          { token },
+          { headers: apiHeaders }
+        );
+        toast.success(t('deliveryClaimSuccess'));
+        setSearchParams({}, { replace: true });
+        await loadOrders();
+      } catch (e: unknown) {
+        const err = e as { response?: { data?: { error?: string } } };
+        toast.error(err.response?.data?.error || t('actionFailed'));
+      }
+    },
+    [clockedIn, apiHeaders, t, setSearchParams, loadOrders]
+  );
 
   useEffect(() => {
     if (claimOrderId && claimToken && clockedIn) {
-      void tryClaimFromScan();
+      void claimOrder(claimOrderId, claimToken);
     }
-  }, [claimOrderId, claimToken, clockedIn, tryClaimFromScan]);
+  }, [claimOrderId, claimToken, clockedIn, claimOrder]);
 
   const loadCompleted = useCallback(async () => {
     if (!clockedIn) return;
@@ -235,6 +243,27 @@ export default function DeliveryDriverPage() {
             {t('deliveryClockInPin')}
           </button>
         ) : null}
+      </div>
+
+      <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2 text-sm font-semibold text-stone-800">
+          <QrCode size={18} className="text-teal-600" />
+          {t('deliveryScanQrTitle')}
+        </div>
+        <p className="mt-2 text-[11px] leading-snug text-stone-500">{t('deliveryScanQrHint')}</p>
+        <button
+          type="button"
+          className="mt-3 w-full rounded-lg border-2 border-dashed border-teal-300 bg-teal-50 px-4 py-3 text-sm font-bold text-teal-900 hover:bg-teal-100"
+          onClick={() => {
+            if (!clockedIn) {
+              setPinOpen(true);
+              return;
+            }
+            setScanOpen(true);
+          }}
+        >
+          {t('deliveryScanQrButton')}
+        </button>
       </div>
 
       <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
@@ -395,6 +424,12 @@ export default function DeliveryDriverPage() {
           void loadOrders();
           void loadWage();
         }}
+      />
+
+      <DeliveryQrScanModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onScan={(orderId, token) => void claimOrder(orderId, token)}
       />
     </div>
   );

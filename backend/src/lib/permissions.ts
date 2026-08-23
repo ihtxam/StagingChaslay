@@ -134,7 +134,7 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
     name: "Delivery",
     isSystem: true,
     sortOrder: 30,
-    permissions: ["USE_POS", "DELIVERY_ORDERS", "VIEW_ORDER_HISTORY", "SEND_KITCHEN", "PROCESS_PAYMENTS"],
+    permissions: ["DELIVERY_ORDERS"],
   },
   {
     name: "User",
