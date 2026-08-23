@@ -35,6 +35,7 @@ class ChaslayPosApp : Application(), Configuration.Provider {
         super.onCreate()
         applySavedLocale()
         crashLogger.installGlobalHandler()
+        crashLogger.flushPendingUploads()
         printerConnectionManager.warmupOnStartup()
         usbPrinterManager.startMonitoring()
         backgroundSyncScheduler.schedule(this)

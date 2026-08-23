@@ -209,6 +209,14 @@ data class AckResponse(
     val ok: Boolean = true
 )
 
+data class DiagnosticReportRequest(
+    val subject: String,
+    val body: String,
+    val auto: Boolean = true,
+    @SerializedName("device_id") val deviceId: String? = null,
+    @SerializedName("app_version") val appVersion: String? = null
+)
+
 data class SyncAdyenConfigDto(
     val merchant_account: String? = null,
     val api_key: String? = null,

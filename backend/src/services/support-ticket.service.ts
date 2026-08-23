@@ -99,6 +99,8 @@ export class SupportTicketService {
       attachment?: { url: string; name: string } | null;
       authorName?: string;
       authorId?: string;
+      /** Superadmin-only tickets (POS diagnostic logs). Default true. */
+      merchantVisible?: boolean;
     }
   ) {
     const db = getDb();
@@ -120,6 +122,7 @@ export class SupportTicketService {
         subcategory: input.subcategory?.slice(0, 80) || null,
         subject: input.subject.trim().slice(0, 255),
         status: 'open',
+        merchantVisible: input.merchantVisible !== false,
         lastMessageAt: now,
         autoCloseAt: addDays(now, 3),
       })
@@ -136,6 +139,28 @@ export class SupportTicketService {
     });
 
     return ticket!;
+  }
+
+  /** Internal POS/Web diagnostic report — superadmin inbox only, not merchant-visible. */
+  static async createDiagnosticReport(
+    merchantId: string,
+    input: {
+      source: 'webpos' | 'android';
+      subject: string;
+      body: string;
+      auto?: boolean;
+      authorName?: string;
+    }
+  ) {
+    const subcategory = input.auto ? `${input.source}-auto` : input.source;
+    return this.createTicket(merchantId, {
+      category: 'technical',
+      subcategory,
+      subject: input.subject.trim().slice(0, 255),
+      body: input.body,
+      authorName: input.authorName || 'POS diagnostics',
+      merchantVisible: false,
+    });
   }
 
   static async setFirstMessageAttachment(
@@ -160,7 +185,10 @@ export class SupportTicketService {
   static async listMerchantTickets(merchantId: string, status?: string) {
     await this.autoCloseExpired();
     const db = getDb();
-    const where = [eq(schema.supportTickets.merchantId, merchantId)];
+    const where = [
+      eq(schema.supportTickets.merchantId, merchantId),
+      eq(schema.supportTickets.merchantVisible, true),
+    ];
     if (status && status !== 'all') {
       where.push(eq(schema.supportTickets.status, status));
     }
@@ -226,6 +254,9 @@ export class SupportTicketService {
     });
     if (!ticket) throw new Error('Ticket not found');
     if (scope?.merchantId && ticket.merchantId !== scope.merchantId) {
+      throw new Error('Ticket not found');
+    }
+    if (scope?.merchantId && ticket.merchantVisible === false) {
       throw new Error('Ticket not found');
     }
     if (scope?.resellerId && ticket.resellerId !== scope.resellerId) {

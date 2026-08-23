@@ -21,7 +21,8 @@ data class CrashLogEntry(
 
 @Singleton
 class CrashLogger @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val diagnosticLogUploader: DiagnosticLogUploader
 ) {
     private val crashDir: File
         get() = File(context.filesDir, "crashes").also { it.mkdirs() }
@@ -43,7 +44,8 @@ class CrashLogger @Inject constructor(
             appendLine()
             append(sw.toString())
         }
-        writeLog("crash", body)
+        val file = writeLog("crash", body)
+        diagnosticLogUploader.scheduleUpload(file, auto = true, isCrash = true)
         Log.e(TAG, "Crash recorded", throwable)
     }
 
@@ -56,7 +58,8 @@ class CrashLogger @Inject constructor(
                 append(it.stackTraceToString())
             }
         }
-        writeLog("error", body)
+        val file = writeLog("error", body)
+        diagnosticLogUploader.scheduleUpload(file, auto = true, isCrash = false)
         if (throwable != null) Log.e(tag, message, throwable) else Log.e(tag, message)
     }
 
@@ -85,7 +88,11 @@ class CrashLogger @Inject constructor(
         crashDir.listFiles()?.forEach { it.delete() }
     }
 
-    private fun writeLog(prefix: String, body: String) {
+    fun flushPendingUploads() {
+        diagnosticLogUploader.flushPendingLogs()
+    }
+
+    private fun writeLog(prefix: String, body: String): File {
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
         val file = File(crashDir, "${prefix}_$stamp.log")
         file.writeText(buildString {
@@ -93,6 +100,7 @@ class CrashLogger @Inject constructor(
             append(body)
         })
         trimOldLogs()
+        return file
     }
 
     private fun trimOldLogs(maxFiles: Int = 50) {

@@ -58,6 +58,7 @@ import com.chaslay.pos.data.remote.PosAuthApi
 import com.chaslay.pos.data.remote.SyncApi
 import com.chaslay.pos.data.remote.dto.VerifyStaffPinRequest
 import com.chaslay.pos.data.remote.dto.PosLoginRequest
+import com.chaslay.pos.debug.CrashLogger
 import com.chaslay.pos.domain.model.LoginResult
 import com.chaslay.pos.domain.model.PosPermission
 import org.json.JSONObject
@@ -85,7 +86,8 @@ class AuthRepository @Inject constructor(
     private val syncApi: SyncApi,
     private val licenseManager: LicenseManager,
     private val syncApiKeyStore: com.chaslay.pos.data.preferences.SyncApiKeyStore,
-    private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences
+    private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences,
+    private val crashLogger: CrashLogger
 ) {
     data class AuthSession(
         val user: UserEntity,
@@ -217,6 +219,7 @@ class AuthRepository @Inject constructor(
             // Bind this device to the merchant's sync key so catalog pull/push hits the right panel.
             body.syncApiKey?.trim()?.takeIf { it.isNotEmpty() }?.let { key ->
                 syncApiKeyStore.setKey(key)
+                crashLogger.flushPendingUploads()
             }
             body.merchantId?.trim()?.takeIf { it.isNotEmpty() }?.let { id ->
                 syncPreferences.setMerchantId(id)

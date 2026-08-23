@@ -42,13 +42,12 @@ export default function WebPosLogsModal({ open, onClose, diagnostics, autoSend }
     setBusy(true);
     try {
       const body = buildSupportLogPayload(entries, fullDiagnostics);
-      await api.post('/merchant/support/tickets', {
-        category: 'technical',
-        subcategory: 'webpos',
+      await api.post('/merchant/support/diagnostic-report', {
+        source: 'webpos',
         subject: `WebPOS logs — ${new Date().toLocaleString()}`,
         body,
+        auto: false,
       });
-      toast.success(t('webPosLogsSent'));
       onClose();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
