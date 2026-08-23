@@ -1072,6 +1072,13 @@ class PosViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            if (!checkoutOpen && !preferMembership) {
+                val lookup = productRepository.findByBarcode(code)
+                if (lookup != null) {
+                    addScannedProduct(lookup)
+                    return@launch
+                }
+            }
             when (tryAttachCardFromScan(code)) {
                 CardScanResult.ATTACHED, CardScanResult.HARD_ERROR -> return@launch
                 CardScanResult.NOT_FOUND -> Unit
@@ -1082,10 +1089,12 @@ class PosViewModel @Inject constructor(
                 }
                 return@launch
             }
-            val lookup = productRepository.findByBarcode(code)
-            if (lookup != null) {
-                addScannedProduct(lookup)
-                return@launch
+            if (preferMembership) {
+                val lookup = productRepository.findByBarcode(code)
+                if (lookup != null) {
+                    addScannedProduct(lookup)
+                    return@launch
+                }
             }
             updateExtras {
                 it.copy(snackbarMessage = appContext.getString(R.string.barcode_not_found, code))
@@ -1096,6 +1105,10 @@ class PosViewModel @Inject constructor(
     private enum class CardScanResult { ATTACHED, NOT_FOUND, HARD_ERROR }
 
     private suspend fun tryAttachCardFromScan(code: String): CardScanResult {
+        val token = syncPreferences.getDashboardToken()
+        if (token.isNullOrBlank() || !_uiExtras.value.giftCardsEnabled) {
+            return CardScanResult.NOT_FOUND
+        }
         return giftCardRepository.lookupCode(code, mediaType = null).fold(
             onSuccess = { card ->
                 val membership = giftCardRepository.toAttachedMembership(card)
@@ -1157,7 +1170,16 @@ class PosViewModel @Inject constructor(
     }
 
     private fun isCardNotFound(error: Throwable): Boolean {
-        if (error is retrofit2.HttpException && error.code() == 404) return true
+        if (error is IllegalArgumentException &&
+            error.message.orEmpty().contains("Cloud login required", ignoreCase = true)
+        ) {
+            return true
+        }
+        if (error is retrofit2.HttpException) {
+            when (error.code()) {
+                404, 401, 403, 501 -> return true
+            }
+        }
         val msg = error.message.orEmpty()
         return msg.contains("not found", ignoreCase = true)
     }
@@ -3637,6 +3659,7 @@ class PosViewModel @Inject constructor(
             decrementStockForCartItems(payable.items)
             if (cartManager.snapshot().items.isEmpty()) {
                 cartManager.snapshot().tableOrderId?.let { tableOrderRepository.closeOrder(it) }
+                finalizeHeldOrderAfterPayment(kitchenCart)
                 cartManager.clear()
             }
             refreshTables()
@@ -4169,6 +4192,7 @@ class PosViewModel @Inject constructor(
                     }
                     if (remaining.items.isEmpty()) {
                         remaining.tableOrderId?.let { tableOrderRepository.closeOrder(it) }
+                        finalizeHeldOrderAfterPayment(kitchenCart)
                         if (!isEqualSplit || equalSplitPaid >= fullCart.splitCount) {
                             cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
                             cartManager.resetSplit()
@@ -4351,6 +4375,11 @@ class PosViewModel @Inject constructor(
     private suspend fun refreshOnlineOrderAlertState() {
         val heldIds = heldOrderRepository.getOngoingHeldOrders().map { it.id }.toSet()
         onlineOrderAlertCoordinator.pruneMissingHeldOrderIds(heldIds)
+    }
+
+    private suspend fun finalizeHeldOrderAfterPayment(cart: CartSummary) {
+        heldOrderRepository.completeAfterPayment(cart)
+        refreshOnlineOrderAlertState()
     }
 
     fun showNewOrderDialog() {

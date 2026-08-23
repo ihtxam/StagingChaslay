@@ -2578,6 +2578,33 @@ class HeldOrderRepository @Inject constructor(
         heldOrderDao.delete(id)
     }
 
+    /** Clears kitchen/hold snapshots after a full payment. Pay-later and invoice orders are left intact. */
+    suspend fun completeAfterPayment(cart: CartSummary): Boolean {
+        var removed = false
+        val orderNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() }
+        if (orderNumber != null) {
+            heldOrderDao.getByOrderNumber(orderNumber)
+                ?.takeIf { it.isKitchenOrCounterSnapshot() }
+                ?.let {
+                    deleteHeldOrder(it.id)
+                    removed = true
+                }
+        }
+        val tableOrderId = cart.tableOrderId?.trim()?.takeIf { it.isNotBlank() }
+        if (tableOrderId != null) {
+            heldOrderDao.getActive()
+                .filter { it.tableOrderId == tableOrderId && it.isKitchenOrCounterSnapshot() }
+                .forEach {
+                    deleteHeldOrder(it.id)
+                    removed = true
+                }
+        }
+        return removed
+    }
+
+    private fun HeldOrderEntity.isKitchenOrCounterSnapshot(): Boolean =
+        paymentMethod != PaymentMethod.PAY_LATER && paymentMethod != PaymentMethod.INVOICE
+
     /** Deletes ALL held orders and their items. Irreversible. */
     suspend fun clearAll() {
         heldOrderItemDao.deleteAll()
