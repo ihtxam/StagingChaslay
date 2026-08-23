@@ -485,9 +485,9 @@ function MerchantShell() {
           language={locale}
           onLanguageChange={changeLanguage}
           profileMenu={{
-            settingsPath: '/merchant/settings',
-            billingPath: '/merchant/billing',
-            supportPath: '/merchant/support',
+            settingsPath: allow('/merchant/settings') ? '/merchant/settings' : undefined,
+            billingPath: allow('/merchant/billing') ? '/merchant/billing' : undefined,
+            supportPath: allow('/merchant/support') ? '/merchant/support' : undefined,
           }}
           shopName={merchantShopName}
           shopPath={allow('/merchant/platform-shop') ? '/merchant/platform-shop' : null}
