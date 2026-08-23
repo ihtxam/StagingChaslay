@@ -130,6 +130,7 @@ function MerchantShell() {
   );
   /** When true on /merchant/pos, hide sidebar + header so WebPOS feels like its own app. */
   const [posAppMode, setPosAppMode] = useState(true);
+  const [merchantShopName, setMerchantShopName] = useState<string | null>(null);
   const [editionFeatures, setEditionFeatures] = useState<EditionFeatureKey[] | null>(null);
   const [inventoryLicensed, setInventoryLicensed] = useState(() => isInventoryLicensed(user));
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
@@ -207,6 +208,7 @@ function MerchantShell() {
   useEffect(() => {
     let cancelled = false;
     const applySettings = (settings: {
+      name?: string | null;
       editionFeatures?: EditionFeatureKey[] | null;
       inventoryAddonEnabled?: boolean;
       inventoryEnabled?: boolean;
@@ -217,6 +219,7 @@ function MerchantShell() {
       setEditionFeatures(Array.isArray(feats) ? feats : null);
       setInventoryLicensed(isInventoryLicensed(settings) || isInventoryLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
+      setMerchantShopName(settings?.name?.trim() || null);
     };
     const load = () => {
       api
@@ -438,7 +441,6 @@ function MerchantShell() {
       label: t('navAccount'),
       icon: '⚙️',
       children: [
-        { label: t('billing'), path: '/merchant/billing', icon: '💼' },
         { label: t('platformShopTitle'), path: '/merchant/platform-shop', icon: '🛒' },
       ].filter((item) => allow(item.path)),
     },
@@ -472,6 +474,7 @@ function MerchantShell() {
             billingPath: '/merchant/billing',
             supportPath: '/merchant/support',
           }}
+          shopName={merchantShopName}
         />
       )}
 

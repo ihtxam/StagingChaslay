@@ -15,6 +15,16 @@ export function displaySidebarAccountName(name?: string | null): string {
   return n;
 }
 
+/** Merchant shop name for the panel sidebar header — no Chaslay branding prefix. */
+export function displaySidebarShopName(name?: string | null): string {
+  const n = name?.trim() || '';
+  if (!n) return 'Shop';
+  if (/^chaslay(reborn)?(\s+admin)?$/i.test(n)) return 'Shop';
+  if (/^chaslay\s+shop$/i.test(n)) return 'Shop';
+  const stripped = n.replace(/^chaslay\s+/i, '').trim();
+  return stripped || 'Shop';
+}
+
 /** Browser tab title for online shop pages (merchant site + platform). */
 export function shopDocumentTitle(pageOrMerchantName?: string | null): string {
   const label = pageOrMerchantName?.trim();

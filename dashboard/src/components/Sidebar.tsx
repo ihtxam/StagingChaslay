@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, Settings, User, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
-import { APP_NAME, displaySidebarAccountName } from '@/lib/brand';
+import { displaySidebarAccountName, displaySidebarShopName } from '@/lib/brand';
 import { useI18n, type Locale } from '@/lib/i18n';
 
 export interface SidebarLeaf {
@@ -44,6 +44,8 @@ interface SidebarProps {
     billingPath?: string;
     supportPath?: string;
   };
+  /** Merchant shop name in the sidebar header (defaults to "Shop"). */
+  shopName?: string | null;
 }
 
 const STORAGE_PREFIX = 'sidebar_groups_open:';
@@ -84,6 +86,7 @@ export default function Sidebar({
   language,
   onLanguageChange,
   profileMenu,
+  shopName,
 }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -102,6 +105,7 @@ export default function Sidebar({
         : user?.roleName || user?.role || '');
 
   const accountName = displaySidebarAccountName(registerDisplay?.name || user?.name);
+  const headerShopName = displaySidebarShopName(shopName);
 
   const activeGroupIds = useMemo(() => {
     const ids = new Set<string>();
@@ -205,7 +209,7 @@ export default function Sidebar({
       >
         <div className="panel-sidebar-divider px-4 py-3 border-b flex items-center justify-between shrink-0">
           <div>
-            <h1 className="text-base font-semibold tracking-tight text-white">{APP_NAME}</h1>
+            <h1 className="text-base font-semibold tracking-tight text-white">{headerShopName}</h1>
             <p className="text-[11px] text-teal-100/70 mt-0.5">{t('panel')}</p>
           </div>
           <button
