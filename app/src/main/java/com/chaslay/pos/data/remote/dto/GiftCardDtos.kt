@@ -91,7 +91,18 @@ data class GiftCardSettingsDto(
     @SerializedName("customAmountEnabled") val customAmountEnabled: Boolean = true,
     @SerializedName("membershipEnabled") val membershipEnabled: Boolean = false,
     @SerializedName("membershipPlans") val membershipPlans: List<GiftCardMembershipPlanDto> = emptyList()
-)
+) {
+    companion object {
+        val DEFAULT = GiftCardSettingsDto(
+            enabled = true,
+            presetDenominations = listOf(20.0, 50.0, 100.0, 150.0),
+            minAmount = 5.0,
+            maxAmount = 500.0,
+            reloadEnabled = true,
+            customAmountEnabled = true
+        )
+    }
+}
 
 data class GiftCardPointsRequest(
     val points: Int,

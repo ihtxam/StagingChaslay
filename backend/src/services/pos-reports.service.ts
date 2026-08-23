@@ -65,7 +65,7 @@ function round2(n: number) {
 }
 
 /** Paid tickets count as sales even while kitchen fulfillment is still open. */
-function isCountableSale(o: { status?: string | null; paymentStatus?: string | null }): boolean {
+export function isCountableSale(o: { status?: string | null; paymentStatus?: string | null }): boolean {
   const status = String(o.status || "").toLowerCase();
   const pay = String(o.paymentStatus || "").toLowerCase();
   if (["cancelled", "canceled", "refunded"].includes(status)) return false;
