@@ -31,6 +31,16 @@ async function maybePushOdsReady(merchantId: string, orderNumber: string | null 
   }
 }
 
+async function maybePushOdsPreparing(merchantId: string, orderNumber: string | null | undefined) {
+  if (!orderNumber?.trim()) return;
+  try {
+    const { OdsService } = await import("@/services/ods.service");
+    await OdsService.pushOrder(merchantId, { orderNumber: orderNumber.trim(), status: "preparing" });
+  } catch {
+    /* ODS optional */
+  }
+}
+
 export type KdsStationInput = {
   name: string;
   orderTypes?: string[];
@@ -454,6 +464,7 @@ export class KdsService {
       .update(schema.kdsTickets)
       .set({ status: "pending", completedAt: null, updatedAt: now })
       .where(eq(schema.kdsTickets.id, item.ticketId));
+    await maybePushOdsPreparing(station.merchantId, item.ticket.orderNumber);
     return { ok: true, lineId: item.lineId, ticketKey: item.ticket.ticketKey };
   }
 
@@ -509,6 +520,7 @@ export class KdsService {
           eq(schema.kdsTicketItems.status, "ready")
         )
       );
+    await maybePushOdsPreparing(station.merchantId, ticket.orderNumber);
     return { ok: true };
   }
 

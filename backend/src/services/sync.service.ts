@@ -737,6 +737,18 @@ export class SyncService {
         }
       }
 
+      if (!isCancelled && fulfillmentOpen) {
+        void import("@/services/ods.service")
+          .then(({ OdsService }) =>
+            OdsService.syncFromOrder(merchantId, {
+              orderNumber,
+              notes: orderValuesBase.notes,
+              status: orderValuesBase.status,
+            })
+          )
+          .catch(() => {});
+      }
+
       results.push({ clientId: sale.clientId, orderId: order.id, created: true, invoiceNumber });
     }
 

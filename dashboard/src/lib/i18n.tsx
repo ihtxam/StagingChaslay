@@ -2287,7 +2287,7 @@ const en: Dict = {
   odsActionFailed: 'Order display action failed',
   odsSettingsTitle: 'Order display (ODS)',
   odsSettingsHint:
-    'Create a customer-facing screen, copy the link to a wall-mounted TV or tablet, and choose a color theme.',
+    'Customer pickup board with two columns: Being prepared and Ready for pickup. Orders appear when accepted or sent to kitchen, move to Ready when marked ready (Order Center, online orders, or KDS), and disappear when picked up or completed.',
   odsAddDisplay: 'Add ODS screen',
   odsDisplayNamePlaceholder: 'e.g. Counter pickup board',
   odsThemeHint: 'Light matches the default white board; teal and dark are alternate themes.',
