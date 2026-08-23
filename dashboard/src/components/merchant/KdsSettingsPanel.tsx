@@ -9,6 +9,7 @@ type KdsStation = {
   id: string;
   name: string;
   token: string;
+  shortCode?: string | null;
   orderTypes: string[];
   categoryIds: string[];
   productIds: string[];
@@ -30,11 +31,12 @@ type Category = {
 
 const CHANNELS = ['takeaway', 'dine_in', 'delivery'] as const;
 
-function kdsPublicUrl(token: string): string {
+function kdsPublicUrl(station: Pick<KdsStation, 'shortCode' | 'token'>): string {
   const origin =
     (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ||
     (typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com');
-  return `${origin.replace(/\/$/, '')}/kds/${token}`;
+  const code = (station.shortCode || station.token).trim();
+  return `${origin.replace(/\/$/, '')}/kds/${code}`;
 }
 
 export default function KdsSettingsPanel() {
@@ -166,8 +168,8 @@ export default function KdsSettingsPanel() {
     }
   };
 
-  const copyUrl = async (token: string) => {
-    const url = kdsPublicUrl(token);
+  const copyUrl = async (station: Pick<KdsStation, 'shortCode' | 'token'>) => {
+    const url = kdsPublicUrl(station);
     try {
       await navigator.clipboard.writeText(url);
       toast.success(t('kdsUrlCopied'));
@@ -416,13 +418,15 @@ export default function KdsSettingsPanel() {
       ) : (
         <ul className="space-y-3">
           {stations.map((s) => {
-            const url = kdsPublicUrl(s.token);
+            const url = kdsPublicUrl(s);
+            const code = s.shortCode || s.token.slice(0, 8);
             const saving = savingStationId === s.id;
             return (
               <li key={s.id} className="rounded-xl border border-stone-200 bg-white p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">{s.name}</p>
+                    <p className="mt-1 text-2xl font-mono font-bold tracking-wider text-teal-700">{code}</p>
                     <p className="mt-1 break-all font-mono text-xs text-stone-500">{url}</p>
                     <div className="mt-3 space-y-2">
                       <div>
@@ -526,7 +530,7 @@ export default function KdsSettingsPanel() {
                       type="button"
                       className="rounded-lg border border-stone-300 p-2 hover:bg-stone-50"
                       title={t('kdsCopyUrl')}
-                      onClick={() => void copyUrl(s.token)}
+                      onClick={() => void copyUrl(s)}
                     >
                       <Copy className="h-4 w-4" />
                     </button>

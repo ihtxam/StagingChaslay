@@ -1,8 +1,12 @@
 import { randomBytes } from "crypto";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { readKdsAddonEnabled } from "@/lib/kds-addon";
 import { ensureKdsAddonColumn } from "@/lib/ensure-merchant-schema";
+import {
+  allocateDisplayShortCode,
+  ensureKdsStationShortCodes,
+} from "@/lib/display-short-code";
 
 export class KdsLicenseError extends Error {
   code = "KDS_ADDON_REQUIRED";
@@ -115,6 +119,7 @@ export class KdsService {
   static async listStations(merchantId: string) {
     await requireAddon(merchantId);
     const db = getDb();
+    await ensureKdsStationShortCodes(db, merchantId);
     return db.query.kdsStations.findMany({
       where: eq(schema.kdsStations.merchantId, merchantId),
       orderBy: [asc(schema.kdsStations.name)],
@@ -132,6 +137,7 @@ export class KdsService {
         merchantId,
         name,
         token: newToken(),
+        shortCode: await allocateDisplayShortCode(db),
         orderTypes: input.orderTypes || [],
         categoryIds: input.categoryIds || [],
         productIds: input.productIds || [],
@@ -181,17 +187,26 @@ export class KdsService {
     const db = getDb();
     const [row] = await db
       .update(schema.kdsStations)
-      .set({ token: newToken(), updatedAt: new Date() })
+      .set({
+        token: newToken(),
+        shortCode: await allocateDisplayShortCode(db),
+        updatedAt: new Date(),
+      })
       .where(and(eq(schema.kdsStations.id, id), eq(schema.kdsStations.merchantId, merchantId)))
       .returning();
     if (!row) throw new Error("KDS station not found");
     return row;
   }
 
-  static async stationByToken(token: string) {
+  static async stationByToken(accessKey: string) {
+    const trimmed = String(accessKey || "").trim();
+    if (!trimmed) return null;
     const db = getDb();
     return db.query.kdsStations.findFirst({
-      where: and(eq(schema.kdsStations.token, token), eq(schema.kdsStations.isActive, true)),
+      where: and(
+        or(eq(schema.kdsStations.shortCode, trimmed), eq(schema.kdsStations.token, trimmed)),
+        eq(schema.kdsStations.isActive, true)
+      ),
     });
   }
 
