@@ -30,3 +30,17 @@ data class ValidateLicenseResponse(
     @SerializedName("customerName") val customerName: String? = null,
     @SerializedName("planLabel") val planLabel: String? = null
 )
+
+data class LicenseActivationErrorRequest(
+    @SerializedName("deviceId") val deviceId: String,
+    @SerializedName("activationCode") val activationCode: String? = null,
+    @SerializedName("errorMessage") val errorMessage: String,
+    @SerializedName("appVersion") val appVersion: String? = null,
+    @SerializedName("deviceModel") val deviceModel: String? = null,
+    @SerializedName("tenantSlug") val tenantSlug: String? = null
+)
+
+data class LicenseActivationErrorResponse(
+    @SerializedName("ok") val ok: Boolean,
+    @SerializedName("referenceId") val referenceId: String? = null
+)

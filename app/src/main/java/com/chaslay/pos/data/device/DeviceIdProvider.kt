@@ -46,7 +46,10 @@ class DeviceIdProvider @Inject constructor(
         if (clean.length == 8) {
             return "${clean.substring(0, 4)}-${clean.substring(4, 8)}"
         }
-        return raw.trim().uppercase()
+        if (clean.isNotEmpty()) {
+            return deriveShortDeviceId(raw)
+        }
+        return ""
     }
 
     private fun generateShortDeviceId(): String {

@@ -6,6 +6,7 @@ import com.chaslay.pos.data.device.DeviceIdProvider
 import com.chaslay.pos.data.preferences.LicenseManager
 import com.chaslay.pos.data.remote.LicenseApi
 import com.chaslay.pos.data.remote.dto.ActivateLicenseRequest
+import com.chaslay.pos.data.remote.dto.LicenseActivationErrorRequest
 import com.chaslay.pos.domain.model.LicenseGateState
 import com.chaslay.pos.domain.model.LicenseSnapshot
 import com.chaslay.pos.domain.model.LicenseStatus
@@ -58,13 +59,16 @@ class LicenseRepository @Inject constructor(
         if (deviceId.isBlank()) {
             return@withContext Result.failure(IllegalStateException("Device ID not ready. Restart the app and try again."))
         }
+        val tenantSlug = BuildConfig.TENANT_SLUG.takeIf { it.isNotBlank() }
+        val deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
         runCatching {
             val response = licenseApi.activate(
                 ActivateLicenseRequest(
                     deviceId = deviceId,
                     activationCode = trimmed,
                     appVersion = BuildConfig.VERSION_NAME,
-                    deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
+                    deviceModel = deviceModel,
+                    tenantSlug = tenantSlug
                 )
             )
             licenseManager.saveActivation(
@@ -72,10 +76,20 @@ class LicenseRepository @Inject constructor(
                 expiresAt = response.expiresAt,
                 customerName = response.customerName,
                 planLabel = response.planLabel,
-                tenantSlug = response.tenantSlug ?: BuildConfig.TENANT_SLUG.takeIf { it.isNotBlank() }
+                tenantSlug = response.tenantSlug ?: tenantSlug
             )
         }.recoverCatching { error ->
-            throw IllegalStateException(readApiError(error), error)
+            val message = readApiError(error)
+            if (error !is HttpException) {
+                reportClientActivationError(
+                    deviceId = deviceId,
+                    activationCode = trimmed,
+                    errorMessage = message,
+                    deviceModel = deviceModel,
+                    tenantSlug = tenantSlug
+                )
+            }
+            throw IllegalStateException(message, error)
         }
     }
 
@@ -112,11 +126,40 @@ class LicenseRepository @Inject constructor(
             val raw = error.response()?.errorBody()?.string()
             if (!raw.isNullOrBlank()) {
                 runCatching {
-                    JSONObject(raw).optString("error").takeIf { it.isNotBlank() }
+                    val json = JSONObject(raw)
+                    val apiError = json.optString("error").takeIf { it.isNotBlank() }
+                    val referenceId = json.optString("referenceId").takeIf { it.isNotBlank() }
+                    when {
+                        apiError != null && referenceId != null ->
+                            "$apiError (Ref: ${referenceId.take(8).uppercase()})"
+                        apiError != null -> apiError
+                        else -> null
+                    }
                 }.getOrNull()?.let { return it }
             }
             return "Activation failed (HTTP ${error.code()})"
         }
         return error.message ?: "Activation failed. Check internet and code."
+    }
+
+    private suspend fun reportClientActivationError(
+        deviceId: String,
+        activationCode: String,
+        errorMessage: String,
+        deviceModel: String,
+        tenantSlug: String?
+    ) {
+        runCatching {
+            licenseApi.reportActivationError(
+                LicenseActivationErrorRequest(
+                    deviceId = deviceId,
+                    activationCode = activationCode,
+                    errorMessage = errorMessage,
+                    appVersion = BuildConfig.VERSION_NAME,
+                    deviceModel = deviceModel,
+                    tenantSlug = tenantSlug
+                )
+            )
+        }
     }
 }

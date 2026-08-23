@@ -2,6 +2,8 @@ package com.chaslay.pos.data.remote
 
 import com.chaslay.pos.data.remote.dto.ActivateLicenseRequest
 import com.chaslay.pos.data.remote.dto.ActivateLicenseResponse
+import com.chaslay.pos.data.remote.dto.LicenseActivationErrorRequest
+import com.chaslay.pos.data.remote.dto.LicenseActivationErrorResponse
 import com.chaslay.pos.data.remote.dto.ValidateLicenseRequest
 import com.chaslay.pos.data.remote.dto.ValidateLicenseResponse
 import retrofit2.http.Body
@@ -13,4 +15,7 @@ interface LicenseApi {
 
     @POST("v1/license/validate")
     suspend fun validate(@Body request: ValidateLicenseRequest): ValidateLicenseResponse
+
+    @POST("v1/license/report-error")
+    suspend fun reportActivationError(@Body request: LicenseActivationErrorRequest): LicenseActivationErrorResponse
 }
