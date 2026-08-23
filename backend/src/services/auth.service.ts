@@ -5,6 +5,8 @@ import { eq, sql } from "drizzle-orm";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
+import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
+import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
 
 export interface JWTPayload {
   id: string;
@@ -172,6 +174,12 @@ export class AuthService {
       enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
       screenLimit: 2,
     }));
+    const kdsOn = await readKdsAddonEnabled(merchant.id).catch(() =>
+      isKdsAddonEnabled(merchant.kdsAddonEnabled)
+    );
+    const odsOn = await readOdsAddonEnabled(merchant.id).catch(() =>
+      isOdsAddonEnabled(merchant.odsAddonEnabled)
+    );
     return {
       token,
       merchant: {
@@ -185,6 +193,10 @@ export class AuthService {
         signageAddonEnabled: signage.enabled,
         signageEnabled: signage.enabled,
         signageScreenLimit: signage.screenLimit,
+        kdsAddonEnabled: kdsOn,
+        kdsEnabled: kdsOn,
+        odsAddonEnabled: odsOn,
+        odsEnabled: odsOn,
       },
       isOwner: true,
     };
@@ -219,6 +231,8 @@ export class AuthService {
       enabled: false,
       screenLimit: 2,
     }));
+    const kdsOn = await readKdsAddonEnabled(staff.merchantId).catch(() => false);
+    const odsOn = await readOdsAddonEnabled(staff.merchantId).catch(() => false);
     return {
       token,
       merchant: {
@@ -234,6 +248,10 @@ export class AuthService {
         signageAddonEnabled: signage.enabled,
         signageEnabled: signage.enabled,
         signageScreenLimit: signage.screenLimit,
+        kdsAddonEnabled: kdsOn,
+        kdsEnabled: kdsOn,
+        odsAddonEnabled: odsOn,
+        odsEnabled: odsOn,
       },
       isOwner: false,
     };
@@ -441,6 +459,12 @@ export class AuthService {
       enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
       screenLimit: 2,
     }));
+    const kdsOn = await readKdsAddonEnabled(merchant.id).catch(() =>
+      isKdsAddonEnabled(merchant.kdsAddonEnabled)
+    );
+    const odsOn = await readOdsAddonEnabled(merchant.id).catch(() =>
+      isOdsAddonEnabled(merchant.odsAddonEnabled)
+    );
     return {
       token,
       merchant: {
@@ -453,6 +477,10 @@ export class AuthService {
         signageAddonEnabled: signage.enabled,
         signageEnabled: signage.enabled,
         signageScreenLimit: signage.screenLimit,
+        kdsAddonEnabled: kdsOn,
+        kdsEnabled: kdsOn,
+        odsAddonEnabled: odsOn,
+        odsEnabled: odsOn,
       },
       impersonatedBy: superadminId,
     };
@@ -482,6 +510,12 @@ export class AuthService {
         enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
         screenLimit: 2,
       }));
+      const kdsOn = await readKdsAddonEnabled(merchantId).catch(() =>
+        isKdsAddonEnabled(merchant.kdsAddonEnabled)
+      );
+      const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
+        isOdsAddonEnabled(merchant.odsAddonEnabled)
+      );
       return {
         id: merchant.id,
         email: merchant.email,
@@ -492,6 +526,10 @@ export class AuthService {
         signageAddonEnabled: signage.enabled,
         signageEnabled: signage.enabled,
         signageScreenLimit: signage.screenLimit,
+        kdsAddonEnabled: kdsOn,
+        kdsEnabled: kdsOn,
+        odsAddonEnabled: odsOn,
+        odsEnabled: odsOn,
       };
     } catch (error) {
       console.error("Error getting merchant:", error);

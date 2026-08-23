@@ -50,6 +50,8 @@ const reseller_service_1 = require("@/services/reseller.service");
 const edition_features_1 = require("@/lib/edition-features");
 const inventory_addon_1 = require("@/lib/inventory-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
+const kds_addon_1 = require("@/lib/kds-addon");
+const ods_addon_1 = require("@/lib/ods-addon");
 const router = (0, express_1.Router)();
 const imageUpload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
@@ -150,6 +152,78 @@ router.put("/platform-settings/adyen", async (req, res) => {
         });
     }
 });
+/**
+ * GET /api/superadmin/platform-settings/brevo
+ */
+router.get("/platform-settings/brevo", async (_req, res) => {
+    try {
+        const brevo = await platform_settings_service_1.PlatformSettingsService.getBrevoSettingsPublic();
+        res.json({ success: true, brevo });
+    }
+    catch (error) {
+        console.error("Error getting platform Brevo settings:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load Brevo settings",
+        });
+    }
+});
+/**
+ * PUT /api/superadmin/platform-settings/brevo
+ */
+router.put("/platform-settings/brevo", async (req, res) => {
+    try {
+        const brevo = await platform_settings_service_1.PlatformSettingsService.updateBrevoSettings(req.body || {});
+        res.json({ success: true, brevo });
+    }
+    catch (error) {
+        console.error("Error updating platform Brevo settings:", error);
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to save Brevo settings",
+        });
+    }
+});
+/**
+ * GET /api/superadmin/email/usage — platform email send statistics
+ */
+router.get("/email/usage", async (_req, res) => {
+    try {
+        const { EmailUsageService } = await Promise.resolve().then(() => __importStar(require("@/services/email-usage.service")));
+        const usage = await EmailUsageService.getPlatformUsageSummary();
+        res.json({ success: true, usage });
+    }
+    catch (error) {
+        console.error("Error getting email usage:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load email usage",
+        });
+    }
+});
+/**
+ * POST /api/superadmin/email/test — send a test email via platform Brevo
+ */
+router.post("/email/test", async (req, res) => {
+    try {
+        const to = String(req.body?.to || "").trim();
+        if (!to) {
+            res.status(400).json({ error: "Recipient email is required" });
+            return;
+        }
+        const { EmailService } = await Promise.resolve().then(() => __importStar(require("@/services/email.service")));
+        await EmailService.send({
+            to,
+            subject: "Chaslay platform email test",
+            html: "<p>This is a test email from Chaslay platform Brevo.</p>",
+            emailType: "marketing_test",
+        });
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error("Error sending platform test email:", error);
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to send test email",
+        });
+    }
+});
 // ============================================================================
 // MERCHANT MANAGEMENT
 // ============================================================================
@@ -224,7 +298,7 @@ router.post("/merchants/:merchantId/impersonate", async (req, res) => {
  */
 router.post("/merchants", async (req, res) => {
     try {
-        const { email, password, businessName, contactName, phone, address, city, country, slug, shopEnabled, subscriptionPlan, status, deviceSeats, licenseType, customDays, editionId, resellerId, businessCategory, maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, } = req.body;
+        const { email, password, businessName, contactName, phone, address, city, country, slug, shopEnabled, subscriptionPlan, status, deviceSeats, licenseType, customDays, editionId, resellerId, businessCategory, maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, } = req.body;
         if (!email || !password || !businessName) {
             return res.status(400).json({ error: "Email, password, and business name are required" });
         }
@@ -244,6 +318,8 @@ router.post("/merchants", async (req, res) => {
             inventoryAddonEnabled: (0, inventory_addon_1.isInventoryAddonEnabled)(inventoryAddonEnabled),
             signageAddonEnabled: (0, signage_addon_1.isSignageAddonEnabled)(signageAddonEnabled),
             signageScreenLimit: signageScreenLimit != null ? (0, signage_addon_1.normalizeSignageScreenLimit)(signageScreenLimit) : undefined,
+            kdsAddonEnabled: (0, kds_addon_1.isKdsAddonEnabled)(kdsAddonEnabled),
+            odsAddonEnabled: (0, ods_addon_1.isOdsAddonEnabled)(odsAddonEnabled),
         });
         res.status(201).json({
             success: true,
@@ -299,7 +375,11 @@ router.put("/merchants/:merchantId", async (req, res) => {
             updates.inventoryEnabled != null ||
             updates.signageAddonEnabled != null ||
             updates.signageEnabled != null ||
-            updates.signageScreenLimit != null) {
+            updates.signageScreenLimit != null ||
+            updates.kdsAddonEnabled != null ||
+            updates.kdsEnabled != null ||
+            updates.odsAddonEnabled != null ||
+            updates.odsEnabled != null) {
             await merchant_service_1.MerchantService.updatePosPostLimits(merchantId, {
                 maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
                 maxWaiterPosts: updates.maxWaiterPosts != null ? Number(updates.maxWaiterPosts) : undefined,
@@ -316,6 +396,16 @@ router.put("/merchants/:merchantId", async (req, res) => {
                 signageScreenLimit: updates.signageScreenLimit != null
                     ? (0, signage_addon_1.normalizeSignageScreenLimit)(updates.signageScreenLimit)
                     : undefined,
+                kdsAddonEnabled: updates.kdsAddonEnabled != null
+                    ? (0, kds_addon_1.isKdsAddonEnabled)(updates.kdsAddonEnabled)
+                    : updates.kdsEnabled != null
+                        ? (0, kds_addon_1.isKdsAddonEnabled)(updates.kdsEnabled)
+                        : undefined,
+                odsAddonEnabled: updates.odsAddonEnabled != null
+                    ? (0, ods_addon_1.isOdsAddonEnabled)(updates.odsAddonEnabled)
+                    : updates.odsEnabled != null
+                        ? (0, ods_addon_1.isOdsAddonEnabled)(updates.odsEnabled)
+                        : undefined,
             });
             delete updates.maxPosPosts;
             delete updates.maxWaiterPosts;
@@ -324,6 +414,10 @@ router.put("/merchants/:merchantId", async (req, res) => {
             delete updates.signageAddonEnabled;
             delete updates.signageEnabled;
             delete updates.signageScreenLimit;
+            delete updates.kdsAddonEnabled;
+            delete updates.kdsEnabled;
+            delete updates.odsAddonEnabled;
+            delete updates.odsEnabled;
         }
         const merchant = Object.keys(updates).length > 0
             ? await merchant_service_1.MerchantService.updateMerchant(merchantId, updates)

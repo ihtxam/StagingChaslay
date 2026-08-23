@@ -56,6 +56,10 @@ export declare class AuthService {
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
             signageScreenLimit: number;
+            kdsAddonEnabled: boolean;
+            kdsEnabled: boolean;
+            odsAddonEnabled: boolean;
+            odsEnabled: boolean;
         };
         isOwner: boolean;
     } | {
@@ -67,12 +71,16 @@ export declare class AuthService {
             status: string;
             staffId: string;
             roleName: string | undefined;
-            permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
+            permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
             inventoryAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
             signageScreenLimit: number;
+            kdsAddonEnabled: boolean;
+            kdsEnabled: boolean;
+            odsAddonEnabled: boolean;
+            odsEnabled: boolean;
         };
         isOwner: boolean;
     }>;
@@ -89,6 +97,10 @@ export declare class AuthService {
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
             signageScreenLimit: number;
+            kdsAddonEnabled: boolean;
+            kdsEnabled: boolean;
+            odsAddonEnabled: boolean;
+            odsEnabled: boolean;
         };
         isOwner: boolean;
     }>;
@@ -101,12 +113,16 @@ export declare class AuthService {
             status: string;
             staffId: string;
             roleName: string | undefined;
-            permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
+            permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
             inventoryAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
             signageScreenLimit: number;
+            kdsAddonEnabled: boolean;
+            kdsEnabled: boolean;
+            odsAddonEnabled: boolean;
+            odsEnabled: boolean;
         };
         isOwner: boolean;
     }>;
@@ -136,6 +152,10 @@ export declare class AuthService {
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
             signageScreenLimit: number;
+            kdsAddonEnabled: boolean;
+            kdsEnabled: boolean;
+            odsAddonEnabled: boolean;
+            odsEnabled: boolean;
         };
         isOwner: boolean;
         reseller?: undefined;
@@ -150,12 +170,16 @@ export declare class AuthService {
             status: string;
             staffId: string;
             roleName: string | undefined;
-            permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
+            permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
             inventoryAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
             signageScreenLimit: number;
+            kdsAddonEnabled: boolean;
+            kdsEnabled: boolean;
+            odsAddonEnabled: boolean;
+            odsEnabled: boolean;
         };
         isOwner: boolean;
         reseller?: undefined;
@@ -210,6 +234,10 @@ export declare class AuthService {
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
             signageScreenLimit: number;
+            kdsAddonEnabled: boolean;
+            kdsEnabled: boolean;
+            odsAddonEnabled: boolean;
+            odsEnabled: boolean;
         };
         impersonatedBy: string;
     }>;
@@ -226,6 +254,10 @@ export declare class AuthService {
         signageAddonEnabled: boolean;
         signageEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        kdsEnabled: boolean;
+        odsAddonEnabled: boolean;
+        odsEnabled: boolean;
     }>;
     /**
      * Update merchant password

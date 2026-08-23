@@ -1,9 +1,68 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KdsService = void 0;
+exports.KdsService = exports.KdsLicenseError = void 0;
 const crypto_1 = require("crypto");
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
+const kds_addon_1 = require("@/lib/kds-addon");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
+class KdsLicenseError extends Error {
+    constructor() {
+        super("Kitchen display (KDS) addon is not enabled for this merchant");
+        this.code = "KDS_ADDON_REQUIRED";
+    }
+}
+exports.KdsLicenseError = KdsLicenseError;
+async function requireAddon(merchantId) {
+    await (0, ensure_merchant_schema_1.ensureKdsAddonColumn)();
+    const enabled = await (0, kds_addon_1.readKdsAddonEnabled)(merchantId);
+    if (!enabled)
+        throw new KdsLicenseError();
+}
+async function maybePushOdsReady(merchantId, orderNumber) {
+    if (!orderNumber?.trim())
+        return;
+    try {
+        const { OdsService } = await Promise.resolve().then(() => __importStar(require("@/services/ods.service")));
+        await OdsService.pushOrder(merchantId, { orderNumber: orderNumber.trim(), status: "ready" });
+    }
+    catch {
+        /* ODS optional */
+    }
+}
 function newToken() {
     return (0, crypto_1.randomBytes)(24).toString("hex");
 }
@@ -21,8 +80,10 @@ function itemMatchesStation(item, station, channel) {
         return true;
     return false;
 }
+const COMPLETED_RETENTION_MS = 24 * 60 * 60 * 1000;
 class KdsService {
     static async listStations(merchantId) {
+        await requireAddon(merchantId);
         const db = (0, db_1.getDb)();
         return db.query.kdsStations.findMany({
             where: (0, drizzle_orm_1.eq)(db_1.schema.kdsStations.merchantId, merchantId),
@@ -30,6 +91,7 @@ class KdsService {
         });
     }
     static async createStation(merchantId, input) {
+        await requireAddon(merchantId);
         const db = (0, db_1.getDb)();
         const name = String(input.name || "").trim().slice(0, 255);
         if (!name)
@@ -49,6 +111,7 @@ class KdsService {
         return row;
     }
     static async updateStation(merchantId, id, input) {
+        await requireAddon(merchantId);
         const db = (0, db_1.getDb)();
         const patch = { updatedAt: new Date() };
         if (input.name != null)
@@ -71,6 +134,7 @@ class KdsService {
         return row;
     }
     static async deleteStation(merchantId, id) {
+        await requireAddon(merchantId);
         const db = (0, db_1.getDb)();
         await db
             .delete(db_1.schema.kdsStations)
@@ -78,6 +142,7 @@ class KdsService {
         return { ok: true };
     }
     static async rotateToken(merchantId, id) {
+        await requireAddon(merchantId);
         const db = (0, db_1.getDb)();
         const [row] = await db
             .update(db_1.schema.kdsStations)
@@ -96,6 +161,7 @@ class KdsService {
     }
     /** Upsert ticket + append new line items when kitchen receives an order. */
     static async pushKitchen(merchantId, payload) {
+        await requireAddon(merchantId);
         const ticketKey = String(payload.ticketKey || "").trim().slice(0, 255);
         if (!ticketKey)
             throw new Error("ticketKey is required");
@@ -162,8 +228,10 @@ class KdsService {
         const station = await this.stationByToken(token);
         if (!station)
             throw new Error("Invalid KDS link");
+        await requireAddon(station.merchantId);
         const db = (0, db_1.getDb)();
         const sinceDate = since ? new Date(since) : null;
+        const completedSince = new Date(Date.now() - COMPLETED_RETENTION_MS);
         const tickets = await db.query.kdsTickets.findMany({
             where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.merchantId, station.merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.kdsTickets.status, ["pending", "completed"])),
             orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.kdsTickets.createdAt)],
@@ -172,10 +240,13 @@ class KdsService {
         const filtered = tickets
             .map((t) => {
             const items = (t.items || []).filter((item) => itemMatchesStation(item, station, t.channel));
-            if (!items.length && t.status === "completed")
+            if (!items.length)
                 return null;
-            if (t.status === "completed" && items.every((i) => i.status === "ready"))
+            if (t.status === "completed" &&
+                t.completedAt &&
+                t.completedAt < completedSince) {
                 return null;
+            }
             return {
                 id: t.id,
                 ticketKey: t.ticketKey,
@@ -199,7 +270,19 @@ class KdsService {
                 })),
             };
         })
-            .filter(Boolean);
+            .filter(Boolean)
+            .sort((a, b) => {
+            if (a.status === "completed" && b.status === "completed") {
+                const aAt = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+                const bAt = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+                return bAt - aAt;
+            }
+            if (a.status === "completed")
+                return 1;
+            if (b.status === "completed")
+                return -1;
+            return 0;
+        });
         const updatedSince = sinceDate
             ? tickets.some((t) => t.updatedAt > sinceDate)
             : true;
@@ -214,6 +297,7 @@ class KdsService {
         const station = await this.stationByToken(token);
         if (!station)
             throw new Error("Invalid KDS link");
+        await requireAddon(station.merchantId);
         const db = (0, db_1.getDb)();
         const item = await db.query.kdsTicketItems.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.kdsTicketItems.id, itemId),
@@ -230,12 +314,48 @@ class KdsService {
             .update(db_1.schema.kdsTickets)
             .set({ updatedAt: new Date() })
             .where((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.id, item.ticketId));
+        const allItems = await db.query.kdsTicketItems.findMany({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.kdsTicketItems.ticketId, item.ticketId),
+        });
+        const allReady = allItems.length > 0 && allItems.every((i) => i.status === "ready");
+        if (allReady) {
+            await maybePushOdsReady(station.merchantId, item.ticket.orderNumber);
+        }
+        return { ok: true, lineId: item.lineId, ticketKey: item.ticket.ticketKey };
+    }
+    /** Recall one ready item from a completed (or ready) ticket back to preparation. */
+    static async recallItem(token, itemId) {
+        const station = await this.stationByToken(token);
+        if (!station)
+            throw new Error("Invalid KDS link");
+        await requireAddon(station.merchantId);
+        const db = (0, db_1.getDb)();
+        const item = await db.query.kdsTicketItems.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.kdsTicketItems.id, itemId),
+            with: { ticket: true },
+        });
+        if (!item?.ticket || item.ticket.merchantId !== station.merchantId) {
+            throw new Error("Item not found");
+        }
+        if (item.status !== "ready") {
+            throw new Error("Only ready items can be recalled");
+        }
+        const now = new Date();
+        await db
+            .update(db_1.schema.kdsTicketItems)
+            .set({ status: "pending", readyAt: null })
+            .where((0, drizzle_orm_1.eq)(db_1.schema.kdsTicketItems.id, itemId));
+        await db
+            .update(db_1.schema.kdsTickets)
+            .set({ status: "pending", completedAt: null, updatedAt: now })
+            .where((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.id, item.ticketId));
         return { ok: true, lineId: item.lineId, ticketKey: item.ticket.ticketKey };
     }
     static async completeTicket(token, ticketId) {
         const station = await this.stationByToken(token);
         if (!station)
             throw new Error("Invalid KDS link");
+        await requireAddon(station.merchantId);
         const db = (0, db_1.getDb)();
         const ticket = await db.query.kdsTickets.findFirst({
             where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.id, ticketId), (0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.merchantId, station.merchantId)),
@@ -252,12 +372,14 @@ class KdsService {
             .update(db_1.schema.kdsTickets)
             .set({ status: "completed", completedAt: now, updatedAt: now })
             .where((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.id, ticketId));
+        await maybePushOdsReady(station.merchantId, ticket.orderNumber);
         return { ok: true, ticketKey: ticket.ticketKey };
     }
     static async recallTicket(token, ticketId) {
         const station = await this.stationByToken(token);
         if (!station)
             throw new Error("Invalid KDS link");
+        await requireAddon(station.merchantId);
         const db = (0, db_1.getDb)();
         const ticket = await db.query.kdsTickets.findFirst({
             where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.id, ticketId), (0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.merchantId, station.merchantId), (0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.status, "completed")),
@@ -275,6 +397,7 @@ class KdsService {
         return { ok: true };
     }
     static async ticketStatusForPos(merchantId, ticketKey) {
+        await requireAddon(merchantId);
         const db = (0, db_1.getDb)();
         const ticket = await db.query.kdsTickets.findFirst({
             where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.ticketKey, ticketKey)),

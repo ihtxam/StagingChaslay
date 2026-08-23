@@ -1,3 +1,7 @@
+export declare class KdsLicenseError extends Error {
+    code: string;
+    constructor();
+}
 export type KdsStationInput = {
     name: string;
     orderTypes?: string[];
@@ -129,6 +133,12 @@ export declare class KdsService {
         } | null)[];
     }>;
     static markItemReady(token: string, itemId: string): Promise<{
+        ok: boolean;
+        lineId: string;
+        ticketKey: string;
+    }>;
+    /** Recall one ready item from a completed (or ready) ticket back to preparation. */
+    static recallItem(token: string, itemId: string): Promise<{
         ok: boolean;
         lineId: string;
         ticketKey: string;

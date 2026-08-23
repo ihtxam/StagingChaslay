@@ -5,6 +5,12 @@ const express_1 = require("express");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
 const kds_service_1 = require("@/services/kds.service");
 const router = (0, express_1.Router)();
+function handleError(res, error, fallback, status = 400) {
+    if (error instanceof kds_service_1.KdsLicenseError) {
+        return res.status(403).json({ error: error.message, code: error.code });
+    }
+    return res.status(status).json({ error: error instanceof Error ? error.message : fallback });
+}
 /** Public KDS display — token in URL, no JWT */
 router.get("/:token/orders", async (req, res) => {
     try {
@@ -13,6 +19,9 @@ router.get("/:token/orders", async (req, res) => {
         res.json({ success: true, ...data });
     }
     catch (error) {
+        if (error instanceof kds_service_1.KdsLicenseError) {
+            return res.status(403).json({ error: error.message, code: error.code });
+        }
         res.status(404).json({ error: error instanceof Error ? error.message : "KDS not found" });
     }
 });
@@ -22,12 +31,21 @@ router.patch("/:token/items/:itemId/ready", async (req, res) => {
         res.json({ success: true, ...data });
     }
     catch (error) {
-        res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+        handleError(res, error, "Failed");
     }
 });
 router.patch("/:token/tickets/:ticketId/complete", async (req, res) => {
     try {
         const data = await kds_service_1.KdsService.completeTicket(req.params.token, req.params.ticketId);
+        res.json({ success: true, ...data });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+    }
+});
+router.patch("/:token/items/:itemId/recall", async (req, res) => {
+    try {
+        const data = await kds_service_1.KdsService.recallItem(req.params.token, req.params.itemId);
         res.json({ success: true, ...data });
     }
     catch (error) {
@@ -55,7 +73,7 @@ merchantRouter.get("/stations", async (req, res) => {
         res.json({ success: true, stations });
     }
     catch (error) {
-        res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+        handleError(res, error, "Failed", 500);
     }
 });
 merchantRouter.post("/stations", async (req, res) => {
@@ -64,7 +82,7 @@ merchantRouter.post("/stations", async (req, res) => {
         res.status(201).json({ success: true, station });
     }
     catch (error) {
-        res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+        handleError(res, error, "Failed");
     }
 });
 merchantRouter.put("/stations/:id", async (req, res) => {
@@ -73,7 +91,7 @@ merchantRouter.put("/stations/:id", async (req, res) => {
         res.json({ success: true, station });
     }
     catch (error) {
-        res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+        handleError(res, error, "Failed");
     }
 });
 merchantRouter.delete("/stations/:id", async (req, res) => {
@@ -82,7 +100,7 @@ merchantRouter.delete("/stations/:id", async (req, res) => {
         res.json({ success: true });
     }
     catch (error) {
-        res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+        handleError(res, error, "Failed");
     }
 });
 merchantRouter.post("/stations/:id/rotate-token", async (req, res) => {
@@ -91,7 +109,7 @@ merchantRouter.post("/stations/:id/rotate-token", async (req, res) => {
         res.json({ success: true, station });
     }
     catch (error) {
-        res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+        handleError(res, error, "Failed");
     }
 });
 merchantRouter.post("/push", async (req, res) => {
@@ -100,7 +118,7 @@ merchantRouter.post("/push", async (req, res) => {
         res.json({ success: true, ...result });
     }
     catch (error) {
-        res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+        handleError(res, error, "Failed");
     }
 });
 merchantRouter.get("/ticket-status", async (req, res) => {
@@ -112,7 +130,7 @@ merchantRouter.get("/ticket-status", async (req, res) => {
         res.json({ success: true, ...status });
     }
     catch (error) {
-        res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+        handleError(res, error, "Failed");
     }
 });
 exports.default = router;

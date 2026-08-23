@@ -44,6 +44,8 @@ const drizzle_orm_1 = require("drizzle-orm");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const inventory_addon_1 = require("@/lib/inventory-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
+const kds_addon_1 = require("@/lib/kds-addon");
+const ods_addon_1 = require("@/lib/ods-addon");
 class AuthService {
     /**
      * Hash a password
@@ -169,6 +171,8 @@ class AuthService {
             enabled: (0, signage_addon_1.isSignageAddonEnabled)(merchant.signageAddonEnabled),
             screenLimit: 2,
         }));
+        const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchant.id).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
+        const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchant.id).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
         return {
             token,
             merchant: {
@@ -182,6 +186,10 @@ class AuthService {
                 signageAddonEnabled: signage.enabled,
                 signageEnabled: signage.enabled,
                 signageScreenLimit: signage.screenLimit,
+                kdsAddonEnabled: kdsOn,
+                kdsEnabled: kdsOn,
+                odsAddonEnabled: odsOn,
+                odsEnabled: odsOn,
             },
             isOwner: true,
         };
@@ -212,6 +220,8 @@ class AuthService {
             enabled: false,
             screenLimit: 2,
         }));
+        const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(staff.merchantId).catch(() => false);
+        const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(staff.merchantId).catch(() => false);
         return {
             token,
             merchant: {
@@ -227,6 +237,10 @@ class AuthService {
                 signageAddonEnabled: signage.enabled,
                 signageEnabled: signage.enabled,
                 signageScreenLimit: signage.screenLimit,
+                kdsAddonEnabled: kdsOn,
+                kdsEnabled: kdsOn,
+                odsAddonEnabled: odsOn,
+                odsEnabled: odsOn,
             },
             isOwner: false,
         };
@@ -412,6 +426,8 @@ class AuthService {
             enabled: (0, signage_addon_1.isSignageAddonEnabled)(merchant.signageAddonEnabled),
             screenLimit: 2,
         }));
+        const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchant.id).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
+        const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchant.id).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
         return {
             token,
             merchant: {
@@ -424,6 +440,10 @@ class AuthService {
                 signageAddonEnabled: signage.enabled,
                 signageEnabled: signage.enabled,
                 signageScreenLimit: signage.screenLimit,
+                kdsAddonEnabled: kdsOn,
+                kdsEnabled: kdsOn,
+                odsAddonEnabled: odsOn,
+                odsEnabled: odsOn,
             },
             impersonatedBy: superadminId,
         };
@@ -445,6 +465,8 @@ class AuthService {
                 enabled: (0, signage_addon_1.isSignageAddonEnabled)(merchant.signageAddonEnabled),
                 screenLimit: 2,
             }));
+            const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchantId).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
+            const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
             return {
                 id: merchant.id,
                 email: merchant.email,
@@ -455,6 +477,10 @@ class AuthService {
                 signageAddonEnabled: signage.enabled,
                 signageEnabled: signage.enabled,
                 signageScreenLimit: signage.screenLimit,
+                kdsAddonEnabled: kdsOn,
+                kdsEnabled: kdsOn,
+                odsAddonEnabled: odsOn,
+                odsEnabled: odsOn,
             };
         }
         catch (error) {

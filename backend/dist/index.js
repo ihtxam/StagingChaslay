@@ -59,6 +59,7 @@ const floor_plans_routes_1 = __importDefault(require("@/routes/floor-plans.route
 const reservations_routes_1 = __importDefault(require("@/routes/reservations.routes"));
 const receipts_routes_1 = __importDefault(require("@/routes/receipts.routes"));
 const kds_routes_1 = __importStar(require("@/routes/kds.routes"));
+const ods_routes_1 = __importStar(require("@/routes/ods.routes"));
 const signage_routes_1 = __importStar(require("@/routes/signage.routes"));
 const chaslay_1 = __importDefault(require("@/routes/chaslay"));
 const webhooks_routes_1 = __importDefault(require("@/routes/webhooks.routes"));
@@ -70,6 +71,7 @@ const panel_routes_1 = __importDefault(require("@/routes/panel.routes"));
 const merchant_support_routes_1 = __importDefault(require("@/routes/merchant-support.routes"));
 const reseller_support_routes_1 = __importDefault(require("@/routes/reseller-support.routes"));
 const inventory_routes_1 = __importDefault(require("@/routes/inventory.routes"));
+const delivery_tracking_routes_1 = __importDefault(require("@/routes/delivery-tracking.routes"));
 const staff_routes_1 = __importDefault(require("@/routes/staff.routes"));
 const reseller_routes_1 = __importDefault(require("@/routes/reseller.routes"));
 const media_upload_service_1 = require("@/services/media-upload.service");
@@ -78,6 +80,8 @@ const reservation_service_1 = require("@/services/reservation.service");
 const subscription_billing_service_1 = require("@/services/subscription-billing.service");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const ensure_licenses_schema_1 = require("@/lib/ensure-licenses-schema");
+const drizzle_orm_1 = require("drizzle-orm");
+const db_1 = require("@/db");
 // Load environment variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -96,6 +100,7 @@ function buildCorsOrigins() {
         "https://app.chaslay.com",
         "https://shop.chaslay.com",
         "https://api.chaslay.com",
+        "https://status.chaslay.com",
     ].filter(Boolean);
     const extra = (process.env.CORS_ORIGINS || "")
         .split(",")
@@ -170,6 +175,30 @@ app.get("/health", (_req, res) => {
         timestamp: new Date().toISOString(),
     });
 });
+/** Public status page data (no auth). */
+app.get("/api/public/status", async (_req, res) => {
+    const components = {
+        api: { status: "ok" },
+        dashboard: { status: "ok" },
+        shop: { status: "ok" },
+        pay: { status: "ok" },
+    };
+    let overall = "operational";
+    try {
+        const start = Date.now();
+        await (0, db_1.getDb)().execute((0, drizzle_orm_1.sql) `SELECT 1`);
+        components.database = { status: "ok", latencyMs: Date.now() - start };
+    }
+    catch {
+        components.database = { status: "error" };
+        overall = "degraded";
+    }
+    res.json({
+        status: overall,
+        updatedAt: new Date().toISOString(),
+        components,
+    });
+});
 app.use("/api/auth", auth_routes_1.default);
 app.use("/api/licensing", licensing_routes_1.default);
 app.use("/api/superadmin", superadmin_routes_1.default);
@@ -196,9 +225,12 @@ app.use("/api/merchant/offers", offers_routes_1.default);
 app.use("/api/merchant/vouchers", vouchers_routes_1.default);
 app.use("/api/merchant/marketing", marketing_routes_1.default);
 app.use("/api/merchant/inventory", inventory_routes_1.default);
+app.use("/api/merchant/delivery", delivery_tracking_routes_1.default);
 app.use("/api/receipts", receipts_routes_1.default);
 app.use("/api/kds", kds_routes_1.default);
 app.use("/api/merchant/kds", kds_routes_1.kdsMerchantRoutes);
+app.use("/api/ods", ods_routes_1.default);
+app.use("/api/merchant/ods", ods_routes_1.odsMerchantRoutes);
 app.use("/api/tv", signage_routes_1.default);
 app.use("/api/merchant/signage", signage_routes_1.signageMerchantRoutes);
 app.use("/api/webhooks", webhooks_routes_1.default);

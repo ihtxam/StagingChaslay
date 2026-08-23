@@ -29,6 +29,10 @@ export declare class MerchantService {
         signageAddonEnabled: boolean;
         signageEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        kdsEnabled: boolean;
+        odsAddonEnabled: boolean;
+        odsEnabled: boolean;
         createdAt: Date;
         devices: number;
         licenses: number;
@@ -43,6 +47,10 @@ export declare class MerchantService {
         signageAddonEnabled: boolean;
         signageEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        kdsEnabled: boolean;
+        odsAddonEnabled: boolean;
+        odsEnabled: boolean;
         editionName: string | null;
         planBillingPaid: boolean;
         lastAppVersion: string | null;
@@ -93,6 +101,9 @@ export declare class MerchantService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -134,6 +145,7 @@ export declare class MerchantService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
@@ -217,6 +229,10 @@ export declare class MerchantService {
             adyenCashierReceiptJson: string | null;
             notes: string | null;
             shippingAddress: string | null;
+            deliveryLatitude: string | null;
+            deliveryLongitude: string | null;
+            assignedDeliveryStaffId: string | null;
+            deliveryTrackingToken: string | null;
             deliveryZoneId: string | null;
             scheduledFor: Date | null;
             customerName: string | null;
@@ -289,12 +305,18 @@ export declare class MerchantService {
         inventoryAddonEnabled?: boolean;
         signageAddonEnabled?: boolean;
         signageScreenLimit?: number;
+        kdsAddonEnabled?: boolean;
+        odsAddonEnabled?: boolean;
     }): Promise<{
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
         signageAddonEnabled: boolean;
         signageEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        kdsEnabled: boolean;
+        odsAddonEnabled: boolean;
+        odsEnabled: boolean;
         issuedLicenses: {
             deviceId: string;
             deviceName: string;
@@ -355,6 +377,9 @@ export declare class MerchantService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -396,6 +421,7 @@ export declare class MerchantService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
@@ -460,6 +486,9 @@ export declare class MerchantService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -496,6 +525,8 @@ export declare class MerchantService {
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         posColorTheme: string;
@@ -504,6 +535,7 @@ export declare class MerchantService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
@@ -534,12 +566,18 @@ export declare class MerchantService {
         inventoryAddonEnabled?: boolean;
         signageAddonEnabled?: boolean;
         signageScreenLimit?: number;
+        kdsAddonEnabled?: boolean;
+        odsAddonEnabled?: boolean;
     }): Promise<{
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
         signageAddonEnabled: boolean;
         signageEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        kdsEnabled: boolean;
+        odsAddonEnabled: boolean;
+        odsEnabled: boolean;
         editionName: string | null;
         planBillingPaid: boolean;
         lastAppVersion: string | null;
@@ -590,6 +628,9 @@ export declare class MerchantService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -631,6 +672,7 @@ export declare class MerchantService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
@@ -714,6 +756,10 @@ export declare class MerchantService {
             adyenCashierReceiptJson: string | null;
             notes: string | null;
             shippingAddress: string | null;
+            deliveryLatitude: string | null;
+            deliveryLongitude: string | null;
+            assignedDeliveryStaffId: string | null;
+            deliveryTrackingToken: string | null;
             deliveryZoneId: string | null;
             scheduledFor: Date | null;
             customerName: string | null;
@@ -775,6 +821,10 @@ export declare class MerchantService {
         signageAddonEnabled: boolean;
         signageEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        kdsEnabled: boolean;
+        odsAddonEnabled: boolean;
+        odsEnabled: boolean;
         editionName: string | null;
         planBillingPaid: boolean;
         lastAppVersion: string | null;
@@ -825,6 +875,9 @@ export declare class MerchantService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -866,6 +919,7 @@ export declare class MerchantService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
@@ -949,6 +1003,10 @@ export declare class MerchantService {
             adyenCashierReceiptJson: string | null;
             notes: string | null;
             shippingAddress: string | null;
+            deliveryLatitude: string | null;
+            deliveryLongitude: string | null;
+            assignedDeliveryStaffId: string | null;
+            deliveryTrackingToken: string | null;
             deliveryZoneId: string | null;
             scheduledFor: Date | null;
             customerName: string | null;
@@ -1001,12 +1059,18 @@ export declare class MerchantService {
         inventoryAddonEnabled?: boolean;
         signageAddonEnabled?: boolean;
         signageScreenLimit?: number;
+        kdsAddonEnabled?: boolean;
+        odsAddonEnabled?: boolean;
     }): Promise<{
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
         signageAddonEnabled: boolean;
         signageEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        kdsEnabled: boolean;
+        odsAddonEnabled: boolean;
+        odsEnabled: boolean;
         editionName: string | null;
         planBillingPaid: boolean;
         lastAppVersion: string | null;
@@ -1057,6 +1121,9 @@ export declare class MerchantService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -1098,6 +1165,7 @@ export declare class MerchantService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
@@ -1181,6 +1249,10 @@ export declare class MerchantService {
             adyenCashierReceiptJson: string | null;
             notes: string | null;
             shippingAddress: string | null;
+            deliveryLatitude: string | null;
+            deliveryLongitude: string | null;
+            assignedDeliveryStaffId: string | null;
+            deliveryTrackingToken: string | null;
             deliveryZoneId: string | null;
             scheduledFor: Date | null;
             customerName: string | null;
@@ -1274,6 +1346,9 @@ export declare class MerchantService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -1310,6 +1385,8 @@ export declare class MerchantService {
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         posColorTheme: string;
@@ -1318,6 +1395,7 @@ export declare class MerchantService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
@@ -1387,6 +1465,9 @@ export declare class MerchantService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -1423,6 +1504,8 @@ export declare class MerchantService {
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         posColorTheme: string;
@@ -1431,6 +1514,7 @@ export declare class MerchantService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
@@ -1500,6 +1584,9 @@ export declare class MerchantService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -1536,6 +1623,8 @@ export declare class MerchantService {
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         posColorTheme: string;
@@ -1544,6 +1633,7 @@ export declare class MerchantService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
@@ -1634,6 +1724,9 @@ export declare class MerchantService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -1670,6 +1763,8 @@ export declare class MerchantService {
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         posColorTheme: string;
@@ -1678,6 +1773,7 @@ export declare class MerchantService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
@@ -1751,6 +1847,9 @@ export declare class MerchantService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -1787,6 +1886,8 @@ export declare class MerchantService {
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         posColorTheme: string;
@@ -1795,6 +1896,7 @@ export declare class MerchantService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
@@ -1865,6 +1967,9 @@ export declare class MerchantService {
             deliveryEtaMinutes: number | null;
             minPreOrderDelayMinutes: number | null;
             deliveryMenuMarkup: string | null;
+            deliveryDriverPayMode: string;
+            deliveryDriverHourlyRate: string | null;
+            deliveryPerOrderFee: string | null;
             adyenMerchantAccount: string | null;
             adyenApiKey: string | null;
             adyenClientId: string | null;
@@ -1901,6 +2006,8 @@ export declare class MerchantService {
             inventoryAddonEnabled: boolean;
             signageAddonEnabled: boolean;
             signageScreenLimit: number;
+            kdsAddonEnabled: boolean;
+            odsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             posColorTheme: string;
@@ -1909,6 +2016,7 @@ export declare class MerchantService {
             vacationSettings: schema.VacationSettings | null;
             emailSmtpSettings: schema.MerchantSmtpSettings | null;
             emailBrevoSettings: schema.MerchantBrevoSettings | null;
+            emailDeliveryMode: string;
             marketingSettings: schema.MarketingSettings | null;
             reportEmailSettings: schema.ReportEmailSettings | null;
             posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;

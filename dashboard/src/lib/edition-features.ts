@@ -25,7 +25,9 @@ export type EditionFeatureKey =
   | 'reservations'
   | 'website_cms'
   | 'inventory'
-  | 'digital_signage';
+  | 'digital_signage'
+  | 'kds'
+  | 'ods';
 
 export type EditionFeatureGroup = {
   id: string;
@@ -79,6 +81,8 @@ export const EDITION_FEATURE_GROUPS: EditionFeatureGroup[] = [
       { key: 'website_cms', label: 'Website / CMS' },
       { key: 'inventory', label: 'Restaurant inventory (paid addon)' },
       { key: 'digital_signage', label: 'Digital signage / menu boards (paid addon)' },
+      { key: 'kds', label: 'Kitchen display / KDS (paid addon)' },
+      { key: 'ods', label: 'Order display / ODS (paid addon)' },
     ],
   },
 ];

@@ -41,6 +41,8 @@ const auth_service_1 = require("@/services/auth.service");
 const edition_features_1 = require("@/lib/edition-features");
 const inventory_addon_1 = require("@/lib/inventory-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
+const kds_addon_1 = require("@/lib/kds-addon");
+const ods_addon_1 = require("@/lib/ods-addon");
 const subscription_plans_service_1 = require("@/services/subscription-plans.service");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken);
@@ -194,7 +196,7 @@ router.get("/merchants", async (req, res) => {
  */
 router.post("/merchants", async (req, res) => {
     try {
-        const { email, password, businessName, phone, address, city, country, editionId, businessCategory, shopEnabled, deviceSeats, licenseType, customDays, sendInvite, maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, } = req.body || {};
+        const { email, password, businessName, phone, address, city, country, editionId, businessCategory, shopEnabled, deviceSeats, licenseType, customDays, sendInvite, maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, } = req.body || {};
         const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
         if (!email || !trimmedBusinessName || !editionId) {
             return res.status(400).json({ error: "Email, business name, and edition are required" });
@@ -219,6 +221,8 @@ router.post("/merchants", async (req, res) => {
             inventoryAddonEnabled: inventoryAddonEnabled === true,
             signageAddonEnabled: signageAddonEnabled === true,
             signageScreenLimit: signageScreenLimit != null ? Number(signageScreenLimit) : undefined,
+            kdsAddonEnabled: kdsAddonEnabled === true,
+            odsAddonEnabled: odsAddonEnabled === true,
         });
         res.status(201).json({ success: true, merchant });
     }
@@ -232,7 +236,7 @@ router.post("/merchants", async (req, res) => {
  */
 router.put("/merchants/:merchantId/pos-limits", async (req, res) => {
     try {
-        const { maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, inventoryEnabled, signageAddonEnabled, signageEnabled, signageScreenLimit, } = req.body || {};
+        const { maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, inventoryEnabled, signageAddonEnabled, signageEnabled, signageScreenLimit, kdsAddonEnabled, kdsEnabled, odsAddonEnabled, odsEnabled, } = req.body || {};
         const merchant = await reseller_service_1.ResellerService.updateMerchantPosLimits(resellerId(req), req.params.merchantId, {
             maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
             maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
@@ -247,6 +251,16 @@ router.put("/merchants/:merchantId/pos-limits", async (req, res) => {
                     ? (0, signage_addon_1.isSignageAddonEnabled)(signageEnabled)
                     : undefined,
             signageScreenLimit: signageScreenLimit != null ? (0, signage_addon_1.normalizeSignageScreenLimit)(signageScreenLimit) : undefined,
+            kdsAddonEnabled: kdsAddonEnabled != null
+                ? (0, kds_addon_1.isKdsAddonEnabled)(kdsAddonEnabled)
+                : kdsEnabled != null
+                    ? (0, kds_addon_1.isKdsAddonEnabled)(kdsEnabled)
+                    : undefined,
+            odsAddonEnabled: odsAddonEnabled != null
+                ? (0, ods_addon_1.isOdsAddonEnabled)(odsAddonEnabled)
+                : odsEnabled != null
+                    ? (0, ods_addon_1.isOdsAddonEnabled)(odsEnabled)
+                    : undefined,
         });
         res.json({ success: true, merchant });
     }

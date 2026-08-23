@@ -22,6 +22,18 @@ import {
   writeSignageAddonEnabled,
   writeSignageScreenLimit,
 } from "@/lib/signage-addon";
+import {
+  isKdsAddonEnabled,
+  readKdsAddonEnabled,
+  readKdsAddonEnabledMap,
+  writeKdsAddonEnabled,
+} from "@/lib/kds-addon";
+import {
+  isOdsAddonEnabled,
+  readOdsAddonEnabled,
+  readOdsAddonEnabledMap,
+  writeOdsAddonEnabled,
+} from "@/lib/ods-addon";
 
 type AppVersionSighting = {
   appVersion?: string | null;
@@ -116,6 +128,12 @@ export class MerchantService {
       const signageById = await readSignageAddonMap(merchantIds).catch(
         () => new Map<string, { enabled: boolean; screenLimit: number }>()
       );
+      const kdsById = await readKdsAddonEnabledMap(merchantIds).catch(
+        () => new Map<string, boolean>()
+      );
+      const odsById = await readOdsAddonEnabledMap(merchantIds).catch(
+        () => new Map<string, boolean>()
+      );
 
       return merchants.map((m) => {
         const floor = floorByMerchant.get(m.id) ?? [];
@@ -127,6 +145,8 @@ export class MerchantService {
           addonById.get(m.id) ?? isInventoryAddonEnabled(m.inventoryAddonEnabled);
         const signage = signageById.get(m.id);
         const signageOn = signage?.enabled ?? isSignageAddonEnabled(m.signageAddonEnabled);
+        const kdsOn = kdsById.get(m.id) ?? isKdsAddonEnabled(m.kdsAddonEnabled);
+        const odsOn = odsById.get(m.id) ?? isOdsAddonEnabled(m.odsAddonEnabled);
         return {
           id: m.id,
           name: m.name,
@@ -152,6 +172,10 @@ export class MerchantService {
           signageAddonEnabled: signageOn,
           signageEnabled: signageOn,
           signageScreenLimit: signage?.screenLimit ?? normalizeSignageScreenLimit(m.signageScreenLimit),
+          kdsAddonEnabled: kdsOn,
+          kdsEnabled: kdsOn,
+          odsAddonEnabled: odsOn,
+          odsEnabled: odsOn,
           createdAt: m.createdAt,
           devices: m.devices?.length ?? 0,
           licenses: m.licenses?.length ?? 0,
@@ -203,6 +227,12 @@ export class MerchantService {
         enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
         screenLimit: normalizeSignageScreenLimit(merchant.signageScreenLimit),
       }));
+      const kdsOn = await readKdsAddonEnabled(merchantId).catch(() =>
+        isKdsAddonEnabled(merchant.kdsAddonEnabled)
+      );
+      const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
+        isOdsAddonEnabled(merchant.odsAddonEnabled)
+      );
       return {
         ...merchant,
         inventoryAddonEnabled: inventoryOn,
@@ -210,6 +240,10 @@ export class MerchantService {
         signageAddonEnabled: signage.enabled,
         signageEnabled: signage.enabled,
         signageScreenLimit: signage.screenLimit,
+        kdsAddonEnabled: kdsOn,
+        kdsEnabled: kdsOn,
+        odsAddonEnabled: odsOn,
+        odsEnabled: odsOn,
         editionName: merchant.edition?.name ?? null,
         planBillingPaid: merchant.planBillingPaid !== false,
         lastAppVersion: lastSeen.lastAppVersion,
@@ -255,6 +289,8 @@ export class MerchantService {
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
+      kdsAddonEnabled?: boolean;
+      odsAddonEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -313,6 +349,8 @@ export class MerchantService {
           inventoryAddonEnabled: options?.inventoryAddonEnabled === true,
           signageAddonEnabled: options?.signageAddonEnabled === true,
           signageScreenLimit: normalizeSignageScreenLimit(options?.signageScreenLimit ?? 2),
+          kdsAddonEnabled: options?.kdsAddonEnabled === true,
+          odsAddonEnabled: options?.odsAddonEnabled === true,
         })
         .returning();
 
@@ -378,11 +416,19 @@ export class MerchantService {
       if (options?.signageScreenLimit != null) {
         await writeSignageScreenLimit(created.id, options.signageScreenLimit);
       }
+      if (options?.kdsAddonEnabled === true) {
+        await writeKdsAddonEnabled(created.id, true);
+      }
+      if (options?.odsAddonEnabled === true) {
+        await writeOdsAddonEnabled(created.id, true);
+      }
       const inventoryOn = await readInventoryAddonEnabled(created.id).catch(() => false);
       const signage = await readSignageAddon(created.id).catch(() => ({
         enabled: false,
         screenLimit: 2,
       }));
+      const kdsOn = await readKdsAddonEnabled(created.id).catch(() => false);
+      const odsOn = await readOdsAddonEnabled(created.id).catch(() => false);
 
       // Don't leak password hash to API clients
       const { passwordHash: _ph, inviteTokenHash: _ith, ...safe } = row as typeof row & {
@@ -397,6 +443,10 @@ export class MerchantService {
         signageAddonEnabled: signage.enabled,
         signageEnabled: signage.enabled,
         signageScreenLimit: signage.screenLimit,
+        kdsAddonEnabled: kdsOn,
+        kdsEnabled: kdsOn,
+        odsAddonEnabled: odsOn,
+        odsEnabled: odsOn,
         issuedLicenses,
         invite,
         passwordSet: hasPassword,
@@ -416,12 +466,20 @@ export class MerchantService {
     try {
       const addonRequested = updates.inventoryAddonEnabled;
       const signageRequested = updates.signageAddonEnabled;
+      const kdsRequested = updates.kdsAddonEnabled;
+      const odsRequested = updates.odsAddonEnabled;
       if (addonRequested !== undefined) {
         await ensureInventoryAddonColumn();
         updates.inventoryAddonEnabled = isInventoryAddonEnabled(addonRequested);
       }
       if (signageRequested !== undefined) {
         updates.signageAddonEnabled = isSignageAddonEnabled(signageRequested);
+      }
+      if (kdsRequested !== undefined) {
+        updates.kdsAddonEnabled = isKdsAddonEnabled(kdsRequested);
+      }
+      if (odsRequested !== undefined) {
+        updates.odsAddonEnabled = isOdsAddonEnabled(odsRequested);
       }
       const merchant = await withMerchantSchemaRetry(() =>
         db
@@ -442,6 +500,14 @@ export class MerchantService {
         const on = await writeSignageAddonEnabled(merchantId, signageRequested);
         Object.assign(merchant[0], { signageAddonEnabled: on, signageEnabled: on });
       }
+      if (kdsRequested !== undefined) {
+        const on = await writeKdsAddonEnabled(merchantId, kdsRequested);
+        Object.assign(merchant[0], { kdsAddonEnabled: on, kdsEnabled: on });
+      }
+      if (odsRequested !== undefined) {
+        const on = await writeOdsAddonEnabled(merchantId, odsRequested);
+        Object.assign(merchant[0], { odsAddonEnabled: on, odsEnabled: on });
+      }
       return merchant[0];
     } catch (error) {
       console.error("Error updating merchant:", error);
@@ -458,6 +524,8 @@ export class MerchantService {
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
+      kdsAddonEnabled?: boolean;
+      odsAddonEnabled?: boolean;
     }
   ) {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
@@ -483,9 +551,17 @@ export class MerchantService {
       await writeSignageScreenLimit(merchantId, limits.signageScreenLimit);
       wroteAddon = true;
     }
+    if (limits.kdsAddonEnabled !== undefined) {
+      await writeKdsAddonEnabled(merchantId, limits.kdsAddonEnabled);
+      wroteAddon = true;
+    }
+    if (limits.odsAddonEnabled !== undefined) {
+      await writeOdsAddonEnabled(merchantId, limits.odsAddonEnabled);
+      wroteAddon = true;
+    }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, or signageScreenLimit is required"
+        "At least one of maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, or odsAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);
@@ -559,12 +635,20 @@ export class MerchantService {
   /** Paid addons are agency/reseller-managed — merchants cannot self-enable. */
   static async updateAddons(
     merchantId: string,
-    addons: { inventoryAddonEnabled?: boolean; signageAddonEnabled?: boolean; signageScreenLimit?: number }
+    addons: {
+      inventoryAddonEnabled?: boolean;
+      signageAddonEnabled?: boolean;
+      signageScreenLimit?: number;
+      kdsAddonEnabled?: boolean;
+      odsAddonEnabled?: boolean;
+    }
   ) {
     if (
       addons.inventoryAddonEnabled === undefined &&
       addons.signageAddonEnabled === undefined &&
-      addons.signageScreenLimit === undefined
+      addons.signageScreenLimit === undefined &&
+      addons.kdsAddonEnabled === undefined &&
+      addons.odsAddonEnabled === undefined
     ) {
       throw new Error("No addon updates provided");
     }
@@ -576,6 +660,12 @@ export class MerchantService {
     }
     if (addons.signageScreenLimit !== undefined) {
       await writeSignageScreenLimit(merchantId, addons.signageScreenLimit);
+    }
+    if (addons.kdsAddonEnabled !== undefined) {
+      await writeKdsAddonEnabled(merchantId, addons.kdsAddonEnabled);
+    }
+    if (addons.odsAddonEnabled !== undefined) {
+      await writeOdsAddonEnabled(merchantId, addons.odsAddonEnabled);
     }
     return this.getMerchantById(merchantId);
   }

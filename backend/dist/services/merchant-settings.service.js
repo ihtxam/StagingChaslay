@@ -46,6 +46,8 @@ const delivery_platform_settings_1 = require("@/lib/delivery-platform-settings")
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const inventory_addon_1 = require("@/lib/inventory-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
+const kds_addon_1 = require("@/lib/kds-addon");
+const ods_addon_1 = require("@/lib/ods-addon");
 function maskSecret(value) {
     if (!value)
         return null;
@@ -105,6 +107,9 @@ class MerchantSettingsService {
     static async buildMerchantSettings(merchantId) {
         await (0, ensure_merchant_schema_1.ensureInventoryAddonColumn)();
         await (0, ensure_merchant_schema_1.ensureSignageAddonColumn)();
+        const { ensureKdsAddonColumn, ensureOdsAddonColumn } = await Promise.resolve().then(() => __importStar(require("@/lib/ensure-merchant-schema")));
+        await ensureKdsAddonColumn();
+        await ensureOdsAddonColumn();
         const db = (0, db_1.getDb)();
         const merchant = await db.query.merchants.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
@@ -117,6 +122,8 @@ class MerchantSettingsService {
             enabled: (0, signage_addon_1.isSignageAddonEnabled)(merchant.signageAddonEnabled),
             screenLimit: Math.max(1, Number(merchant.signageScreenLimit) || 2),
         }));
+        const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchantId).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
+        const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
         const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
         const shopHost = process.env.SHOP_PUBLIC_HOST ||
             (domain.includes("chaslay.com") ? "shop.chaslay.com" : domain.startsWith("shop.") ? domain : `shop.${domain}`);
@@ -164,6 +171,10 @@ class MerchantSettingsService {
             signageAddonEnabled: signage.enabled,
             signageEnabled: signage.enabled,
             signageScreenLimit: signage.screenLimit,
+            kdsAddonEnabled: kdsOn,
+            kdsEnabled: kdsOn,
+            odsAddonEnabled: odsOn,
+            odsEnabled: odsOn,
             inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
             inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
             posColorTheme: merchant.posColorTheme || "teal",
@@ -176,9 +187,16 @@ class MerchantSettingsService {
             deliveryEtaMinutes: merchant.deliveryEtaMinutes,
             minPreOrderDelayMinutes: merchant.minPreOrderDelayMinutes ?? 30,
             deliveryMenuMarkup: merchant.deliveryMenuMarkup ?? "0",
+            deliveryDriverPayMode: merchant.deliveryDriverPayMode || "both",
+            deliveryDriverHourlyRate: merchant.deliveryDriverHourlyRate ?? "0",
+            deliveryPerOrderFee: merchant.deliveryPerOrderFee ?? "0",
             vacationSettings: (0, vacation_1.normalizeVacationSettings)(merchant.vacationSettings),
             emailSmtpSettings: marketing_service_1.MarketingService.getSmtpPublic(merchant.emailSmtpSettings),
             emailBrevoSettings: marketing_service_1.MarketingService.getBrevoPublic(merchant.emailBrevoSettings),
+            emailDeliveryMode: String(merchant.emailDeliveryMode || "platform")
+                .toLowerCase() === "own"
+                ? "own"
+                : "platform",
             marketingSettings: marketing_service_1.MarketingService.normalizeMarketing(merchant.marketingSettings),
             shopPathUrl: merchant.slug ? `https://${shopHost}/${merchant.slug}` : null,
             shopSubdomainUrl: merchant.subdomain ? `https://${merchant.subdomain}.${apex}` : null,
@@ -350,6 +368,25 @@ class MerchantSettingsService {
                 throw new Error("deliveryMenuMarkup must be >= 0");
             patch.deliveryMenuMarkup = n.toFixed(2);
         }
+        if (updates.deliveryDriverPayMode !== undefined) {
+            const mode = String(updates.deliveryDriverPayMode);
+            if (!["hourly", "per_order", "both"].includes(mode)) {
+                throw new Error("deliveryDriverPayMode must be hourly, per_order, or both");
+            }
+            patch.deliveryDriverPayMode = mode;
+        }
+        if (updates.deliveryDriverHourlyRate !== undefined) {
+            const n = Number(updates.deliveryDriverHourlyRate);
+            if (!Number.isFinite(n) || n < 0)
+                throw new Error("deliveryDriverHourlyRate must be >= 0");
+            patch.deliveryDriverHourlyRate = n.toFixed(2);
+        }
+        if (updates.deliveryPerOrderFee !== undefined) {
+            const n = Number(updates.deliveryPerOrderFee);
+            if (!Number.isFinite(n) || n < 0)
+                throw new Error("deliveryPerOrderFee must be >= 0");
+            patch.deliveryPerOrderFee = n.toFixed(2);
+        }
         if (updates.adyenMerchantAccount !== undefined)
             patch.adyenMerchantAccount = updates.adyenMerchantAccount;
         if (updates.adyenClientId !== undefined)
@@ -475,6 +512,10 @@ class MerchantSettingsService {
             next.monthlySent = prev.monthlySent;
             next.monthlyPeriod = prev.monthlyPeriod;
             patch.emailBrevoSettings = next;
+        }
+        if (updates.emailDeliveryMode !== undefined) {
+            const mode = String(updates.emailDeliveryMode || "platform").toLowerCase();
+            patch.emailDeliveryMode = mode === "own" ? "own" : "platform";
         }
         if (updates.marketingSettings !== undefined) {
             patch.marketingSettings = marketing_service_1.MarketingService.normalizeMarketing(updates.marketingSettings);

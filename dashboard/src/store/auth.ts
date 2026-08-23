@@ -17,6 +17,8 @@ export interface User {
   impersonatedBy?: string;
   inventoryAddonEnabled?: boolean;
   signageAddonEnabled?: boolean;
+  kdsAddonEnabled?: boolean;
+  odsAddonEnabled?: boolean;
 }
 
 interface AuthStore {

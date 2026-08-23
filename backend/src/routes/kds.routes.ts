@@ -1,8 +1,15 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchantAccess, setMerchantContext } from "@/middleware/auth.middleware";
-import { KdsService } from "@/services/kds.service";
+import { KdsService, KdsLicenseError } from "@/services/kds.service";
 
 const router = Router();
+
+function handleError(res: Response, error: unknown, fallback: string, status = 400) {
+  if (error instanceof KdsLicenseError) {
+    return res.status(403).json({ error: error.message, code: error.code });
+  }
+  return res.status(status).json({ error: error instanceof Error ? error.message : fallback });
+}
 
 /** Public KDS display — token in URL, no JWT */
 router.get("/:token/orders", async (req: Request, res: Response) => {
@@ -11,6 +18,9 @@ router.get("/:token/orders", async (req: Request, res: Response) => {
     const data = await KdsService.listForToken(req.params.token, since);
     res.json({ success: true, ...data });
   } catch (error) {
+    if (error instanceof KdsLicenseError) {
+      return res.status(403).json({ error: error.message, code: error.code });
+    }
     res.status(404).json({ error: error instanceof Error ? error.message : "KDS not found" });
   }
 });
@@ -20,7 +30,7 @@ router.patch("/:token/items/:itemId/ready", async (req: Request, res: Response) 
     const data = await KdsService.markItemReady(req.params.token, req.params.itemId);
     res.json({ success: true, ...data });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+    handleError(res, error, "Failed");
   }
 });
 
@@ -62,7 +72,7 @@ merchantRouter.get("/stations", async (req: Request, res: Response) => {
     const stations = await KdsService.listStations(req.merchantId!);
     res.json({ success: true, stations });
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+    handleError(res, error, "Failed", 500);
   }
 });
 
@@ -71,7 +81,7 @@ merchantRouter.post("/stations", async (req: Request, res: Response) => {
     const station = await KdsService.createStation(req.merchantId!, req.body || {});
     res.status(201).json({ success: true, station });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+    handleError(res, error, "Failed");
   }
 });
 
@@ -80,7 +90,7 @@ merchantRouter.put("/stations/:id", async (req: Request, res: Response) => {
     const station = await KdsService.updateStation(req.merchantId!, req.params.id, req.body || {});
     res.json({ success: true, station });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+    handleError(res, error, "Failed");
   }
 });
 
@@ -89,7 +99,7 @@ merchantRouter.delete("/stations/:id", async (req: Request, res: Response) => {
     await KdsService.deleteStation(req.merchantId!, req.params.id);
     res.json({ success: true });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+    handleError(res, error, "Failed");
   }
 });
 
@@ -98,7 +108,7 @@ merchantRouter.post("/stations/:id/rotate-token", async (req: Request, res: Resp
     const station = await KdsService.rotateToken(req.merchantId!, req.params.id);
     res.json({ success: true, station });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+    handleError(res, error, "Failed");
   }
 });
 
@@ -107,7 +117,7 @@ merchantRouter.post("/push", async (req: Request, res: Response) => {
     const result = await KdsService.pushKitchen(req.merchantId!, req.body || {});
     res.json({ success: true, ...result });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+    handleError(res, error, "Failed");
   }
 });
 
@@ -118,7 +128,7 @@ merchantRouter.get("/ticket-status", async (req: Request, res: Response) => {
     const status = await KdsService.ticketStatusForPos(req.merchantId!, ticketKey);
     res.json({ success: true, ...status });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+    handleError(res, error, "Failed");
   }
 });
 

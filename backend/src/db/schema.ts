@@ -272,6 +272,10 @@ export const merchants = pgTable(
     signageAddonEnabled: boolean("signage_addon_enabled").default(false).notNull(),
     /** Max TV screens when the signage addon is on. Default 2. */
     signageScreenLimit: integer("signage_screen_limit").default(2).notNull(),
+    /** Paid kitchen display (KDS) addon. Superadmin/reseller only. */
+    kdsAddonEnabled: boolean("kds_addon_enabled").default(false).notNull(),
+    /** Paid order display system (ODS) addon. Superadmin/reseller only. */
+    odsAddonEnabled: boolean("ods_addon_enabled").default(false).notNull(),
     /**
      * Extra yield / waste factor applied to recipe usage on sale (0–0.50). Default 20%.
      */
@@ -1226,6 +1230,52 @@ export const kdsTicketItems = pgTable(
   (table) => ({
     ticketIdx: index("kds_ticket_items_ticket_id_idx").on(table.ticketId),
     lineIdx: index("kds_ticket_items_line_id_idx").on(table.ticketId, table.lineId),
+  })
+);
+
+export const ODS_THEMES = ["light", "teal", "dark"] as const;
+export type OdsTheme = (typeof ODS_THEMES)[number];
+
+export const odsDisplays = pgTable(
+  "ods_displays",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    token: varchar("token", { length: 128 }).notNull(),
+    /** Customer board color theme */
+    theme: varchar("theme", { length: 32 }).default("light").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("ods_displays_merchant_id_idx").on(table.merchantId),
+    tokenIdx: uniqueIndex("ods_displays_token_uidx").on(table.token),
+  })
+);
+
+export const odsOrders = pgTable(
+  "ods_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    orderNumber: varchar("order_number", { length: 64 }).notNull(),
+    status: varchar("status", { length: 20 }).default("preparing").notNull(),
+    readyAt: timestamp("ready_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("ods_orders_merchant_id_idx").on(table.merchantId),
+    merchantOrderIdx: uniqueIndex("ods_orders_merchant_order_uidx").on(
+      table.merchantId,
+      table.orderNumber
+    ),
   })
 );
 
@@ -2541,6 +2591,14 @@ export const heldOrdersRelations = relations(heldOrders, ({ one }) => ({
 
 export const kdsStationsRelations = relations(kdsStations, ({ one }) => ({
   merchant: one(merchants, { fields: [kdsStations.merchantId], references: [merchants.id] }),
+}));
+
+export const odsDisplaysRelations = relations(odsDisplays, ({ one }) => ({
+  merchant: one(merchants, { fields: [odsDisplays.merchantId], references: [merchants.id] }),
+}));
+
+export const odsOrdersRelations = relations(odsOrders, ({ one }) => ({
+  merchant: one(merchants, { fields: [odsOrders.merchantId], references: [merchants.id] }),
 }));
 
 export const kdsTicketsRelations = relations(kdsTickets, ({ one, many }) => ({

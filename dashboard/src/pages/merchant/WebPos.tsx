@@ -123,6 +123,7 @@ import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPos
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 import { pushCartLinesToKds, fetchKdsReadyLineIds } from '@/lib/kds-push';
+import { pushOrderToOds } from '@/lib/ods-push';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
@@ -6186,6 +6187,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         channel: saleChannel,
         lines: filteredLines,
       });
+      if (kitchenOpts.orderNumber) {
+        void pushOrderToOds({ orderNumber: kitchenOpts.orderNumber, status: 'preparing' });
+      }
       return;
     }
 
@@ -6220,6 +6224,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       channel: saleChannel,
       lines: filteredLines,
     });
+    if (kitchenOpts.orderNumber) {
+      void pushOrderToOds({ orderNumber: kitchenOpts.orderNumber, status: 'preparing' });
+    }
   };
 
   const retryKitchenPrint = async (lines: CartLine[]) => {

@@ -34,6 +34,8 @@ import {
 } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
+import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
+import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -99,6 +101,11 @@ export class MerchantSettingsService {
   private static async buildMerchantSettings(merchantId: string) {
     await ensureInventoryAddonColumn();
     await ensureSignageAddonColumn();
+    const { ensureKdsAddonColumn, ensureOdsAddonColumn } = await import(
+      "@/lib/ensure-merchant-schema"
+    );
+    await ensureKdsAddonColumn();
+    await ensureOdsAddonColumn();
     const db = getDb();
 
     const merchant = await db.query.merchants.findFirst({
@@ -116,6 +123,12 @@ export class MerchantSettingsService {
       enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
       screenLimit: Math.max(1, Number(merchant.signageScreenLimit) || 2),
     }));
+    const kdsOn = await readKdsAddonEnabled(merchantId).catch(() =>
+      isKdsAddonEnabled(merchant.kdsAddonEnabled)
+    );
+    const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
+      isOdsAddonEnabled(merchant.odsAddonEnabled)
+    );
 
     const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
     const shopHost =
@@ -169,6 +182,10 @@ export class MerchantSettingsService {
       signageAddonEnabled: signage.enabled,
       signageEnabled: signage.enabled,
       signageScreenLimit: signage.screenLimit,
+      kdsAddonEnabled: kdsOn,
+      kdsEnabled: kdsOn,
+      odsAddonEnabled: odsOn,
+      odsEnabled: odsOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       posColorTheme: (merchant.posColorTheme as string) || "teal",

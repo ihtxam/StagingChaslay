@@ -18,6 +18,8 @@ exports.BILLABLE_FEATURE_KEYS = [
     "reservations",
     "inventory",
     "digital_signage",
+    "kds",
+    "ods",
 ];
 const DEFAULT_PRICES = {
     currency: "CHF",
@@ -33,6 +35,8 @@ const DEFAULT_PRICES = {
         reservations: 10,
         inventory: 29,
         digital_signage: 19,
+        kds: 19,
+        ods: 15,
     },
 };
 function num(v, fallback) {
@@ -74,6 +78,10 @@ function detectActiveBillableFeatures(merchant) {
         out.push("inventory");
     if (merchant.signageAddonEnabled)
         out.push("digital_signage");
+    if (merchant.kdsAddonEnabled)
+        out.push("kds");
+    if (merchant.odsAddonEnabled)
+        out.push("ods");
     return [...new Set(out)];
 }
 function monthBounds(year, month1to12) {
@@ -193,6 +201,8 @@ class ResellerBillingService {
             reservations: 0,
             inventory: 0,
             digital_signage: 0,
+            kds: 0,
+            ods: 0,
         };
         let billableMerchants = 0;
         for (const m of merchants) {
@@ -208,6 +218,8 @@ class ResellerBillingService {
                     reservationsEnabled: m.reservationsEnabled,
                     inventoryAddonEnabled: m.inventoryAddonEnabled,
                     signageAddonEnabled: m.signageAddonEnabled,
+                    kdsAddonEnabled: m.kdsAddonEnabled,
+                    odsAddonEnabled: m.odsAddonEnabled,
                     adyenApiKey: m.adyenApiKey,
                     customDomain: m.customDomain,
                     editionFeatures,

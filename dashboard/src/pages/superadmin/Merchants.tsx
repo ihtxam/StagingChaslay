@@ -42,6 +42,10 @@ interface Merchant {
   signageAddonEnabled?: boolean;
   signageEnabled?: boolean;
   signageScreenLimit?: number;
+  kdsAddonEnabled?: boolean;
+  kdsEnabled?: boolean;
+  odsAddonEnabled?: boolean;
+  odsEnabled?: boolean;
   createdAt: string;
   devices: number;
   licenses: number;
@@ -98,6 +102,8 @@ const emptyForm = {
   inventoryAddonEnabled: false,
   signageAddonEnabled: false,
   signageScreenLimit: 2,
+  kdsAddonEnabled: false,
+  odsAddonEnabled: false,
 };
 
 export default function Merchants() {
@@ -126,6 +132,8 @@ export default function Merchants() {
     inventoryAddonEnabled: false,
     signageAddonEnabled: false,
     signageScreenLimit: 2,
+    kdsAddonEnabled: false,
+    odsAddonEnabled: false,
   });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
   const [planForm, setPlanForm] = useState({
@@ -200,6 +208,8 @@ export default function Merchants() {
         inventoryAddonEnabled: res.data.merchant?.inventoryAddonEnabled === true,
         signageAddonEnabled: res.data.merchant?.signageAddonEnabled === true,
         signageScreenLimit: Math.max(1, Number(res.data.merchant?.signageScreenLimit) || 2),
+        kdsAddonEnabled: res.data.merchant?.kdsAddonEnabled === true,
+        odsAddonEnabled: res.data.merchant?.odsAddonEnabled === true,
       });
     } catch {
       toast.error('Failed to load merchant details');
@@ -216,16 +226,22 @@ export default function Merchants() {
         inventoryAddonEnabled: !!posLimits.inventoryAddonEnabled,
         signageAddonEnabled: !!posLimits.signageAddonEnabled,
         signageScreenLimit: Number(posLimits.signageScreenLimit) || 2,
+        kdsAddonEnabled: !!posLimits.kdsAddonEnabled,
+        odsAddonEnabled: !!posLimits.odsAddonEnabled,
       });
       const saved = res.data?.merchant;
       const inventoryOn = saved?.inventoryAddonEnabled === true || saved?.inventoryEnabled === true;
       const signageOn = saved?.signageAddonEnabled === true || saved?.signageEnabled === true;
+      const kdsOn = saved?.kdsAddonEnabled === true || saved?.kdsEnabled === true;
+      const odsOn = saved?.odsAddonEnabled === true || saved?.odsEnabled === true;
       setPosLimits({
         maxPosPosts: Math.max(0, Number(saved?.maxPosPosts ?? posLimits.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(saved?.maxWaiterPosts ?? posLimits.maxWaiterPosts) || 0),
         inventoryAddonEnabled: inventoryOn,
         signageAddonEnabled: signageOn,
         signageScreenLimit: Math.max(1, Number(saved?.signageScreenLimit ?? posLimits.signageScreenLimit) || 2),
+        kdsAddonEnabled: kdsOn,
+        odsAddonEnabled: odsOn,
       });
       setShowDetail((prev) =>
         prev
@@ -236,6 +252,10 @@ export default function Merchants() {
               signageAddonEnabled: signageOn,
               signageEnabled: signageOn,
               signageScreenLimit: Number(saved?.signageScreenLimit) || 2,
+              kdsAddonEnabled: kdsOn,
+              kdsEnabled: kdsOn,
+              odsAddonEnabled: odsOn,
+              odsEnabled: odsOn,
             }
           : prev
       );
@@ -380,6 +400,8 @@ export default function Merchants() {
         inventoryAddonEnabled: !!form.inventoryAddonEnabled,
         signageAddonEnabled: !!form.signageAddonEnabled,
         signageScreenLimit: Number(form.signageScreenLimit) || 2,
+        kdsAddonEnabled: !!form.kdsAddonEnabled,
+        odsAddonEnabled: !!form.odsAddonEnabled,
       });
       const issued = res.data.merchant?.issuedLicenses || [];
       setIssuedKeys(issued);
@@ -449,6 +471,8 @@ export default function Merchants() {
         impersonatedBy: res.data.impersonatedBy,
         inventoryAddonEnabled: !!(account.inventoryAddonEnabled || account.inventoryEnabled),
         signageAddonEnabled: !!(account.signageAddonEnabled || account.signageEnabled),
+        kdsAddonEnabled: !!(account.kdsAddonEnabled || account.kdsEnabled),
+        odsAddonEnabled: !!(account.odsAddonEnabled || account.odsEnabled),
       });
       toast.success(`Opened ${account.name}`);
       navigate('/merchant');
@@ -942,6 +966,30 @@ export default function Merchants() {
                     </span>
                   </span>
                 </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!form.kdsAddonEnabled}
+                    onChange={(e) => setForm({ ...form, kdsAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">Kitchen display (KDS)</span>
+                    <span className="text-xs text-gray-500">Paid extra: kitchen ticket screens for staff.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!form.odsAddonEnabled}
+                    onChange={(e) => setForm({ ...form, odsAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">Order display (ODS)</span>
+                    <span className="text-xs text-gray-500">Paid extra: customer pickup number board.</span>
+                  </span>
+                </label>
                 <label className="block text-sm pt-1">
                   <span className="font-medium">Screen limit</span>
                   <input
@@ -1218,6 +1266,52 @@ export default function Merchants() {
                         }`}
                       >
                         {posLimits.signageAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.kdsAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, kdsAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Kitchen display (KDS)</span>
+                      <span className="text-xs text-gray-500">Paid extra: kitchen ticket screens.</span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.kdsAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.kdsAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.odsAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, odsAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Order display (ODS)</span>
+                      <span className="text-xs text-gray-500">Paid extra: customer pickup number board.</span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.odsAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.odsAddonEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
                   </label>

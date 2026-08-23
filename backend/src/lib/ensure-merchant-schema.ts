@@ -90,6 +90,10 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS signage_addon_enabled boolean NOT NULL DEFAULT false",
   signage_screen_limit:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS signage_screen_limit integer NOT NULL DEFAULT 2",
+  kds_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kds_addon_enabled boolean NOT NULL DEFAULT false",
+  ods_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ods_addon_enabled boolean NOT NULL DEFAULT false",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
@@ -284,6 +288,29 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS kds_ticket_items_ticket_id_idx ON kds_ticket_items(ticket_id)`,
   `CREATE INDEX IF NOT EXISTS kds_ticket_items_line_id_idx ON kds_ticket_items(ticket_id, line_id)`,
+  `CREATE TABLE IF NOT EXISTS ods_displays (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(255) NOT NULL,
+    token varchar(128) NOT NULL,
+    theme varchar(32) NOT NULL DEFAULT 'light',
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS ods_displays_token_uidx ON ods_displays(token)`,
+  `CREATE INDEX IF NOT EXISTS ods_displays_merchant_id_idx ON ods_displays(merchant_id)`,
+  `CREATE TABLE IF NOT EXISTS ods_orders (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    order_number varchar(64) NOT NULL,
+    status varchar(20) NOT NULL DEFAULT 'preparing',
+    ready_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS ods_orders_merchant_id_idx ON ods_orders(merchant_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS ods_orders_merchant_order_uidx ON ods_orders(merchant_id, order_number)`,
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_number varchar(50)`,
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_issued_at timestamptz`,
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_due_at timestamptz`,
@@ -704,6 +731,16 @@ export async function ensureInventoryDemoColumns(): Promise<void> {
 export async function ensureSignageAddonColumn(): Promise<void> {
   await runPatch("signage_addon_enabled");
   await runPatch("signage_screen_limit");
+  await ensureMerchantTables();
+}
+
+export async function ensureKdsAddonColumn(): Promise<void> {
+  await runPatch("kds_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensureOdsAddonColumn(): Promise<void> {
+  await runPatch("ods_addon_enabled");
   await ensureMerchantTables();
 }
 

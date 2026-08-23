@@ -6,6 +6,8 @@ import { AuthService } from "@/services/auth.service";
 import { EDITION_FEATURE_GROUPS, ALL_EDITION_FEATURES } from "@/lib/edition-features";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
+import { isKdsAddonEnabled } from "@/lib/kds-addon";
+import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 
 const router = Router();
@@ -185,6 +187,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
       inventoryAddonEnabled,
       signageAddonEnabled,
       signageScreenLimit,
+      kdsAddonEnabled,
+      odsAddonEnabled,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
     if (!email || !trimmedBusinessName || !editionId) {
@@ -211,6 +215,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
       signageAddonEnabled: signageAddonEnabled === true,
       signageScreenLimit:
         signageScreenLimit != null ? Number(signageScreenLimit) : undefined,
+      kdsAddonEnabled: kdsAddonEnabled === true,
+      odsAddonEnabled: odsAddonEnabled === true,
     });
     res.status(201).json({ success: true, merchant });
   } catch (error) {
@@ -232,6 +238,10 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
       signageAddonEnabled,
       signageEnabled,
       signageScreenLimit,
+      kdsAddonEnabled,
+      kdsEnabled,
+      odsAddonEnabled,
+      odsEnabled,
     } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
       resellerId(req),
@@ -253,6 +263,18 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
               : undefined,
         signageScreenLimit:
           signageScreenLimit != null ? normalizeSignageScreenLimit(signageScreenLimit) : undefined,
+        kdsAddonEnabled:
+          kdsAddonEnabled != null
+            ? isKdsAddonEnabled(kdsAddonEnabled)
+            : kdsEnabled != null
+              ? isKdsAddonEnabled(kdsEnabled)
+              : undefined,
+        odsAddonEnabled:
+          odsAddonEnabled != null
+            ? isOdsAddonEnabled(odsAddonEnabled)
+            : odsEnabled != null
+              ? isOdsAddonEnabled(odsEnabled)
+              : undefined,
       }
     );
     res.json({ success: true, merchant });

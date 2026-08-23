@@ -51,6 +51,10 @@ export declare class MerchantSettingsService {
         signageAddonEnabled: boolean;
         signageEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        kdsEnabled: boolean;
+        odsAddonEnabled: boolean;
+        odsEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         posColorTheme: string;
@@ -66,6 +70,9 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number;
         deliveryMenuMarkup: string;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string;
+        deliveryPerOrderFee: string;
         vacationSettings: schema.VacationSettings;
         emailSmtpSettings: {
             enabled: boolean | undefined;
@@ -90,6 +97,7 @@ export declare class MerchantSettingsService {
             monthlySent: number;
             monthlyPeriod: string | null | undefined;
         };
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings;
         shopPathUrl: string | null;
         shopSubdomainUrl: string | null;
@@ -191,9 +199,13 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes?: number;
         minPreOrderDelayMinutes?: number;
         deliveryMenuMarkup?: number;
+        deliveryDriverPayMode?: string;
+        deliveryDriverHourlyRate?: number;
+        deliveryPerOrderFee?: number;
         vacationSettings?: VacationSettings | null;
         emailSmtpSettings?: MerchantSmtpSettings | null;
         emailBrevoSettings?: MerchantBrevoSettings | null;
+        emailDeliveryMode?: "platform" | "own" | string;
         marketingSettings?: MarketingSettings | null;
         adyenMerchantAccount?: string;
         adyenApiKey?: string;
@@ -264,6 +276,10 @@ export declare class MerchantSettingsService {
         signageAddonEnabled: boolean;
         signageEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        kdsEnabled: boolean;
+        odsAddonEnabled: boolean;
+        odsEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         posColorTheme: string;
@@ -279,6 +295,9 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number;
         deliveryMenuMarkup: string;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string;
+        deliveryPerOrderFee: string;
         vacationSettings: schema.VacationSettings;
         emailSmtpSettings: {
             enabled: boolean | undefined;
@@ -303,6 +322,7 @@ export declare class MerchantSettingsService {
             monthlySent: number;
             monthlyPeriod: string | null | undefined;
         };
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings;
         shopPathUrl: string | null;
         shopSubdomainUrl: string | null;
@@ -444,6 +464,10 @@ export declare class MerchantSettingsService {
         signageAddonEnabled: boolean;
         signageEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        kdsEnabled: boolean;
+        odsAddonEnabled: boolean;
+        odsEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         posColorTheme: string;
@@ -459,6 +483,9 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number;
         deliveryMenuMarkup: string;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string;
+        deliveryPerOrderFee: string;
         vacationSettings: schema.VacationSettings;
         emailSmtpSettings: {
             enabled: boolean | undefined;
@@ -483,6 +510,7 @@ export declare class MerchantSettingsService {
             monthlySent: number;
             monthlyPeriod: string | null | undefined;
         };
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings;
         shopPathUrl: string | null;
         shopSubdomainUrl: string | null;
@@ -590,6 +618,10 @@ export declare class MerchantSettingsService {
         signageAddonEnabled: boolean;
         signageEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        kdsEnabled: boolean;
+        odsAddonEnabled: boolean;
+        odsEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         posColorTheme: string;
@@ -605,6 +637,9 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number;
         deliveryMenuMarkup: string;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string;
+        deliveryPerOrderFee: string;
         vacationSettings: schema.VacationSettings;
         emailSmtpSettings: {
             enabled: boolean | undefined;
@@ -629,6 +664,7 @@ export declare class MerchantSettingsService {
             monthlySent: number;
             monthlyPeriod: string | null | undefined;
         };
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings;
         shopPathUrl: string | null;
         shopSubdomainUrl: string | null;
@@ -732,6 +768,9 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        deliveryDriverPayMode: string;
+        deliveryDriverHourlyRate: string | null;
+        deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
@@ -768,6 +807,8 @@ export declare class MerchantSettingsService {
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
+        kdsAddonEnabled: boolean;
+        odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         posColorTheme: string;
@@ -776,6 +817,7 @@ export declare class MerchantSettingsService {
         vacationSettings: schema.VacationSettings | null;
         emailSmtpSettings: schema.MerchantSmtpSettings | null;
         emailBrevoSettings: schema.MerchantBrevoSettings | null;
+        emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings | null;
         reportEmailSettings: schema.ReportEmailSettings | null;
         posPrintSettings: PosPrintSettings | null;

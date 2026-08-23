@@ -1,6 +1,31 @@
 import { randomBytes } from "crypto";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { readKdsAddonEnabled } from "@/lib/kds-addon";
+import { ensureKdsAddonColumn } from "@/lib/ensure-merchant-schema";
+
+export class KdsLicenseError extends Error {
+  code = "KDS_ADDON_REQUIRED";
+  constructor() {
+    super("Kitchen display (KDS) addon is not enabled for this merchant");
+  }
+}
+
+async function requireAddon(merchantId: string) {
+  await ensureKdsAddonColumn();
+  const enabled = await readKdsAddonEnabled(merchantId);
+  if (!enabled) throw new KdsLicenseError();
+}
+
+async function maybePushOdsReady(merchantId: string, orderNumber: string | null | undefined) {
+  if (!orderNumber?.trim()) return;
+  try {
+    const { OdsService } = await import("@/services/ods.service");
+    await OdsService.pushOrder(merchantId, { orderNumber: orderNumber.trim(), status: "ready" });
+  } catch {
+    /* ODS optional */
+  }
+}
 
 export type KdsStationInput = {
   name: string;
@@ -59,6 +84,7 @@ const COMPLETED_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export class KdsService {
   static async listStations(merchantId: string) {
+    await requireAddon(merchantId);
     const db = getDb();
     return db.query.kdsStations.findMany({
       where: eq(schema.kdsStations.merchantId, merchantId),
@@ -67,6 +93,7 @@ export class KdsService {
   }
 
   static async createStation(merchantId: string, input: KdsStationInput) {
+    await requireAddon(merchantId);
     const db = getDb();
     const name = String(input.name || "").trim().slice(0, 255);
     if (!name) throw new Error("Station name is required");
@@ -86,6 +113,7 @@ export class KdsService {
   }
 
   static async updateStation(merchantId: string, id: string, input: Partial<KdsStationInput>) {
+    await requireAddon(merchantId);
     const db = getDb();
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     if (input.name != null) patch.name = String(input.name).trim().slice(0, 255);
@@ -103,6 +131,7 @@ export class KdsService {
   }
 
   static async deleteStation(merchantId: string, id: string) {
+    await requireAddon(merchantId);
     const db = getDb();
     await db
       .delete(schema.kdsStations)
@@ -111,6 +140,7 @@ export class KdsService {
   }
 
   static async rotateToken(merchantId: string, id: string) {
+    await requireAddon(merchantId);
     const db = getDb();
     const [row] = await db
       .update(schema.kdsStations)
@@ -130,6 +160,7 @@ export class KdsService {
 
   /** Upsert ticket + append new line items when kitchen receives an order. */
   static async pushKitchen(merchantId: string, payload: KdsPushPayload) {
+    await requireAddon(merchantId);
     const ticketKey = String(payload.ticketKey || "").trim().slice(0, 255);
     if (!ticketKey) throw new Error("ticketKey is required");
     const items = (payload.items || []).filter((i) => i.lineId && i.name);
@@ -202,6 +233,7 @@ export class KdsService {
   static async listForToken(token: string, since?: string) {
     const station = await this.stationByToken(token);
     if (!station) throw new Error("Invalid KDS link");
+    await requireAddon(station.merchantId);
 
     const db = getDb();
     const sinceDate = since ? new Date(since) : null;
@@ -278,6 +310,7 @@ export class KdsService {
   static async markItemReady(token: string, itemId: string) {
     const station = await this.stationByToken(token);
     if (!station) throw new Error("Invalid KDS link");
+    await requireAddon(station.merchantId);
     const db = getDb();
     const item = await db.query.kdsTicketItems.findFirst({
       where: eq(schema.kdsTicketItems.id, itemId),
@@ -294,6 +327,15 @@ export class KdsService {
       .update(schema.kdsTickets)
       .set({ updatedAt: new Date() })
       .where(eq(schema.kdsTickets.id, item.ticketId));
+
+    const allItems = await db.query.kdsTicketItems.findMany({
+      where: eq(schema.kdsTicketItems.ticketId, item.ticketId),
+    });
+    const allReady = allItems.length > 0 && allItems.every((i) => i.status === "ready");
+    if (allReady) {
+      await maybePushOdsReady(station.merchantId, item.ticket.orderNumber);
+    }
+
     return { ok: true, lineId: item.lineId, ticketKey: item.ticket.ticketKey };
   }
 
@@ -301,6 +343,7 @@ export class KdsService {
   static async recallItem(token: string, itemId: string) {
     const station = await this.stationByToken(token);
     if (!station) throw new Error("Invalid KDS link");
+    await requireAddon(station.merchantId);
     const db = getDb();
     const item = await db.query.kdsTicketItems.findFirst({
       where: eq(schema.kdsTicketItems.id, itemId),
@@ -327,6 +370,7 @@ export class KdsService {
   static async completeTicket(token: string, ticketId: string) {
     const station = await this.stationByToken(token);
     if (!station) throw new Error("Invalid KDS link");
+    await requireAddon(station.merchantId);
     const db = getDb();
     const ticket = await db.query.kdsTickets.findFirst({
       where: and(
@@ -345,12 +389,14 @@ export class KdsService {
       .update(schema.kdsTickets)
       .set({ status: "completed", completedAt: now, updatedAt: now })
       .where(eq(schema.kdsTickets.id, ticketId));
+    await maybePushOdsReady(station.merchantId, ticket.orderNumber);
     return { ok: true, ticketKey: ticket.ticketKey };
   }
 
   static async recallTicket(token: string, ticketId: string) {
     const station = await this.stationByToken(token);
     if (!station) throw new Error("Invalid KDS link");
+    await requireAddon(station.merchantId);
     const db = getDb();
     const ticket = await db.query.kdsTickets.findFirst({
       where: and(
@@ -377,6 +423,7 @@ export class KdsService {
   }
 
   static async ticketStatusForPos(merchantId: string, ticketKey: string) {
+    await requireAddon(merchantId);
     const db = getDb();
     const ticket = await db.query.kdsTickets.findFirst({
       where: and(

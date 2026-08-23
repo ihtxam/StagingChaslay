@@ -30,14 +30,21 @@ export default function KdsSettingsPanel() {
   const [name, setName] = useState('');
   const [orderTypes, setOrderTypes] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [licenseError, setLicenseError] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get('/merchant/kds/stations');
       setStations(res.data?.stations || []);
+      setLicenseError(false);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('kdsLoadFailed'));
+      if (e.response?.data?.code === 'KDS_ADDON_REQUIRED') {
+        setLicenseError(true);
+        setStations([]);
+      } else {
+        toast.error(e.response?.data?.error || t('kdsLoadFailed'));
+      }
     } finally {
       setLoading(false);
     }
@@ -101,6 +108,14 @@ export default function KdsSettingsPanel() {
   const toggleChannel = (ch: string) => {
     setOrderTypes((prev) => (prev.includes(ch) ? prev.filter((c) => c !== ch) : [...prev, ch]));
   };
+
+  if (licenseError) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        {t('kdsAddonRequired')}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
