@@ -50,6 +50,7 @@ export default function WebPosBookingsView() {
   const [scope, setScope] = useState<'today' | 'future'>('today');
   const [maxDaysAhead, setMaxDaysAhead] = useState(30);
   const [autoAccept, setAutoAccept] = useState(true);
+  const [enabled, setEnabled] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -70,6 +71,7 @@ export default function WebPosBookingsView() {
     setLoading(true);
     try {
       const cfg = await api.get('/merchant/reservations/config');
+      setEnabled(!!cfg.data.config?.enabled);
       const ahead = Number(cfg.data.config?.settings?.maxDaysAhead) || 30;
       setMaxDaysAhead(ahead);
       setAutoAccept(!!cfg.data.config?.settings?.autoAccept);
@@ -167,6 +169,10 @@ export default function WebPosBookingsView() {
 
   const createReservation = async (e: FormEvent) => {
     e.preventDefault();
+    if (!enabled) {
+      toast.error(t('reservationsDisabledHint'));
+      return;
+    }
     setCreateBusy(true);
     try {
       await api.post('/merchant/reservations', {
@@ -254,8 +260,15 @@ export default function WebPosBookingsView() {
         ) : null}
         <button
           type="button"
-          className="webpos-accent-btn ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold"
-          onClick={() => setCreateOpen(true)}
+          className="webpos-accent-btn ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+          disabled={!enabled}
+          onClick={() => {
+            if (!enabled) {
+              toast.error(t('reservationsDisabledHint'));
+              return;
+            }
+            setCreateOpen(true);
+          }}
         >
           <Plus className="h-4 w-4" />
           {t('reservationsNew')}

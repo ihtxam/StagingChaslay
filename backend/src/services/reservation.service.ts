@@ -482,7 +482,7 @@ export class ReservationService {
     const db = getDb();
     const merchant = await getMerchant(merchantId);
     const cfg = this.getSettingsForMerchant(merchant);
-    if (!cfg.enabled && input.source === "web") {
+    if (!cfg.enabled) {
       throw new Error("Reservations are not enabled");
     }
     const settings = cfg.settings;

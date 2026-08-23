@@ -52,6 +52,17 @@ export function playWaiterTillBellOnce(): void {
   tone(ctx, 1319, t0 + 0.16, 0.22, 0.18);
 }
 
+/** Triple chime when a new reservation prints at the main till (~0.9s). */
+export function playReservationTillBellOnce(): void {
+  const ctx = getCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + 0.02;
+  tone(ctx, 740, t0, 0.14, 0.17);
+  tone(ctx, 988, t0 + 0.18, 0.14, 0.17);
+  tone(ctx, 1175, t0 + 0.36, 0.28, 0.19);
+  tone(ctx, 988, t0 + 0.68, 0.12, 0.14);
+}
+
 /** Repeat ringtone until stopOrderAlertLoop() — used while new orders are waiting. */
 export function startOrderAlertLoop(intervalMs = 4500): void {
   if (loopTimer) return;
