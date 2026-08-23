@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
+  ChefHat,
   Loader2,
   LogOut,
   Minus,
@@ -44,6 +45,12 @@ import {
   persistWaiterHeldOrder,
   printWaiterKitchen,
 } from '@/lib/waiter-kitchen';
+import {
+  pushCartLinesToKds,
+  fetchKdsTicketStatus,
+  applyKdsReadyToCart,
+} from '@/lib/kds-push';
+import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 import WebPosTablesView from '@/components/webpos/WebPosTablesView';
@@ -212,6 +219,25 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     setTicketOrderNumber(display);
     return { display, orderNumber: display };
   }, [ticketDisplay, ticketOrderNumber]);
+
+  const waiterKdsTicketKey = kitchenTicketKeyBase(ticketOrderNumber || ticketDisplay || '');
+
+  useEffect(() => {
+    const hasSent = cart.some((l) => l.sentToKitchen);
+    if (!hasSent || !waiterKdsTicketKey) return;
+    let cancelled = false;
+    const syncReady = async () => {
+      const status = await fetchKdsTicketStatus(waiterKdsTicketKey);
+      if (cancelled || !status?.readyLineIds?.length) return;
+      setCart((prev) => applyKdsReadyToCart(prev, status.readyLineIds));
+    };
+    void syncReady();
+    const timer = window.setInterval(() => void syncReady(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [cart.filter((l) => l.sentToKitchen).length, waiterKdsTicketKey]);
 
   const pushLine = (
     p: Product,
@@ -430,6 +456,14 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         orderNumber: ticket.orderNumber,
         t,
       });
+      void pushCartLinesToKds({
+        ticketKey: ticket.orderNumber,
+        orderNumber: ticket.orderNumber,
+        tableLabel,
+        tabNumber: null,
+        channel,
+        lines: unsent,
+      });
       await persistWaiterHeldOrder({
         cartLines: nextCart,
         channel,
@@ -446,7 +480,6 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       setCart(nextCart);
       setOrdersRefresh((n) => n + 1);
       toast.success(t('waiterSentToKitchen'));
-      resetOrder();
     } catch (e: any) {
       toastPrintError(e, t, 'webPosKitchenPrintFailed');
     } finally {
@@ -570,7 +603,20 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
                         className="flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium">{line.name}</p>
+                          <p className="truncate font-medium">
+                            {line.kitchenReadyAt ? (
+                              <ChefHat
+                                className="mr-1 inline-block h-4 w-4 shrink-0 text-emerald-400"
+                                aria-label={t('webPosReadyBadge')}
+                              />
+                            ) : null}
+                            {line.name}
+                            {line.sentToKitchen ? (
+                              <span className="ml-1 rounded bg-stone-800 px-1 text-[9px] font-bold uppercase text-stone-400">
+                                {line.kitchenReadyAt ? t('webPosReadyBadge') : t('webPosSentBadge')}
+                              </span>
+                            ) : null}
+                          </p>
                           <p className="text-xs text-stone-400">{money(line.lineTotal)}</p>
                         </div>
                         {!line.sentToKitchen && (

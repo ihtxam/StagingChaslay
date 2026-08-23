@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { readKdsAddonEnabled } from "@/lib/kds-addon";
 import { ensureKdsAddonColumn } from "@/lib/ensure-merchant-schema";
@@ -526,21 +526,30 @@ export class KdsService {
 
   static async ticketStatusForPos(merchantId: string, ticketKey: string) {
     await requireAddon(merchantId);
+    const base = String(ticketKey || "")
+      .trim()
+      .split("@")[0];
+    if (!base) return { readyLineIds: [] as string[], total: 0, ready: 0, sent: 0 };
+
     const db = getDb();
-    const ticket = await db.query.kdsTickets.findFirst({
+    const tickets = await db.query.kdsTickets.findMany({
       where: and(
         eq(schema.kdsTickets.merchantId, merchantId),
-        eq(schema.kdsTickets.ticketKey, ticketKey)
+        or(
+          eq(schema.kdsTickets.ticketKey, base),
+          sql`${schema.kdsTickets.ticketKey} LIKE ${`${base}@%`}`
+        )
       ),
       with: { items: true },
     });
-    if (!ticket) return { readyLineIds: [] as string[], total: 0, ready: 0 };
-    const items = ticket.items || [];
+    if (!tickets.length) return { readyLineIds: [] as string[], total: 0, ready: 0, sent: 0 };
+    const items = tickets.flatMap((t) => t.items || []);
     const readyLineIds = items.filter((i) => i.status === "ready").map((i) => i.lineId);
     return {
-      status: ticket.status,
+      status: tickets.some((t) => t.status === "pending") ? "pending" : "completed",
       readyLineIds,
       total: items.length,
+      sent: items.length,
       ready: readyLineIds.length,
     };
   }

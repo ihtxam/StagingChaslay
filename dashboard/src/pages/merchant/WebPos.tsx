@@ -125,7 +125,8 @@ import WebPosComboModal, {
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
-import { pushCartLinesToKds, fetchKdsBoardStatus } from '@/lib/kds-push';
+import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart } from '@/lib/kds-push';
+import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import { playKitchenCompleteOnce } from '@/lib/order-alert';
 import { pushOrderToOds } from '@/lib/ods-push';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
@@ -3976,14 +3977,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const candidateKeys = () => {
       const keys = new Set<string>();
       const tab = tabOrderShout(tabNumber);
-      if (tab) keys.add(tab);
+      if (tab) keys.add(kitchenTicketKeyBase(tab));
       const display = ticketDisplay?.trim();
-      if (display) keys.add(display);
+      if (display) keys.add(kitchenTicketKeyBase(display));
       const last = lastKitchenTicketRef.current?.trim();
-      if (last) keys.add(last);
+      if (last) keys.add(kitchenTicketKeyBase(last));
       const orderNum = ticketOrderNumber?.trim();
-      if (orderNum) keys.add(orderNum);
-      if (kdsTicketKey) keys.add(kdsTicketKey);
+      if (orderNum) keys.add(kitchenTicketKeyBase(orderNum));
+      if (kdsTicketKey) keys.add(kitchenTicketKeyBase(kdsTicketKey));
       return keys;
     };
 
@@ -3991,12 +3992,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const board = await fetchKdsBoardStatus();
       if (cancelled || !board.length) return;
       const keys = candidateKeys();
-      const matching = board.filter((t) => keys.has(t.ticketKey));
+      const matching = matchBoardTickets(board, keys);
       if (!matching.length) return;
 
-      const readyIds = new Set<string>();
+      const readyIds = collectReadyLineIds(matching);
       for (const ticket of matching) {
-        for (const lineId of ticket.readyLineIds) readyIds.add(lineId);
         if (ticket.status === 'completed') {
           const ringId = `${ticket.ticketKey}|${ticket.completedAt || 'done'}`;
           if (!kdsCompletedRungRef.current.has(ringId)) {
@@ -4007,13 +4007,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
 
       if (readyIds.size && hasKitchenLines) {
-        setCart((prev) =>
-          prev.map((l) =>
-            readyIds.has(l.lineId) && !l.kitchenReadyAt
-              ? { ...l, kitchenReadyAt: Date.now() }
-              : l
-          )
-        );
+        setCart((prev) => applyKdsReadyToCart(prev, [...readyIds]));
       }
     };
 
@@ -8232,6 +8226,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           <WebPosOrdersPanel
             embedded
             open
+            kitchenEnabled={kitchenEnabled}
             onClose={() => {
               setHighlightOrderId(null);
               setOrdersChannelPref(null);

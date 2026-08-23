@@ -1,5 +1,14 @@
 import api from '@/lib/api';
 import type { CartLine, PosChannel } from '@/components/webpos/types';
+import { kitchenTicketKeyBase, kitchenTicketKeysMatch } from '@/lib/kitchen-progress';
+
+export type KdsTicketStatus = {
+  readyLineIds: string[];
+  ready: number;
+  total: number;
+  sent: number;
+  status?: string;
+};
 
 export type KdsBoardTicket = {
   ticketKey: string;
@@ -69,14 +78,59 @@ export async function fetchKdsBoardStatus(): Promise<KdsBoardTicket[]> {
   }
 }
 
-export async function fetchKdsReadyLineIds(ticketKey: string): Promise<string[]> {
-  if (!ticketKey) return [];
+export async function fetchKdsTicketStatus(ticketKey: string): Promise<KdsTicketStatus | null> {
+  const base = kitchenTicketKeyBase(ticketKey);
+  if (!base) return null;
   try {
     const res = await api.get('/merchant/kds/ticket-status', {
-      params: { ticketKey },
+      params: { ticketKey: base },
     });
-    return (res.data?.readyLineIds || []) as string[];
+    return {
+      readyLineIds: (res.data?.readyLineIds || []) as string[],
+      ready: Number(res.data?.ready) || 0,
+      total: Number(res.data?.total) || 0,
+      sent: Number(res.data?.sent ?? res.data?.total) || 0,
+      status: res.data?.status ? String(res.data.status) : undefined,
+    };
   } catch {
-    return [];
+    return null;
   }
+}
+
+export async function fetchKdsReadyLineIds(ticketKey: string): Promise<string[]> {
+  const status = await fetchKdsTicketStatus(ticketKey);
+  return status?.readyLineIds || [];
+}
+
+/** Apply KDS ready line ids onto cart lines (sets kitchenReadyAt). */
+export function applyKdsReadyToCart(lines: CartLine[], readyLineIds: string[]): CartLine[] {
+  if (!readyLineIds.length) return lines;
+  const readySet = new Set(readyLineIds);
+  let changed = false;
+  const next = lines.map((l) => {
+    if (readySet.has(l.lineId) && !l.kitchenReadyAt) {
+      changed = true;
+      return { ...l, kitchenReadyAt: Date.now() };
+    }
+    return l;
+  });
+  return changed ? next : lines;
+}
+
+/** Match board tickets to any of the candidate POS ticket keys. */
+export function matchBoardTickets(
+  board: KdsBoardTicket[],
+  candidateKeys: Iterable<string>
+): KdsBoardTicket[] {
+  const keys = [...candidateKeys].filter(Boolean);
+  if (!keys.length || !board.length) return [];
+  return board.filter((ticket) => keys.some((key) => kitchenTicketKeysMatch(ticket.ticketKey, key)));
+}
+
+export function collectReadyLineIds(tickets: KdsBoardTicket[]): Set<string> {
+  const readyIds = new Set<string>();
+  for (const ticket of tickets) {
+    for (const lineId of ticket.readyLineIds) readyIds.add(lineId);
+  }
+  return readyIds;
 }
