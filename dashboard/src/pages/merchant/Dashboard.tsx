@@ -436,14 +436,6 @@ function MerchantShell() {
     ...(allow('/merchant/users')
       ? [{ label: t('staffPageTitle'), path: '/merchant/users', icon: '👤' }]
       : []),
-    {
-      id: 'account',
-      label: t('navAccount'),
-      icon: '⚙️',
-      children: [
-        { label: t('platformShopTitle'), path: '/merchant/platform-shop', icon: '🛒' },
-      ].filter((item) => allow(item.path)),
-    },
   ]
     .filter((entry) => {
       if ('children' in entry && Array.isArray(entry.children)) {
