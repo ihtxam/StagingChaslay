@@ -1,13 +1,18 @@
 import { getDb, schema } from "@/db";
-import { and, eq, gte, lte, inArray } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { roundMoney2 } from "@/lib/money";
 import { zurichDayBounds } from "@/lib/vacation";
 import {
   normalizePaymentMethod,
+  netPaymentBucketsAfterRefund,
   parsePaymentBreakdown,
   paymentBreakdownTotals,
 } from "@/lib/payment-breakdown";
-import { resolveReportRange, type ReportPreset } from "@/services/pos-reports.service";
+import {
+  isCountableSale,
+  resolveReportRange,
+  type ReportPreset,
+} from "@/services/pos-reports.service";
 
 export type SalesAdjustmentPeriodPreset =
   | "today"
@@ -21,6 +26,9 @@ export type SalesAdjustmentPreview = {
   from: string;
   to: string;
   targetPercent: number;
+  /** Cash the reports show for this period (all payment buckets). */
+  reportCashTotal: number;
+  /** Cash on orders this tool can adjust (100% cash, no card/terminal/gift). */
   currentCashTotal: number;
   targetCashTotal: number;
   reductionNeeded: number;
@@ -78,7 +86,7 @@ export function resolveSalesAdjustmentRange(opts: {
   if (opts.month) {
     return calendarMonthBounds(opts.month);
   }
-  const preset = (opts.preset || "this_month") as ReportPreset;
+  const preset = (opts.preset || "today") as ReportPreset;
   if (!["today", "last_week", "this_month", "last_month", "custom"].includes(preset)) {
     throw new Error("Invalid period preset");
   }
@@ -96,6 +104,23 @@ function orderNetTotal(order: { total: unknown; refundAmount?: unknown | null })
   );
 }
 
+/** Net cash collected on this order (matches report payment buckets). */
+export function orderCashNet(order: {
+  paymentMethod?: string | null;
+  paymentBreakdown?: unknown;
+  total: unknown;
+  refundAmount?: unknown | null;
+}): number {
+  return roundMoney2(
+    netPaymentBucketsAfterRefund(
+      Number(order.total) || 0,
+      Number(order.refundAmount) || 0,
+      order.paymentBreakdown,
+      order.paymentMethod
+    ).get("cash") || 0
+  );
+}
+
 /** True when the order was paid entirely in cash (card/terminal/gift portions excluded). */
 export function isCashOnlyOrder(order: {
   paymentMethod?: string | null;
@@ -106,15 +131,15 @@ export function isCashOnlyOrder(order: {
   const net = orderNetTotal(order);
   if (net <= 0) return false;
 
-  const method = normalizePaymentMethod(String(order.paymentMethod || ""));
-  if (["card", "terminal"].includes(method)) return false;
-
   const tenders = parsePaymentBreakdown(
     order.paymentBreakdown,
     order.paymentMethod,
     Number(order.total) || 0
   );
-  if (!tenders.length) return method === "cash";
+  if (!tenders.length) {
+    const method = normalizePaymentMethod(String(order.paymentMethod || ""));
+    return method === "cash";
+  }
 
   const { cash, terminal, giftCard, other } = paymentBreakdownTotals(tenders);
   if (terminal > 0.001 || giftCard > 0.001 || other > 0.001) return false;
@@ -123,6 +148,8 @@ export function isCashOnlyOrder(order: {
 
 type OrderRow = {
   id: string;
+  status?: string | null;
+  paymentStatus?: string | null;
   subtotal: string;
   taxAmount: string;
   discountAmount: string | null;
@@ -218,19 +245,23 @@ export class SalesAdjustmentService {
     const { start, end, from, to, label } = resolveSalesAdjustmentRange(rangeOpts || {});
     const orders = await SalesAdjustmentService.loadEligibleOrders(merchantId, start, end);
 
+    let reportCashTotal = 0;
     let currentCashTotal = 0;
     let eligibleOrderCount = 0;
     let adjustableItemCount = 0;
 
     for (const o of orders) {
+      const cashNet = orderCashNet(o);
+      if (cashNet > 0.001) {
+        reportCashTotal = roundMoney2(reportCashTotal + cashNet);
+      }
       if (!isCashOnlyOrder(o)) continue;
-      const net = orderNetTotal(o);
-      currentCashTotal = roundMoney2(currentCashTotal + net);
 
+      currentCashTotal = roundMoney2(currentCashTotal + cashNet);
       eligibleOrderCount += 1;
       for (const item of o.items || []) {
         if (item.weightKg != null && Number(item.weightKg) > 0) continue;
-        if (effectiveQty(item) >= 1) adjustableItemCount += 1;
+        if (effectiveQty(item) > 0) adjustableItemCount += 1;
       }
     }
 
@@ -242,6 +273,7 @@ export class SalesAdjustmentService {
       from,
       to,
       targetPercent: percent,
+      reportCashTotal,
       currentCashTotal,
       targetCashTotal,
       reductionNeeded,
@@ -263,6 +295,14 @@ export class SalesAdjustmentService {
   ): Promise<SalesAdjustmentResult> {
     const percent = validatePercent(targetPercent);
     const preview = await SalesAdjustmentService.preview(merchantId, percent, rangeOpts);
+    if (preview.currentCashTotal <= 0.01) {
+      if (preview.reportCashTotal > 0.01) {
+        throw new Error(
+          `Reports show CHF ${preview.reportCashTotal.toFixed(2)} cash for this period, but none of it is on 100% cash orders (card/terminal/mixed payments are excluded).`
+        );
+      }
+      throw new Error("Nothing to adjust — no cash sales found for this period.");
+    }
     if (preview.reductionNeeded <= 0.01) {
       throw new Error("Nothing to adjust — cash sales are already at or below the target.");
     }
@@ -292,7 +332,7 @@ export class SalesAdjustmentService {
         for (const item of order.items || []) {
           if (item.weightKg != null && Number(item.weightKg) > 0) continue;
           const qty = effectiveQty(item);
-          if (qty < 1) continue;
+          if (qty <= 0) continue;
           const unitValue = unitLineValue(item);
           if (unitValue <= 0) continue;
           list.push({ order, item, unitValue });
@@ -308,12 +348,14 @@ export class SalesAdjustmentService {
 
       const pick = candidates[0];
       const oldQty = effectiveQty(pick.item);
-      const newQty = roundMoney2(Math.max(0, oldQty - 1));
+      const newQty =
+        oldQty >= 1 ? roundMoney2(Math.max(0, oldQty - 1)) : 0;
       const ratio = oldQty > 0 ? newQty / oldQty : 0;
 
       const newTotalPrice = roundMoney2(Number(pick.item.totalPrice) * ratio);
       const newTaxAmount = roundMoney2(Number(pick.item.taxAmount) * ratio);
-      const newQuantity = roundMoney2(Number(pick.item.quantity) - 1);
+      const qtyDelta = roundMoney2(oldQty - newQty);
+      const newQuantity = roundMoney2(Math.max(0, Number(pick.item.quantity) - qtyDelta));
 
       await db
         .update(schema.orderItems)
@@ -370,7 +412,6 @@ export class SalesAdjustmentService {
           discountAmount: order.discountAmount || "0",
           total: order.total,
           paymentBreakdown,
-          updatedAt: new Date(),
         })
         .where(eq(schema.orders.id, orderId));
     }
@@ -378,6 +419,18 @@ export class SalesAdjustmentService {
     const afterPreview = await SalesAdjustmentService.preview(merchantId, percent, rangeOpts);
     const beforeCashTotal = preview.currentCashTotal;
     const afterCashTotal = afterPreview.currentCashTotal;
+    const reductionApplied = roundMoney2(beforeCashTotal - afterCashTotal);
+
+    if (reductionApplied <= 0.01 && preview.reductionNeeded > 0.01) {
+      throw new Error(
+        "Adjustment did not change cash totals — reload reports and try again, or pick a shorter period with more cash-only orders."
+      );
+    }
+    if (reductionApplied + 0.02 < preview.reductionNeeded * 0.25) {
+      throw new Error(
+        `Only CHF ${reductionApplied.toFixed(2)} of CHF ${preview.reductionNeeded.toFixed(2)} could be reduced — not enough adjustable line items.`
+      );
+    }
 
     return {
       periodLabel: label,
@@ -386,7 +439,7 @@ export class SalesAdjustmentService {
       targetPercent: percent,
       beforeCashTotal,
       afterCashTotal,
-      reductionApplied: roundMoney2(beforeCashTotal - afterCashTotal),
+      reductionApplied,
       ordersAdjusted,
       itemsAdjusted,
       monthKey: from.slice(0, 7),
@@ -399,16 +452,15 @@ export class SalesAdjustmentService {
     end: Date
   ): Promise<OrderRow[]> {
     const db = getDb();
-    return db.query.orders.findMany({
+    const rows = (await db.query.orders.findMany({
       where: and(
         eq(schema.orders.merchantId, merchantId),
-        inArray(schema.orders.orderType, ["pos"]),
-        eq(schema.orders.status, "completed"),
         gte(schema.orders.createdAt, start),
         lte(schema.orders.createdAt, end)
       ),
       with: { items: true },
       orderBy: (orders, { desc }) => [desc(orders.createdAt)],
-    }) as Promise<OrderRow[]>;
+    })) as OrderRow[];
+    return rows.filter(isCountableSale);
   }
 }
