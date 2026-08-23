@@ -3596,6 +3596,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setFulfillmentWhen(null);
     setSelectedCustomer(null);
     setProvisionalPrinted(false);
+    setMobileCartOpen(false);
     if (wasTable) {
       setTablesRefreshToken((n) => n + 1);
       setPosTab('tables');
@@ -6930,6 +6931,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await persistHeldOrder(cart, sendToKitchen, { ticket });
       setCart([]);
       clearCartTicket();
+      setMobileCartOpen(false);
       toast.success(sendToKitchen ? t('webPosHeldSentKitchen') : t('webPosOrderHeld'));
       if (sendToKitchen) {
         const kitchenDelta = unsentKitchenLines(cartSnapshot);

@@ -163,7 +163,9 @@ function WebPosComboModifierTabs({
             type="button"
             onClick={() => setTabId(g.id)}
             className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold ${
-              g.id === active?.id ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-700'
+              g.id === active?.id
+                ? 'bg-[var(--webpos-accent)] text-white'
+                : 'bg-[var(--webpos-surface-2,#f5f5f4)] text-[var(--webpos-text-muted,#78716c)]'
             }`}
           >
             {translateTitle(g.title)}
@@ -204,7 +206,9 @@ function WebPosComboModifierTabs({
                   onSelectionChange({ ...selection, [active.id]: [...current, opt.id] });
                 }}
                 className={`rounded-xl border-2 px-2 py-2 text-center ${
-                  checked ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-white'
+                  checked
+                    ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
+                    : 'border-[var(--webpos-border,#e7e5e4)] bg-[var(--webpos-surface,#fff)]'
                 }`}
               >
                 <div className="text-xs font-semibold">
@@ -572,8 +576,8 @@ export default function WebPosComboModal({
                             onClick={() => handleTileClick(slot, opt)}
                             className={`group w-full overflow-hidden rounded-xl border-2 text-left transition-colors ${
                               selected
-                                ? 'border-stone-900 ring-1 ring-stone-900'
-                                : 'border-stone-200 hover:border-stone-400'
+                                ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-softer)] ring-2 ring-[var(--webpos-accent-ring)]'
+                                : 'border-[var(--webpos-border,#e7e5e4)] hover:border-[var(--webpos-accent-border)]'
                             }`}
                           >
                             {showProductImages ? (
