@@ -6,6 +6,7 @@ import com.chaslay.pos.domain.model.GiftCardProducts
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.VatBreakdownRow
+import com.chaslay.pos.domain.model.roundMoney
 
 data class ReceiptPrintContext(
     val orderNumber: String? = null,
@@ -149,6 +150,47 @@ object ReceiptVatCalculator {
 
     fun formatRate(rate: Double): String =
         if (rate % 1.0 == 0.0) rate.toInt().toString() else String.format("%.1f", rate)
+
+    /** Payable merchandise TTC (excl. tips & cash rounding). */
+    fun billMerchandiseTtc(total: Double, tipAmount: Double, roundingAmount: Double): Double =
+        roundMoney(total - tipAmount - roundingAmount)
+
+    /**
+     * When line sums and payable total diverge (order remise, split, sync), scale VAT rows
+     * to the bill merchandise TTC so TVA is never printed from stale line aggregates.
+     */
+    fun reconcileVatRowsToBillMerchandise(
+        rows: List<VatBreakdownRow>,
+        billMerchandiseTtc: Double,
+        vatIncludedInPrice: Boolean
+    ): List<VatBreakdownRow> {
+        if (rows.isEmpty() || billMerchandiseTtc <= 0.0) return rows
+        val rowsBrut = rows.sumOf { it.brut }
+        if (rowsBrut <= 0.0 || kotlin.math.abs(rowsBrut - billMerchandiseTtc) <= 0.02) return rows
+        val factor = billMerchandiseTtc / rowsBrut
+        return rows.map { row ->
+            if (vatIncludedInPrice) {
+                val brut = roundMoney(row.brut * factor)
+                val net = brut / (1.0 + row.rate / 100.0)
+                val tva = roundMoney(brut - net)
+                VatBreakdownRow(
+                    label = row.label,
+                    rate = row.rate,
+                    net = roundMoney(net),
+                    tva = tva,
+                    brut = brut
+                )
+            } else {
+                VatBreakdownRow(
+                    label = row.label,
+                    rate = row.rate,
+                    net = roundMoney(row.net * factor),
+                    tva = roundMoney(row.tva * factor),
+                    brut = roundMoney(row.brut * factor)
+                )
+            }
+        }
+    }
 
     /**
      * Net / tax / gross for one rate. VAT-included extracts tax from TTC so the tax

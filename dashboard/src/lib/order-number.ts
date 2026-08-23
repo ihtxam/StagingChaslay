@@ -1,5 +1,12 @@
 const SHORT_WEB_RE = /^WEB-(\d{1,6})$/;
 const LEGACY_WEB_RE = /^WEB-(\d{10,})(?:-([A-F0-9]{4,8}))?$/i;
+const OPAQUE_ORDER_RE = /^(WP|DI)-/i;
+
+function normalizeShout(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.startsWith('#') ? trimmed : `#${trimmed.replace(/^#/, '')}`;
+}
 
 /** Display-friendly web order number — shortens legacy WEB-{timestamp}-{suffix} values. */
 export function formatOrderNumberDisplay(orderNumber: string | null | undefined): string {
@@ -14,13 +21,48 @@ export function formatOrderNumberDisplay(orderNumber: string | null | undefined)
   return n;
 }
 
-/** Checkout AMOUNT DUE line: public order number plus kitchen ticket when both exist. */
+/**
+ * Guest-facing primary order reference.
+ * Kitchen shout / tab # wins over opaque WP-/DI- ids; TX and WEB numbers stay full.
+ */
+export function guestOrderNumber(opts: {
+  orderNumber?: string | null;
+  orderDisplay?: string | null;
+  tabNumber?: string | null;
+}): string {
+  const shout = String(opts.orderDisplay || '').trim();
+  if (shout && !OPAQUE_ORDER_RE.test(shout)) {
+    return normalizeShout(shout);
+  }
+  const tab = String(opts.tabNumber || '')
+    .trim()
+    .replace(/^#/, '');
+  if (tab) return `#${tab}`;
+  const raw = formatOrderNumberDisplay(opts.orderNumber);
+  if (!raw || OPAQUE_ORDER_RE.test(raw)) return '';
+  return raw;
+}
+
+/** Checkout AMOUNT DUE line — same primary number as receipts; kitchen secondary when distinct. */
 export function formatCheckoutOrderRef(
   orderNumber?: string | null,
-  kitchenNumber?: string | null
+  kitchenNumber?: string | null,
+  tabNumber?: string | null
 ): string {
-  const order = String(orderNumber || '').trim();
-  const kitchen = String(kitchenNumber || '').trim();
-  if (order && kitchen && kitchen !== order) return `${order} / ${kitchen}`;
-  return order || kitchen;
+  const primary = guestOrderNumber({ orderNumber, orderDisplay: kitchenNumber, tabNumber });
+  if (!primary) return '';
+  const kitchen = String(kitchenNumber || '')
+    .trim()
+    .replace(/^#/, '');
+  const kitchenHash = kitchen ? `#${kitchen}` : '';
+  const raw = String(orderNumber || '').trim();
+  if (
+    kitchenHash &&
+    kitchenHash !== primary &&
+    /^TX-/i.test(raw) &&
+    primary.toUpperCase() === raw.toUpperCase()
+  ) {
+    return `${primary} · Kitchen ${kitchenHash}`;
+  }
+  return primary;
 }

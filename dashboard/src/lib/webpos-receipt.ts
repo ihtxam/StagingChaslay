@@ -1,5 +1,6 @@
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY, formatTimeHHMM, ymdZurich } from '@/lib/date-format';
 import { roundMoney2, splitVatIncludedGross } from '@/lib/money';
+import { guestOrderNumber } from '@/lib/order-number';
 import { APP_NAME } from '@/lib/brand';
 import {
   buildReceiptUrl,
@@ -303,6 +304,8 @@ export type WebPosReceipt = {
   orderDisplay?: string | null;
   /** Full order number stored in backend */
   orderNumber?: string | null;
+  /** Takeaway / delivery tab label used as guest order # */
+  tabNumber?: string | null;
   completedAt: number;
   channel?: string;
   paymentMethod: string;
@@ -478,7 +481,7 @@ export function generateGiftCardSaleReceiptText(
   r += thin + '\n';
   r += centerLine(L.giftCardScanRedeem, width) + '\n';
   r += sep + '\n';
-  r += (tx.footer || L.thankYou).trim() + '\n\n\n';
+  r += guestReceiptFooterLines(tx.footer, tx.businessName, L.thankYou).trim() + '\n\n\n';
   return r;
 }
 
@@ -705,22 +708,37 @@ function formatVatSection(
   if (tx.showVat === false || tx.taxAmount <= 0 || tx.taxRate <= 0) return null;
 
   const rateLabel = `${L.tva}: ${tx.taxRate}%`;
+  const net = roundMoney2(tx.subtotal);
+  const tva = roundMoney2(tx.taxAmount);
+  const brut = roundMoney2(net + tva);
 
   if (tx.vatIncludedInPrice !== false) {
-    const net = roundMoney2(tx.subtotal);
-    const tva = roundMoney2(tx.taxAmount);
-    const brut = roundMoney2(net + tva);
-    let r = L.vatIncludedNote.slice(0, width) + '\n';
-    r += vatTableRow(L.type, L.net, L.tva, L.brut, width) + '\n';
+    let r = vatTableRow(L.type, L.net, L.tva, L.brut, width) + '\n';
     r += vatTableRow(rateLabel, net.toFixed(2), tva.toFixed(2), brut.toFixed(2), width);
     return r;
   }
 
-  const net = roundMoney2(tx.subtotal);
-  const tva = roundMoney2(tx.taxAmount);
-  const brut = roundMoney2(net + tva);
   const text = `${L.tva} ${tx.taxRate}% ${L.net} ${net.toFixed(2)} ${L.tva} ${tva.toFixed(2)} ${L.total} ${brut.toFixed(2)}`;
   return text.slice(0, width);
+}
+
+/** Skip footer lines that repeat the store name already printed in the header. */
+function guestReceiptFooterLines(
+  footer: string | undefined,
+  businessName: string | undefined,
+  thankYou: string
+): string {
+  const biz = String(businessName || '')
+    .trim()
+    .toLowerCase();
+  const lines = String(footer || thankYou)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line) return false;
+      return !biz || line.toLowerCase() !== biz;
+    });
+  return lines.join('\n') || thankYou;
 }
 
 /**
@@ -748,20 +766,18 @@ function billMerchandiseTtc(tx: WebPosReceipt): number {
 }
 
 /**
- * Guest receipt bottom number = kitchen shout / display ticket (#7128).
- * Never lead with the opaque WP-… / DI-… record id.
+ * Guest receipt bottom number = kitchen shout / tab # / public TX (never opaque WP-/DI- id).
  */
 export function guestReceiptBottomNumber(tx: {
   orderDisplay?: string | null;
   orderNumber?: string | null;
+  tabNumber?: string | null;
 }): string {
-  const shout = String(tx.orderDisplay || '').trim();
-  if (shout && !/^(WP|DI)-/i.test(shout)) {
-    return shout.startsWith('#') ? shout : `#${shout.replace(/^#/, '')}`;
-  }
-  const raw = String(tx.orderNumber || '').trim();
-  if (!raw || /^(WP|DI)-/i.test(raw)) return '';
-  return raw;
+  return guestOrderNumber({
+    orderNumber: tx.orderNumber,
+    orderDisplay: tx.orderDisplay,
+    tabNumber: tx.tabNumber,
+  });
 }
 
 function formatReceiptMetaFooter(
@@ -771,22 +787,14 @@ function formatReceiptMetaFooter(
   width: number
 ): string {
   const dateStr = formatDateTimeDDMMYYYY(tx.completedAt);
-  const orderRef = shortenOrderRef(guestReceiptBottomNumber(tx), 16);
+  const orderRef = guestReceiptBottomNumber(tx);
   const channel = tx.channel ? channelLabel(L, tx.channel) : '';
   const user = tx.showStaff !== false && tx.staffName?.trim() ? tx.staffName.trim() : '';
-  const parts = [dateStr, orderRef, channel, user].filter(Boolean);
-  return centerLine(parts.join(' | '), width);
-}
-
-/** Shorten long TX refs for receipt footer, e.g. TX-20260801-005747-8949 → TX-005747-8949 */
-function shortenOrderRef(orderNumber: string, maxLen = 16): string {
-  if (orderNumber.length <= maxLen) return orderNumber;
-  const parts = orderNumber.split('-');
-  if (parts.length >= 3) {
-    const short = `${parts[0]}-${parts[parts.length - 2]}-${parts[parts.length - 1]}`;
-    if (short.length <= maxLen) return short;
-  }
-  return `…${orderNumber.slice(-(maxLen - 1))}`;
+  const metaParts = [dateStr, channel, user].filter(Boolean);
+  let r = '';
+  if (orderRef) r += centerLine(orderRef, width) + '\n';
+  if (metaParts.length) r += centerLine(metaParts.join(' | '), width);
+  return r.trimEnd();
 }
 
 function hasGiftCardPayment(tx: WebPosReceipt): boolean {
@@ -904,9 +912,9 @@ export function resolveOrderReceiptVat(tx: WebPosReceipt): {
   if (vatIncluded) {
     const fromItems = merchandiseBrutAfterDiscount(tx);
     const fromBill = billMerchandiseTtc(tx);
-    let brut = fromItems > 0 ? fromItems : fromBill;
-    if (fromItems > 0 && fromBill > 0 && Math.abs(fromItems - fromBill) > 0.02) {
-      // Trust payable total when line sum and stored total diverge (reprints / sync).
+    // Payable merchandise TTC is authoritative for guest receipts (remise, splits, sync).
+    let brut = fromBill > 0 ? fromBill : fromItems;
+    if (fromBill > 0 && fromItems > 0 && Math.abs(fromItems - fromBill) > 0.02) {
       brut = fromBill;
     }
     if (brut <= 0) {
@@ -1080,8 +1088,7 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
 
   r += formatReceiptMetaFooter(tx, L, locale, width) + '\n';
-  const footer = (tx.footer || L.thankYou).trim();
-  r += footer + '\n';
+  r += guestReceiptFooterLines(tx.footer, tx.businessName, L.thankYou).trim() + '\n';
   if (tx.printAdyenReceiptOnTicket !== false) {
     r = appendAdyenReceiptBlock(r, tx.adyenCustomerReceipt, width);
   }
@@ -1127,7 +1134,7 @@ export function generateRefundReceiptText(tx: RefundReceiptPrint, panelLang?: st
   r += centerLine((tx.businessName || APP_NAME).toUpperCase().slice(0, width), width) + '\n';
   if (tx.address) r += tx.address.slice(0, width) + '\n';
   r += sep + '\n';
-  const ref = (tx.orderDisplay || tx.orderNumber || '').trim();
+  const ref = guestReceiptBottomNumber(tx);
   if (ref) r += padLine('Order:', ref.slice(0, width - 8), width) + '\n';
   r += padLine('Date:', formatDateTimeDDMMYYYY(tx.refundedAt).slice(0, width - 8), width) + '\n';
   r += thin + '\n';
@@ -1154,7 +1161,7 @@ export function generateRefundReceiptText(tx: RefundReceiptPrint, panelLang?: st
     r += padLine(L.staff, tx.staffName.trim().slice(0, width - 8), width) + '\n';
   }
   r += sep + '\n';
-  r += (tx.footer || L.thankYou).trim() + '\n\n\n';
+  r += guestReceiptFooterLines(tx.footer, tx.businessName, L.thankYou).trim() + '\n\n\n';
   return r;
 }
 
@@ -2649,6 +2656,7 @@ export function posOrderToWebPosReceipt(
     id: order.clientId || order.id,
     orderDisplay: ticketDisplay,
     orderNumber: order.orderNumber,
+    tabNumber: order.tabNumber || meta.tabNumber || null,
     completedAt,
     channel: order.channel || order.fulfillmentChannel || undefined,
     paymentMethod: order.paymentMethod || 'cash',

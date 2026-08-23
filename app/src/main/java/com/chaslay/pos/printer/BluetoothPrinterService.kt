@@ -909,10 +909,14 @@ class BluetoothPrinterService @Inject constructor(
             discountAmount
         )
         val giftCardRate = giftCardVatRate(settings, cart.serviceType)
-        val vatRows = ReceiptVatCalculator.vatRowsFromCartItems(
-            cart.items,
-            discountFactor,
-            giftCardRate,
+        val vatRows = ReceiptVatCalculator.reconcileVatRowsToBillMerchandise(
+            ReceiptVatCalculator.vatRowsFromCartItems(
+                cart.items,
+                discountFactor,
+                giftCardRate,
+                cart.vatIncludedInPrice
+            ),
+            ReceiptVatCalculator.billMerchandiseTtc(total, tipAmount, 0.0),
             cart.vatIncludedInPrice
         )
 
@@ -1029,7 +1033,7 @@ class BluetoothPrinterService @Inject constructor(
             orderNumber = context.orderNumber,
             orderType = orderType
         )
-        appendFooter(sb, settings.receiptFooter, lineWidth)
+        appendFooter(sb, settings.receiptFooter, lineWidth, settings.businessName)
         val deliveryDirectionsUrl = deliveryDirectionsUrlForCart(settings, cart, context, lineWidth, sb)
         sb.appendLine("\n\n\n")
         return finalizePayload(sb.toString(), settings, lineWidth, deliveryDirectionsUrl = deliveryDirectionsUrl)
@@ -1058,10 +1062,18 @@ class BluetoothPrinterService @Inject constructor(
             orderDiscount
         )
         val giftCardRate = giftCardVatRate(settings, transaction.serviceType)
-        val vatRows = ReceiptVatCalculator.vatRowsFromTransactionItems(
-            items,
-            discountFactor,
-            giftCardRate,
+        val vatRows = ReceiptVatCalculator.reconcileVatRowsToBillMerchandise(
+            ReceiptVatCalculator.vatRowsFromTransactionItems(
+                items,
+                discountFactor,
+                giftCardRate,
+                settings.vatIncludedInPrice
+            ),
+            ReceiptVatCalculator.billMerchandiseTtc(
+                transaction.total,
+                transaction.tipAmount,
+                transaction.roundingAmount
+            ),
             settings.vatIncludedInPrice
         )
 
@@ -1154,11 +1166,8 @@ class BluetoothPrinterService @Inject constructor(
         }
 
         appendReceiptPaymentLines(sb, labels, transaction, settings.currencySymbol, lineWidth)
-        transaction.cardReference?.takeIf { it.isNotBlank() }?.let { ref ->
-            sb.appendLine(leftRight("Terminal ref:", ref.take(lineWidth - 14), lineWidth))
-        }
 
-        // VAT after payment — Net / Tax / Gross table plus tax-total (never print Net as tax).
+        // VAT after payment — compact Net / Tax / Gross table (guest receipt).
         if (settings.receiptShowVatTable && vatRows.isNotEmpty()) {
             appendReceiptVatSection(sb, vatRows, labels, lineWidth, settings.vatIncludedInPrice)
         }
@@ -1188,7 +1197,7 @@ class BluetoothPrinterService @Inject constructor(
             ?.forEach { line ->
             sb.appendLine(line)
         }
-        appendFooter(sb, settings.receiptFooter, lineWidth)
+        appendFooter(sb, settings.receiptFooter, lineWidth, settings.businessName)
         val qrUrl = if (settings.receiptShowQrCode) {
             transaction.receiptUrl?.takeIf { it.isNotBlank() }
                 ?: ReceiptPublicUrls.build(settings.receiptBaseUrl, transaction.id)
@@ -1525,15 +1534,10 @@ class BluetoothPrinterService @Inject constructor(
         rows: List<com.chaslay.pos.domain.model.VatBreakdownRow>,
         labels: ReceiptLabels,
         lineWidth: Int,
-        vatIncludedInPrice: Boolean
+        @Suppress("UNUSED_PARAMETER") vatIncludedInPrice: Boolean
     ) {
         if (rows.isEmpty()) return
-        if (vatIncludedInPrice) {
-            sb.appendLine(labels.vatIncludedNote)
-        }
         appendVatTable(sb, rows, labels, lineWidth)
-        val vatTotal = rows.sumOf { it.tva }
-        sb.appendLine(leftRight(labels.vatTotal, twoDp(vatTotal), lineWidth))
     }
 
     private fun appendVatTable(
@@ -1571,34 +1575,25 @@ class BluetoothPrinterService @Inject constructor(
         orderNumber: String? = null,
         orderType: String? = null
     ) {
-        val parts = buildList {
+        val guestRef = com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(orderNumber)
+        val metaParts = buildList {
             add(dateTime)
-            orderNumber?.trim()?.takeIf { it.isNotBlank() }?.let { add(shortenOrderNumber(it, maxLen = 16)) }
             orderType?.trim()?.takeIf { it.isNotBlank() }?.let { add(it) }
             if (showStaff) {
                 staffName?.trim()?.takeIf { it.isNotBlank() }?.let { add(it) }
             }
         }
-        // Keep footer compact — never double-height for long TX numbers.
         sb.append(escDoubleHeight(false))
         sb.append(escBold(false))
-        sb.appendLine(center(parts.joinToString(" | "), lineWidth))
+        if (guestRef.isNotBlank()) {
+            sb.appendLine(center(guestRef, lineWidth))
+        }
+        if (metaParts.isNotEmpty()) {
+            sb.appendLine(center(metaParts.joinToString(" | "), lineWidth))
+        }
     }
 
-    private fun formatTxItemQtyLabel(item: TransactionItemEntity): String =
-        if (item.isWeighed) {
-            val kg = item.quantity / 1000.0
-            String.format(Locale.US, "%.3f kg %s", kg, item.productName)
-        } else {
-            "${item.quantity}x ${item.productName}"
-        }
-
-    private fun formatTxItemRateLabel(item: TransactionItemEntity, currencySymbol: String): String? =
-        if (item.isWeighed) {
-            String.format(Locale.US, "%.2f %s/kg", item.unitPrice, currencySymbol)
-        } else null
-
-    /** Shorten long TX refs for the receipt footer, e.g. TX-20260801-005747-8949 → TX-005747-8949 */
+    /** Kitchen-ticket compact ref — not used on guest payment receipts. */
     private fun shortenOrderNumber(orderNumber: String, maxLen: Int = 16): String {
         if (orderNumber.length <= maxLen) return orderNumber
         val parts = orderNumber.split('-')
@@ -1614,6 +1609,19 @@ class BluetoothPrinterService @Inject constructor(
         }
         return "…" + orderNumber.takeLast(maxLen - 1)
     }
+
+    private fun formatTxItemQtyLabel(item: TransactionItemEntity): String =
+        if (item.isWeighed) {
+            val kg = item.quantity / 1000.0
+            String.format(Locale.US, "%.3f kg %s", kg, item.productName)
+        } else {
+            "${item.quantity}x ${item.productName}"
+        }
+
+    private fun formatTxItemRateLabel(item: TransactionItemEntity, currencySymbol: String): String? =
+        if (item.isWeighed) {
+            String.format(Locale.US, "%.2f %s/kg", item.unitPrice, currencySymbol)
+        } else null
 
     private fun vatRow(type: String, net: String, tva: String, brut: String, lineWidth: Int = LINE_WIDTH_80): String {
         val numWidth = if (lineWidth <= LINE_WIDTH_58) 6 else 8
@@ -1914,11 +1922,23 @@ class BluetoothPrinterService @Inject constructor(
         }
     }
 
-    private fun appendFooter(sb: StringBuilder, footer: String, lineWidth: Int = LINE_WIDTH_80) {
+    private fun appendFooter(
+        sb: StringBuilder,
+        footer: String,
+        lineWidth: Int = LINE_WIDTH_80,
+        businessName: String? = null
+    ) {
         if (footer.isBlank()) return
+        val biz = businessName?.trim()?.lowercase().orEmpty()
+        val lines = footer.lines()
+            .map { it.trim() }
+            .filter { line ->
+                line.isNotBlank() && (biz.isEmpty() || line.lowercase() != biz)
+            }
+        if (lines.isEmpty()) return
         sb.appendLine(center(sepDash(lineWidth), lineWidth))
-        footer.lines().forEach { line ->
-            if (line.isNotBlank()) sb.appendLine(center(line.trim(), lineWidth))
+        lines.forEach { line ->
+            if (line.isNotBlank()) sb.appendLine(center(line, lineWidth))
         }
     }
 
