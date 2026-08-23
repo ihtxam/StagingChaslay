@@ -1,9 +1,9 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import OpenPageEmbed from '@/components/OpenPageEmbed';
+import OpenPageEmbed, { type CmsCatalogPayload } from '@/components/OpenPageEmbed';
 import {
   emptyOpenPageBlocks,
   isOpenPageBlocks,
@@ -13,6 +13,7 @@ import {
   type OpenPageBlocks,
   type OpenPageSiteConfig,
 } from '@/lib/cms/openpage-types';
+import { needsChaslayBlockMigration } from '@/lib/cms/split-openpage-html';
 import { starterForTemplate } from '@/lib/cms/openpage-starters';
 
 const CMS_LOCALES: CmsLocale[] = ['en', 'fr', 'de'];
@@ -47,6 +48,67 @@ function asOpenPage(blocks: unknown, title = 'Homepage'): OpenPageBlocks {
   return emptyOpenPageBlocks(title);
 }
 
+function pageNeedsHtmlMigration(page: CmsPage, locale: CmsLocale = 'en'): boolean {
+  const blocks = asOpenPage(page.blocks, page.title);
+  const config = resolveOpenPageConfig(blocks, locale);
+  const html = blocks.locales?.[locale]?.html || (locale === (blocks.defaultLocale || 'en') ? blocks.html : '') || '';
+  return needsChaslayBlockMigration(html, config);
+}
+
+function OpenPageHtmlMigrator({
+  page,
+  catalog,
+  onDone,
+}: {
+  page: CmsPage;
+  catalog: CmsCatalogPayload | null;
+  onDone: (ok: boolean) => void;
+}) {
+  const blocks = asOpenPage(page.blocks, page.title);
+  const locale = blocks.defaultLocale || 'en';
+  const config = resolveOpenPageConfig(blocks, locale);
+  const doneRef = useRef(false);
+
+  const finish = (ok: boolean) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onDone(ok);
+  };
+
+  return (
+    <div className="fixed left-0 top-0 h-0 w-0 overflow-hidden opacity-0 pointer-events-none" aria-hidden>
+      <OpenPageEmbed
+        mode="page"
+        title={page.title}
+        config={config}
+        catalog={catalog}
+        migrateHtml
+        onSaved={async (payload) => {
+          try {
+            const next = withLocaleBundle(blocks, locale, {
+              config: payload.config,
+              html: payload.html,
+            });
+            await api.put(`/merchant/cms/pages/${page.id}`, {
+              title: page.title,
+              slug: page.slug,
+              isHomepage: page.isHomepage,
+              blocks: next,
+              theme: payload.config.theme || page.theme || null,
+              seoTitle: page.seoTitle?.trim().slice(0, 200) || null,
+              seoDescription: page.seoDescription?.trim().slice(0, 500) || null,
+              status: page.status,
+            });
+            finish(true);
+          } catch {
+            finish(false);
+          }
+        }}
+      />
+    </div>
+  );
+}
+
 function themeStr(theme: Record<string, unknown> | null | undefined, key: string, fallback: string): string {
   const v = theme?.[key];
   return typeof v === 'string' ? v : fallback;
@@ -68,6 +130,22 @@ export default function WebsiteCms() {
   const [newTemplate, setNewTemplate] = useState('food_truck');
   const [asHomepage, setAsHomepage] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [catalog, setCatalog] = useState<CmsCatalogPayload | null>(null);
+  const [migrateHtml, setMigrateHtml] = useState(false);
+  const [migrationQueue, setMigrationQueue] = useState<CmsPage[]>([]);
+  const [migrationFailed, setMigrationFailed] = useState<Set<string>>(() => new Set());
+
+  const loadCatalog = useCallback(async () => {
+    try {
+      const res = await api.get('/merchant/cms/catalog');
+      setCatalog({
+        categories: res.data.categories || [],
+        products: res.data.products || [],
+      });
+    } catch {
+      setCatalog(null);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +161,11 @@ export default function WebsiteCms() {
       const s = siteRes.data.site as Site;
       setSite(s);
       setCustomDomain(s.customDomain || '');
+      void loadCatalog();
+      const toMigrate = nextPages.filter(
+        (p) => !migrationFailed.has(p.id) && pageNeedsHtmlMigration(p)
+      );
+      if (toMigrate.length) setMigrationQueue(toMigrate);
       if (!nextPages.length) {
         setCreateOpen(true);
         setAsHomepage(true);
@@ -92,7 +175,7 @@ export default function WebsiteCms() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, loadCatalog, migrationFailed]);
 
   useEffect(() => {
     void load();
@@ -144,9 +227,11 @@ export default function WebsiteCms() {
       const res = await api.get(`/merchant/cms/pages/${pageId}`);
       const page = res.data.page as CmsPage;
       const blocks = asOpenPage(page.blocks, page.title);
+      const locale = blocks.defaultLocale || 'en';
       setEditing(page);
       setDraft(blocks);
       setEditLocale(blocks.defaultLocale || 'en');
+      setMigrateHtml(pageNeedsHtmlMigration(page, locale));
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('cmsLoadFailed'));
     }
@@ -176,7 +261,11 @@ export default function WebsiteCms() {
     }
   };
 
-  const onBuilderSaved = async (payload: { config: OpenPageSiteConfig; html: string }) => {
+  const onBuilderSaved = async (payload: {
+    config: OpenPageSiteConfig;
+    html: string;
+    migrateHtml?: boolean;
+  }) => {
     setBusy(true);
     try {
       const next = withLocaleBundle(draft, editLocale, {
@@ -184,8 +273,12 @@ export default function WebsiteCms() {
         html: payload.html,
       });
       setDraft(next);
+      setMigrateHtml(false);
       const ok = await persistPage(next);
-      if (ok) toast.success(`${t('saved')} (${editLocale.toUpperCase()})`);
+      if (ok) {
+        if (payload.migrateHtml) toast.success(t('cmsHtmlMigrated'));
+        else toast.success(`${t('saved')} (${editLocale.toUpperCase()})`);
+      }
     } finally {
       setBusy(false);
     }
@@ -374,6 +467,8 @@ export default function WebsiteCms() {
             mode="page"
             title={editing.title}
             config={resolveOpenPageConfig(draft, editLocale)}
+            catalog={catalog}
+            migrateHtml={migrateHtml}
             className="relative min-h-0 flex-1 w-full rounded-none border-0"
             shellBg={shellBg}
             onSaved={(payload) => void onBuilderSaved(payload)}
@@ -386,6 +481,24 @@ export default function WebsiteCms() {
 
   return (
     <div className="space-y-6 max-w-4xl">
+      {migrationQueue.length > 0 ? (
+        <OpenPageHtmlMigrator
+          page={migrationQueue[0]}
+          catalog={catalog}
+          onDone={(ok) => {
+            const pageId = migrationQueue[0]?.id;
+            setMigrationQueue((q) => q.slice(1));
+            if (!ok && pageId) {
+              setMigrationFailed((prev) => new Set(prev).add(pageId));
+            } else if (ok) {
+              void load();
+            }
+          }}
+        />
+      ) : null}
+      {migrationQueue.length > 0 ? (
+        <p className="text-xs muted">{t('cmsMigratingHtml')}</p>
+      ) : null}
       <div>
         <h1 className="text-xl font-semibold">{t('cmsWebsite')}</h1>
         <p className="text-sm muted mt-1">{t('cmsWebsiteHint')}</p>

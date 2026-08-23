@@ -29,6 +29,8 @@ import { adjustTaxForOrderDiscount } from '@/lib/tax-discount';
 import { shopDocumentTitle } from '@/lib/brand';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
+import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup';
@@ -55,6 +57,7 @@ export default function CheckoutPage() {
   const { merchantSlug } = useParams<{ merchantSlug: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const navigate = useNavigate();
+  const cmsTheme = useShopCmsTheme(shopKey);
 
   const [draft, setDraft] = useState<ShopCheckoutDraft>(emptyDraft());
   const [merchant, setMerchant] = useState<any>(null);
@@ -845,7 +848,12 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-[#f6f5f2] text-stone-900">
+    <ShopThemeShell
+      theme={cmsTheme}
+      className="min-h-dvh"
+      style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
+    >
+    <div className="min-h-dvh">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <header className="bg-white border-b border-stone-200">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
@@ -2112,5 +2120,6 @@ export default function CheckoutPage() {
         }}
       />
     </div>
+    </ShopThemeShell>
   );
 }

@@ -1,8 +1,14 @@
 import type { SiteConfig } from '@/blocks/types'
 import { exportSiteToHTML } from '@/lib/export-html'
+import type { CatalogCategory, CatalogProduct } from '@/store/catalogStore'
 
 export const EMBED_SOURCE_PARENT = 'foodtruckpos'
 export const EMBED_SOURCE_CHILD = 'openpage'
+
+export type CmsCatalogPayload = {
+  categories: CatalogCategory[]
+  products: CatalogProduct[]
+}
 
 export type EmbedParentMessage =
   | {
@@ -11,6 +17,9 @@ export type EmbedParentMessage =
       config?: SiteConfig | null
       mode?: 'page' | 'newsletter'
       title?: string
+      catalog?: CmsCatalogPayload | null
+      /** When true, child re-exports HTML once after init (CHASLAY_BLOCK migration). */
+      migrateHtml?: boolean
     }
   | {
       source: typeof EMBED_SOURCE_PARENT
@@ -24,6 +33,7 @@ export type EmbedChildMessage =
       type: 'openpage:saved'
       config: SiteConfig
       html: string
+      migrateHtml?: boolean
     }
 
 export function isEmbedMode(): boolean {

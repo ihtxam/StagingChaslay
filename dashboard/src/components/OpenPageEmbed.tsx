@@ -6,15 +6,29 @@ const CHILD = 'openpage';
 /** Hash route lands on the editor without relying on Caddy path rewrites. */
 const OPENPAGE_SRC = '/openpage/?embed=1#/editor';
 
+export type CmsCatalogPayload = {
+  categories: Array<{ id: string; name: string }>;
+  products: Array<{
+    id: string;
+    name: string;
+    categoryId?: string | null;
+    price?: string;
+    image?: string | null;
+  }>;
+};
+
 type Props = {
   mode?: 'page' | 'newsletter';
   title?: string;
   config?: OpenPageSiteConfig | null;
+  catalog?: CmsCatalogPayload | null;
+  /** Re-export HTML once after init (CHASLAY_BLOCK marker migration). */
+  migrateHtml?: boolean;
   className?: string;
   /** Match dashboard editor shell to the page theme. */
   shellBg?: string;
   /** Called when the OpenPage editor posts a Save. */
-  onSaved: (payload: { config: OpenPageSiteConfig; html: string }) => void;
+  onSaved: (payload: { config: OpenPageSiteConfig; html: string; migrateHtml?: boolean }) => void;
 };
 
 /**
@@ -25,6 +39,8 @@ export default function OpenPageEmbed({
   mode = 'page',
   title,
   config,
+  catalog,
+  migrateHtml = false,
   className,
   shellBg = '#171210',
   onSaved,
@@ -34,10 +50,14 @@ export default function OpenPageEmbed({
   const [error, setError] = useState<string | null>(null);
   const onSavedRef = useRef(onSaved);
   const configRef = useRef(config);
+  const catalogRef = useRef(catalog);
+  const migrateRef = useRef(migrateHtml);
   const modeRef = useRef(mode);
   const titleRef = useRef(title);
   onSavedRef.current = onSaved;
   configRef.current = config;
+  catalogRef.current = catalog;
+  migrateRef.current = migrateHtml;
   modeRef.current = mode;
   titleRef.current = title;
 
@@ -49,6 +69,8 @@ export default function OpenPageEmbed({
         config: configRef.current || null,
         mode: modeRef.current,
         title: titleRef.current,
+        catalog: catalogRef.current || null,
+        migrateHtml: migrateRef.current || undefined,
       },
       '*'
     );
@@ -61,6 +83,7 @@ export default function OpenPageEmbed({
         type?: string;
         config?: OpenPageSiteConfig;
         html?: string;
+        migrateHtml?: boolean;
       };
       if (!data || data.source !== CHILD) return;
       if (data.type === 'openpage:ready') {
@@ -70,7 +93,7 @@ export default function OpenPageEmbed({
         return;
       }
       if (data.type === 'openpage:saved' && data.config && typeof data.html === 'string') {
-        onSavedRef.current({ config: data.config, html: data.html });
+        onSavedRef.current({ config: data.config, html: data.html, migrateHtml: data.migrateHtml });
       }
     }
     window.addEventListener('message', onMessage);
@@ -80,7 +103,7 @@ export default function OpenPageEmbed({
   useEffect(() => {
     if (!ready) return;
     postInit();
-  }, [config, mode, title, ready]);
+  }, [config, catalog, migrateHtml, mode, title, ready]);
 
   useEffect(() => {
     if (ready) return;

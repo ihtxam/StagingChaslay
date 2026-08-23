@@ -2769,6 +2769,8 @@ const en: Dict = {
   cmsPuckHint: 'Visual page builder. Click Save in the toolbar to capture the design, then Publish.',
   cmsOpenPageHint:
     'Design on the canvas, click Save in the builder toolbar (top), then Publish. Shop homepage shows that HTML.',
+  cmsHtmlMigrated: 'Homepage HTML updated for live menu and reservation blocks.',
+  cmsMigratingHtml: 'Updating saved pages for live blocks…',
   cmsOpenBuilder: 'Open builder',
   cmsOpenInNewTab: 'Open builder tab',
   cmsBuilderSaveHint: 'Important: click Save inside the builder first, then Publish here.',
@@ -5848,6 +5850,8 @@ const fr: Dict = {
   cmsPuckHint: 'Éditeur visuel. Enregistrez dans la barre d’outils, puis Publiez.',
   cmsOpenPageHint:
     'Concevez sur le canvas, cliquez Enregistrer dans la barre de l’éditeur, puis Publier.',
+  cmsHtmlMigrated: 'HTML de la page mis à jour pour les blocs menu et réservations en direct.',
+  cmsMigratingHtml: 'Mise à jour des pages enregistrées pour les blocs en direct…',
   cmsOpenBuilder: 'Ouvrir l’éditeur',
   cmsOpenInNewTab: 'Ouvrir l’éditeur (onglet)',
   cmsBuilderSaveHint: 'Important : cliquez d’abord Enregistrer dans l’éditeur, puis Publier ici.',
@@ -8929,6 +8933,8 @@ const de: Dict = {
   cmsPuckHint: 'Visueller Builder. In der Toolbar speichern, dann veröffentlichen.',
   cmsOpenPageHint:
     'Auf der Canvas gestalten, in der Editor-Toolbar speichern, dann veröffentlichen.',
+  cmsHtmlMigrated: 'Homepage-HTML für Live-Menü- und Reservierungsblöcke aktualisiert.',
+  cmsMigratingHtml: 'Gespeicherte Seiten werden für Live-Blöcke aktualisiert…',
   cmsOpenBuilder: 'Builder öffnen',
   cmsOpenInNewTab: 'Builder-Tab öffnen',
   cmsBuilderSaveHint: 'Wichtig: zuerst im Builder speichern, dann hier veröffentlichen.',
