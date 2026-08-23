@@ -22,6 +22,7 @@ type KdsTicket = {
   tabNumber?: string | null;
   channel?: string | null;
   status: string;
+  completedAt?: string | null;
   items: KdsItem[];
 };
 
@@ -63,10 +64,11 @@ export default function KdsDisplayPage() {
       const pending: KdsTicket[] = [];
       const done: KdsTicket[] = [];
       for (const row of rows) {
-        const visibleItems = (row.items || []).filter((i) => i.status !== 'ready');
-        const readyItems = (row.items || []).filter((i) => i.status === 'ready');
+        const allItems = row.items || [];
+        const visibleItems = allItems.filter((i) => i.status !== 'ready');
+        const readyItems = allItems.filter((i) => i.status === 'ready');
         if (row.status === 'completed') {
-          done.push({ ...row, items: row.items || [] });
+          done.push({ ...row, items: allItems });
         } else if (visibleItems.length) {
           pending.push({ ...row, items: visibleItems });
         } else if (readyItems.length) {
@@ -75,6 +77,7 @@ export default function KdsDisplayPage() {
       }
       for (const row of pending) {
         for (const item of row.items) {
+          if (item.status === 'ready') continue;
           if (initialLoad.current) {
             knownItemIds.current.add(item.id);
             continue;
@@ -108,6 +111,8 @@ export default function KdsDisplayPage() {
     [tickets]
   );
 
+  const completedCount = completed.length;
+
   const markReady = async (itemId: string) => {
     setBusyId(itemId);
     try {
@@ -120,10 +125,24 @@ export default function KdsDisplayPage() {
     }
   };
 
+  const recallItem = async (itemId: string) => {
+    setBusyId(itemId);
+    try {
+      await publicApi.patch(`/kds/${encodeURIComponent(token)}/items/${itemId}/recall`);
+      setTab('pending');
+      await load();
+    } catch (e: any) {
+      setError(e.response?.data?.error || t('kdsActionFailed'));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const completeTicket = async (ticketId: string) => {
     setBusyId(ticketId);
     try {
       await publicApi.patch(`/kds/${encodeURIComponent(token)}/tickets/${ticketId}/complete`);
+      setTab('completed');
       await load();
     } catch (e: any) {
       setError(e.response?.data?.error || t('kdsActionFailed'));
@@ -172,7 +191,7 @@ export default function KdsDisplayPage() {
                 tab === 'completed' ? 'bg-teal-600 text-white' : 'bg-stone-800 text-stone-300'
               }`}
             >
-              {t('kdsTabCompleted')}
+              {t('kdsTabCompleted')} ({completedCount})
             </button>
           </div>
         </div>
@@ -199,6 +218,7 @@ export default function KdsDisplayPage() {
               ]
                 .filter(Boolean)
                 .join(' · ');
+              const isCompletedTab = tab === 'completed';
               return (
                 <article
                   key={ticket.id}
@@ -209,18 +229,35 @@ export default function KdsDisplayPage() {
                     <p className="text-xs text-stone-400">
                       {ticket.channel || '—'} · {ready}/{total} {t('kdsReadyShort')}
                     </p>
+                    {isCompletedTab && ticket.completedAt ? (
+                      <p className="mt-0.5 text-[10px] text-stone-500">
+                        {new Date(ticket.completedAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    ) : null}
                   </div>
                   <ul className="flex-1 space-y-2 p-3">
                     {ticket.items.map((item) => (
                       <li key={item.id}>
                         <button
                           type="button"
-                          disabled={busyId === item.id || item.status === 'ready'}
-                          onClick={() => void markReady(item.id)}
+                          disabled={busyId === item.id}
+                          onClick={() =>
+                            void (isCompletedTab
+                              ? recallItem(item.id)
+                              : markReady(item.id))
+                          }
+                          title={
+                            isCompletedTab ? t('kdsRecallItemHint') : undefined
+                          }
                           className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${
-                            item.status === 'ready'
-                              ? 'border-emerald-700/50 bg-emerald-950/40 opacity-60'
-                              : 'border-stone-700 bg-stone-800 hover:border-teal-500 hover:bg-stone-750'
+                            isCompletedTab
+                              ? 'border-stone-700 bg-stone-800/80 hover:border-amber-500 hover:bg-stone-800'
+                              : item.status === 'ready'
+                                ? 'border-emerald-700/50 bg-emerald-950/40 opacity-60'
+                                : 'border-stone-700 bg-stone-800 hover:border-teal-500 hover:bg-stone-750'
                           }`}
                         >
                           <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-700 text-sm font-bold">
@@ -229,10 +266,22 @@ export default function KdsDisplayPage() {
                           <span className="min-w-0 flex-1">
                             <span className="block font-semibold leading-snug">{item.name}</span>
                             {item.lineNote ? (
-                              <span className="mt-0.5 block text-xs text-amber-200/90">{item.lineNote}</span>
+                              <span className="mt-0.5 block text-xs text-amber-200/90">
+                                {item.lineNote}
+                              </span>
+                            ) : null}
+                            {isCompletedTab ? (
+                              <span className="mt-1 block text-[10px] font-medium uppercase tracking-wide text-amber-300/90">
+                                {t('kdsRecallItemHint')}
+                              </span>
                             ) : null}
                           </span>
-                          {item.status === 'ready' ? (
+                          {isCompletedTab ? (
+                            <RotateCcw
+                              className="mt-1 h-5 w-5 shrink-0 text-amber-400"
+                              aria-hidden
+                            />
+                          ) : item.status === 'ready' ? (
                             <Check className="mt-1 h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
                           ) : null}
                         </button>
