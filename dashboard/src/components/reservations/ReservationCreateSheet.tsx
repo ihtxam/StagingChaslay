@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { ChevronRight, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 export type ReservationCreateForm = {
@@ -56,6 +56,13 @@ type Props = {
   onClose: () => void;
   onSubmit: (form: ReservationCreateForm) => Promise<void>;
 };
+
+const chipClass = (active: boolean) =>
+  `rounded-full px-2.5 py-1 text-xs sm:text-sm border transition ${
+    active
+      ? 'bg-sky-100 border-sky-300 text-sky-900 font-medium'
+      : 'border-[var(--border)] hover:bg-[var(--bg-muted)]'
+  }`;
 
 export default function ReservationCreateSheet({ open, tables, onClose, onSubmit }: Props) {
   const { t, formatDate } = useI18n();
@@ -114,227 +121,248 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[var(--bg)]">
-      <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-elevated)]">
-        <button type="button" className="p-2 -ml-2 rounded-lg hover:bg-[var(--bg-muted)]" onClick={onClose}>
-          <X className="w-5 h-5" />
-        </button>
-        <h2 className="text-lg font-semibold">{t('reservationsCreateTitle')}</h2>
-        <button
-          type="submit"
-          form="reservation-create-form"
-          disabled={saving}
-          className="text-sm font-semibold text-rose-600 disabled:opacity-50"
-        >
-          OK
-        </button>
-      </header>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reservation-create-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/45"
+        aria-label={t('cancel')}
+        onClick={onClose}
+      />
 
-      <form id="reservation-create-form" onSubmit={submit} className="flex-1 overflow-y-auto">
-        <section className="border-b border-[var(--border)] bg-[var(--bg-elevated)]">
+      <div className="relative flex max-h-[min(92vh,640px)] w-full flex-col overflow-hidden rounded-t-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl sm:max-w-[24rem] sm:rounded-2xl">
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
+          <h2 id="reservation-create-title" className="text-base font-semibold">
+            {t('reservationsCreateTitle')}
+          </h2>
           <button
             type="button"
-            className="w-full flex items-center justify-between px-4 py-3 text-left"
-            onClick={() => {
-              const el = document.getElementById('res-date-input') as HTMLInputElement | null;
-              el?.showPicker?.();
-              el?.focus();
-            }}
+            className="rounded-lg p-1.5 hover:bg-[var(--bg-muted)]"
+            onClick={onClose}
+            aria-label={t('cancel')}
           >
-            <span className="font-medium">{dateLabel}</span>
-            <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
+            <X className="h-5 w-5" />
           </button>
-          <input
-            id="res-date-input"
-            type="date"
-            className="sr-only"
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-          />
-          <div className="flex flex-wrap gap-2 px-4 pb-3">
-            {[
-              [ymd(), t('reportsToday')],
-              [addDaysYmd(1), t('reservationsTomorrow')],
-              [nextThursdayYmd(), t('reservationsThisThursday')],
-            ].map(([d, label]) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setForm({ ...form, date: d })}
-                className={`rounded-full px-3 py-1.5 text-sm border ${
-                  form.date === d
-                    ? 'bg-sky-100 border-sky-300 text-sky-900 font-medium'
-                    : 'border-[var(--border)]'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </section>
+        </header>
 
-        <section className="border-b border-[var(--border)] bg-[var(--bg-elevated)] mt-2">
-          <button
-            type="button"
-            className="w-full flex items-center justify-between px-4 py-3 text-left"
-            onClick={() => {
-              const el = document.getElementById('res-time-input') as HTMLInputElement | null;
-              el?.showPicker?.();
-              el?.focus();
-            }}
-          >
-            <span className="text-sm muted">{t('reservationsTime') || 'Time'}</span>
-            <span className="font-medium">{form.time}</span>
-          </button>
-          <input
-            id="res-time-input"
-            type="time"
-            className="sr-only"
-            value={form.time}
-            onChange={(e) => setForm({ ...form, time: e.target.value })}
-          />
-          <div className="flex flex-wrap gap-2 px-4 pb-3">
-            {timeSlots.map((slot) => (
-              <button
-                key={slot}
-                type="button"
-                onClick={() => setForm({ ...form, time: slot })}
-                className={`rounded-full px-3 py-1.5 text-sm border ${
-                  form.time === slot
-                    ? 'bg-sky-100 border-sky-300 text-sky-900 font-medium'
-                    : 'border-[var(--border)]'
-                }`}
-              >
-                {slot}
-              </button>
-            ))}
-          </div>
-          {isPast ? (
-            <p className="px-4 pb-3 text-xs text-amber-700">{t('reservationsDatePast')}</p>
-          ) : null}
-        </section>
-
-        <section className="border-b border-[var(--border)] bg-[var(--bg-elevated)] mt-2 px-4 py-3">
-          <p className="text-sm muted mb-2">{t('reservationsPartySize')}</p>
-          <div className="flex flex-wrap gap-2">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setForm({ ...form, partySize: n })}
-                className={`w-11 h-11 rounded-lg border text-sm font-medium ${
-                  form.partySize === n
-                    ? 'bg-sky-100 border-sky-300 text-sky-900'
-                    : 'border-[var(--border)]'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setForm({ ...form, partySize: Math.min(20, form.partySize + 1) })}
-              className="w-11 h-11 rounded-lg border border-[var(--border)] text-lg"
-            >
-              +
-            </button>
-          </div>
-        </section>
-
-        <section className="mt-2 bg-[var(--bg-elevated)] border-y border-[var(--border)]">
-          <p className="px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            {t('reservationsContactInfo')}
-          </p>
-          <label className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border)]">
-            <span className="w-24 text-sm shrink-0">{t('reservationsLastName')}</span>
-            <input
-              className="flex-1 bg-transparent outline-none text-sm"
-              value={form.guestLastName}
-              onChange={(e) => setForm({ ...form, guestLastName: e.target.value })}
-            />
-          </label>
-          <label className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border)]">
-            <span className="w-24 text-sm shrink-0">{t('reservationsFirstName')}</span>
-            <input
-              className="flex-1 bg-transparent outline-none text-sm"
-              value={form.guestFirstName}
-              onChange={(e) => setForm({ ...form, guestFirstName: e.target.value })}
-            />
-          </label>
-          <label className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border)]">
-            <span className="w-24 text-sm shrink-0">{t('reservationsPhone')}</span>
-            <input
-              className="flex-1 bg-transparent outline-none text-sm"
-              type="tel"
-              value={form.guestPhone}
-              onChange={(e) => setForm({ ...form, guestPhone: e.target.value })}
-            />
-          </label>
-          <label className="flex items-center gap-3 px-4 py-3">
-            <span className="w-24 text-sm shrink-0">{t('email')}</span>
-            <input
-              className="flex-1 bg-transparent outline-none text-sm"
-              type="email"
-              value={form.guestEmail}
-              onChange={(e) => setForm({ ...form, guestEmail: e.target.value })}
-            />
-          </label>
-        </section>
-
-        <section className="mt-2 bg-[var(--bg-elevated)] border-y border-[var(--border)]">
-          <p className="px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            {t('reservationsDetails')}
-          </p>
-          <label className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border)]">
-            <span className="text-sm">{t('reservationsStatus')}</span>
-            <select
-              className="text-sm bg-transparent outline-none text-right"
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-            >
-              <option value="confirmed">{t('reservationsConfirmed')}</option>
-              <option value="pending">{t('reservationsPending')}</option>
-            </select>
-          </label>
-          <label className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border)]">
-            <span className="text-sm">{t('reservationsSource')}</span>
-            <select
-              className="text-sm bg-transparent outline-none text-right"
-              value={form.source}
-              onChange={(e) => setForm({ ...form, source: e.target.value })}
-            >
-              <option value="phone">{t('reservationsSourcePhone')}</option>
-              <option value="walk_in">{t('reservationsSourceWalkIn')}</option>
-              <option value="online">{t('reservationsSourceOnline')}</option>
-            </select>
-          </label>
-          {tables.length ? (
-            <label className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border)]">
-              <span className="text-sm">{t('reservationsTable')}</span>
-              <select
-                className="text-sm bg-transparent outline-none text-right max-w-[50%]"
-                value={form.tableId}
-                onChange={(e) => setForm({ ...form, tableId: e.target.value })}
-              >
-                <option value="">—</option>
-                {tables.map((tbl) => (
-                  <option key={tbl.id} value={tbl.id}>
-                    {tbl.label}
-                  </option>
+        <form id="reservation-create-form" onSubmit={submit} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="space-y-4 p-4">
+            <section>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                  {t('date')}
+                </p>
+                <label className="text-xs text-[var(--text-muted)]">
+                  <span className="sr-only">{t('date')}</span>
+                  <input
+                    type="date"
+                    className="rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-0.5 text-xs"
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  />
+                </label>
+              </div>
+              <p className="mb-2 text-sm font-medium">{dateLabel}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  [ymd(), t('reportsToday')],
+                  [addDaysYmd(1), t('reservationsTomorrow')],
+                  [nextThursdayYmd(), t('reservationsThisThursday')],
+                ].map(([d, label]) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setForm({ ...form, date: d })}
+                    className={chipClass(form.date === d)}
+                  >
+                    {label}
+                  </button>
                 ))}
-              </select>
-            </label>
-          ) : null}
-          <label className="flex items-center gap-3 px-4 py-3">
-            <span className="w-24 text-sm shrink-0">{t('reservationsComment')}</span>
-            <input
-              className="flex-1 bg-transparent outline-none text-sm"
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            />
-          </label>
-        </section>
-      </form>
+              </div>
+            </section>
+
+            <section>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                  {t('reservationsTime') || t('time')}
+                </p>
+                <label className="text-xs text-[var(--text-muted)]">
+                  <span className="sr-only">{t('time')}</span>
+                  <input
+                    type="time"
+                    className="rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-0.5 text-xs"
+                    value={form.time}
+                    onChange={(e) => setForm({ ...form, time: e.target.value })}
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {timeSlots.map((slot) => (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() => setForm({ ...form, time: slot })}
+                    className={chipClass(form.time === slot)}
+                  >
+                    {slot}
+                  </button>
+                ))}
+              </div>
+              {isPast ? (
+                <p className="mt-2 text-xs text-amber-700">{t('reservationsDatePast')}</p>
+              ) : null}
+            </section>
+
+            <section>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                {t('reservationsPartySize')}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setForm({ ...form, partySize: n })}
+                    className={`h-9 w-9 rounded-lg border text-sm font-medium ${
+                      form.partySize === n
+                        ? 'bg-sky-100 border-sky-300 text-sky-900'
+                        : 'border-[var(--border)] hover:bg-[var(--bg-muted)]'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, partySize: Math.min(20, form.partySize + 1) })}
+                  className="h-9 w-9 rounded-lg border border-[var(--border)] text-lg hover:bg-[var(--bg-muted)]"
+                >
+                  +
+                </button>
+                {form.partySize > 5 ? (
+                  <span className="self-center text-sm font-semibold tabular-nums">{form.partySize}</span>
+                ) : null}
+              </div>
+            </section>
+
+            <section>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                {t('reservationsContactInfo')}
+              </p>
+              <div className="space-y-2">
+                <label className="block text-xs">
+                  <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsLastName')}</span>
+                  <input
+                    className="input w-full py-2 text-sm"
+                    value={form.guestLastName}
+                    onChange={(e) => setForm({ ...form, guestLastName: e.target.value })}
+                  />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsFirstName')}</span>
+                  <input
+                    className="input w-full py-2 text-sm"
+                    value={form.guestFirstName}
+                    onChange={(e) => setForm({ ...form, guestFirstName: e.target.value })}
+                  />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsPhone')}</span>
+                  <input
+                    className="input w-full py-2 text-sm"
+                    type="tel"
+                    value={form.guestPhone}
+                    onChange={(e) => setForm({ ...form, guestPhone: e.target.value })}
+                  />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block text-[var(--text-muted)]">{t('email')}</span>
+                  <input
+                    className="input w-full py-2 text-sm"
+                    type="email"
+                    value={form.guestEmail}
+                    onChange={(e) => setForm({ ...form, guestEmail: e.target.value })}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                {t('reservationsDetails')}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block text-xs">
+                  <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsStatus')}</span>
+                  <select
+                    className="input w-full py-2 text-sm"
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  >
+                    <option value="confirmed">{t('reservationsConfirmed')}</option>
+                    <option value="pending">{t('reservationsPending')}</option>
+                  </select>
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsSource')}</span>
+                  <select
+                    className="input w-full py-2 text-sm"
+                    value={form.source}
+                    onChange={(e) => setForm({ ...form, source: e.target.value })}
+                  >
+                    <option value="phone">{t('reservationsSourcePhone')}</option>
+                    <option value="walk_in">{t('reservationsSourceWalkIn')}</option>
+                    <option value="online">{t('reservationsSourceOnline')}</option>
+                  </select>
+                </label>
+                {tables.length ? (
+                  <label className="block text-xs col-span-2">
+                    <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsTable')}</span>
+                    <select
+                      className="input w-full py-2 text-sm"
+                      value={form.tableId}
+                      onChange={(e) => setForm({ ...form, tableId: e.target.value })}
+                    >
+                      <option value="">—</option>
+                      {tables.map((tbl) => (
+                        <option key={tbl.id} value={tbl.id}>
+                          {tbl.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <label className="block text-xs col-span-2">
+                  <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsComment')}</span>
+                  <input
+                    className="input w-full py-2 text-sm"
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  />
+                </label>
+              </div>
+            </section>
+          </div>
+        </form>
+
+        <footer className="flex shrink-0 gap-2 border-t border-[var(--border)] bg-[var(--bg-elevated)] p-3">
+          <button type="button" className="btn-secondary flex-1 py-2 text-sm" onClick={onClose}>
+            {t('cancel')}
+          </button>
+          <button
+            type="submit"
+            form="reservation-create-form"
+            disabled={saving}
+            className="btn-primary flex-1 py-2 text-sm disabled:opacity-50"
+          >
+            {saving ? t('loading') : t('save')}
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }
