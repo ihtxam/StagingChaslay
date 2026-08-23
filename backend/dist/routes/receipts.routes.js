@@ -6,6 +6,7 @@ const drizzle_orm_1 = require("drizzle-orm");
 const order_item_name_1 = require("@/lib/order-item-name");
 const adyen_receipt_1 = require("@/lib/adyen-receipt");
 const merchant_settings_service_1 = require("@/services/merchant-settings.service");
+const guest_order_number_1 = require("@/lib/guest-order-number");
 const router = (0, express_1.Router)();
 /** Any hex UUID (v1–v8), not just RFC 4122 v1–v5. Postgres accepts all of these. */
 function isPgUuid(ref) {
@@ -32,6 +33,7 @@ async function findReceiptOrder(ref) {
         id: db_1.schema.orders.id,
         clientId: db_1.schema.orders.clientId,
         orderNumber: db_1.schema.orders.orderNumber,
+        tabNumber: db_1.schema.orders.tabNumber,
         notes: db_1.schema.orders.notes,
         customerName: db_1.schema.orders.customerName,
         fulfillmentChannel: db_1.schema.orders.fulfillmentChannel,
@@ -71,6 +73,7 @@ async function findReceiptOrder(ref) {
         id: db_1.schema.orders.id,
         clientId: db_1.schema.orders.clientId,
         orderNumber: db_1.schema.orders.orderNumber,
+        tabNumber: db_1.schema.orders.tabNumber,
         notes: db_1.schema.orders.notes,
         customerName: db_1.schema.orders.customerName,
         fulfillmentChannel: db_1.schema.orders.fulfillmentChannel,
@@ -131,6 +134,7 @@ async function findReceiptByKitchenShout(ref) {
             id: db_1.schema.orders.id,
             clientId: db_1.schema.orders.clientId,
             orderNumber: db_1.schema.orders.orderNumber,
+        tabNumber: db_1.schema.orders.tabNumber,
             notes: db_1.schema.orders.notes,
             customerName: db_1.schema.orders.customerName,
             fulfillmentChannel: db_1.schema.orders.fulfillmentChannel,
@@ -250,12 +254,23 @@ router.get("/:ref", async (req, res) => {
                 ? Number(ptsEarnMatch[1])
                 : 0;
         const pointsBalance = ptsBalMatch?.[1] != null ? Number(ptsBalMatch[1]) : null;
+        const meta = (0, guest_order_number_1.parseOrderMetaFromNotes)(notes);
+        const orderDisplay = meta.ticketDisplay || null;
+        const tabNumber = order.tabNumber || meta.tabNumber || null;
+        const guestNumber = (0, guest_order_number_1.guestOrderNumber)({
+            orderNumber: order.orderNumber,
+            orderDisplay,
+            tabNumber,
+        });
         res.json({
             success: true,
             receipt: {
                 id: order.id,
                 clientId: order.clientId,
                 orderNumber: order.orderNumber,
+                guestOrderNumber: guestNumber || order.orderNumber,
+                orderDisplay,
+                tabNumber,
                 businessName: order.businessName,
                 address: [order.address, order.city].filter(Boolean).join(", "),
                 phone: order.phone,

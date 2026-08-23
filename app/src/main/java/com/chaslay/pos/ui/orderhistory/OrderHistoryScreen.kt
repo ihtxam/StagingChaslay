@@ -687,7 +687,9 @@ private fun StatusPill(text: String, color: Color, compact: Boolean = false) {
 }
 
 private fun shortOrderId(number: String): String =
-    number.removePrefix("TX-").takeLast(6).uppercase(Locale.getDefault())
+    com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(number).ifBlank {
+        number.removePrefix("TX-")
+    }
 
 private fun orderTypeLabel(serviceType: ServiceType?): String = when (serviceType) {
     ServiceType.DINE_IN -> "DINE IN"

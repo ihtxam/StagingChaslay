@@ -119,7 +119,7 @@ fun OrderCompleteDialog(
                     color = OrderCompleteTextPrimary
                 )
                 Text(
-                    "#${transaction.transactionNumber.takeLast(6).uppercase()}",
+                    com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(transaction.transactionNumber),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = OrderCompleteTextPrimary,

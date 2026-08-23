@@ -7,10 +7,14 @@ import { useI18n, type Locale } from '@/lib/i18n';
 import { normalizeReceiptDomain, qrImageUrl } from '@/lib/qr';
 import { paymentLabel, receiptLabels } from '@/lib/receipt-labels';
 import { buildDigitalReceiptTotals, formatQtyArticlePrefix, splitReceiptArticle } from '@/lib/webpos-receipt';
+import { guestOrderNumber } from '@/lib/order-number';
 
 type Receipt = {
   id: string;
   orderNumber: string;
+  guestOrderNumber?: string;
+  orderDisplay?: string | null;
+  tabNumber?: string | null;
   businessName?: string;
   address?: string;
   phone?: string;
@@ -182,6 +186,15 @@ export default function ReceiptPage() {
       ? `${L.tva} (${totals.taxRate}%)`
       : L.tax;
 
+  const guestRef =
+    receipt.guestOrderNumber ||
+    guestOrderNumber({
+      orderNumber: receipt.orderNumber,
+      orderDisplay: receipt.orderDisplay,
+      tabNumber: receipt.tabNumber,
+    }) ||
+    receipt.orderNumber;
+
   return (
     <div className="min-h-screen bg-slate-100 py-8 px-4">
       <div className="max-w-md mx-auto bg-white rounded-xl shadow p-6">
@@ -201,7 +214,7 @@ export default function ReceiptPage() {
         </div>
         <div className="text-sm space-y-1 border-y py-3 mb-3">
           <p>
-            <span className="text-gray-500">{t('receiptOrder')}:</span> {receipt.orderNumber}
+            <span className="text-gray-500">{t('receiptOrder')}:</span> {guestRef}
           </p>
           {receipt.completedAt && (
             <p>
