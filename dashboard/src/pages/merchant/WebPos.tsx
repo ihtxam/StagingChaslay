@@ -1325,6 +1325,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** Fast-food can keep kitchen but hide Tables / Set table. */
   const tablesUiEnabled =
     !isRetail && tablesEditionOk && checkoutSettings.tablesEnabled !== false;
+  /** Bookings tab + reservation alerts — restaurant only when module is on. */
+  const reservationsPosUiEnabled = !isRetail && !!merchant?.reservationsEnabled;
   const giftCardsEditionOk =
     editionAllows('pos_gift_cards') || editionAllows('gift_cards');
   // Counter / takeaway / delivery / open table or tab → Send.
@@ -1367,11 +1369,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [tablesUiEnabled, postSuccessTarget]);
 
   useEffect(() => {
-    if (!tablesUiEnabled && (posTab === 'tables' || posTab === 'bookings')) {
+    if (!tablesUiEnabled && posTab === 'tables') {
       setPosTab('register');
       setPosView('register');
     }
   }, [tablesUiEnabled, posTab]);
+
+  useEffect(() => {
+    if (!reservationsPosUiEnabled && posTab === 'bookings') {
+      setPosTab('register');
+      setPosView('register');
+    }
+  }, [reservationsPosUiEnabled, posTab]);
 
   const showFireCourseButton =
     coursesEnabled &&
@@ -2312,10 +2321,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [pollOnlineOrders]);
 
   useEffect(() => {
+    if (!reservationsPosUiEnabled) {
+      setReservationPendingCount(0);
+      return;
+    }
     void pollReservations();
     const id = setInterval(() => void pollReservations(), 8000);
     return () => clearInterval(id);
-  }, [pollReservations]);
+  }, [pollReservations, reservationsPosUiEnabled]);
 
   // Browsers block audio until a user gesture - unlock AudioContext on first tap
   useEffect(() => {
@@ -6519,6 +6532,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       id: clientId,
       orderDisplay: ticket.display,
       orderNumber: ticket.orderNumber,
+      tabNumber: tabSnapshot || undefined,
       completedAt: Date.now(),
       channel: effectiveChannel,
       paymentMethod: method,
@@ -7572,7 +7586,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     tabOrderShout(tabNumber) || ticketDisplay?.trim() || null;
   const checkoutOrderRef = formatCheckoutOrderRef(
     collectOrderRef?.orderNumber || ticketOrderNumber,
-    checkoutKitchenNumber
+    checkoutKitchenNumber,
+    tabNumber
   );
 
   const onlinePendingCount = unactionedOrderCount;
@@ -7691,7 +7706,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         showEodButton={showEodButton}
         onEodReport={openEodPrint}
         hideTablesTab={!tablesUiEnabled}
-        hideBookingsTab={!tablesUiEnabled}
+        hideBookingsTab={!reservationsPosUiEnabled}
         colorTheme={posColorTheme}
         onColorThemeChange={(theme) => void changePosColorTheme(theme)}
         appearance={posAppearance}
@@ -7833,7 +7848,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               canManageOnlineShop ? (enabled) => void toggleShopEnabled(enabled) : undefined
             }
             onReservationsEnabledChange={
-              canManageOnlineShop ? (enabled) => void toggleReservationsEnabled(enabled) : undefined
+              canManageOnlineShop && !isRetail
+                ? (enabled) => void toggleReservationsEnabled(enabled)
+                : undefined
             }
             onViewLogs={() => {
               setSettingsOpen(false);
