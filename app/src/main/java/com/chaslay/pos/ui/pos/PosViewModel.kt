@@ -3659,7 +3659,6 @@ class PosViewModel @Inject constructor(
             decrementStockForCartItems(payable.items)
             if (cartManager.snapshot().items.isEmpty()) {
                 cartManager.snapshot().tableOrderId?.let { tableOrderRepository.closeOrder(it) }
-                finalizeHeldOrderAfterPayment(kitchenCart)
                 cartManager.clear()
             }
             refreshTables()
@@ -4192,7 +4191,6 @@ class PosViewModel @Inject constructor(
                     }
                     if (remaining.items.isEmpty()) {
                         remaining.tableOrderId?.let { tableOrderRepository.closeOrder(it) }
-                        finalizeHeldOrderAfterPayment(kitchenCart)
                         if (!isEqualSplit || equalSplitPaid >= fullCart.splitCount) {
                             cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
                             cartManager.resetSplit()
@@ -4375,11 +4373,6 @@ class PosViewModel @Inject constructor(
     private suspend fun refreshOnlineOrderAlertState() {
         val heldIds = heldOrderRepository.getOngoingHeldOrders().map { it.id }.toSet()
         onlineOrderAlertCoordinator.pruneMissingHeldOrderIds(heldIds)
-    }
-
-    private suspend fun finalizeHeldOrderAfterPayment(cart: CartSummary) {
-        heldOrderRepository.completeAfterPayment(cart)
-        refreshOnlineOrderAlertState()
     }
 
     fun showNewOrderDialog() {
