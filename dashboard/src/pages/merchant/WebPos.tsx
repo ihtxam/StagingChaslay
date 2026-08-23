@@ -5493,6 +5493,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const res = await api.post(`/merchant/orders/${ctx.id}/action`, {
         action,
         paymentMethod: payMethod,
+        skipReceiptPrint: true,
       });
       toast.success(t('webPosPaymentCollected'));
       let orderForReceipt: PosOrderForReceipt | null = null;
@@ -8164,8 +8165,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           <WebPosSuccessView
             amount={successInfo.amount}
             changeDue={successInfo.changeDue}
-            orderNumber={successInfo.orderNumber}
-            paymentMethod={successInfo.paymentMethod}
             receiptUrl={lastSplitReceipts.length <= 1 ? lastReceiptUrl : undefined}
             splitParts={successSplitParts}
             onBack={() => {
@@ -8642,8 +8641,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 compact
                 amount={successInfo.amount}
                 changeDue={successInfo.changeDue}
-                orderNumber={successInfo.orderNumber}
-                paymentMethod={successInfo.paymentMethod}
                 receiptUrl={lastSplitReceipts.length <= 1 ? lastReceiptUrl : undefined}
                 splitParts={successSplitParts}
                 onPrint={lastSplitReceipts.length <= 1 ? openSuccessPrint : undefined}
