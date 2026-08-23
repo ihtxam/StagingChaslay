@@ -32,6 +32,8 @@ export type OdsPushPayload = {
 
 const READY_RETENTION_MS = 2 * 60 * 60 * 1000;
 const PREPARING_RETENTION_MS = 24 * 60 * 60 * 1000;
+/** Live online / pay-later orders older than this are hidden from the customer board. */
+const LIVE_ORDER_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 
 /** Order Center / web shop statuses shown on the “being prepared” column. */
 const PREPARING_ORDER_STATUSES = ["accepted", "preparing", "sent_to_kitchen"] as const;
@@ -238,6 +240,9 @@ export class OdsService {
 
     const now = new Date();
     if (existing) {
+      if (existing.status === status) {
+        return { ok: true, orderNumber, status, unchanged: true };
+      }
       await db
         .update(schema.odsOrders)
         .set({
@@ -303,12 +308,24 @@ export class OdsService {
     return { ok: false, skipped: true };
   }
 
+  /** Remove every shadow-board entry for this merchant (Settings → clear board). */
+  static async clearAllOrders(merchantId: string) {
+    await requireAddon(merchantId);
+    const db = getDb();
+    const deleted = await db
+      .delete(schema.odsOrders)
+      .where(eq(schema.odsOrders.merchantId, merchantId))
+      .returning({ id: schema.odsOrders.id });
+    return { ok: true, removed: deleted.length };
+  }
+
   /** Live orders from the main orders table (online shop + POS pay-later / open fulfillment). */
   static async boardFromLiveOrders(merchantId: string) {
     const enabled = await readOdsAddonEnabled(merchantId).catch(() => false);
     if (!enabled) return { preparing: [] as string[], ready: [] as string[] };
 
     const db = getDb();
+    const createdSince = new Date(Date.now() - LIVE_ORDER_MAX_AGE_MS);
     const rows = await db.query.orders.findMany({
       where: and(
         eq(schema.orders.merchantId, merchantId),
@@ -322,6 +339,7 @@ export class OdsService {
     const ready: string[] = [];
     const seen = new Set<string>();
     for (const row of rows) {
+      if (row.createdAt && row.createdAt < createdSince) continue;
       const num = resolveOdsDisplayNumber(row);
       if (!num || seen.has(num)) continue;
       seen.add(num);

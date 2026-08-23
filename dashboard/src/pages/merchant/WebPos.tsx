@@ -128,7 +128,7 @@ import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart } from '@/lib/kds-push';
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import { playKitchenCompleteOnce } from '@/lib/order-alert';
-import { pushOrderToOds } from '@/lib/ods-push';
+import { pushOrderToOds, dismissOrderFromOds } from '@/lib/ods-push';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
@@ -3997,6 +3997,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
       const readyIds = collectReadyLineIds(matching);
       for (const ticket of matching) {
+        if (
+          ticket.total > 0 &&
+          ticket.ready === ticket.total &&
+          ticket.status === 'pending'
+        ) {
+          void pushOrderToOds({ orderNumber: ticket.ticketKey, status: 'ready' });
+        }
         if (ticket.status === 'completed') {
           const ringId = `${ticket.ticketKey}|${ticket.completedAt || 'done'}`;
           if (!kdsCompletedRungRef.current.has(ringId)) {
@@ -6840,6 +6847,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (shiftsEnabled) void refreshCurrentShift(true);
     const moreSplits = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
     if (!moreSplits) {
+      const payLaterSale = method === 'pay_later' || method === 'invoice';
+      if (!payLaterSale) {
+        const odsNums = new Set<string>();
+        const display = ticket.display?.trim();
+        if (display) odsNums.add(display);
+        const kitchenNum = kitchenOrderNumber({ ticket, allowNew: false });
+        if (kitchenNum) odsNums.add(kitchenNum);
+        const tab = tabOrderShout(tabNumber);
+        if (tab) odsNums.add(kitchenTicketKeyBase(tab));
+        for (const num of odsNums) void dismissOrderFromOds(num);
+      }
       const paidKeys = [
         openCartDraftKey({ tableId, tabNumber, channel }),
         openCartDraftKey({ ticketDisplay: ticket.display, channel: effectiveChannel }),
