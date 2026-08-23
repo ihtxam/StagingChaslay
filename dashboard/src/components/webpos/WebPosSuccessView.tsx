@@ -173,43 +173,10 @@ export default function WebPosSuccessView({
       >
         {t('webPosOrderCompleted')}
       </p>
-      <p
-        className={`mt-3 font-semibold uppercase tracking-[0.18em] text-stone-500 ${
-          compact ? 'text-xs' : 'text-[11px]'
-        }`}
-      >
-        {t('webPosAmountPaid')}
-      </p>
-      <AmountDisplay amount={isSplit ? splitTotal : amount} compact={compact} />
-
-      {orderNumber ? (
-        <p
-          className={`mt-4 font-semibold text-stone-800 ${
-            compact ? 'text-base' : 'text-lg'
-          }`}
-        >
-          {orderNumber}
-        </p>
-      ) : null}
-      {paymentMethod ? (
-        <p className={`mt-1 font-medium text-stone-500 ${compact ? 'text-sm' : 'text-base'}`}>
-          {paymentMethod}
-        </p>
-      ) : null}
 
       {isSplit ? (
-        <p className={`mt-2 text-sm font-medium text-stone-500 ${compact ? 'px-2' : ''}`}>
+        <p className={`mt-4 text-sm font-medium text-stone-500 ${compact ? 'px-2' : ''}`}>
           {t('webPosSplitOrderTitle').replace('{count}', String(splitParts!.length))}
-        </p>
-      ) : null}
-
-      {changeDue != null && changeDue > 0 ? (
-        <p
-          className={`mt-5 font-semibold text-[var(--webpos-accent-text)] ${
-            compact ? 'text-xl' : 'text-lg'
-          }`}
-        >
-          {t('webPosChangeDue')}: CHF {changeDue.toFixed(2)}
         </p>
       ) : null}
 
@@ -274,6 +241,42 @@ export default function WebPosSuccessView({
           <ReceiptQr url={receiptUrl} label={t('webPosDigitalReceipt')} compact={compact} />
         </div>
       ) : null}
+
+      <div className={`mt-6 ${compact ? 'px-2' : ''}`}>
+        <p
+          className={`font-semibold uppercase tracking-[0.18em] text-stone-500 ${
+            compact ? 'text-xs' : 'text-[11px]'
+          }`}
+        >
+          {t('webPosAmountPaid')}
+        </p>
+        <AmountDisplay amount={isSplit ? splitTotal : amount} compact={compact} />
+
+        {changeDue != null && changeDue > 0 ? (
+          <p
+            className={`mt-3 font-semibold text-[var(--webpos-accent-text)] ${
+              compact ? 'text-xl' : 'text-lg'
+            }`}
+          >
+            {t('webPosChangeDue')}: CHF {changeDue.toFixed(2)}
+          </p>
+        ) : null}
+
+        {orderNumber ? (
+          <p
+            className={`mt-4 font-semibold text-stone-800 ${
+              compact ? 'text-base' : 'text-lg'
+            }`}
+          >
+            {orderNumber}
+          </p>
+        ) : null}
+        {paymentMethod ? (
+          <p className={`mt-1 font-medium text-stone-500 ${compact ? 'text-sm' : 'text-base'}`}>
+            {paymentMethod}
+          </p>
+        ) : null}
+      </div>
 
       <div
         className={`flex flex-wrap items-center justify-center ${

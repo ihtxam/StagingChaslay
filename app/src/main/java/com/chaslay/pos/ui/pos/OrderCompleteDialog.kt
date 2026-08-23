@@ -2,7 +2,6 @@ package com.chaslay.pos.ui.pos
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,7 +60,6 @@ private val OrderCompleteCardShape = RoundedCornerShape(24.dp)
 private val OrderCompleteSuccessGreen = Color(0xFF1F8F55)
 private val OrderCompleteTextPrimary = Color(0xFF121826)
 private val OrderCompleteTextSecondary = Color(0xFF556377)
-private val OrderCompleteHairline = Color(0x1A000000)
 
 @Composable
 fun OrderCompleteDialog(
@@ -119,70 +117,53 @@ fun OrderCompleteDialog(
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, OrderCompleteHairline, RoundedCornerShape(16.dp))
-                        .background(Color(0xFFF7F7F7), RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        if (qrBitmap != null) {
-                            Image(
-                                bitmap = qrBitmap.asImageBitmap(),
-                                contentDescription = stringResource(R.string.digital_receipt),
-                                modifier = Modifier.size(180.dp)
-                            )
-                            Text(
-                                stringResource(R.string.scan_digital_receipt),
-                                fontSize = 11.sp,
-                                color = OrderCompleteTextSecondary,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(top = 6.dp)
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.Receipt,
-                                contentDescription = null,
-                                tint = OrderCompleteTextSecondary,
-                                modifier = Modifier.size(48.dp)
-                            )
-                        }
-                    }
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            stringResource(R.string.total_paid),
-                            fontSize = 12.sp,
-                            color = OrderCompleteTextSecondary,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.8.sp
-                        )
-                        Text(
-                            formatMoney(transaction.total, currencySymbol),
-                            fontSize = 36.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = FontFamily.Monospace,
-                            color = OrderCompleteTextPrimary,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                        transaction.changeDue?.takeIf { it > 0 }?.let { change ->
-                            Text(
-                                "Change: ${formatMoney(change, currencySymbol)}",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF13A99A),
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-                    }
+
+                if (qrBitmap != null) {
+                    Image(
+                        bitmap = qrBitmap.asImageBitmap(),
+                        contentDescription = stringResource(R.string.digital_receipt),
+                        modifier = Modifier.size(180.dp)
+                    )
+                    Text(
+                        stringResource(R.string.scan_digital_receipt),
+                        fontSize = 11.sp,
+                        color = OrderCompleteTextSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Receipt,
+                        contentDescription = null,
+                        tint = OrderCompleteTextSecondary,
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    stringResource(R.string.total_paid),
+                    fontSize = 12.sp,
+                    color = OrderCompleteTextSecondary,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.8.sp
+                )
+                Text(
+                    formatMoney(transaction.total, currencySymbol),
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = FontFamily.Monospace,
+                    color = OrderCompleteTextPrimary,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+                transaction.changeDue?.takeIf { it > 0 }?.let { change ->
+                    Text(
+                        "Change: ${formatMoney(change, currencySymbol)}",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF13A99A),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
 
                 Text(
