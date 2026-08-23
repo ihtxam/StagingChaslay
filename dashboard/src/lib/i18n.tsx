@@ -2062,8 +2062,7 @@ const en: Dict = {
     'Sent to main till printer. Keep ChaslayReborn open on the PC with the Print Agent.',
   webPosWaiterOrderAtTill: 'Waiter order received — printing on this till',
   webPosWaiterOrderAtTillNamed: 'Waiter order received — {label}',
-  webPosAgentOffline:
-    'Print agent offline. Download & install once from Settings → Receipts & printers (or run print-agent setup EXE), then Refresh printers. Set your thermal printer as Windows default, or pick it above.',
+  webPosAgentOffline: 'Print agent offline.',
   webPosSearchProducts: 'Search products or barcode…',
   webPosAllCategories: 'All',
   webPosMostSold: '+ Most Sold',
@@ -5050,8 +5049,7 @@ const fr: Dict = {
     'Envoyé à l\'imprimante de la caisse principale. Gardez ChaslayReborn ouvert sur le PC avec l\'agent d\'impression.',
   webPosWaiterOrderAtTill: 'Commande serveur reçue — impression sur cette caisse',
   webPosWaiterOrderAtTillNamed: 'Commande serveur reçue — {label}',
-  webPosAgentOffline:
-    'Agent hors ligne. Téléchargez et installez une fois depuis Paramètres → Reçus & imprimantes (setup EXE), puis Actualiser. Imprimante thermique par défaut Windows, ou choisissez-la ci-dessus.',
+  webPosAgentOffline: 'Agent d\'impression hors ligne.',
   webPosSearchProducts: 'Rechercher un produit ou code-barres…',
   webPosAllCategories: 'Tous',
   webPosMostSold: '+ Meilleures ventes',
@@ -8045,8 +8043,7 @@ const de: Dict = {
     'An die Hauptkasse gesendet. ChaslayReborn auf dem PC mit Druckagent geöffnet lassen.',
   webPosWaiterOrderAtTill: 'Kellnerbestellung eingegangen — Druck an dieser Kasse',
   webPosWaiterOrderAtTillNamed: 'Kellnerbestellung eingegangen — {label}',
-  webPosAgentOffline:
-    'Druckagent offline. Einmal unter Einstellungen → Belege & Drucker herunterladen/installieren, dann aktualisieren. Thermodrucker als Windows-Standard setzen oder oben wählen.',
+  webPosAgentOffline: 'Druckagent offline.',
   webPosSearchProducts: 'Produkt oder Barcode suchen…',
   webPosAllCategories: 'Alle',
   webPosMostSold: '+ Meistverkauft',
