@@ -151,6 +151,8 @@ export type ProcessEscPosPrintJobsResult = {
   done: number;
   /** Kitchen jobs from another device (waiter phone / mobile WebPOS). */
   remoteKitchenDone: number;
+  /** Reservation alert tickets printed. */
+  reservationDone: number;
 };
 
 let drainInFlight: Promise<ProcessEscPosPrintJobsResult> | null = null;
@@ -178,7 +180,7 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
   if (drainInFlight) return drainInFlight;
   drainInFlight = (async (): Promise<ProcessEscPosPrintJobsResult> => {
     try {
-      if (!(await isPrintAgentAvailable())) return { done: 0, remoteKitchenDone: 0 };
+      if (!(await isPrintAgentAvailable())) return { done: 0, remoteKitchenDone: 0, reservationDone: 0 };
       const localDeviceId = webPosDeviceId();
       const res = await api.get('/merchant/pos/print-jobs/pending', {
         params: { jobType: 'ESCPOS', limit: 15 },
@@ -186,6 +188,7 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
       const jobs = (res.data?.jobs || []) as PendingJob[];
       let done = 0;
       let remoteKitchenDone = 0;
+      let reservationDone = 0;
       for (const job of jobs) {
         const p = (job.payload || {}) as Partial<
           EscPosPrintJobPayload & AutoPrintOrderPayload & AutoPrintReservationPayload
@@ -195,6 +198,7 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
             await processAutoPrintReservationJob(p as AutoPrintReservationPayload);
             await ackPrintJob(job.id, 'DONE');
             done += 1;
+            reservationDone += 1;
           } catch {
             await ackPrintJob(job.id, 'FAILED').catch(() => {});
           }
@@ -240,7 +244,7 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
           await ackPrintJob(job.id, 'FAILED').catch(() => {});
         }
       }
-      return { done, remoteKitchenDone };
+      return { done, remoteKitchenDone, reservationDone };
     } finally {
       drainInFlight = null;
     }

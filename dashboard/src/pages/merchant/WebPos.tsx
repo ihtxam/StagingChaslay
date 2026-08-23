@@ -397,6 +397,7 @@ import {
 import {
   playOrderAlertOnce,
   playWaiterTillBellOnce,
+  playReservationTillBellOnce,
   startOrderAlertLoop,
   startOrderAlertForDuration,
   stopOrderAlertLoop,
@@ -2109,6 +2110,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [printSettings?.waiterTillBellEnabled, agentOk, t]
   );
 
+  const ringReservationTillBell = useCallback(() => {
+    if (!isMainTillRegister(agentOk)) return;
+    playReservationTillBellOnce();
+    setReservationAlertUntil(Date.now() + 10000);
+    toast(t('webPosNewReservationAlert'), { icon: '📅', duration: 10000 });
+  }, [agentOk, t]);
+
   /** Retry unprinted kitchen/receipt jobs every 8s while WebPOS stays open. */
   useEffect(() => {
     startPrintQueueAutoRetry();
@@ -2132,6 +2140,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (result.remoteKitchenDone > 0) {
           ringWaiterTillBell(`remote-print-${Date.now()}`);
         }
+        if (result.reservationDone > 0) {
+          ringReservationTillBell();
+        }
       } catch {
         /* best-effort */
       } finally {
@@ -2143,7 +2154,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cancelled = true;
       if (timer != null) window.clearTimeout(timer);
     };
-  }, [agentOk, ringWaiterTillBell]);
+  }, [agentOk, ringWaiterTillBell, ringReservationTillBell]);
 
   /** Main till bell: new waiter/mobile kitchen sends registered via held orders. */
   useEffect(() => {
@@ -2377,8 +2388,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       for (const id of alertIds) knownReservationIdsRef.current.add(id);
 
       if (fresh.length > 0) {
-        playOrderAlertOnce();
-        startOrderAlertForDuration(10000, 2500);
+        playReservationTillBellOnce();
+        window.setTimeout(() => playReservationTillBellOnce(), 950);
         setReservationAlertUntil(Date.now() + 10000);
         toast(t('webPosNewReservationAlert'), { icon: '📅', duration: 10000 });
       }

@@ -182,6 +182,10 @@ export default function Reservations() {
   };
 
   const createReservation = async (sheetForm: ReservationCreateForm) => {
+    if (!enabled) {
+      toast.error(t('reservationsDisabledHint'));
+      return;
+    }
     const guestName = [sheetForm.guestFirstName, sheetForm.guestLastName]
       .map((s) => s.trim())
       .filter(Boolean)
@@ -294,7 +298,18 @@ export default function Reservations() {
                 <option value="no_show">no_show</option>
               </select>
             </label>
-            <button type="button" className="btn-primary" onClick={() => setCreateOpen(true)}>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!enabled}
+              onClick={() => {
+                if (!enabled) {
+                  toast.error(t('reservationsDisabledHint'));
+                  return;
+                }
+                setCreateOpen(true);
+              }}
+            >
               {t('reservationsNew')}
             </button>
           </div>

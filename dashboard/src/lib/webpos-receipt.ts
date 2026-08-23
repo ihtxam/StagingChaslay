@@ -2825,7 +2825,7 @@ export function generateReservationTicketEscPos(opts: ReservationTicketOpts): Ui
     escKitchenSize(1),
     escBold(false),
     escposCp850Encode(lines.slice(1).join('\n')),
-    new Uint8Array([0x0a, 0x0a, 0x0a]),
+    new Uint8Array([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]),
   ];
   return concatBytes(...parts);
 }
