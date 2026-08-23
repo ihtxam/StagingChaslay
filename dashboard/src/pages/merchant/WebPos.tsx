@@ -80,7 +80,10 @@ import {
   isLocalPrintStation,
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
+  readDeviceAutoPrintKitchen,
   resolvePrintRetryLocally,
+  syncMainTillAutoPrintKitchen,
+  writeDeviceAutoPrintKitchen,
 } from '@/lib/webpos-print-relay';
 import {
   applyKitchenPrintRetryFromSettings,
@@ -798,6 +801,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [printerName, setPrinterName] = useState(() => localStorage.getItem('manupos_webpos_printer') || '');
   const printerHealAttemptedRef = useRef<Set<string>>(new Set());
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('manupos_webpos_autoprint') !== '0');
+  const [autoPrintKitchenDevice, setAutoPrintKitchenDevice] = useState(() =>
+    readDeviceAutoPrintKitchen(true)
+  );
   const [lastReceipt, setLastReceipt] = useState<string>('');
   const [lastReceiptUrl, setLastReceiptUrl] = useState<string>('');
   const [lastDeliveryQrUrl, setLastDeliveryQrUrl] = useState<string>('');
@@ -1949,6 +1955,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (cfg.posPrintSettings?.autoPrintReceipt != null) {
           setAutoPrint(cfg.posPrintSettings.autoPrintReceipt !== false);
         }
+        if (cfg.posPrintSettings?.autoPrintKitchen != null) {
+          setAutoPrintKitchenDevice(
+            readDeviceAutoPrintKitchen(cfg.posPrintSettings.autoPrintKitchen !== false)
+          );
+        }
       }
       const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
       setStaffRoster(staffList);
@@ -2493,6 +2504,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     localStorage.setItem('manupos_webpos_autoprint', autoPrint ? '1' : '0');
   }, [autoPrint]);
+
+  useEffect(() => {
+    writeDeviceAutoPrintKitchen(autoPrintKitchenDevice);
+  }, [autoPrintKitchenDevice]);
+
+  useEffect(() => {
+    if (!isLocalPrint) return;
+    syncMainTillAutoPrintKitchen(printSettings?.autoPrintKitchen !== false);
+  }, [printSettings?.autoPrintKitchen, isLocalPrint]);
 
   const ensureShift = useCallback(
     async (action: () => void) => {
@@ -6128,6 +6148,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   ) => {
     if (isRetail) return;
     if (printSettings?.autoPrintKitchen === false && !opts?.forcePrint && !opts?.cancelled) return;
+    if (
+      !readDeviceAutoPrintKitchen(printSettings?.autoPrintKitchen !== false) &&
+      !opts?.forcePrint &&
+      !opts?.cancelled
+    ) {
+      return;
+    }
     const lang = resolveReceiptLanguage(printSettings, printSettings?.receiptLanguage === 'panel' ? locale : printSettings?.receiptLanguage || locale);
     const filteredLines = (
       opts?.courseOnly != null
@@ -7930,6 +7957,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             mainTillOnline={mainTillOnline}
             mainTillPrintAgentOnline={mainTillPrintAgentOnline}
             autoPrint={autoPrint}
+            autoPrintKitchen={autoPrintKitchenDevice}
             postSuccessTarget={postSuccessTarget}
             onPrinterChange={(name) => {
               setPrinterName(name);
@@ -7949,6 +7977,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
             }}
             onAutoPrintChange={setAutoPrint}
+            onAutoPrintKitchenChange={isLocalPrint ? undefined : setAutoPrintKitchenDevice}
             onPostSuccessChange={setPostSuccessTarget}
             onRefreshPrinters={() => {
               void refreshAgent();

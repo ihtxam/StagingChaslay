@@ -9,7 +9,10 @@ import {
   uint8ToBase64,
   type PosPrintSettingsClient,
 } from '@/lib/webpos-receipt';
-import { printViaAgentOrQueue } from '@/lib/webpos-print-relay';
+import {
+  printViaAgentOrQueue,
+  readDeviceAutoPrintKitchen,
+} from '@/lib/webpos-print-relay';
 import type { CartLine, PosChannel } from '@/components/webpos/types';
 
 export async function printWaiterKitchen(opts: {
@@ -24,6 +27,7 @@ export async function printWaiterKitchen(opts: {
 }): Promise<void> {
   const { lines, channel, printSettings, locale, staffName, tableLabel, orderNumber, t } = opts;
   if (printSettings?.autoPrintKitchen === false) return;
+  if (!readDeviceAutoPrintKitchen(printSettings?.autoPrintKitchen !== false)) return;
 
   const filtered = lines.filter(
     (l) => !l.giftCard && !String(l.productId || '').startsWith('__gift_card_')

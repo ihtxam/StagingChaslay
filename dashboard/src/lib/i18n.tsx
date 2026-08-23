@@ -2142,6 +2142,11 @@ const en: Dict = {
   webPosDefaultPrinter: 'Default printer',
   webPosDefaultSuffix: ' (default)',
   webPosAutoPrint: 'Auto-print after sale',
+  webPosAutoPrintHint: 'Print a customer receipt when you complete a sale here. On the main till, also blocks relayed receipts from phones when off.',
+  webPosAutoPrintHintRemote:
+    'When checked, completing a sale on this phone queues a receipt to the main till (if its auto-print is also on).',
+  webPosAutoPrintKitchenHintRemote:
+    'When checked, kitchen tickets are sent to the main till printer when you send or pay an order from this device.',
   webPosRefreshPrinters: 'Refresh printers',
   webPosReloadCatalog: 'Reload catalog',
   webPosPrintersRefreshed: 'Printers refreshed',
@@ -5273,6 +5278,12 @@ const fr: Dict = {
   webPosDefaultPrinter: 'Imprimante par défaut',
   webPosDefaultSuffix: ' (défaut)',
   webPosAutoPrint: 'Impression auto après vente',
+  webPosAutoPrintHint:
+    'Imprime automatiquement le reçu client quand vous encaissez sur cet appareil.',
+  webPosAutoPrintHintRemote:
+    'Si coché, encaisser sur ce téléphone envoie un reçu à la caisse principale (si son auto-impression est aussi activée).',
+  webPosAutoPrintKitchenHintRemote:
+    'Si coché, les tickets cuisine partent vers l\'imprimante de la caisse quand vous envoyez ou encaissez depuis cet appareil.',
   webPosRefreshPrinters: 'Actualiser les imprimantes',
   webPosReloadCatalog: 'Recharger le catalogue',
   webPosPrintersRefreshed: 'Imprimantes actualisées',
@@ -5280,7 +5291,7 @@ const fr: Dict = {
   webPosPrintRelayHint:
     'Laissez ChaslayReborn ouvert sur le PC avec l\'agent d\'impression — cette caisse imprime automatiquement les tickets des téléphones serveurs.',
   webPosPrintQueuedMainTill:
-    'Envoyé à l\'imprimante de la caisse principale. Gardez ChaslayReborn ouvert sur le PC avec l\'agent d\'impression.',
+    'Envoyé à la caisse principale — gardez ChaslayReborn ouvert sur le PC.',
   webPosWaiterOrderAtTill: 'Commande serveur reçue — impression sur cette caisse',
   webPosWaiterOrderAtTillNamed: 'Commande serveur reçue — {label}',
   webPosAgentOffline: 'Agent d\'impression hors ligne.',
@@ -8378,6 +8389,12 @@ const de: Dict = {
   webPosDefaultPrinter: 'Standarddrucker',
   webPosDefaultSuffix: ' (Standard)',
   webPosAutoPrint: 'Nach Verkauf automatisch drucken',
+  webPosAutoPrintHint:
+    'Druckt automatisch den Kundenbeleg beim Abschluss auf diesem Gerät.',
+  webPosAutoPrintHintRemote:
+    'Wenn aktiv, wird beim Abschluss auf diesem Handy ein Beleg an die Hauptkasse gesendet (wenn dort Auto-Druck ebenfalls an ist).',
+  webPosAutoPrintKitchenHintRemote:
+    'Wenn aktiv, gehen Küchentickets an den Hauptkassen-Drucker, wenn Sie von diesem Gerät senden oder abschließen.',
   webPosRefreshPrinters: 'Drucker aktualisieren',
   webPosReloadCatalog: 'Katalog neu laden',
   webPosPrintersRefreshed: 'Drucker aktualisiert',

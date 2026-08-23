@@ -16,6 +16,10 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
 import {
+  readDeviceAutoPrintKitchen,
+  writeDeviceAutoPrintKitchen,
+} from '@/lib/webpos-print-relay';
+import {
   backOfficeHomePath,
   hasPermission,
   isMerchantOwnerJwt,
@@ -48,6 +52,7 @@ import WebPosProductModifiersModal, {
   productHasModifiers,
   type ShopProductForModifiers,
 } from '@/components/webpos/WebPosProductModifiersModal';
+import WaiterSettingsDropdown from '@/components/webpos/WaiterSettingsDropdown';
 import type { CartLine, Category, PosCategoryId, PosChannel, Product } from '@/components/webpos/types';
 import type { ShopSelectedExtra } from '@/lib/shop-cart';
 
@@ -87,6 +92,8 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [orderNote, setOrderNote] = useState('');
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
   const [sending, setSending] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [autoPrintKitchen, setAutoPrintKitchen] = useState(() => readDeviceAutoPrintKitchen(true));
   const [heldTableIds, setHeldTableIds] = useState<string[]>([]);
   const [ordersRefresh, setOrdersRefresh] = useState(0);
 
@@ -139,6 +146,10 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         setCategories(catRes.data?.categories || []);
         setProducts(prodRes.data?.products || []);
         setPrintSettings(configRes.data?.config?.posPrintSettings || null);
+        const ps = configRes.data?.config?.posPrintSettings as { autoPrintKitchen?: boolean } | undefined;
+        if (ps?.autoPrintKitchen != null) {
+          setAutoPrintKitchen(readDeviceAutoPrintKitchen(ps.autoPrintKitchen !== false));
+        }
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('webPosLoadFailed'));
       } finally {
@@ -153,6 +164,10 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     if (!loading && pinRequired) setPinGateOpen(true);
   }, [loading, pinRequired]);
+
+  useEffect(() => {
+    writeDeviceAutoPrintKitchen(autoPrintKitchen);
+  }, [autoPrintKitchen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -459,6 +474,13 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           <p className="font-semibold">{staff?.name || t('waiterAppSubtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
+          <WaiterSettingsDropdown
+            open={settingsOpen}
+            onToggle={() => setSettingsOpen((v) => !v)}
+            onClose={() => setSettingsOpen(false)}
+            autoPrintKitchen={autoPrintKitchen}
+            onAutoPrintKitchenChange={setAutoPrintKitchen}
+          />
           {hasPermission(staff?.permissions, 'MANAGE_PRODUCTS') ||
           hasPermission(staff?.permissions, 'VIEW_ORDER_HISTORY') ? (
             <button
