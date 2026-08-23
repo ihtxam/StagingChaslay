@@ -1919,6 +1919,59 @@ router.get(
 );
 
 /**
+ * GET /api/merchant/reports/revenue?mode=days|weeks|months&year=2026&month=6
+ * SumUp-style revenue breakdown by day, calendar week, or month.
+ */
+router.get(
+  "/reports/revenue",
+  requirePermission("VIEW_REPORTS", "END_OF_DAY"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { resolveReportActor, salesScopeForActor } = await import(
+        "@/lib/report-sales-scope"
+      );
+      const actor = resolveReportActor(req);
+      if (actor.kind === "pin") {
+        const ok =
+          actor.permissions.includes("VIEW_REPORTS") ||
+          actor.permissions.includes("END_OF_DAY");
+        if (!ok) {
+          return res.status(403).json({ error: "Permission denied" });
+        }
+      }
+      const scope = salesScopeForActor(actor);
+      if (!scope.viewAll && !scope.staffId) {
+        return res.status(403).json({
+          error: "Own-sales reports require a staff PIN session",
+        });
+      }
+      const mode = String(req.query.mode || "days").toLowerCase();
+      if (mode !== "days" && mode !== "weeks" && mode !== "months") {
+        return res.status(400).json({ error: "mode must be days, weeks, or months" });
+      }
+      const year = Number(req.query.year) || new Date().getFullYear();
+      const month = req.query.month != null ? Number(req.query.month) : undefined;
+      const { PosReportsService } = await import("@/services/pos-reports.service");
+      const breakdown = await PosReportsService.getRevenueBreakdown(merchantId, {
+        mode: mode as "days" | "weeks" | "months",
+        year,
+        month,
+        staffId: scope.staffId,
+        staffName: scope.staffName,
+      });
+      res.json({ success: true, breakdown });
+    } catch (error) {
+      console.error("Revenue breakdown failed:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load revenue",
+      });
+    }
+  }
+);
+
+/**
  * GET /api/merchant/reports/export?format=xlsx|csv&preset=...
  * Download overview/EOD workbook (OrderPin-inspired columns).
  */

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Printer } from 'lucide-react';
+import { Download, Mail, Plus, Printer, Settings2, Trash2, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
@@ -29,6 +29,7 @@ import {
   CashDrawerBreakdown,
   type CashDrawerShift,
 } from '@/components/reports/CashDrawerBreakdown';
+import ReportsRevenuePanel from '@/components/reports/ReportsRevenuePanel';
 import { loadWebPosStaffSession } from '@/lib/permissions';
 
 type EodShiftCash = CashDrawerShift;
@@ -81,7 +82,14 @@ type EodReport = {
 };
 
 type Preset = 'today' | 'yesterday' | 'last_week' | 'this_month' | 'last_month' | 'last_3_months' | 'custom';
-type Tab = 'eod' | 'sales' | 'products' | 'users';
+type Tab = 'eod' | 'sales' | 'products' | 'users' | 'revenue';
+
+type ReportEmailSettings = {
+  language: 'en' | 'fr' | 'de';
+  sendEveryDay: boolean;
+  sendEveryMonth: boolean;
+  emails: string[];
+};
 
 export default function ReportsPage() {
   const { t, locale, formatDateTime } = useI18n();
@@ -95,6 +103,25 @@ export default function ReportsPage() {
   const [businessName, setBusinessName] = useState('');
   const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
   const [eodIncludeProductsSold, setEodIncludeProductsSold] = useEodIncludeProductsSold();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [emailSettings, setEmailSettings] = useState<ReportEmailSettings>({
+    language: 'en',
+    sendEveryDay: false,
+    sendEveryMonth: false,
+    emails: [''],
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  const queryParams = useMemo(() => {
+    const params = new URLSearchParams({ preset });
+    if (preset === 'custom') {
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+    }
+    return params;
+  }, [preset, from, to]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,6 +163,90 @@ export default function ReportsPage() {
   }, [ownOnly, tab]);
 
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
+
+  const openSettings = async () => {
+    setSettingsOpen(true);
+    try {
+      const res = await api.get('/merchant/reports/email-settings');
+      const s = res.data.settings as ReportEmailSettings;
+      setEmailSettings({
+        language: s.language || 'en',
+        sendEveryDay: !!s.sendEveryDay,
+        sendEveryMonth: !!s.sendEveryMonth,
+        emails: s.emails?.length ? s.emails : [''],
+      });
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('ovSettingsLoadFailed'));
+    }
+  };
+
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const emails = emailSettings.emails.map((e) => e.trim()).filter(Boolean);
+      const res = await api.put('/merchant/reports/email-settings', {
+        ...emailSettings,
+        emails,
+      });
+      const s = res.data.settings as ReportEmailSettings;
+      setEmailSettings({
+        language: s.language || 'en',
+        sendEveryDay: !!s.sendEveryDay,
+        sendEveryMonth: !!s.sendEveryMonth,
+        emails: s.emails?.length ? s.emails : [''],
+      });
+      toast.success(t('ovSettingsSaved'));
+      setSettingsOpen(false);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('ovSettingsSaveFailed'));
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const downloadExport = async (format: 'xlsx' | 'csv') => {
+    try {
+      const res = await api.get(
+        `/merchant/reports/export?${queryParams}&format=${format}&language=${locale}`,
+        { responseType: 'blob' }
+      );
+      const cd = String(res.headers['content-disposition'] || '');
+      const match = cd.match(/filename="?([^"]+)"?/i);
+      const filename =
+        match?.[1] ||
+        `Report_${report?.range?.from || 'export'}.${format === 'csv' ? 'csv' : 'xlsx'}`;
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(t('ovExportDone'));
+      setExportOpen(false);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('ovExportFailed'));
+    }
+  };
+
+  const sendEmailNow = async () => {
+    setSendingEmail(true);
+    try {
+      const emails = emailSettings.emails.map((e) => e.trim()).filter(Boolean);
+      await api.post('/merchant/reports/email-send', {
+        preset,
+        from: preset === 'custom' ? from : undefined,
+        to: preset === 'custom' ? to : undefined,
+        emails: emails.length ? emails : undefined,
+        language: emailSettings.language,
+      });
+      toast.success(t('ovEmailSent'));
+      setExportOpen(false);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('ovEmailFailed'));
+    } finally {
+      setSendingEmail(false);
+    }
+  };
 
   const printEod = async () => {
     if (!report) return;
@@ -245,6 +356,7 @@ export default function ReportsPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'eod', label: t('reportsTabEod') },
     { id: 'sales', label: t('reportsTabSales') },
+    { id: 'revenue', label: t('reportsTabRevenue') },
     { id: 'products', label: t('reportsTabProducts') },
     ...(ownOnly ? [] : [{ id: 'users' as const, label: t('reportsTabUsers') }]),
   ];
@@ -264,19 +376,64 @@ export default function ReportsPage() {
             </p>
           ) : null}
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <EodIncludeProductsCheckbox
             checked={eodIncludeProductsSold}
             onChange={setEodIncludeProductsSold}
           />
           <button
             type="button"
-            className="btn-secondary inline-flex items-center gap-2"
+            className="btn-secondary inline-flex items-center gap-1.5"
             onClick={() => void printEod()}
-            disabled={!report || loading}
+            disabled={!report || loading || tab === 'revenue'}
           >
-            <Printer size={16} />
+            <Printer className="w-4 h-4" />
             {t('reportsPrintEod')}
+          </button>
+          <div className="relative">
+            <button
+              type="button"
+              className="btn-secondary inline-flex items-center gap-1.5"
+              onClick={() => setExportOpen((v) => !v)}
+            >
+              <Download className="w-4 h-4" />
+              {t('ovExport')}
+            </button>
+            {exportOpen && (
+              <div className="absolute right-0 mt-1 z-20 card p-1.5 min-w-[160px] shadow-lg">
+                <button
+                  type="button"
+                  className="w-full text-left text-sm px-2.5 py-1.5 rounded hover:bg-[var(--bg-muted)]"
+                  onClick={() => void downloadExport('xlsx')}
+                >
+                  Excel (.xlsx)
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left text-sm px-2.5 py-1.5 rounded hover:bg-[var(--bg-muted)]"
+                  onClick={() => void downloadExport('csv')}
+                >
+                  CSV
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left text-sm px-2.5 py-1.5 rounded hover:bg-[var(--bg-muted)] inline-flex items-center gap-1.5"
+                  onClick={() => void sendEmailNow()}
+                  disabled={sendingEmail}
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  {sendingEmail ? t('loading') : t('ovSendEmail')}
+                </button>
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn-secondary inline-flex items-center gap-1.5"
+            onClick={() => void openSettings()}
+          >
+            <Settings2 className="w-4 h-4" />
+            {t('ovSettings')}
           </button>
         </div>
       </div>
@@ -298,6 +455,7 @@ export default function ReportsPage() {
         ))}
       </div>
 
+      {tab !== 'revenue' ? (
       <div className="flex flex-wrap gap-2">
         {presets.map((p) => (
           <button
@@ -314,7 +472,12 @@ export default function ReportsPage() {
           </button>
         ))}
       </div>
+      ) : null}
 
+      {tab === 'revenue' ? (
+        <ReportsRevenuePanel />
+      ) : (
+        <>
       {preset === 'custom' && (
         <div className="flex flex-wrap gap-3 items-end">
           <label className="text-sm space-y-1">
@@ -605,6 +768,135 @@ export default function ReportsPage() {
             </section>
           )}
         </>
+      )}
+        </>
+      )}
+
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-[var(--bg-elevated)] rounded-xl shadow-xl w-full max-w-lg border border-[var(--border)]">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+              <h3 className="font-semibold">{t('ovReportSettings')}</h3>
+              <button
+                type="button"
+                className="p-1 rounded hover:bg-[var(--bg-muted)]"
+                onClick={() => setSettingsOpen(false)}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <label className="block text-sm space-y-1">
+                <span className="muted">{t('ovEmailLanguage')}</span>
+                <select
+                  className="input"
+                  value={emailSettings.language}
+                  onChange={(e) =>
+                    setEmailSettings((s) => ({
+                      ...s,
+                      language: e.target.value as 'en' | 'fr' | 'de',
+                    }))
+                  }
+                >
+                  <option value="en">English</option>
+                  <option value="fr">Français</option>
+                  <option value="de">Deutsch</option>
+                </select>
+              </label>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={emailSettings.sendEveryDay}
+                  onChange={(e) =>
+                    setEmailSettings((s) => ({ ...s, sendEveryDay: e.target.checked }))
+                  }
+                />
+                <span>
+                  <span className="text-sm font-medium block">{t('ovSendEveryDay')}</span>
+                  <span className="text-xs muted">{t('ovSendEveryDayHint')}</span>
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={emailSettings.sendEveryMonth}
+                  onChange={(e) =>
+                    setEmailSettings((s) => ({ ...s, sendEveryMonth: e.target.checked }))
+                  }
+                />
+                <span>
+                  <span className="text-sm font-medium block">{t('ovSendEveryMonth')}</span>
+                  <span className="text-xs muted">{t('ovSendEveryMonthHint')}</span>
+                </span>
+              </label>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm muted">{t('ovEmailList')}</span>
+                  <button
+                    type="button"
+                    className="text-sm text-[var(--accent)] inline-flex items-center gap-1"
+                    onClick={() =>
+                      setEmailSettings((s) => ({ ...s, emails: [...s.emails, ''] }))
+                    }
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {t('ovAddEmail')}
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {emailSettings.emails.map((email, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <input
+                        type="email"
+                        className="input flex-1"
+                        placeholder={t('ovEmailPlaceholder')}
+                        value={email}
+                        onChange={(e) =>
+                          setEmailSettings((s) => {
+                            const emails = [...s.emails];
+                            emails[idx] = e.target.value;
+                            return { ...s, emails };
+                          })
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="btn-secondary px-2"
+                        onClick={() =>
+                          setEmailSettings((s) => ({
+                            ...s,
+                            emails: s.emails.filter((_, i) => i !== idx),
+                          }))
+                        }
+                        aria-label={t('delete')}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-4 py-3 border-t border-[var(--border)]">
+              <button type="button" className="btn-secondary" onClick={() => setSettingsOpen(false)}>
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={savingSettings}
+                onClick={() => void saveSettings()}
+              >
+                {savingSettings ? t('loading') : t('save')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
