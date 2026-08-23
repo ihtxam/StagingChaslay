@@ -72,6 +72,7 @@ import com.chaslay.pos.util.DineInCounterTicket
 import com.chaslay.pos.printer.KitchenPrintMeta
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -2171,9 +2172,10 @@ class PosViewModel @Inject constructor(
         val program = extras.loyaltyProgram
         val cartForMerchandise = cartManager.paymentSnapshot()
         val merchandiseTotal = cartForMerchandise.merchandiseTotal()
+        val expressCardOrTerminal = method == PaymentMethod.CARD || method == PaymentMethod.ADYEN_TERMINAL
         val canPayWithPoints = membership?.membershipEnabled == true &&
             membership.pointsBalance >= program.redeemThreshold
-        val defaultPayWithPoints = canPayWithPoints
+        val defaultPayWithPoints = canPayWithPoints && !expressCardOrTerminal
         val maxPoints = membership?.let {
             LoyaltyMath.maxRedeemablePoints(
                 merchandiseTotal,
@@ -2189,7 +2191,7 @@ class PosViewModel @Inject constructor(
         val canPayWithGiftCard = extras.giftCardsEnabled &&
             giftBalance > 0.01 &&
             cartForMerchandise.items.any { !it.isGiftCardLine }
-        val defaultGiftRedeem = if (canPayWithGiftCard) {
+        val defaultGiftRedeem = if (canPayWithGiftCard && !expressCardOrTerminal) {
             kotlin.math.min(giftBalance, afterPoints)
         } else 0.0
         return CheckoutState(
@@ -2217,10 +2219,12 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    private fun resolveCheckoutMethod(preferred: PaymentMethod?): PaymentMethod {
+    private fun resolveCheckoutMethod(
+        preferred: PaymentMethod?,
+        settings: BusinessSettingsEntity = cachedSettings
+    ): PaymentMethod {
         if (preferred == PaymentMethod.PAY_LATER) return PaymentMethod.PAY_LATER
         if (preferred == PaymentMethod.INVOICE) return PaymentMethod.INVOICE
-        val settings = cachedSettings
         val enabled = buildList {
             if (settings.cashEnabled) add(PaymentMethod.CASH)
             if (settings.cardEnabled) add(PaymentMethod.CARD)
@@ -3538,6 +3542,7 @@ class PosViewModel @Inject constructor(
     }
 
     fun expressPay(method: PaymentMethod, activity: Activity?) {
+        if (_uiExtras.value.isProcessingPayment) return
         val checkoutState = buildExpressCheckoutState(method) ?: return
         updateExtras {
             it.copy(
@@ -3667,15 +3672,24 @@ class PosViewModel @Inject constructor(
 
     fun completeCheckout(activity: Activity?) {
         val checkout = _uiExtras.value.checkoutState
-        val method = resolveCheckoutMethod(checkout.method)
         val fullCart = cartManager.snapshot()
         val payable = cartManager.paymentSnapshot()
         if (payable.isEmpty && !(fullCart.splitCount > 1 && !fullCart.splitByItems)) return
+        if (_uiExtras.value.isProcessingPayment) return
+
+        updateExtras {
+            it.copy(
+                isProcessingPayment = true,
+                errorMessage = null,
+                errorTitle = null
+            )
+        }
 
         viewModelScope.launch {
-            updateExtras { it.copy(isProcessingPayment = true, errorMessage = null) }
+            try {
             persistTableOrderIfNeeded()
             val settings = settingsRepository.getSettings()
+            val method = resolveCheckoutMethod(checkout.method, settings)
             val userId = sessionManager.currentUserId.first() ?: 0L
             val userName = sessionManager.currentUserName.first() ?: "Cashier"
             val paidIds = payable.items.map { it.id }.toSet()
@@ -4253,6 +4267,24 @@ class PosViewModel @Inject constructor(
                         } else {
                             it.terminalPaymentMessage
                         }
+                    )
+                }
+            }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("POS", "Checkout failed", e)
+                adyenTerminalService.cancelActivePayment()
+                updateExtras {
+                    it.copy(
+                        isProcessingPayment = false,
+                        showTerminalPaymentModal = false,
+                        terminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
+                        terminalPaymentAmount = 0.0,
+                        terminalPaymentMessage = null,
+                        tapToPayMessage = null,
+                        errorMessage = e.message ?: appContext.getString(R.string.terminal_pay_failed_msg),
+                        errorTitle = appContext.getString(R.string.terminal_pay_failed)
                     )
                 }
             }
