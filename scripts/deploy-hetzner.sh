@@ -340,6 +340,13 @@ if [[ -f "$REPO_DIR/backend/sql/ensure-orders-staff-id.sql" ]]; then
     < "$REPO_DIR/backend/sql/ensure-orders-staff-id.sql" || true
 fi
 
+if [[ -f "$REPO_DIR/backend/sql/ensure-pos-sessions-print-agent.sql" ]]; then
+  echo "=== Apply pos_sessions.print_agent_online SQL patch ==="
+  docker compose --env-file .env.production exec -T db \
+    psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
+    < "$REPO_DIR/backend/sql/ensure-pos-sessions-print-agent.sql" || true
+fi
+
 echo "=== Health checks ==="
 API_HEALTH="$(curl -sf http://127.0.0.1:3000/health || docker compose --env-file .env.production exec -T api wget -qO- http://127.0.0.1:3000/health || true)"
 echo "local api: ${API_HEALTH:-unreachable}"

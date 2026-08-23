@@ -1537,6 +1537,11 @@ const en: Dict = {
   webPosPrinterNotFoundGeneric: 'Printer not found or disconnected',
   webPosAgentRunningShort: 'Print Agent running',
   webPosAgentNotRunningShort: 'Print Agent not running',
+  webPosMainTillOfflineShort: 'Main till offline',
+  webPosMainTillPrintRunningShort: 'Main till — Print Agent running',
+  webPosMainTillPrintOfflineShort: 'Main till — Print Agent not running',
+  webPosRemotePrintHint:
+    'This device sends kitchen and receipt jobs to the main till. Keep ChaslayReborn open on the PC with Print Agent.',
   webPosPrinterDisconnectedShort: 'Printer not found',
   webPosPrinterRenamedHint:
     'Agent is running. Re-select printer — name may have changed.',
@@ -4593,6 +4598,11 @@ const fr: Dict = {
   webPosPrinterNotFoundGeneric: 'Imprimante introuvable ou déconnectée',
   webPosAgentRunningShort: 'Agent d’impression actif',
   webPosAgentNotRunningShort: 'Agent d’impression arrêté',
+  webPosMainTillOfflineShort: 'Caisse principale hors ligne',
+  webPosMainTillPrintRunningShort: 'Caisse principale — agent d’impression actif',
+  webPosMainTillPrintOfflineShort: 'Caisse principale — agent d’impression arrêté',
+  webPosRemotePrintHint:
+    'Cet appareil envoie les tickets à la caisse principale. Gardez ChaslayReborn ouvert sur le PC avec l’agent d’impression.',
   webPosPrinterDisconnectedShort: 'Imprimante introuvable',
   webPosPrinterRenamedHint:
     'L’agent fonctionne. Resélectionnez l’imprimante — le nom a peut-être changé.',
@@ -7654,6 +7664,11 @@ const de: Dict = {
   webPosPrinterNotFoundGeneric: 'Drucker nicht gefunden oder getrennt',
   webPosAgentRunningShort: 'Druckagent aktiv',
   webPosAgentNotRunningShort: 'Druckagent nicht gestartet',
+  webPosMainTillOfflineShort: 'Hauptkasse offline',
+  webPosMainTillPrintRunningShort: 'Hauptkasse — Druckagent aktiv',
+  webPosMainTillPrintOfflineShort: 'Hauptkasse — Druckagent nicht gestartet',
+  webPosRemotePrintHint:
+    'Dieses Gerät sendet Druckaufträge an die Hauptkasse. ChaslayReborn auf dem PC mit Druckagent geöffnet lassen.',
   webPosPrinterDisconnectedShort: 'Drucker nicht gefunden',
   webPosPrinterRenamedHint:
     'Agent läuft. Drucker erneut wählen — der Name hat sich möglicherweise geändert.',

@@ -163,6 +163,12 @@ type Props = {
   printerMissing?: boolean;
   /** Installed agent build is older than MIN_PRINT_AGENT_VERSION. */
   agentOutdated?: boolean;
+  /** This browser is the main till (local Print Agent). Phones/waiter devices are false. */
+  isLocalPrintStation?: boolean;
+  /** Remote devices: any main till session is active. */
+  mainTillOnline?: boolean;
+  /** Remote devices: a main till reported Print Agent online on heartbeat. */
+  mainTillPrintAgentOnline?: boolean;
   search: string;
   onSearchChange: (q: string) => void;
   /** Enter on the product search: exact barcode/SKU adds the product. */
@@ -217,6 +223,9 @@ export default function WebPosTopBar({
   agentOk,
   printerMissing = false,
   agentOutdated = false,
+  isLocalPrintStation = true,
+  mainTillOnline = false,
+  mainTillPrintAgentOnline = false,
   search,
   onSearchChange,
   onSearchSubmit,
@@ -485,25 +494,42 @@ export default function WebPosTopBar({
       {merchantName ? (
         <p className="webpos-merchant-subline truncate px-2 pb-1 text-[10px] text-stone-400 sm:px-4">
           <span>{merchantName}</span>
-          {!agentOk ? (
+          {isLocalPrintStation ? (
+            !agentOk ? (
+              <span className="webpos-merchant-subline__warn">
+                {' '}
+                - {t('webPosAgentNotRunningShort')}
+              </span>
+            ) : printerMissing ? (
+              <span className="webpos-merchant-subline__warn">
+                {' '}
+                - {t('webPosPrinterDisconnectedShort')}
+              </span>
+            ) : agentOutdated ? (
+              <span className="webpos-merchant-subline__warn">
+                {' '}
+                - {t('webPosPrintAgentUpdateShort')}
+              </span>
+            ) : (
+              <span className="webpos-merchant-subline__ok">
+                {' '}
+                - {t('webPosAgentRunningShort')}
+              </span>
+            )
+          ) : !mainTillOnline ? (
             <span className="webpos-merchant-subline__warn">
               {' '}
-              - {t('webPosAgentNotRunningShort')}
+              - {t('webPosMainTillOfflineShort')}
             </span>
-          ) : printerMissing ? (
+          ) : !mainTillPrintAgentOnline ? (
             <span className="webpos-merchant-subline__warn">
               {' '}
-              - {t('webPosPrinterDisconnectedShort')}
-            </span>
-          ) : agentOutdated ? (
-            <span className="webpos-merchant-subline__warn">
-              {' '}
-              - {t('webPosPrintAgentUpdateShort')}
+              - {t('webPosMainTillPrintOfflineShort')}
             </span>
           ) : (
             <span className="webpos-merchant-subline__ok">
               {' '}
-              - {t('webPosAgentRunningShort')}
+              - {t('webPosMainTillPrintRunningShort')}
             </span>
           )}
           {!syncOnline ? (
@@ -542,6 +568,9 @@ export function WebPosSettingsDropdown({
   printerMissing = false,
   suggestedPrinters = [],
   agentOutdated = false,
+  isLocalPrintStation = true,
+  mainTillOnline = false,
+  mainTillPrintAgentOnline = false,
   autoPrint,
   postSuccessTarget,
   onPrinterChange,
@@ -590,6 +619,9 @@ export function WebPosSettingsDropdown({
   printerMissing?: boolean;
   suggestedPrinters?: Array<{ name: string }>;
   agentOutdated?: boolean;
+  isLocalPrintStation?: boolean;
+  mainTillOnline?: boolean;
+  mainTillPrintAgentOnline?: boolean;
   autoPrint: boolean;
   postSuccessTarget: 'register' | 'tables';
   onPrinterChange: (name: string) => void;
@@ -948,6 +980,8 @@ export function WebPosSettingsDropdown({
         <MoreHorizontal size={14} />
         {t('webPosPrinting')}
       </div>
+      {isLocalPrintStation ? (
+        <>
       <label className="block space-y-1 text-xs">
         <span className="text-[11px] text-stone-500">{t('webPosPrinter')}</span>
         <select
@@ -1039,6 +1073,23 @@ export function WebPosSettingsDropdown({
           <option value="tables">{t('webPosTabTables')}</option>
         </select>
       </label>
+        </>
+      ) : (
+        <div className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5">
+          <p className="text-[10px] leading-snug text-stone-600">{t('webPosRemotePrintHint')}</p>
+          <p
+            className={`text-[10px] font-semibold leading-snug ${
+              !mainTillOnline || !mainTillPrintAgentOnline ? 'text-amber-800' : 'text-emerald-700'
+            }`}
+          >
+            {!mainTillOnline
+              ? t('webPosMainTillOfflineShort')
+              : !mainTillPrintAgentOnline
+                ? t('webPosMainTillPrintOfflineShort')
+                : t('webPosMainTillPrintRunningShort')}
+          </p>
+        </div>
+      )}
       {onSendLogs ? (
         <button
           type="button"

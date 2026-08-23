@@ -16,6 +16,12 @@ type StoredPosSession = {
 
 let heartbeatTimer: number | null = null;
 let visibilityHookInstalled = false;
+let heartbeatExtras: { printAgentOnline?: boolean } = {};
+
+/** Main till: report local Print Agent status on heartbeat for mobile/waiter UI. */
+export function setPosSessionHeartbeatExtras(extras: { printAgentOnline?: boolean }) {
+  heartbeatExtras = extras;
+}
 
 function readStored(): StoredPosSession | null {
   try {
@@ -53,7 +59,11 @@ function notifySessionKicked() {
 
 async function sendHeartbeat(sessionId: string) {
   try {
-    await api.post('/merchant/pos/sessions/heartbeat', { sessionId });
+    const body: { sessionId: string; printAgentOnline?: boolean } = { sessionId };
+    if (typeof heartbeatExtras.printAgentOnline === 'boolean') {
+      body.printAgentOnline = heartbeatExtras.printAgentOnline;
+    }
+    await api.post('/merchant/pos/sessions/heartbeat', body);
   } catch (e: any) {
     const code = e?.response?.data?.code;
     if (code === 'POS_SESSION_EXPIRED' || e?.response?.status === 410) {
@@ -163,6 +173,7 @@ export type ActivePosSession = {
   deviceId: string;
   deviceLabel?: string | null;
   staffName?: string | null;
+  printAgentOnline?: boolean | null;
   lastHeartbeat: string;
   createdAt: string;
 };
