@@ -6,6 +6,7 @@ import com.chaslay.pos.data.local.entity.RoleEntity
 import com.chaslay.pos.data.local.entity.UserEntity
 import com.chaslay.pos.data.repository.AuthRepository
 import com.chaslay.pos.domain.model.PosPermission
+import com.chaslay.pos.domain.model.isValidStaffPin
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -116,6 +117,10 @@ class UsersRolesViewModel @Inject constructor(
                 _uiState.update { it.copy(message = "Set a PIN or password") }
                 return@launch
             }
+            if (state.formPin.isNotBlank() && !isValidStaffPin(state.formPin)) {
+                _uiState.update { it.copy(message = "PIN must be 4-8 digits") }
+                return@launch
+            }
             authRepository.saveUser(
                 id = state.editingUserId,
                 name = state.formName,
@@ -132,8 +137,8 @@ class UsersRolesViewModel @Inject constructor(
 
     fun resetPin(userId: Long, newPin: String) {
         viewModelScope.launch {
-            if (newPin.length < 4) {
-                _uiState.update { it.copy(message = "PIN must be at least 4 digits") }
+            if (!isValidStaffPin(newPin)) {
+                _uiState.update { it.copy(message = "PIN must be 4-8 digits") }
                 return@launch
             }
             authRepository.resetUserPin(userId, newPin)

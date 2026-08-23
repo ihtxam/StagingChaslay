@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.AuthRepository
 import com.chaslay.pos.domain.model.LoginResult
+import com.chaslay.pos.domain.model.STAFF_PIN_MAX_LENGTH
+import com.chaslay.pos.domain.model.STAFF_PIN_MIN_LENGTH
 import com.chaslay.pos.sync.MenuSyncMode
 import com.chaslay.pos.sync.MenuSyncRepository
 import com.chaslay.pos.sync.PosSessionRepository
@@ -85,10 +87,17 @@ class AuthViewModel @Inject constructor(
     }
 
     fun onPinSetupDigit(digit: String) {
-        if (_uiState.value.pinSetupUserName == null || pinSetupBuffer.length >= 4) return
+        if (_uiState.value.pinSetupUserName == null || pinSetupBuffer.length >= STAFF_PIN_MAX_LENGTH) return
         pinSetupBuffer += digit
         _uiState.update { it.copy(pinSetupLength = pinSetupBuffer.length, errorMessage = null) }
-        if (pinSetupBuffer.length < 4) return
+        if (pinSetupBuffer.length >= STAFF_PIN_MAX_LENGTH) {
+            confirmPinSetupEntry()
+        }
+    }
+
+    fun confirmPinSetupEntry() {
+        if (_uiState.value.pinSetupUserName == null) return
+        if (pinSetupBuffer.length < STAFF_PIN_MIN_LENGTH) return
 
         when (_uiState.value.pinSetupStep) {
             PinSetupStep.ENTER -> {

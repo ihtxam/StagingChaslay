@@ -55,11 +55,14 @@ import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaslay.pos.R
+import com.chaslay.pos.domain.model.STAFF_PIN_MAX_LENGTH
+import com.chaslay.pos.domain.model.STAFF_PIN_MIN_LENGTH
 import com.chaslay.pos.ui.theme.ChaslayBrand
 import kotlinx.coroutines.delay
 
-private const val PIN_MAX_LENGTH = 4
-private const val PIN_AUTO_LOGIN_LENGTH = 4
+private const val PIN_MIN_LENGTH = STAFF_PIN_MIN_LENGTH
+private const val PIN_MAX_LENGTH = STAFF_PIN_MAX_LENGTH
+private const val PIN_AUTO_DELAY_MS = 420L
 private val WIDE_LAYOUT_BREAKPOINT = 720.dp
 
 @Composable
@@ -88,6 +91,8 @@ fun LoginScreen(
             onDigit = viewModel::onPinSetupDigit,
             onBackspace = viewModel::onPinSetupBackspace,
             onClear = viewModel::onPinSetupClear,
+            onEnter = viewModel::confirmPinSetupEntry,
+            enterEnabled = state.pinSetupLength >= PIN_MIN_LENGTH,
             onCancel = viewModel::cancelPinSetup,
             onSkip = viewModel::skipPinSetup
         )
@@ -103,17 +108,26 @@ fun LoginScreen(
     }
 
     LaunchedEffect(pin) {
-        if (pin.length == PIN_AUTO_LOGIN_LENGTH) {
-            delay(300)
-            if (pin.length == PIN_AUTO_LOGIN_LENGTH) {
+        if (pin.length >= PIN_MIN_LENGTH) {
+            delay(PIN_AUTO_DELAY_MS)
+            if (pin.length >= PIN_MIN_LENGTH) {
                 viewModel.loginWithPin(pin)
             }
         }
     }
 
     fun submitPin() {
-        if (pin.length >= PIN_AUTO_LOGIN_LENGTH) {
+        if (pin.length >= PIN_MIN_LENGTH) {
             viewModel.loginWithPin(pin)
+        }
+    }
+
+    fun appendPinDigit(d: String) {
+        if (pin.length >= PIN_MAX_LENGTH) return
+        val next = pin + d
+        pin = next
+        if (next.length >= PIN_MAX_LENGTH) {
+            viewModel.loginWithPin(next)
         }
     }
 
@@ -172,11 +186,11 @@ fun LoginScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .widthIn(max = 520.dp),
-                        onDigit = { d -> if (pin.length < PIN_MAX_LENGTH) pin += d },
+                        onDigit = ::appendPinDigit,
                         onBackspace = { if (pin.isNotEmpty()) pin = pin.dropLast(1) },
                         onClear = { pin = "" },
                         onSubmitPin = ::submitPin,
-                        enterEnabled = pin.length >= PIN_AUTO_LOGIN_LENGTH,
+                        enterEnabled = pin.length >= PIN_MIN_LENGTH,
                         onEmailChange = { email = it },
                         onPasswordChange = { password = it },
                         onEmailSubmit = { viewModel.loginWithEmail(email, password) },
@@ -206,11 +220,11 @@ fun LoginScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .widthIn(max = 420.dp),
-                    onDigit = { d -> if (pin.length < PIN_MAX_LENGTH) pin += d },
+                    onDigit = ::appendPinDigit,
                     onBackspace = { if (pin.isNotEmpty()) pin = pin.dropLast(1) },
                     onClear = { pin = "" },
                     onSubmitPin = ::submitPin,
-                    enterEnabled = pin.length >= PIN_AUTO_LOGIN_LENGTH,
+                    enterEnabled = pin.length >= PIN_MIN_LENGTH,
                     onEmailChange = { email = it },
                     onPasswordChange = { password = it },
                     onEmailSubmit = { viewModel.loginWithEmail(email, password) },
@@ -454,6 +468,8 @@ private fun PinSetupScreen(
     onDigit: (String) -> Unit,
     onBackspace: () -> Unit,
     onClear: () -> Unit,
+    onEnter: () -> Unit,
+    enterEnabled: Boolean,
     onCancel: () -> Unit,
     onSkip: () -> Unit
 ) {
@@ -505,8 +521,8 @@ private fun PinSetupScreen(
                 onDigit = onDigit,
                 onBackspace = onBackspace,
                 onClear = onClear,
-                onEnter = {},
-                enterEnabled = false
+                onEnter = onEnter,
+                enterEnabled = enterEnabled
             )
             errorMessage?.let {
                 Spacer(modifier = Modifier.height(16.dp))

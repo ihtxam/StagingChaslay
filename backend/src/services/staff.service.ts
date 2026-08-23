@@ -414,6 +414,9 @@ export class StaffService {
     const db = getDb();
     const normalized = pin.trim();
     if (!normalized) throw new Error("PIN is required");
+    if (normalized.length < 4 || normalized.length > 8) {
+      throw new Error("PIN must be 4-8 digits");
+    }
 
     // Ensure system Waiter privileges stay floor-only before returning PIN session.
     await this.enforceWaiterFloorRestrictions(merchantId);

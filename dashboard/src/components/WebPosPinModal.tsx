@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, Lock, UserCircle2, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import {
+  STAFF_PIN_MAX_LENGTH,
+  STAFF_PIN_MIN_LENGTH,
+} from '@/lib/staff-pin';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 
-/** Staff PINs are 4 digits (matches Android POS login). */
-const PIN_MIN_LENGTH = 4;
-const PIN_MAX_LENGTH = 4;
+const PIN_MIN_LENGTH = STAFF_PIN_MIN_LENGTH;
+const PIN_MAX_LENGTH = STAFF_PIN_MAX_LENGTH;
 /** Pause so a longer PIN can be typed before verify runs (no OK button in gate mode). */
 const PIN_AUTO_DELAY_MS = 420;
 
@@ -107,6 +110,10 @@ export default function WebPosPinModal({
     const next = pin + d;
     setPin(next);
     setError('');
+    if (next.length >= PIN_MAX_LENGTH) {
+      void submitPin(next);
+      return;
+    }
     if (next.length >= PIN_MIN_LENGTH) {
       scheduleAutoSubmit(next);
     }
@@ -123,7 +130,10 @@ export default function WebPosPinModal({
     ? (['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', ''] as const)
     : (['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'] as const);
 
-  const dots = Math.max(PIN_MIN_LENGTH, Math.min(pin.length || PIN_MIN_LENGTH, PIN_MAX_LENGTH));
+  const dots = Math.max(
+    PIN_MIN_LENGTH,
+    Math.min(pin.length > 0 ? pin.length : PIN_MIN_LENGTH, PIN_MAX_LENGTH)
+  );
 
   const keypad = (
     <div

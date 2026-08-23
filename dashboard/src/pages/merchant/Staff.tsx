@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { notifyStaffRosterChanged } from '@/lib/permissions';
+import { isValidStaffPin, sanitizeStaffPinInput } from '@/lib/staff-pin';
 import { useI18n } from '@/lib/i18n';
 import { ALL_PERMISSIONS, staffRoleDisplayName, type Permission } from '@/lib/permissions';
 import { useAuthStore } from '@/store/auth';
@@ -123,6 +124,11 @@ export default function StaffPage() {
         return;
       }
     }
+    const pin = staffForm.pin.trim();
+    if (pin && !isValidStaffPin(pin)) {
+      toast.error(t('staffPinInvalid'));
+      return;
+    }
     try {
       await api.post('/merchant/staff', { ...staffForm, email, password, canAccessPanel });
       toast.success(t('staffUserCreated'));
@@ -169,7 +175,7 @@ export default function StaffPage() {
         return;
       }
     }
-    if (editForm.pin && editForm.pin.length !== 4) {
+    if (editForm.pin && !isValidStaffPin(editForm.pin)) {
       toast.error(t('staffPinInvalid'));
       return;
     }
@@ -279,14 +285,14 @@ export default function StaffPage() {
                 <input
                   className="input mt-1"
                   inputMode="numeric"
-                  pattern="[0-9]{4}"
-                  maxLength={4}
+                  pattern="[0-9]{4,8}"
+                  maxLength={8}
                   placeholder={t('staffPinPlaceholder')}
                   value={staffForm.pin}
                   onChange={(e) =>
                     setStaffForm({
                       ...staffForm,
-                      pin: e.target.value.replace(/\D/g, '').slice(0, 4),
+                      pin: sanitizeStaffPinInput(e.target.value),
                     })
                   }
                 />
@@ -472,8 +478,8 @@ export default function StaffPage() {
                 <input
                   className="input mt-1"
                   inputMode="numeric"
-                  pattern="[0-9]{4}"
-                  maxLength={4}
+                  pattern="[0-9]{4,8}"
+                  maxLength={8}
                   placeholder={
                     editingStaff.pinSet ? t('staffPinKeepPlaceholder') : t('staffPinPlaceholder')
                   }
@@ -482,7 +488,7 @@ export default function StaffPage() {
                   onChange={(e) =>
                     setEditForm({
                       ...editForm,
-                      pin: e.target.value.replace(/\D/g, '').slice(0, 4),
+                      pin: sanitizeStaffPinInput(e.target.value),
                       clearPin: false,
                     })
                   }

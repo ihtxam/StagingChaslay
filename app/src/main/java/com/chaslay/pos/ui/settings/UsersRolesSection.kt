@@ -51,6 +51,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaslay.pos.R
 import com.chaslay.pos.domain.model.PosPermission
+import com.chaslay.pos.domain.model.sanitizeStaffPinInput
 import com.chaslay.pos.ui.theme.vectronColors
 
 private val AccentTeal = Color(0xFF00897B)
@@ -285,7 +286,7 @@ fun UsersRolesSection(
                     }
                     OutlinedTextField(
                         value = state.formPin,
-                        onValueChange = viewModel::updateFormPin,
+                        onValueChange = { viewModel.updateFormPin(sanitizeStaffPinInput(it)) },
                         label = { Text(stringResource(R.string.pos_pin)) },
                         modifier = Modifier.fillMaxWidth()
                     )
