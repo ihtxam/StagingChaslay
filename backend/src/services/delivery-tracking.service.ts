@@ -336,10 +336,7 @@ export class DeliveryTrackingService {
       .set({ assignedDeliveryStaffId: staffId })
       .where(eq(schema.orders.id, orderId));
 
-    if (order.status === "ready") {
-      const { OrderService } = await import("@/services/order.service");
-      await OrderService.applyOrderAction(merchantId, orderId, "out_for_delivery", {});
-    }
+    await this.advanceDeliveryForDriver(merchantId, orderId);
 
     const staff = await db.query.merchantStaff.findFirst({
       where: eq(schema.merchantStaff.id, staffId),
@@ -490,11 +487,78 @@ export class DeliveryTrackingService {
     if (order.fulfillmentChannel !== "delivery") {
       throw new Error("Not a delivery order");
     }
-    if (order.status !== "ready" && order.status !== "out_for_delivery") {
+    await this.advanceDeliveryForDriver(merchantId, orderId);
+    const refreshed = await db.query.orders.findFirst({
+      where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
+    });
+    const status = String(refreshed?.status || "");
+    if (status !== "ready" && status !== "out_for_delivery") {
       throw new Error("Order cannot be marked delivered in current status");
     }
     const { OrderService } = await import("@/services/order.service");
     return OrderService.applyOrderAction(merchantId, orderId, "complete", {});
+  }
+
+  /** Driver starts delivery — mark ready (if needed) and out for delivery. */
+  static async startDeliveryAsDriver(merchantId: string, staffId: string, orderId: string) {
+    await this.ensureSchema();
+    const db = getDb();
+    const order = await db.query.orders.findFirst({
+      where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
+    });
+    if (!order) throw new Error("Order not found");
+    if (order.assignedDeliveryStaffId !== staffId) {
+      throw new Error("This delivery is not assigned to you");
+    }
+    if (order.fulfillmentChannel !== "delivery") {
+      throw new Error("Not a delivery order");
+    }
+    if (["cancelled", "refunded", "completed"].includes(String(order.status))) {
+      throw new Error("Order is no longer active");
+    }
+    return this.advanceDeliveryForDriver(merchantId, orderId);
+  }
+
+  /**
+   * Kitchen → delivery transitions for an assigned driver order:
+   * preparing/accepted → ready → out_for_delivery.
+   * Pending orders must be accepted at the till first (unless auto-accepted).
+   */
+  static async advanceDeliveryForDriver(merchantId: string, orderId: string) {
+    await this.ensureSchema();
+    const db = getDb();
+    const { OrderService } = await import("@/services/order.service");
+
+    const read = async () =>
+      db.query.orders.findFirst({
+        where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
+      });
+
+    let order = await read();
+    if (!order) throw new Error("Order not found");
+    if (order.fulfillmentChannel !== "delivery") {
+      throw new Error("Not a delivery order");
+    }
+
+    let status = String(order.status || "");
+    if (status === "pending_approval" || status === "pending") {
+      throw new Error("Order must be accepted at the till before delivery can start");
+    }
+    if (status === "completed" || status === "cancelled" || status === "refunded") {
+      return order;
+    }
+
+    if (status === "preparing" || status === "accepted") {
+      await OrderService.applyOrderAction(merchantId, orderId, "mark_ready", {});
+      order = (await read()) || order;
+      status = String(order.status || "");
+    }
+    if (status === "ready") {
+      await OrderService.applyOrderAction(merchantId, orderId, "out_for_delivery", {});
+      order = (await read()) || order;
+    }
+
+    return order;
   }
 
   /** Latest driver ping for an order (merchant orders board). */

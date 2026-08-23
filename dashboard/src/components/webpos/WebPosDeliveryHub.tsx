@@ -160,7 +160,9 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
       setStoreLat(Number.isFinite(lat) ? lat : null);
       setStoreLng(Number.isFinite(lng) ? lng : null);
       const dp = s.deliveryPlatformSettings || {};
-      setAutoAccept(!!dp.justEat?.autoAccept || !!dp.uberEats?.autoAccept);
+      setAutoAccept(
+        !!dp.justEat?.autoAccept || !!dp.uberEats?.autoAccept || !!dp.onlineShopAutoAccept
+      );
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || t('deliveryMapLoadFailed'));
@@ -209,7 +211,7 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
       if (alertedPendingRef.current.has(o.id)) continue;
       alertedPendingRef.current.add(o.id);
       const zip = extractZipFromAddress(o.shippingAddress);
-      speakDeliveryAlert(newOrderSpeechLine(o.orderSource, zip));
+      speakDeliveryAlert(newOrderSpeechLine(t, o.orderSource, zip));
     }
   }, [pendingApproval, speechOn]);
 
@@ -253,6 +255,7 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, st
       await api.put('/merchant/settings', {
         deliveryPlatformSettings: {
           ...dp,
+          onlineShopAutoAccept: next,
           justEat: { ...(dp.justEat || {}), autoAccept: next },
           uberEats: { ...(dp.uberEats || {}), autoAccept: next },
         },
