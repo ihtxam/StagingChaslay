@@ -2,13 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  Printer,
-  Download,
-  Settings2,
-  X,
-  Plus,
-  Trash2,
-  Mail,
   TrendingUp,
   TrendingDown,
 } from 'lucide-react';
@@ -29,27 +22,6 @@ import {
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
-import {
-  generateEodReportText,
-  logoUrlToEscPos,
-  printersForRole,
-  resolveReceiptLanguage,
-  textToEscPos,
-  uint8ToBase64,
-  type PosPrintSettingsClient,
-} from '@/lib/webpos-receipt';
-import {
-  browserPrintText,
-  isPrintAgentAvailable,
-  isUnsuitableRawPrinter,
-  printViaAgent,
-  unsuitableRawPrinterMessage,
-} from '@/lib/print-agent';
-import { toastPrintError } from '@/lib/webpos-print-toast';
-import {
-  EodIncludeProductsCheckbox,
-  useEodIncludeProductsSold,
-} from '@/components/EodIncludeProductsCheckbox';
 import {
   CashDrawerBreakdown,
   type CashDrawerShift,
@@ -78,6 +50,7 @@ type OverviewData = {
   };
   salesBreakdown: { productAmount: number; tax: number; totalSales: number };
   salesOverTime: Array<{ label: string; amount: number }>;
+  salesByHour?: Array<{ label: string; amount: number }>;
   paymentMethods: Array<{
     method: string;
     label: string;
@@ -96,13 +69,6 @@ type OverviewData = {
   staff: Array<{ name: string; salesCount: number; total: number }>;
   businessName: string;
   eod?: Record<string, unknown>;
-};
-
-type ReportEmailSettings = {
-  language: 'en' | 'fr' | 'de';
-  sendEveryDay: boolean;
-  sendEveryMonth: boolean;
-  emails: string[];
 };
 
 const CHART_COLORS = ['#a855f7', '#ec4899', '#14b8a6', '#f59e0b', '#3b82f6', '#64748b'];
@@ -127,26 +93,18 @@ function ChangeLine({ value, label }: { value: number | null; label: string }) {
   );
 }
 
+type InsightsPreset = 'today' | 'yesterday' | 'last_week';
+
 export default function Overview() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [preset, setPreset] = useState<Preset>('today');
+  const [insightsPreset, setInsightsPreset] = useState<InsightsPreset>('today');
+  const [insightsData, setInsightsData] = useState<OverviewData | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [emailSettings, setEmailSettings] = useState<ReportEmailSettings>({
-    language: 'en',
-    sendEveryDay: false,
-    sendEveryMonth: false,
-    emails: [''],
-  });
-  const [savingSettings, setSavingSettings] = useState(false);
-  const [sendingEmail, setSendingEmail] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
-  const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
-  const [eodIncludeProductsSold, setEodIncludeProductsSold] = useEodIncludeProductsSold();
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams({ preset });
@@ -169,16 +127,8 @@ export default function Overview() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [ovRes, setRes] = await Promise.all([
-        api.get(`/merchant/reports/overview?${queryParams}`),
-        api.get('/merchant/settings').catch(() => null),
-      ]);
+      const ovRes = await api.get(`/merchant/reports/overview?${queryParams}`);
       setData(ovRes.data.overview);
-      const s = setRes?.data?.settings;
-      if (s) {
-        setPrintSettings(s.posPrintSettings || null);
-        setShopLogoUrl(s.shopLogoUrl || s.posPrintSettings?.receiptLogoUrl || null);
-      }
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('ovLoadFailed'));
     } finally {
@@ -190,181 +140,36 @@ export default function Overview() {
     void load();
   }, [load]);
 
-  const openSettings = async () => {
-    setSettingsOpen(true);
+  const loadInsights = useCallback(async () => {
+    setInsightsLoading(true);
     try {
-      const res = await api.get('/merchant/reports/email-settings');
-      const s = res.data.settings as ReportEmailSettings;
-      setEmailSettings({
-        language: s.language || 'en',
-        sendEveryDay: !!s.sendEveryDay,
-        sendEveryMonth: !!s.sendEveryMonth,
-        emails: s.emails?.length ? s.emails : [''],
-      });
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || t('ovSettingsLoadFailed'));
-    }
-  };
-
-  const saveSettings = async () => {
-    setSavingSettings(true);
-    try {
-      const emails = emailSettings.emails.map((e) => e.trim()).filter(Boolean);
-      const res = await api.put('/merchant/reports/email-settings', {
-        ...emailSettings,
-        emails,
-      });
-      const s = res.data.settings as ReportEmailSettings;
-      setEmailSettings({
-        language: s.language || 'en',
-        sendEveryDay: !!s.sendEveryDay,
-        sendEveryMonth: !!s.sendEveryMonth,
-        emails: s.emails?.length ? s.emails : [''],
-      });
-      toast.success(t('ovSettingsSaved'));
-      setSettingsOpen(false);
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || t('ovSettingsSaveFailed'));
+      const res = await api.get(`/merchant/reports/overview?preset=${insightsPreset}`);
+      setInsightsData(res.data.overview);
+    } catch {
+      setInsightsData(null);
     } finally {
-      setSavingSettings(false);
+      setInsightsLoading(false);
     }
-  };
+  }, [insightsPreset]);
 
-  const downloadExport = async (format: 'xlsx' | 'csv') => {
-    try {
-      const res = await api.get(
-        `/merchant/reports/export?${queryParams}&format=${format}&language=${locale}`,
-        {
-        responseType: 'blob',
-      });
-      const cd = String(res.headers['content-disposition'] || '');
-      const match = cd.match(/filename="?([^"]+)"?/i);
-      const filename =
-        match?.[1] ||
-        `Report_${data?.range?.from || 'export'}.${format === 'csv' ? 'csv' : 'xlsx'}`;
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success(t('ovExportDone'));
-      setExportOpen(false);
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || t('ovExportFailed'));
-    }
-  };
+  useEffect(() => {
+    void loadInsights();
+  }, [loadInsights]);
 
-  const sendEmailNow = async () => {
-    setSendingEmail(true);
-    try {
-      const emails = emailSettings.emails.map((e) => e.trim()).filter(Boolean);
-      await api.post('/merchant/reports/email-send', {
-        preset,
-        from: preset === 'custom' ? from : undefined,
-        to: preset === 'custom' ? to : undefined,
-        emails: emails.length ? emails : undefined,
-        language: emailSettings.language,
-      });
-      toast.success(t('ovEmailSent'));
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || t('ovEmailFailed'));
-    } finally {
-      setSendingEmail(false);
+  const busiestHour = useMemo(() => {
+    const rows = insightsData?.salesByHour || [];
+    if (!rows.length) return null;
+    let best = rows[0]!;
+    for (const r of rows) {
+      if (r.amount > best.amount) best = r;
     }
-  };
+    return best.amount > 0 ? best : null;
+  }, [insightsData?.salesByHour]);
 
-  const printOverview = async () => {
-    if (!data?.eod) {
-      toast.error(t('ovPrintFailed'));
-      return;
-    }
-    try {
-      const eod = data.eod as any;
-      const lang = resolveReceiptLanguage(printSettings, locale);
-      const targets = printersForRole(printSettings, 'eod');
-      const paperWidthMm = targets[0]?.paperWidthMm || printSettings?.paperWidthMm || 80;
-      const text = generateEodReportText({
-        label: data.range.label,
-        periodFrom: data.range.from,
-        periodTo: data.range.to,
-        salesCount: eod.salesCount,
-        revenue: eod.revenue,
-        subtotal: eod.subtotal || eod.revenue,
-        taxTotal: eod.taxTotal,
-        netTotal: eod.netTotal,
-        tipsTotal: eod.tipsTotal,
-        grandTotal: eod.grandTotal,
-        refundTotal: eod.refundTotal,
-        refundCount: eod.refundCount,
-        refundedOrders: eod.refundedOrders,
-        refundRows: eod.refundRows,
-        cancelledCount: eod.cancelledCount,
-        cancelledTotal: eod.cancelledTotal,
-        cashTotal: eod.cashTotal,
-        cardTotal: eod.cardTotal,
-        terminalTotal: eod.terminalTotal,
-        coversServed: eod.coversServed,
-        vatRows: eod.vatRows,
-        productsSold: eod.productsSold,
-        paymentRows: eod.paymentRows,
-        orderTypeRows: eod.orderTypeRows,
-        channelRows: eod.channelRows,
-        businessName: data.businessName,
-        language: lang,
-        paperWidthMm,
-        header: printSettings?.receiptHeader,
-        footer: printSettings?.receiptFooter,
-        includeProductsSold: eodIncludeProductsSold,
-        reportKind: 'eod',
-      });
-      const names =
-        targets.length > 0
-          ? targets.map((x) => x.name)
-          : [localStorage.getItem('manupos_webpos_printer') || ''];
-      const named = names.map((n) => (n || '').trim()).filter(Boolean);
-      if (
-        named.length > 0 &&
-        named.every((n) => isUnsuitableRawPrinter(n))
-      ) {
-        browserPrintText(text);
-        toast(t('webPosEodBrowserFallback'));
-        return;
-      }
-      const ok = await isPrintAgentAvailable();
-      if (!ok) {
-        browserPrintText(text);
-        toast(t('webPosEodBrowserFallback'));
-        return;
-      }
-      const logoUrl = printSettings?.receiptLogoUrl || shopLogoUrl;
-      const logo = logoUrl
-        ? await logoUrlToEscPos(logoUrl, paperWidthMm === 58 ? 240 : 384)
-        : null;
-      const escpos = textToEscPos(text, undefined, logo);
-      const dataBase64 = uint8ToBase64(escpos);
-      for (const name of names) {
-        const label = (name || '').trim();
-        if (label && isUnsuitableRawPrinter(label)) {
-          throw new Error(unsuitableRawPrinterMessage(label));
-        }
-        try {
-          await printViaAgent({ printerName: label || undefined, dataBase64, text });
-        } catch (err: any) {
-          const msg = String(err?.message || '');
-          if (/OneNote|PDF|XPS|ESC-POS|virtual|receipt\/ESC-POS|corrupted/i.test(msg)) {
-            browserPrintText(text);
-            toast(t('webPosEodBrowserFallback'));
-            return;
-          }
-          throw err;
-        }
-      }
-      toast.success(t('reportsPrinted'));
-    } catch (e: any) {
-      toastPrintError(e, t, 'ovPrintFailed');
-    }
-  };
+  const insightsHourChart = useMemo(() => {
+    const rows = insightsData?.salesByHour || [];
+    return rows.filter((_, i) => i % 3 === 0);
+  }, [insightsData?.salesByHour]);
 
   const compareLabel =
     preset === 'today'
@@ -401,57 +206,6 @@ export default function Overview() {
           <h1 className="page-title">{t('overview')}</h1>
           <p className="page-sub">{t('overviewSub')}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <EodIncludeProductsCheckbox
-            checked={eodIncludeProductsSold}
-            onChange={setEodIncludeProductsSold}
-          />
-          <button type="button" className="btn-secondary inline-flex items-center gap-1.5" onClick={() => void printOverview()}>
-            <Printer className="w-4 h-4" />
-            {t('ovPrint')}
-          </button>
-          <div className="relative">
-            <button
-              type="button"
-              className="btn-secondary inline-flex items-center gap-1.5"
-              onClick={() => setExportOpen((v) => !v)}
-            >
-              <Download className="w-4 h-4" />
-              {t('ovExport')}
-            </button>
-            {exportOpen && (
-              <div className="absolute right-0 mt-1 z-20 card p-1.5 min-w-[160px] shadow-lg">
-                <button
-                  type="button"
-                  className="w-full text-left text-sm px-2.5 py-1.5 rounded hover:bg-[var(--bg-muted)]"
-                  onClick={() => void downloadExport('xlsx')}
-                >
-                  Excel (.xlsx)
-                </button>
-                <button
-                  type="button"
-                  className="w-full text-left text-sm px-2.5 py-1.5 rounded hover:bg-[var(--bg-muted)]"
-                  onClick={() => void downloadExport('csv')}
-                >
-                  CSV
-                </button>
-                <button
-                  type="button"
-                  className="w-full text-left text-sm px-2.5 py-1.5 rounded hover:bg-[var(--bg-muted)] inline-flex items-center gap-1.5"
-                  onClick={() => void sendEmailNow()}
-                  disabled={sendingEmail}
-                >
-                  <Mail className="w-3.5 h-3.5" />
-                  {sendingEmail ? t('loading') : t('ovSendEmail')}
-                </button>
-              </div>
-            )}
-          </div>
-          <button type="button" className="btn-secondary inline-flex items-center gap-1.5" onClick={() => void openSettings()}>
-            <Settings2 className="w-4 h-4" />
-            {t('ovSettings')}
-          </button>
-        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -486,6 +240,95 @@ export default function Overview() {
           </button>
         </div>
       )}
+
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">{t('ovInsights')}</h2>
+          <div className="flex rounded-lg border border-[var(--border)] p-0.5 bg-[var(--bg-muted)]">
+            {(
+              [
+                ['today', t('reportsToday')],
+                ['yesterday', t('reportsYesterday')],
+                ['last_week', t('ovThisWeek')],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setInsightsPreset(id)}
+                className={`rounded-md px-3 py-1.5 text-sm ${
+                  insightsPreset === id
+                    ? 'bg-[var(--bg-elevated)] shadow-sm font-medium'
+                    : 'text-[var(--text-muted)]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="card min-h-[280px]">
+            <h3 className="text-sm font-semibold">{t('ovBestSelling')}</h3>
+            <p className="text-xs muted mb-3">{t('ovBestSellingHint')}</p>
+            {insightsLoading ? (
+              <p className="text-sm muted">{t('loading')}</p>
+            ) : (insightsData?.products || []).length ? (
+              <div className="space-y-2">
+                {(insightsData?.products || []).slice(0, 8).map((p) => {
+                  const max = Math.max(...(insightsData?.products || []).map((x) => x.quantity), 1);
+                  return (
+                    <div key={p.name} className="text-sm">
+                      <div className="flex justify-between gap-2 mb-0.5">
+                        <span className="truncate">{p.name}</span>
+                        <span className="tabular-nums muted shrink-0">{p.quantity}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-[var(--bg-muted)] overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-teal-500/80"
+                          style={{ width: `${Math.max(4, (p.quantity / max) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm muted text-center py-10">{t('ovNoItemsSold')}</p>
+            )}
+          </div>
+
+          <div className="card min-h-[280px]">
+            <h3 className="text-sm font-semibold">{t('ovBusiestPeriod')}</h3>
+            <p className="text-xs muted mb-3">{t('ovBusiestPeriodHint')}</p>
+            <div className="h-[200px]">
+              {insightsLoading ? (
+                <p className="text-sm muted">{t('loading')}</p>
+              ) : (insightsData?.salesByHour || []).some((h) => h.amount > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={insightsHourChart} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={40} />
+                    <Tooltip formatter={(v: number) => money(v)} />
+                    <Bar dataKey="amount" fill="#14b8a6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm muted text-center py-10">{t('ovNoSalesYet')}</p>
+              )}
+            </div>
+            <div className="flex justify-between text-xs muted mt-2 pt-2 border-t border-[var(--border)]">
+              <span>{t('ovBusiestHour')}</span>
+              <span>
+                {t('ovBusiestTime')}
+                {busiestHour ? `: ${busiestHour.label}:00` : ' —'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {kpis && (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5 sm:gap-3">
@@ -745,117 +588,6 @@ export default function Overview() {
         </div>
       </div>
 
-      {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-[var(--bg-elevated)] rounded-xl shadow-xl w-full max-w-lg border border-[var(--border)]">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-              <h3 className="font-semibold">{t('ovReportSettings')}</h3>
-              <button type="button" className="p-1 rounded hover:bg-[var(--bg-muted)]" onClick={() => setSettingsOpen(false)}>
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-4 space-y-4">
-              <label className="block text-sm space-y-1">
-                <span className="muted">{t('ovEmailLanguage')}</span>
-                <select
-                  className="input"
-                  value={emailSettings.language}
-                  onChange={(e) =>
-                    setEmailSettings((s) => ({
-                      ...s,
-                      language: e.target.value as 'en' | 'fr' | 'de',
-                    }))
-                  }
-                >
-                  <option value="en">English</option>
-                  <option value="fr">Français</option>
-                  <option value="de">Deutsch</option>
-                </select>
-              </label>
-
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={emailSettings.sendEveryDay}
-                  onChange={(e) => setEmailSettings((s) => ({ ...s, sendEveryDay: e.target.checked }))}
-                />
-                <span>
-                  <span className="text-sm font-medium block">{t('ovSendEveryDay')}</span>
-                  <span className="text-xs muted">{t('ovSendEveryDayHint')}</span>
-                </span>
-              </label>
-
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={emailSettings.sendEveryMonth}
-                  onChange={(e) => setEmailSettings((s) => ({ ...s, sendEveryMonth: e.target.checked }))}
-                />
-                <span>
-                  <span className="text-sm font-medium block">{t('ovSendEveryMonth')}</span>
-                  <span className="text-xs muted">{t('ovSendEveryMonthHint')}</span>
-                </span>
-              </label>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm muted">{t('ovEmailList')}</span>
-                  <button
-                    type="button"
-                    className="text-sm text-[var(--accent)] inline-flex items-center gap-1"
-                    onClick={() => setEmailSettings((s) => ({ ...s, emails: [...s.emails, ''] }))}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    {t('ovAddEmail')}
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {emailSettings.emails.map((email, idx) => (
-                    <div key={idx} className="flex gap-2">
-                      <input
-                        type="email"
-                        className="input flex-1"
-                        placeholder={t('ovEmailPlaceholder')}
-                        value={email}
-                        onChange={(e) =>
-                          setEmailSettings((s) => {
-                            const emails = [...s.emails];
-                            emails[idx] = e.target.value;
-                            return { ...s, emails };
-                          })
-                        }
-                      />
-                      <button
-                        type="button"
-                        className="btn-secondary px-2"
-                        onClick={() =>
-                          setEmailSettings((s) => ({
-                            ...s,
-                            emails: s.emails.filter((_, i) => i !== idx),
-                          }))
-                        }
-                        aria-label={t('delete')}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 px-4 py-3 border-t border-[var(--border)]">
-              <button type="button" className="btn-secondary" onClick={() => setSettingsOpen(false)}>
-                {t('cancel')}
-              </button>
-              <button type="button" className="btn-primary" disabled={savingSettings} onClick={() => void saveSettings()}>
-                {savingSettings ? t('loading') : t('save')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

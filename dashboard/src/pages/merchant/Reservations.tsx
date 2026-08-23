@@ -3,6 +3,9 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import ReservationCancelModal from '@/components/reservations/ReservationCancelModal';
+import ReservationCreateSheet, {
+  type ReservationCreateForm,
+} from '@/components/reservations/ReservationCreateSheet';
 
 type Reservation = {
   id: string;
@@ -50,16 +53,6 @@ export default function Reservations() {
   const [editId, setEditId] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
-    guestName: '',
-    guestPhone: '',
-    guestEmail: '',
-    partySize: 2,
-    date: ymd(),
-    time: '19:00',
-    notes: '',
-    tableId: '',
-  });
-  const [form, setForm] = useState({
     guestName: '',
     guestPhone: '',
     guestEmail: '',
@@ -188,30 +181,40 @@ export default function Reservations() {
     }
   };
 
-  const createReservation = async (e: FormEvent) => {
-    e.preventDefault();
+  const createReservation = async (sheetForm: ReservationCreateForm) => {
+    const guestName = [sheetForm.guestFirstName, sheetForm.guestLastName]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(' ');
+    if (!guestName.trim()) {
+      toast.error(t('name'));
+      return;
+    }
+    if (!sheetForm.guestPhone.trim()) {
+      toast.error(t('phone'));
+      return;
+    }
     try {
       await api.post('/merchant/reservations', {
-        ...form,
-        tableId: form.tableId || undefined,
-        partySize: Number(form.partySize),
-        source: 'phone',
+        guestName,
+        guestPhone: sheetForm.guestPhone,
+        guestEmail: sheetForm.guestEmail || undefined,
+        date: sheetForm.date,
+        time: sheetForm.time,
+        partySize: Number(sheetForm.partySize),
+        notes: sheetForm.notes || undefined,
+        tableId: sheetForm.tableId || undefined,
+        source: sheetForm.source || 'phone',
+        status: sheetForm.status || 'confirmed',
+        skipSlotCheck: true,
       });
       setCreateOpen(false);
-      setForm({
-        guestName: '',
-        guestPhone: '',
-        guestEmail: '',
-        partySize: 2,
-        date: dateFilter,
-        time: '19:00',
-        notes: '',
-        tableId: '',
-      });
       toast.success(t('created'));
       await loadList();
+      await loadConfig();
     } catch (err: any) {
       toast.error(err.response?.data?.error || t('cmsSaveFailed'));
+      throw err;
     }
   };
 
@@ -296,79 +299,12 @@ export default function Reservations() {
             </button>
           </div>
 
-          {createOpen && (
-            <form
-              onSubmit={createReservation}
-              className="rounded-md border border-[var(--border)] bg-[var(--bg-muted)] p-4 grid gap-3 md:grid-cols-2"
-            >
-              <input
-                className="input"
-                required
-                placeholder={t('name')}
-                value={form.guestName}
-                onChange={(e) => setForm({ ...form, guestName: e.target.value })}
-              />
-              <input
-                className="input"
-                required
-                placeholder={t('phone')}
-                value={form.guestPhone}
-                onChange={(e) => setForm({ ...form, guestPhone: e.target.value })}
-              />
-              <input
-                className="input"
-                type="email"
-                placeholder="Email"
-                value={form.guestEmail}
-                onChange={(e) => setForm({ ...form, guestEmail: e.target.value })}
-              />
-              <input
-                className="input"
-                type="number"
-                min={1}
-                value={form.partySize}
-                onChange={(e) => setForm({ ...form, partySize: Number(e.target.value) })}
-              />
-              <input
-                className="input"
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-              />
-              <input
-                className="input"
-                type="time"
-                value={form.time}
-                onChange={(e) => setForm({ ...form, time: e.target.value })}
-              />
-              <select
-                className="input md:col-span-2"
-                value={form.tableId}
-                onChange={(e) => setForm({ ...form, tableId: e.target.value })}
-              >
-                <option value="">{t('reservationsNoTable')}</option>
-                {tables.map((tb) => (
-                  <option key={tb.id} value={tb.id}>
-                    {tb.label} ({tb.capacity})
-                  </option>
-                ))}
-              </select>
-              <textarea
-                className="input md:col-span-2"
-                placeholder={t('notes')}
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              />
-              <div className="md:col-span-2 flex justify-end gap-2">
-                <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>
-                  {t('cancel')}
-                </button>
-                <button type="submit" className="btn-primary">
-                  {t('create')}
-                </button>
-              </div>
-            </form>
-          )}
+          <ReservationCreateSheet
+            open={createOpen}
+            tables={tables}
+            onClose={() => setCreateOpen(false)}
+            onSubmit={createReservation}
+          />
 
           <div className="space-y-2">
             {reservations.length === 0 && (

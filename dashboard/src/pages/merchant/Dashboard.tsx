@@ -378,8 +378,8 @@ function MerchantShell() {
   const menuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
     { label: t('orders'), path: '/merchant/orders', icon: '📦' },
-    ...(allow('/merchant/delivery')
-      ? [{ label: t('deliveryMapNav'), path: '/merchant/delivery', icon: '🛵' }]
+    ...(allow('/merchant/sales/reservations')
+      ? [{ label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' }]
       : []),
     {
       id: 'sales',
@@ -388,7 +388,6 @@ function MerchantShell() {
       children: [
         { label: t('invoicesNav'), path: '/merchant/invoices', icon: '🧾' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
-        { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
       ].filter((item) => allow(item.path)),
     },
     {
@@ -440,11 +439,11 @@ function MerchantShell() {
       ].filter((item) => allow(item.path)),
     },
     {
-      id: 'online',
-      label: t('navOnline'),
+      id: 'cms',
+      label: t('navCms'),
       icon: '🌐',
       children: [
-        { label: t('shop'), path: '/merchant/online-shop', icon: '🌐' },
+        { label: t('shop'), path: '/merchant/online-shop', icon: '🛒' },
         { label: t('cmsWebsite'), path: '/merchant/website', icon: '✏️' },
       ].filter((item) => allow(item.path)),
     },
@@ -453,6 +452,12 @@ function MerchantShell() {
       : []),
     ...(allow('/merchant/users')
       ? [{ label: t('staffPageTitle'), path: '/merchant/users', icon: '👤' }]
+      : []),
+    ...(allow('/merchant/delivery')
+      ? [{ label: t('deliveryMapNav'), path: '/merchant/delivery', icon: '🛵' }]
+      : []),
+    ...(allow('/merchant/delivery/driver')
+      ? [{ label: t('deliveryDriverTitle'), path: '/merchant/delivery/driver', icon: '📍' }]
       : []),
   ]
     .filter((entry) => {
