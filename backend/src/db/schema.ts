@@ -3184,6 +3184,8 @@ export const supportTickets = pgTable(
     subcategory: varchar("subcategory", { length: 80 }),
     subject: varchar("subject", { length: 255 }).notNull(),
     status: varchar("status", { length: 20 }).notNull().default("open"),
+    /** When false, ticket is visible in superadmin support inbox only (POS diagnostic auto-reports). */
+    merchantVisible: boolean("merchant_visible").notNull().default(true),
     assignedToSuperadminId: uuid("assigned_to_superadmin_id"),
     lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
     closedAt: timestamp("closed_at"),

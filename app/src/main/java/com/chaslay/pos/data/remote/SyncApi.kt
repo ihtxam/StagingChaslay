@@ -1,6 +1,7 @@
 package com.chaslay.pos.data.remote
 
 import com.chaslay.pos.data.remote.dto.AckResponse
+import com.chaslay.pos.data.remote.dto.DiagnosticReportRequest
 import com.chaslay.pos.data.remote.dto.IncomingOrdersResponse
 import com.chaslay.pos.data.remote.dto.MenuBootstrapResponse
 import com.chaslay.pos.data.remote.dto.MenuChangesResponse
@@ -45,4 +46,7 @@ interface SyncApi {
 
     @POST("v1/orders/{id}/ack")
     suspend fun ackOrder(@Path("id") id: String): AckResponse
+
+    @POST("v1/sync/diagnostic-report")
+    suspend fun postDiagnosticReport(@Body body: DiagnosticReportRequest): AckResponse
 }

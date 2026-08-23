@@ -139,7 +139,10 @@ import WebPosTopBar, {
 } from '@/components/webpos/WebPosTopBar';
 import WebPosLogsModal from '@/components/webpos/WebPosLogsModal';
 import WebPosOnboardingTour, { readWebPosOnboardingDone } from '@/components/webpos/WebPosOnboardingTour';
-import { appendWebPosLog, hookWebPosConsole } from '@/lib/webpos-log';
+import {
+  initWebPosLogging,
+  sendWebPosLogsToSupport,
+} from '@/lib/webpos-log';
 
 const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
 const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
@@ -2003,12 +2006,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [load]);
 
   useEffect(() => {
-    hookWebPosConsole();
-    appendWebPosLog('WebPOS session started');
+    initWebPosLogging({
+      getDiagnostics: () => ({
+        locale,
+        staffName: webposStaff?.name,
+        staffRole: webposStaff?.roleName,
+        merchantName: merchant?.name || merchant?.businessName,
+      }),
+    });
     if (!readWebPosOnboardingDone()) {
       setOnboardingOpen(true);
     }
-  }, []);
+  }, [locale, webposStaff?.name, webposStaff?.roleName, merchant?.name, merchant?.businessName]);
 
   useEffect(() => {
     if (!shiftsEnabled || !offlineSync.online) return;
@@ -7878,8 +7887,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }
             onSendLogs={() => {
               setSettingsOpen(false);
-              setLogsAutoSend(true);
-              setLogsOpen(true);
+              void sendWebPosLogsToSupport({
+                locale,
+                staffName: webposStaff?.name,
+                staffRole: webposStaff?.roleName,
+                merchantName: merchant?.name || merchant?.businessName,
+              }).catch(() => undefined);
             }}
             terminalEnabled={enabledMethods.terminal}
             terminals={activeTerminals}

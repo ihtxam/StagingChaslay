@@ -110,4 +110,26 @@ router.post('/tickets/:ticketId/reply', upload.single('attachment'), async (req:
   }
 });
 
+/** POS diagnostic logs — superadmin inbox only (not listed in merchant Support). */
+router.post('/diagnostic-report', async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const { source, subject, body, auto } = req.body || {};
+    if (!subject?.trim() || !body?.trim()) {
+      return res.status(400).json({ error: 'Subject and body are required' });
+    }
+    const src = source === 'android' ? 'android' : 'webpos';
+    const ticket = await SupportTicketService.createDiagnosticReport(merchantId, {
+      source: src,
+      subject: String(subject),
+      body: String(body),
+      auto: auto === true || auto === 'true',
+      authorName: req.user?.name || undefined,
+    });
+    res.status(201).json({ success: true, ok: true, ticketId: ticket.id });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to submit report' });
+  }
+});
+
 export default router;

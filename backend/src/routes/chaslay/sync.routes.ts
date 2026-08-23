@@ -74,4 +74,38 @@ router.post("/staff/verify-pin", async (req: Request, res: Response) => {
   }
 });
 
+/** Android POS crash/error logs — superadmin support inbox only. */
+router.post("/diagnostic-report", async (req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const { subject, body, auto, deviceId, appVersion } = req.body || {};
+    if (!subject?.trim() || !body?.trim()) {
+      return res.status(400).json({ error: "Subject and body are required" });
+    }
+    const header = [
+      "--- Chaslay Android POS diagnostics ---",
+      JSON.stringify(
+        {
+          deviceId: deviceId ? String(deviceId).slice(0, 64) : null,
+          appVersion: appVersion ? String(appVersion).slice(0, 64) : null,
+          auto: auto === true || auto === "true",
+        },
+        null,
+        2
+      ),
+      "--- Log ---",
+    ].join("\n");
+    const ticket = await SupportTicketService.createDiagnosticReport(req.chaslayMerchantId!, {
+      source: "android",
+      subject: String(subject).slice(0, 255),
+      body: `${header}\n${String(body)}`,
+      auto: auto === true || auto === "true",
+      authorName: "Android POS",
+    });
+    res.json({ ok: true, ticketId: ticket.id });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to submit report" });
+  }
+});
+
 export default router;
