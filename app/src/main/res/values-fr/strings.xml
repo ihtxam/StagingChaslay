@@ -244,6 +244,10 @@
     <string name="keypad_hint_qty">Saisissez la quantité, puis Saisissez</string>
     <string name="keypad_hint_percent">Saisissez le % de réduction, puis saisissez</string>
     <string name="order_history">Historique des commandes</string>
+    <string name="order_history_page_of">Page %1$d sur %2$d</string>
+    <string name="order_history_showing_range">%1$d–%2$d sur %3$d</string>
+    <string name="previous_page">Précédent</string>
+    <string name="next_page">Suivant</string>
     <string name="hold_order">Maintenir</string>
     <string name="hold_short">Maintenir</string>
     <string name="hold_and_send">SANTÉ ET SÉCURITÉ</string>

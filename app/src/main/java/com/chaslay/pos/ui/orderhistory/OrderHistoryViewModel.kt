@@ -42,6 +42,10 @@ data class OrderHistoryUiState(
     val serviceFilter: ServiceType? = null,
     val statusFilter: PaymentStatus? = null,
     val searchQuery: String = "",
+    val currentPage: Int = 1,
+    val totalPages: Int = 1,
+    val totalFilteredCount: Int = 0,
+    val pageSize: Int = OrderHistoryViewModel.PAGE_SIZE,
     val currencySymbol: String = "CHF",
     val languageCode: String = "en",
     val dateRangeLabel: String = "",
@@ -70,8 +74,14 @@ class OrderHistoryViewModel @Inject constructor(
     private val sessionManager: SessionManager
 ) : ViewModel() {
 
+    companion object {
+        const val PAGE_SIZE = 25
+    }
+
     private val _uiState = MutableStateFlow(OrderHistoryUiState())
     val uiState: StateFlow<OrderHistoryUiState> = _uiState.asStateFlow()
+
+    private var filteredOrdersCache: List<TransactionEntity> = emptyList()
 
     private var unlockTapCount = 0
     private var lastUnlockTapMs = 0L
@@ -139,42 +149,89 @@ class OrderHistoryViewModel @Inject constructor(
                 .filterValues { it.size > 1 }
                 .mapValues { it.value.size }
 
-            _uiState.value = _uiState.value.copy(
-                orders = orders,
+            filteredOrdersCache = orders
+            applyPagination(
+                tables = tables,
                 splitCounts = splitCounts,
-                tableNames = tables,
-                dateRangeLabel = formatDateRange(start, end, filter)
+                start = start,
+                end = end,
+                filter = filter
             )
         }
     }
 
+    private fun applyPagination(
+        tables: Map<Long, String>,
+        splitCounts: Map<String, Int>,
+        start: Long,
+        end: Long,
+        filter: HistoryDateFilter
+    ) {
+        val total = filteredOrdersCache.size
+        val totalPages = if (total == 0) 1 else ((total + PAGE_SIZE - 1) / PAGE_SIZE)
+        val page = _uiState.value.currentPage.coerceIn(1, totalPages)
+        val fromIndex = (page - 1) * PAGE_SIZE
+        val pageOrders = filteredOrdersCache.drop(fromIndex).take(PAGE_SIZE)
+        _uiState.value = _uiState.value.copy(
+            orders = pageOrders,
+            splitCounts = splitCounts,
+            tableNames = tables,
+            currentPage = page,
+            totalPages = totalPages,
+            totalFilteredCount = total,
+            pageSize = PAGE_SIZE,
+            dateRangeLabel = formatDateRange(start, end, filter)
+        )
+    }
+
+    fun nextPage() {
+        val next = _uiState.value.currentPage + 1
+        if (next > _uiState.value.totalPages) return
+        _uiState.value = _uiState.value.copy(currentPage = next)
+        viewModelScope.launch { emitCurrentPage() }
+    }
+
+    fun previousPage() {
+        val prev = _uiState.value.currentPage - 1
+        if (prev < 1) return
+        _uiState.value = _uiState.value.copy(currentPage = prev)
+        viewModelScope.launch { emitCurrentPage() }
+    }
+
+    private suspend fun emitCurrentPage() {
+        val state = _uiState.value
+        val fromIndex = (state.currentPage - 1) * PAGE_SIZE
+        val pageOrders = filteredOrdersCache.drop(fromIndex).take(PAGE_SIZE)
+        _uiState.value = state.copy(orders = pageOrders)
+    }
+
     fun setDateFilter(filter: HistoryDateFilter) {
-        _uiState.value = _uiState.value.copy(dateFilter = filter)
+        _uiState.value = _uiState.value.copy(dateFilter = filter, currentPage = 1)
         refresh()
     }
 
     fun setChannelTab(tab: HistoryChannelTab) {
-        _uiState.value = _uiState.value.copy(channelTab = tab)
+        _uiState.value = _uiState.value.copy(channelTab = tab, currentPage = 1)
         refresh()
     }
 
     fun setPaymentFilter(method: PaymentMethod?) {
-        _uiState.value = _uiState.value.copy(paymentFilter = method)
+        _uiState.value = _uiState.value.copy(paymentFilter = method, currentPage = 1)
         refresh()
     }
 
     fun setServiceFilter(serviceType: ServiceType?) {
-        _uiState.value = _uiState.value.copy(serviceFilter = serviceType)
+        _uiState.value = _uiState.value.copy(serviceFilter = serviceType, currentPage = 1)
         refresh()
     }
 
     fun setStatusFilter(status: PaymentStatus?) {
-        _uiState.value = _uiState.value.copy(statusFilter = status)
+        _uiState.value = _uiState.value.copy(statusFilter = status, currentPage = 1)
         refresh()
     }
 
     fun setSearchQuery(query: String) {
-        _uiState.value = _uiState.value.copy(searchQuery = query)
+        _uiState.value = _uiState.value.copy(searchQuery = query, currentPage = 1)
         refresh()
     }
 

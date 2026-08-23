@@ -272,6 +272,10 @@
     <string name="keypad_hint_qty">Enter quantity, then Enter</string>
     <string name="keypad_hint_percent">Enter discount %, then Enter</string>
     <string name="order_history">Order History</string>
+    <string name="order_history_page_of">Page %1$d of %2$d</string>
+    <string name="order_history_showing_range">Showing %1$d–%2$d of %3$d</string>
+    <string name="previous_page">Previous</string>
+    <string name="next_page">Next</string>
     <string name="hold_order">Hold</string>
     <string name="hold_short">Hold</string>
     <string name="hold_and_send">H+S</string>

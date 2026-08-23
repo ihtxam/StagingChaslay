@@ -363,11 +363,16 @@ private fun OrderHistoryContent(
                             Text(stringResource(R.string.no_orders_found), color = TextMuted)
                         }
                     } else {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
                             itemsIndexed(state.orders, key = { _, order -> order.id }) { index, order ->
+                                val globalIndex = (state.currentPage - 1) * state.pageSize + index + 1
                                 val isSplit = order.masterOrderId?.let { (state.splitCounts[it] ?: 0) > 1 } == true
                                 RecordsTableRow(
-                                    index = index + 1,
+                                    index = globalIndex,
                                     order = order,
                                     tableLabel = order.tableId?.let { state.tableNames[it] },
                                     isSplit = isSplit,
@@ -379,9 +384,68 @@ private fun OrderHistoryContent(
                                 HorizontalDivider(color = Color(0xFFF3F4F6))
                             }
                         }
+                        RecordsPaginationBar(
+                            currentPage = state.currentPage,
+                            totalPages = state.totalPages,
+                            totalCount = state.totalFilteredCount,
+                            pageSize = state.pageSize,
+                            onPrevious = viewModel::previousPage,
+                            onNext = viewModel::nextPage
+                        )
                     }
                 }
             }
+    }
+}
+
+@Composable
+private fun RecordsPaginationBar(
+    currentPage: Int,
+    totalPages: Int,
+    totalCount: Int,
+    pageSize: Int,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit
+) {
+    if (totalCount <= pageSize) return
+    val from = ((currentPage - 1) * pageSize) + 1
+    val to = minOf(currentPage * pageSize, totalCount)
+    HorizontalDivider(color = Color(0xFFE5E7EB))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(HeaderBg)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedButton(
+            onClick = onPrevious,
+            enabled = currentPage > 1,
+            modifier = Modifier.height(36.dp)
+        ) {
+            Text(stringResource(R.string.previous_page), fontSize = 12.sp)
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                stringResource(R.string.order_history_page_of, currentPage, totalPages),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary
+            )
+            Text(
+                stringResource(R.string.order_history_showing_range, from, to, totalCount),
+                fontSize = 10.sp,
+                color = TextMuted
+            )
+        }
+        OutlinedButton(
+            onClick = onNext,
+            enabled = currentPage < totalPages,
+            modifier = Modifier.height(36.dp)
+        ) {
+            Text(stringResource(R.string.next_page), fontSize = 12.sp)
+        }
     }
 }
 
