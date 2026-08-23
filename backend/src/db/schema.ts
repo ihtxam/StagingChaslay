@@ -1079,6 +1079,8 @@ export const posSessions = pgTable(
     deviceLabel: varchar("device_label", { length: 255 }),
     staffId: uuid("staff_id"),
     staffName: varchar("staff_name", { length: 255 }),
+    /** Main till only: local Print Agent reachable on last heartbeat */
+    printAgentOnline: boolean("print_agent_online"),
     lastHeartbeat: timestamp("last_heartbeat").defaultNow().notNull(),
     revokedAt: timestamp("revoked_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

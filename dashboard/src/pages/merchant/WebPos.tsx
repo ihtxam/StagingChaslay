@@ -77,6 +77,7 @@ import {
   type AgentPrinter,
 } from '@/lib/print-agent';
 import {
+  isLocalPrintStation,
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
   resolvePrintRetryLocally,
@@ -96,6 +97,8 @@ import {
   registerPosSession,
   clearPosSessionLocal,
   revokePosSession,
+  fetchActivePosSessions,
+  setPosSessionHeartbeatExtras,
 } from '@/lib/pos-session';
 import { buildReceiptUrl, resolvePublishedReceiptRef, normalizeScannedPayload, parseTableQrPayload } from '@/lib/qr';
 import WebPosMembershipSellModal from '@/components/webpos/WebPosMembershipSellModal';
@@ -772,6 +775,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [agentOk, setAgentOk] = useState(false);
   const [agentOutdated, setAgentOutdated] = useState(false);
+  const isLocalPrint = isLocalPrintStation(agentOk);
+  const [mainTillOnline, setMainTillOnline] = useState(false);
+  const [mainTillPrintAgentOnline, setMainTillPrintAgentOnline] = useState(false);
   const printRetryLocally = resolvePrintRetryLocally(agentOk);
   const [printerDisconnected, setPrinterDisconnected] = useState(false);
   const [offlineSync, setOfflineSync] = useState<OfflineSyncState>({
@@ -1163,6 +1169,41 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       document.documentElement.removeAttribute('data-webpos-text-size');
     };
   }, [posTextSize]);
+
+  /** Main till reports Print Agent status for mobile/waiter devices. */
+  useEffect(() => {
+    if (!isLocalPrint) {
+      setPosSessionHeartbeatExtras({});
+      return;
+    }
+    setPosSessionHeartbeatExtras({ printAgentOnline: agentOk });
+  }, [isLocalPrint, agentOk]);
+
+  /** Phones/tablets: show main till print hub status instead of local agent. */
+  useEffect(() => {
+    if (isLocalPrint || pinGateRequired) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const { sessions } = await fetchActivePosSessions();
+        const main = sessions.main || [];
+        if (cancelled) return;
+        setMainTillOnline(main.length > 0);
+        setMainTillPrintAgentOnline(main.some((s) => s.printAgentOnline === true));
+      } catch {
+        if (!cancelled) {
+          setMainTillOnline(false);
+          setMainTillPrintAgentOnline(false);
+        }
+      }
+    };
+    void poll();
+    const id = window.setInterval(poll, 20_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [isLocalPrint, pinGateRequired]);
 
   /** Mobile cart page is phone-only; restore side-cart layout from lg (1024px) up. */
   useEffect(() => {
@@ -7747,6 +7788,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         agentOk={agentOk}
         printerMissing={printerMissing}
         agentOutdated={agentOutdated}
+        isLocalPrintStation={isLocalPrint}
+        mainTillOnline={mainTillOnline}
+        mainTillPrintAgentOnline={mainTillPrintAgentOnline}
         search={search}
         onSearchChange={setSearch}
         onSearchSubmit={() => {
@@ -7817,6 +7861,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             printerMissing={printerMissing}
             suggestedPrinters={suggestedPrinters}
             agentOutdated={agentOutdated}
+            isLocalPrintStation={isLocalPrint}
+            mainTillOnline={mainTillOnline}
+            mainTillPrintAgentOnline={mainTillPrintAgentOnline}
             autoPrint={autoPrint}
             postSuccessTarget={postSuccessTarget}
             onPrinterChange={(name) => {
