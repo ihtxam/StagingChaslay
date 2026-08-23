@@ -3,7 +3,6 @@ import {
   BookOpen,
   ClipboardList,
   FileText,
-  GraduationCap,
   LayoutGrid,
   Maximize2,
   Menu,
@@ -13,7 +12,6 @@ import {
   PanelLeft,
   Pencil,
   RefreshCw,
-  ScrollText,
   Search,
   Sun,
   Truck,
@@ -586,9 +584,7 @@ export function WebPosSettingsDropdown({
   channelsSaving = false,
   onShopEnabledChange,
   onReservationsEnabledChange,
-  onViewLogs,
   onSendLogs,
-  onShowTutorial,
   terminalEnabled = false,
   terminals = [],
   selectedTerminalId = '',
@@ -643,9 +639,7 @@ export function WebPosSettingsDropdown({
   channelsSaving?: boolean;
   onShopEnabledChange?: (enabled: boolean) => void;
   onReservationsEnabledChange?: (enabled: boolean) => void;
-  onViewLogs?: () => void;
   onSendLogs?: () => void;
-  onShowTutorial?: () => void;
   terminalEnabled?: boolean;
   terminals?: Array<{ terminalId: string; terminalName: string | null }>;
   selectedTerminalId?: string;
@@ -929,83 +923,6 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {onSyncNow ? (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-            {t('webPosSyncMenu')}
-          </p>
-          <button
-            type="button"
-            className={`flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
-              !syncOnline
-                ? 'border-amber-300 bg-amber-50 text-amber-900'
-                : syncFailedCount > 0
-                  ? 'border-red-300 bg-red-50 text-red-800'
-                  : syncPendingCount > 0
-                    ? 'border-sky-300 bg-sky-50 text-sky-900'
-                    : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
-            }`}
-            onClick={onSyncNow}
-            disabled={syncing}
-          >
-            <RefreshCw size={16} className={syncing ? 'animate-spin' : undefined} />
-            {!syncOnline
-              ? t('webPosSyncOfflineShort')
-              : syncPendingCount > 0 || syncFailedCount > 0
-                ? t('webPosSyncPendingShort').replace(
-                    '{n}',
-                    String(syncPendingCount + syncFailedCount)
-                  )
-                : t('webPosSyncOkShort')}
-          </button>
-          {syncNeedsAttention && syncOnline ? (
-            <p className="text-center text-[10px] text-stone-500">
-              {syncFailedCount > 0
-                ? t('webPosSyncFailed').replace('{n}', String(syncFailedCount))
-                : t('webPosSyncPending').replace('{n}', String(syncPendingCount))}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {(onViewLogs || onSendLogs || onShowTutorial) && (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-            {t('webPosHelpMenu')}
-          </p>
-          {onShowTutorial ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-              onClick={onShowTutorial}
-            >
-              <GraduationCap size={16} />
-              {t('webPosShowTutorial')}
-            </button>
-          ) : null}
-          {onViewLogs ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50"
-              onClick={onViewLogs}
-            >
-              <ScrollText size={16} />
-              {t('webPosViewLogs')}
-            </button>
-          ) : null}
-          {onSendLogs ? (
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2 py-2 text-left text-xs font-semibold text-teal-900 hover:bg-teal-100"
-              onClick={onSendLogs}
-            >
-              <FileText size={16} />
-              {t('webPosSendLogs')}
-            </button>
-          ) : null}
-        </div>
-      )}
-
       {terminalEnabled && terminals.length > 0 && onTerminalChange ? (
         <div className="space-y-2 border-b border-stone-100 pb-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
@@ -1029,6 +946,55 @@ export function WebPosSettingsDropdown({
           <p className="text-[10px] leading-snug text-stone-500">{t('webPosMyTerminalHint')}</p>
         </div>
       ) : null}
+
+      <div className="space-y-2 border-b border-stone-100 pb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+          {t('webPosProductsMenu')}
+        </p>
+        <button
+          type="button"
+          className="btn-secondary justify-start w-full text-xs"
+          onClick={onReloadCatalog}
+        >
+          <RefreshCw size={14} />
+          {t('webPosReloadCatalog')}
+        </button>
+        {onSyncNow ? (
+          <>
+            <button
+              type="button"
+              className={`flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                !syncOnline
+                  ? 'border-amber-300 bg-amber-50 text-amber-900'
+                  : syncFailedCount > 0
+                    ? 'border-red-300 bg-red-50 text-red-800'
+                    : syncPendingCount > 0
+                      ? 'border-sky-300 bg-sky-50 text-sky-900'
+                      : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+              }`}
+              onClick={onSyncNow}
+              disabled={syncing}
+            >
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : undefined} />
+              {!syncOnline
+                ? t('webPosSyncOfflineShort')
+                : syncPendingCount > 0 || syncFailedCount > 0
+                  ? t('webPosSyncPendingShort').replace(
+                      '{n}',
+                      String(syncPendingCount + syncFailedCount)
+                    )
+                  : t('webPosSyncOkShort')}
+            </button>
+            {syncNeedsAttention && syncOnline ? (
+              <p className="text-center text-[10px] text-stone-500">
+                {syncFailedCount > 0
+                  ? t('webPosSyncFailed').replace('{n}', String(syncFailedCount))
+                  : t('webPosSyncPending').replace('{n}', String(syncPendingCount))}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+      </div>
 
       <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
         <MoreHorizontal size={14} />
@@ -1099,16 +1065,14 @@ export function WebPosSettingsDropdown({
           <option value="tables">{t('webPosTabTables')}</option>
         </select>
       </label>
-      <div className="grid grid-cols-1 gap-1.5">
-        <button type="button" className="btn-secondary justify-start text-xs" onClick={onRefreshPrinters}>
-          <RefreshCw size={14} />
-          {t('webPosRefreshPrinters')}
-        </button>
-        <button type="button" className="btn-secondary justify-start text-xs" onClick={onReloadCatalog}>
-          <RefreshCw size={14} />
-          {t('webPosReloadCatalog')}
-        </button>
-      </div>
+      <button
+        type="button"
+        className="btn-secondary justify-start w-full text-xs"
+        onClick={onRefreshPrinters}
+      >
+        <RefreshCw size={14} />
+        {t('webPosRefreshPrinters')}
+      </button>
       <p
         className={`text-[10px] leading-snug ${
           !agentOk || printerMissing || agentOutdated
@@ -1131,6 +1095,18 @@ export function WebPosSettingsDropdown({
         {webPosVersionLabel}
       </p>
       </div>
+      {onSendLogs ? (
+        <div className="shrink-0 border-t border-stone-200 p-3">
+          <button
+            type="button"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2 py-2.5 text-xs font-semibold text-teal-900 hover:bg-teal-100"
+            onClick={onSendLogs}
+          >
+            <FileText size={16} />
+            {t('webPosSendLogs')}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

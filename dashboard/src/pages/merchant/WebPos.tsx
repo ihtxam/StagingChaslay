@@ -7877,19 +7877,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 ? (enabled) => void toggleReservationsEnabled(enabled)
                 : undefined
             }
-            onViewLogs={() => {
-              setSettingsOpen(false);
-              setLogsAutoSend(false);
-              setLogsOpen(true);
-            }}
             onSendLogs={() => {
               setSettingsOpen(false);
               setLogsAutoSend(true);
               setLogsOpen(true);
-            }}
-            onShowTutorial={() => {
-              setSettingsOpen(false);
-              setOnboardingOpen(true);
             }}
             terminalEnabled={enabledMethods.terminal}
             terminals={activeTerminals}
