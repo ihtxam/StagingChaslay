@@ -32,8 +32,16 @@ export type KdsStationInput = {
   orderTypes?: string[];
   categoryIds?: string[];
   productIds?: string[];
+  theme?: string;
   isActive?: boolean;
 };
+
+const KDS_THEMES = new Set(["dark", "light", "teal"]);
+
+function normalizeKdsTheme(value: unknown): string {
+  const t = String(value || "dark").toLowerCase();
+  return KDS_THEMES.has(t) ? t : "dark";
+}
 
 export type KdsPushItem = {
   lineId: string;
@@ -106,6 +114,7 @@ export class KdsService {
         orderTypes: input.orderTypes || [],
         categoryIds: input.categoryIds || [],
         productIds: input.productIds || [],
+        theme: normalizeKdsTheme(input.theme),
         isActive: input.isActive !== false,
       })
       .returning();
@@ -120,6 +129,7 @@ export class KdsService {
     if (input.orderTypes != null) patch.orderTypes = input.orderTypes;
     if (input.categoryIds != null) patch.categoryIds = input.categoryIds;
     if (input.productIds != null) patch.productIds = input.productIds;
+    if (input.theme != null) patch.theme = normalizeKdsTheme(input.theme);
     if (input.isActive != null) patch.isActive = !!input.isActive;
     const [row] = await db
       .update(schema.kdsStations)
@@ -300,11 +310,46 @@ export class KdsService {
       : true;
 
     return {
-      station: { id: station.id, name: station.name },
+      station: {
+        id: station.id,
+        name: station.name,
+        theme: normalizeKdsTheme(station.theme),
+      },
       serverTime: new Date().toISOString(),
       updated: updatedSince,
       tickets: filtered,
     };
+  }
+
+  /** POS sync: all open/recent KDS tickets with ready line ids and completion state. */
+  static async boardStatusForMerchant(merchantId: string) {
+    await requireAddon(merchantId);
+    const db = getDb();
+    const completedSince = new Date(Date.now() - COMPLETED_RETENTION_MS);
+    const tickets = await db.query.kdsTickets.findMany({
+      where: and(
+        eq(schema.kdsTickets.merchantId, merchantId),
+        inArray(schema.kdsTickets.status, ["pending", "completed"])
+      ),
+      with: { items: true },
+    });
+    return tickets
+      .filter(
+        (t) =>
+          t.status === "pending" ||
+          (t.completedAt && t.completedAt >= completedSince)
+      )
+      .map((t) => {
+        const items = t.items || [];
+        return {
+          ticketKey: t.ticketKey,
+          status: t.status,
+          completedAt: t.completedAt?.toISOString() ?? null,
+          readyLineIds: items.filter((i) => i.status === "ready").map((i) => i.lineId),
+          total: items.length,
+          ready: items.filter((i) => i.status === "ready").length,
+        };
+      });
   }
 
   static async markItemReady(token: string, itemId: string) {

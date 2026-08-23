@@ -251,9 +251,11 @@ const TABLE_PATCHES: string[] = [
     category_ids jsonb NOT NULL DEFAULT '[]',
     product_ids jsonb NOT NULL DEFAULT '[]',
     is_active boolean NOT NULL DEFAULT true,
+    theme varchar(32) NOT NULL DEFAULT 'dark',
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   )`,
+  `ALTER TABLE kds_stations ADD COLUMN IF NOT EXISTS theme varchar(32) NOT NULL DEFAULT 'dark'`,
   `CREATE UNIQUE INDEX IF NOT EXISTS kds_stations_token_uidx ON kds_stations(token)`,
   `CREATE INDEX IF NOT EXISTS kds_stations_merchant_id_idx ON kds_stations(merchant_id)`,
   `CREATE TABLE IF NOT EXISTS kds_tickets (

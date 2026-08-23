@@ -132,5 +132,14 @@ merchantRouter.get("/ticket-status", async (req: Request, res: Response) => {
   }
 });
 
+merchantRouter.get("/board-status", async (req: Request, res: Response) => {
+  try {
+    const tickets = await KdsService.boardStatusForMerchant(req.merchantId!);
+    res.json({ success: true, tickets });
+  } catch (error) {
+    handleError(res, error, "Failed");
+  }
+});
+
 export { merchantRouter as kdsMerchantRoutes };
 export default router;

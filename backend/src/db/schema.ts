@@ -1175,6 +1175,8 @@ export const kdsStations = pgTable(
     orderTypes: json("order_types").$type<string[]>().default([]).notNull(),
     categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
     productIds: json("product_ids").$type<string[]>().default([]).notNull(),
+    /** Display theme: dark | light | teal */
+    theme: varchar("theme", { length: 32 }).default("dark").notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -1184,6 +1186,9 @@ export const kdsStations = pgTable(
     tokenIdx: index("kds_stations_token_idx").on(table.token),
   })
 );
+
+export const KDS_THEMES = ["dark", "light", "teal"] as const;
+export type KdsTheme = (typeof KDS_THEMES)[number];
 
 export const kdsTickets = pgTable(
   "kds_tickets",

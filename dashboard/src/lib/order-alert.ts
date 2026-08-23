@@ -63,6 +63,26 @@ export function playReservationTillBellOnce(): void {
   tone(ctx, 988, t0 + 0.68, 0.12, 0.14);
 }
 
+/** Kitchen order fully completed on KDS — descending success chime (~0.8s). */
+export function playKitchenCompleteOnce(): void {
+  const ctx = getCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + 0.02;
+  tone(ctx, 1175, t0, 0.2, 0.2);
+  tone(ctx, 988, t0 + 0.22, 0.2, 0.18);
+  tone(ctx, 740, t0 + 0.44, 0.32, 0.16);
+}
+
+/** New ticket/item on kitchen display — bright triple ping (~0.7s). */
+export function playKdsNewOrderOnce(): void {
+  const ctx = getCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + 0.02;
+  tone(ctx, 880, t0, 0.14, 0.22);
+  tone(ctx, 1100, t0 + 0.18, 0.14, 0.22);
+  tone(ctx, 1320, t0 + 0.36, 0.24, 0.24);
+}
+
 /** Repeat ringtone until stopOrderAlertLoop() — used while new orders are waiting. */
 export function startOrderAlertLoop(intervalMs = 4500): void {
   if (loopTimer) return;

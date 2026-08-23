@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Ban,
+  ChefHat,
   MessageSquare,
   MoreHorizontal,
   Printer,
@@ -868,6 +869,12 @@ export default function WebPosCartPanel({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium leading-snug">
+                      {l.kitchenReadyAt ? (
+                        <ChefHat
+                          className="mr-1 inline-block h-4 w-4 shrink-0 text-emerald-600"
+                          aria-label={t('webPosReadyBadge')}
+                        />
+                      ) : null}
                       {lineName}
                       {l.isWeighed ? (
                         <span className="ml-1 text-[10px] font-semibold text-stone-500">

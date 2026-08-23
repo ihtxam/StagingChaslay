@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Copy, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { KDS_SHELL_THEMES, type KdsShellTheme } from '@/lib/kds-channel-styles';
 import { useI18n } from '@/lib/i18n';
 
 type KdsStation = {
@@ -11,8 +12,11 @@ type KdsStation = {
   orderTypes: string[];
   categoryIds: string[];
   productIds: string[];
+  theme?: string;
   isActive: boolean;
 };
+
+const KDS_THEME_OPTIONS: KdsShellTheme[] = ['dark', 'light', 'teal'];
 
 type Category = {
   id: string;
@@ -36,6 +40,7 @@ export default function KdsSettingsPanel() {
   const [name, setName] = useState('');
   const [orderTypes, setOrderTypes] = useState<string[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [theme, setTheme] = useState<KdsShellTheme>('dark');
   const [busy, setBusy] = useState(false);
   const [licenseError, setLicenseError] = useState(false);
   const [savingStationId, setSavingStationId] = useState<string | null>(null);
@@ -80,10 +85,12 @@ export default function KdsSettingsPanel() {
         name: trimmed,
         orderTypes,
         categoryIds,
+        theme,
       });
       setName('');
       setOrderTypes([]);
       setCategoryIds([]);
+      setTheme('dark');
       toast.success(t('kdsStationCreated'));
       await load();
     } catch (e: any) {
@@ -95,7 +102,7 @@ export default function KdsSettingsPanel() {
 
   const updateStationFilters = async (
     id: string,
-    patch: { orderTypes?: string[]; categoryIds?: string[] }
+    patch: { orderTypes?: string[]; categoryIds?: string[]; theme?: KdsShellTheme }
   ) => {
     setSavingStationId(id);
     try {
@@ -104,6 +111,7 @@ export default function KdsSettingsPanel() {
       await api.put(`/merchant/kds/stations/${id}`, {
         orderTypes: patch.orderTypes ?? station.orderTypes,
         categoryIds: patch.categoryIds ?? station.categoryIds,
+        theme: patch.theme ?? station.theme ?? 'dark',
       });
       await load();
     } catch (e: any) {
@@ -167,6 +175,52 @@ export default function KdsSettingsPanel() {
   };
 
   const categoryName = (id: string) => categories.find((c) => c.id === id)?.name || id.slice(0, 8);
+
+  const themeLabel = (th: KdsShellTheme) => {
+    if (th === 'light') return t('kdsTheme_light');
+    if (th === 'teal') return t('kdsTheme_teal');
+    return t('kdsTheme_dark');
+  };
+
+  const ThemePicker = ({
+    value,
+    disabled,
+    onChange,
+  }: {
+    value: KdsShellTheme;
+    disabled?: boolean;
+    onChange: (theme: KdsShellTheme) => void;
+  }) => (
+    <div>
+      <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsThemeLabel')}</p>
+      <div className="flex flex-wrap gap-2">
+        {KDS_THEME_OPTIONS.map((th) => {
+          const shell = KDS_SHELL_THEMES[th];
+          const selected = value === th;
+          return (
+            <button
+              key={th}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(th)}
+              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                selected
+                  ? 'border-teal-600 ring-2 ring-teal-200'
+                  : 'border-stone-200 hover:border-stone-300'
+              }`}
+            >
+              <span
+                className={`mb-1 block h-6 w-16 rounded ${shell.shell}`}
+                aria-hidden
+              />
+              {themeLabel(th)}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-1 text-xs text-stone-500">{t('kdsThemeHint')}</p>
+    </div>
+  );
 
   if (licenseError) {
     return (
@@ -233,6 +287,7 @@ export default function KdsSettingsPanel() {
             <p className="mt-1 text-xs text-stone-500">{t('kdsCategoryFilterHint')}</p>
           </div>
         ) : null}
+        <ThemePicker value={theme} onChange={setTheme} />
         <button
           type="button"
           disabled={busy || !name.trim()}
@@ -309,6 +364,15 @@ export default function KdsSettingsPanel() {
                           )}
                         </div>
                       ) : null}
+                      <ThemePicker
+                        value={
+                          (['dark', 'light', 'teal'].includes(String(s.theme || 'dark').toLowerCase())
+                            ? String(s.theme).toLowerCase()
+                            : 'dark') as KdsShellTheme
+                        }
+                        disabled={saving}
+                        onChange={(next) => void updateStationFilters(s.id, { theme: next })}
+                      />
                     </div>
                   </div>
                   <div className="flex gap-2">
