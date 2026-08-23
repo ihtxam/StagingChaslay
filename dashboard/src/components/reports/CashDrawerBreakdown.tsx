@@ -33,19 +33,23 @@ function movementLabel(
 export function CashDrawerBreakdown({
   shifts,
   money,
+  hideTitle = false,
 }: {
   shifts: CashDrawerShift[];
   money: (n: number) => string;
+  hideTitle?: boolean;
 }) {
   const { t, formatDateTime } = useI18n();
   if (!shifts.length) return null;
 
   return (
-    <section className="card overflow-hidden !p-0">
-      <h2 className="px-3 py-2 sm:px-4 text-sm font-semibold border-b border-[var(--border)]">
-        {t('reportsCashDrawer')}
-      </h2>
-      <div className="divide-y divide-[var(--border)]">
+    <section className={hideTitle ? '' : 'card overflow-hidden !p-0'}>
+      {hideTitle ? null : (
+        <h2 className="px-3 py-2 sm:px-4 text-sm font-semibold border-b border-[var(--border)]">
+          {t('reportsCashDrawer')}
+        </h2>
+      )}
+      <div className={hideTitle ? 'space-y-0' : 'divide-y divide-[var(--border)]'}>
         {shifts.map((s, idx) => {
           const cashIn = s.cashIn ?? 0;
           const cashOut = s.cashOut ?? 0;

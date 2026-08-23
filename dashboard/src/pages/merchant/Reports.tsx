@@ -30,6 +30,7 @@ import {
   type CashDrawerShift,
 } from '@/components/reports/CashDrawerBreakdown';
 import ReportsRevenuePanel from '@/components/reports/ReportsRevenuePanel';
+import ReportCollapsibleSection from '@/components/reports/ReportCollapsibleSection';
 import { loadWebPosStaffSession } from '@/lib/permissions';
 
 type EodShiftCash = CashDrawerShift;
@@ -535,94 +536,6 @@ export default function ReportsPage() {
               </div>
               <p className="text-xs text-[var(--text-muted)]">{t('reportsNetSalesHint')}</p>
 
-              {!!report.cancelledOrders?.length && (
-                <section className="rounded-xl border border-[var(--border)] overflow-hidden">
-                  <h2 className="px-3 py-2 text-sm font-semibold bg-[var(--bg-muted)]">
-                    {t('reportsCancelled')}
-                  </h2>
-                  <ul className="divide-y divide-[var(--border)]">
-                    {report.cancelledOrders.map((c, idx) => (
-                      <li
-                        key={`${c.orderNumber}-${idx}`}
-                        className="px-3 py-2.5 flex flex-wrap items-start justify-between gap-2 text-sm"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-semibold">{c.orderNumber}</p>
-                          <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                            {c.cancelReason || '—'}
-                            {c.cancelledAt
-                              ? ` · ${formatDateTime(c.cancelledAt)}`
-                              : ''}
-                          </p>
-                        </div>
-                        <p className="font-semibold tabular-nums shrink-0">{money(c.total)}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
-              {!!report.refundedOrders?.length && (
-                <section className="rounded-xl border border-rose-200/80 bg-rose-50/30 dark:border-rose-900/40 dark:bg-rose-950/20 overflow-hidden">
-                  <h2 className="px-3 py-2 text-sm font-semibold bg-rose-100/60 dark:bg-rose-950/40 text-rose-900 dark:text-rose-100">
-                    {t('reportsRefundSummary')}
-                  </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 border-b border-rose-200/60 dark:border-rose-900/40">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-rose-800/70">{t('reportsRefundCount')}</p>
-                      <p className="text-lg font-semibold tabular-nums">{report.refundedOrders.length}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-rose-800/70">{t('reportsRefunds')}</p>
-                      <p className="text-lg font-semibold tabular-nums text-rose-700">−{money(report.refundTotal)}</p>
-                    </div>
-                  </div>
-                  {!!report.refundRows?.length && (
-                    <div className="px-3 py-2 border-b border-rose-200/60 dark:border-rose-900/40">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-rose-800/80 mb-1.5">
-                        {t('reportsRefundsByPayment')}
-                      </p>
-                      <ul className="space-y-1 text-sm">
-                        {report.refundRows.map((row) => (
-                          <li key={row.method} className="flex justify-between gap-2">
-                            <span>{paymentMethodLabel(row.method, t)}</span>
-                            <span className="font-semibold tabular-nums text-rose-700">−{money(row.total)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  <h3 className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-800/80">
-                    {t('reportsRefundedOrders')}
-                  </h3>
-                  <ul className="divide-y divide-rose-200/60 dark:divide-rose-900/40">
-                    {report.refundedOrders.map((r, idx) => (
-                      <li
-                        key={`${r.orderNumber}-rf-${idx}`}
-                        className="px-3 py-2.5 flex flex-wrap items-start justify-between gap-2 text-sm"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-semibold">{r.orderNumber}</p>
-                          <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                            {t('reportsRefundReason')}: {r.refundReason || '—'}
-                            {r.refundedAt
-                              ? ` · ${formatDateTime(r.refundedAt)}`
-                              : ''}
-                          </p>
-                        </div>
-                        <p className="font-semibold tabular-nums shrink-0 text-rose-700">
-                          −{money(r.refundAmount)}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
-              {!!report.shiftCash?.length && (
-                <CashDrawerBreakdown shifts={report.shiftCash} money={money} />
-              )}
-
               {!!report.vatRows?.length && (
                 <section className="rounded-xl border border-[var(--border)] overflow-hidden">
                   <h2 className="px-3 py-2 text-sm font-semibold bg-[var(--bg-muted)]">
@@ -665,7 +578,7 @@ export default function ReportsPage() {
                       report.channelRows.map((r) => (
                         <li key={r.channel} className="flex justify-between px-3 py-2">
                           <span>
-                            {r.channel} � {r.count}
+                            {r.channel} · {r.count}
                           </span>
                           <span className="tabular-nums">{money(r.total)}</span>
                         </li>
@@ -693,14 +606,112 @@ export default function ReportsPage() {
                   </ul>
                 </section>
               </div>
+
+              {!!report.cancelledOrders?.length && (
+                <ReportCollapsibleSection
+                  title={t('reportsCancelled')}
+                  badge={String(report.cancelledOrders.length)}
+                >
+                  <ul className="divide-y divide-[var(--border)]">
+                    {report.cancelledOrders.map((c, idx) => (
+                      <li
+                        key={`${c.orderNumber}-${idx}`}
+                        className="px-3 py-2.5 flex flex-wrap items-start justify-between gap-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold">{c.orderNumber}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                            {c.cancelReason || '—'}
+                            {c.cancelledAt ? ` · ${formatDateTime(c.cancelledAt)}` : ''}
+                          </p>
+                        </div>
+                        <p className="font-semibold tabular-nums shrink-0">{money(c.total)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </ReportCollapsibleSection>
+              )}
+
+              {!!report.refundedOrders?.length && (
+                <ReportCollapsibleSection
+                  title={t('reportsRefundSummary')}
+                  badge={`${report.refundedOrders.length} · −${money(report.refundTotal)}`}
+                  variant="danger"
+                >
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 border-b border-rose-200/60 dark:border-rose-900/40">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-rose-800/70">
+                        {t('reportsRefundCount')}
+                      </p>
+                      <p className="text-lg font-semibold tabular-nums">{report.refundedOrders.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-rose-800/70">
+                        {t('reportsRefunds')}
+                      </p>
+                      <p className="text-lg font-semibold tabular-nums text-rose-700">
+                        −{money(report.refundTotal)}
+                      </p>
+                    </div>
+                  </div>
+                  {!!report.refundRows?.length && (
+                    <div className="px-3 py-2 border-b border-rose-200/60 dark:border-rose-900/40">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-rose-800/80 mb-1.5">
+                        {t('reportsRefundsByPayment')}
+                      </p>
+                      <ul className="space-y-1 text-sm">
+                        {report.refundRows.map((row) => (
+                          <li key={row.method} className="flex justify-between gap-2">
+                            <span>{paymentMethodLabel(row.method, t)}</span>
+                            <span className="font-semibold tabular-nums text-rose-700">
+                              −{money(row.total)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <h3 className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-800/80">
+                    {t('reportsRefundedOrders')}
+                  </h3>
+                  <ul className="divide-y divide-rose-200/60 dark:divide-rose-900/40">
+                    {report.refundedOrders.map((r, idx) => (
+                      <li
+                        key={`${r.orderNumber}-rf-${idx}`}
+                        className="px-3 py-2.5 flex flex-wrap items-start justify-between gap-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold">{r.orderNumber}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                            {t('reportsRefundReason')}: {r.refundReason || '—'}
+                            {r.refundedAt ? ` · ${formatDateTime(r.refundedAt)}` : ''}
+                          </p>
+                        </div>
+                        <p className="font-semibold tabular-nums shrink-0 text-rose-700">
+                          −{money(r.refundAmount)}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </ReportCollapsibleSection>
+              )}
+
+              {!!report.shiftCash?.length && (
+                <ReportCollapsibleSection
+                  title={t('reportsCashDrawer')}
+                  badge={String(report.shiftCash.length)}
+                >
+                  <CashDrawerBreakdown shifts={report.shiftCash} money={money} hideTitle />
+                </ReportCollapsibleSection>
+              )}
             </>
           )}
 
           {(tab === 'eod' || tab === 'products') && (
-            <section className="rounded-xl border border-[var(--border)] overflow-hidden">
-              <h2 className="px-3 py-2 text-sm font-semibold bg-[var(--bg-muted)]">
-                {t('reportsProductsSold')}
-              </h2>
+            <ReportCollapsibleSection
+              title={t('reportsProductsSold')}
+              badge={String(report.productsSold.length)}
+            >
               <div className="table-scroll">
                 <table className="w-full text-sm">
                   <thead>
@@ -729,7 +740,7 @@ export default function ReportsPage() {
                   </tbody>
                 </table>
               </div>
-            </section>
+            </ReportCollapsibleSection>
           )}
 
           {tab === 'users' && (
