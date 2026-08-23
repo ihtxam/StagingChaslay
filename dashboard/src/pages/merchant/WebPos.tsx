@@ -1156,6 +1156,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     selectedCustomer,
   ]);
 
+  /** Narrow screens scale rem UI via html font-size (zoom is disabled on phones). */
+  useEffect(() => {
+    document.documentElement.setAttribute('data-webpos-text-size', posTextSize);
+    return () => {
+      document.documentElement.removeAttribute('data-webpos-text-size');
+    };
+  }, [posTextSize]);
+
   /** Mobile cart page is phone-only; restore side-cart layout from lg (1024px) up. */
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -7178,7 +7186,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const changePosTextSize = (size: WebPosTextSize) => {
     setPosTextSize(size);
-    setSettingsOpen(false);
     try {
       localStorage.setItem(WEBPOS_TEXT_SIZE_KEY, size);
     } catch {
