@@ -84,6 +84,7 @@ import {
   resolvePrintRetryLocally,
   syncMainTillAutoPrintKitchen,
   writeDeviceAutoPrintKitchen,
+  writeDeviceAutoPrintReceipt,
 } from '@/lib/webpos-print-relay';
 import {
   applyKitchenPrintRetryFromSettings,
@@ -1954,7 +1955,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const pick = first.find((m) => cfg.methods[m]);
         if (pick) setPaymentMethod(pick);
         if (cfg.posPrintSettings?.autoPrintReceipt != null) {
-          setAutoPrint(cfg.posPrintSettings.autoPrintReceipt !== false);
+          try {
+            const stored = localStorage.getItem('manupos_webpos_autoprint');
+            if (stored === null) {
+              setAutoPrint(cfg.posPrintSettings.autoPrintReceipt !== false);
+            }
+          } catch {
+            setAutoPrint(cfg.posPrintSettings.autoPrintReceipt !== false);
+          }
         }
         if (cfg.posPrintSettings?.autoPrintKitchen != null) {
           setAutoPrintKitchenDevice(
@@ -7988,7 +7996,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setPrintSettings(next);
               void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
             }}
-            onAutoPrintChange={setAutoPrint}
+            onAutoPrintChange={(v) => {
+              setAutoPrint(v);
+              writeDeviceAutoPrintReceipt(v);
+            }}
             onAutoPrintKitchenChange={isLocalPrint ? undefined : setAutoPrintKitchenDevice}
             onPostSuccessChange={setPostSuccessTarget}
             onRefreshPrinters={() => {

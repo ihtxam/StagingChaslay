@@ -202,14 +202,17 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
     await printKitchenTickets(order, orderId, source, printSettings, lang);
   }
 
-  if (delivery && payload.printDeliveryReceipt === true) {
+  const receiptAutoPrintAllowed =
+    printSettings?.autoPrintReceipt !== false && readMainTillAutoPrintReceipt();
+
+  if (delivery && payload.printDeliveryReceipt === true && receiptAutoPrintAllowed) {
     await printDeliveryReceiptForOrder(orderId, {
       merchant,
       printSettings,
       locale,
       fallbackPrinterName: localStorage.getItem('manupos_webpos_printer') || '',
     });
-  } else if (payload.printNotification === true) {
+  } else if (payload.printNotification === true && receiptAutoPrintAllowed) {
     const receiptPrinters = printersForRole(printSettings, 'receipt');
     const targets =
       receiptPrinters.length > 0
@@ -254,8 +257,7 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
   if (
     !delivery &&
     payload.printReceipt === true &&
-    printSettings?.autoPrintReceipt !== false &&
-    readMainTillAutoPrintReceipt()
+    receiptAutoPrintAllowed
   ) {
     const { printMerchantOrderReceipt } = await import('@/lib/print-order-receipt');
     await printMerchantOrderReceipt(order, {
