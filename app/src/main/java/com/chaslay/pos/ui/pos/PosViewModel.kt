@@ -3637,7 +3637,6 @@ class PosViewModel @Inject constructor(
                     completedTransaction = transaction.copy(receiptUrl = fallbackUrl),
                     receiptPublicUrl = fallbackUrl,
                     orderCompleteNotice = null,
-                    successMessage = "Payment completed",
                     selectedCartItemId = null,
                     keypadBuffer = "",
                     kitchenSentToPrinter = false
@@ -4194,11 +4193,6 @@ class PosViewModel @Inject constructor(
                             orderCompleteNotice = null,
                             splitPaymentIndex = splitIndex,
                             splitPaymentTotal = splitTotal,
-                            successMessage = if (splitIndex != null && splitTotal != null) {
-                                "Payment $splitIndex of $splitTotal completed"
-                            } else {
-                                "Payment completed"
-                            },
                             checkoutState = CheckoutState(roundingStep = checkoutRoundingDefault()),
                             selectedCartItemId = null,
                             lastAddedItemId = null,

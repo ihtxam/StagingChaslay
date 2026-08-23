@@ -69,7 +69,6 @@ fun OrderCompleteDialog(
     currencySymbol: String,
     splitPaymentIndex: Int? = null,
     splitPaymentTotal: Int? = null,
-    successMessage: String? = null,
     receiptPublicUrl: String? = null,
     orderCompleteNotice: String? = null,
     showAdyenPaymentReceipt: Boolean = false,
@@ -118,64 +117,6 @@ fun OrderCompleteDialog(
                     fontWeight = FontWeight.Bold,
                     color = OrderCompleteTextPrimary
                 )
-                Text(
-                    com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(transaction.transactionNumber),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = OrderCompleteTextPrimary,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-                Text(
-                    paymentLabel(transaction.paymentMethod),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = OrderCompleteTextSecondary,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-                if (splitPaymentIndex != null && splitPaymentTotal != null) {
-                    Text(
-                        "Payment $splitPaymentIndex of $splitPaymentTotal",
-                        fontSize = 14.sp,
-                        color = Color(0xFF16A085),
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-                successMessage?.takeIf { it.isNotBlank() }?.let { msg ->
-                    Text(
-                        msg,
-                        fontSize = 14.sp,
-                        color = OrderCompleteSuccessGreen,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 4.dp),
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                orderCompleteNotice?.let { notice ->
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (notice.contains("printed", ignoreCase = true) || notice.contains("sent", ignoreCase = true)) {
-                            Color(0xFFECFDF5)
-                        } else {
-                            Color(0xFFFEF2F2)
-                        }
-                    ) {
-                        Text(
-                            notice,
-                            modifier = Modifier.padding(12.dp),
-                            fontSize = 13.sp,
-                            color = if (notice.contains("printed", ignoreCase = true) || notice.contains("sent", ignoreCase = true)) {
-                                Color(0xFF166534)
-                            } else {
-                                Color(0xFFB91C1C)
-                            },
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
 
                 Spacer(modifier = Modifier.height(20.dp))
                 Row(
@@ -243,6 +184,52 @@ fun OrderCompleteDialog(
                         }
                     }
                 }
+
+                Text(
+                    com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(transaction.transactionNumber),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = OrderCompleteTextPrimary,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+                Text(
+                    paymentLabel(transaction.paymentMethod),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = OrderCompleteTextSecondary,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+                if (splitPaymentIndex != null && splitPaymentTotal != null) {
+                    Text(
+                        "Payment $splitPaymentIndex of $splitPaymentTotal",
+                        fontSize = 14.sp,
+                        color = Color(0xFF16A085),
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                orderCompleteNotice
+                    ?.takeIf { notice ->
+                        !notice.contains("printed", ignoreCase = true) &&
+                            !notice.contains("sent", ignoreCase = true)
+                    }
+                    ?.let { notice ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFFFEF2F2)
+                        ) {
+                            Text(
+                                notice,
+                                modifier = Modifier.padding(12.dp),
+                                fontSize = 13.sp,
+                                color = Color(0xFFB91C1C),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
 
                 Spacer(modifier = Modifier.height(20.dp))
                 Row(

@@ -132,7 +132,6 @@ fun WaiterPosScreen(
             OrderCompleteDialog(
                 transaction = state.completedTransaction!!,
                 currencySymbol = state.currencySymbol,
-                successMessage = state.successMessage,
                 receiptPublicUrl = state.receiptPublicUrl,
                 orderCompleteNotice = state.orderCompleteNotice,
                 showAdyenPaymentReceipt = state.adyenCustomerReceipt != null,

@@ -5,7 +5,8 @@ import { RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
 import { repairCatalogText } from '@/lib/text-encoding';
 import { useI18n, type Locale } from '@/lib/i18n';
-import { formatCheckoutOrderRef } from '@/lib/order-number';
+import { formatCheckoutOrderRef, guestOrderNumber } from '@/lib/order-number';
+import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import { roundMoney2, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
 import {
@@ -733,9 +734,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const stored = localStorage.getItem('manupos_webpos_post_success');
     return stored === 'tables' || stored === 'register' ? stored : 'register';
   });
-  const [successInfo, setSuccessInfo] = useState<{ amount: number; changeDue: number | null } | null>(
-    null
-  );
+  const [successInfo, setSuccessInfo] = useState<{
+    amount: number;
+    changeDue: number | null;
+    orderNumber?: string | null;
+    paymentMethod?: string | null;
+  } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>('cash');
   const [paymentConfig, setPaymentConfig] = useState<WebPosPaymentConfig | null>(null);
   const [selectedTerminalId, setSelectedTerminalId] = useState('');
@@ -5454,6 +5458,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setSuccessInfo({
         amount: ctx.total,
         changeDue: changeDue > 0 ? changeDue : null,
+        orderNumber:
+          guestOrderNumber({
+            orderNumber: orderForReceipt?.orderNumber || ctx.orderNumber,
+            orderDisplay: orderForReceipt?.ticketDisplay,
+            tabNumber: orderForReceipt?.tabNumber,
+          }) || null,
+        paymentMethod: paymentMethodLabel(payMethod, t),
       });
       clearCollectCheckout();
       setOrdersRefreshToken((n) => n + 1);
@@ -5636,7 +5647,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     try {
       // Express: compact success popup; honor autoPrintReceipt like normal checkout.
       await finalizeSale(method, undefined, whenForPay, extras, false);
-      setSuccessInfo({ amount: paidAmount, changeDue: 0 });
+      setSuccessInfo({
+        amount: paidAmount,
+        changeDue: 0,
+        orderNumber:
+          guestOrderNumber({
+            orderNumber: splitReceiptsRef.current[0]?.orderNumber || lastReceiptOrderNumber,
+          }) || null,
+        paymentMethod: paymentMethodLabel(method, t),
+      });
       setExpressSuccessOpen(true);
     } catch (e: any) {
       toast.error(e.response?.data?.error || e.message || t('webPosSaleFailed'));
@@ -6720,6 +6739,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setSuccessInfo({
         amount: splitReceiptsRef.current.length > 1 ? splitPaidTotal : paidTotal,
         changeDue: extras?.changeDue ?? null,
+        orderNumber:
+          guestOrderNumber({
+            orderNumber: ticket.orderNumber,
+            orderDisplay: ticket.display,
+          }) || null,
+        paymentMethod: paymentMethodLabel(method, t),
       });
       setPosView('success');
       setExpressSuccessOpen(false);
@@ -7999,6 +8024,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           <WebPosSuccessView
             amount={successInfo.amount}
             changeDue={successInfo.changeDue}
+            orderNumber={successInfo.orderNumber}
+            paymentMethod={successInfo.paymentMethod}
             receiptUrl={lastSplitReceipts.length <= 1 ? lastReceiptUrl : undefined}
             splitParts={successSplitParts}
             onBack={() => {
@@ -8484,6 +8511,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 compact
                 amount={successInfo.amount}
                 changeDue={successInfo.changeDue}
+                orderNumber={successInfo.orderNumber}
+                paymentMethod={successInfo.paymentMethod}
                 receiptUrl={lastSplitReceipts.length <= 1 ? lastReceiptUrl : undefined}
                 splitParts={successSplitParts}
                 onPrint={lastSplitReceipts.length <= 1 ? openSuccessPrint : undefined}
