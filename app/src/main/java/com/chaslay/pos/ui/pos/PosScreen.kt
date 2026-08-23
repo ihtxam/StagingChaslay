@@ -235,6 +235,8 @@ fun PosScreen(
         )
     }
 
+    AttachCustomerDialogHost(state = state, viewModel = viewModel)
+
     if (state.showCheckoutScreen) {
         val checkoutCart = viewModel.checkoutDisplayCart(state.cart)
         val isSplitCheckout = state.cart.splitCount > 1
@@ -667,17 +669,6 @@ fun PosScreen(
             presets = state.kitchenMessagePresets,
             onSend = viewModel::sendKitchenMessage,
             onDismiss = viewModel::dismissKitchenMessageDialog
-        )
-    }
-
-    if (state.showAttachCustomerDialog) {
-        ChooseCustomerDialog(
-            customers = state.deliveryCustomers,
-            title = stringResource(R.string.add_customer),
-            onSearch = viewModel::searchDeliveryCustomers,
-            onCreateCustomer = viewModel::createDeliveryCustomer,
-            onSelectCustomer = viewModel::attachCustomerToCart,
-            onDismiss = viewModel::dismissAttachCustomerDialog
         )
     }
 
@@ -3780,6 +3771,23 @@ private fun TakeoutScheduleDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AttachCustomerDialogHost(
+    state: PosUiState,
+    viewModel: PosViewModel
+) {
+    if (state.showAttachCustomerDialog) {
+        ChooseCustomerDialog(
+            customers = state.deliveryCustomers,
+            title = stringResource(R.string.add_customer),
+            onSearch = viewModel::searchDeliveryCustomers,
+            onCreateCustomer = viewModel::createDeliveryCustomer,
+            onSelectCustomer = viewModel::attachCustomerToCart,
+            onDismiss = viewModel::dismissAttachCustomerDialog
+        )
     }
 }
 

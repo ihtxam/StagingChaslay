@@ -97,7 +97,7 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/45 p-3 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-3 sm:items-center sm:p-4">
       <div className="flex max-h-[min(90dvh,calc(100dvh-1.5rem))] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-3">
           <h2 className="font-semibold">{t('webPosSelectCustomer')}</h2>

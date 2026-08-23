@@ -9145,6 +9145,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         initialMethod={checkoutSeedMethod}
         onClose={() => {
           setCheckoutOpen(false);
+          setCustomerOpen(false);
+          setPendingPayMethod(null);
           setSplitQueue([]);
           setSplitIndex(0);
           splitMasterIdRef.current = null;

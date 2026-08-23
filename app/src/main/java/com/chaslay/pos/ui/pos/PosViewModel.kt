@@ -2243,12 +2243,15 @@ class PosViewModel @Inject constructor(
                 showCheckoutScreen = false,
                 pendingPaymentMethod = null,
                 showSplitBillScreen = false,
-                returnToSplitAfterCheckout = false
+                returnToSplitAfterCheckout = false,
+                showAttachCustomerDialog = false
             )
         }
     }
 
     fun updateCheckoutMethod(method: PaymentMethod) {
+        val needsInvoiceCustomer =
+            method == PaymentMethod.INVOICE && cartManager.snapshot().deliveryName.isNullOrBlank()
         updateExtras {
             val prev = it.checkoutState.method
             val laterIntent = if (method == PaymentMethod.PAY_LATER) {
@@ -2271,14 +2274,21 @@ class PosViewModel @Inject constructor(
                         it.checkoutState.cardTenderAmount
                     },
                     tenderAmount = if (method == PaymentMethod.PAY_LATER || method == PaymentMethod.INVOICE) 0.0 else it.checkoutState.tenderAmount
-                )
+                ),
+                showAttachCustomerDialog = if (method != PaymentMethod.INVOICE) false else it.showAttachCustomerDialog
             )
+        }
+        if (needsInvoiceCustomer) {
+            showAttachCustomerDialog()
         }
     }
 
     fun deselectCheckoutMethod() {
         updateExtras {
-            it.copy(checkoutState = it.checkoutState.copy(method = null))
+            it.copy(
+                checkoutState = it.checkoutState.copy(method = null),
+                showAttachCustomerDialog = false
+            )
         }
     }
 
