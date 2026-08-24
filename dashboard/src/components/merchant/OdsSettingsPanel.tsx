@@ -117,11 +117,12 @@ export default function OdsSettingsPanel() {
     if (!window.confirm(t('odsClearBoardConfirm'))) return;
     setBusy(true);
     try {
-      const { removed, dismissed } = await clearAllOdsOrders();
+      const { removed, dismissed, closedLive } = await clearAllOdsOrders();
       toast.success(
         t('odsClearBoardDone')
           .replace('{n}', String(removed))
           .replace('{d}', String(dismissed))
+          .replace('{c}', String(closedLive))
       );
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('odsActionFailed'));
