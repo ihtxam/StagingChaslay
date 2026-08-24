@@ -187,24 +187,94 @@ export type HeldOrderRow = {
   createdAt?: string | null;
 };
 
-function heldRowTimeMs(row: Pick<HeldOrderRow, 'updatedAt' | 'createdAt'>): number {
+export function heldRowTimeMs(row: Pick<HeldOrderRow, 'updatedAt' | 'createdAt'>): number {
   const updated = row.updatedAt ? Date.parse(row.updatedAt) : 0;
   const created = row.createdAt ? Date.parse(row.createdAt) : 0;
   return Math.max(updated, created);
 }
 
+function normHeldTicket(value?: string | null): string {
+  const raw = String(value || '')
+    .trim()
+    .replace(/^#/, '');
+  return raw ? `#${raw}` : '';
+}
+
+export function heldCartQuantity(cart: CartLine[]): number {
+  return cart.reduce((s, l) => s + (Number(l.quantity) || 0), 0);
+}
+
+export function heldCartSignature(cart: CartLine[]): string {
+  const qty = heldCartQuantity(cart);
+  const total = cart.reduce((s, l) => s + Number(l.lineTotal || 0), 0);
+  return `${cart.length}:${qty}:${total.toFixed(2)}`;
+}
+
+/** True when a server-held cart from waiter/mobile should replace a stale local draft. */
+export function remoteHeldShouldReplaceLocal(
+  local: { cart: CartLine[] },
+  held: HeldOrderRow
+): boolean {
+  const meta = parseHeldCartJson(held.cartJson);
+  if (!meta.cart.length) return false;
+  if (heldCartSignature(meta.cart) === heldCartSignature(local.cart)) return false;
+  const remoteQty = heldCartQuantity(meta.cart);
+  const localQty = heldCartQuantity(local.cart);
+  if (remoteQty > localQty) return true;
+  if (meta.cart.length > local.cart.length) return true;
+  const remoteTime = heldRowTimeMs(held);
+  return remoteTime > 0 && remoteQty >= localQty;
+}
+
 /** Best open held row for a table — newest row that still has cart lines. */
 export function findHeldOrderForTable(
   tableId: string,
-  rows: HeldOrderRow[]
+  rows: HeldOrderRow[],
+  opts?: { ticketDisplay?: string | null }
 ): HeldOrderRow | null {
   const tid = String(tableId || '').trim();
   if (!tid) return null;
   const matches = rows.filter((row) => parseHeldCartJson(row.cartJson).tableId === tid);
   if (!matches.length) return null;
   const withLines = matches.filter((row) => parseHeldCartJson(row.cartJson).cart.length > 0);
-  const pool = withLines.length ? withLines : matches;
+  let pool = withLines.length ? withLines : matches;
+  const ticket = normHeldTicket(opts?.ticketDisplay);
+  if (ticket) {
+    const forTicket = pool.filter((row) => {
+      const meta = parseHeldCartJson(row.cartJson);
+      const rowTicket = normHeldTicket(meta.ticketDisplay || meta.kitchenTicketKey);
+      return rowTicket === ticket;
+    });
+    if (forTicket.length) pool = forTicket;
+  }
   return [...pool].sort((a, b) => heldRowTimeMs(b) - heldRowTimeMs(a))[0] || null;
+}
+
+export function buildHeldTableInfoMap(
+  rows: Array<{
+    cartJson?: unknown;
+    staffName?: string | null;
+    updatedAt?: string | null;
+    createdAt?: string | null;
+  }>
+): Record<string, { staffName: string | null; itemCount: number; updatedAt: number }> {
+  const map: Record<string, { staffName: string | null; itemCount: number; updatedAt: number }> =
+    {};
+  for (const row of rows) {
+    const meta = parseHeldCartJson(row.cartJson);
+    const tableId = meta.tableId?.trim();
+    if (!tableId) continue;
+    const time = heldRowTimeMs(row);
+    const prev = map[tableId];
+    if (prev && prev.updatedAt >= time) continue;
+    const lines = meta.cart || [];
+    map[tableId] = {
+      staffName: row.staffName?.trim() || null,
+      itemCount: heldCartQuantity(lines),
+      updatedAt: time,
+    };
+  }
+  return map;
 }
 
 export type HeldReleaseIdent = {

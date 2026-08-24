@@ -1,5 +1,10 @@
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY, formatTimeHHMM, ymdZurich } from '@/lib/date-format';
-import { roundMoney2, splitVatIncludedGross } from '@/lib/money';
+import {
+  channelTaxRateFromMerchant,
+  roundMoney2,
+  splitVatIncludedGross,
+  type MerchantChannelTaxSettings,
+} from '@/lib/money';
 import { guestOrderNumber } from '@/lib/order-number';
 import { APP_NAME } from '@/lib/brand';
 import {
@@ -1952,6 +1957,8 @@ export function generateEodReportText(report: EodReportPrint): string {
   const sep = '='.repeat(width);
   const thin = '-'.repeat(width);
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
+  const debitMoney = (n: number) =>
+    Number(n) > 0.001 ? `-${money(n)}` : money(n);
   const two = (n: number) => Number(n || 0).toFixed(2);
   const tips = Number(report.tipsTotal || 0);
   const brut = Number(report.revenue || 0);
@@ -2025,11 +2032,17 @@ export function generateEodReportText(report: EodReportPrint): string {
     r +=
       padLine(
         `${L.cancelled} (${report.cancelledCount})`,
-        money(report.cancelledTotal),
+        debitMoney(report.cancelledTotal),
         width
       ) + '\n';
   }
-  // Refunds are shown on screen but omitted from thermal report prints.
+  if (report.refundTotal > 0.001 || (report.refundCount ?? 0) > 0) {
+    const refundLabel =
+      (report.refundCount ?? 0) > 0
+        ? `${L.refunds} (${report.refundCount})`
+        : L.refunds;
+    r += padLine(refundLabel, debitMoney(report.refundTotal), width) + '\n';
+  }
   r += '\n';
   r += thin + '\n';
   r += centerLine(L.paymentMethods, width) + '\n';
@@ -2681,6 +2694,8 @@ export type PosOrderForReceipt = {
   paymentMethod?: string | null;
   subtotal?: number;
   taxAmount?: number;
+  /** Persisted VAT % when available; otherwise inferred from subtotal/tax on reprint. */
+  taxRate?: number;
   discountAmount?: number;
   tipAmount?: number;
   roundingAmount?: number;
@@ -2739,6 +2754,38 @@ export type PosOrderForReceipt = {
   refundReason?: string | null;
 };
 
+/** VAT % for receipt reprints — never use the live POS channel when order totals imply another rate. */
+export function resolveReceiptTaxRateForOrder(
+  order: Pick<
+    PosOrderForReceipt,
+    'subtotal' | 'taxAmount' | 'taxRate' | 'channel' | 'fulfillmentChannel'
+  >,
+  opts?: {
+    fallbackRate?: number;
+    merchantTax?: MerchantChannelTaxSettings;
+  }
+): number {
+  const explicit = Number(order.taxRate);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+
+  const subtotal = Number(order.subtotal ?? 0);
+  const taxAmount = Number(order.taxAmount ?? 0);
+  if (subtotal > 0.001 && taxAmount > 0.001) {
+    return roundMoney2((taxAmount / subtotal) * 100);
+  }
+
+  if (opts?.merchantTax) {
+    return channelTaxRateFromMerchant(
+      opts.merchantTax,
+      order.channel || order.fulfillmentChannel
+    );
+  }
+
+  const fallback = Number(opts?.fallbackRate);
+  if (Number.isFinite(fallback) && fallback > 0) return fallback;
+  return 8.1;
+}
+
 export function posOrderToWebPosReceipt(
   order: PosOrderForReceipt,
   ctx: {
@@ -2747,6 +2794,7 @@ export function posOrderToWebPosReceipt(
     phone?: string;
     vatNumber?: string;
     taxRate?: number;
+    merchantTax?: MerchantChannelTaxSettings;
     vatIncludedInPrice?: boolean;
     vatAfterDiscount?: boolean;
     printSettings?: PosPrintSettingsClient | null;
@@ -2756,8 +2804,10 @@ export function posOrderToWebPosReceipt(
 ): WebPosReceipt {
   const subtotal = Number(order.subtotal ?? 0);
   const taxAmount = Number(order.taxAmount ?? 0);
-  const inferredRate =
-    subtotal > 0 && taxAmount > 0 ? roundMoney2((taxAmount / subtotal) * 100) : 8.1;
+  const taxRate = resolveReceiptTaxRateForOrder(order, {
+    fallbackRate: ctx.taxRate,
+    merchantTax: ctx.merchantTax,
+  });
   const lang = resolveReceiptLanguage(ctx.printSettings, ctx.panelLang);
   const paperWidthMm = ctx.printSettings?.paperWidthMm || 80;
   const completedAt = order.completedAt
@@ -2841,7 +2891,7 @@ export function posOrderToWebPosReceipt(
     subtotal,
     discount: Number(order.discountAmount ?? 0),
     taxAmount,
-    taxRate: ctx.taxRate ?? inferredRate,
+    taxRate,
     rounding: Number(order.roundingAmount ?? 0),
     tipAmount: Number(order.tipAmount ?? 0),
     total: Number(order.total),

@@ -58,6 +58,29 @@ export function resolvePosTaxRate(
   return defaultRate;
 }
 
+export type MerchantChannelTaxSettings = {
+  vatRate?: string | number | null;
+  taxTakeawayRate?: string | number | null;
+  taxDineInRate?: string | number | null;
+  taxDeliveryRate?: string | number | null;
+};
+
+/** Channel tax rate from merchant settings (matches WebPOS + backend receipts). */
+export function channelTaxRateFromMerchant(
+  merchant: MerchantChannelTaxSettings,
+  channel?: string | null
+): number {
+  const vat = merchant.vatRate;
+  const ch = String(channel || 'takeaway').toLowerCase();
+  if (ch === 'dine_in') return resolvePosTaxRate(merchant.taxDineInRate, vat, 8.1);
+  if (ch === 'delivery') {
+    const delivery = resolvePosTaxRate(merchant.taxDeliveryRate, null, 0);
+    if (delivery > 0) return delivery;
+    return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
+  }
+  return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
+}
+
 /** Extract net (HT) from a gross (TTC) amount when VAT is included in price. */
 export function extractNetFromGross(gross: number, ratePercent: number): number {
   if (!Number.isFinite(gross) || gross <= 0 || ratePercent <= 0) return roundMoney2(gross);
