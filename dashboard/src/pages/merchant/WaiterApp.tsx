@@ -41,10 +41,10 @@ import {
   revokePosSession,
 } from '@/lib/pos-session';
 import {
-  nextWaiterTicketNumber,
   persistWaiterHeldOrder,
   printWaiterKitchen,
 } from '@/lib/waiter-kitchen';
+import { nextWebPosTicketNumber, webPosBackendOrderId } from '@/lib/webpos-receipt';
 import { parseHeldCartJson } from '@/lib/webpos-held';
 import {
   pushCartLinesToKds,
@@ -78,6 +78,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const authUser = useAuthStore((s) => s.user);
+  const merchantId = authUser?.merchantId;
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
@@ -216,16 +217,22 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   );
 
   const ensureTicket = useCallback(() => {
-    if (ticketDisplay && ticketOrderNumber) {
-      return { display: ticketDisplay, orderNumber: ticketOrderNumber };
+    const display = ticketDisplay?.trim();
+    if (display) {
+      if (ticketOrderNumber?.trim()) {
+        return { display, orderNumber: ticketOrderNumber.trim() };
+      }
+      const orderNumber = webPosBackendOrderId(merchantId);
+      setTicketOrderNumber(orderNumber);
+      return { display, orderNumber };
     }
-    const display = nextWaiterTicketNumber();
-    setTicketDisplay(display);
-    setTicketOrderNumber(display);
-    return { display, orderNumber: display };
-  }, [ticketDisplay, ticketOrderNumber]);
+    const ticket = nextWebPosTicketNumber(merchantId);
+    setTicketDisplay(ticket.display);
+    setTicketOrderNumber(ticket.orderNumber);
+    return ticket;
+  }, [ticketDisplay, ticketOrderNumber, merchantId]);
 
-  const waiterKdsTicketKey = kitchenTicketKeyBase(ticketOrderNumber || ticketDisplay || '');
+  const waiterKdsTicketKey = kitchenTicketKeyBase(ticketDisplay || ticketOrderNumber || '');
   const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
 
   useEffect(() => {
@@ -247,6 +254,55 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       window.clearInterval(timer);
     };
   }, [cart.filter((l) => l.sentToKitchen).length, waiterKdsTicketKey]);
+
+  /** Sync in-progress table/takeaway carts to /merchant/pos/held so main till Orders → Active lists them. */
+  useEffect(() => {
+    if (loading || pinRequired || tab !== 'order' || !cart.length || sending) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const ticket = ensureTicket();
+        try {
+          const savedId = await persistWaiterHeldOrder({
+            heldId: activeHeldIdRef.current,
+            cartLines: cart,
+            channel,
+            tableId,
+            tableLabel,
+            ticketDisplay: ticket.display,
+            ticketOrderNumber: ticket.orderNumber,
+            staffId: staff?.id,
+            staffName: staff?.name,
+            sendToKitchen: cart.some((l) => l.sentToKitchen),
+            orderNote,
+            money,
+          });
+          if (cancelled) return;
+          if (savedId) activeHeldIdRef.current = savedId;
+          setOrdersRefresh((n) => n + 1);
+        } catch (e) {
+          console.warn('[waiter] held persist failed', e);
+        }
+      })();
+    }, 800);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    cart,
+    channel,
+    tableId,
+    tableLabel,
+    orderNote,
+    tab,
+    loading,
+    pinRequired,
+    sending,
+    staff?.id,
+    staff?.name,
+    ensureTicket,
+  ]);
 
   const pushLine = (
     p: Product,
@@ -495,8 +551,8 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           : l
       );
       void pushCartLinesToKds({
-        ticketKey: ticket.orderNumber,
-        orderNumber: ticket.orderNumber,
+        ticketKey: ticket.display,
+        orderNumber: ticket.display,
         tableLabel,
         tabNumber: null,
         channel,
@@ -509,10 +565,10 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         locale,
         staffName: staff?.name,
         tableLabel,
-        orderNumber: ticket.orderNumber,
+        orderNumber: ticket.display,
         t,
       });
-      await persistWaiterHeldOrder({
+      const savedId = await persistWaiterHeldOrder({
         heldId: activeHeldIdRef.current,
         cartLines: nextCart,
         channel,
@@ -526,6 +582,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         orderNote,
         money,
       });
+      if (savedId) activeHeldIdRef.current = savedId;
       setCart(nextCart);
       setOrdersRefresh((n) => n + 1);
       toast.success(t('waiterSentToKitchen'));

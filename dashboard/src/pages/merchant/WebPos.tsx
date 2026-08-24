@@ -2225,10 +2225,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (knownRemoteHeldRef.current == null) {
           knownRemoteHeldRef.current = new Set(held.map((h) => h.id));
         } else {
+          const ids = new Set(held.map((h) => h.id));
+          let heldChanged = false;
           for (const h of held) {
-            if (h.status !== 'sent_to_kitchen') continue;
             if (knownRemoteHeldRef.current.has(h.id)) continue;
             knownRemoteHeldRef.current.add(h.id);
+            heldChanged = true;
+            if (h.status !== 'sent_to_kitchen') continue;
             const suppressUntil = localHeldBellSuppressRef.current.get(h.id);
             if (suppressUntil != null && Date.now() < suppressUntil) continue;
             ringWaiterTillBell(
@@ -2236,10 +2239,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               h.label || h.staffName || null
             );
           }
-          const ids = new Set(held.map((h) => h.id));
           for (const id of [...knownRemoteHeldRef.current]) {
-            if (!ids.has(id)) knownRemoteHeldRef.current.delete(id);
+            if (!ids.has(id)) {
+              knownRemoteHeldRef.current.delete(id);
+              heldChanged = true;
+            }
           }
+          if (heldChanged) setOrdersRefreshToken((n) => n + 1);
         }
       } catch {
         /* best-effort */
