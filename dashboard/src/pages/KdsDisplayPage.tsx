@@ -472,19 +472,28 @@ export default function KdsDisplayPage() {
 
   const cardWrapClass = layoutMode === 'slider' ? 'w-[min(340px,85vw)] shrink-0 snap-start' : '';
 
+  const channelFilterBtnClass = (active: boolean) =>
+    active
+      ? shellTheme === 'light'
+        ? 'bg-stone-800 text-white'
+        : 'bg-white/20 text-white ring-1 ring-white/30'
+      : shellTheme === 'light'
+        ? 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+        : 'bg-black/15 text-inherit hover:bg-black/25';
+
   return (
     <div className={`kds-shell min-h-dvh ${theme.shell}`}>
-      <header className={`sticky top-0 z-10 border-b px-4 py-3 backdrop-blur ${theme.shell} border-black/10`}>
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className={`text-xs uppercase tracking-widest ${theme.muted}`}>{t('kdsTitle')}</p>
-            <h1 className={`text-xl font-bold ${theme.text}`}>{stationName}</h1>
+      <header className={`sticky top-0 z-10 border-b px-3 py-2 backdrop-blur sm:px-4 ${theme.shell} border-black/10`}>
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-2 gap-y-1.5">
+          <div className="mr-1 min-w-0 shrink-0">
+            <p className={`text-[10px] uppercase tracking-widest leading-none ${theme.muted}`}>{t('kdsTitle')}</p>
+            <h1 className={`truncate text-base font-bold leading-tight sm:text-lg ${theme.text}`}>{stationName}</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={() => setTab('active')}
-              className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:py-2 sm:text-sm ${
                 tab === 'active' ? 'bg-teal-600 text-white' : 'bg-black/20 text-inherit'
               }`}
             >
@@ -493,45 +502,32 @@ export default function KdsDisplayPage() {
             <button
               type="button"
               onClick={() => setTab('archived')}
-              className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:py-2 sm:text-sm ${
                 tab === 'archived' ? 'bg-teal-600 text-white' : 'bg-black/20 text-inherit'
               }`}
             >
               {t('kdsTabCompleted')} ({archived.length})
             </button>
-          </div>
-        </div>
-        <div className="mx-auto mt-2 flex max-w-[1600px] flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-1.5">
+            <span className="mx-0.5 hidden h-5 w-px bg-black/15 sm:inline-block" aria-hidden />
             {CHANNEL_FILTERS.map((f) => (
               <button
                 key={f}
                 type="button"
                 onClick={() => setChannelFilter(f)}
-                className={`rounded-lg px-2.5 py-1.5 text-xs font-bold ${
-                  channelFilter === f
-                    ? shellTheme === 'light'
-                      ? 'bg-stone-800 text-white'
-                      : 'bg-white/20 text-white ring-1 ring-white/30'
-                    : shellTheme === 'light'
-                      ? 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                      : 'bg-black/15 text-inherit hover:bg-black/25'
-                }`}
+                className={`rounded-lg px-2 py-1 text-[11px] font-bold sm:px-2.5 sm:py-1.5 sm:text-xs ${channelFilterBtnClass(channelFilter === f)}`}
               >
                 {channelFilterLabel(f, t)}
               </button>
             ))}
           </div>
           {layoutMode === 'grid' ? (
-            <KdsGridColumnsPicker
-              compact
-              value={gridColumns}
-              onChange={applyGridColumns}
-            />
+            <div className="ml-auto shrink-0">
+              <KdsGridColumnsPicker compact value={gridColumns} onChange={applyGridColumns} />
+            </div>
           ) : null}
         </div>
         {error ? (
-          <p className="mx-auto mt-2 max-w-[1600px] rounded-lg bg-red-900/80 px-3 py-2 text-sm text-red-100">
+          <p className="mx-auto mt-1.5 max-w-[1600px] rounded-lg bg-red-900/80 px-3 py-2 text-sm text-red-100">
             {error}
           </p>
         ) : null}
