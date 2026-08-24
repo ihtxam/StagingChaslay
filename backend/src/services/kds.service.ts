@@ -7,6 +7,7 @@ import {
   allocateDisplayShortCode,
   ensureKdsStationShortCodes,
 } from "@/lib/display-short-code";
+import { resolveOdsPushNumber } from "@/lib/guest-order-number";
 
 export class KdsLicenseError extends Error {
   code = "KDS_ADDON_REQUIRED";
@@ -21,21 +22,40 @@ async function requireAddon(merchantId: string) {
   if (!enabled) throw new KdsLicenseError();
 }
 
-async function maybePushOdsReady(merchantId: string, orderNumber: string | null | undefined) {
-  if (!orderNumber?.trim()) return;
+function resolveKdsOdsNumber(ticket: {
+  ticketKey?: string | null;
+  orderNumber?: string | null;
+}): string {
+  return (
+    resolveOdsPushNumber(ticket.ticketKey) ||
+    resolveOdsPushNumber(ticket.orderNumber) ||
+    ""
+  );
+}
+
+async function maybePushOdsReady(
+  merchantId: string,
+  ticket: { ticketKey?: string | null; orderNumber?: string | null }
+) {
+  const orderNumber = resolveKdsOdsNumber(ticket);
+  if (!orderNumber) return;
   try {
     const { OdsService } = await import("@/services/ods.service");
-    await OdsService.pushOrder(merchantId, { orderNumber: orderNumber.trim(), status: "ready" });
+    await OdsService.pushOrder(merchantId, { orderNumber, status: "ready" });
   } catch {
     /* ODS optional */
   }
 }
 
-async function maybePushOdsPreparing(merchantId: string, orderNumber: string | null | undefined) {
-  if (!orderNumber?.trim()) return;
+async function maybePushOdsPreparing(
+  merchantId: string,
+  ticket: { ticketKey?: string | null; orderNumber?: string | null }
+) {
+  const orderNumber = resolveKdsOdsNumber(ticket);
+  if (!orderNumber) return;
   try {
     const { OdsService } = await import("@/services/ods.service");
-    await OdsService.pushOrder(merchantId, { orderNumber: orderNumber.trim(), status: "preparing" });
+    await OdsService.pushOrder(merchantId, { orderNumber, status: "preparing" });
   } catch {
     /* ODS optional */
   }
@@ -477,7 +497,7 @@ export class KdsService {
     });
     const allReady = allItems.length > 0 && allItems.every((i) => i.status === "ready");
     if (allReady) {
-      await maybePushOdsReady(station.merchantId, item.ticket.orderNumber);
+      await maybePushOdsReady(station.merchantId, item.ticket);
     }
 
     return { ok: true, lineId: item.lineId, ticketKey: item.ticket.ticketKey };
@@ -508,7 +528,7 @@ export class KdsService {
       .update(schema.kdsTickets)
       .set({ status: "pending", completedAt: null, updatedAt: now })
       .where(eq(schema.kdsTickets.id, item.ticketId));
-    await maybePushOdsPreparing(station.merchantId, item.ticket.orderNumber);
+    await maybePushOdsPreparing(station.merchantId, item.ticket);
     return { ok: true, lineId: item.lineId, ticketKey: item.ticket.ticketKey };
   }
 
@@ -541,7 +561,7 @@ export class KdsService {
       .update(schema.kdsTickets)
       .set({ status: "completed", completedAt: now, updatedAt: now })
       .where(eq(schema.kdsTickets.id, ticketId));
-    await maybePushOdsReady(station.merchantId, ticket.orderNumber);
+    await maybePushOdsReady(station.merchantId, ticket);
     return { ok: true, ticketKey: ticket.ticketKey };
   }
 
@@ -571,7 +591,7 @@ export class KdsService {
           eq(schema.kdsTicketItems.status, "ready")
         )
       );
-    await maybePushOdsPreparing(station.merchantId, ticket.orderNumber);
+    await maybePushOdsPreparing(station.merchantId, ticket);
     return { ok: true };
   }
 
