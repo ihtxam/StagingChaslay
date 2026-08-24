@@ -30,6 +30,10 @@ function money(n: number) {
   return `CHF ${Number(n || 0).toFixed(2)}`;
 }
 
+function debitMoney(n: number) {
+  return Number(n) > 0.001 ? `−${money(n)}` : money(n);
+}
+
 export default function RevenuePeriodSummaryModal({ open, from, to, title, onClose }: Props) {
   const { t, formatDate } = useI18n();
   const [report, setReport] = useState<EodSlice | null>(null);
@@ -74,7 +78,7 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
       `${t('reportsNetSalesExclTips')}: ${money(report.revenue)}`,
       `  ${t('reportsTips')}: ${money(report.tipsTotal)}`,
       `  ${t('reportsTax')}: ${money(report.taxTotal)}`,
-      `${t('reportsRefunds')}: ${money(report.refundTotal)}`,
+      `${t('reportsRefunds')}: ${debitMoney(report.refundTotal)}`,
       `${t('reportsGrandTotal')}: ${money(report.grandTotal)}`,
       '',
       t('reportsByPayment'),
@@ -189,7 +193,7 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
                 </div>
                 <div className="flex justify-between gap-2">
                   <span className="text-[var(--text-muted)]">{t('reportsRefunds')}</span>
-                  <span className="tabular-nums">{money(report.refundTotal)}</span>
+                  <span className="tabular-nums">{debitMoney(report.refundTotal)}</span>
                 </div>
                 <div className="flex justify-between gap-2 border-t border-[var(--border)] pt-2 font-semibold">
                   <span>{t('reportsGrandTotal')}</span>

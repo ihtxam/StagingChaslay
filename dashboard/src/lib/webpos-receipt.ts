@@ -1952,6 +1952,8 @@ export function generateEodReportText(report: EodReportPrint): string {
   const sep = '='.repeat(width);
   const thin = '-'.repeat(width);
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
+  const debitMoney = (n: number) =>
+    Number(n) > 0.001 ? `-${money(n)}` : money(n);
   const two = (n: number) => Number(n || 0).toFixed(2);
   const tips = Number(report.tipsTotal || 0);
   const brut = Number(report.revenue || 0);
@@ -2025,11 +2027,17 @@ export function generateEodReportText(report: EodReportPrint): string {
     r +=
       padLine(
         `${L.cancelled} (${report.cancelledCount})`,
-        money(report.cancelledTotal),
+        debitMoney(report.cancelledTotal),
         width
       ) + '\n';
   }
-  // Refunds are shown on screen but omitted from thermal report prints.
+  if (report.refundTotal > 0.001 || (report.refundCount ?? 0) > 0) {
+    const refundLabel =
+      (report.refundCount ?? 0) > 0
+        ? `${L.refunds} (${report.refundCount})`
+        : L.refunds;
+    r += padLine(refundLabel, debitMoney(report.refundTotal), width) + '\n';
+  }
   r += '\n';
   r += thin + '\n';
   r += centerLine(L.paymentMethods, width) + '\n';
