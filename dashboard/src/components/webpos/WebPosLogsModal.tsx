@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Copy, Send, Trash2, X } from 'lucide-react';
-import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import {
   buildSupportLogPayload,
@@ -9,6 +8,7 @@ import {
   clearWebPosLogs,
   formatWebPosLogsText,
   readWebPosLogs,
+  sendWebPosLogsToSupport,
   type WebPosDiagnostics,
 } from '@/lib/webpos-log';
 import { webPosVersionLabel } from '@/lib/app-version';
@@ -41,13 +41,8 @@ export default function WebPosLogsModal({ open, onClose, diagnostics, autoSend }
   const sendLogs = useCallback(async () => {
     setBusy(true);
     try {
-      const body = buildSupportLogPayload(entries, fullDiagnostics);
-      await api.post('/merchant/support/diagnostic-report', {
-        source: 'webpos',
-        subject: `WebPOS logs — ${new Date().toLocaleString()}`,
-        body,
-        auto: false,
-      });
+      await sendWebPosLogsToSupport(fullDiagnostics, { auto: false });
+      toast.success(t('webPosLogsSent'));
       onClose();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
@@ -55,7 +50,7 @@ export default function WebPosLogsModal({ open, onClose, diagnostics, autoSend }
     } finally {
       setBusy(false);
     }
-  }, [entries, fullDiagnostics, onClose, t]);
+  }, [fullDiagnostics, onClose, t]);
 
   useEffect(() => {
     if (!open) {

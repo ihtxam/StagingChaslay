@@ -74,7 +74,7 @@ router.post("/staff/verify-pin", async (req: Request, res: Response) => {
   }
 });
 
-/** Android POS crash/error logs — superadmin support inbox only. */
+/** Android POS crash/error logs — superadmin System Logs only. */
 router.post("/diagnostic-report", async (req: Request, res: Response) => {
   try {
     const { SupportTicketService } = await import("@/services/support-ticket.service");
@@ -95,14 +95,14 @@ router.post("/diagnostic-report", async (req: Request, res: Response) => {
       ),
       "--- Log ---",
     ].join("\n");
-    const ticket = await SupportTicketService.createDiagnosticReport(req.chaslayMerchantId!, {
+    const log = await SupportTicketService.createDiagnosticReport(req.chaslayMerchantId!, {
       source: "android",
       subject: String(subject).slice(0, 255),
       body: `${header}\n${String(body)}`,
       auto: auto === true || auto === "true",
       authorName: "Android POS",
     });
-    res.json({ ok: true, ticketId: ticket.id });
+    res.json({ ok: true, logId: log.id });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to submit report" });
   }

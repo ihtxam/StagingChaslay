@@ -212,7 +212,7 @@ export type SendWebPosLogsOptions = {
   reason?: string;
 };
 
-/** POST session logs to merchant support (no modal). */
+/** POST session logs to platform System Logs (superadmin only — not support tickets). */
 export async function sendWebPosLogsToSupport(
   diagnostics: Partial<WebPosDiagnostics> & { appVersion?: string },
   opts?: SendWebPosLogsOptions
@@ -230,11 +230,11 @@ export async function sendWebPosLogsToSupport(
   const subject = opts?.auto
     ? `WebPOS auto-report — ${opts.reason || 'error'} (${when})`
     : `WebPOS logs — ${when}`;
-  await api.post('/merchant/support/tickets', {
-    category: 'technical',
-    subcategory: 'webpos',
+  await api.post('/merchant/support/diagnostic-report', {
+    source: 'webpos',
     subject,
     body,
+    auto: opts?.auto ?? false,
   });
 }
 
