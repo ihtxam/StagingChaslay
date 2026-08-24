@@ -31,15 +31,26 @@ function isInvoiceOrderRecord(order: {
   return method === "invoice" || !!order.invoiceNumber;
 }
 
+function isCounterTender(method: string): boolean {
+  const m = String(method || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  return m === "cash" || m === "card" || m === "terminal";
+}
+
 function resolveCollectPaymentMethod(
   requested: string | null | undefined,
   order: { paymentMethod?: string | null; invoiceNumber?: string | null }
 ): string {
-  if (isInvoiceOrderRecord(order)) return "invoice";
   const requestedRaw = String(requested || "")
     .trim()
     .toLowerCase()
     .replace(/-/g, "_");
+  if (isInvoiceOrderRecord(order)) {
+    if (isCounterTender(requestedRaw)) return requestedRaw;
+    return "invoice";
+  }
   const requestedLater = requestedRaw.match(/^pay_later[:_](.+)$/);
   const existingRaw = String(order.paymentMethod || "cash")
     .trim()
@@ -616,10 +627,10 @@ export class OrderService {
           } catch (invErr) {
             console.warn("Inventory deduct after collect_payment failed:", invErr);
           }
-          // Invoice A4 was printed at sale — do not print a second receipt/invoice.
-          // POS Pay Later / WebPOS collect: till prints locally (one copy).
+          // Invoice A4 at sale — skip auto receipt unless counter cash/card collection.
           const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
-          if (!invoiceOrder && !wasPayLater && !opts?.skipReceiptPrint) {
+          const invoiceCounter = invoiceOrder && isCounterTender(method);
+          if ((!invoiceOrder || invoiceCounter) && !wasPayLater && !opts?.skipReceiptPrint) {
             try {
               await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
             } catch (printErr) {
@@ -688,10 +699,10 @@ export class OrderService {
           } catch (invErr) {
             console.warn("Inventory deduct after complete_and_collect failed:", invErr);
           }
-          // Invoice A4 was printed at sale — do not print a second receipt/invoice.
-          // POS Pay Later / WebPOS collect: till prints locally (one copy).
+          // Invoice A4 at sale — skip auto receipt unless counter cash/card collection.
           const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
-          if (!invoiceOrder && !wasPayLater && !opts?.skipReceiptPrint) {
+          const invoiceCounter = invoiceOrder && isCounterTender(method);
+          if ((!invoiceOrder || invoiceCounter) && !wasPayLater && !opts?.skipReceiptPrint) {
             try {
               await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
             } catch (printErr) {

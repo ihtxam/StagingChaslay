@@ -222,7 +222,8 @@ function shouldPrintRelayedJob(
   if (!remote) return true;
   if (jobKind === 'eod') return true;
   if (jobKind === 'kitchen') return readMainTillAutoPrintKitchen();
-  if (jobKind === 'receipt') return readMainTillAutoPrintReceipt();
+  // Explicit ESC/POS receipt jobs from waiter phones / mobile WebPOS are always intentional.
+  if (jobKind === 'receipt') return true;
   return true;
 }
 

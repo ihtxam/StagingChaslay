@@ -871,17 +871,26 @@ export default function WebPosOrdersPanel({
     setCollectBusy(true);
     try {
       const invoiceOrder = isInvoiceOrder(collectFor);
-      const res = invoiceOrder
+      const counterTender = ['cash', 'card', 'terminal'].includes(paymentMethodDraft);
+      const res = invoiceOrder && !counterTender
         ? await api.post(`/merchant/orders/${collectFor.id}/record-invoice-payment`, {
             paymentMethod: INVOICE_SETTLEMENT_METHOD,
           })
         : await api.post(`/merchant/orders/${collectFor.id}/action`, {
             action: collectPaymentAction(collectFor.status),
             paymentMethod: paymentMethodDraft,
+            skipReceiptPrint: true,
           });
       toast.success(t('webPosPaymentCollected'));
+      const updated = (res.data?.order as PosOrder | undefined) || null;
+      if (updated && (!invoiceOrder || counterTender)) {
+        try {
+          await onPrintOrder?.(updated);
+        } catch (e: unknown) {
+          console.warn('[orders] receipt print after collect failed', e);
+        }
+      }
       setCollectFor(null);
-      const updated = res.data?.order as PosOrder | undefined;
       setSelectedOrder(updated || null);
       onOrderActioned?.(collectFor.id);
       void load();
@@ -970,7 +979,7 @@ export default function WebPosOrdersPanel({
   const startCollectPayment = (order: PosOrder) => {
     setPaymentEditFor(null);
     if (isInvoiceOrder(order)) {
-      setPaymentMethodDraft(INVOICE_SETTLEMENT_METHOD);
+      setPaymentMethodDraft('cash');
       setCollectFor(order);
       setSelectedOrder(order);
       return;
@@ -2044,12 +2053,39 @@ export default function WebPosOrdersPanel({
             {isInvoiceOrder(collectFor) ? (
               <>
                 <p className="text-sm font-medium">
-                  {t('webPosInvoiceMarkPaid')} · {money(collectFor.total)}
+                  {t('webPosTakePayment')} · {money(collectFor.total)}
                 </p>
-                <p className="text-xs text-stone-500">{t('webPosInvoiceMarkPaidHint')}</p>
-                <p className="text-sm font-semibold text-stone-700">
-                  {t('webPosInvoice')} · {t('webPosBankTransfer')}
+                <p className="text-xs text-stone-500">
+                  {t('webPosInvoiceMarkPaidHint')}
+                  {collectFor.invoiceNumber ? ` · ${collectFor.invoiceNumber}` : ''}
                 </p>
+                <div className="flex flex-wrap gap-2">
+                  {PAYMENT_OPTIONS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setPaymentMethodDraft(m)}
+                      className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
+                        paymentMethodDraft === m
+                          ? 'bg-emerald-700 text-white'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                      }`}
+                    >
+                      {paymentLabel(m)}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethodDraft(INVOICE_SETTLEMENT_METHOD)}
+                    className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
+                      paymentMethodDraft === INVOICE_SETTLEMENT_METHOD
+                        ? 'bg-stone-800 text-white'
+                        : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                    }`}
+                  >
+                    {t('webPosBankTransfer')}
+                  </button>
+                </div>
               </>
             ) : (
               <>

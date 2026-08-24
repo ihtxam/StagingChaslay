@@ -124,7 +124,7 @@ fun WaiterPosScreen(
             onToggleDiscountPanel = viewModel::toggleCheckoutDiscountPanel,
             onSplitClick = {},
             onOpenCashDrawer = {},
-            onPrintReceipt = {},
+            onPrintReceipt = viewModel::printCheckoutPreview,
             onTenderAmount = viewModel::updateCheckoutTenderAmount,
             onComplete = { viewModel.completeCheckout(activity) }
         )
@@ -136,9 +136,9 @@ fun WaiterPosScreen(
                 orderCompleteNotice = state.orderCompleteNotice,
                 showAdyenPaymentReceipt = state.adyenCustomerReceipt != null,
                 showAdyenCashierReceipt = state.adyenCashierReceipt != null,
-                onPrintReceipt = {},
-                onPrintAdyenPaymentReceipt = {},
-                onPrintAdyenCashierReceipt = {},
+                onPrintReceipt = viewModel::printCompletedReceipt,
+                onPrintAdyenPaymentReceipt = viewModel::printAdyenCustomerReceipt,
+                onPrintAdyenCashierReceipt = viewModel::printAdyenCashierReceipt,
                 onShareEmail = {},
                 onDone = {
                     viewModel.dismissOrderComplete()

@@ -5501,10 +5501,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     order: MerchantOrder,
     returnView: 'orders' | 'register' = 'orders'
   ) => {
-    if (isInvoiceOrder(order)) {
-      void markInvoiceOrderPaid(order, returnView);
-      return;
-    }
     const lines = orderItemsToCartLines(order.items || []);
     if (!lines.length) {
       toast.error(t('webPosNoItems'));
@@ -5595,7 +5591,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!primary && due > 0.001) return;
     let payMethod = primary?.method === 'gift_card' ? 'card' : primary?.method || 'cash';
     if (ctx.isInvoice) {
-      payMethod = INVOICE_SETTLEMENT_METHOD;
+      const counterTender = ['cash', 'card', 'terminal'].includes(payMethod);
+      if (!counterTender) {
+        payMethod = INVOICE_SETTLEMENT_METHOD;
+      }
     } else {
       if (payMethod === 'pay_later' || payMethod === 'invoice') payMethod = 'cash';
       if (!['cash', 'card', 'terminal', 'bank_transfer'].includes(payMethod)) payMethod = 'cash';
@@ -5704,15 +5703,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         };
         splitReceiptsRef.current = [part];
         setLastSplitReceipts([part]);
-        if (!ctx.isInvoice && !isInvoiceOrder(orderForReceipt || {})) {
+        const invoiceCounter =
+          ctx.isInvoice && ['cash', 'card', 'terminal'].includes(payMethod);
+        const skipThermal =
+          (ctx.isInvoice || isInvoiceOrder(orderForReceipt || {})) && !invoiceCounter;
+        if (!skipThermal) {
           try {
             await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl);
-          } catch {
-            /* print is best-effort — manual reprint uses staged lastReceipt */
+          } catch (e: unknown) {
+            notifyPrintError(e, 'webPosPrintFailed');
           }
         }
-      } catch {
-        /* receipt build is best-effort */
+      } catch (e: unknown) {
+        notifyPrintError(e, 'webPosPrintFailed');
       }
       setSuccessInfo({
         amount: ctx.total,
