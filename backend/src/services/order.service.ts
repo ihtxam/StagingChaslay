@@ -540,6 +540,14 @@ export class OrderService {
         } catch (printErr) {
           console.warn("Accept auto-print enqueue failed:", printErr);
         }
+        void import("@/services/kds.service")
+          .then(({ KdsService, KdsLicenseError }) =>
+            KdsService.pushOrderToKitchen(merchantId, orderId).catch((err) => {
+              if (err instanceof KdsLicenseError) return;
+              console.warn("Accept KDS push failed:", err);
+            })
+          )
+          .catch(() => {});
         void sendGuestShopOrderEmail(merchantId, orderId, "confirmed", order);
         return set({ status: "preparing" });
       }

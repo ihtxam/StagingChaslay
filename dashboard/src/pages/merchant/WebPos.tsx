@@ -2347,6 +2347,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         dismissNewOrderAlert(order.id);
         toast.success(t('updated'));
         void pollOnlineOrders();
+        setOrdersRefreshToken((n) => n + 1);
         openOnlineOrdersInTab(order.id);
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('actionFailed'));

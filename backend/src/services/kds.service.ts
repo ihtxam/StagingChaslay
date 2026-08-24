@@ -220,6 +220,48 @@ export class KdsService {
     });
   }
 
+  /**
+   * Push a saved order (online shop / partner) onto the KDS board.
+   * POS register tickets use pushKitchen directly from WebPOS "Send to kitchen".
+   */
+  static async pushOrderToKitchen(merchantId: string, orderId: string) {
+    const db = getDb();
+    const order = await db.query.orders.findFirst({
+      where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
+      with: {
+        items: {
+          with: { product: { columns: { categoryId: true } } },
+        },
+      },
+    });
+    if (!order?.items?.length) return { ok: true, added: 0 };
+
+    const { formatWebOrderNumberDisplay } = await import("@/lib/web-order-number");
+    const { resolveOrderItemName } = await import("@/lib/order-item-name");
+    const displayNum =
+      formatWebOrderNumberDisplay(order.orderNumber || "") ||
+      order.orderNumber ||
+      order.id;
+
+    const items = order.items.map((i) => ({
+      lineId: i.id,
+      productId: i.productId || undefined,
+      categoryId: i.product?.categoryId || undefined,
+      name: resolveOrderItemName(i.productName),
+      quantity: String(i.quantity || 1),
+      selectedExtras: i.selectedExtras || [],
+      comboSelections: i.comboSelections || [],
+    }));
+
+    return this.pushKitchen(merchantId, {
+      ticketKey: displayNum,
+      orderNumber: displayNum,
+      tableLabel: order.customerName?.trim()?.slice(0, 120) || null,
+      channel: order.fulfillmentChannel || "takeaway",
+      items,
+    });
+  }
+
   /** Upsert ticket + append new line items when kitchen receives an order. */
   static async pushKitchen(merchantId: string, payload: KdsPushPayload) {
     await requireAddon(merchantId);
