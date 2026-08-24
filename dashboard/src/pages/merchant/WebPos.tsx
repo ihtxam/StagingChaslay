@@ -8371,6 +8371,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     tabNumber?: string | null;
                     ticketDisplay?: string | null;
                     ticketOrderNumber?: string | null;
+                    kitchenTicketKey?: string | null;
                     billDiscount?: BillDiscount;
                     orderNote?: string;
                   }
@@ -8384,7 +8385,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 if (data.tableLabel) setTableLabel(data.tableLabel);
                 if (data.tabNumber != null) setTabNumber(data.tabNumber);
                 const ticketFromLabel = (held.label || '').match(/#\d{4}/)?.[0] || null;
-                const restoredTicket = data.ticketDisplay?.trim() || ticketFromLabel;
+                const restoredTicket =
+                  data.kitchenTicketKey?.trim() ||
+                  data.ticketDisplay?.trim() ||
+                  ticketFromLabel;
                 if (restoredTicket) {
                   setTicketDisplay(restoredTicket);
                   lastKitchenTicketRef.current = restoredTicket;
@@ -8628,6 +8632,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 }
                 kdsReadyMap={kdsReadyMap}
                 kdsTicketKeys={kdsCartTicketKeys}
+                kitchenOrderLabel={
+                  orderSent || cart.some((l) => l.sentToKitchen)
+                    ? kitchenOrderNumber({ allowNew: false }) || null
+                    : null
+                }
               />
             </div>
             ) : null}

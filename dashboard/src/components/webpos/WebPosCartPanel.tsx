@@ -130,6 +130,8 @@ type Props = {
   kdsReadyMap?: Map<string, Set<string>>;
   /** POS ticket keys for KDS matching (optional fallback). */
   kdsTicketKeys?: string[];
+  /** Kitchen shout / ticket number (#8728) when order has sent lines. */
+  kitchenOrderLabel?: string | null;
 };
 
 function lineExtrasLabel(l: CartLine) {
@@ -254,6 +256,7 @@ export default function WebPosCartPanel({
   onLineCancel,
   kdsReadyMap = new Map(),
   kdsTicketKeys = [],
+  kitchenOrderLabel = null,
 }: Props) {
   const { t } = useI18n();
   const lineReady = (line: CartLine) =>
@@ -377,6 +380,14 @@ export default function WebPosCartPanel({
     isRetail && showChannelTabs && channelTabOptions.includes('dine_in');
   const showFulfillmentTime =
     !!onEditFulfillment && (channel === 'takeaway' || channel === 'delivery');
+  const sentOrderLabel = useMemo(() => {
+    if (!(orderedLines.length > 0 || orderSent)) return null;
+    const fromParent = kitchenOrderLabel?.trim();
+    if (fromParent) return fromParent;
+    const tab = tabNumber?.trim().replace(/^#/, '');
+    if (tab) return `#${tab}`;
+    return ticketDisplay?.trim() || null;
+  }, [kitchenOrderLabel, orderedLines.length, orderSent, tabNumber, ticketDisplay]);
   const cartMenuItemClass =
     'flex w-full min-h-[3rem] touch-manipulation items-center gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-left text-sm font-semibold text-stone-800 hover:bg-stone-100 active:scale-[0.98] disabled:opacity-40';
   const cartMenuItemDangerClass =
@@ -449,6 +460,14 @@ export default function WebPosCartPanel({
                   ? fulfillmentLabel
                   : t('webPosChooseTime')}
               </button>
+            ) : null}
+            {sentOrderLabel ? (
+              <span
+                className="inline-flex min-h-8 shrink-0 items-center rounded-lg bg-teal-100 px-2 py-1 text-[11px] font-bold tabular-nums tracking-tight text-teal-900"
+                title={t('webPosTicket')}
+              >
+                {sentOrderLabel}
+              </span>
             ) : null}
             {tableLabel && channel === 'dine_in' ? (
               <span className="inline-flex min-w-0 flex-1 items-center truncate rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-700">
