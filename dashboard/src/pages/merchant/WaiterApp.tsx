@@ -45,7 +45,8 @@ import {
   printWaiterKitchen,
 } from '@/lib/waiter-kitchen';
 import { nextWebPosTicketNumber, webPosBackendOrderId } from '@/lib/webpos-receipt';
-import { findHeldOrderForTable, parseHeldCartJson, releaseHeldOrder } from '@/lib/webpos-held';
+import { findHeldOrderForTable, parseHeldCartJson, buildHeldTableInfoMap, releaseHeldOrder } from '@/lib/webpos-held';
+import type { TableHeldDisplay } from '@/components/webpos/WebPosTablesView';
 import { resolveCartCheckoutGuard } from '@/lib/order-to-cart';
 import type { MerchantOrder } from '@/lib/order-management';
 import {
@@ -109,6 +110,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [autoPrintKitchen, setAutoPrintKitchen] = useState(() => readDeviceAutoPrintKitchen(true));
   const [heldTableIds, setHeldTableIds] = useState<string[]>([]);
+  const [heldTableInfo, setHeldTableInfo] = useState<Record<string, TableHeldDisplay>>({});
   const [ordersRefresh, setOrdersRefresh] = useState(0);
   const activeHeldIdRef = useRef<string | null>(null);
   const paidBlockedRef = useRef(false);
@@ -187,24 +189,44 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const refreshHeldTables = async () => {
       try {
         const res = await api.get('/merchant/pos/held');
         if (cancelled) return;
+        const rows = (res.data?.held || []) as Array<{
+          cartJson?: Record<string, unknown> | null;
+          staffName?: string | null;
+          updatedAt?: string | null;
+          createdAt?: string | null;
+        }>;
         const ids = new Set<string>();
-        for (const h of (res.data?.held || []) as Array<{ cartJson?: Record<string, unknown> | null }>) {
+        for (const h of rows) {
           const tid = parseHeldCartJson(h.cartJson).tableId;
           if (typeof tid === 'string' && tid) ids.add(tid);
         }
         setHeldTableIds([...ids]);
+        const infoMap = buildHeldTableInfoMap(rows);
+        const display: Record<string, TableHeldDisplay> = {};
+        for (const [tid, info] of Object.entries(infoMap)) {
+          display[tid] = { staffName: info.staffName, itemCount: info.itemCount };
+        }
+        setHeldTableInfo(display);
       } catch {
         /* ignore */
       }
-    })();
+    };
+    void refreshHeldTables();
+    if (tab !== 'tables') {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const timer = window.setInterval(() => void refreshHeldTables(), 5000);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
-  }, [ordersRefresh]);
+  }, [ordersRefresh, tab]);
 
   const cartQtyByProduct = useMemo(() => {
     const m = new Map<string, number>();
@@ -741,6 +763,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
                 onSelectTable={selectTable}
                 selectedTableId={tableId}
                 draftTableIds={heldTableIds}
+                tableHeldInfo={heldTableInfo}
                 refreshToken={ordersRefresh}
               />
             </div>

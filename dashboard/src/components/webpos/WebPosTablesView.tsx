@@ -54,11 +54,18 @@ function writeSelectedFloorId(id: string) {
   }
 }
 
+export type TableHeldDisplay = {
+  staffName?: string | null;
+  itemCount?: number;
+};
+
 type Props = {
   onSelectTable?: (table: { id: string; label: string }) => void;
   selectedTableId?: string | null;
   /** Table ids that have an in-session open draft cart */
   draftTableIds?: string[];
+  /** Server-held order metadata keyed by table id */
+  tableHeldInfo?: Record<string, TableHeldDisplay>;
   /** Hide this table from the plan (e.g. source table when picking a move target). */
   excludeTableId?: string | null;
   /** Move whole open order from an occupied table. */
@@ -71,6 +78,7 @@ export default function WebPosTablesView({
   onSelectTable,
   selectedTableId,
   draftTableIds = [],
+  tableHeldInfo = {},
   excludeTableId = null,
   onMoveTable,
   refreshToken = 0,
@@ -151,13 +159,14 @@ export default function WebPosTablesView({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-3 sm:p-4 touch-pan-x touch-pan-y">
         <div
-          className="relative mx-auto rounded-xl border border-stone-200 bg-white shadow-sm"
+          className="relative rounded-xl border border-stone-200 bg-white shadow-sm"
           style={{
             width: activePlan.canvasWidth,
             height: activePlan.canvasHeight,
-            maxWidth: '100%',
+            minWidth: activePlan.canvasWidth,
+            minHeight: activePlan.canvasHeight,
           }}
         >
           {activePlan.tables
@@ -165,8 +174,12 @@ export default function WebPosTablesView({
             .map((table) => {
             const selected = selectedTableId === table.id;
             const hasDraft = draftTableIds.includes(table.id);
+            const heldInfo = tableHeldInfo[table.id];
             const isReserved = table.status === 'reserved';
             const statusColor = hasDraft ? STATUS_COLOR.occupied : STATUS_COLOR[table.status];
+            const subLabel = hasDraft
+              ? heldInfo?.staffName?.trim() || t('webPosOpenCart')
+              : `${table.capacity}p`;
             return (
               <div
                 key={table.id}
@@ -194,8 +207,8 @@ export default function WebPosTablesView({
                   }}
                 >
                   <span>{table.label}</span>
-                  <span className="text-[10px] font-normal opacity-70">
-                    {hasDraft ? t('webPosOpenCart') : `${table.capacity}p`}
+                  <span className="max-w-full truncate px-1 text-[10px] font-normal opacity-80">
+                    {subLabel}
                   </span>
                 </button>
                 {hasDraft && onMoveTable ? (
