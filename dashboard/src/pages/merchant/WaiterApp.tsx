@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ChefHat,
@@ -45,6 +45,7 @@ import {
   persistWaiterHeldOrder,
   printWaiterKitchen,
 } from '@/lib/waiter-kitchen';
+import { parseHeldCartJson } from '@/lib/webpos-held';
 import {
   pushCartLinesToKds,
   fetchKdsBoardStatus,
@@ -106,6 +107,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [autoPrintKitchen, setAutoPrintKitchen] = useState(() => readDeviceAutoPrintKitchen(true));
   const [heldTableIds, setHeldTableIds] = useState<string[]>([]);
   const [ordersRefresh, setOrdersRefresh] = useState(0);
+  const activeHeldIdRef = useRef<string | null>(null);
 
   const pinRequired = webPosPinGateRequired({
     hasStaffPins: staffConfigured,
@@ -187,7 +189,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         if (cancelled) return;
         const ids = new Set<string>();
         for (const h of (res.data?.held || []) as Array<{ cartJson?: Record<string, unknown> | null }>) {
-          const tid = h.cartJson?.tableId;
+          const tid = parseHeldCartJson(h.cartJson).tableId;
           if (typeof tid === 'string' && tid) ids.add(tid);
         }
         setHeldTableIds([...ids]);
@@ -304,12 +306,50 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     );
   };
 
-  const selectTable = (table: { id: string; label: string }) => {
+  const loadHeldForTable = async (targetTableId: string) => {
+    const res = await api.get('/merchant/pos/held');
+    const rows = (res.data?.held || []) as Array<{ id: string; cartJson?: unknown }>;
+    return rows.find((h) => parseHeldCartJson(h.cartJson).tableId === targetTableId) || null;
+  };
+
+  const applyHeldOrder = (held: { id: string; cartJson?: unknown }, table: { id: string; label: string }) => {
+    const meta = parseHeldCartJson(held.cartJson);
+    activeHeldIdRef.current = held.id;
+    setCart(meta.cart || []);
+    setChannel((meta.channel as PosChannel) || 'dine_in');
     setTableId(table.id);
-    setTableLabel(table.label);
-    setChannel('dine_in');
-    ensureTicket();
-    setTab('order');
+    setTableLabel(table.label || meta.tableLabel || null);
+    setTicketDisplay(meta.ticketDisplay || null);
+    setTicketOrderNumber(meta.ticketOrderNumber || meta.ticketDisplay || null);
+    setOrderNote(meta.orderNote || '');
+  };
+
+  const selectTable = async (table: { id: string; label: string }) => {
+    try {
+      const held = await loadHeldForTable(table.id);
+      if (held) {
+        applyHeldOrder(held, table);
+      } else {
+        activeHeldIdRef.current = null;
+        setCart([]);
+        setTableId(table.id);
+        setTableLabel(table.label);
+        setChannel('dine_in');
+        setTicketDisplay(null);
+        setTicketOrderNumber(null);
+        setOrderNote('');
+        ensureTicket();
+        if (heldTableIds.includes(table.id)) {
+          toast(t('waiterTableOccupiedEmpty'), { icon: '⚠️' });
+        }
+      }
+      setTab('order');
+    } catch (e: unknown) {
+      toast.error(
+        (e as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+          t('webPosLoadFailed')
+      );
+    }
   };
 
   const startTakeaway = () => {
@@ -350,6 +390,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   }, [loading, pinRequired, searchParams, tableId]);
 
   const resetOrder = () => {
+    activeHeldIdRef.current = null;
     setCart([]);
     setTableId(null);
     setTableLabel(null);
@@ -472,6 +513,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         t,
       });
       await persistWaiterHeldOrder({
+        heldId: activeHeldIdRef.current,
         cartLines: nextCart,
         channel,
         tableId,

@@ -862,6 +862,7 @@ const en: Dict = {
   platformSystemLogs: 'System logs',
   platformSystemNav: 'System',
   platformSystemLogsHint: 'Platform events, errors, and superadmin actions.',
+  platformClientErrors: 'Client errors',
   platformLogsLoadFailed: 'Could not load system logs',
   platformNoLogs: 'No log entries yet',
   platformMessagesAdmin: 'Messages & status',
@@ -1540,6 +1541,10 @@ const en: Dict = {
   webPosHoldFailed: 'Could not hold order',
   webPosOrderResumed: 'Order resumed',
   webPosKitchenPrintFailed: 'Kitchen print failed',
+  webPosNoKitchenPrinterConfigured:
+    'No kitchen printer configured. Enable Kitchen on a printer in Settings (not Receipt only).',
+  waiterTableOccupiedEmpty:
+    'This table has an open order on another device — cart could not be loaded. Try again or use the main till.',
   webPosKitchenPrintRetrying: 'Kitchen print failed — retrying automatically…',
   webPosKitchenPrintRetryingStatus: 'Retrying… attempt {n} of {max}',
   webPosPrintAgentOfflineShort: 'Print Agent offline — start it on this PC',
@@ -4009,6 +4014,7 @@ const fr: Dict = {
   platformSystemLogs: 'Journaux système',
   platformSystemNav: 'Système',
   platformSystemLogsHint: 'Événements plateforme, erreurs et actions superadmin.',
+  platformClientErrors: 'Erreurs client',
   platformLogsLoadFailed: 'Impossible de charger les journaux',
   platformNoLogs: 'Aucune entrée de journal',
   platformMessagesAdmin: 'Messages & statut',
@@ -4692,6 +4698,10 @@ const fr: Dict = {
   webPosHoldFailed: 'Impossible de mettre en attente',
   webPosOrderResumed: 'Commande reprise',
   webPosKitchenPrintFailed: 'Échec impression cuisine',
+  webPosNoKitchenPrinterConfigured:
+    'Aucune imprimante cuisine configurée. Activez Cuisine sur une imprimante dans Paramètres (pas Receipt seul).',
+  waiterTableOccupiedEmpty:
+    'Cette table a une commande ouverte sur un autre appareil — panier introuvable. Réessayez ou utilisez la caisse principale.',
   webPosKitchenPrintRetrying: 'Impression cuisine échouée — nouvelle tentative…',
   webPosKitchenPrintRetryingStatus: 'Nouvelle tentative… essai {n} sur {max}',
   webPosPrintAgentOfflineShort: 'Print Agent hors ligne — démarrez-le sur ce PC',
@@ -7128,6 +7138,7 @@ const de: Dict = {
   platformSystemLogs: 'Systemprotokolle',
   platformSystemNav: 'System',
   platformSystemLogsHint: 'Plattform-Ereignisse, Fehler und Superadmin-Aktionen.',
+  platformClientErrors: 'Client-Fehler',
   platformLogsLoadFailed: 'Protokolle konnten nicht geladen werden',
   platformNoLogs: 'Noch keine Protokolleinträge',
   platformMessagesAdmin: 'Nachrichten & Status',
@@ -7811,6 +7822,10 @@ const de: Dict = {
   webPosHoldFailed: 'Halten fehlgeschlagen',
   webPosOrderResumed: 'Bestellung fortgesetzt',
   webPosKitchenPrintFailed: 'Küchendruck fehlgeschlagen',
+  webPosNoKitchenPrinterConfigured:
+    'Kein Küchendrucker konfiguriert. Aktivieren Sie Küche auf einem Drucker in Einstellungen (nicht nur Receipt).',
+  waiterTableOccupiedEmpty:
+    'Dieser Tisch hat eine offene Bestellung auf einem anderen Gerät — Warenkorb konnte nicht geladen werden.',
   webPosKitchenPrintRetrying: 'Küchendruck fehlgeschlagen — automatischer Neuversuch…',
   webPosKitchenPrintRetryingStatus: 'Neuversuch… Versuch {n} von {max}',
   webPosPrintAgentOfflineShort: 'Print Agent offline — auf diesem PC starten',

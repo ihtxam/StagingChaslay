@@ -74,6 +74,13 @@ export default function SystemLogs() {
           value={category}
           onChange={(e) => { setPage(1); setCategory(e.target.value); }}
         />
+        <button
+          type="button"
+          className={`btn-secondary text-sm ${category === 'client_error' ? 'ring-2 ring-teal-500' : ''}`}
+          onClick={() => { setPage(1); setCategory((c) => (c === 'client_error' ? '' : 'client_error')); }}
+        >
+          {t('platformClientErrors')}
+        </button>
         <button type="button" className="btn-secondary text-sm" onClick={() => void load()}>
           {t('refresh')}
         </button>

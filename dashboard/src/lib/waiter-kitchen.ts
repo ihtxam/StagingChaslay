@@ -4,6 +4,7 @@ import {
   buildKitchenTicketItemFromLine,
   generateKitchenTicketEscPos,
   generateKitchenTicketText,
+  resolveKitchenPrintJobs,
   resolveKitchenPaperWidthMm,
   resolveReceiptLanguage,
   uint8ToBase64,
@@ -74,7 +75,9 @@ export async function printWaiterKitchen(opts: {
   };
 
   let queuedAny = false;
-  const printJobs = buildKitchenPrintJobs(receiptItems, printSettings);
+  const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter(
+    (j) => (j.printerName || '').trim()
+  );
   if (printJobs.length) {
     for (const job of printJobs) {
       const paperWidthMm = job.paperWidthMm;
@@ -103,26 +106,7 @@ export async function printWaiterKitchen(opts: {
     return;
   }
 
-  const paperWidthMm = resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
-  const escpos = generateKitchenTicketEscPos({
-    ...kitchenOpts,
-    items: receiptItems,
-    paperWidthMm,
-  });
-  const text = generateKitchenTicketText({
-    ...kitchenOpts,
-    items: receiptItems,
-    paperWidthMm,
-  });
-  const mode = await printViaAgentOrQueue({
-    dataBase64: uint8ToBase64(escpos),
-    text,
-    orderId: orderNumber,
-    retryLocally: false,
-    jobKind: 'kitchen',
-    jobLabel: orderNumber ? `Kitchen · ${orderNumber}` : 'Kitchen',
-  });
-  if (mode === 'queued') toast.success(t('webPosPrintQueuedMainTill'));
+  toast.error(t('webPosNoKitchenPrinterConfigured'));
 }
 
 export function nextWaiterTicketNumber(): string {
@@ -143,6 +127,7 @@ export function nextWaiterTicketNumber(): string {
 }
 
 export async function persistWaiterHeldOrder(opts: {
+  heldId?: string | null;
   cartLines: CartLine[];
   channel: PosChannel;
   tableId?: string | null;
@@ -156,6 +141,7 @@ export async function persistWaiterHeldOrder(opts: {
   money: (n: number) => string;
 }): Promise<void> {
   const {
+    heldId,
     cartLines,
     channel,
     tableId,
@@ -185,6 +171,7 @@ export async function persistWaiterHeldOrder(opts: {
   const api = (await import('@/lib/api')).default;
 
   await api.post('/merchant/pos/held', {
+    id: heldId || undefined,
     label: heldLabel,
     channel,
     cartJson,
