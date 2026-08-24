@@ -433,6 +433,10 @@ export class OrderService {
         throw new Error("Order not found");
       }
 
+      void import("@/services/ods.service")
+        .then(({ OdsService }) => OdsService.syncFromOrder(merchantId, order[0]))
+        .catch(() => {});
+
       return order[0];
     } catch (error) {
       console.error("Error updating order:", error);
@@ -540,11 +544,14 @@ export class OrderService {
         } catch (printErr) {
           console.warn("Accept auto-print enqueue failed:", printErr);
         }
-        void import("@/services/kds.service")
-          .then(({ KdsService, KdsLicenseError }) =>
-            KdsService.pushOrderToKitchen(merchantId, orderId).catch((err) => {
-              if (err instanceof KdsLicenseError) return;
-              console.warn("Accept KDS push failed:", err);
+        void import("@/services/kitchen-ingress.service")
+          .then(({ enterKitchenFromOrder }) =>
+            enterKitchenFromOrder(merchantId, orderId, {
+              printKitchen: false,
+              orderSource:
+                order.orderSource === "justeat" || order.orderSource === "ubereats"
+                  ? order.orderSource
+                  : "online_shop",
             })
           )
           .catch(() => {});
@@ -555,7 +562,11 @@ export class OrderService {
         if (status !== "accepted" && !awaitingApproval) {
           throw new Error("Order cannot start preparing from current status");
         }
-        return set({ status: "preparing" });
+        const updated = await set({ status: "preparing" });
+        void import("@/services/kitchen-ingress.service")
+          .then(({ enterKitchenFromOrder }) => enterKitchenFromOrder(merchantId, orderId))
+          .catch(() => {});
+        return updated;
       }
       case "mark_ready": {
         if (status !== "preparing" && status !== "accepted") {
