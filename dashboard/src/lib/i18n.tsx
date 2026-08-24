@@ -2320,9 +2320,11 @@ const en: Dict = {
   odsRotateToken: 'Rotate link',
   odsNoDisplays: 'No ODS screens yet',
   odsClearBoard: 'Clear pickup board',
-  odsClearBoardHint: 'Remove all order numbers from the customer display (stale kitchen tickets).',
+  odsClearBoardHint:
+    'Hides every number currently on the pickup display, including stale online orders. They stay hidden even if the kitchen screen pushes them again.',
   odsClearBoardConfirm: 'Clear all orders from the pickup board?',
-  odsClearBoardDone: 'Pickup board cleared ({n} removed)',
+  odsClearBoardDone:
+    'Pickup board cleared ({d} hidden, {n} kitchen tickets removed, {c} open orders closed)',
   odsThemeUpdated: 'Theme updated',
   odsAddonRequired:
     'Order display (ODS) is a paid add-on. Ask your agency or reseller to enable it on your account.',

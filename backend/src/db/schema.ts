@@ -1299,6 +1299,26 @@ export const odsOrders = pgTable(
   })
 );
 
+/** Staff-dismissed pickup numbers — survives clear-all and blocks live merge re-appearance. */
+export const odsDismissedOrders = pgTable(
+  "ods_dismissed_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    orderNumber: varchar("order_number", { length: 64 }).notNull(),
+    dismissedAt: timestamp("dismissed_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("ods_dismissed_merchant_id_idx").on(table.merchantId),
+    merchantOrderIdx: uniqueIndex("ods_dismissed_merchant_order_uidx").on(
+      table.merchantId,
+      table.orderNumber
+    ),
+  })
+);
+
 export const SIGNAGE_TEMPLATES = [
   "dark_pizza",
   "kebab_green",
@@ -2619,6 +2639,10 @@ export const odsDisplaysRelations = relations(odsDisplays, ({ one }) => ({
 
 export const odsOrdersRelations = relations(odsOrders, ({ one }) => ({
   merchant: one(merchants, { fields: [odsOrders.merchantId], references: [merchants.id] }),
+}));
+
+export const odsDismissedOrdersRelations = relations(odsDismissedOrders, ({ one }) => ({
+  merchant: one(merchants, { fields: [odsDismissedOrders.merchantId], references: [merchants.id] }),
 }));
 
 export const kdsTicketsRelations = relations(kdsTickets, ({ one, many }) => ({
