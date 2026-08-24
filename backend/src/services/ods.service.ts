@@ -73,22 +73,31 @@ export function resolveOdsDisplayNumber(order: OrderForOds): string {
 
 function mergeBoardNumbers(
   shadow: { preparing: string[]; ready: string[] },
-  live: { preparing: string[]; ready: string[] }
+  live: { preparing: string[]; ready: string[] },
+  kdsReady: string[] = []
 ) {
-  const readySet = new Set([...live.ready, ...shadow.ready]);
+  const readyAliasSet = new Set<string>();
+  for (const num of [...live.ready, ...shadow.ready, ...kdsReady]) {
+    for (const alias of orderNumberAliases(num)) readyAliasSet.add(alias);
+  }
+  const isReady = (num: string) =>
+    orderNumberAliases(num).some((alias) => readyAliasSet.has(alias));
+
   const preparing: string[] = [];
   const seenPrep = new Set<string>();
   for (const num of [...shadow.preparing, ...live.preparing]) {
-    if (readySet.has(num) || seenPrep.has(num)) continue;
-    seenPrep.add(num);
-    preparing.push(num);
+    const key = normalizeOrderNumber(num);
+    if (!key || isReady(num) || seenPrep.has(key)) continue;
+    seenPrep.add(key);
+    preparing.push(key);
   }
   const ready: string[] = [];
   const seenReady = new Set<string>();
-  for (const num of [...live.ready, ...shadow.ready]) {
-    if (seenReady.has(num)) continue;
-    seenReady.add(num);
-    ready.push(num);
+  for (const num of [...live.ready, ...shadow.ready, ...kdsReady]) {
+    const key = normalizeOrderNumber(num);
+    if (!key || seenReady.has(key)) continue;
+    seenReady.add(key);
+    ready.push(key);
   }
   return { preparing, ready };
 }
@@ -102,6 +111,35 @@ function filterBoardByDismissed(
     preparing: board.preparing.filter((n) => !isOrderDismissed(n, dismissed)),
     ready: board.ready.filter((n) => !isOrderDismissed(n, dismissed)),
   };
+}
+
+async function kdsKitchenReadyNumbers(merchantId: string): Promise<string[]> {
+  const db = getDb();
+  const tickets = await db.query.kdsTickets.findMany({
+    where: and(
+      eq(schema.kdsTickets.merchantId, merchantId),
+      inArray(schema.kdsTickets.status, ["pending", "completed"])
+    ),
+    with: { items: true },
+  });
+  const ready: string[] = [];
+  const seen = new Set<string>();
+  for (const ticket of tickets) {
+    const items = ticket.items || [];
+    if (!items.length) continue;
+    const allReady =
+      ticket.status === "completed" ||
+      items.every((item) => String(item.status || "").toLowerCase() === "ready");
+    if (!allReady) continue;
+    const num =
+      resolveOdsPushNumber(ticket.ticketKey) || resolveOdsPushNumber(ticket.orderNumber);
+    if (!num) continue;
+    const key = normalizeOrderNumber(num);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    ready.push(key);
+  }
+  return ready;
 }
 
 async function dismissedOrderNumbers(merchantId: string): Promise<Set<string>> {
