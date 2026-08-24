@@ -26,7 +26,10 @@ export async function dismissOrderFromOds(orderNumber: string): Promise<void> {
   }
 }
 
-export async function clearAllOdsOrders(): Promise<number> {
+export async function clearAllOdsOrders(): Promise<{ removed: number; dismissed: number }> {
   const res = await api.post('/merchant/ods/clear-all');
-  return Number(res.data?.removed) || 0;
+  return {
+    removed: Number(res.data?.removed) || 0,
+    dismissed: Number(res.data?.dismissed) || 0,
+  };
 }

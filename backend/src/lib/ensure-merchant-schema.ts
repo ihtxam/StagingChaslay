@@ -320,6 +320,14 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS ods_orders_merchant_id_idx ON ods_orders(merchant_id)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS ods_orders_merchant_order_uidx ON ods_orders(merchant_id, order_number)`,
+  `CREATE TABLE IF NOT EXISTS ods_dismissed_orders (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    order_number varchar(64) NOT NULL,
+    dismissed_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS ods_dismissed_merchant_id_idx ON ods_dismissed_orders(merchant_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS ods_dismissed_merchant_order_uidx ON ods_dismissed_orders(merchant_id, order_number)`,
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_number varchar(50)`,
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_issued_at timestamptz`,
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_due_at timestamptz`,

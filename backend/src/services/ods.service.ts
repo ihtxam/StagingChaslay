@@ -32,11 +32,14 @@ export type OdsPushPayload = {
 };
 
 const READY_RETENTION_MS = 2 * 60 * 60 * 1000;
-const PREPARING_RETENTION_MS = 24 * 60 * 60 * 1000;
 /** Live “being prepared” rows older than this are hidden (stale kitchen queue). */
 const LIVE_PREPARING_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 /** Live “ready for pickup” rows older than this are hidden. */
 const LIVE_READY_MAX_AGE_MS = 4 * 60 * 60 * 1000;
+/** Shadow “preparing” rows — align with live preparing max age. */
+const PREPARING_RETENTION_MS = LIVE_PREPARING_MAX_AGE_MS;
+/** Dismissed numbers expire after this (allows ticket numbers to recycle). */
+const DISMISSED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Order Center / web shop statuses shown on the “being prepared” column. */
 const PREPARING_ORDER_STATUSES = ["accepted", "preparing", "sent_to_kitchen"] as const;
@@ -88,6 +91,72 @@ function mergeBoardNumbers(
     ready.push(num);
   }
   return { preparing, ready };
+}
+
+function filterBoardByDismissed(
+  board: { preparing: string[]; ready: string[] },
+  dismissed: Set<string>
+) {
+  if (!dismissed.size) return board;
+  const skip = (num: string) => dismissed.has(normalizeOrderNumber(num));
+  return {
+    preparing: board.preparing.filter((n) => !skip(n)),
+    ready: board.ready.filter((n) => !skip(n)),
+  };
+}
+
+async function dismissedOrderNumbers(merchantId: string): Promise<Set<string>> {
+  const db = getDb();
+  const rows = await db.query.odsDismissedOrders.findMany({
+    where: eq(schema.odsDismissedOrders.merchantId, merchantId),
+    columns: { orderNumber: true },
+  });
+  return new Set(rows.map((r) => normalizeOrderNumber(r.orderNumber)).filter(Boolean));
+}
+
+async function markDismissed(merchantId: string, orderNumbers: Iterable<string>) {
+  const db = getDb();
+  const now = new Date();
+  const seen = new Set<string>();
+  for (const raw of orderNumbers) {
+    const orderNumber = normalizeOrderNumber(raw);
+    if (!orderNumber || seen.has(orderNumber)) continue;
+    seen.add(orderNumber);
+    await db
+      .insert(schema.odsDismissedOrders)
+      .values({ merchantId, orderNumber, dismissedAt: now })
+      .onConflictDoUpdate({
+        target: [schema.odsDismissedOrders.merchantId, schema.odsDismissedOrders.orderNumber],
+        set: { dismissedAt: now },
+      });
+  }
+  return seen.size;
+}
+
+async function unmarkDismissed(merchantId: string, orderNumber: string) {
+  const num = normalizeOrderNumber(orderNumber);
+  if (!num) return;
+  const db = getDb();
+  await db
+    .delete(schema.odsDismissedOrders)
+    .where(
+      and(
+        eq(schema.odsDismissedOrders.merchantId, merchantId),
+        eq(schema.odsDismissedOrders.orderNumber, num)
+      )
+    );
+}
+
+async function purgeDismissed(merchantId: string) {
+  const db = getDb();
+  await db
+    .delete(schema.odsDismissedOrders)
+    .where(
+      and(
+        eq(schema.odsDismissedOrders.merchantId, merchantId),
+        lt(schema.odsDismissedOrders.dismissedAt, new Date(Date.now() - DISMISSED_RETENTION_MS))
+      )
+    );
 }
 
 function newToken(): string {
@@ -176,6 +245,7 @@ async function purgeStale(merchantId: string) {
   const db = getDb();
   const now = Date.now();
   await reconcileShadowBoard(merchantId);
+  await purgeDismissed(merchantId);
   await db
     .delete(schema.odsOrders)
     .where(
@@ -296,6 +366,11 @@ export class OdsService {
     const db = getDb();
     await purgeStale(merchantId);
 
+    const dismissed = await dismissedOrderNumbers(merchantId);
+    if (dismissed.has(orderNumber)) {
+      return { ok: true, skipped: true, dismissed: true };
+    }
+
     const existing = await findShadowRow(merchantId, orderNumber);
 
     const now = new Date();
@@ -339,6 +414,7 @@ export class OdsService {
     }
     if (!enabled) return { ok: false, skipped: true };
     const db = getDb();
+    await markDismissed(merchantId, [num]);
     const rows = await db.query.odsOrders.findMany({
       where: eq(schema.odsOrders.merchantId, merchantId),
       columns: { id: true, orderNumber: true },
@@ -360,31 +436,66 @@ export class OdsService {
     if (!num) return { ok: false, skipped: true };
 
     const status = String(order.status || "").toLowerCase();
+    if (ODS_DISMISS_STATUSES.has(status)) {
+      await unmarkDismissed(merchantId, num);
+      return this.dismissOrderSoft(merchantId, num);
+    }
+
+    const dismissed = await dismissedOrderNumbers(merchantId);
+    if (dismissed.has(num)) {
+      return { ok: true, skipped: true, dismissed: true };
+    }
+
     if ((PREPARING_ORDER_STATUSES as readonly string[]).includes(status)) {
       return this.pushOrder(merchantId, { orderNumber: num, status: "preparing" });
     }
     if (status === "ready") {
       return this.pushOrder(merchantId, { orderNumber: num, status: "ready" });
     }
-    if (ODS_DISMISS_STATUSES.has(status)) {
-      return this.dismissOrderSoft(merchantId, num);
-    }
     return { ok: false, skipped: true };
   }
 
-  /** Remove every shadow-board entry for this merchant (Settings → clear board). */
+  /** Snapshot current board numbers, dismiss them, and clear shadow rows. */
   static async clearAllOrders(merchantId: string) {
     await requireAddon(merchantId);
+    await purgeStale(merchantId);
     const db = getDb();
+
+    const preparingRows = await db.query.odsOrders.findMany({
+      where: and(
+        eq(schema.odsOrders.merchantId, merchantId),
+        eq(schema.odsOrders.status, "preparing")
+      ),
+      columns: { orderNumber: true },
+    });
+    const readyRows = await db.query.odsOrders.findMany({
+      where: and(
+        eq(schema.odsOrders.merchantId, merchantId),
+        eq(schema.odsOrders.status, "ready")
+      ),
+      columns: { orderNumber: true },
+    });
+    const shadow = {
+      preparing: preparingRows.map((r) => normalizeOrderNumber(r.orderNumber)).filter(Boolean),
+      ready: readyRows.map((r) => normalizeOrderNumber(r.orderNumber)).filter(Boolean),
+    };
+    const live = await this.boardFromLiveOrders(merchantId, { includeDismissed: true });
+    const merged = mergeBoardNumbers(shadow, live);
+    const toDismiss = [...new Set([...merged.preparing, ...merged.ready])];
+    const dismissed = await markDismissed(merchantId, toDismiss);
+
     const deleted = await db
       .delete(schema.odsOrders)
       .where(eq(schema.odsOrders.merchantId, merchantId))
       .returning({ id: schema.odsOrders.id });
-    return { ok: true, removed: deleted.length };
+    return { ok: true, removed: deleted.length, dismissed };
   }
 
   /** Live orders from the main orders table (online shop + POS pay-later / open fulfillment). */
-  static async boardFromLiveOrders(merchantId: string) {
+  static async boardFromLiveOrders(
+    merchantId: string,
+    opts?: { includeDismissed?: boolean }
+  ) {
     const enabled = await readOdsAddonEnabled(merchantId).catch(() => false);
     if (!enabled) return { preparing: [] as string[], ready: [] as string[] };
 
@@ -416,7 +527,9 @@ export class OdsService {
       if (st === "ready") ready.push(num);
       else if ((PREPARING_ORDER_STATUSES as readonly string[]).includes(st)) preparing.push(num);
     }
-    return { preparing, ready };
+    if (opts?.includeDismissed) return { preparing, ready };
+    const dismissed = await dismissedOrderNumbers(merchantId);
+    return filterBoardByDismissed({ preparing, ready }, dismissed);
   }
 
   static async boardForToken(token: string) {
@@ -451,6 +564,8 @@ export class OdsService {
     };
     const live = await this.boardFromLiveOrders(display.merchantId);
     const merged = mergeBoardNumbers(shadow, live);
+    const dismissed = await dismissedOrderNumbers(display.merchantId);
+    const filtered = filterBoardByDismissed(merged, dismissed);
 
     return {
       display: {
@@ -459,8 +574,8 @@ export class OdsService {
         theme: display.theme as OdsTheme,
       },
       serverTime: new Date().toISOString(),
-      preparing: merged.preparing,
-      ready: merged.ready,
+      preparing: filtered.preparing,
+      ready: filtered.ready,
     };
   }
 }
