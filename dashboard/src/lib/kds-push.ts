@@ -190,11 +190,14 @@ export function collectKdsTicketKeys(opts: {
   ticketDisplay?: string | null;
   ticketOrderNumber?: string | null;
   lastKitchenTicket?: string | null;
+  kitchenTicketKey?: string | null;
   tabOrderShout?: (tab: string | null | undefined) => string;
 }): string[] {
   const keys = new Set<string>();
   const tabShout = opts.tabOrderShout?.(opts.tabNumber) || '';
   if (tabShout) keys.add(kitchenTicketKeyBase(tabShout));
+  const kitchenKey = String(opts.kitchenTicketKey || '').trim();
+  if (kitchenKey) keys.add(kitchenTicketKeyBase(kitchenKey));
   const display = String(opts.ticketDisplay || '').trim();
   if (display) keys.add(kitchenTicketKeyBase(display));
   const last = String(opts.lastKitchenTicket || '').trim();

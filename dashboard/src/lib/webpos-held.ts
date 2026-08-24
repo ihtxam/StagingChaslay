@@ -9,6 +9,7 @@ export type HeldCartMeta = {
   tabNumber?: string | null;
   ticketDisplay?: string | null;
   ticketOrderNumber?: string | null;
+  kitchenTicketKey?: string | null;
   orderNote?: string | null;
   billDiscount?: { percent?: number; amount?: number } | null;
 };
@@ -36,6 +37,7 @@ export function parseHeldCartJson(raw: unknown): HeldCartMeta {
     tabNumber: o.tabNumber != null ? String(o.tabNumber) : null,
     ticketDisplay: typeof o.ticketDisplay === 'string' ? o.ticketDisplay : null,
     ticketOrderNumber: typeof o.ticketOrderNumber === 'string' ? o.ticketOrderNumber : null,
+    kitchenTicketKey: typeof o.kitchenTicketKey === 'string' ? o.kitchenTicketKey : null,
     orderNote: typeof o.orderNote === 'string' ? o.orderNote : null,
     billDiscount: o.billDiscount && typeof o.billDiscount === 'object' ? (o.billDiscount as HeldCartMeta['billDiscount']) : null,
   };

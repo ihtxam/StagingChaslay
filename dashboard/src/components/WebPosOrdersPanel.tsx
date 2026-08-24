@@ -97,6 +97,8 @@ function heldTicketKeys(h: HeldRow): string[] {
   if (resolved) keys.add(resolved);
   const display = String(meta.ticketDisplay || '').trim();
   if (display) keys.add(kitchenTicketKeyBase(display));
+  const kitchenKey = String(meta.kitchenTicketKey || '').trim();
+  if (kitchenKey) keys.add(kitchenTicketKeyBase(kitchenKey));
   const tab = String(meta.tabNumber || '').trim();
   if (tab) keys.add(kitchenTicketKeyBase(tab.startsWith('#') ? tab : `#${tab}`));
   const orderNum = String(meta.ticketOrderNumber || '').trim();

@@ -3705,7 +3705,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** Clear operator editing UI without deleting table/tab kitchen drafts. */
   const releaseOperatorAfterKitchen = (
     sentCart: CartLine[],
-    opts?: { draftActiveCourse?: number }
+    opts?: {
+      draftActiveCourse?: number;
+      ticket?: { display: string; orderNumber: string };
+    }
   ) => {
     const wasTable = !!tableId;
     const pendingCourses = sentCart
@@ -3714,13 +3717,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       .sort((a, b) => a - b);
     const draftActiveCourse =
       opts?.draftActiveCourse ?? pendingCourses[0] ?? activeCourse;
+    const draftTicketDisplay =
+      opts?.ticket?.display?.trim() ||
+      ticketDisplay?.trim() ||
+      lastKitchenTicketRef.current?.trim() ||
+      null;
+    const draftTicketOrderNumber =
+      opts?.ticket?.orderNumber?.trim() || ticketOrderNumber?.trim() || null;
     // Keep a local draft for every kitchen-sent ticket (including takeaway)
     // so Orders can recover if /merchant/pos/held is slow or fails.
     const key = openCartDraftKey({
       tableId,
       tabNumber,
       channel: tableId ? 'dine_in' : effectiveChannel,
-      ticketDisplay,
+      ticketDisplay: draftTicketDisplay,
     });
     openCartDraftsRef.current.set(key, {
       cart: sentCart,
@@ -3728,8 +3738,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tableId,
       tableLabel,
       tabNumber,
-      ticketDisplay,
-      ticketOrderNumber,
+      ticketDisplay: draftTicketDisplay,
+      ticketOrderNumber: draftTicketOrderNumber,
       orderNote,
       activeCourse: draftActiveCourse,
       courseCount,
@@ -3792,7 +3802,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         await persistHeldOrder(sentCart, true, { ticket });
         await fireCourseLines(lines, activeCourse);
         toast.success(t('webPosFireCourseDone').replace('{n}', String(activeCourse)));
-        releaseOperatorAfterKitchen(sentCart);
+        releaseOperatorAfterKitchen(sentCart, { ticket });
         return;
       }
 
@@ -3832,7 +3842,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setOrderSent(true);
       setCoursesBulkSent(true);
       toast.success(t('webPosHeldSentKitchen'));
-      releaseOperatorAfterKitchen(sentCart);
+      releaseOperatorAfterKitchen(sentCart, { ticket });
     } catch (e: unknown) {
       notifyPrintError(e, 'webPosKitchenPrintFailed');
     } finally {
@@ -3971,6 +3981,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const clearCartTicket = useCallback(() => {
     setTicketDisplay(null);
     setTicketOrderNumber(null);
+    lastKitchenTicketRef.current = null;
   }, []);
 
   /** Kitchen shout number — tab # when set, else ticket #6457 for kitchen / message / receipt. */
@@ -3990,8 +4001,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         lastKitchenTicketRef.current = ticket.display.trim();
         return ticket.display.trim();
       }
-      if (lastKitchenTicketRef.current?.trim()) {
-        return lastKitchenTicketRef.current.trim();
+      const remembered = lastKitchenTicketRef.current?.trim();
+      const hasActiveKitchen =
+        cart.some((l) => l.sentToKitchen) || orderSent || !!ticketDisplay?.trim();
+      if (remembered && hasActiveKitchen) {
+        return remembered;
       }
       if (opts?.allowNew === false) {
         return '';
@@ -4000,7 +4014,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       lastKitchenTicketRef.current = created.display;
       return created.display;
     },
-    [tabNumber, tabOrderShout, ticketDisplay, ticketOrderNumber, ensureCartTicket]
+    [tabNumber, tabOrderShout, ticketDisplay, ticketOrderNumber, ensureCartTicket, cart, orderSent]
   );
 
   const kdsTicketKey =
@@ -4117,6 +4131,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setTicketDisplay(remembered);
   }, [cart, ticketDisplay]);
 
+  /** Assign kitchen shout # as soon as the cart opens so POS matches KDS/ODS. */
+  useEffect(() => {
+    if (isRetail || !kitchenEnabled || !cart.length) return;
+    if (ticketDisplay?.trim() || tabOrderShout(tabNumber)) return;
+    ensureCartTicket();
+  }, [isRetail, kitchenEnabled, cart.length, ticketDisplay, tabNumber, tabOrderShout, ensureCartTicket]);
+
   /**
    * Persist cart to /merchant/pos/held so Orders can list kitchen / held tickets.
    * Upserts by ticket (or table / tab) so re-sends update the same row.
@@ -4148,6 +4169,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tabNumber,
       ticketDisplay: ticket.display,
       ticketOrderNumber: ticket.orderNumber,
+      kitchenTicketKey: ticket.display,
       billDiscount,
       orderNote,
     };
@@ -4935,8 +4957,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     try {
       if (kitchenLines.length) {
         try {
+          const cancelTicket = ensureCartTicket();
           await printKitchenForCart(kitchenLines, effectiveChannel, {
-            orderNumber: kitchenOrderNumber({ allowNew: false }) || kitchenOrderNumber(),
+            orderNumber:
+              kitchenOrderNumber({ ticket: cancelTicket, allowNew: false }) ||
+              kitchenOrderNumber({ ticket: cancelTicket }),
             when: fulfillmentWhen,
             cancelled: true,
             cancelReason: reason,
