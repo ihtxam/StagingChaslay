@@ -2197,6 +2197,89 @@ export function generateShiftReportText(report: EodReportPrint): string {
   return generateEodReportText({ ...report, reportKind: 'shift' });
 }
 
+export type RevenuePeriodSummaryPrint = {
+  title: string;
+  periodLabel: string;
+  revenue: number;
+  tipsTotal: number;
+  taxTotal: number;
+  refundTotal: number;
+  grandTotal: number;
+  paymentRows: Array<{ method: string; count: number; total: number }>;
+  userPerformance?: Array<{ name: string; total: number }>;
+  businessName?: string;
+  language?: string;
+  paperWidthMm?: 58 | 80;
+  header?: string;
+  footer?: string;
+  /** Localized labels (from i18n). */
+  labels: {
+    netSalesExclTips: string;
+    tips: string;
+    tax: string;
+    refunds: string;
+    grandTotal: string;
+    byPayment: string;
+    userPerformance: string;
+    qty: string;
+  };
+  paymentMethodLabel: (method: string) => string;
+  staffNameLabel: (name: string) => string;
+};
+
+/** Compact revenue-period summary for thermal receipt / EOD printers. */
+export function generateRevenuePeriodSummaryText(report: RevenuePeriodSummaryPrint): string {
+  const width = lineWidthForPaper(report.paperWidthMm ?? 80);
+  const L = receiptLabels(report.language);
+  const sep = '='.repeat(width);
+  const thin = '-'.repeat(width);
+  const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
+  const debit = (n: number) => (Number(n) > 0.001 ? `-${money(n)}` : money(n));
+
+  let r = '';
+  r += sep + '\n';
+  if (report.header?.trim()) {
+    for (const line of report.header.trim().split(/\r?\n/)) r += line.slice(0, width) + '\n';
+  } else if (report.businessName) {
+    r += centerLine(report.businessName.toUpperCase().slice(0, width), width) + '\n';
+  }
+  r += sep + '\n';
+  r += centerLine(report.title.slice(0, width), width) + '\n';
+  r += centerLine(report.periodLabel.slice(0, width), width) + '\n';
+  r += thin + '\n';
+  r += padLine(report.labels.netSalesExclTips, money(report.revenue), width) + '\n';
+  r += padLine(`  ${report.labels.tips}`, money(report.tipsTotal), width) + '\n';
+  r += padLine(`  ${report.labels.tax}`, money(report.taxTotal), width) + '\n';
+  r += padLine(report.labels.refunds, debit(report.refundTotal), width) + '\n';
+  r += thin + '\n';
+  r += padLine(report.labels.grandTotal, money(report.grandTotal), width) + '\n';
+  r += thin + '\n';
+  r += centerLine(report.labels.byPayment, width) + '\n';
+  r += thin + '\n';
+  for (const row of report.paymentRows || []) {
+    r +=
+      padLine(
+        `${report.paymentMethodLabel(row.method)} · ${report.labels.qty} ${row.count}`,
+        money(row.total),
+        width
+      ) + '\n';
+  }
+  if (report.userPerformance?.length) {
+    r += thin + '\n';
+    r += centerLine(report.labels.userPerformance, width) + '\n';
+    r += thin + '\n';
+    for (const u of report.userPerformance) {
+      r += padLine(report.staffNameLabel(u.name), money(u.total), width) + '\n';
+    }
+  }
+  if (report.footer?.trim()) {
+    r += thin + '\n';
+    r += report.footer.trim() + '\n';
+  }
+  r += '\n\n\n';
+  return r;
+}
+
 /** Minimal ESC/POS: init + optional logo + text + optional QR raster + optional delivery QR raster + Code128 + feed + cut */
 export function textToEscPos(
   text: string,
