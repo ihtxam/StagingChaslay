@@ -38,12 +38,19 @@ export function orderMatchesCartLink(order: MerchantOrder, link: CartOrderLink):
   const orderTab = normTab(refs.tabNumber);
   if (cartTicket && orderTicket && cartTicket === orderTicket) return true;
   if (cartTab && orderTab && cartTab === orderTab) return true;
-  if (link.tableId && order.tableId && link.tableId === order.tableId) return true;
   if (
     link.ticketOrderNumber?.trim() &&
     order.orderNumber?.trim() &&
     link.ticketOrderNumber.trim() === order.orderNumber.trim()
   ) {
+    return true;
+  }
+  if (link.tableId && order.tableId && link.tableId === order.tableId) {
+    // Same table can host many tickets over a shift — never inherit a different #.
+    if (cartTicket && orderTicket) return cartTicket === orderTicket;
+    if (cartTicket || orderTicket) return false;
+    if (cartTab && orderTab) return cartTab === orderTab;
+    if (cartTab || orderTab) return false;
     return true;
   }
   return false;
