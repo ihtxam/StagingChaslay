@@ -30,6 +30,56 @@ function encodeOrderMetaNotes(opts: {
   return joined || null;
 }
 
+function parseTicketFromNotes(notes?: string | null): string | null {
+  const m = String(notes || "").match(TICKET_NOTE_RE);
+  return m?.[1]?.trim() || null;
+}
+
+function parseTabFromNotes(notes?: string | null): string | null {
+  const m = String(notes || "").match(TAB_NOTE_RE);
+  return m?.[1]?.trim() || null;
+}
+
+function normTicketKey(value?: string | null): string {
+  const raw = String(value || "")
+    .trim()
+    .replace(/^#/, "");
+  return raw ? `#${raw}` : "";
+}
+
+async function findRecentPaidDuplicateOrder(
+  db: ReturnType<typeof getDb>,
+  merchantId: string,
+  opts: { ticketDisplay?: string | null; tabNumber?: string | null; tableId?: string | null }
+): Promise<{ id: string } | null> {
+  const since = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const rows = await db.query.orders.findMany({
+    where: and(
+      eq(schema.orders.merchantId, merchantId),
+      gt(schema.orders.createdAt, since),
+      inArray(schema.orders.paymentStatus, ["completed", "paid"])
+    ),
+    orderBy: [desc(schema.orders.createdAt)],
+    limit: 150,
+    columns: { id: true, notes: true, tableId: true, status: true },
+  });
+  const ticket = normTicketKey(opts.ticketDisplay);
+  const tab = String(opts.tabNumber || "")
+    .trim()
+    .replace(/^#/, "");
+  for (const row of rows) {
+    if (String(row.status || "").toLowerCase() === "cancelled") continue;
+    const rowTicket = normTicketKey(parseTicketFromNotes(row.notes));
+    const rowTab = String(parseTabFromNotes(row.notes) || "")
+      .trim()
+      .replace(/^#/, "");
+    if (ticket && rowTicket && ticket === rowTicket) return row;
+    if (tab && rowTab && tab === rowTab) return row;
+    if (opts.tableId && row.tableId === opts.tableId) return row;
+  }
+  return null;
+}
+
 export interface SyncSaleItem {
   productClientId?: string;
   productId?: string;
@@ -430,6 +480,24 @@ export class SyncService {
         // Do not return a phantom orderId — callers must not build QR URLs for skipped sales.
         results.push({ clientId: sale.clientId, orderId: "", created: false, skipped: true });
         continue;
+      }
+
+      const payLaterEarly =
+        String(sale.paymentStatus || "").toLowerCase() === "awaiting_payment" ||
+        sale.paymentMethod === "pay_later" ||
+        sale.paymentMethod === "pay-later" ||
+        String(sale.paymentMethod || "").toLowerCase() === "invoice";
+      if (!isCancelledEarly && !payLaterEarly) {
+        const dup = await findRecentPaidDuplicateOrder(db, merchantId, {
+          ticketDisplay: sale.ticketDisplay,
+          tabNumber: sale.tabNumber,
+          tableId: sale.tableId,
+        });
+        if (dup) {
+          throw new Error(
+            `Ticket ${sale.ticketDisplay || sale.tabNumber || "unknown"} was already paid`
+          );
+        }
       }
 
       const baseOrderNumber = String(sale.orderNumber || `POS-${sale.clientId}`).slice(0, 40);

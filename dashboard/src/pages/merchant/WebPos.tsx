@@ -357,12 +357,17 @@ import {
   collectPaymentAction,
   customerFromOrder,
   orderItemsToCartLines,
+  orderMatchesCartLink,
+  resolveCartCheckoutGuard,
+  type CartOrderLink,
 } from '@/lib/order-to-cart';
 import {
   INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
   isInvoiceOrder,
+  isPaidOrder,
   isTerminalOrderStatus,
+  orderPublicRefs,
   posSaleFulfillmentStatus,
   type MerchantOrder,
 } from '@/lib/order-management';
@@ -4869,21 +4874,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   });
 
   const openRegisterCheckout = () => {
-    if (!cart.length || busy) return;
-    if (
-      (channel === 'delivery' || channel === 'takeaway') &&
-      !fulfillmentWhen
-    ) {
-      setFulfillmentWhen(asapFulfillment());
-    }
-    if (channel === 'delivery' && !selectedCustomer) {
-      setPendingPayMethod('cash');
-      setCustomerOpen(true);
-      return;
-    }
-    setMobileCartOpen(false);
-    setSelectedLineId(null);
-    setPosView('checkout');
+    void (async () => {
+      if (!cart.length || busy) return;
+      if (!(await guardCartCheckout())) return;
+      if (
+        (channel === 'delivery' || channel === 'takeaway') &&
+        !fulfillmentWhen
+      ) {
+        setFulfillmentWhen(asapFulfillment());
+      }
+      if (channel === 'delivery' && !selectedCustomer) {
+        setPendingPayMethod('cash');
+        setCustomerOpen(true);
+        return;
+      }
+      setMobileCartOpen(false);
+      setSelectedLineId(null);
+      setPosView('checkout');
+    })();
   };
 
   const leaveTableForChannel = () => {
@@ -5561,6 +5569,152 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPosView('checkout');
   };
 
+  const currentCartOrderLink = (): CartOrderLink => ({
+    ticketDisplay: ticketDisplay?.trim() || lastKitchenTicketRef.current?.trim() || null,
+    tabNumber,
+    tableId,
+    ticketOrderNumber,
+  });
+
+  const orderDisplayLabel = (order: MerchantOrder) => {
+    const refs = orderPublicRefs(order);
+    return (
+      guestOrderNumber({
+        orderNumber: order.orderNumber,
+        orderDisplay: refs.ticketDisplay || undefined,
+        tabNumber: refs.tabNumber || undefined,
+      }) ||
+      refs.ticketDisplay ||
+      order.orderNumber ||
+      ''
+    );
+  };
+
+  /** Drop stale cart when the same ticket was paid on another till / orders tab. */
+  const releasePaidCartSession = (order?: MerchantOrder | null) => {
+    const link = currentCartOrderLink();
+    const draftKeys = [
+      openCartDraftKey({ tableId, tabNumber, channel }),
+      openCartDraftKey({ ticketDisplay: link.ticketDisplay, channel: effectiveChannel }),
+      openCartDraftKey({ tableId: link.tableId, channel: 'dine_in' }),
+    ];
+    for (const key of draftKeys) openCartDraftsRef.current.delete(key);
+    const heldId = resumedHeldIdRef.current;
+    resumedHeldIdRef.current = null;
+    if (heldId) void api.delete(`/merchant/pos/held/${heldId}`).catch(() => {});
+    clearCollectCheckout();
+    setOrderSent(false);
+    setCoursesBulkSent(false);
+    setCheckoutOpen(false);
+    setMobileCartOpen(false);
+    setPosView('register');
+    setPosTab('register');
+    setDraftVersion((n) => n + 1);
+    if (order?.id) markOnlineOrderActioned(order.id);
+  };
+
+  const guardCartCheckout = async (): Promise<boolean> => {
+    if (!cart.length || collectOrderRef) return true;
+    const hasSent = orderSent || cart.some((l) => l.sentToKitchen);
+    if (!hasSent && !resumedHeldIdRef.current && !ticketDisplay?.trim()) return true;
+    try {
+      const res = await api.get('/merchant/orders', { params: { limit: 120 } });
+      const orders = (res.data?.orders || []) as MerchantOrder[];
+      const guard = resolveCartCheckoutGuard(orders, currentCartOrderLink(), {
+        requireSent: hasSent || !!resumedHeldIdRef.current,
+      });
+      if (guard.action === 'blocked') {
+        releasePaidCartSession(guard.order);
+        toast.error(
+          t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(guard.order))
+        );
+        return false;
+      }
+      if (guard.action === 'collect') {
+        openOrderCollectCheckout(guard.order, 'register');
+        toast.info(
+          t('webPosOrderUseCollect').replace('{number}', orderDisplayLabel(guard.order))
+        );
+        return false;
+      }
+    } catch {
+      /* allow checkout when order lookup fails */
+    }
+    return true;
+  };
+
+  const handleOrderPaidElsewhere = useCallback(
+    (order: MerchantOrder) => {
+      if (collectOrderRef?.id === order.id) {
+        clearCollectCheckout();
+        setOrdersRefreshToken((n) => n + 1);
+        return;
+      }
+      if (!cart.length && !orderSent) return;
+      if (!orderMatchesCartLink(order, currentCartOrderLink())) return;
+      if (!isPaidOrder(order)) return;
+      releasePaidCartSession(order);
+      toast.error(
+        t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
+      );
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot link fields only
+    [
+      cart.length,
+      orderSent,
+      ticketDisplay,
+      tabNumber,
+      tableId,
+      ticketOrderNumber,
+      collectOrderRef,
+      t,
+    ]
+  );
+
+  /** Clear register cart when the same kitchen ticket was paid on another till. */
+  useEffect(() => {
+    if (collectOrderRef) return;
+    const hasSent = orderSent || cart.some((l) => l.sentToKitchen);
+    if (!hasSent && !resumedHeldIdRef.current && !cart.length) return;
+    let cancelled = false;
+    let timer: number | null = null;
+    const poll = async () => {
+      if (cancelled || (!cart.length && !orderSent)) return;
+      try {
+        const res = await api.get('/merchant/orders', { params: { limit: 120 } });
+        const orders = (res.data?.orders || []) as MerchantOrder[];
+        const guard = resolveCartCheckoutGuard(orders, currentCartOrderLink(), {
+          requireSent: hasSent || !!resumedHeldIdRef.current,
+        });
+        if (guard.action === 'blocked') {
+          releasePaidCartSession(guard.order);
+          toast.error(
+            t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(guard.order))
+          );
+          return;
+        }
+      } catch {
+        /* best-effort */
+      }
+      if (!cancelled) timer = window.setTimeout(poll, 6000);
+    };
+    timer = window.setTimeout(poll, 6000);
+    return () => {
+      cancelled = true;
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [
+    cart,
+    orderSent,
+    ticketDisplay,
+    tabNumber,
+    tableId,
+    ticketOrderNumber,
+    collectOrderRef,
+    ordersRefreshToken,
+    t,
+  ]);
+
   const collectUrlHandledRef = useRef<string | null>(null);
   useEffect(() => {
     if (loading || pinGateRequired) return;
@@ -5735,6 +5889,36 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           }) || null,
         paymentMethod: paymentMethodLabel(payMethod, t),
       });
+      const heldId = resumedHeldIdRef.current;
+      resumedHeldIdRef.current = null;
+      if (heldId) {
+        void api.delete(`/merchant/pos/held/${heldId}`).catch(() => {});
+      } else if (orderForReceipt) {
+        const ticketShout =
+          orderForReceipt.ticketDisplay ||
+          parseOrderMetaNotes(orderForReceipt.notes).ticketDisplay ||
+          null;
+        void (async () => {
+          try {
+            const heldRes = await api.get('/merchant/pos/held');
+            const list = (heldRes.data?.held || []) as Array<{
+              id: string;
+              cartJson?: { ticketDisplay?: string | null; tableId?: string | null };
+            }>;
+            for (const h of list) {
+              const cj = h.cartJson;
+              if (
+                (ticketShout && cj?.ticketDisplay === ticketShout) ||
+                (tableId && cj?.tableId === tableId)
+              ) {
+                await api.delete(`/merchant/pos/held/${h.id}`);
+              }
+            }
+          } catch {
+            /* best-effort */
+          }
+        })();
+      }
       clearCollectCheckout();
       setOrdersRefreshToken((n) => n + 1);
       setPosView('success');
@@ -6646,6 +6830,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setCheckoutOpen(false);
       return;
     }
+    if (!collectOrderRef && !(await guardCartCheckout())) return;
     const ticket = ensureCartTicket();
     const clientId = presetClientId || `webpos-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const whenSnapshot =
@@ -7141,6 +7326,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     whenOverride?: FulfillmentWhen | null
   ) => {
     if (whenOverride !== undefined) setFulfillmentWhen(whenOverride);
+    if (!(await guardCartCheckout())) return;
     if (method === 'express') {
       setBusy(true);
       try {
@@ -8446,6 +8632,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }}
             onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
             onOrderActioned={markOnlineOrderActioned}
+            onOrderPaid={handleOrderPaidElsewhere}
             onlineOrders={onlineOrders}
             onRefreshOnline={() => void pollOnlineOrders()}
             onChannelFilterChange={(filter) => {

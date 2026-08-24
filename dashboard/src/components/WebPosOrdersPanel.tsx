@@ -243,6 +243,8 @@ type Props = {
   onCollectPaymentCheckout?: (order: PosOrder) => void;
   /** Order handled (accept/reject/complete) — clear bell badge for this ticket */
   onOrderActioned?: (orderId: string) => void;
+  /** Order paid/collected elsewhere — clear matching register cart */
+  onOrderPaid?: (order: PosOrder) => void;
   /** Rich online order rows from /merchant/orders poll (Order Center view) */
   onlineOrders?: OnlineOrder[];
   onRefreshOnline?: () => void;
@@ -438,6 +440,7 @@ export default function WebPosOrdersPanel({
   initialChannelFilter = null,
   onCollectPaymentCheckout,
   onOrderActioned,
+  onOrderPaid,
   onlineOrders = [],
   onRefreshOnline,
   onChannelFilterChange,
@@ -886,6 +889,7 @@ export default function WebPosOrdersPanel({
           });
       toast.success(t('webPosPaymentCollected'));
       const updated = (res.data?.order as PosOrder | undefined) || null;
+      if (updated) onOrderPaid?.(updated);
       if (updated && autoPrintReceipt && (!invoiceOrder || counterTender)) {
         try {
           await onPrintOrder?.(updated);
