@@ -31,6 +31,9 @@ type MerchantPrintCtx = {
   taxIncludedInPrice?: boolean;
   vatAfterDiscount?: boolean;
   vatRate?: string | null;
+  taxTakeawayRate?: string | null;
+  taxDineInRate?: string | null;
+  taxDeliveryRate?: string | null;
   shopLogoUrl?: string | null;
 };
 
@@ -101,13 +104,21 @@ export async function printMerchantOrderReceipt(
     fallbackPrinterName?: string | null;
   }
 ): Promise<void> {
-  const taxRate = opts.merchant.vatRate != null ? Number(opts.merchant.vatRate) : 8.1;
+  const merchantTax = {
+    vatRate: opts.merchant.vatRate,
+    taxTakeawayRate: opts.merchant.taxTakeawayRate,
+    taxDineInRate: opts.merchant.taxDineInRate,
+    taxDeliveryRate: opts.merchant.taxDeliveryRate,
+  };
+  const fallbackRate =
+    opts.merchant.vatRate != null ? Number(opts.merchant.vatRate) : 8.1;
   const receiptPayload = posOrderToWebPosReceipt(order, {
     businessName: opts.merchant.name || APP_NAME,
     address: [opts.merchant.address, opts.merchant.city].filter(Boolean).join(', '),
     phone: opts.merchant.phone || undefined,
     vatNumber: opts.merchant.vatNumber || undefined,
-    taxRate,
+    taxRate: fallbackRate,
+    merchantTax,
     vatIncludedInPrice: opts.merchant.taxIncludedInPrice === true,
     vatAfterDiscount: opts.merchant.vatAfterDiscount !== false,
     printSettings: opts.printSettings,
