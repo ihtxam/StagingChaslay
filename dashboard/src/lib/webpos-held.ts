@@ -250,6 +250,33 @@ export function findHeldOrderForTable(
   return [...pool].sort((a, b) => heldRowTimeMs(b) - heldRowTimeMs(a))[0] || null;
 }
 
+export function buildHeldTableInfoMap(
+  rows: Array<{
+    cartJson?: unknown;
+    staffName?: string | null;
+    updatedAt?: string | null;
+    createdAt?: string | null;
+  }>
+): Record<string, { staffName: string | null; itemCount: number; updatedAt: number }> {
+  const map: Record<string, { staffName: string | null; itemCount: number; updatedAt: number }> =
+    {};
+  for (const row of rows) {
+    const meta = parseHeldCartJson(row.cartJson);
+    const tableId = meta.tableId?.trim();
+    if (!tableId) continue;
+    const time = heldRowTimeMs(row);
+    const prev = map[tableId];
+    if (prev && prev.updatedAt >= time) continue;
+    const lines = meta.cart || [];
+    map[tableId] = {
+      staffName: row.staffName?.trim() || null,
+      itemCount: heldCartQuantity(lines),
+      updatedAt: time,
+    };
+  }
+  return map;
+}
+
 export type HeldReleaseIdent = {
   heldId?: string | null;
   ticketDisplay?: string | null;

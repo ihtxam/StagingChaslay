@@ -148,8 +148,11 @@ export default function PrinterKitchenRoutingPicker({
       {allMode ? (
         <p className="text-xs text-emerald-700 m-0">{t('printerLinkedCategoriesAll')}</p>
       ) : null}
-      <div className="grid gap-0 overflow-hidden rounded-lg border border-[var(--border)] sm:grid-cols-[minmax(9rem,34%)_1fr] min-h-[14rem] max-h-72">
-        <div className="border-b sm:border-b-0 sm:border-r border-[var(--border)] overflow-y-auto bg-stone-50/80">
+      <div className="grid min-h-0 gap-0 overflow-hidden rounded-lg border border-[var(--border)] sm:grid-cols-[minmax(9rem,34%)_1fr] h-[min(28rem,55vh)] min-h-[14rem]">
+        <div
+          className="min-h-0 max-h-[min(28rem,55vh)] border-b sm:border-b-0 sm:border-r border-[var(--border)] overflow-y-auto overscroll-contain bg-stone-50/80"
+          onWheel={(e) => e.stopPropagation()}
+        >
           {categories.map((cat) => {
             const active = cat.id === (activeCategory?.id ?? null);
             const linked = isCategoryLinked(profile, cat.id, categories.length);
@@ -184,7 +187,10 @@ export default function PrinterKitchenRoutingPicker({
             );
           })}
         </div>
-        <div className="overflow-y-auto p-2">
+        <div
+          className="min-h-0 max-h-[min(28rem,55vh)] overflow-y-auto overscroll-contain p-2"
+          onWheel={(e) => e.stopPropagation()}
+        >
           {!activeCategory ? (
             <p className="text-xs text-[var(--muted)] m-0 p-2">{t('printerPickCategory')}</p>
           ) : !productsInActive.length ? (

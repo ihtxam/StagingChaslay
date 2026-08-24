@@ -214,6 +214,7 @@ export type HeldRow = {
   channel?: string | null;
   cartJson: unknown;
   notes?: string | null;
+  staffName?: string | null;
   updatedAt?: string | null;
   createdAt?: string | null;
 };
@@ -1408,7 +1409,9 @@ export default function WebPosOrdersPanel({
                         <div className="flex items-center justify-between gap-2 border-t border-stone-200 px-2.5 py-1.5 text-[10px] text-stone-500">
                           <span className="inline-flex min-w-0 items-center gap-1 truncate">
                             <User size={11} />
-                            <span className="truncate">{t('webPosOngoing')}</span>
+                            <span className="truncate">
+                              {h.staffName?.trim() || t('webPosOngoing')}
+                            </span>
                           </span>
                           <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
                             <Clock size={11} />
@@ -1498,7 +1501,9 @@ export default function WebPosOrdersPanel({
                                   {h.label || t('webPosHeldOrder')}
                                 </p>
                                 <p className="mt-0.5 text-xs text-stone-500">
-                                  {formatDateTime(h.updatedAt || h.createdAt || Date.now())}
+                                  {h.staffName?.trim()
+                                    ? `${h.staffName.trim()} · ${formatDateTime(h.updatedAt || h.createdAt || Date.now())}`
+                                    : formatDateTime(h.updatedAt || h.createdAt || Date.now())}
                                 </p>
                               </div>
                               <span className="shrink-0 text-sm font-bold tabular-nums text-teal-700">
@@ -1741,7 +1746,9 @@ export default function WebPosOrdersPanel({
                   </button>
                   <p className="text-sm font-semibold">{selectedHeld.label || t('webPosHeldOrder')}</p>
                   <p className="mt-1 text-xs text-stone-500">
-                    {channelLabel(selectedHeld.channel)}
+                    {selectedHeld.staffName?.trim()
+                      ? `${selectedHeld.staffName.trim()} · ${channelLabel(selectedHeld.channel)}`
+                      : channelLabel(selectedHeld.channel)}
                   </p>
                   <ul className="mt-4 space-y-2 text-sm">
                     {heldCartLines(selectedHeld).map((l, idx) => {
