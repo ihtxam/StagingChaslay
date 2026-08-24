@@ -275,7 +275,7 @@ export default function WebPosOnlineOrdersView({
           </button>
         </div>
 
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {(
             [
               ['active', t('orderCenterTabActive')],
@@ -287,7 +287,7 @@ export default function WebPosOnlineOrdersView({
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              className={`rounded-full px-4 py-1.5 text-sm font-semibold ${
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold sm:px-4 sm:text-sm ${
                 tab === id
                   ? 'bg-stone-900 text-white'
                   : 'bg-white text-stone-600 ring-1 ring-stone-200 hover:bg-stone-100'
@@ -296,9 +296,7 @@ export default function WebPosOnlineOrdersView({
               {label}
             </button>
           ))}
-        </div>
-
-        <div className="mt-2 flex flex-wrap gap-1.5">
+          <span className="mx-0.5 hidden h-5 w-px bg-stone-300 sm:inline-block" aria-hidden />
           {(
             [
               ['all', t('orderCenterFilterAll')],
@@ -311,7 +309,7 @@ export default function WebPosOnlineOrdersView({
               key={id}
               type="button"
               onClick={() => setPlatform(id)}
-              className={`rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${
+              className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide sm:px-2.5 sm:text-[11px] ${
                 platform === id
                   ? 'bg-violet-100 text-violet-900'
                   : 'bg-white text-stone-500 ring-1 ring-stone-200 hover:bg-stone-50'
