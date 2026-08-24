@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Printer, Share2, X } from 'lucide-react';
+import { Printer, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
-import { browserPrintText } from '@/lib/print-agent';
+import { printThermalReportTextSafe } from '@/lib/print-thermal-report';
+import {
+  generateRevenuePeriodSummaryText,
+  resolveReceiptLanguage,
+  type PosPrintSettingsClient,
+} from '@/lib/webpos-receipt';
 
 type EodSlice = {
   range: { label: string; from: string; to: string };
@@ -34,10 +39,16 @@ function debitMoney(n: number) {
   return Number(n) > 0.001 ? `−${money(n)}` : money(n);
 }
 
+const UNASSIGNED_STAFF_KEY = 'Unassigned';
+
 export default function RevenuePeriodSummaryModal({ open, from, to, title, onClose }: Props) {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, locale } = useI18n();
   const [report, setReport] = useState<EodSlice | null>(null);
   const [loading, setLoading] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
+  const [businessName, setBusinessName] = useState('');
+  const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
 
   const periodLabel = useMemo(() => {
     if (from === to) {
@@ -50,12 +61,24 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
     return `${from} – ${to}`;
   }, [from, to, formatDate]);
 
+  const staffNameLabel = useCallback(
+    (name: string) => (name === UNASSIGNED_STAFF_KEY ? t('reportsUnassignedSales') : name),
+    [t]
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ preset: 'custom', from, to });
-      const res = await api.get(`/merchant/reports/eod?${params}`);
-      setReport(res.data.report as EodSlice);
+      const [repRes, setRes] = await Promise.all([
+        api.get(`/merchant/reports/eod?${params}`),
+        api.get('/merchant/settings'),
+      ]);
+      setReport(repRes.data.report as EodSlice);
+      const s = setRes.data.settings;
+      setPrintSettings(s?.posPrintSettings || null);
+      setBusinessName(s?.name || '');
+      setShopLogoUrl(s?.shopLogoUrl || s?.posPrintSettings?.receiptLogoUrl || null);
     } catch {
       toast.error(t('reportsLoadFailed'));
       setReport(null);
@@ -69,56 +92,61 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
     void load();
   }, [open, load]);
 
-  const buildPrintText = () => {
+  const buildThermalText = () => {
     if (!report) return '';
-    const lines = [
-      t('reportsTabRevenue'),
+    const lang = resolveReceiptLanguage(printSettings, locale);
+    return generateRevenuePeriodSummaryText({
+      title: title || t('reportsTabRevenue'),
       periodLabel,
-      '',
-      `${t('reportsNetSalesExclTips')}: ${money(report.revenue)}`,
-      `  ${t('reportsTips')}: ${money(report.tipsTotal)}`,
-      `  ${t('reportsTax')}: ${money(report.taxTotal)}`,
-      `${t('reportsRefunds')}: ${debitMoney(report.refundTotal)}`,
-      `${t('reportsGrandTotal')}: ${money(report.grandTotal)}`,
-      '',
-      t('reportsByPayment'),
-    ];
-    for (const row of report.paymentRows || []) {
-      lines.push(`  ${paymentMethodLabel(row.method, t)} · QTY ${row.count}: ${money(row.total)}`);
-    }
-    if (report.userPerformance?.length) {
-      lines.push('', t('reportsTabUsers'));
-      for (const u of report.userPerformance) {
-        lines.push(`  ${u.name}: ${money(u.total)}`);
-      }
-    }
-    return lines.join('\n');
+      revenue: report.revenue,
+      tipsTotal: report.tipsTotal,
+      taxTotal: report.taxTotal,
+      refundTotal: report.refundTotal,
+      grandTotal: report.grandTotal,
+      paymentRows: report.paymentRows || [],
+      userPerformance: report.userPerformance?.map((u) => ({
+        name: u.name,
+        total: u.total,
+      })),
+      businessName,
+      language: lang,
+      paperWidthMm: printSettings?.paperWidthMm || 80,
+      header: printSettings?.receiptHeader,
+      footer: printSettings?.receiptFooter,
+      labels: {
+        netSalesExclTips: t('reportsNetSalesExclTips'),
+        tips: t('reportsTips'),
+        tax: t('reportsTax'),
+        refunds: t('reportsRefunds'),
+        grandTotal: t('reportsGrandTotal'),
+        byPayment: t('reportsByPayment'),
+        userPerformance: t('reportsTabUsers'),
+        qty: 'QTY',
+      },
+      paymentMethodLabel: (method) => paymentMethodLabel(method, t),
+      staffNameLabel,
+    });
   };
 
-  const printSummary = () => {
-    const text = buildPrintText();
-    if (!text) return;
-    browserPrintText(text);
-  };
-
-  const shareSummary = async () => {
-    const text = buildPrintText();
-    if (!text) return;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: t('reportsTabRevenue'), text });
-        return;
-      } catch {
-        /* fall through */
-      }
-    }
+  const printSummary = async () => {
+    const text = buildThermalText();
+    if (!text || printing) return;
+    setPrinting(true);
     try {
-      await navigator.clipboard.writeText(text);
-      toast.success(t('copied'));
-    } catch {
-      toast.error(t('copyFailed'));
+      await printThermalReportTextSafe({
+        text,
+        printSettings,
+        logoUrl: printSettings?.receiptLogoUrl || shopLogoUrl,
+        t,
+      });
+    } finally {
+      setPrinting(false);
     }
   };
+
+  const showUnassignedHint = report?.userPerformance?.some(
+    (u) => u.name === UNASSIGNED_STAFF_KEY
+  );
 
   if (!open) return null;
 
@@ -144,21 +172,12 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
-              className="rounded-lg p-2 hover:bg-[var(--bg-muted)]"
-              onClick={printSummary}
-              disabled={!report || loading}
+              className="rounded-lg p-2 hover:bg-[var(--bg-muted)] disabled:opacity-50"
+              onClick={() => void printSummary()}
+              disabled={!report || loading || printing}
               aria-label={t('reportsPrintEod')}
             >
               <Printer className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="rounded-lg p-2 hover:bg-[var(--bg-muted)]"
-              onClick={() => void shareSummary()}
-              disabled={!report || loading}
-              aria-label={t('reportsRevenueShare')}
-            >
-              <Share2 className="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -226,10 +245,15 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
                   <h3 className="px-3 py-2 text-sm font-semibold bg-[var(--bg-muted)]">
                     {t('reportsTabUsers')}
                   </h3>
+                  {showUnassignedHint ? (
+                    <p className="px-3 py-2 text-xs text-[var(--text-muted)] border-b border-[var(--border)]">
+                      {t('reportsUnassignedHint')}
+                    </p>
+                  ) : null}
                   <ul className="divide-y divide-[var(--border)] text-sm">
                     {report.userPerformance.map((u) => (
                       <li key={u.name} className="flex justify-between gap-2 px-3 py-2.5">
-                        <span className="truncate">{u.name}</span>
+                        <span className="truncate">{staffNameLabel(u.name)}</span>
                         <span className="font-medium tabular-nums shrink-0">{money(u.total)}</span>
                       </li>
                     ))}

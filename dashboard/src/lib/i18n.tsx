@@ -1432,6 +1432,9 @@ const en: Dict = {
   reportsRevenueMonth: 'Month',
   reportsRevenueTapHint: 'Tap a row for a printable summary of that period.',
   reportsRevenueShare: 'Share summary',
+  reportsUnassignedSales: 'Unassigned',
+  reportsUnassignedHint:
+    'Sales with no staff member on the order (main till without staff PIN, online orders, or older data).',
   reportsTabSales: 'Sales report',
   reportsTabProducts: 'Product sales',
   reportsTabUsers: 'User performance',
@@ -4591,6 +4594,9 @@ const fr: Dict = {
   reportsRevenueMonth: 'Mois',
   reportsRevenueTapHint: 'Appuyez sur une ligne pour un résumé imprimable.',
   reportsRevenueShare: 'Partager le résumé',
+  reportsUnassignedSales: 'Non assigné',
+  reportsUnassignedHint:
+    'Ventes sans employé enregistré sur la commande (caisse sans PIN, commandes en ligne ou anciennes données).',
   reportsTabSales: 'Rapport des ventes',
   reportsTabProducts: 'Ventes produits',
   reportsTabUsers: 'Performance équipe',
@@ -7718,6 +7724,9 @@ const de: Dict = {
   reportsRevenueMonth: 'Monat',
   reportsRevenueTapHint: 'Zeile antippen für eine druckbare Zusammenfassung.',
   reportsRevenueShare: 'Zusammenfassung teilen',
+  reportsUnassignedSales: 'Nicht zugewiesen',
+  reportsUnassignedHint:
+    'Umsatz ohne erfassten Mitarbeiter (Kasse ohne PIN, Online-Bestellungen oder ältere Daten).',
   reportsTabSales: 'Verkaufsbericht',
   reportsTabProducts: 'Produktverkäufe',
   reportsTabUsers: 'Mitarbeiterleistung',
