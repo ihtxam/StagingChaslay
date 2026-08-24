@@ -17,6 +17,8 @@ type Props = {
   order: OnlineOrder | null;
   queueCount?: number;
   busy?: boolean;
+  /** Auto-accept is on — order is already in kitchen; staff only acknowledge. */
+  acknowledgeOnly?: boolean;
   onAcknowledge: (order: OnlineOrder) => void;
   onAccept?: (order: OnlineOrder) => void;
   onReject?: (order: OnlineOrder) => void;
@@ -31,6 +33,7 @@ export default function WebPosNewOrderAlertModal({
   order,
   queueCount = 1,
   busy,
+  acknowledgeOnly = false,
   onAcknowledge,
   onAccept,
   onReject,
@@ -58,6 +61,8 @@ export default function WebPosNewOrderAlertModal({
   const platformClass = orderPlatformBadgeClass(asMerchantOrder(order));
   const isScheduled = !!order.scheduledFor;
   const zip = extractZipFromAddress(order.shippingAddress);
+  const showWorkflowActions =
+    !acknowledgeOnly && (onAccept != null || onReject != null || onOpen != null);
 
   return createPortal(
     <div
@@ -159,7 +164,7 @@ export default function WebPosNewOrderAlertModal({
           {t('webPosOrderTaken')}
         </button>
 
-        {onAccept || onReject || onOpen ? (
+        {showWorkflowActions ? (
           <div className="mt-3 grid grid-cols-2 gap-2">
             {onReject ? (
               <button

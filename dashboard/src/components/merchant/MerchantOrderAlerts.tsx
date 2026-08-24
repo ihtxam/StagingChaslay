@@ -10,6 +10,8 @@ import {
 import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
+import { isAwaitingApproval } from '@/lib/order-management';
+import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
 
 type Props = {
   enabled: boolean;
@@ -58,8 +60,8 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   useEffect(() => {
     if (!enabled) return;
     void api.get('/merchant/settings').then((res) => {
-      const dp = res.data?.settings?.deliveryPlatformSettings || res.data?.deliveryPlatformSettings || {};
-      setAutoAccept(!!dp.justEat?.autoAccept || !!dp.uberEats?.autoAccept || !!dp.onlineShopAutoAccept);
+      const s = res.data?.settings || res.data || {};
+      setAutoAccept(readDeliveryAutoAccept(s));
     }).catch(() => {});
   }, [enabled]);
 
@@ -74,7 +76,8 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
     try {
       const res = await api.get('/merchant/orders', { params: { limit: 80 } });
       const online = ((res.data.orders || []) as OnlineOrder[]).filter((o) => o.orderType === 'web_shop');
-      const pending = online.filter((o) => o.status === 'pending' || o.status === 'pending_approval');
+      const alertStatuses = onlineOrderAlertStatuses(autoAccept);
+      const pending = online.filter((o) => alertStatuses.has(String(o.status || '').toLowerCase()));
       const pendingIds = pending.map((o) => o.id);
 
       if (knownIdsRef.current == null) {
@@ -86,21 +89,28 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
       for (const id of pendingIds) knownIdsRef.current.add(id);
 
       if (fresh.length > 0) {
-        const needsManual: OnlineOrder[] = [];
+        const forAlert: OnlineOrder[] = [];
         if (autoAccept) {
           for (const o of fresh) {
-            try {
-              await api.post(`/merchant/orders/${o.id}/action`, { action: 'accept' });
-            } catch {
-              needsManual.push(o);
+            if (isAwaitingApproval(o.status)) {
+              try {
+                const actionRes = await api.post(`/merchant/orders/${o.id}/action`, { action: 'accept' });
+                const updated =
+                  (actionRes.data?.order as OnlineOrder | undefined) || { ...o, status: 'preparing' };
+                forAlert.push(updated);
+              } catch {
+                forAlert.push(o);
+              }
+            } else {
+              forAlert.push(o);
             }
           }
         } else {
-          needsManual.push(...fresh);
+          forAlert.push(...fresh);
         }
 
-        if (needsManual.length > 0) {
-          for (const o of needsManual) {
+        if (forAlert.length > 0) {
+          for (const o of forAlert) {
             unactionedRef.current.add(o.id);
             const zip = extractZipFromAddress(o.shippingAddress);
             speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
@@ -114,7 +124,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
           }
           setQueue((prev) => {
             const seen = new Set(prev.map((p) => p.id));
-            return [...prev, ...needsManual.filter((o) => !seen.has(o.id))];
+            return [...prev, ...forAlert.filter((o) => !seen.has(o.id))];
           });
           playOrderAlertOnce();
           startOrderAlertLoop(5000);
@@ -124,16 +134,11 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
         }
       }
 
-      setQueue((prev) =>
-        prev.filter((o) => {
-          const row = online.find((x) => x.id === o.id);
-          return !!row && (row.status === 'pending' || row.status === 'pending_approval');
-        })
-      );
+      setQueue((prev) => prev.filter((o) => unactionedRef.current.has(o.id)));
     } catch {
       /* ignore poll errors */
     }
-  }, [autoAccept, enabled, markActioned, t]);
+  }, [autoAccept, enabled, t]);
 
   useEffect(() => {
     if (!enabled) {
@@ -192,14 +197,18 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
 
   if (!enabled) return null;
 
+  const current = queue[0] ?? null;
+  const acknowledgeOnly = autoAccept && !!current && !isAwaitingApproval(current.status);
+
   return (
     <WebPosNewOrderAlertModal
-      order={queue[0] ?? null}
+      order={current}
       queueCount={queue.length}
       busy={busy}
+      acknowledgeOnly={acknowledgeOnly}
       onAcknowledge={acknowledgeOrder}
-      onAccept={(o) => void acceptOrder(o)}
-      onReject={(o) => void rejectOrder(o)}
+      onAccept={acknowledgeOnly ? undefined : (o) => void acceptOrder(o)}
+      onReject={acknowledgeOnly ? undefined : (o) => void rejectOrder(o)}
     />
   );
 }
