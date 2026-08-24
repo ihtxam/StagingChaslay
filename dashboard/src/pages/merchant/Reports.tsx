@@ -165,6 +165,8 @@ export default function ReportsPage() {
   }, [ownOnly, tab]);
 
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
+  const debitMoney = (n: number) =>
+    Number(n) > 0.001 ? `−${money(n)}` : money(n);
 
   const openSettings = async () => {
     setSettingsOpen(true);
@@ -521,9 +523,9 @@ export default function ReportsPage() {
                   [t('reportsCash'), money(report.cashTotal)],
                   [t('reportsCard'), money(report.cardTotal)],
                   [t('reportsTerminal'), money(report.terminalTotal)],
-                  [t('reportsRefunds'), money(report.refundTotal)],
+                  [t('reportsRefunds'), debitMoney(report.refundTotal)],
                   [t('reportsCancelled'), String(report.cancelledCount)],
-                  [t('reportsCancelledTotal'), money(report.cancelledTotal)],
+                  [t('reportsCancelledTotal'), debitMoney(report.cancelledTotal)],
                 ].map(([label, value]) => (
                   <div
                     key={String(label)}
@@ -616,7 +618,7 @@ export default function ReportsPage() {
                   title={t('reportsCancelled')}
                   badge={
                     report.cancelledCount > 0
-                      ? `${report.cancelledCount} · ${money(report.cancelledTotal)}`
+                      ? `${report.cancelledCount} · ${debitMoney(report.cancelledTotal)}`
                       : '0'
                   }
                   defaultOpen={report.cancelledCount > 0}
@@ -635,7 +637,9 @@ export default function ReportsPage() {
                               {c.cancelledAt ? ` · ${formatDateTime(c.cancelledAt)}` : ''}
                             </p>
                           </div>
-                          <p className="font-semibold tabular-nums shrink-0">{money(c.total)}</p>
+                          <p className="font-semibold tabular-nums shrink-0">
+                            {debitMoney(c.total)}
+                          </p>
                         </li>
                       ))}
                     </ul>

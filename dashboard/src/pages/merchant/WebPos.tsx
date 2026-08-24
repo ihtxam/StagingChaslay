@@ -365,11 +365,16 @@ import {
   type CartOrderLink,
 } from '@/lib/order-to-cart';
 import {
+  buildHeldTableInfoMap,
   findHeldOrderForTable,
+  heldCartSignature,
+  heldRowTimeMs,
   parseHeldCartJson,
   releaseHeldOrder,
+  remoteHeldShouldReplaceLocal,
   type HeldOrderRow,
 } from '@/lib/webpos-held';
+import type { TableHeldDisplay } from '@/components/webpos/WebPosTablesView';
 import {
   INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
@@ -771,6 +776,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [manualTableOpen, setManualTableOpen] = useState(false);
   const [newOrderConfirmOpen, setNewOrderConfirmOpen] = useState(false);
   const resumedHeldIdRef = useRef<string | null>(null);
+  const lastSeenHeldUpdatedAtRef = useRef(0);
+  const lastLocalCartMutationRef = useRef(0);
+  const applyingRemoteHeldRef = useRef(false);
   /** Last kitchen shout printed for this cart — hurry/follow-up must reuse it. */
   const lastKitchenTicketRef = useRef<string | null>(bootActive?.ticketDisplay ?? null);
   const [postSuccessTarget, setPostSuccessTarget] = useState<'register' | 'tables'>(() => {
@@ -858,6 +866,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [ordersRefreshToken, setOrdersRefreshToken] = useState(0);
   const [tablesRefreshToken, setTablesRefreshToken] = useState(0);
   const [heldTableIds, setHeldTableIds] = useState<string[]>([]);
+  const [heldTableInfo, setHeldTableInfo] = useState<Record<string, TableHeldDisplay>>({});
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
   const [ordersChannelPref, setOrdersChannelPref] = useState<'online' | null>(null);
   const [collectOrderRef, setCollectOrderRef] = useState<CollectOrderRef | null>(null);
@@ -984,24 +993,47 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
+    const refreshHeldTables = async () => {
       try {
         const res = await api.get('/merchant/pos/held');
+        const rows = (res.data?.held || []) as Array<{
+          cartJson?: Record<string, unknown> | null;
+          staffName?: string | null;
+          updatedAt?: string | null;
+          createdAt?: string | null;
+        }>;
+        if (cancelled) return;
         const ids = new Set<string>();
-        for (const h of (res.data?.held || []) as Array<{ cartJson?: Record<string, unknown> | null }>) {
-          const cj = h.cartJson;
-          if (!cj || typeof cj !== 'object') continue;
-          if (typeof cj.tableId === 'string' && cj.tableId) ids.add(cj.tableId);
+        for (const h of rows) {
+          const tid = parseHeldCartJson(h.cartJson).tableId;
+          if (typeof tid === 'string' && tid) ids.add(tid);
         }
-        if (!cancelled) setHeldTableIds([...ids]);
+        setHeldTableIds([...ids]);
+        const infoMap = buildHeldTableInfoMap(rows);
+        const display: Record<string, TableHeldDisplay> = {};
+        for (const [tid, info] of Object.entries(infoMap)) {
+          display[tid] = { staffName: info.staffName, itemCount: info.itemCount };
+        }
+        setHeldTableInfo(display);
       } catch {
-        if (!cancelled) setHeldTableIds([]);
+        if (!cancelled) {
+          setHeldTableIds([]);
+          setHeldTableInfo({});
+        }
       }
-    })();
+    };
+    void refreshHeldTables();
+    if (posView !== 'tables') {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const timer = window.setInterval(() => void refreshHeldTables(), 5000);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
-  }, [ordersRefreshToken, tablesRefreshToken, draftVersion]);
+  }, [ordersRefreshToken, tablesRefreshToken, draftVersion, posView]);
 
   const cartQtyByProduct = useMemo(() => {
     const map = new Map<string, number>();
@@ -4037,10 +4069,70 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         billDiscount: meta.billDiscount || { percent: 0, amount: 0 },
       });
       setDraftVersion((n) => n + 1);
+      lastSeenHeldUpdatedAtRef.current = heldRowTimeMs(held);
       return true;
     },
     []
   );
+
+  useEffect(() => {
+    if (applyingRemoteHeldRef.current || !tableId) return;
+    lastLocalCartMutationRef.current = Date.now();
+  }, [cart, tableId]);
+
+  /** Pull waiter/mobile cart changes while a table order is open on the till. */
+  useEffect(() => {
+    if (!tableId) return;
+    const hasSent = orderSent || cart.some((l) => l.sentToKitchen);
+    if (!hasSent && !resumedHeldIdRef.current && !cart.length) return;
+    let cancelled = false;
+    const syncRemoteHeld = async () => {
+      if (cancelled) return;
+      if (Date.now() - lastLocalCartMutationRef.current < 2500) return;
+      try {
+        const res = await api.get('/merchant/pos/held');
+        const held = findHeldOrderForTable(
+          tableId,
+          (res.data?.held || []) as HeldOrderRow[],
+          { ticketDisplay: ticketDisplay || lastKitchenTicketRef.current }
+        );
+        if (!held) return;
+        const remoteTime = heldRowTimeMs(held);
+        const meta = parseHeldCartJson(held.cartJson);
+        if (!meta.cart.length) return;
+        if (
+          heldCartSignature(meta.cart) === heldCartSignature(cart) &&
+          remoteTime <= lastSeenHeldUpdatedAtRef.current
+        ) {
+          lastSeenHeldUpdatedAtRef.current = Math.max(lastSeenHeldUpdatedAtRef.current, remoteTime);
+          return;
+        }
+        if (remoteTime <= lastSeenHeldUpdatedAtRef.current) return;
+        if (!remoteHeldShouldReplaceLocal({ cart }, held)) return;
+        applyingRemoteHeldRef.current = true;
+        applyHeldOrderFromRow(held, {
+          id: tableId,
+          label: tableLabel || meta.tableLabel || tableId,
+        });
+        applyingRemoteHeldRef.current = false;
+      } catch {
+        /* best-effort */
+      }
+    };
+    void syncRemoteHeld();
+    const timer = window.setInterval(() => void syncRemoteHeld(), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [
+    tableId,
+    tableLabel,
+    ticketDisplay,
+    cart,
+    orderSent,
+    applyHeldOrderFromRow,
+  ]);
 
   /** Customer-facing shout from tab number (delivery / takeaway order #). */
   const tabOrderShout = useCallback((tab: string | null | undefined) => {
@@ -4397,18 +4489,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     saveOpenCartDraft();
     const key = openCartDraftKey({ tableId: table.id, channel: 'dine_in' });
     const existing = openCartDraftsRef.current.get(key);
-    if (existing && draftOccupiesTable(existing)) {
-      applyOpenCartDraft(existing);
-      setMobileCartOpen(false);
-      setPosTab('register');
-      setPosView('register');
-      return;
-    }
     try {
       const res = await api.get('/merchant/pos/held');
       const held = findHeldOrderForTable(
         table.id,
-        (res.data?.held || []) as HeldOrderRow[]
+        (res.data?.held || []) as HeldOrderRow[],
+        { ticketDisplay: existing?.ticketDisplay || ticketDisplay }
       );
       if (held && applyHeldOrderFromRow(held, table)) {
         setMobileCartOpen(false);
@@ -4418,6 +4504,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     } catch (e) {
       console.warn('[WebPOS][held] load table order failed', e);
+    }
+    if (existing && draftOccupiesTable(existing)) {
+      applyOpenCartDraft(existing);
+      setMobileCartOpen(false);
+      setPosTab('register');
+      setPosView('register');
+      return;
     }
     setCart([]);
     setSelectedLineId(null);
@@ -8634,6 +8727,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           <WebPosTablesView
             selectedTableId={tableId}
             draftTableIds={draftTableIds}
+            tableHeldInfo={heldTableInfo}
             refreshToken={tablesRefreshToken}
             onSelectTable={(table) => switchToTableOrder(table)}
             onMoveTable={(table) => openMoveTablePicker(table)}
