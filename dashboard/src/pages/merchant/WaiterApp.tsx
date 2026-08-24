@@ -47,8 +47,11 @@ import {
 } from '@/lib/waiter-kitchen';
 import {
   pushCartLinesToKds,
-  fetchKdsTicketStatus,
+  fetchKdsBoardStatus,
+  buildKdsReadyMap,
+  collectReadyLineIds,
   applyKdsReadyToCart,
+  cartLineKitchenReady,
 } from '@/lib/kds-push';
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import WebPosPinModal from '@/components/WebPosPinModal';
@@ -221,15 +224,19 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   }, [ticketDisplay, ticketOrderNumber]);
 
   const waiterKdsTicketKey = kitchenTicketKeyBase(ticketOrderNumber || ticketDisplay || '');
+  const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
 
   useEffect(() => {
     const hasSent = cart.some((l) => l.sentToKitchen);
-    if (!hasSent || !waiterKdsTicketKey) return;
+    if (!hasSent) return;
     let cancelled = false;
     const syncReady = async () => {
-      const status = await fetchKdsTicketStatus(waiterKdsTicketKey);
-      if (cancelled || !status?.readyLineIds?.length) return;
-      setCart((prev) => applyKdsReadyToCart(prev, status.readyLineIds));
+      const board = await fetchKdsBoardStatus();
+      if (cancelled) return;
+      setKdsReadyMap(buildKdsReadyMap(board));
+      const readyIds = collectReadyLineIds(board);
+      if (!readyIds.size) return;
+      setCart((prev) => applyKdsReadyToCart(prev, [...readyIds]));
     };
     void syncReady();
     const timer = window.setInterval(() => void syncReady(), 4000);
@@ -446,6 +453,14 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           ? { ...l, sentToKitchen: true, sentToKitchenAt: sentAt }
           : l
       );
+      void pushCartLinesToKds({
+        ticketKey: ticket.orderNumber,
+        orderNumber: ticket.orderNumber,
+        tableLabel,
+        tabNumber: null,
+        channel,
+        lines: unsent,
+      });
       await printWaiterKitchen({
         lines: unsent,
         channel,
@@ -455,14 +470,6 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         tableLabel,
         orderNumber: ticket.orderNumber,
         t,
-      });
-      void pushCartLinesToKds({
-        ticketKey: ticket.orderNumber,
-        orderNumber: ticket.orderNumber,
-        tableLabel,
-        tabNumber: null,
-        channel,
-        lines: unsent,
       });
       await persistWaiterHeldOrder({
         cartLines: nextCart,
@@ -597,14 +604,20 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
                   <p className="py-8 text-center text-sm text-stone-500">{t('waiterCartEmpty')}</p>
                 ) : (
                   <ul className="space-y-2">
-                    {cart.map((line) => (
+                    {cart.map((line) => {
+                      const isKitchenReady = cartLineKitchenReady(
+                        line,
+                        waiterKdsTicketKey ? [waiterKdsTicketKey] : [],
+                        kdsReadyMap
+                      );
+                      return (
                       <li
                         key={line.lineId}
                         className="flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2"
                       >
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium">
-                            {line.kitchenReadyAt ? (
+                            {isKitchenReady ? (
                               <ChefHat
                                 className="mr-1 inline-block h-4 w-4 shrink-0 text-emerald-400"
                                 aria-label={t('webPosReadyBadge')}
@@ -613,7 +626,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
                             {line.name}
                             {line.sentToKitchen ? (
                               <span className="ml-1 rounded bg-stone-800 px-1 text-[9px] font-bold uppercase text-stone-400">
-                                {line.kitchenReadyAt ? t('webPosReadyBadge') : t('webPosSentBadge')}
+                                {isKitchenReady ? t('webPosReadyBadge') : t('webPosSentBadge')}
                               </span>
                             ) : null}
                           </p>
@@ -639,7 +652,8 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
                           </div>
                         )}
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </div>

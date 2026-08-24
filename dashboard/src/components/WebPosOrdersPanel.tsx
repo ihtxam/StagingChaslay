@@ -59,10 +59,9 @@ import {
   sameHeldIdentity,
   ticketQueryMatches,
 } from '@/lib/webpos-held';
-import { fetchKdsBoardStatus, type KdsBoardTicket } from '@/lib/kds-push';
+import { fetchKdsBoardStatus, buildKdsReadyMap, lineKitchenReady, type KdsBoardTicket } from '@/lib/kds-push';
 import {
   kitchenTicketKeyBase,
-  kitchenTicketKeysMatch,
   resolveKitchenTicketKey,
 } from '@/lib/kitchen-progress';
 import { hasTerminalPortion, parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
@@ -103,34 +102,6 @@ function heldTicketKeys(h: HeldRow): string[] {
   const orderNum = String(meta.ticketOrderNumber || '').trim();
   if (orderNum) keys.add(kitchenTicketKeyBase(orderNum));
   return [...keys];
-}
-
-function buildKdsReadyMap(tickets: KdsBoardTicket[]): Map<string, Set<string>> {
-  const map = new Map<string, Set<string>>();
-  const mergeInto = (key: string, lineIds: string[]) => {
-    if (!key) return;
-    const existing = map.get(key) || new Set<string>();
-    for (const id of lineIds) existing.add(id);
-    map.set(key, existing);
-  };
-  for (const ticket of tickets) {
-    mergeInto(ticket.ticketKey, ticket.readyLineIds);
-    mergeInto(kitchenTicketKeyBase(ticket.ticketKey), ticket.readyLineIds);
-  }
-  return map;
-}
-
-function lineKitchenReady(
-  lineId: string,
-  ticketKeys: string[],
-  readyMap: Map<string, Set<string>>
-): boolean {
-  for (const key of ticketKeys) {
-    for (const [mapKey, readySet] of readyMap) {
-      if (kitchenTicketKeysMatch(key, mapKey) && readySet.has(lineId)) return true;
-    }
-  }
-  return false;
 }
 
 /** Portaled menu so ⋮ actions are not clipped by the orders list scrollport. */

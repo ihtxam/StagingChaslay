@@ -12,6 +12,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '@/lib/i18n';
+import { cartLineKitchenReady } from '@/lib/kds-push';
 import { normalizeDashes, repairCatalogText } from '@/lib/text-encoding';
 import WebPosNumericKeypad from './WebPosNumericKeypad';
 import WebPosSwipeableCartLine from './WebPosSwipeableCartLine';
@@ -125,6 +126,10 @@ type Props = {
   onLinePrint?: (line: CartLine) => void;
   /** Cancel one sent line (kitchen void). */
   onLineCancel?: (line: CartLine) => void;
+  /** Live KDS ready line ids (board poll). */
+  kdsReadyMap?: Map<string, Set<string>>;
+  /** POS ticket keys for KDS matching (optional fallback). */
+  kdsTicketKeys?: string[];
 };
 
 function lineExtrasLabel(l: CartLine) {
@@ -247,8 +252,12 @@ export default function WebPosCartPanel({
   onOrderPrint,
   onLinePrint,
   onLineCancel,
+  kdsReadyMap = new Map(),
+  kdsTicketKeys = [],
 }: Props) {
   const { t } = useI18n();
+  const lineReady = (line: CartLine) =>
+    cartLineKitchenReady(line, kdsTicketKeys, kdsReadyMap);
   const hasItems = cart.length > 0;
   const isPage = layout === 'page';
   const effectiveShowSend = kitchenEnabled && showSend;
@@ -304,8 +313,8 @@ export default function WebPosCartPanel({
   const orderedLines = useMemo(() => cart.filter((l) => !!l.sentToKitchen), [cart]);
   const orderingLines = useMemo(() => cart.filter((l) => !l.sentToKitchen), [cart]);
   const kdsReadyCount = useMemo(
-    () => orderedLines.filter((l) => !!l.kitchenReadyAt).length,
-    [orderedLines]
+    () => orderedLines.filter((l) => cartLineKitchenReady(l, kdsTicketKeys, kdsReadyMap)).length,
+    [orderedLines, kdsReadyMap, kdsTicketKeys]
   );
   const showOrderTabs = kitchenEnabled && orderedLines.length > 0;
   const onOrderedTab = showOrderTabs && cartTab === 'ordered';
@@ -849,11 +858,12 @@ export default function WebPosCartPanel({
               const extras = lineExtrasLabel(l);
               const lineName = repairCatalogText(l.name || '');
               const sentAtLabel = formatSentAt(l.sentToKitchenAt);
+              const isKitchenReady = lineReady(l);
               const lineBody = (
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium leading-snug">
-                      {l.kitchenReadyAt ? (
+                      {isKitchenReady ? (
                         <ChefHat
                           className="mr-1 inline-block h-4 w-4 shrink-0 text-emerald-600"
                           aria-label={t('webPosReadyBadge')}
@@ -867,7 +877,7 @@ export default function WebPosCartPanel({
                       ) : null}
                       {l.sentToKitchen ? (
                         <span className="ml-1 rounded bg-stone-200 px-1 text-[9px] font-bold uppercase text-stone-600">
-                          {l.kitchenReadyAt ? t('webPosReadyBadge') : t('webPosSentBadge')}
+                          {isKitchenReady ? t('webPosReadyBadge') : t('webPosSentBadge')}
                         </span>
                       ) : null}
                       {l.kitchenPrintFailed ? (

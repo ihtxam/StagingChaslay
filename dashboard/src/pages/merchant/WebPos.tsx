@@ -126,7 +126,7 @@ import WebPosComboModal, {
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
-import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart } from '@/lib/kds-push';
+import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart, buildKdsReadyMap, collectKdsTicketKeys } from '@/lib/kds-push';
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import { playKitchenCompleteOnce } from '@/lib/order-alert';
 import { pushOrderToOds, dismissOrderFromOds } from '@/lib/ods-push';
@@ -4009,12 +4009,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     lastKitchenTicketRef.current?.trim() ||
     '';
 
+  const kdsCartTicketKeys = useMemo(
+    () =>
+      collectKdsTicketKeys({
+        tabNumber,
+        ticketDisplay,
+        ticketOrderNumber,
+        lastKitchenTicket: lastKitchenTicketRef.current,
+        tabOrderShout,
+      }),
+    [tabNumber, ticketDisplay, ticketOrderNumber, draftVersion, tabOrderShout]
+  );
+
   const kdsCompletedRungRef = useRef(new Set<string>());
+  const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
 
   useEffect(() => {
-    if (isRetail) return;
-    const hasKitchenLines = cart.some((l) => l.sentToKitchen);
-    if (!hasKitchenLines && !kdsTicketKey && !ticketOrderNumber) return;
+    if (isRetail || !kitchenEnabled) return;
 
     let cancelled = false;
     const candidateKeys = () => {
@@ -4033,12 +4044,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     const syncBoard = async () => {
       const board = await fetchKdsBoardStatus();
-      if (cancelled || !board.length) return;
-      const keys = candidateKeys();
-      const matching = matchBoardTickets(board, keys);
-      if (!matching.length) return;
+      if (cancelled) return;
+      setKdsReadyMap(buildKdsReadyMap(board));
+      if (!board.length) return;
 
-      const readyIds = collectReadyLineIds(matching);
+      const keys = candidateKeys();
+      const matching = keys.size ? matchBoardTickets(board, keys) : [];
+      const readyIds = collectReadyLineIds(board);
+
       for (const ticket of matching) {
         if (
           ticket.total > 0 &&
@@ -4056,9 +4069,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
       }
 
-      if (readyIds.size && hasKitchenLines) {
-        setCart((prev) => applyKdsReadyToCart(prev, [...readyIds]));
+      if (!readyIds.size) return;
+      const readyList = [...readyIds];
+      setCart((prev) => applyKdsReadyToCart(prev, readyList));
+      let draftChanged = false;
+      for (const [key, draft] of openCartDraftsRef.current.entries()) {
+        const nextCart = applyKdsReadyToCart(draft.cart, readyList);
+        if (nextCart !== draft.cart) {
+          openCartDraftsRef.current.set(key, { ...draft, cart: nextCart });
+          draftChanged = true;
+        }
       }
+      if (draftChanged) setDraftVersion((n) => n + 1);
     };
 
     void syncBoard();
@@ -4069,11 +4091,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
   }, [
     isRetail,
+    kitchenEnabled,
     kdsTicketKey,
     tabNumber,
     ticketDisplay,
     ticketOrderNumber,
     cart.filter((l) => l.sentToKitchen).length,
+    draftVersion,
     tabOrderShout,
   ]);
 
@@ -6191,36 +6215,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   ) => {
     if (isRetail) return;
-    if (printSettings?.autoPrintKitchen === false && !opts?.forcePrint && !opts?.cancelled) return;
-    if (
-      !readDeviceAutoPrintKitchen(printSettings?.autoPrintKitchen !== false) &&
-      !opts?.forcePrint &&
-      !opts?.cancelled
-    ) {
-      return;
-    }
-    const lang = resolveReceiptLanguage(printSettings, printSettings?.receiptLanguage === 'panel' ? locale : printSettings?.receiptLanguage || locale);
     const filteredLines = (
       opts?.courseOnly != null
         ? lines.filter((l) => (l.courseNumber || 1) === opts.courseOnly)
         : lines
     ).filter((l) => !l.giftCard && !String(l.productId || '').startsWith('__gift_card_'));
     if (!filteredLines.length) return;
-    const receiptItems = filteredLines.map((l) =>
-      buildKitchenTicketItemFromLine({
-        name: l.name,
-        quantity: l.quantity,
-        unitPrice: l.unitPrice,
-        lineTotal: l.lineTotal,
-        weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
-        productId: l.productId,
-        categoryId: l.categoryId,
-        courseNumber: l.courseNumber,
-        selectedExtras: l.selectedExtras,
-        comboSelections: l.comboSelections,
-        lineNote: l.lineNote,
-      })
-    );
+
+    const lang = resolveReceiptLanguage(printSettings, printSettings?.receiptLanguage === 'panel' ? locale : printSettings?.receiptLanguage || locale);
     const customerName = selectedCustomer
       ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(' ')
       : '';
@@ -6255,6 +6257,42 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     if (kitchenOpts.orderNumber) lastKitchenTicketRef.current = kitchenOpts.orderNumber;
 
+    // Kitchen display is independent of print settings — always push sent lines.
+    void pushCartLinesToKds({
+      ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
+      orderNumber: kitchenOpts.orderNumber,
+      tableLabel: kitchenOpts.tableLabel,
+      tabNumber: kitchenOpts.tabNumber,
+      channel: saleChannel,
+      lines: filteredLines,
+    });
+    if (kitchenOpts.orderNumber && !opts?.cancelled) {
+      void pushOrderToOds({ orderNumber: kitchenOpts.orderNumber, status: 'preparing' });
+    }
+
+    if (printSettings?.autoPrintKitchen === false && !opts?.forcePrint && !opts?.cancelled) return;
+    if (
+      !readDeviceAutoPrintKitchen(printSettings?.autoPrintKitchen !== false) &&
+      !opts?.forcePrint &&
+      !opts?.cancelled
+    ) {
+      return;
+    }
+    const receiptItems = filteredLines.map((l) =>
+      buildKitchenTicketItemFromLine({
+        name: l.name,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        lineTotal: l.lineTotal,
+        weightKg: l.isWeighed ? l.weightKg ?? l.quantity : undefined,
+        productId: l.productId,
+        categoryId: l.categoryId,
+        courseNumber: l.courseNumber,
+        selectedExtras: l.selectedExtras,
+        comboSelections: l.comboSelections,
+        lineNote: l.lineNote,
+      })
+    );
     let queuedAny = false;
     const kitchenLabel = [
       kitchenOpts.orderNumber,
@@ -6297,17 +6335,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       setPrinterDisconnected(false);
       if (queuedAny) toastPrintQueuedMainTill();
-      void pushCartLinesToKds({
-        ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
-        orderNumber: kitchenOpts.orderNumber,
-        tableLabel: kitchenOpts.tableLabel,
-        tabNumber: kitchenOpts.tabNumber,
-        channel: saleChannel,
-        lines: filteredLines,
-      });
-      if (kitchenOpts.orderNumber) {
-        void pushOrderToOds({ orderNumber: kitchenOpts.orderNumber, status: 'preparing' });
-      }
       return;
     }
 
@@ -6334,17 +6361,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     });
     setPrinterDisconnected(false);
     if (mode === 'queued') toastPrintQueuedMainTill();
-    void pushCartLinesToKds({
-      ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
-      orderNumber: kitchenOpts.orderNumber,
-      tableLabel: kitchenOpts.tableLabel,
-      tabNumber: kitchenOpts.tabNumber,
-      channel: saleChannel,
-      lines: filteredLines,
-    });
-    if (kitchenOpts.orderNumber) {
-      void pushOrderToOds({ orderNumber: kitchenOpts.orderNumber, status: 'preparing' });
-    }
   };
 
   const retryKitchenPrint = async (lines: CartLine[]) => {
@@ -8572,6 +8588,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     ? (line) => setCancelModal({ scope: 'item', lineId: line.lineId })
                     : undefined
                 }
+                kdsReadyMap={kdsReadyMap}
+                kdsTicketKeys={kdsCartTicketKeys}
               />
             </div>
             ) : null}

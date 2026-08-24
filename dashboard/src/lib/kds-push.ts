@@ -127,10 +127,79 @@ export function matchBoardTickets(
   return board.filter((ticket) => keys.some((key) => kitchenTicketKeysMatch(ticket.ticketKey, key)));
 }
 
+/** Build map of ticket key -> ready line ids (includes normalized base keys). */
+export function buildKdsReadyMap(tickets: KdsBoardTicket[]): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  const mergeInto = (key: string, lineIds: string[]) => {
+    if (!key) return;
+    const existing = map.get(key) || new Set<string>();
+    for (const id of lineIds) existing.add(id);
+    map.set(key, existing);
+  };
+  for (const ticket of tickets) {
+    mergeInto(ticket.ticketKey, ticket.readyLineIds);
+    mergeInto(kitchenTicketKeyBase(ticket.ticketKey), ticket.readyLineIds);
+  }
+  return map;
+}
+
+export function lineKitchenReady(
+  lineId: string,
+  ticketKeys: string[],
+  readyMap: Map<string, Set<string>>
+): boolean {
+  if (!lineId || !readyMap.size) return false;
+  for (const key of ticketKeys) {
+    for (const [mapKey, readySet] of readyMap) {
+      if (kitchenTicketKeysMatch(key, mapKey) && readySet.has(lineId)) return true;
+    }
+  }
+  return false;
+}
+
+export function lineIdKitchenReady(lineId: string, readyMap: Map<string, Set<string>>): boolean {
+  if (!lineId || !readyMap.size) return false;
+  for (const readySet of readyMap.values()) {
+    if (readySet.has(lineId)) return true;
+  }
+  return false;
+}
+
+export function cartLineKitchenReady(
+  line: CartLine,
+  ticketKeys: string[],
+  readyMap: Map<string, Set<string>>
+): boolean {
+  if (line.kitchenReadyAt) return true;
+  if (!line.sentToKitchen) return false;
+  const lineId = String(line.lineId || '');
+  if (lineIdKitchenReady(lineId, readyMap)) return true;
+  return lineKitchenReady(lineId, ticketKeys, readyMap);
+}
+
 export function collectReadyLineIds(tickets: KdsBoardTicket[]): Set<string> {
   const readyIds = new Set<string>();
   for (const ticket of tickets) {
     for (const lineId of ticket.readyLineIds) readyIds.add(lineId);
   }
   return readyIds;
+}
+
+export function collectKdsTicketKeys(opts: {
+  tabNumber?: string | null;
+  ticketDisplay?: string | null;
+  ticketOrderNumber?: string | null;
+  lastKitchenTicket?: string | null;
+  tabOrderShout?: (tab: string | null | undefined) => string;
+}): string[] {
+  const keys = new Set<string>();
+  const tabShout = opts.tabOrderShout?.(opts.tabNumber) || '';
+  if (tabShout) keys.add(kitchenTicketKeyBase(tabShout));
+  const display = String(opts.ticketDisplay || '').trim();
+  if (display) keys.add(kitchenTicketKeyBase(display));
+  const last = String(opts.lastKitchenTicket || '').trim();
+  if (last) keys.add(kitchenTicketKeyBase(last));
+  const orderNum = String(opts.ticketOrderNumber || '').trim();
+  if (orderNum) keys.add(kitchenTicketKeyBase(orderNum));
+  return [...keys];
 }
