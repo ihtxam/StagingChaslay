@@ -360,10 +360,13 @@ import {
 } from '@/lib/order-to-cart';
 import {
   INVOICE_SETTLEMENT_METHOD,
+  isAwaitingApproval,
   isInvoiceOrder,
+  isTerminalOrderStatus,
   posSaleFulfillmentStatus,
   type MerchantOrder,
 } from '@/lib/order-management';
+import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
 import { isPayLaterPaymentMethod, payLaterCollectedTender } from '@/lib/receipt-labels';
 
 type SplitReceiptPart = {
@@ -839,6 +842,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const unactionedOrderIdsRef = useRef<Set<string>>(new Set());
   const [unactionedOrderCount, setUnactionedOrderCount] = useState(0);
   const [newOrderAlertQueue, setNewOrderAlertQueue] = useState<OnlineOrder[]>([]);
+  const [deliveryAutoAccept, setDeliveryAutoAccept] = useState(false);
   const [alertRejectOrder, setAlertRejectOrder] = useState<OnlineOrder | null>(null);
   const [alertActionBusy, setAlertActionBusy] = useState(false);
   const knownReservationIdsRef = useRef<Set<string> | null>(null);
@@ -2246,6 +2250,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
   }, []);
 
+  useEffect(() => {
+    void api
+      .get('/merchant/settings')
+      .then((res) => {
+        const s = res.data?.settings || res.data || {};
+        setDeliveryAutoAccept(readDeliveryAutoAccept(s));
+      })
+      .catch(() => {});
+  }, []);
+
   const pollOnlineOrders = useCallback(async () => {
     try {
       const res = await api.get('/merchant/orders', { params: { limit: 80 } });
@@ -2253,8 +2267,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const online = all.filter((o) => o.orderType === 'web_shop');
       setOnlineOrders(online);
 
-      const newOnes = online.filter(
-        (o) => o.status === 'pending' || o.status === 'pending_approval'
+      const alertStatuses = onlineOrderAlertStatuses(deliveryAutoAccept);
+      const newOnes = online.filter((o) =>
+        alertStatuses.has(String(o.status || '').toLowerCase())
       );
       const newIds = newOnes.map((o) => o.id);
 
@@ -2269,19 +2284,38 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
       for (const id of [...unactionedOrderIdsRef.current]) {
         const row = online.find((o) => o.id === id);
-        if (!row || (row.status !== 'pending' && row.status !== 'pending_approval')) {
+        if (!row) {
+          unactionedOrderIdsRef.current.delete(id);
+          continue;
+        }
+        if (deliveryAutoAccept) {
+          if (isTerminalOrderStatus(row.status)) unactionedOrderIdsRef.current.delete(id);
+        } else if (!isAwaitingApproval(row.status)) {
           unactionedOrderIdsRef.current.delete(id);
         }
       }
       setNewOrderAlertQueue((prev) =>
-        prev.filter((o) => {
-          const row = online.find((x) => x.id === o.id);
-          return !!row && (row.status === 'pending' || row.status === 'pending_approval');
-        })
+        prev.filter((o) => unactionedOrderIdsRef.current.has(o.id))
       );
 
       if (freshOrders.length > 0) {
+        const queueOrders: OnlineOrder[] = [];
         for (const o of freshOrders) {
+          if (deliveryAutoAccept && isAwaitingApproval(o.status)) {
+            try {
+              const actionRes = await api.post(`/merchant/orders/${o.id}/action`, { action: 'accept' });
+              const updated =
+                (actionRes.data?.order as OnlineOrder | undefined) || { ...o, status: 'preparing' };
+              queueOrders.push(updated);
+            } catch {
+              queueOrders.push(o);
+            }
+          } else {
+            queueOrders.push(o);
+          }
+        }
+
+        for (const o of queueOrders) {
           unactionedOrderIdsRef.current.add(o.id);
           const zip = extractZipFromAddress(o.shippingAddress);
           speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
@@ -2290,7 +2324,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setNewOrderAlertQueue((prev) => {
           const seen = new Set(prev.map((p) => p.id));
           const next = [...prev];
-          for (const o of freshOrders) {
+          for (const o of queueOrders) {
             if (!seen.has(o.id)) next.push(o);
           }
           return next;
@@ -2307,7 +2341,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     } catch {
       /* ignore poll errors */
     }
-  }, [t]);
+  }, [deliveryAutoAccept, t]);
 
   const markOnlineOrderActioned = useCallback((orderId: string) => {
     unactionedOrderIdsRef.current.delete(orderId);
@@ -7822,6 +7856,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const onlinePendingCount = unactionedOrderCount;
   const orderAlertRing = unactionedOrderCount > 0;
   const currentNewOrderAlert = newOrderAlertQueue[0] ?? null;
+  const newOrderAlertAcknowledgeOnly =
+    deliveryAutoAccept &&
+    !!currentNewOrderAlert &&
+    !isAwaitingApproval(currentNewOrderAlert.status);
 
   const tableBadge =
     tableLabel || tabNumber
@@ -9201,10 +9239,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         order={currentNewOrderAlert}
         queueCount={newOrderAlertQueue.length}
         busy={alertActionBusy}
+        acknowledgeOnly={newOrderAlertAcknowledgeOnly}
         onAcknowledge={acknowledgeNewOrderAlert}
-        onAccept={acceptFromNewOrderAlert}
-        onReject={rejectFromNewOrderAlert}
-        onOpen={(order) => openOnlineOrdersInTab(order.id)}
+        onAccept={newOrderAlertAcknowledgeOnly ? undefined : acceptFromNewOrderAlert}
+        onReject={newOrderAlertAcknowledgeOnly ? undefined : rejectFromNewOrderAlert}
+        onOpen={
+          newOrderAlertAcknowledgeOnly
+            ? undefined
+            : (order) => openOnlineOrdersInTab(order.id)
+        }
       />
 
       <WebPosRejectOrderModal

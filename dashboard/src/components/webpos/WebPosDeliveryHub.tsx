@@ -138,6 +138,7 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, on
   const alertedPendingRef = useRef<Set<string>>(new Set());
   const staleAlertedRef = useRef<Set<string>>(new Set());
   const ticketAckedRef = useRef<Set<string>>(new Set());
+  const autoAcceptStartedRef = useRef<Set<string>>(new Set());
   const [ticketAckQueue, setTicketAckQueue] = useState<DeliverySlipAckOrder[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -278,7 +279,7 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, on
     }
   };
 
-  const runAction = async (orderId: string, action: string) => {
+  const runAction = async (orderId: string, action: string): Promise<boolean> => {
     const orderRow = orders.find((o) => o.id === orderId);
     setBusyId(orderId);
     try {
@@ -311,13 +312,29 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, on
       }
       toast.success(t('updated'));
       await load();
+      return true;
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || t('actionFailed'));
+      return false;
     } finally {
       setBusyId(null);
     }
   };
+
+  useEffect(() => {
+    if (!autoAccept) {
+      autoAcceptStartedRef.current.clear();
+      return;
+    }
+    for (const o of pendingApproval) {
+      if (autoAcceptStartedRef.current.has(o.id)) continue;
+      autoAcceptStartedRef.current.add(o.id);
+      void runAction(o.id, 'accept').then((ok) => {
+        if (!ok) autoAcceptStartedRef.current.delete(o.id);
+      });
+    }
+  }, [autoAccept, pendingApproval]);
 
   const assignDriver = async (orderId: string, staffId: string) => {
     setBusyId(orderId);
