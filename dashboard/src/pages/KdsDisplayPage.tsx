@@ -54,6 +54,8 @@ type DisplayTicket = KdsTicket & {
 };
 
 const CHANNEL_FILTERS: ChannelFilter[] = ['all', 'dine_in', 'takeaway', 'delivery'];
+/** Time to show all-ready summary before auto-completing the ticket. */
+const KDS_AUTO_COMPLETE_MS = 4000;
 
 function splitTicketForDisplay(row: KdsTicket): DisplayTicket | null {
   const allItems = row.items || [];
@@ -144,6 +146,45 @@ function TicketCard({
   const ready = ticket.allItems.filter((i) => i.status === 'ready').length;
   const total = ticket.allItems.length;
   const allReadySummary = tab === 'active' && ticket.viewMode === 'summary';
+  const [autoProgress, setAutoProgress] = useState(0);
+  const autoCompleteRef = useRef<number | null>(null);
+  const autoTriggeredRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
+  useEffect(() => {
+    if (!allReadySummary || busyId === ticket.id) {
+      autoTriggeredRef.current = false;
+      setAutoProgress(0);
+      if (autoCompleteRef.current != null) {
+        window.clearInterval(autoCompleteRef.current);
+        autoCompleteRef.current = null;
+      }
+      return;
+    }
+    if (autoTriggeredRef.current) return;
+    autoTriggeredRef.current = true;
+    const startedAt = Date.now();
+    autoCompleteRef.current = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const pct = Math.min(100, (elapsed / KDS_AUTO_COMPLETE_MS) * 100);
+      setAutoProgress(pct);
+      if (pct >= 100) {
+        if (autoCompleteRef.current != null) {
+          window.clearInterval(autoCompleteRef.current);
+          autoCompleteRef.current = null;
+        }
+        onCompleteRef.current(ticket.id);
+      }
+    }, 40);
+    return () => {
+      if (autoCompleteRef.current != null) {
+        window.clearInterval(autoCompleteRef.current);
+        autoCompleteRef.current = null;
+      }
+    };
+  }, [allReadySummary, busyId, ticket.id]);
+
   const label = [ticket.orderNumber || ticket.ticketKey, ticket.tableLabel || ticket.tabNumber]
     .filter(Boolean)
     .join(' · ');
@@ -191,9 +232,27 @@ function TicketCard({
         ) : null}
       </div>
       {allReadySummary ? (
-        <p className="border-b border-emerald-500/30 bg-emerald-950/40 px-4 py-2 text-center text-xs font-semibold text-emerald-300">
-          {t('kdsAllReadyHint')}
-        </p>
+        <div className="border-b border-emerald-500/30 bg-emerald-950/40 px-4 py-2">
+          <p className="text-center text-xs font-semibold text-emerald-300">{t('kdsAllReadyHint')}</p>
+          <div
+            className="mt-2 h-2.5 overflow-hidden rounded-full bg-black/30"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(autoProgress)}
+            aria-label={t('kdsAutoCompleting')}
+          >
+            <div
+              className="relative h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-400 to-teal-300 transition-[width] duration-75 ease-linear"
+              style={{ width: `${autoProgress}%` }}
+            >
+              <span className="absolute inset-y-0 right-0 w-8 bg-white/25 blur-sm" aria-hidden />
+            </div>
+          </div>
+          <p className="mt-1.5 text-center text-[10px] font-medium tabular-nums text-emerald-200/80">
+            {t('kdsAutoCompleting')}
+          </p>
+        </div>
       ) : null}
       <ul className="flex-1 space-y-2 overflow-y-auto p-3">
         {rows.map((row) => {
@@ -253,16 +312,7 @@ function TicketCard({
         })}
       </ul>
       <div className={`border-t p-3 ${shellTheme === 'light' ? 'border-stone-200' : 'border-black/20'}`}>
-        {!isDone ? (
-          <button
-            type="button"
-            disabled={busyId === ticket.id || ticket.viewMode !== 'summary'}
-            onClick={() => void onComplete(ticket.id)}
-            className="w-full rounded-xl bg-teal-600 py-3 text-sm font-bold text-white hover:bg-teal-500 disabled:opacity-50"
-          >
-            {t('kdsCompleteTicket')}
-          </button>
-        ) : (
+        {isDone ? (
           <button
             type="button"
             disabled={busyId === ticket.id}
@@ -271,6 +321,15 @@ function TicketCard({
           >
             <RotateCcw className="h-4 w-4" aria-hidden />
             {t('kdsRecallTicket')}
+          </button>
+        ) : allReadySummary ? null : (
+          <button
+            type="button"
+            disabled={busyId === ticket.id}
+            onClick={() => void onComplete(ticket.id)}
+            className="w-full rounded-xl bg-teal-600 py-3 text-sm font-bold text-white hover:bg-teal-500 disabled:opacity-50"
+          >
+            {t('kdsCompleteTicket')}
           </button>
         )}
       </div>
