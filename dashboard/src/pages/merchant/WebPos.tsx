@@ -25,6 +25,7 @@ import {
   giftCardSaleReceiptEscPos,
   computeGiftCardSaleVat,
   logoUrlToEscPos,
+  resolveReceiptLogoWidthPx,
   encodeOrderMetaNotes,
   parseOrderMetaNotes,
   nextWebPosTicketNumber,
@@ -5185,11 +5186,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       printSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl;
     let logo: Uint8Array | null = null;
     if (logoUrl) {
-      const cacheKey = `${String(logoUrl)}|${paper}`;
+      const logoWidth = resolveReceiptLogoWidthPx(printSettings, paper === 58 ? 58 : 80);
+      const cacheKey = `${String(logoUrl)}|${paper}|${logoWidth}`;
       if (logoEscPosCacheRef.current?.key === cacheKey) {
         logo = logoEscPosCacheRef.current.bytes;
       } else {
-        logo = await logoUrlToEscPos(String(logoUrl), paper === 58 ? 240 : 384);
+        logo = await logoUrlToEscPos(String(logoUrl), logoWidth);
         logoEscPosCacheRef.current = { key: cacheKey, bytes: logo };
       }
     }
@@ -6232,11 +6234,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         : null;
     let logo: Uint8Array | null = null;
     if (logoUrl) {
-      const cacheKey = `${String(logoUrl)}|${paper}`;
+      const logoWidth = resolveReceiptLogoWidthPx(printSettings, paper === 58 ? 58 : 80);
+      const cacheKey = `${String(logoUrl)}|${paper}|${logoWidth}`;
       if (logoEscPosCacheRef.current?.key === cacheKey) {
         logo = logoEscPosCacheRef.current.bytes;
       } else {
-        logo = await logoUrlToEscPos(String(logoUrl), paper === 58 ? 240 : 384);
+        logo = await logoUrlToEscPos(String(logoUrl), logoWidth);
         logoEscPosCacheRef.current = { key: cacheKey, bytes: logo };
       }
     }

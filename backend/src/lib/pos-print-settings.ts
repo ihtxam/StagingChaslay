@@ -50,6 +50,8 @@ export type PosPrintSettings = {
   receiptLanguage?: "en" | "fr" | "de" | "panel";
   /** Override logo; empty/null falls back to shopLogoUrl */
   receiptLogoUrl?: string | null;
+  /** Printed logo width in pixels (48–200, default 200). */
+  receiptLogoWidthPx?: number;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
   /** Play a bell on the main till when a waiter/mobile kitchen order arrives. */
@@ -105,6 +107,7 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   paperWidthMm: 80,
   receiptLanguage: "panel",
   receiptLogoUrl: null,
+  receiptLogoWidthPx: 200,
     autoPrintReceipt: true,
     autoPrintKitchen: true,
     waiterTillBellEnabled: true,
@@ -233,6 +236,12 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
       src.receiptLogoUrl === null || src.receiptLogoUrl === undefined
         ? null
         : String(src.receiptLogoUrl).trim().slice(0, 500) || null,
+    receiptLogoWidthPx: clampInt(
+      src.receiptLogoWidthPx,
+      48,
+      200,
+      DEFAULT_POS_PRINT_SETTINGS.receiptLogoWidthPx
+    ),
     autoPrintReceipt: src.autoPrintReceipt !== false,
     autoPrintKitchen: src.autoPrintKitchen !== false,
     waiterTillBellEnabled: src.waiterTillBellEnabled !== false,

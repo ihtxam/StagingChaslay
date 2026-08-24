@@ -244,6 +244,8 @@ export type PosPrintSettingsClient = {
   paperWidthMm?: 58 | 80;
   receiptLanguage?: 'en' | 'fr' | 'de' | 'panel';
   receiptLogoUrl?: string | null;
+  /** Printed logo width in pixels (48–200, default 200). */
+  receiptLogoWidthPx?: number;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
   /** Play a bell on the main till when a waiter/mobile kitchen order arrives. */
@@ -2273,10 +2275,77 @@ export function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+export const RECEIPT_LOGO_WIDTH_PX_MAX = 200;
+export const RECEIPT_LOGO_WIDTH_PX_MIN = 48;
+export const RECEIPT_LOGO_WIDTH_PX_DEFAULT = 200;
+
+const RECEIPT_LOGO_PAPER_MAX: Record<58 | 80, number> = { 58: 240, 80: 384 };
+
+/** Resolve configured receipt logo print width (capped at 200px and paper limits). */
+export function resolveReceiptLogoWidthPx(
+  settings?: Pick<PosPrintSettingsClient, 'receiptLogoWidthPx' | 'paperWidthMm'> | null,
+  paperWidthMm?: 58 | 80
+): number {
+  const paper = paperWidthMm === 58 || settings?.paperWidthMm === 58 ? 58 : 80;
+  const paperMax = RECEIPT_LOGO_PAPER_MAX[paper];
+  const configured = Number(settings?.receiptLogoWidthPx);
+  const width =
+    Number.isFinite(configured) && configured > 0
+      ? Math.round(configured)
+      : RECEIPT_LOGO_WIDTH_PX_DEFAULT;
+  return Math.min(RECEIPT_LOGO_WIDTH_PX_MAX, paperMax, Math.max(RECEIPT_LOGO_WIDTH_PX_MIN, width));
+}
+
+/** Resize an uploaded logo so stored/printed width never exceeds maxPx (default 200). */
+export async function resizeImageFileForReceiptLogo(
+  file: File,
+  maxPx = RECEIPT_LOGO_WIDTH_PX_MAX
+): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  const objectUrl = URL.createObjectURL(file);
+  let img: HTMLImageElement;
+  try {
+    img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('logo load failed'));
+      el.src = objectUrl;
+    });
+  } catch {
+    return file;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+  try {
+    if (img.width <= maxPx && img.height <= maxPx) return file;
+    const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, mime, mime === 'image/jpeg' ? 0.92 : undefined)
+    );
+    if (!blob) return file;
+    const ext = mime === 'image/png' ? '.png' : '.jpg';
+    const base = file.name.replace(/\.[^.]+$/, '') || 'receipt-logo';
+    return new File([blob], `${base}${ext}`, { type: mime });
+  } catch {
+    return file;
+  }
+}
+
 /** Load image URL → ESC/POS GS v 0 raster (monochrome). */
 export async function logoUrlToEscPos(
   url: string,
-  maxWidthDots = 384
+  maxWidthPx = RECEIPT_LOGO_WIDTH_PX_DEFAULT
 ): Promise<Uint8Array | null> {
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -2286,7 +2355,7 @@ export async function logoUrlToEscPos(
       el.onerror = () => reject(new Error('logo load failed'));
       el.src = url;
     });
-    const scale = Math.min(1, maxWidthDots / img.width);
+    const scale = Math.min(1, maxWidthPx / img.width);
     const w = Math.max(8, Math.floor(img.width * scale));
     const h = Math.max(8, Math.floor(img.height * scale));
     const canvas = document.createElement('canvas');

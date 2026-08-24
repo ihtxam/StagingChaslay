@@ -27,6 +27,10 @@ import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
 import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRoutingPicker';
 import api from '@/lib/api';
+import {
+  RECEIPT_LOGO_WIDTH_PX_MAX,
+  resizeImageFileForReceiptLogo,
+} from '@/lib/webpos-receipt';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { dashboardVersionLabel } from '@/lib/app-version';
@@ -196,6 +200,7 @@ interface SettingsData {
     paperWidthMm?: 58 | 80;
     receiptLanguage?: 'en' | 'fr' | 'de' | 'panel';
     receiptLogoUrl?: string | null;
+    receiptLogoWidthPx?: number;
     autoPrintReceipt?: boolean;
     autoPrintKitchen?: boolean;
     waiterTillBellEnabled?: boolean;
@@ -1118,6 +1123,10 @@ export default function Settings() {
         paperWidthMm: ps.paperWidthMm === 58 ? 58 : 80,
         receiptLanguage: ps.receiptLanguage || 'panel',
         receiptLogoUrl: ps.receiptLogoUrl || null,
+        receiptLogoWidthPx: Math.min(
+          200,
+          Math.max(48, Number(ps.receiptLogoWidthPx) || 200)
+        ),
         autoPrintReceipt: ps.autoPrintReceipt !== false,
         autoPrintKitchen: ps.autoPrintKitchen !== false,
         waiterTillBellEnabled: ps.waiterTillBellEnabled !== false,
@@ -3207,7 +3216,14 @@ export default function Settings() {
                       <img
                         src={settings.posPrintSettings?.receiptLogoUrl || settings.shopLogoUrl || ''}
                         alt=""
-                        className="h-16 object-contain rounded border border-[var(--border)] bg-white p-1"
+                        className="object-contain rounded border border-[var(--border)] bg-white p-1"
+                        style={{
+                          maxWidth: Math.min(
+                            200,
+                            settings.posPrintSettings?.receiptLogoWidthPx ?? 200
+                          ),
+                          maxHeight: 80,
+                        }}
                       />
                     )}
                     <div className="flex flex-wrap gap-2">
@@ -3221,8 +3237,12 @@ export default function Settings() {
                             e.target.value = '';
                             if (!file) return;
                             try {
+                              const resized = await resizeImageFileForReceiptLogo(
+                                file,
+                                RECEIPT_LOGO_WIDTH_PX_MAX
+                              );
                               const fd = new FormData();
-                              fd.append('file', file);
+                              fd.append('file', resized);
                               const res = await api.post('/merchant/media', fd, {
                                 headers: { 'Content-Type': 'multipart/form-data' },
                               });
@@ -3274,6 +3294,31 @@ export default function Settings() {
                         })
                       }
                     />
+                  </div>
+                </Field>
+                <Field label={t('receiptLogoWidth')} hint={t('receiptLogoWidthHint')}>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={48}
+                      max={200}
+                      className="input w-28"
+                      value={settings.posPrintSettings?.receiptLogoWidthPx ?? 200}
+                      onChange={(e) => {
+                        const n = Math.min(
+                          200,
+                          Math.max(48, Number(e.target.value) || 200)
+                        );
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            receiptLogoWidthPx: n,
+                          },
+                        });
+                      }}
+                    />
+                    <span className="text-sm text-[var(--muted-fg)]">px</span>
                   </div>
                 </Field>
                 <Field label={t('receiptHeader')}>
