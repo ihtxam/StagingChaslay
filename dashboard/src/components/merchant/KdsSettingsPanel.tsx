@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Copy, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import KdsGridColumnsPicker from '@/components/kds/KdsGridColumnsPicker';
 import { KDS_SHELL_THEMES, type KdsShellTheme } from '@/lib/kds-channel-styles';
 import { useI18n } from '@/lib/i18n';
 
@@ -246,40 +247,6 @@ export default function KdsSettingsPanel() {
     </div>
   );
 
-  const GridColumnsPicker = ({
-    value,
-    layoutMode,
-    disabled,
-    onChange,
-  }: {
-    value: number;
-    layoutMode: KdsLayoutMode;
-    disabled?: boolean;
-    onChange: (n: number) => void;
-  }) => {
-    if (layoutMode !== 'grid') return null;
-    return (
-      <div>
-        <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsGridColumnsLabel')}</p>
-        <div className="flex flex-wrap gap-2">
-          {[1, 2, 3, 4, 5, 6].map((n) => (
-            <button
-              key={n}
-              type="button"
-              disabled={disabled}
-              onClick={() => onChange(n)}
-              className={`h-9 w-9 rounded-lg text-sm font-bold ${
-                value === n ? 'bg-teal-600 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-              }`}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   const ThemePicker = ({
     value,
     disabled,
@@ -387,7 +354,9 @@ export default function KdsSettingsPanel() {
         ) : null}
         <ThemePicker value={theme} onChange={setTheme} />
         <LayoutPicker value={layoutMode} onChange={setLayoutMode} />
-        <GridColumnsPicker value={gridColumns} layoutMode={layoutMode} onChange={setGridColumns} />
+        {layoutMode === 'grid' ? (
+          <KdsGridColumnsPicker value={gridColumns} onChange={setGridColumns} />
+        ) : null}
         <div>
           <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsOverdueMinutesLabel')}</p>
           <input
@@ -496,16 +465,13 @@ export default function KdsSettingsPanel() {
                         disabled={saving}
                         onChange={(next) => void updateStationFilters(s.id, { layoutMode: next })}
                       />
-                      <GridColumnsPicker
-                        value={Math.min(6, Math.max(1, Number(s.gridColumns) || 3))}
-                        layoutMode={
-                          (['grid', 'rows', 'slider'].includes(String(s.layoutMode || 'grid').toLowerCase())
-                            ? String(s.layoutMode).toLowerCase()
-                            : 'grid') as KdsLayoutMode
-                        }
-                        disabled={saving}
-                        onChange={(next) => void updateStationFilters(s.id, { gridColumns: next })}
-                      />
+                      {String(s.layoutMode || 'grid').toLowerCase() === 'grid' ? (
+                        <KdsGridColumnsPicker
+                          value={Math.min(6, Math.max(1, Number(s.gridColumns) || 3))}
+                          disabled={saving}
+                          onChange={(next) => void updateStationFilters(s.id, { gridColumns: next })}
+                        />
+                      ) : null}
                       <div>
                         <p className="text-xs font-medium text-stone-600">{t('kdsOverdueMinutesLabel')}</p>
                         <input
