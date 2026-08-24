@@ -5,7 +5,7 @@ import { RefreshCw, Truck } from 'lucide-react';
 import api from '@/lib/api';
 import { repairCatalogText } from '@/lib/text-encoding';
 import { useI18n, type Locale } from '@/lib/i18n';
-import { formatCheckoutOrderRef, guestOrderNumber } from '@/lib/order-number';
+import { formatCheckoutOrderRef, guestOrderNumber, resolveOdsPushNumber } from '@/lib/order-number';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import { roundMoney2, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
@@ -4108,7 +4108,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ticket.ready === ticket.total &&
           ticket.status === 'pending'
         ) {
-          void pushOrderToOds({ orderNumber: ticket.ticketKey, status: 'ready' });
+          const odsNum = resolveOdsPushNumber(ticket.ticketKey);
+          if (odsNum) void pushOrderToOds({ orderNumber: odsNum, status: 'ready' });
         }
         if (ticket.status === 'completed') {
           const ringId = `${ticket.ticketKey}|${ticket.completedAt || 'done'}`;
@@ -5536,14 +5537,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const openOrderCollectCheckout = (
-    order: MerchantOrder,
-    returnView: 'orders' | 'register' = 'orders'
-  ) => {
+  const dismissOdsForOrder = (order: MerchantOrder) => {
+    const refs = orderPublicRefs(order);
+    const nums = new Set<string>();
+    const guest = guestOrderNumber({
+      orderNumber: order.orderNumber,
+      orderDisplay: refs.ticketDisplay || undefined,
+      tabNumber: refs.tabNumber || undefined,
+    });
+    if (guest) nums.add(guest);
+    if (refs.ticketDisplay) nums.add(refs.ticketDisplay);
+    const tab = tabOrderShout(order.tabNumber ?? null);
+    if (tab) nums.add(kitchenTicketKeyBase(tab));
+    for (const num of nums) void dismissOrderFromOds(num);
+  };
+
+  const loadOrderIntoRegister = (order: MerchantOrder): boolean => {
     const lines = orderItemsToCartLines(order.items || []);
     if (!lines.length) {
       toast.error(t('webPosNoItems'));
-      return;
+      return false;
     }
     const ch = (order.channel || order.fulfillmentChannel || 'takeaway') as Channel;
     setCart(lines);
@@ -5578,6 +5591,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     } else {
       setFulfillmentWhen(null);
     }
+    return true;
+  };
+
+  const loadPosOrderToRegister = (order: MerchantOrder) => {
+    if (!loadOrderIntoRegister(order)) return;
+    setHighlightOrderId(null);
+    setOrdersChannelPref(null);
+    setPosTab('register');
+    setPosView('register');
+  };
+
+  const openOrderCollectCheckout = (
+    order: MerchantOrder,
+    returnView: 'orders' | 'register' = 'orders'
+  ) => {
+    if (!loadOrderIntoRegister(order)) return;
     setCollectOrderRef({
       id: order.id,
       orderNumber: order.orderNumber,
@@ -5669,6 +5698,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const handleOrderPaidElsewhere = useCallback(
     (order: MerchantOrder) => {
+      if (isPaidOrder(order)) dismissOdsForOrder(order);
       if (collectOrderRef?.id === order.id) {
         clearCollectCheckout();
         setOrdersRefreshToken((n) => n + 1);
@@ -5945,6 +5975,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       clearCollectCheckout();
       setOrdersRefreshToken((n) => n + 1);
+      if (orderForReceipt && isPaidOrder(orderForReceipt)) dismissOdsForOrder(orderForReceipt);
       setPosView('success');
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
@@ -8659,6 +8690,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               }
             }}
             onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
+            onLoadPosOrder={loadPosOrderToRegister}
             onOrderActioned={markOnlineOrderActioned}
             onOrderPaid={handleOrderPaidElsewhere}
             onlineOrders={onlineOrders}

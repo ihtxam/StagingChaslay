@@ -1,6 +1,6 @@
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
 import { parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
-import { formatOrderNumberDisplay } from '@/lib/order-number';
+import { formatOrderNumberDisplay, guestOrderNumber } from '@/lib/order-number';
 
 export type MerchantOrder = PosOrderForReceipt & {
   status: string;
@@ -298,6 +298,34 @@ export function canCancelOrder(o: MerchantOrder): boolean {
   if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) return false;
   if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(pay)) return false;
   return true;
+}
+
+/** Unpaid in-store POS ticket — allow cancel even when fulfillment status is completed. */
+export function canCancelPosAwaitingOrder(o: MerchantOrder): boolean {
+  if (isOnlineShopOrder(o)) return false;
+  if (!isAwaitingPaymentOrder(o)) return false;
+  const status = (o.status || '').toLowerCase();
+  if (['cancelled', 'refunded'].includes(status)) return false;
+  return true;
+}
+
+/** Primary label for order lists — kitchen ticket / tab over opaque WP-/DI- ids. */
+export function orderListPrimaryLabel(o: MerchantOrder): string {
+  const refs = orderPublicRefs(o);
+  const guest = guestOrderNumber({
+    orderNumber: o.orderNumber,
+    orderDisplay: refs.ticketDisplay || undefined,
+    tabNumber: refs.tabNumber || undefined,
+  });
+  if (guest) return guest;
+  const parts = [
+    refs.ticketDisplay,
+    refs.tabNumber ? `#${refs.tabNumber.replace(/^#/, '')}` : null,
+    o.tableLabel ? String(o.tableLabel) : null,
+    o.customerName || null,
+  ].filter(Boolean);
+  if (parts.length) return parts.join(' · ');
+  return formatOrderNumberDisplay(o.orderNumber) || o.orderNumber || o.id.slice(0, 8);
 }
 
 export function canRefundOrder(o: MerchantOrder): boolean {

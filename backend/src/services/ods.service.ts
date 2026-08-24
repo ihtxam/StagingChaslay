@@ -7,7 +7,7 @@ import {
   allocateDisplayShortCode,
   ensureOdsDisplayShortCodes,
 } from "@/lib/display-short-code";
-import { guestOrderNumber, parseOrderMetaFromNotes } from "@/lib/guest-order-number";
+import { guestOrderNumber, isGuestFacingOdsNumber, parseOrderMetaFromNotes, resolveOdsPushNumber } from "@/lib/guest-order-number";
 import { formatWebOrderNumberDisplay } from "@/lib/web-order-number";
 
 export const ODS_THEMES = ["light", "teal", "dark"] as const;
@@ -263,10 +263,24 @@ async function requireAddon(merchantId: string) {
   if (!enabled) throw new OdsLicenseError();
 }
 
+async function purgeOpaqueShadowRows(merchantId: string) {
+  const db = getDb();
+  const shadowRows = await db.query.odsOrders.findMany({
+    where: eq(schema.odsOrders.merchantId, merchantId),
+    columns: { id: true, orderNumber: true },
+  });
+  for (const row of shadowRows) {
+    const num = normalizeOrderNumber(row.orderNumber);
+    if (!num || isGuestFacingOdsNumber(num)) continue;
+    await db.delete(schema.odsOrders).where(eq(schema.odsOrders.id, row.id));
+  }
+}
+
 async function purgeStale(merchantId: string) {
   const db = getDb();
   const now = Date.now();
   await reconcileShadowBoard(merchantId);
+  await purgeOpaqueShadowRows(merchantId);
   await purgeDismissed(merchantId);
   await db
     .delete(schema.odsOrders)
@@ -373,8 +387,10 @@ export class OdsService {
 
   /** Push or update an order on the customer board (POS / KDS integration). */
   static async pushOrder(merchantId: string, payload: OdsPushPayload) {
-    const orderNumber = normalizeOrderNumber(payload.orderNumber);
-    if (!orderNumber) throw new Error("orderNumber is required");
+    const orderNumber = resolveOdsPushNumber(payload.orderNumber) || normalizeOrderNumber(payload.orderNumber);
+    if (!orderNumber || !isGuestFacingOdsNumber(orderNumber)) {
+      return { ok: false, skipped: true, reason: "non_guest_number" };
+    }
     const status = payload.status === "ready" ? "ready" : "preparing";
 
     let enabled = false;
