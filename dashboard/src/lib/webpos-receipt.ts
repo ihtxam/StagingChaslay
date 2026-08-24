@@ -2477,6 +2477,38 @@ export function kitchenJobsExcludingReceiptPrinters(
   });
 }
 
+/** Prefer dedicated kitchen printers; never route to receipt printer when a kitchen-only printer exists. */
+export function resolveKitchenPrintJobs(
+  items: KitchenTicketItem[],
+  settings: PosPrintSettingsClient | null | undefined
+): KitchenPrintJob[] {
+  const dedicated = kitchenJobsExcludingReceiptPrinters(items, settings);
+  if (dedicated.length) return dedicated;
+
+  const allPrinters = (settings?.printers || []).filter((p) => p.enabled !== false && p.name);
+  const kitchenOnly = allPrinters.filter((p) => p.printKitchenTickets && !p.printReceipts);
+  if (kitchenOnly.length) {
+    const globalPaper: 58 | 80 = settings?.paperWidthMm === 58 ? 58 : 80;
+    const excluded = new Set(settings?.kitchenExcludedCategoryIds || []);
+    for (const kp of kitchenOnly) {
+      const filtered = filterKitchenItems(items, kp, {
+        otherKitchenPrinters: kitchenOnly,
+        excludedCategoryIds: excluded,
+      });
+      if (!filtered.length) continue;
+      return [
+        {
+          printerName: kp.name,
+          paperWidthMm: resolveKitchenPaperWidthMm(settings, kp.paperWidthMm),
+          items: filtered,
+        },
+      ];
+    }
+  }
+
+  return buildKitchenPrintJobs(items, settings);
+}
+
 export function resolveReceiptLanguage(
   settings: PosPrintSettingsClient | null | undefined,
   panelLanguage?: string | null

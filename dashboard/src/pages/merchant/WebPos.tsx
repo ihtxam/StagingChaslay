@@ -13,6 +13,7 @@ import {
   buildKitchenPrintJobs,
   buildKitchenCrossStationFooters,
   kitchenJobsExcludingReceiptPrinters,
+  resolveKitchenPrintJobs,
   buildKitchenTicketItemFromLine,
   generateKitchenTicketEscPos,
   generateKitchenTicketText,
@@ -6582,9 +6583,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       jobLabel: kitchenLabel || t('webPosPrintJobKitchen'),
       lineIds: opts?.lineIds,
     };
-    const printJobs = opts?.dedicatedKitchenOnly
-      ? kitchenJobsExcludingReceiptPrinters(receiptItems, printSettings)
-      : buildKitchenPrintJobs(receiptItems, printSettings);
+    const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter(
+      (j) => (j.printerName || '').trim()
+    );
     const crossFooters = buildKitchenCrossStationFooters(printJobs);
     const otherStationLabel = t('kitchenOtherStationFooter');
     if (printJobs.length) {
@@ -6601,7 +6602,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const escpos = generateKitchenTicketEscPos(ticketOpts);
         const text = generateKitchenTicketText(ticketOpts);
         const mode = await printViaAgentOrQueue({
-          printerName: job.printerName || printerName || undefined,
+          printerName: job.printerName || undefined,
           dataBase64: uint8ToBase64(escpos),
           text,
           orderId: opts?.orderNumber || null,
@@ -6617,27 +6618,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     if (opts?.dedicatedKitchenOnly) return;
 
-    const paperWidthMm = resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
-    const escpos = generateKitchenTicketEscPos({
-      ...kitchenOpts,
-      items: receiptItems,
-      paperWidthMm,
-    });
-    const text = generateKitchenTicketText({
-      ...kitchenOpts,
-      items: receiptItems,
-      paperWidthMm,
-    });
-    const mode = await printViaAgentOrQueue({
-      printerName: printerName || undefined,
-      dataBase64: uint8ToBase64(escpos),
-      text,
-      orderId: opts?.orderNumber || null,
-      retryLocally: printRetryLocally,
-      ...printMeta,
-    });
-    setPrinterDisconnected(false);
-    if (mode === 'queued') toastPrintQueuedMainTill();
+    toast.error(t('webPosNoKitchenPrinterConfigured'));
+    return;
   };
 
   const retryKitchenPrint = async (lines: CartLine[]) => {

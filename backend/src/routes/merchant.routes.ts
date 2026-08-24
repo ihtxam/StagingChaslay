@@ -24,6 +24,7 @@ import { getDb, schema } from "@/db";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import posSessionsRoutes from "@/routes/pos-sessions.routes";
+import clientErrorsRoutes from "@/routes/client-errors.routes";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -2907,5 +2908,6 @@ router.post("/platform-shop/confirm", async (req: Request, res: Response) => {
 });
 
 router.use(posSessionsRoutes);
+router.use("/client-errors", clientErrorsRoutes);
 
 export default router;

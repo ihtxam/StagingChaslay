@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
 import { resolveShopKey } from '@/lib/shop-cart';
+import { initClientErrorReporting } from '@/lib/client-error-report';
 import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
 
 import LoginPage from '@/pages/LoginPage';
@@ -136,6 +137,7 @@ function App() {
 
   useEffect(() => {
     hydrate();
+    initClientErrorReporting();
   }, [hydrate]);
 
   return (
