@@ -1,7 +1,84 @@
 import type { CartLine } from '@/components/webpos/types';
 import type { WebPosCustomer } from '@/components/WebPosCustomerPicker';
 import { resolveOrderItemName } from '@/lib/order-item-name';
-import type { MerchantOrder } from '@/lib/order-management';
+import {
+  canCollectPayment,
+  isPaidOrder,
+  orderPublicRefs,
+  type MerchantOrder,
+} from '@/lib/order-management';
+
+/** Cart identity used to match persisted POS orders (ticket #6832, tab, table). */
+export type CartOrderLink = {
+  ticketDisplay?: string | null;
+  tabNumber?: string | null;
+  tableId?: string | null;
+  ticketOrderNumber?: string | null;
+};
+
+function normTicket(value?: string | null): string {
+  const raw = String(value || '')
+    .trim()
+    .replace(/^#/, '');
+  return raw ? `#${raw}` : '';
+}
+
+function normTab(value?: string | null): string {
+  return String(value || '')
+    .trim()
+    .replace(/^#/, '');
+}
+
+/** True when a server order belongs to the same open cart session. */
+export function orderMatchesCartLink(order: MerchantOrder, link: CartOrderLink): boolean {
+  const refs = orderPublicRefs(order);
+  const cartTicket = normTicket(link.ticketDisplay);
+  const cartTab = normTab(link.tabNumber);
+  const orderTicket = normTicket(refs.ticketDisplay);
+  const orderTab = normTab(refs.tabNumber);
+  if (cartTicket && orderTicket && cartTicket === orderTicket) return true;
+  if (cartTab && orderTab && cartTab === orderTab) return true;
+  if (link.tableId && order.tableId && link.tableId === order.tableId) return true;
+  if (
+    link.ticketOrderNumber?.trim() &&
+    order.orderNumber?.trim() &&
+    link.ticketOrderNumber.trim() === order.orderNumber.trim()
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function findOrdersMatchingCart(
+  orders: MerchantOrder[],
+  link: CartOrderLink
+): MerchantOrder[] {
+  return orders.filter((o) => orderMatchesCartLink(o, link));
+}
+
+export type CartCheckoutGuard =
+  | { action: 'ok' }
+  | { action: 'blocked'; order: MerchantOrder }
+  | { action: 'collect'; order: MerchantOrder };
+
+/** Block duplicate payment or redirect to collect on an existing unpaid ticket. */
+export function resolveCartCheckoutGuard(
+  orders: MerchantOrder[],
+  link: CartOrderLink,
+  opts?: { requireSent?: boolean }
+): CartCheckoutGuard {
+  const matches = findOrdersMatchingCart(orders, link);
+  if (!matches.length) return { action: 'ok' };
+  const paid = matches.find(
+    (o) => isPaidOrder(o) && (o.status || '').toLowerCase() !== 'cancelled'
+  );
+  if (paid) return { action: 'blocked', order: paid };
+  if (opts?.requireSent) {
+    const open = matches.find(canCollectPayment);
+    if (open) return { action: 'collect', order: open };
+  }
+  return { action: 'ok' };
+}
 
 type OrderLine = NonNullable<MerchantOrder['items']>[number];
 
