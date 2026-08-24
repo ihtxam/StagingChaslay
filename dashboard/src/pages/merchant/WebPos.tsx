@@ -364,6 +364,11 @@ import {
   type CartOrderLink,
 } from '@/lib/order-to-cart';
 import {
+  findHeldOrderForTable,
+  parseHeldCartJson,
+  type HeldOrderRow,
+} from '@/lib/webpos-held';
+import {
   INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
   isInvoiceOrder,
@@ -3970,6 +3975,71 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setBillDiscount(draft.billDiscount || { percent: 0, amount: 0 });
   };
 
+  const applyHeldOrderFromRow = useCallback(
+    (held: HeldOrderRow, table?: { id: string; label: string }) => {
+      const meta = parseHeldCartJson(held.cartJson);
+      if (!meta.cart.length) return false;
+      resumedHeldIdRef.current = String(held.id).startsWith('local:') ? null : held.id;
+      setCart(meta.cart);
+      setChannel((meta.channel as Channel) || 'dine_in');
+      setTableId(meta.tableId || table?.id || null);
+      setTableLabel(meta.tableLabel || table?.label || null);
+      setTabNumber(meta.tabNumber);
+      const ticketFromLabel = (held.label || '').match(/#\d{4}/)?.[0] || null;
+      const restoredTicket =
+        meta.kitchenTicketKey?.trim() ||
+        meta.ticketDisplay?.trim() ||
+        ticketFromLabel;
+      if (restoredTicket) {
+        setTicketDisplay(restoredTicket);
+        lastKitchenTicketRef.current = restoredTicket;
+      } else {
+        setTicketDisplay(meta.ticketDisplay ?? null);
+      }
+      if (meta.ticketOrderNumber) setTicketOrderNumber(meta.ticketOrderNumber);
+      if (meta.orderNote != null) setOrderNote(meta.orderNote);
+      if (meta.billDiscount) setBillDiscount(meta.billDiscount);
+      let maxCourse = 1;
+      for (const line of meta.cart) {
+        const n = Number(line.courseNumber) || 0;
+        if (n > maxCourse) maxCourse = n;
+      }
+      setActiveCourse(maxCourse);
+      setCourseCount(maxCourse);
+      const sent =
+        held.status === 'sent_to_kitchen' || meta.cart.some((l) => l.sentToKitchen);
+      setOrderSent(sent);
+      setCoursesBulkSent(sent);
+      setSelectedLineId(null);
+      setKeypadBuffer('');
+      const draftKey = openCartDraftKey({
+        tableId: meta.tableId || table?.id || null,
+        tabNumber: meta.tabNumber,
+        channel: (meta.channel as Channel) || 'dine_in',
+      });
+      openCartDraftsRef.current.set(draftKey, {
+        cart: meta.cart,
+        channel: (meta.channel as Channel) || 'dine_in',
+        tableId: meta.tableId || table?.id || null,
+        tableLabel: meta.tableLabel || table?.label || null,
+        tabNumber: meta.tabNumber,
+        ticketDisplay: restoredTicket || meta.ticketDisplay || null,
+        ticketOrderNumber: meta.ticketOrderNumber || null,
+        orderNote: meta.orderNote || '',
+        activeCourse: maxCourse,
+        courseCount: maxCourse,
+        orderSent: sent,
+        coursesBulkSent: sent,
+        selectedLineId: null,
+        keypadBuffer: '',
+        billDiscount: meta.billDiscount || { percent: 0, amount: 0 },
+      });
+      setDraftVersion((n) => n + 1);
+      return true;
+    },
+    []
+  );
+
   /** Customer-facing shout from tab number (delivery / takeaway order #). */
   const tabOrderShout = useCallback((tab: string | null | undefined) => {
     const n = String(tab || '')
@@ -4320,32 +4390,50 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPosView('register');
   };
 
-  /** Open a table from the Tables plan (load that table's draft / empty order). */
-  const switchToTableOrder = (table: { id: string; label: string }) => {
+  /** Open a table from the Tables plan (load that table's draft / waiter-held order). */
+  const switchToTableOrder = async (table: { id: string; label: string }) => {
     saveOpenCartDraft();
     const key = openCartDraftKey({ tableId: table.id, channel: 'dine_in' });
     const existing = openCartDraftsRef.current.get(key);
-    if (existing) {
+    if (existing && draftOccupiesTable(existing)) {
       applyOpenCartDraft(existing);
-    } else {
-      setCart([]);
-      setSelectedLineId(null);
-      setKeypadBuffer('');
-      setOrderNote('');
-      setBillDiscount({ percent: 0, amount: 0 });
-      setTabNumber(null);
-      clearCartTicket();
-      setActiveCourse(1);
-      setCourseCount(1);
-      setOrderSent(false);
-      setCoursesBulkSent(false);
-      setFulfillmentWhen(null);
-      setSelectedCustomer(null);
-      setTableId(table.id);
-      setTableLabel(table.label);
-      setChannel('dine_in');
+      setMobileCartOpen(false);
+      setPosTab('register');
+      setPosView('register');
+      return;
     }
-    // Mobile register: land on the product grid so staff can add items (not an empty cart page).
+    try {
+      const res = await api.get('/merchant/pos/held');
+      const held = findHeldOrderForTable(
+        table.id,
+        (res.data?.held || []) as HeldOrderRow[]
+      );
+      if (held && applyHeldOrderFromRow(held, table)) {
+        setMobileCartOpen(false);
+        setPosTab('register');
+        setPosView('register');
+        return;
+      }
+    } catch (e) {
+      console.warn('[WebPOS][held] load table order failed', e);
+    }
+    setCart([]);
+    setSelectedLineId(null);
+    setKeypadBuffer('');
+    setOrderNote('');
+    setBillDiscount({ percent: 0, amount: 0 });
+    setTabNumber(null);
+    clearCartTicket();
+    setActiveCourse(1);
+    setCourseCount(1);
+    setOrderSent(false);
+    setCoursesBulkSent(false);
+    setFulfillmentWhen(null);
+    setSelectedCustomer(null);
+    setTableId(table.id);
+    setTableLabel(table.label);
+    setChannel('dine_in');
+    resumedHeldIdRef.current = null;
     setMobileCartOpen(false);
     setPosTab('register');
     setPosView('register');
@@ -8590,51 +8678,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             highlightOrderId={highlightOrderId}
             initialChannelFilter={ordersChannelPref}
             onResumeHeld={(held) => {
-              resumedHeldIdRef.current = String(held.id).startsWith('local:') ? null : held.id;
-              const data = held.cartJson as
-                | {
-                    cart?: CartLine[];
-                    channel?: Channel;
-                    tableId?: string | null;
-                    tableLabel?: string | null;
-                    tabNumber?: string | null;
-                    ticketDisplay?: string | null;
-                    ticketOrderNumber?: string | null;
-                    kitchenTicketKey?: string | null;
-                    billDiscount?: BillDiscount;
-                    orderNote?: string;
-                  }
-                | CartLine[];
-              if (Array.isArray(data)) {
-                setCart(data);
-              } else if (data?.cart) {
-                setCart(data.cart);
-                if (data.channel) setChannel(data.channel);
-                if (data.tableId) setTableId(data.tableId);
-                if (data.tableLabel) setTableLabel(data.tableLabel);
-                if (data.tabNumber != null) setTabNumber(data.tabNumber);
-                const ticketFromLabel = (held.label || '').match(/#\d{4}/)?.[0] || null;
-                const restoredTicket =
-                  data.kitchenTicketKey?.trim() ||
-                  data.ticketDisplay?.trim() ||
-                  ticketFromLabel;
-                if (restoredTicket) {
-                  setTicketDisplay(restoredTicket);
-                  lastKitchenTicketRef.current = restoredTicket;
-                }
-                if (data.ticketOrderNumber) setTicketOrderNumber(data.ticketOrderNumber);
-                if (data.orderNote != null) setOrderNote(data.orderNote);
-                if (data.billDiscount) setBillDiscount(data.billDiscount);
+              const meta = parseHeldCartJson(held.cartJson);
+              const table = meta.tableId
+                ? { id: meta.tableId, label: meta.tableLabel || '' }
+                : undefined;
+              if (
+                applyHeldOrderFromRow(
+                  {
+                    id: held.id,
+                    cartJson: held.cartJson,
+                    status: held.status,
+                    label: held.label,
+                    updatedAt: held.updatedAt,
+                    createdAt: held.createdAt,
+                  },
+                  table
+                )
+              ) {
+                setOrdersRefreshToken((n) => n + 1);
+                setPosTab('register');
+                setPosView('register');
+                requestAnimationFrame(() => blurPosInputs());
+                toast.success(t('webPosOrderResumed'));
+              } else {
+                toast.error(t('webPosOrdersLoadFailed'));
               }
-              const sent = held.status === 'sent_to_kitchen';
-              setOrderSent(sent);
-              setCoursesBulkSent(sent);
-              // Keep the server held row until payment / cancel so Ongoing still lists it.
-              setOrdersRefreshToken((n) => n + 1);
-              setPosTab('register');
-              setPosView('register');
-              requestAnimationFrame(() => blurPosInputs());
-              toast.success(t('webPosOrderResumed'));
             }}
             onPrintOrder={async (order, splitLabel) => {
               try {

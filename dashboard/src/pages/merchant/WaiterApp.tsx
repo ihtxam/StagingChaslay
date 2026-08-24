@@ -45,7 +45,7 @@ import {
   printWaiterKitchen,
 } from '@/lib/waiter-kitchen';
 import { nextWebPosTicketNumber, webPosBackendOrderId } from '@/lib/webpos-receipt';
-import { parseHeldCartJson } from '@/lib/webpos-held';
+import { findHeldOrderForTable, parseHeldCartJson } from '@/lib/webpos-held';
 import {
   pushCartLinesToKds,
   fetchKdsBoardStatus,
@@ -364,8 +364,8 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
 
   const loadHeldForTable = async (targetTableId: string) => {
     const res = await api.get('/merchant/pos/held');
-    const rows = (res.data?.held || []) as Array<{ id: string; cartJson?: unknown }>;
-    return rows.find((h) => parseHeldCartJson(h.cartJson).tableId === targetTableId) || null;
+    const rows = (res.data?.held || []) as Array<{ id: string; cartJson?: unknown; status?: string; updatedAt?: string; createdAt?: string }>;
+    return findHeldOrderForTable(targetTableId, rows);
   };
 
   const applyHeldOrder = (held: { id: string; cartJson?: unknown }, table: { id: string; label: string }) => {
