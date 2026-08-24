@@ -110,7 +110,7 @@ router.post('/tickets/:ticketId/reply', upload.single('attachment'), async (req:
   }
 });
 
-/** POS diagnostic logs — superadmin inbox only (not listed in merchant Support). */
+/** POS diagnostic logs — superadmin System Logs only (not merchant Support or inbox). */
 router.post('/diagnostic-report', async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
@@ -119,14 +119,15 @@ router.post('/diagnostic-report', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Subject and body are required' });
     }
     const src = source === 'android' ? 'android' : 'webpos';
-    const ticket = await SupportTicketService.createDiagnosticReport(merchantId, {
+    const log = await SupportTicketService.createDiagnosticReport(merchantId, {
       source: src,
       subject: String(subject),
       body: String(body),
       auto: auto === true || auto === 'true',
       authorName: req.user?.name || undefined,
+      actorId: req.user?.staffId || req.user?.id || null,
     });
-    res.status(201).json({ success: true, ok: true, ticketId: ticket.id });
+    res.status(201).json({ success: true, ok: true, logId: log.id });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to submit report' });
   }

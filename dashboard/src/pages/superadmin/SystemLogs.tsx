@@ -10,6 +10,7 @@ type LogRow = {
   message: string;
   metadata?: Record<string, unknown> | null;
   actorRole?: string | null;
+  merchantId?: string | null;
   createdAt: string;
 };
 
@@ -81,6 +82,13 @@ export default function SystemLogs() {
         >
           {t('platformClientErrors')}
         </button>
+        <button
+          type="button"
+          className={`btn-secondary text-sm ${category === 'merchant_diagnostic' ? 'ring-2 ring-teal-500' : ''}`}
+          onClick={() => { setPage(1); setCategory((c) => (c === 'merchant_diagnostic' ? '' : 'merchant_diagnostic')); }}
+        >
+          {t('platformMerchantDiagnostics')}
+        </button>
         <button type="button" className="btn-secondary text-sm" onClick={() => void load()}>
           {t('refresh')}
         </button>
@@ -117,7 +125,18 @@ export default function SystemLogs() {
                   <td className="px-3 py-2 text-xs font-mono text-stone-600">{log.category}</td>
                   <td className="px-3 py-2 text-stone-800 max-w-xl">
                     <p>{log.message}</p>
-                    {log.metadata && Object.keys(log.metadata).length ? (
+                    {log.merchantId ? (
+                      <p className="mt-0.5 text-[10px] font-mono text-stone-500">
+                        merchant: {log.merchantId}
+                      </p>
+                    ) : null}
+                    {log.category === 'merchant_diagnostic' &&
+                    log.metadata &&
+                    typeof log.metadata.body === 'string' ? (
+                      <pre className="mt-1 max-h-48 overflow-auto rounded bg-stone-100 p-2 text-[10px] text-stone-700">
+                        {log.metadata.body}
+                      </pre>
+                    ) : log.metadata && Object.keys(log.metadata).length ? (
                       <pre className="mt-1 text-[10px] text-stone-500 overflow-x-auto">
                         {JSON.stringify(log.metadata, null, 2)}
                       </pre>

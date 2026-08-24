@@ -141,7 +141,7 @@ export class SupportTicketService {
     return ticket!;
   }
 
-  /** Internal POS/Web diagnostic report — superadmin inbox only, not merchant-visible. */
+  /** Internal POS/Web diagnostic report — platform System Logs only (not support inbox). */
   static async createDiagnosticReport(
     merchantId: string,
     input: {
@@ -150,17 +150,26 @@ export class SupportTicketService {
       body: string;
       auto?: boolean;
       authorName?: string;
+      actorId?: string | null;
     }
   ) {
-    const subcategory = input.auto ? `${input.source}-auto` : input.source;
-    return this.createTicket(merchantId, {
-      category: 'technical',
-      subcategory,
-      subject: input.subject.trim().slice(0, 255),
-      body: input.body,
-      authorName: input.authorName || 'POS diagnostics',
-      merchantVisible: false,
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { id: true, resellerId: true },
     });
+    if (!merchant) throw new Error('Merchant not found');
+    const { PlatformLogService } = await import('@/services/platform-log.service');
+    const log = await PlatformLogService.writeMerchantDiagnostic(merchantId, {
+      source: input.source,
+      subject: input.subject,
+      body: input.body,
+      auto: input.auto,
+      authorName: input.authorName,
+      actorId: input.actorId,
+      resellerId: merchant.resellerId,
+    });
+    return log;
   }
 
   static async setFirstMessageAttachment(
@@ -202,7 +211,10 @@ export class SupportTicketService {
   static async listResellerTickets(resellerId: string, status?: string) {
     await this.autoCloseExpired();
     const db = getDb();
-    const where = [eq(schema.supportTickets.resellerId, resellerId)];
+    const where = [
+      eq(schema.supportTickets.resellerId, resellerId),
+      eq(schema.supportTickets.merchantVisible, true),
+    ];
     if (status && status !== 'all') {
       where.push(eq(schema.supportTickets.status, status));
     }
@@ -217,7 +229,7 @@ export class SupportTicketService {
   static async listAllTickets(opts?: { status?: string; category?: string; assignedTo?: string }) {
     await this.autoCloseExpired();
     const db = getDb();
-    const where = [];
+    const where = [eq(schema.supportTickets.merchantVisible, true)];
     if (opts?.status && opts.status !== 'all') {
       where.push(eq(schema.supportTickets.status, opts.status));
     }

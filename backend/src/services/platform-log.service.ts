@@ -65,4 +65,35 @@ export class PlatformLogService {
 
     return { logs: rows, page, limit, total: Number(count) || 0 };
   }
+
+  /** POS / Android diagnostic reports — superadmin System Logs only, never support tickets. */
+  static async writeMerchantDiagnostic(
+    merchantId: string,
+    input: {
+      source: "webpos" | "android";
+      subject: string;
+      body: string;
+      auto?: boolean;
+      authorName?: string;
+      actorId?: string | null;
+      resellerId?: string | null;
+    }
+  ) {
+    const body = String(input.body || "").slice(0, 120_000);
+    return this.write({
+      level: input.auto ? "warn" : "info",
+      category: "merchant_diagnostic",
+      message: String(input.subject || "Diagnostic report").trim().slice(0, 2000),
+      merchantId,
+      resellerId: input.resellerId || null,
+      actorRole: "merchant",
+      actorId: input.actorId || null,
+      metadata: {
+        source: input.source,
+        auto: !!input.auto,
+        authorName: input.authorName || null,
+        body,
+      },
+    });
+  }
 }
