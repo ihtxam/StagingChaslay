@@ -6,6 +6,11 @@ import KdsGridColumnsPicker, {
   readKdsGridColumnsOverride,
   writeKdsGridColumnsOverride,
 } from '@/components/kds/KdsGridColumnsPicker';
+import KdsLayoutModePicker, {
+  readKdsLayoutModeOverride,
+  writeKdsLayoutModeOverride,
+  type KdsLayoutMode,
+} from '@/components/kds/KdsLayoutModePicker';
 import {
   KDS_SHELL_THEMES,
   kdsChannelBorderClass,
@@ -16,7 +21,6 @@ import {
 import { playKdsNewOrderOnce, playKitchenOverdueOnce } from '@/lib/order-alert';
 import { useI18n } from '@/lib/i18n';
 
-type KdsLayoutMode = 'grid' | 'rows' | 'slider';
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery';
 
 type KdsItem = {
@@ -295,8 +299,18 @@ export default function KdsDisplayPage() {
   const initialLoad = useRef(true);
   const pollRef = useRef<number | null>(null);
   const gridColumnsOverrideRef = useRef<number | null>(readKdsGridColumnsOverride(token));
+  const layoutModeOverrideRef = useRef<KdsLayoutMode | null>(readKdsLayoutModeOverride(token));
 
   const theme = KDS_SHELL_THEMES[shellTheme] ?? KDS_SHELL_THEMES.dark;
+
+  const applyLayoutMode = useCallback(
+    (mode: KdsLayoutMode) => {
+      const next = writeKdsLayoutModeOverride(token, mode);
+      layoutModeOverrideRef.current = next;
+      setLayoutMode(next);
+    },
+    [token]
+  );
 
   const applyGridColumns = useCallback(
     (columns: number) => {
@@ -377,9 +391,13 @@ export default function KdsDisplayPage() {
       setStationName(st.name || t('kdsDefaultStationName'));
       const th = String(st.theme || 'dark').toLowerCase();
       setShellTheme(th === 'light' || th === 'teal' || th === 'dark' ? (th as KdsShellTheme) : 'dark');
-      const lm = String(st.layoutMode || 'grid').toLowerCase();
-      setLayoutMode(lm === 'rows' || lm === 'slider' ? lm : 'grid');
       if (initialLoad.current) {
+        const lm = String(st.layoutMode || 'grid').toLowerCase();
+        const serverMode: KdsLayoutMode =
+          lm === 'rows' || lm === 'slider' ? (lm as KdsLayoutMode) : 'grid';
+        const localMode = layoutModeOverrideRef.current ?? readKdsLayoutModeOverride(token);
+        layoutModeOverrideRef.current = localMode;
+        setLayoutMode(localMode ?? serverMode);
         const serverCols = Math.min(6, Math.max(1, Number(st.gridColumns) || 3));
         const localCols = gridColumnsOverrideRef.current ?? readKdsGridColumnsOverride(token);
         gridColumnsOverrideRef.current = localCols;
@@ -397,6 +415,7 @@ export default function KdsDisplayPage() {
 
   useEffect(() => {
     gridColumnsOverrideRef.current = readKdsGridColumnsOverride(token);
+    layoutModeOverrideRef.current = readKdsLayoutModeOverride(token);
   }, [token]);
 
   useEffect(() => {
@@ -556,16 +575,6 @@ export default function KdsDisplayPage() {
             >
               {t('kdsTabPending')} ({pendingCount})
             </button>
-            <button
-              type="button"
-              onClick={() => setTab('archived')}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:py-2 sm:text-sm ${
-                tab === 'archived' ? 'bg-teal-600 text-white' : 'bg-black/20 text-inherit'
-              }`}
-            >
-              {t('kdsTabCompleted')} ({archived.length})
-            </button>
-            <span className="mx-0.5 hidden h-5 w-px bg-black/15 sm:inline-block" aria-hidden />
             {CHANNEL_FILTERS.map((f) => (
               <button
                 key={f}
@@ -576,12 +585,22 @@ export default function KdsDisplayPage() {
                 {channelFilterLabel(f, t)}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setTab('archived')}
+              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:py-2 sm:text-sm ${
+                tab === 'archived' ? 'bg-teal-600 text-white' : 'bg-black/20 text-inherit'
+              }`}
+            >
+              {t('kdsTabCompleted')} ({archived.length})
+            </button>
           </div>
-          {layoutMode === 'grid' ? (
-            <div className="ml-auto shrink-0">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <KdsLayoutModePicker compact value={layoutMode} onChange={applyLayoutMode} />
+            {layoutMode === 'grid' ? (
               <KdsGridColumnsPicker compact value={gridColumns} onChange={applyGridColumns} />
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
         {error ? (
           <p className="mx-auto mt-1.5 max-w-[1600px] rounded-lg bg-red-900/80 px-3 py-2 text-sm text-red-100">

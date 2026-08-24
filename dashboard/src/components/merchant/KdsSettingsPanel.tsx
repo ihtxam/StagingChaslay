@@ -3,6 +3,7 @@ import { Copy, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import KdsGridColumnsPicker from '@/components/kds/KdsGridColumnsPicker';
+import KdsLayoutModePicker, { type KdsLayoutMode } from '@/components/kds/KdsLayoutModePicker';
 import { KDS_SHELL_THEMES, type KdsShellTheme } from '@/lib/kds-channel-styles';
 import { useI18n } from '@/lib/i18n';
 
@@ -22,8 +23,6 @@ type KdsStation = {
 };
 
 const KDS_THEME_OPTIONS: KdsShellTheme[] = ['dark', 'light', 'teal'];
-const KDS_LAYOUT_OPTIONS = ['grid', 'rows', 'slider'] as const;
-type KdsLayoutMode = (typeof KDS_LAYOUT_OPTIONS)[number];
 
 type Category = {
   id: string;
@@ -209,44 +208,6 @@ export default function KdsSettingsPanel() {
     return t('kdsTheme_dark');
   };
 
-  const layoutLabel = (mode: KdsLayoutMode) => {
-    if (mode === 'rows') return t('kdsLayout_rows');
-    if (mode === 'slider') return t('kdsLayout_slider');
-    return t('kdsLayout_grid');
-  };
-
-  const LayoutPicker = ({
-    value,
-    disabled,
-    onChange,
-  }: {
-    value: KdsLayoutMode;
-    disabled?: boolean;
-    onChange: (mode: KdsLayoutMode) => void;
-  }) => (
-    <div>
-      <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsLayoutLabel')}</p>
-      <div className="flex flex-wrap gap-2">
-        {KDS_LAYOUT_OPTIONS.map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            disabled={disabled}
-            onClick={() => onChange(mode)}
-            className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
-              value === mode
-                ? 'border-teal-600 bg-teal-50 text-teal-800 ring-2 ring-teal-200'
-                : 'border-stone-200 hover:border-stone-300'
-            }`}
-          >
-            {layoutLabel(mode)}
-          </button>
-        ))}
-      </div>
-      <p className="mt-1 text-xs text-stone-500">{t('kdsLayoutHint')}</p>
-    </div>
-  );
-
   const ThemePicker = ({
     value,
     disabled,
@@ -353,7 +314,7 @@ export default function KdsSettingsPanel() {
           </div>
         ) : null}
         <ThemePicker value={theme} onChange={setTheme} />
-        <LayoutPicker value={layoutMode} onChange={setLayoutMode} />
+        <KdsLayoutModePicker value={layoutMode} onChange={setLayoutMode} />
         {layoutMode === 'grid' ? (
           <KdsGridColumnsPicker value={gridColumns} onChange={setGridColumns} />
         ) : null}
@@ -456,7 +417,7 @@ export default function KdsSettingsPanel() {
                         disabled={saving}
                         onChange={(next) => void updateStationFilters(s.id, { theme: next })}
                       />
-                      <LayoutPicker
+                      <KdsLayoutModePicker
                         value={
                           (['grid', 'rows', 'slider'].includes(String(s.layoutMode || 'grid').toLowerCase())
                             ? String(s.layoutMode).toLowerCase()
