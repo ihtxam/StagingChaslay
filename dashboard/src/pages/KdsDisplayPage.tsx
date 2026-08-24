@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Check, Clock, RotateCcw } from 'lucide-react';
 import { publicApi } from '@/lib/api';
+import KdsGridColumnsPicker, {
+  readKdsGridColumnsOverride,
+  writeKdsGridColumnsOverride,
+} from '@/components/kds/KdsGridColumnsPicker';
 import {
   KDS_SHELL_THEMES,
   kdsChannelBorderClass,
@@ -263,8 +267,18 @@ export default function KdsDisplayPage() {
   const overdueRungRef = useRef(new Set<string>());
   const initialLoad = useRef(true);
   const pollRef = useRef<number | null>(null);
+  const gridColumnsOverrideRef = useRef<number | null>(readKdsGridColumnsOverride(token));
 
   const theme = KDS_SHELL_THEMES[shellTheme] ?? KDS_SHELL_THEMES.dark;
+
+  const applyGridColumns = useCallback(
+    (columns: number) => {
+      const next = writeKdsGridColumnsOverride(token, columns);
+      gridColumnsOverrideRef.current = next;
+      setGridColumns(next);
+    },
+    [token]
+  );
 
   const checkOverdue = useCallback(
     (pending: KdsTicket[]) => {
@@ -342,7 +356,12 @@ export default function KdsDisplayPage() {
       setShellTheme(th === 'light' || th === 'teal' || th === 'dark' ? (th as KdsShellTheme) : 'dark');
       const lm = String(st.layoutMode || 'grid').toLowerCase();
       setLayoutMode(lm === 'rows' || lm === 'slider' ? lm : 'grid');
-      setGridColumns(Math.min(6, Math.max(1, Number(st.gridColumns) || 3)));
+      if (initialLoad.current) {
+        const serverCols = Math.min(6, Math.max(1, Number(st.gridColumns) || 3));
+        const localCols = gridColumnsOverrideRef.current ?? readKdsGridColumnsOverride(token);
+        gridColumnsOverrideRef.current = localCols;
+        setGridColumns(localCols ?? serverCols);
+      }
       setOverdueMinutes(Math.min(120, Math.max(5, Number(st.overdueMinutes) || 20)));
       setTickets(active);
       setArchived(done);
@@ -351,6 +370,10 @@ export default function KdsDisplayPage() {
       setError(e.response?.data?.error || e.message || t('kdsLoadFailed'));
     }
   }, [token, t, checkOverdue, overdueMinutes]);
+
+  useEffect(() => {
+    gridColumnsOverrideRef.current = readKdsGridColumnsOverride(token);
+  }, [token]);
 
   useEffect(() => {
     void load();
@@ -478,25 +501,34 @@ export default function KdsDisplayPage() {
             </button>
           </div>
         </div>
-        <div className="mx-auto mt-2 flex max-w-[1600px] flex-wrap gap-1.5">
-          {CHANNEL_FILTERS.map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setChannelFilter(f)}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-bold ${
-                channelFilter === f
-                  ? shellTheme === 'light'
-                    ? 'bg-stone-800 text-white'
-                    : 'bg-white/20 text-white ring-1 ring-white/30'
-                  : shellTheme === 'light'
-                    ? 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                    : 'bg-black/15 text-inherit hover:bg-black/25'
-              }`}
-            >
-              {channelFilterLabel(f, t)}
-            </button>
-          ))}
+        <div className="mx-auto mt-2 flex max-w-[1600px] flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-1.5">
+            {CHANNEL_FILTERS.map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setChannelFilter(f)}
+                className={`rounded-lg px-2.5 py-1.5 text-xs font-bold ${
+                  channelFilter === f
+                    ? shellTheme === 'light'
+                      ? 'bg-stone-800 text-white'
+                      : 'bg-white/20 text-white ring-1 ring-white/30'
+                    : shellTheme === 'light'
+                      ? 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                      : 'bg-black/15 text-inherit hover:bg-black/25'
+                }`}
+              >
+                {channelFilterLabel(f, t)}
+              </button>
+            ))}
+          </div>
+          {layoutMode === 'grid' ? (
+            <KdsGridColumnsPicker
+              compact
+              value={gridColumns}
+              onChange={applyGridColumns}
+            />
+          ) : null}
         </div>
         {error ? (
           <p className="mx-auto mt-2 max-w-[1600px] rounded-lg bg-red-900/80 px-3 py-2 text-sm text-red-100">
