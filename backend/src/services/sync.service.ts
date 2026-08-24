@@ -75,7 +75,19 @@ async function findRecentPaidDuplicateOrder(
       .replace(/^#/, "");
     if (ticket && rowTicket && ticket === rowTicket) return row;
     if (tab && rowTab && tab === rowTab) return row;
-    if (opts.tableId && row.tableId === opts.tableId) return row;
+    if (opts.tableId && row.tableId === opts.tableId) {
+      if (ticket && rowTicket) {
+        if (ticket === rowTicket) return row;
+        continue;
+      }
+      if (ticket || rowTicket) continue;
+      if (tab && rowTab) {
+        if (tab === rowTab) return row;
+        continue;
+      }
+      if (tab || rowTab) continue;
+      return row;
+    }
   }
   return null;
 }
@@ -802,6 +814,16 @@ export class SyncService {
           await InventoryService.deductForPaidOrder(merchantId, order.id);
         } catch (invErr) {
           console.warn("[sync] inventory deduct failed:", invErr);
+        }
+        try {
+          const { PosOrdersService } = await import("@/services/pos-orders.service");
+          await PosOrdersService.releaseHeldByIdentity(merchantId, {
+            ticketDisplay: sale.ticketDisplay,
+            tabNumber: sale.tabNumber,
+            tableId: sale.tableId,
+          });
+        } catch (heldErr) {
+          console.warn("[sync] held release failed:", heldErr);
         }
       }
 

@@ -1,4 +1,5 @@
 import { loadPersistedWebPosCarts, savePersistedWebPosCarts } from '@/lib/webpos-cart-persist';
+import api from '@/lib/api';
 import type { CartLine, OpenCartDraft, PosChannel } from '@/components/webpos/types';
 
 export type HeldCartMeta = {
@@ -204,4 +205,32 @@ export function findHeldOrderForTable(
   const withLines = matches.filter((row) => parseHeldCartJson(row.cartJson).cart.length > 0);
   const pool = withLines.length ? withLines : matches;
   return [...pool].sort((a, b) => heldRowTimeMs(b) - heldRowTimeMs(a))[0] || null;
+}
+
+export type HeldReleaseIdent = {
+  heldId?: string | null;
+  ticketDisplay?: string | null;
+  tableId?: string | null;
+  tabNumber?: string | null;
+};
+
+/** Drop held rows after payment — works without CANCEL_ORDERS permission. */
+export async function releaseHeldOrder(ident: HeldReleaseIdent): Promise<void> {
+  const hasIdent =
+    ident.heldId ||
+    ident.ticketDisplay?.trim() ||
+    ident.tableId?.trim() ||
+    ident.tabNumber?.trim();
+  if (!hasIdent) return;
+  try {
+    await api.post('/merchant/pos/held/release', {
+      heldId: ident.heldId || undefined,
+      ticketDisplay: ident.ticketDisplay || undefined,
+      tableId: ident.tableId || undefined,
+      tabNumber: ident.tabNumber || undefined,
+    });
+  } catch {
+    /* payment already recorded — best-effort cleanup */
+  }
+  removeLocalHeldDraft(ident);
 }

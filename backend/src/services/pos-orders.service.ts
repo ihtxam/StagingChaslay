@@ -933,6 +933,62 @@ export class PosOrdersService {
   }
 
   /**
+   * Remove open held rows after payment — matches ticket #, table, or tab identity.
+   * Used by POS checkout (staff may lack CANCEL_ORDERS) and server-side sale sync.
+   */
+  static async releaseHeldByIdentity(
+    merchantId: string,
+    opts: {
+      heldId?: string | null;
+      ticketDisplay?: string | null;
+      tableId?: string | null;
+      tabNumber?: string | null;
+    }
+  ) {
+    const db = getDb();
+    const target = heldIdentity({
+      ticketDisplay: opts.ticketDisplay,
+      tableId: opts.tableId,
+      tabNumber: opts.tabNumber,
+    });
+    const hasTarget =
+      !!target.ticketDisplay || !!target.tableId || !!target.tabNumber || !!opts.heldId;
+    if (!hasTarget) return { released: 0 };
+
+    const open = await db.query.heldOrders.findMany({
+      where: and(
+        eq(schema.heldOrders.merchantId, merchantId),
+        inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
+      ),
+    });
+
+    const toDelete = new Set<string>();
+    if (opts.heldId) toDelete.add(opts.heldId);
+    for (const row of open) {
+      if (sameHeldIdentity(heldIdentity(row.cartJson), target)) {
+        toDelete.add(row.id);
+      }
+    }
+
+    for (const id of toDelete) {
+      await db
+        .delete(schema.heldOrders)
+        .where(and(eq(schema.heldOrders.id, id), eq(schema.heldOrders.merchantId, merchantId)));
+    }
+
+    if (toDelete.size) {
+      console.info("[pos-held] release", {
+        merchantId,
+        released: toDelete.size,
+        ticket: target.ticketDisplay,
+        tableId: target.tableId,
+        tab: target.tabNumber,
+      });
+    }
+    return { released: toDelete.size };
+  }
+
+  /**
    * Cancel a held / kitchen-sent order with a required reason.
    * Records a cancelled POS sale for EOD and sales reports, then removes the hold.
    */
