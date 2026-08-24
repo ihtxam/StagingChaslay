@@ -6229,7 +6229,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     const paper = opts.paperWidthMm || targets[0]?.paperWidthMm || printSettings?.paperWidthMm || 80;
     const logoUrl =
-      opts.role === 'receipt'
+      opts.role === 'receipt' || opts.role === 'eod'
         ? printSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl
         : null;
     let logo: Uint8Array | null = null;
