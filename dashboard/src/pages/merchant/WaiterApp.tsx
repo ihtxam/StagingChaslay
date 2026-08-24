@@ -45,7 +45,9 @@ import {
   printWaiterKitchen,
 } from '@/lib/waiter-kitchen';
 import { nextWebPosTicketNumber, webPosBackendOrderId } from '@/lib/webpos-receipt';
-import { findHeldOrderForTable, parseHeldCartJson } from '@/lib/webpos-held';
+import { findHeldOrderForTable, parseHeldCartJson, releaseHeldOrder } from '@/lib/webpos-held';
+import { resolveCartCheckoutGuard } from '@/lib/order-to-cart';
+import type { MerchantOrder } from '@/lib/order-management';
 import {
   pushCartLinesToKds,
   fetchKdsBoardStatus,
@@ -109,6 +111,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [heldTableIds, setHeldTableIds] = useState<string[]>([]);
   const [ordersRefresh, setOrdersRefresh] = useState(0);
   const activeHeldIdRef = useRef<string | null>(null);
+  const paidBlockedRef = useRef(false);
 
   const pinRequired = webPosPinGateRequired({
     hasStaffPins: staffConfigured,
@@ -257,7 +260,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
 
   /** Sync in-progress table/takeaway carts to /merchant/pos/held so main till Orders → Active lists them. */
   useEffect(() => {
-    if (loading || pinRequired || tab !== 'order' || !cart.length || sending) return;
+    if (loading || pinRequired || tab !== 'order' || !cart.length || sending || paidBlockedRef.current) return;
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void (async () => {
@@ -302,6 +305,81 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     staff?.id,
     staff?.name,
     ensureTicket,
+  ]);
+
+  /** Clear cart when the same ticket was paid on another device (e.g. mobile checkout). */
+  const clearPaidWaiterSession = useCallback(
+    (order?: MerchantOrder | null) => {
+      paidBlockedRef.current = true;
+      const heldId = activeHeldIdRef.current;
+      activeHeldIdRef.current = null;
+      void releaseHeldOrder({
+        heldId,
+        ticketDisplay: ticketDisplay || order?.ticketDisplay,
+        tableId,
+        tabNumber: order?.tabNumber,
+      });
+      setCart([]);
+      setTableId(null);
+      setTableLabel(null);
+      setTicketDisplay(null);
+      setTicketOrderNumber(null);
+      setOrderNote('');
+      setTab('tables');
+      setOrdersRefresh((n) => n + 1);
+    },
+    [ticketDisplay, tableId]
+  );
+
+  useEffect(() => {
+    if (loading || pinRequired || tab !== 'order') return;
+    const hasSent = cart.some((l) => l.sentToKitchen);
+    if (!cart.length && !hasSent && !activeHeldIdRef.current && !ticketDisplay?.trim()) return;
+    if (paidBlockedRef.current) return;
+    let cancelled = false;
+    const poll = async () => {
+      if (cancelled || paidBlockedRef.current) return;
+      try {
+        const res = await api.get('/merchant/orders', { params: { limit: 120 } });
+        const orders = (res.data?.orders || []) as MerchantOrder[];
+        const guard = resolveCartCheckoutGuard(
+          orders,
+          {
+            ticketDisplay,
+            tabNumber: null,
+            tableId,
+            ticketOrderNumber,
+          },
+          { requireSent: hasSent || !!activeHeldIdRef.current }
+        );
+        if (guard.action === 'blocked') {
+          const num =
+            guard.order.ticketDisplay?.trim() ||
+            guard.order.orderNumber?.trim() ||
+            '';
+          toast.error(t('webPosOrderAlreadyPaid').replace('{number}', num));
+          clearPaidWaiterSession(guard.order);
+        }
+      } catch {
+        /* best-effort */
+      }
+    };
+    void poll();
+    const timer = window.setInterval(poll, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [
+    cart,
+    ticketDisplay,
+    tableId,
+    ticketOrderNumber,
+    tab,
+    loading,
+    pinRequired,
+    clearPaidWaiterSession,
+    t,
   ]);
 
   const pushLine = (
@@ -381,6 +459,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   };
 
   const selectTable = async (table: { id: string; label: string }) => {
+    paidBlockedRef.current = false;
     try {
       const held = await loadHeldForTable(table.id);
       if (held) {
@@ -409,6 +488,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   };
 
   const startTakeaway = () => {
+    paidBlockedRef.current = false;
     setTableId(null);
     setTableLabel(null);
     setChannel('takeaway');
@@ -446,6 +526,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   }, [loading, pinRequired, searchParams, tableId]);
 
   const resetOrder = () => {
+    paidBlockedRef.current = false;
     activeHeldIdRef.current = null;
     setCart([]);
     setTableId(null);

@@ -367,6 +367,7 @@ import {
 import {
   findHeldOrderForTable,
   parseHeldCartJson,
+  releaseHeldOrder,
   type HeldOrderRow,
 } from '@/lib/webpos-held';
 import {
@@ -4485,17 +4486,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const clearHeldOrdersForTable = async (tid: string) => {
-    const res = await api.get('/merchant/pos/held');
-    const list = (res.data?.held || []) as Array<{
-      id: string;
-      cartJson?: Record<string, unknown> | null;
-    }>;
-    for (const h of list) {
-      const cj = h.cartJson;
-      if (!cj || typeof cj !== 'object') continue;
-      if (cj.tableId !== tid) continue;
-      await api.delete(`/merchant/pos/held/${h.id}`);
-    }
+    await releaseHeldOrder({ tableId: tid });
   };
 
   const releaseEmptyTable = () => {
@@ -5751,15 +5742,33 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     for (const key of draftKeys) openCartDraftsRef.current.delete(key);
     const heldId = resumedHeldIdRef.current;
     resumedHeldIdRef.current = null;
-    if (heldId) void api.delete(`/merchant/pos/held/${heldId}`).catch(() => {});
+    void releaseHeldOrder({
+      heldId,
+      ticketDisplay: link.ticketDisplay || order?.ticketDisplay || ticketDisplay,
+      tableId: link.tableId || tableId,
+      tabNumber: link.tabNumber || tabNumber,
+    });
     clearCollectCheckout();
+    setCart([]);
+    setSelectedLineId(null);
+    setKeypadBuffer('');
+    setOrderNote('');
+    setBillDiscount({ percent: 0, amount: 0 });
+    setTableId(null);
+    setTableLabel(null);
+    setTabNumber(null);
+    clearCartTicket();
+    setActiveCourse(1);
+    setCourseCount(1);
     setOrderSent(false);
     setCoursesBulkSent(false);
+    setChannel(null);
     setCheckoutOpen(false);
     setMobileCartOpen(false);
     setPosView('register');
     setPosTab('register');
     setDraftVersion((n) => n + 1);
+    setOrdersRefreshToken((n) => n + 1);
     if (order?.id) markOnlineOrderActioned(order.id);
   };
 
@@ -6042,34 +6051,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       const heldId = resumedHeldIdRef.current;
       resumedHeldIdRef.current = null;
-      if (heldId) {
-        void api.delete(`/merchant/pos/held/${heldId}`).catch(() => {});
-      } else if (orderForReceipt) {
-        const ticketShout =
-          orderForReceipt.ticketDisplay ||
-          parseOrderMetaNotes(orderForReceipt.notes).ticketDisplay ||
-          null;
-        void (async () => {
-          try {
-            const heldRes = await api.get('/merchant/pos/held');
-            const list = (heldRes.data?.held || []) as Array<{
-              id: string;
-              cartJson?: { ticketDisplay?: string | null; tableId?: string | null };
-            }>;
-            for (const h of list) {
-              const cj = h.cartJson;
-              if (
-                (ticketShout && cj?.ticketDisplay === ticketShout) ||
-                (tableId && cj?.tableId === tableId)
-              ) {
-                await api.delete(`/merchant/pos/held/${h.id}`);
-              }
-            }
-          } catch {
-            /* best-effort */
-          }
-        })();
-      }
+      const ticketShout =
+        orderForReceipt?.ticketDisplay ||
+        parseOrderMetaNotes(orderForReceipt?.notes || '').ticketDisplay ||
+        ticketDisplay ||
+        null;
+      void releaseHeldOrder({
+        heldId,
+        ticketDisplay: ticketShout,
+        tableId: orderForReceipt?.tableId || tableId,
+        tabNumber: orderForReceipt?.tabNumber || tabNumber,
+      });
       clearCollectCheckout();
       setOrdersRefreshToken((n) => n + 1);
       if (orderForReceipt && isPaidOrder(orderForReceipt)) dismissOdsForOrder(orderForReceipt);
@@ -7281,27 +7273,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       for (const paidKey of paidKeys) openCartDraftsRef.current.delete(paidKey);
       const heldId = resumedHeldIdRef.current;
       resumedHeldIdRef.current = null;
-      if (heldId) {
-        void api.delete(`/merchant/pos/held/${heldId}`).catch(() => {});
-      } else {
-        void (async () => {
-          try {
-            const heldRes = await api.get('/merchant/pos/held');
-            const list = (heldRes.data?.held || []) as Array<{
-              id: string;
-              cartJson?: { ticketDisplay?: string | null; tableId?: string | null };
-            }>;
-            for (const h of list) {
-              const cj = h.cartJson;
-              if (cj?.ticketDisplay === ticket.display || (tableId && cj?.tableId === tableId)) {
-                await api.delete(`/merchant/pos/held/${h.id}`);
-              }
-            }
-          } catch {
-            /* sale already recorded */
-          }
-        })();
-      }
+      void releaseHeldOrder({
+        heldId,
+        ticketDisplay: ticket.display,
+        tableId,
+        tabNumber,
+      });
       setDraftVersion((n) => n + 1);
       setSendReceiptPrefillEmail(selectedCustomer?.email || '');
       setCart([]);

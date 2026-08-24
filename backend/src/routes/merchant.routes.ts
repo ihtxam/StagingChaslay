@@ -2491,6 +2491,27 @@ router.post("/pos/held", async (req: Request, res: Response) => {
   }
 });
 
+/** Release held rows after payment — does not require CANCEL_ORDERS */
+router.post("/pos/held/release", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
+    if (!(await WebPosEntitlementService.guard(merchantId, res))) return;
+    const body = req.body || {};
+    const { PosOrdersService } = await import("@/services/pos-orders.service");
+    const result = await PosOrdersService.releaseHeldByIdentity(merchantId, {
+      heldId: body.heldId ? String(body.heldId) : null,
+      ticketDisplay: body.ticketDisplay != null ? String(body.ticketDisplay) : null,
+      tableId: body.tableId != null ? String(body.tableId) : null,
+      tabNumber: body.tabNumber != null ? String(body.tabNumber) : null,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Release failed" });
+  }
+});
+
 router.post("/pos/held/:id/resume", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;

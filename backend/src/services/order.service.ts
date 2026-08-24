@@ -6,6 +6,43 @@ import { adjustTaxForOrderDiscount } from "@/lib/tax-discount";
 import { resolveOrderItemName } from "@/lib/order-item-name";
 import { resolvePosCancelReason } from "@/lib/pos-print-settings";
 
+const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
+const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
+
+async function releaseHeldAfterPosPayment(
+  merchantId: string,
+  order: {
+    notes?: string | null;
+    tableId?: string | null;
+    guestCount?: number | null;
+  }
+) {
+  try {
+    const ticketMatch = String(order.notes || "").match(TICKET_NOTE_RE);
+    const tabMatch = String(order.notes || "").match(TAB_NOTE_RE);
+    const { PosOrdersService } = await import("@/services/pos-orders.service");
+    await PosOrdersService.releaseHeldByIdentity(merchantId, {
+      ticketDisplay: ticketMatch?.[1]?.trim() || null,
+      tabNumber:
+        tabMatch?.[1]?.trim() ||
+        (order.guestCount != null && Number(order.guestCount) > 0
+          ? String(order.guestCount)
+          : null),
+      tableId: order.tableId || null,
+    });
+  } catch (err) {
+    console.warn("Held release after payment failed:", err);
+  }
+  if (order.tableId) {
+    try {
+      const { FloorPlanService } = await import("@/services/floor-plan.service");
+      await FloorPlanService.setTableStatus(merchantId, order.tableId, "available", null);
+    } catch {
+      /* table may have been removed */
+    }
+  }
+}
+
 function computeEstimatedReadyAt(
   order: { fulfillmentChannel?: string | null; scheduledFor?: Date | null },
   merchant: { pickupEtaMinutes?: number | null; deliveryEtaMinutes?: number | null }
@@ -627,6 +664,7 @@ export class OrderService {
           } catch (invErr) {
             console.warn("Inventory deduct after collect_payment failed:", invErr);
           }
+          void releaseHeldAfterPosPayment(merchantId, order);
           // Invoice A4 at sale — skip auto receipt unless counter cash/card collection.
           const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
           const invoiceCounter = invoiceOrder && isCounterTender(method);
@@ -699,6 +737,7 @@ export class OrderService {
           } catch (invErr) {
             console.warn("Inventory deduct after complete_and_collect failed:", invErr);
           }
+          void releaseHeldAfterPosPayment(merchantId, order);
           // Invoice A4 at sale — skip auto receipt unless counter cash/card collection.
           const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
           const invoiceCounter = invoiceOrder && isCounterTender(method);
