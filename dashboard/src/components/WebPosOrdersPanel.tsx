@@ -547,8 +547,8 @@ export default function WebPosOrdersPanel({
     return () => window.clearTimeout(id);
   }, [search]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     const params = new URLSearchParams({ limit: '80', from: todayIso(), to: todayIso() });
     if (searchQ) params.set('q', searchQ);
     const heldPromise = api.get('/merchant/pos/held');
@@ -608,12 +608,19 @@ export default function WebPosOrdersPanel({
     });
     setHeld(nextHeld);
     setOrders(nextOrders);
-    setLoading(false);
+    if (!opts?.silent) setLoading(false);
   }, [t, searchQ, channelFilter]);
 
   useEffect(() => {
     if (open) void load();
   }, [open, load, refreshToken]);
+
+  /** Refresh held / active list while open so waiter tablet orders appear without manual reload. */
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setInterval(() => void load({ silent: true }), 5000);
+    return () => window.clearInterval(timer);
+  }, [open, load]);
 
   useEffect(() => {
     if (!open || !initialChannelFilter) return;

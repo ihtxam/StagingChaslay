@@ -119,11 +119,15 @@ function sameHeldIdentity(
   a: ReturnType<typeof heldIdentity>,
   b: ReturnType<typeof heldIdentity>
 ): boolean {
-  if (a.tableId && b.tableId && a.tableId === b.tableId) return true;
+  if (a.ticketDisplay && b.ticketDisplay && a.ticketDisplay === b.ticketDisplay) return true;
+  if (a.tableId && b.tableId && a.tableId === b.tableId) {
+    if (a.ticketDisplay && b.ticketDisplay) return a.ticketDisplay === b.ticketDisplay;
+    if (a.ticketDisplay || b.ticketDisplay) return false;
+    return true;
+  }
   if (!a.tableId && !b.tableId && a.tabNumber && b.tabNumber && a.tabNumber === b.tabNumber) {
     return true;
   }
-  if (a.ticketDisplay && b.ticketDisplay && a.ticketDisplay === b.ticketDisplay) return true;
   return false;
 }
 

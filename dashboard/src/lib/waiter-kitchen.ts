@@ -109,23 +109,6 @@ export async function printWaiterKitchen(opts: {
   toast.error(t('webPosNoKitchenPrinterConfigured'));
 }
 
-export function nextWaiterTicketNumber(): string {
-  const key = 'waiter_ticket_seq';
-  try {
-    const day = new Date().toISOString().slice(0, 10);
-    const raw = localStorage.getItem(key);
-    let seq = 1;
-    if (raw) {
-      const parsed = JSON.parse(raw) as { day?: string; n?: number };
-      if (parsed.day === day && parsed.n) seq = parsed.n + 1;
-    }
-    localStorage.setItem(key, JSON.stringify({ day, n: seq }));
-    return `W-${String(seq).padStart(3, '0')}`;
-  } catch {
-    return `W-${Date.now().toString().slice(-4)}`;
-  }
-}
-
 export async function persistWaiterHeldOrder(opts: {
   heldId?: string | null;
   cartLines: CartLine[];
@@ -139,7 +122,7 @@ export async function persistWaiterHeldOrder(opts: {
   sendToKitchen: boolean;
   orderNote?: string;
   money: (n: number) => string;
-}): Promise<void> {
+}): Promise<string | null> {
   const {
     heldId,
     cartLines,
@@ -154,29 +137,32 @@ export async function persistWaiterHeldOrder(opts: {
     orderNote,
     money,
   } = opts;
-  if (!cartLines.length) return;
+  if (!cartLines.length) return null;
 
+  const persistChannel = tableId ? 'dine_in' : channel;
   const cartSum = cartLines.reduce((s, l) => s + Number(l.lineTotal || 0), 0);
-  const heldLabel = [tableLabel, ticketDisplay, channel, money(cartSum)].filter(Boolean).join(' · ');
+  const heldLabel = [tableLabel, ticketDisplay, persistChannel, money(cartSum)].filter(Boolean).join(' · ');
   const cartJson = {
     cart: cartLines,
-    channel,
+    channel: persistChannel,
     tableId: tableId || null,
     tableLabel: tableLabel || null,
     ticketDisplay,
     ticketOrderNumber,
+    kitchenTicketKey: ticketDisplay,
     orderNote: orderNote || '',
   };
 
   const api = (await import('@/lib/api')).default;
 
-  await api.post('/merchant/pos/held', {
+  const res = await api.post('/merchant/pos/held', {
     id: heldId || undefined,
     label: heldLabel,
-    channel,
+    channel: persistChannel,
     cartJson,
     staffId,
     staffName,
     sendToKitchen,
   });
+  return (res.data?.held as { id?: string } | undefined)?.id || null;
 }
