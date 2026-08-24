@@ -7,6 +7,7 @@ import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import {
   generateEodReportText,
   logoUrlToEscPos,
+  resolveReceiptLogoWidthPx,
   printersForRole,
   resolveReceiptLanguage,
   textToEscPos,
@@ -315,9 +316,8 @@ export default function ReportsPage() {
         return;
       }
       const logoUrl = printSettings?.receiptLogoUrl || shopLogoUrl;
-      const logo = logoUrl
-        ? await logoUrlToEscPos(logoUrl, paperWidthMm === 58 ? 240 : 384)
-        : null;
+      const logoWidth = resolveReceiptLogoWidthPx(printSettings, paperWidthMm === 58 ? 58 : 80);
+      const logo = logoUrl ? await logoUrlToEscPos(logoUrl, logoWidth) : null;
       // Plain ESC/POS body (no bold) � kitchen tickets use bold separately.
       const escpos = textToEscPos(text, undefined, logo);
       const dataBase64 = uint8ToBase64(escpos);

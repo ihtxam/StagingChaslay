@@ -10,6 +10,7 @@ import {
   generateRefundReceiptText,
   generateWebPosReceiptText,
   logoUrlToEscPos,
+  resolveReceiptLogoWidthPx,
   posOrderToWebPosReceipt,
   printersForRole,
   resolveReceiptLanguage,
@@ -60,8 +61,9 @@ async function printReceiptText(
   }
   const paper = targets[0]?.paperWidthMm || opts.printSettings?.paperWidthMm || 80;
   const lang = resolveReceiptLanguage(opts.printSettings, opts.locale);
+  const logoWidth = resolveReceiptLogoWidthPx(opts.printSettings, paper === 58 ? 58 : 80);
   const logo = opts.logoUrl
-    ? await logoUrlToEscPos(String(opts.logoUrl), paper === 58 ? 240 : 384)
+    ? await logoUrlToEscPos(String(opts.logoUrl), logoWidth)
     : null;
   const escpos = await buildReceiptEscPos(text, {
     qrData: opts.qrUrl,
