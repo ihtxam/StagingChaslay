@@ -31,6 +31,7 @@ import { resolveOrderItemName } from '@/lib/order-item-name';
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
 import {
   canAdminCollectPayment,
+  canCancelPosAwaitingOrder,
   canCollectPayment,
   canMarkReadyOrder,
   canShowAwaitingPaymentBadge,
@@ -38,6 +39,7 @@ import {
   formatOrderPaymentDisplay,
   INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
+  isAwaitingPaymentOrder,
   isInvoiceOrder,
   isOnlineShopOrder,
   isOpenWebPosOrder,
@@ -46,6 +48,7 @@ import {
   orderChannelBadgeClass,
   orderChannelBorderClass,
   orderChannelHeaderClass,
+  orderListPrimaryLabel,
   orderStatusBadgeClass,
   orderStatusLabel,
 } from '@/lib/order-management';
@@ -241,6 +244,8 @@ type Props = {
   initialChannelFilter?: ChannelFilter | null;
   /** Open WebPOS checkout for unpaid orders instead of the quick collect modal */
   onCollectPaymentCheckout?: (order: PosOrder) => void;
+  /** Load an open POS order back into the register (without opening checkout). */
+  onLoadPosOrder?: (order: PosOrder) => void;
   /** Order handled (accept/reject/complete) — clear bell badge for this ticket */
   onOrderActioned?: (orderId: string) => void;
   /** Order paid/collected elsewhere — clear matching register cart */
@@ -266,8 +271,14 @@ function todayIso(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
 }
 
+/** In-store open ticket awaiting payment — show preview + load/collect, not instant checkout. */
+function isOpenPosAwaitingOrder(o: PosOrder): boolean {
+  return !isOnlineShopOrder(o) && isOpenWebPosOrder(o) && isAwaitingPaymentOrder(o);
+}
+
 /** Ongoing / kitchen / unpaid — not completed sales (POS cancel rules) */
 function canCancelOrder(o: PosOrder): boolean {
+  if (canCancelPosAwaitingOrder(o)) return true;
   const status = (o.status || '').toLowerCase();
   const pay = (o.paymentStatus || '').toLowerCase();
   if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) return false;
@@ -439,6 +450,7 @@ export default function WebPosOrdersPanel({
   highlightOrderId = null,
   initialChannelFilter = null,
   onCollectPaymentCheckout,
+  onLoadPosOrder,
   onOrderActioned,
   onOrderPaid,
   onlineOrders = [],
@@ -1023,12 +1035,9 @@ export default function WebPosOrdersPanel({
     closeMenus();
   };
 
-  /** Unpaid collectable orders open checkout; others show the detail panel. */
+  /** Unpaid collectable orders show detail first; collect from the side panel. */
   const openOrderClick = (o: PosOrder) => {
-    if (canCollectPayment(o)) {
-      startCollectPayment(o);
-      return;
-    }
+    setCollectFor(null);
     selectOrder(o);
   };
 
@@ -1404,11 +1413,7 @@ export default function WebPosOrdersPanel({
                   }
                   const o = item.order;
                   const refs = orderPublicRefs(o);
-                  const idLabel =
-                    o.tableLabel ||
-                    (refs.tabNumber ? `#${refs.tabNumber}` : null) ||
-                    refs.ticketDisplay ||
-                    formatOrderNumberDisplay(o.orderNumber);
+                  const idLabel = orderListPrimaryLabel(o);
                   const age = formatOrderAge(orderTimeMs(o) || nowMs, nowMs);
                   const itemCount = Array.isArray(o.items) ? o.items.length : 0;
                   return (
@@ -1545,14 +1550,14 @@ export default function WebPosOrdersPanel({
                   const selected = selectedOrder?.id === o.id;
                   const isSplitRow = o.masterOrderId && (splitCounts.get(o.masterOrderId) || 0) > 1;
                   const isCompletedSale = !canCancelOrder(o);
+                  const showPosCancel = canCancel && canCancelPosAwaitingOrder(o);
                   const rowMenuOpen = rowMenuOrderId === o.id;
                   const refs = orderPublicRefs(o);
-                  const titleParts = [
-                    refs.ticketDisplay,
-                    refs.tabNumber ? `${t('webPosTab')} ${refs.tabNumber}` : null,
-                    o.tableLabel ? `${t('table')} ${o.tableLabel}` : null,
-                    o.customerName || null,
-                  ].filter(Boolean);
+                  const primaryLabel = orderListPrimaryLabel(o);
+                  const subtitleLabel =
+                    refs.ticketDisplay && primaryLabel !== refs.ticketDisplay
+                      ? formatOrderNumberDisplay(o.orderNumber)
+                      : null;
                   return (
                     <li key={`o-${o.id}`} className="relative">
                       <button
@@ -1565,11 +1570,7 @@ export default function WebPosOrdersPanel({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold">
-                                {titleParts.length
-                                  ? titleParts.join(' · ')
-                                  : formatOrderNumberDisplay(o.orderNumber)}
-                              </p>
+                              <p className="truncate text-sm font-semibold">{primaryLabel}</p>
                               <p className="mt-0.5 text-xs text-stone-500">
                                 {formatDateTime(o.completedAt || o.createdAt)}
                               </p>
@@ -1617,7 +1618,9 @@ export default function WebPosOrdersPanel({
                               </span>
                             ) : null}
                           </div>
-                          <p className="mt-0.5 text-[11px] text-stone-400">{formatOrderNumberDisplay(o.orderNumber)}</p>
+                          {subtitleLabel ? (
+                            <p className="mt-0.5 text-[11px] text-stone-400">{subtitleLabel}</p>
+                          ) : null}
                         </div>
                         {isCompletedSale ? (
                           <span
@@ -1667,7 +1670,29 @@ export default function WebPosOrdersPanel({
                             <MoreHorizontal size={16} />
                           </span>
                         ) : (
-                          <Info size={16} className="mt-1 shrink-0 text-stone-400 sm:mt-0" />
+                          <>
+                            <Info size={16} className="mt-1 shrink-0 text-stone-400 sm:mt-0" />
+                            {showPosCancel ? (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="mt-0.5 shrink-0 rounded p-1 text-stone-400 hover:bg-red-50 hover:text-red-600 sm:mt-0"
+                                aria-label={t('webPosCancelOrder')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCancelFor(o);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.stopPropagation();
+                                    setCancelFor(o);
+                                  }
+                                }}
+                              >
+                                <Trash2 size={16} />
+                              </span>
+                            ) : null}
+                          </>
                         )}
                       </button>
                       {rowMenuOpen
@@ -1848,12 +1873,7 @@ export default function WebPosOrdersPanel({
                   </div>
 
                   <div>
-                    <p className="text-sm font-semibold">
-                      {refs.ticketDisplay ||
-                        (refs.tabNumber
-                          ? `${t('webPosTab')} ${refs.tabNumber}`
-                          : formatOrderNumberDisplay(selectedOrder.orderNumber))}
-                    </p>
+                    <p className="text-sm font-semibold">{orderListPrimaryLabel(selectedOrder)}</p>
                     <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
                       {showsKitchenFulfillmentStages(selectedOrder) ? (
                         <span
@@ -2005,6 +2025,40 @@ export default function WebPosOrdersPanel({
                           ? t('webPosRecordInvoicePayment')
                           : t('webPosCollectNow'))}{' '}
                         · {money(selectedOrder.total)}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {isOpenPosAwaitingOrder(selectedOrder) ? (
+                  <div className="space-y-2 border-t border-stone-200 p-3">
+                    {onLoadPosOrder ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900"
+                        onClick={() => {
+                          onLoadPosOrder(selectedOrder);
+                          onClose();
+                        }}
+                      >
+                        {t('webPosLoadOrder')}
+                      </button>
+                    ) : null}
+                    {(canCollectPayment(selectedOrder) || canAdminCollectPayment(selectedOrder)) ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-xl bg-emerald-700 py-3.5 text-sm font-bold text-white hover:bg-emerald-800"
+                        onClick={() => startCollectPayment(selectedOrder)}
+                      >
+                        {t('webPosTakePayment')} · {money(selectedOrder.total)}
+                      </button>
+                    ) : null}
+                    {canCancel && canCancelPosAwaitingOrder(selectedOrder) ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-xl border border-rose-200 bg-rose-50 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100"
+                        onClick={() => setCancelFor(selectedOrder)}
+                      >
+                        {t('webPosCancelOrder')}
                       </button>
                     ) : null}
                   </div>

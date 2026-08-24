@@ -1,4 +1,6 @@
-const OPAQUE_ORDER_RE = /^(WP|DI)-/i;
+const OPAQUE_ORDER_RE = /^(WP|DI|POS)-/i;
+const HEX_FRAGMENT_RE = /^[a-f0-9]{6,12}$/i;
+const WEBPOS_CLIENT_RE = /^webpos-/i;
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
 
@@ -42,4 +44,32 @@ export function guestOrderNumber(opts: {
   const raw = String(opts.orderNumber || "").trim();
   if (!raw || OPAQUE_ORDER_RE.test(raw)) return "";
   return raw;
+}
+
+/** True when a value is safe to show on the customer pickup board (ODS). */
+export function isGuestFacingOdsNumber(value: unknown): boolean {
+  const n = String(value || "").trim();
+  if (!n) return false;
+  if (OPAQUE_ORDER_RE.test(n)) return false;
+  if (WEBPOS_CLIENT_RE.test(n)) return false;
+  if (HEX_FRAGMENT_RE.test(n)) return false;
+  const bare = n.replace(/^#/, "");
+  if (/^\d{1,6}$/.test(bare)) return true;
+  if (/^#\d{1,6}$/.test(n)) return true;
+  if (/^D-\d{1,4}$/i.test(n)) return true;
+  if (/^WEB-/i.test(n)) return true;
+  if (/^TX-/i.test(n)) return true;
+  if (/^ORD-/i.test(n)) return true;
+  return false;
+}
+
+/** Normalize a kitchen ticket key for ODS push; returns empty when not guest-facing. */
+export function resolveOdsPushNumber(value: unknown): string {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  const base = trimmed.split("@")[0]?.trim() || "";
+  if (!base || !isGuestFacingOdsNumber(base)) return "";
+  const bare = base.replace(/^#/, "");
+  if (/^\d{1,6}$/.test(bare)) return `#${bare}`;
+  return base;
 }

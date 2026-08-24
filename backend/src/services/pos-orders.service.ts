@@ -381,9 +381,14 @@ export class PosOrdersService {
     if (!order) throw new Error("Order not found");
     if (order.status === "cancelled") throw new Error("Order already cancelled");
     if (order.status === "refunded") throw new Error("Order already refunded");
+    const payStatus = String(order.paymentStatus || "").toLowerCase();
+    const awaitingPayment =
+      payStatus === "awaiting_payment" ||
+      String(order.paymentMethod || "").toLowerCase().replace(/-/g, "_") === "pay_later";
     if (
-      BLOCKED_CANCEL_STATUSES.has(String(order.status)) ||
-      COMPLETED_STATUSES.has(String(order.paymentStatus || ""))
+      !awaitingPayment &&
+      (BLOCKED_CANCEL_STATUSES.has(String(order.status)) ||
+        COMPLETED_STATUSES.has(payStatus))
     ) {
       throw new Error(
         "Completed orders cannot be cancelled. Change the payment method or issue a refund."
@@ -403,6 +408,16 @@ export class PosOrdersService {
       })
       .where(eq(schema.orders.id, orderId))
       .returning();
+
+    void import("@/services/ods.service")
+      .then(({ OdsService }) =>
+        OdsService.syncFromOrder(merchantId, {
+          orderNumber: updated.orderNumber,
+          notes: updated.notes,
+          status: "cancelled",
+        })
+      )
+      .catch(() => {});
 
     return updated;
   }

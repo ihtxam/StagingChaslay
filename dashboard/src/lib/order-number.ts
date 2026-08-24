@@ -1,6 +1,8 @@
 const SHORT_WEB_RE = /^WEB-(\d{1,6})$/;
 const LEGACY_WEB_RE = /^WEB-(\d{10,})(?:-([A-F0-9]{4,8}))?$/i;
-const OPAQUE_ORDER_RE = /^(WP|DI)-/i;
+const OPAQUE_ORDER_RE = /^(WP|DI|POS)-/i;
+const HEX_FRAGMENT_RE = /^[a-f0-9]{6,12}$/i;
+const WEBPOS_CLIENT_RE = /^webpos-/i;
 
 function normalizeShout(value: string): string {
   const trimmed = value.trim();
@@ -65,4 +67,32 @@ export function formatCheckoutOrderRef(
     return `${primary} · Kitchen ${kitchenHash}`;
   }
   return primary;
+}
+
+/** True when a value is safe to show on the customer pickup board (ODS). */
+export function isGuestFacingOdsNumber(value: string | null | undefined): boolean {
+  const n = String(value || '').trim();
+  if (!n) return false;
+  if (OPAQUE_ORDER_RE.test(n)) return false;
+  if (WEBPOS_CLIENT_RE.test(n)) return false;
+  if (HEX_FRAGMENT_RE.test(n)) return false;
+  const bare = n.replace(/^#/, '');
+  if (/^\d{1,6}$/.test(bare)) return true;
+  if (/^#\d{1,6}$/.test(n)) return true;
+  if (/^D-\d{1,4}$/i.test(n)) return true;
+  if (/^WEB-/i.test(n)) return true;
+  if (/^TX-/i.test(n)) return true;
+  if (/^ORD-/i.test(n)) return true;
+  return false;
+}
+
+/** Normalize a kitchen ticket key for ODS push; returns empty when not guest-facing. */
+export function resolveOdsPushNumber(value: string | null | undefined): string {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  const base = trimmed.split('@')[0]?.trim() || '';
+  if (!base || !isGuestFacingOdsNumber(base)) return '';
+  const bare = base.replace(/^#/, '');
+  if (/^\d{1,6}$/.test(bare)) return `#${bare}`;
+  return base;
 }

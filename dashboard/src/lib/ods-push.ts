@@ -1,10 +1,11 @@
 import api from '@/lib/api';
+import { resolveOdsPushNumber } from '@/lib/order-number';
 
 export async function pushOrderToOds(opts: {
   orderNumber: string;
   status: 'preparing' | 'ready';
 }): Promise<void> {
-  const orderNumber = String(opts.orderNumber || '').trim();
+  const orderNumber = resolveOdsPushNumber(opts.orderNumber);
   if (!orderNumber) return;
   try {
     await api.post('/merchant/ods/push', {
@@ -17,7 +18,7 @@ export async function pushOrderToOds(opts: {
 }
 
 export async function dismissOrderFromOds(orderNumber: string): Promise<void> {
-  const num = String(orderNumber || '').trim();
+  const num = resolveOdsPushNumber(orderNumber) || String(orderNumber || '').trim();
   if (!num) return;
   try {
     await api.post('/merchant/ods/dismiss', { orderNumber: num });
