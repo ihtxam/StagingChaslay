@@ -8,6 +8,7 @@ import {
   ensureOdsDisplayShortCodes,
 } from "@/lib/display-short-code";
 import { guestOrderNumber, parseOrderMetaFromNotes } from "@/lib/guest-order-number";
+import { formatWebOrderNumberDisplay } from "@/lib/web-order-number";
 
 export const ODS_THEMES = ["light", "teal", "dark"] as const;
 export type OdsTheme = (typeof ODS_THEMES)[number];
@@ -32,8 +33,10 @@ export type OdsPushPayload = {
 
 const READY_RETENTION_MS = 2 * 60 * 60 * 1000;
 const PREPARING_RETENTION_MS = 24 * 60 * 60 * 1000;
-/** Live online / pay-later orders older than this are hidden from the customer board. */
-const LIVE_ORDER_MAX_AGE_MS = 8 * 60 * 60 * 1000;
+/** Live “being prepared” rows older than this are hidden (stale kitchen queue). */
+const LIVE_PREPARING_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+/** Live “ready for pickup” rows older than this are hidden. */
+const LIVE_READY_MAX_AGE_MS = 4 * 60 * 60 * 1000;
 
 /** Order Center / web shop statuses shown on the “being prepared” column. */
 const PREPARING_ORDER_STATUSES = ["accepted", "preparing", "sent_to_kitchen"] as const;
@@ -55,13 +58,14 @@ export type OrderForOds = {
 
 export function resolveOdsDisplayNumber(order: OrderForOds): string {
   const meta = parseOrderMetaFromNotes(order.notes);
-  return normalizeOrderNumber(
-    guestOrderNumber({
-      orderNumber: order.orderNumber,
-      orderDisplay: meta.ticketDisplay,
-      tabNumber: meta.tabNumber,
-    })
-  );
+  const raw = guestOrderNumber({
+    orderNumber: order.orderNumber,
+    orderDisplay: meta.ticketDisplay,
+    tabNumber: meta.tabNumber,
+  });
+  const web = formatWebOrderNumberDisplay(String(order.orderNumber || "").trim());
+  const pick = raw || web || String(order.orderNumber || "").trim();
+  return normalizeOrderNumber(pick);
 }
 
 function mergeBoardNumbers(
@@ -96,10 +100,70 @@ function normalizeTheme(value: unknown): OdsTheme {
 }
 
 function normalizeOrderNumber(value: unknown): string {
-  return String(value || "")
+  let s = String(value || "")
     .trim()
-    .replace(/\s+/g, "")
-    .slice(0, 64);
+    .replace(/\s+/g, "");
+  if (!s) return "";
+  const bare = s.replace(/^#/, "");
+  if (/^\d{1,6}$/.test(bare)) {
+    return `#${bare}`;
+  }
+  if (/^WEB-/i.test(s)) {
+    return formatWebOrderNumberDisplay(s);
+  }
+  return s.slice(0, 64);
+}
+
+async function findShadowRow(
+  merchantId: string,
+  orderNumber: string
+): Promise<{ id: string; orderNumber: string; status: string } | null> {
+  const db = getDb();
+  const target = normalizeOrderNumber(orderNumber);
+  if (!target) return null;
+  const rows = await db.query.odsOrders.findMany({
+    where: eq(schema.odsOrders.merchantId, merchantId),
+    columns: { id: true, orderNumber: true, status: true },
+  });
+  return rows.find((r) => normalizeOrderNumber(r.orderNumber) === target) || null;
+}
+
+/** Drop shadow rows whose main order has already left the board. */
+async function reconcileShadowBoard(merchantId: string) {
+  const db = getDb();
+  const shadowRows = await db.query.odsOrders.findMany({
+    where: eq(schema.odsOrders.merchantId, merchantId),
+    columns: { id: true, orderNumber: true },
+  });
+  if (!shadowRows.length) return;
+
+  const liveOrders = await db.query.orders.findMany({
+    where: and(
+      eq(schema.orders.merchantId, merchantId),
+      inArray(schema.orders.status, [
+        ...Array.from(ODS_DISMISS_STATUSES),
+        "ready",
+        ...PREPARING_ORDER_STATUSES,
+      ])
+    ),
+    columns: { orderNumber: true, notes: true, status: true },
+  });
+
+  const terminalNums = new Set<string>();
+  for (const row of liveOrders) {
+    const num = resolveOdsDisplayNumber(row);
+    if (!num) continue;
+    const st = String(row.status || "").toLowerCase();
+    if (ODS_DISMISS_STATUSES.has(st)) terminalNums.add(num);
+  }
+
+  for (const shadow of shadowRows) {
+    const num = normalizeOrderNumber(shadow.orderNumber);
+    if (!num) continue;
+    if (terminalNums.has(num)) {
+      await db.delete(schema.odsOrders).where(eq(schema.odsOrders.id, shadow.id));
+    }
+  }
 }
 
 async function requireAddon(merchantId: string) {
@@ -111,6 +175,7 @@ async function requireAddon(merchantId: string) {
 async function purgeStale(merchantId: string) {
   const db = getDb();
   const now = Date.now();
+  await reconcileShadowBoard(merchantId);
   await db
     .delete(schema.odsOrders)
     .where(
@@ -231,12 +296,7 @@ export class OdsService {
     const db = getDb();
     await purgeStale(merchantId);
 
-    const existing = await db.query.odsOrders.findFirst({
-      where: and(
-        eq(schema.odsOrders.merchantId, merchantId),
-        eq(schema.odsOrders.orderNumber, orderNumber)
-      ),
-    });
+    const existing = await findShadowRow(merchantId, orderNumber);
 
     const now = new Date();
     if (existing) {
@@ -279,11 +339,15 @@ export class OdsService {
     }
     if (!enabled) return { ok: false, skipped: true };
     const db = getDb();
-    await db
-      .delete(schema.odsOrders)
-      .where(
-        and(eq(schema.odsOrders.merchantId, merchantId), eq(schema.odsOrders.orderNumber, num))
-      );
+    const rows = await db.query.odsOrders.findMany({
+      where: eq(schema.odsOrders.merchantId, merchantId),
+      columns: { id: true, orderNumber: true },
+    });
+    const target = normalizeOrderNumber(num);
+    const toDelete = rows.filter((r) => normalizeOrderNumber(r.orderNumber) === target);
+    for (const row of toDelete) {
+      await db.delete(schema.odsOrders).where(eq(schema.odsOrders.id, row.id));
+    }
     return { ok: true };
   }
 
@@ -325,13 +389,13 @@ export class OdsService {
     if (!enabled) return { preparing: [] as string[], ready: [] as string[] };
 
     const db = getDb();
-    const createdSince = new Date(Date.now() - LIVE_ORDER_MAX_AGE_MS);
+    const now = Date.now();
     const rows = await db.query.orders.findMany({
       where: and(
         eq(schema.orders.merchantId, merchantId),
         inArray(schema.orders.status, [...PREPARING_ORDER_STATUSES, "ready"])
       ),
-      columns: { orderNumber: true, notes: true, status: true, createdAt: true },
+      columns: { orderNumber: true, notes: true, status: true, createdAt: true, updatedAt: true },
       orderBy: [asc(schema.orders.createdAt)],
     });
 
@@ -339,7 +403,14 @@ export class OdsService {
     const ready: string[] = [];
     const seen = new Set<string>();
     for (const row of rows) {
-      if (row.createdAt && row.createdAt < createdSince) continue;
+      const touched = row.updatedAt || row.createdAt;
+      const ageMs = touched ? now - touched.getTime() : 0;
+      const st = String(row.status || "").toLowerCase();
+      if (st === "ready") {
+        if (ageMs > LIVE_READY_MAX_AGE_MS) continue;
+      } else if ((PREPARING_ORDER_STATUSES as readonly string[]).includes(st)) {
+        if (ageMs > LIVE_PREPARING_MAX_AGE_MS) continue;
+      }
       const num = resolveOdsDisplayNumber(row);
       if (!num || seen.has(num)) continue;
       seen.add(num);
@@ -377,8 +448,8 @@ export class OdsService {
     });
 
     const shadow = {
-      preparing: preparingRows.map((r) => r.orderNumber),
-      ready: readyRows.map((r) => r.orderNumber),
+      preparing: preparingRows.map((r) => normalizeOrderNumber(r.orderNumber)).filter(Boolean),
+      ready: readyRows.map((r) => normalizeOrderNumber(r.orderNumber)).filter(Boolean),
     };
     const live = await this.boardFromLiveOrders(display.merchantId);
     const merged = mergeBoardNumbers(shadow, live);

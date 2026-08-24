@@ -2294,13 +2294,21 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       finalOrder = (await earnLoyaltyForOrder(merchant, order)) as typeof order;
     }
 
-    // Till notification on arrival; kitchen on Accept; customer receipt on payment.
+    if (shopAutoAccept) {
+      const { enterKitchenFromOrder } = await import("@/services/kitchen-ingress.service");
+      void enterKitchenFromOrder(merchant.id, order.id, {
+        printKitchen: true,
+        orderSource: "online_shop",
+      });
+    }
+
+    // Till notification on arrival; kitchen ticket when auto-accept or on manual Accept.
 
     try {
       const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
       await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
         printDeliveryReceipt: order.fulfillmentChannel === "delivery",
-        printNotification: order.fulfillmentChannel !== "delivery",
+        printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
         printKitchen: false,
         printReceipt: false,
       });

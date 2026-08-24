@@ -555,11 +555,10 @@ export class DeliveryPlatformService {
     });
 
     if (status === "preparing") {
-      void import("@/services/kds.service")
-        .then(({ KdsService, KdsLicenseError }) =>
-          KdsService.pushOrderToKitchen(merchantId, order.id).catch((err) => {
-            if (err instanceof KdsLicenseError) return;
-            console.warn("Partner order KDS push failed:", err);
+      void import("@/services/kitchen-ingress.service")
+        .then(({ enterKitchenFromOrder }) =>
+          enterKitchenFromOrder(merchantId, order.id, {
+            orderSource: source,
           })
         )
         .catch(() => {});
