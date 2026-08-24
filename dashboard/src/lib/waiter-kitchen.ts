@@ -27,7 +27,7 @@ export async function printWaiterKitchen(opts: {
 }): Promise<void> {
   const { lines, channel, printSettings, locale, staffName, tableLabel, orderNumber, t } = opts;
   if (printSettings?.autoPrintKitchen === false) return;
-  if (!readDeviceAutoPrintKitchen(printSettings?.autoPrintKitchen !== false)) return;
+  if (!readDeviceAutoPrintKitchen(true)) return;
 
   const filtered = lines.filter(
     (l) => !l.giftCard && !String(l.productId || '').startsWith('__gift_card_')

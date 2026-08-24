@@ -566,6 +566,41 @@ export class KdsService {
     return { ok: true };
   }
 
+  /** Remove pending KDS tickets when POS voids/cancels a kitchen order. */
+  static async dismissTicketsByKey(merchantId: string, ticketKey: string) {
+    await requireAddon(merchantId);
+    const raw = String(ticketKey || "").trim();
+    const base = raw.split("@")[0];
+    if (!base) return { dismissed: 0 };
+    const digits = base.replace(/^#/, "");
+    const db = getDb();
+    const pending = await db.query.kdsTickets.findMany({
+      where: and(
+        eq(schema.kdsTickets.merchantId, merchantId),
+        eq(schema.kdsTickets.status, "pending")
+      ),
+    });
+    const matches = pending.filter((t) => {
+      const key = String(t.ticketKey || "").trim();
+      const keyBase = key.split("@")[0];
+      if (keyBase === base || key === raw) return true;
+      if (digits && (keyBase === `#${digits}` || keyBase === digits)) return true;
+      return false;
+    });
+    if (!matches.length) return { dismissed: 0 };
+    const now = new Date();
+    await db
+      .update(schema.kdsTickets)
+      .set({ status: "completed", completedAt: now, updatedAt: now })
+      .where(
+        inArray(
+          schema.kdsTickets.id,
+          matches.map((t) => t.id)
+        )
+      );
+    return { dismissed: matches.length };
+  }
+
   static async ticketStatusForPos(merchantId: string, ticketKey: string) {
     await requireAddon(merchantId);
     const base = String(ticketKey || "")

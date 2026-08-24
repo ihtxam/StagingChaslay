@@ -126,7 +126,7 @@ import WebPosComboModal, {
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
-import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart, buildKdsReadyMap, collectKdsTicketKeys } from '@/lib/kds-push';
+import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart, buildKdsReadyMap, collectKdsTicketKeys, dismissKdsTicket } from '@/lib/kds-push';
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import { playKitchenCompleteOnce } from '@/lib/order-alert';
 import { pushOrderToOds, dismissOrderFromOds } from '@/lib/ods-push';
@@ -1965,13 +1965,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setAutoPrint(cfg.posPrintSettings.autoPrintReceipt !== false);
             }
           } catch {
-            setAutoPrint(cfg.posPrintSettings.autoPrintReceipt !== false);
+            /* keep device dropdown preference */
           }
         }
         if (cfg.posPrintSettings?.autoPrintKitchen != null) {
-          setAutoPrintKitchenDevice(
-            readDeviceAutoPrintKitchen(cfg.posPrintSettings.autoPrintKitchen !== false)
-          );
+          try {
+            const stored = localStorage.getItem('manupos_webpos_autoprint_kitchen_device');
+            if (stored === null) {
+              setAutoPrintKitchenDevice(
+                readDeviceAutoPrintKitchen(cfg.posPrintSettings.autoPrintKitchen !== false)
+              );
+            }
+          } catch {
+            /* keep device dropdown preference */
+          }
         }
       }
       const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
@@ -5707,7 +5714,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ctx.isInvoice && ['cash', 'card', 'terminal'].includes(payMethod);
         const skipThermal =
           (ctx.isInvoice || isInvoiceOrder(orderForReceipt || {})) && !invoiceCounter;
-        if (!skipThermal) {
+        if (!skipThermal && autoPrint) {
           try {
             await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl);
           } catch (e: unknown) {
@@ -6285,25 +6292,28 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     if (kitchenOpts.orderNumber) lastKitchenTicketRef.current = kitchenOpts.orderNumber;
 
-    // Kitchen display is independent of print settings — always push sent lines.
-    void pushCartLinesToKds({
-      ticketKey: kitchenOpts.orderNumber || kdsTicketKey,
-      orderNumber: kitchenOpts.orderNumber,
-      tableLabel: kitchenOpts.tableLabel,
-      tabNumber: kitchenOpts.tabNumber,
-      channel: saleChannel,
-      lines: filteredLines,
-    });
-    if (kitchenOpts.orderNumber && !opts?.cancelled) {
-      void pushOrderToOds({ orderNumber: kitchenOpts.orderNumber, status: 'preparing' });
+    // Kitchen display: push new sends; dismiss (not re-create) on void/cancel tickets.
+    const ticketKey = kitchenOpts.orderNumber || kdsTicketKey;
+    if (opts?.cancelled) {
+      if (ticketKey) {
+        void dismissKdsTicket(ticketKey);
+        void dismissOrderFromOds(ticketKey);
+      }
+    } else {
+      void pushCartLinesToKds({
+        ticketKey,
+        orderNumber: kitchenOpts.orderNumber,
+        tableLabel: kitchenOpts.tableLabel,
+        tabNumber: kitchenOpts.tabNumber,
+        channel: saleChannel,
+        lines: filteredLines,
+      });
+      if (kitchenOpts.orderNumber) {
+        void pushOrderToOds({ orderNumber: kitchenOpts.orderNumber, status: 'preparing' });
+      }
     }
 
-    if (printSettings?.autoPrintKitchen === false && !opts?.forcePrint && !opts?.cancelled) return;
-    if (
-      !readDeviceAutoPrintKitchen(printSettings?.autoPrintKitchen !== false) &&
-      !opts?.forcePrint &&
-      !opts?.cancelled
-    ) {
+    if (!readDeviceAutoPrintKitchen(true) && !opts?.forcePrint && !opts?.cancelled) {
       return;
     }
     const receiptItems = filteredLines.map((l) =>
@@ -7046,8 +7056,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       !opts?.skipReceiptPrint &&
       method !== 'invoice' &&
       method !== 'pay_later' &&
-      autoPrint &&
-      printSettings?.autoPrintReceipt !== false;
+      autoPrint;
     // Offline sales have no published receipt URL yet — still print text via local Print Agent.
     if (shouldPrintReceipt) {
       // Never hold checkout/busy on the print agent.
@@ -8339,6 +8348,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             embedded
             open
             kitchenEnabled={kitchenEnabled}
+            autoPrintReceipt={autoPrint}
             onClose={() => {
               setHighlightOrderId(null);
               setOrdersChannelPref(null);

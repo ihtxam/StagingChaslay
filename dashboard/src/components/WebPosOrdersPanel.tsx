@@ -254,6 +254,8 @@ type Props = {
   canSalesAdjust?: boolean;
   /** When true, poll KDS for per-line ready state on held kitchen tickets */
   kitchenEnabled?: boolean;
+  /** Device dropdown — auto-print receipt after collect payment */
+  autoPrintReceipt?: boolean;
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
@@ -442,6 +444,7 @@ export default function WebPosOrdersPanel({
   onOpenDeliveryHub,
   canSalesAdjust = false,
   kitchenEnabled = true,
+  autoPrintReceipt = true,
 }: Props) {
   const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -883,7 +886,7 @@ export default function WebPosOrdersPanel({
           });
       toast.success(t('webPosPaymentCollected'));
       const updated = (res.data?.order as PosOrder | undefined) || null;
-      if (updated && (!invoiceOrder || counterTender)) {
+      if (updated && autoPrintReceipt && (!invoiceOrder || counterTender)) {
         try {
           await onPrintOrder?.(updated);
         } catch (e: unknown) {

@@ -121,6 +121,17 @@ merchantRouter.post("/push", async (req: Request, res: Response) => {
   }
 });
 
+merchantRouter.post("/dismiss", async (req: Request, res: Response) => {
+  try {
+    const ticketKey = String(req.body?.ticketKey || "").trim();
+    if (!ticketKey) return res.status(400).json({ error: "ticketKey required" });
+    const result = await KdsService.dismissTicketsByKey(req.merchantId!, ticketKey);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    handleError(res, error, "Failed");
+  }
+});
+
 merchantRouter.get("/ticket-status", async (req: Request, res: Response) => {
   try {
     const ticketKey = String(req.query.ticketKey || "").trim();

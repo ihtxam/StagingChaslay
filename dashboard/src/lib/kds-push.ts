@@ -33,6 +33,16 @@ export function resolveKdsTicketKey(opts: {
   return orderNum;
 }
 
+export async function dismissKdsTicket(ticketKey: string): Promise<void> {
+  const base = kitchenTicketKeyBase(ticketKey);
+  if (!base) return;
+  try {
+    await api.post('/merchant/kds/dismiss', { ticketKey: base });
+  } catch (e) {
+    console.warn('[kds] dismiss failed', e);
+  }
+}
+
 export async function pushCartLinesToKds(opts: {
   ticketKey: string;
   orderNumber?: string | null;
