@@ -1375,6 +1375,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
   }, [merchant, effectiveChannel]);
 
+  const merchantTax = useMemo(
+    () =>
+      merchant
+        ? {
+            vatRate: merchant.vatRate,
+            taxTakeawayRate: merchant.taxTakeawayRate,
+            taxDineInRate: merchant.taxDineInRate,
+            taxDeliveryRate: merchant.taxDeliveryRate,
+          }
+        : undefined,
+    [merchant]
+  );
+
   /** Menu prices include VAT (gross); prices are not tax-exclusive. */
   const vatIncludedInPrice = merchant?.taxIncludedInPrice === true;
   /** Tax-exclusive: VAT on discounted net (default) vs pre-discount net. */
@@ -5968,6 +5981,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           phone: merchant?.phone || undefined,
           vatNumber: merchant?.vatNumber || undefined,
           taxRate,
+          merchantTax,
           vatIncludedInPrice,
           vatAfterDiscount,
           printSettings,
@@ -6520,6 +6534,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       phone: merchant?.phone || undefined,
       vatNumber: merchant?.vatNumber || undefined,
       taxRate,
+      merchantTax,
       vatIncludedInPrice,
       vatAfterDiscount,
       printSettings,
