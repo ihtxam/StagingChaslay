@@ -84,6 +84,7 @@ import {
   resolvePrintRetryLocally,
   syncMainTillAutoPrintKitchen,
   writeDeviceAutoPrintKitchen,
+  writeDeviceAutoPrintReceipt,
 } from '@/lib/webpos-print-relay';
 import {
   applyKitchenPrintRetryFromSettings,
@@ -125,9 +126,10 @@ import WebPosComboModal, {
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
-import { pushCartLinesToKds, fetchKdsBoardStatus } from '@/lib/kds-push';
+import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart } from '@/lib/kds-push';
+import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import { playKitchenCompleteOnce } from '@/lib/order-alert';
-import { pushOrderToOds } from '@/lib/ods-push';
+import { pushOrderToOds, dismissOrderFromOds } from '@/lib/ods-push';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
@@ -1953,7 +1955,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const pick = first.find((m) => cfg.methods[m]);
         if (pick) setPaymentMethod(pick);
         if (cfg.posPrintSettings?.autoPrintReceipt != null) {
-          setAutoPrint(cfg.posPrintSettings.autoPrintReceipt !== false);
+          try {
+            const stored = localStorage.getItem('manupos_webpos_autoprint');
+            if (stored === null) {
+              setAutoPrint(cfg.posPrintSettings.autoPrintReceipt !== false);
+            }
+          } catch {
+            setAutoPrint(cfg.posPrintSettings.autoPrintReceipt !== false);
+          }
         }
         if (cfg.posPrintSettings?.autoPrintKitchen != null) {
           setAutoPrintKitchenDevice(
@@ -2338,6 +2347,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         dismissNewOrderAlert(order.id);
         toast.success(t('updated'));
         void pollOnlineOrders();
+        setOrdersRefreshToken((n) => n + 1);
         openOnlineOrdersInTab(order.id);
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('actionFailed'));
@@ -3976,14 +3986,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const candidateKeys = () => {
       const keys = new Set<string>();
       const tab = tabOrderShout(tabNumber);
-      if (tab) keys.add(tab);
+      if (tab) keys.add(kitchenTicketKeyBase(tab));
       const display = ticketDisplay?.trim();
-      if (display) keys.add(display);
+      if (display) keys.add(kitchenTicketKeyBase(display));
       const last = lastKitchenTicketRef.current?.trim();
-      if (last) keys.add(last);
+      if (last) keys.add(kitchenTicketKeyBase(last));
       const orderNum = ticketOrderNumber?.trim();
-      if (orderNum) keys.add(orderNum);
-      if (kdsTicketKey) keys.add(kdsTicketKey);
+      if (orderNum) keys.add(kitchenTicketKeyBase(orderNum));
+      if (kdsTicketKey) keys.add(kitchenTicketKeyBase(kdsTicketKey));
       return keys;
     };
 
@@ -3991,12 +4001,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const board = await fetchKdsBoardStatus();
       if (cancelled || !board.length) return;
       const keys = candidateKeys();
-      const matching = board.filter((t) => keys.has(t.ticketKey));
+      const matching = matchBoardTickets(board, keys);
       if (!matching.length) return;
 
-      const readyIds = new Set<string>();
+      const readyIds = collectReadyLineIds(matching);
       for (const ticket of matching) {
-        for (const lineId of ticket.readyLineIds) readyIds.add(lineId);
+        if (
+          ticket.total > 0 &&
+          ticket.ready === ticket.total &&
+          ticket.status === 'pending'
+        ) {
+          void pushOrderToOds({ orderNumber: ticket.ticketKey, status: 'ready' });
+        }
         if (ticket.status === 'completed') {
           const ringId = `${ticket.ticketKey}|${ticket.completedAt || 'done'}`;
           if (!kdsCompletedRungRef.current.has(ringId)) {
@@ -4007,13 +4023,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
 
       if (readyIds.size && hasKitchenLines) {
-        setCart((prev) =>
-          prev.map((l) =>
-            readyIds.has(l.lineId) && !l.kitchenReadyAt
-              ? { ...l, kitchenReadyAt: Date.now() }
-              : l
-          )
-        );
+        setCart((prev) => applyKdsReadyToCart(prev, [...readyIds]));
       }
     };
 
@@ -6846,6 +6856,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (shiftsEnabled) void refreshCurrentShift(true);
     const moreSplits = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
     if (!moreSplits) {
+      const payLaterSale = method === 'pay_later' || method === 'invoice';
+      if (!payLaterSale) {
+        const odsNums = new Set<string>();
+        const display = ticket.display?.trim();
+        if (display) odsNums.add(display);
+        const kitchenNum = kitchenOrderNumber({ ticket, allowNew: false });
+        if (kitchenNum) odsNums.add(kitchenNum);
+        const tab = tabOrderShout(tabNumber);
+        if (tab) odsNums.add(kitchenTicketKeyBase(tab));
+        for (const num of odsNums) void dismissOrderFromOds(num);
+      }
       const paidKeys = [
         openCartDraftKey({ tableId, tabNumber, channel }),
         openCartDraftKey({ ticketDisplay: ticket.display, channel: effectiveChannel }),
@@ -7976,7 +7997,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setPrintSettings(next);
               void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
             }}
-            onAutoPrintChange={setAutoPrint}
+            onAutoPrintChange={(v) => {
+              setAutoPrint(v);
+              writeDeviceAutoPrintReceipt(v);
+            }}
             onAutoPrintKitchenChange={isLocalPrint ? undefined : setAutoPrintKitchenDevice}
             onPostSuccessChange={setPostSuccessTarget}
             onRefreshPrinters={() => {
@@ -8232,6 +8256,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           <WebPosOrdersPanel
             embedded
             open
+            kitchenEnabled={kitchenEnabled}
             onClose={() => {
               setHighlightOrderId(null);
               setOrdersChannelPref(null);

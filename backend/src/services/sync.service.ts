@@ -737,7 +737,7 @@ export class SyncService {
         }
       }
 
-      if (!isCancelled && fulfillmentOpen) {
+      if (!isCancelled) {
         void import("@/services/ods.service")
           .then(({ OdsService }) =>
             OdsService.syncFromOrder(merchantId, {

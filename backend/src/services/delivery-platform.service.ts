@@ -554,6 +554,17 @@ export class DeliveryPlatformService {
         (order.paymentStatus === "completed" || order.paymentStatus === "paid"),
     });
 
+    if (status === "preparing") {
+      void import("@/services/kds.service")
+        .then(({ KdsService, KdsLicenseError }) =>
+          KdsService.pushOrderToKitchen(merchantId, order.id).catch((err) => {
+            if (err instanceof KdsLicenseError) return;
+            console.warn("Partner order KDS push failed:", err);
+          })
+        )
+        .catch(() => {});
+    }
+
     return { order, created: true };
   }
 

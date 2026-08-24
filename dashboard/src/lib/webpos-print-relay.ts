@@ -285,12 +285,25 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
           continue;
         }
         if (p.kind === 'auto_print_order' && p.orderId) {
-          if (!readMainTillAutoPrintReceipt() && !readMainTillAutoPrintKitchen()) {
+          const payload = p as AutoPrintOrderPayload;
+          const allowKitchen = payload.printKitchen === true && readMainTillAutoPrintKitchen();
+          const allowReceiptLike =
+            (payload.printReceipt === true ||
+              payload.printNotification === true ||
+              payload.printDeliveryReceipt === true) &&
+            readMainTillAutoPrintReceipt();
+          if (!allowKitchen && !allowReceiptLike) {
             await ackPrintJob(job.id, 'DONE');
             continue;
           }
           try {
-            await processAutoPrintOrderJob(p as AutoPrintOrderPayload);
+            await processAutoPrintOrderJob({
+              ...payload,
+              printKitchen: allowKitchen,
+              printReceipt: allowReceiptLike && payload.printReceipt === true,
+              printNotification: allowReceiptLike && payload.printNotification === true,
+              printDeliveryReceipt: allowReceiptLike && payload.printDeliveryReceipt === true,
+            });
             await ackPrintJob(job.id, 'DONE');
             done += 1;
           } catch {

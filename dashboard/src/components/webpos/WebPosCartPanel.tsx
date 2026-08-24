@@ -529,22 +529,6 @@ export default function WebPosCartPanel({
               </span>
             ) : null}
           </div>
-          {tableLabel && channel === 'dine_in' ? (
-            <span className="inline-flex shrink-0 items-center gap-2">
-              <span className="rounded-lg bg-sky-100 px-2.5 py-1.5 text-xs font-bold text-sky-900">
-                {tableLabel}
-              </span>
-              {canReleaseTable && onReleaseTable ? (
-                <button
-                  type="button"
-                  className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-700 hover:bg-red-100"
-                  onClick={onReleaseTable}
-                >
-                  {t('webPosReleaseTable')}
-                </button>
-              ) : null}
-            </span>
-          ) : null}
           <button
             type="button"
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-stone-50"

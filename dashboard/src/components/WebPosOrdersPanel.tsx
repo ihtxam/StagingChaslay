@@ -60,6 +60,11 @@ import {
   ticketQueryMatches,
 } from '@/lib/webpos-held';
 import { fetchKdsBoardStatus, type KdsBoardTicket } from '@/lib/kds-push';
+import {
+  kitchenTicketKeyBase,
+  kitchenTicketKeysMatch,
+  resolveKitchenTicketKey,
+} from '@/lib/kitchen-progress';
 import { hasTerminalPortion, parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
@@ -89,17 +94,28 @@ function heldTimeMs(h: { updatedAt?: string | null; createdAt?: string | null })
 function heldTicketKeys(h: HeldRow): string[] {
   const meta = parseHeldCartJson(h.cartJson);
   const keys = new Set<string>();
+  const resolved = resolveKitchenTicketKey(meta);
+  if (resolved) keys.add(resolved);
   const display = String(meta.ticketDisplay || '').trim();
-  if (display) keys.add(display);
+  if (display) keys.add(kitchenTicketKeyBase(display));
   const tab = String(meta.tabNumber || '').trim();
-  if (tab) keys.add(tab.startsWith('#') ? tab : `#${tab}`);
+  if (tab) keys.add(kitchenTicketKeyBase(tab.startsWith('#') ? tab : `#${tab}`));
+  const orderNum = String(meta.ticketOrderNumber || '').trim();
+  if (orderNum) keys.add(kitchenTicketKeyBase(orderNum));
   return [...keys];
 }
 
 function buildKdsReadyMap(tickets: KdsBoardTicket[]): Map<string, Set<string>> {
   const map = new Map<string, Set<string>>();
+  const mergeInto = (key: string, lineIds: string[]) => {
+    if (!key) return;
+    const existing = map.get(key) || new Set<string>();
+    for (const id of lineIds) existing.add(id);
+    map.set(key, existing);
+  };
   for (const ticket of tickets) {
-    map.set(ticket.ticketKey, new Set(ticket.readyLineIds));
+    mergeInto(ticket.ticketKey, ticket.readyLineIds);
+    mergeInto(kitchenTicketKeyBase(ticket.ticketKey), ticket.readyLineIds);
   }
   return map;
 }
@@ -110,7 +126,9 @@ function lineKitchenReady(
   readyMap: Map<string, Set<string>>
 ): boolean {
   for (const key of ticketKeys) {
-    if (readyMap.get(key)?.has(lineId)) return true;
+    for (const [mapKey, readySet] of readyMap) {
+      if (kitchenTicketKeysMatch(key, mapKey) && readySet.has(lineId)) return true;
+    }
   }
   return false;
 }
@@ -261,6 +279,8 @@ type Props = {
   onOpenDeliveryHub?: () => void;
   /** Owner/manager only — unlock cash sales adjustment via search icon taps */
   canSalesAdjust?: boolean;
+  /** When true, poll KDS for per-line ready state on held kitchen tickets */
+  kitchenEnabled?: boolean;
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
@@ -448,6 +468,7 @@ export default function WebPosOrdersPanel({
   onChannelFilterChange,
   onOpenDeliveryHub,
   canSalesAdjust = false,
+  kitchenEnabled = true,
 }: Props) {
   const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -486,7 +507,7 @@ export default function WebPosOrdersPanel({
   const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !kitchenEnabled) return;
     let cancelled = false;
     const sync = async () => {
       const board = await fetchKdsBoardStatus();
@@ -499,7 +520,7 @@ export default function WebPosOrdersPanel({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [open, refreshToken]);
+  }, [open, refreshToken, kitchenEnabled]);
 
   useEffect(() => {
     try {
@@ -1342,7 +1363,8 @@ export default function WebPosOrdersPanel({
                     const readyCount = lines.filter(
                       (l: any) =>
                         l.sentToKitchen &&
-                        lineKitchenReady(String(l.lineId || ''), ticketKeys, kdsReadyMap)
+                        (!!l.kitchenReadyAt ||
+                          lineKitchenReady(String(l.lineId || ''), ticketKeys, kdsReadyMap))
                     ).length;
                     const heldMeta = parseHeldCartJson(h.cartJson);
                     const idLabel =
@@ -1702,11 +1724,13 @@ export default function WebPosOrdersPanel({
                   </p>
                   <ul className="mt-4 space-y-2 text-sm">
                     {heldCartLines(selectedHeld).map((l, idx) => {
-                      const ready = lineKitchenReady(
-                        String(l.lineId || ''),
-                        heldTicketKeys(selectedHeld),
-                        kdsReadyMap
-                      );
+                      const ready =
+                        !!l.kitchenReadyAt ||
+                        lineKitchenReady(
+                          String(l.lineId || ''),
+                          heldTicketKeys(selectedHeld),
+                          kdsReadyMap
+                        );
                       return (
                         <li key={idx} className="flex justify-between gap-2">
                           <span className="inline-flex min-w-0 items-start gap-1">

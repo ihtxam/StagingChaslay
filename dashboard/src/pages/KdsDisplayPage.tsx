@@ -301,7 +301,8 @@ export default function KdsDisplayPage() {
           const pendingItems = allItems.filter((i) => i.status !== 'ready');
           const readyItems = allItems.filter((i) => i.status === 'ready');
           if (pendingItems.length) {
-            active.push({ ...row, items: pendingItems.concat(readyItems) });
+            // Hide ready lines while work remains; tap last dish to reveal all checked.
+            active.push({ ...row, items: pendingItems });
           } else if (readyItems.length) {
             active.push({ ...row, items: readyItems });
           }
