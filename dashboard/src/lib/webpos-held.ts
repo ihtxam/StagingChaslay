@@ -176,3 +176,32 @@ export function sameHeldIdentity(
   }
   return false;
 }
+
+export type HeldOrderRow = {
+  id: string;
+  cartJson?: unknown;
+  status?: string | null;
+  label?: string | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+};
+
+function heldRowTimeMs(row: Pick<HeldOrderRow, 'updatedAt' | 'createdAt'>): number {
+  const updated = row.updatedAt ? Date.parse(row.updatedAt) : 0;
+  const created = row.createdAt ? Date.parse(row.createdAt) : 0;
+  return Math.max(updated, created);
+}
+
+/** Best open held row for a table — newest row that still has cart lines. */
+export function findHeldOrderForTable(
+  tableId: string,
+  rows: HeldOrderRow[]
+): HeldOrderRow | null {
+  const tid = String(tableId || '').trim();
+  if (!tid) return null;
+  const matches = rows.filter((row) => parseHeldCartJson(row.cartJson).tableId === tid);
+  if (!matches.length) return null;
+  const withLines = matches.filter((row) => parseHeldCartJson(row.cartJson).cart.length > 0);
+  const pool = withLines.length ? withLines : matches;
+  return [...pool].sort((a, b) => heldRowTimeMs(b) - heldRowTimeMs(a))[0] || null;
+}
