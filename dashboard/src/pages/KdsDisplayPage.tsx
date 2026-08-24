@@ -44,7 +44,22 @@ type KdsTicket = {
 
 type ItemRow = { kind: 'course'; course: number } | { kind: 'item'; item: KdsItem };
 
+type DisplayTicket = KdsTicket & {
+  allItems: KdsItem[];
+  viewMode: 'pending' | 'summary';
+};
+
 const CHANNEL_FILTERS: ChannelFilter[] = ['all', 'dine_in', 'takeaway', 'delivery'];
+
+function splitTicketForDisplay(row: KdsTicket): DisplayTicket | null {
+  const allItems = row.items || [];
+  if (!allItems.length) return null;
+  const pendingItems = allItems.filter((i) => i.status !== 'ready');
+  if (pendingItems.length) {
+    return { ...row, allItems, viewMode: 'pending', items: pendingItems };
+  }
+  return { ...row, allItems, viewMode: 'summary', items: allItems };
+}
 
 function groupItemsByCourse(items: KdsItem[]): ItemRow[] {
   const courses = [
@@ -94,7 +109,7 @@ function channelFilterLabel(filter: ChannelFilter, t: (k: string) => string): st
 }
 
 type TicketCardProps = {
-  ticket: KdsTicket;
+  ticket: DisplayTicket;
   tab: 'active' | 'archived';
   shellTheme: KdsShellTheme;
   theme: (typeof KDS_SHELL_THEMES)[KdsShellTheme];
@@ -122,8 +137,9 @@ function TicketCard({
   onRecallTicket,
   t,
 }: TicketCardProps) {
-  const ready = ticket.items.filter((i) => i.status === 'ready').length;
-  const total = ticket.items.length;
+  const ready = ticket.allItems.filter((i) => i.status === 'ready').length;
+  const total = ticket.allItems.length;
+  const allReadySummary = tab === 'active' && ticket.viewMode === 'summary';
   const label = [ticket.orderNumber || ticket.ticketKey, ticket.tableLabel || ticket.tabNumber]
     .filter(Boolean)
     .join(' · ');
@@ -170,6 +186,11 @@ function TicketCard({
           </p>
         ) : null}
       </div>
+      {allReadySummary ? (
+        <p className="border-b border-emerald-500/30 bg-emerald-950/40 px-4 py-2 text-center text-xs font-semibold text-emerald-300">
+          {t('kdsAllReadyHint')}
+        </p>
+      ) : null}
       <ul className="flex-1 space-y-2 overflow-y-auto p-3">
         {rows.map((row) => {
           if (row.kind === 'course') {
@@ -208,7 +229,13 @@ function TicketCard({
                   {item.quantity}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-semibold leading-snug">{item.name}</span>
+                  <span
+                    className={`block font-semibold leading-snug ${
+                      item.status === 'ready' ? 'line-through opacity-80' : ''
+                    }`}
+                  >
+                    {item.name}
+                  </span>
                   {item.lineNote ? (
                     <span className="mt-0.5 block text-xs text-amber-300/90">{item.lineNote}</span>
                   ) : null}
@@ -225,7 +252,7 @@ function TicketCard({
         {!isDone ? (
           <button
             type="button"
-            disabled={busyId === ticket.id}
+            disabled={busyId === ticket.id || ticket.viewMode !== 'summary'}
             onClick={() => void onComplete(ticket.id)}
             className="w-full rounded-xl bg-teal-600 py-3 text-sm font-bold text-white hover:bg-teal-500 disabled:opacity-50"
           >
@@ -255,7 +282,7 @@ export default function KdsDisplayPage() {
   const [layoutMode, setLayoutMode] = useState<KdsLayoutMode>('grid');
   const [gridColumns, setGridColumns] = useState(3);
   const [overdueMinutes, setOverdueMinutes] = useState(20);
-  const [tickets, setTickets] = useState<KdsTicket[]>([]);
+  const [fullTickets, setFullTickets] = useState<KdsTicket[]>([]);
   const [archived, setArchived] = useState<KdsTicket[]>([]);
   const [tab, setTab] = useState<'active' | 'archived'>('active');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
@@ -281,12 +308,12 @@ export default function KdsDisplayPage() {
   );
 
   const checkOverdue = useCallback(
-    (pending: KdsTicket[]) => {
+    (pending: DisplayTicket[]) => {
       const limitMs = overdueMinutes * 60 * 1000;
       const now = Date.now();
       for (const ticket of pending) {
         if (ticket.status === 'completed') continue;
-        const hasPendingItems = ticket.items.some((i) => i.status !== 'ready');
+        const hasPendingItems = ticket.allItems.some((i) => i.status !== 'ready');
         if (!hasPendingItems) continue;
         const age = now - ticketArrivedMs(ticket);
         if (age >= limitMs && !overdueRungRef.current.has(ticket.id)) {
@@ -303,7 +330,7 @@ export default function KdsDisplayPage() {
     try {
       const res = await publicApi.get(`/kds/${encodeURIComponent(token)}/orders`);
       const rows = (res.data?.tickets || []) as KdsTicket[];
-      const active: KdsTicket[] = [];
+      const activeFull: KdsTicket[] = [];
       const done: KdsTicket[] = [];
 
       for (const row of rows) {
@@ -312,24 +339,21 @@ export default function KdsDisplayPage() {
         if (row.status === 'completed') {
           done.push({ ...row, items: allItems });
         } else {
-          const pendingItems = allItems.filter((i) => i.status !== 'ready');
-          const readyItems = allItems.filter((i) => i.status === 'ready');
-          if (pendingItems.length) {
-            // Hide ready lines while work remains; tap last dish to reveal all checked.
-            active.push({ ...row, items: pendingItems });
-          } else if (readyItems.length) {
-            active.push({ ...row, items: readyItems });
-          }
+          activeFull.push({ ...row, items: allItems });
         }
       }
 
+      const activeDisplay = activeFull
+        .map(splitTicketForDisplay)
+        .filter((row): row is DisplayTicket => row != null);
+
       if (!initialLoad.current) {
-        for (const row of active) {
+        for (const row of activeDisplay) {
           if (!knownTicketIds.current.has(row.id)) {
             knownTicketIds.current.add(row.id);
             playKdsNewOrderOnce();
           }
-          for (const item of row.items) {
+          for (const item of row.allItems) {
             if (item.status === 'ready') continue;
             if (!knownItemIds.current.has(item.id)) {
               knownItemIds.current.add(item.id);
@@ -337,18 +361,17 @@ export default function KdsDisplayPage() {
             }
           }
         }
-        checkOverdue(active);
+        checkOverdue(activeDisplay);
       } else {
-        for (const row of active) {
+        for (const row of activeDisplay) {
           knownTicketIds.current.add(row.id);
-          for (const item of row.items) knownItemIds.current.add(item.id);
+          for (const item of row.allItems) knownItemIds.current.add(item.id);
         }
-        for (const row of active) {
+        for (const row of activeDisplay) {
           const age = Date.now() - ticketArrivedMs(row);
           if (age >= overdueMinutes * 60 * 1000) overdueRungRef.current.add(row.id);
         }
       }
-      initialLoad.current = false;
 
       const st = res.data?.station || {};
       setStationName(st.name || t('kdsDefaultStationName'));
@@ -362,8 +385,9 @@ export default function KdsDisplayPage() {
         gridColumnsOverrideRef.current = localCols;
         setGridColumns(localCols ?? serverCols);
       }
+      initialLoad.current = false;
       setOverdueMinutes(Math.min(120, Math.max(5, Number(st.overdueMinutes) || 20)));
-      setTickets(active);
+      setFullTickets(activeFull);
       setArchived(done);
       setError('');
     } catch (e: any) {
@@ -388,18 +412,26 @@ export default function KdsDisplayPage() {
     return () => window.clearInterval(tick);
   }, []);
 
+  const displayTickets = useMemo(
+    () =>
+      fullTickets
+        .map(splitTicketForDisplay)
+        .filter((row): row is DisplayTicket => row != null),
+    [fullTickets]
+  );
+
   useEffect(() => {
-    checkOverdue(tickets);
-  }, [nowMs, tickets, checkOverdue]);
+    checkOverdue(displayTickets);
+  }, [nowMs, displayTickets, checkOverdue]);
 
   const pendingCount = useMemo(
-    () => tickets.reduce((n, tk) => n + tk.items.filter((i) => i.status !== 'ready').length, 0),
-    [tickets]
+    () => fullTickets.reduce((n, tk) => n + tk.items.filter((i) => i.status !== 'ready').length, 0),
+    [fullTickets]
   );
 
   const filteredTickets = useMemo(
-    () => tickets.filter((tk) => matchesChannelFilter(tk.channel, channelFilter)),
-    [tickets, channelFilter]
+    () => displayTickets.filter((tk) => matchesChannelFilter(tk.channel, channelFilter)),
+    [displayTickets, channelFilter]
   );
 
   const filteredArchived = useMemo(
@@ -411,11 +443,21 @@ export default function KdsDisplayPage() {
 
   const markReady = async (itemId: string) => {
     setBusyId(itemId);
+    setFullTickets((prev) =>
+      prev.map((ticket) => {
+        if (!ticket.items.some((i) => i.id === itemId)) return ticket;
+        return {
+          ...ticket,
+          items: ticket.items.map((i) => (i.id === itemId ? { ...i, status: 'ready' } : i)),
+        };
+      })
+    );
     try {
       await publicApi.patch(`/kds/${encodeURIComponent(token)}/items/${itemId}/ready`);
       await load();
     } catch (e: any) {
       setError(e.response?.data?.error || t('kdsActionFailed'));
+      await load();
     } finally {
       setBusyId(null);
     }
@@ -435,12 +477,27 @@ export default function KdsDisplayPage() {
 
   const completeTicket = async (ticketId: string) => {
     setBusyId(ticketId);
+    const snapshot = fullTickets.find((t) => t.id === ticketId);
+    overdueRungRef.current.delete(ticketId);
+    setFullTickets((prev) => prev.filter((t) => t.id !== ticketId));
+    if (snapshot) {
+      const nowIso = new Date().toISOString();
+      setArchived((prev) => [
+        {
+          ...snapshot,
+          status: 'completed',
+          completedAt: nowIso,
+          items: snapshot.items.map((i) => ({ ...i, status: 'ready' })),
+        },
+        ...prev,
+      ]);
+    }
     try {
       await publicApi.patch(`/kds/${encodeURIComponent(token)}/tickets/${ticketId}/complete`);
-      overdueRungRef.current.delete(ticketId);
       await load();
     } catch (e: any) {
       setError(e.response?.data?.error || t('kdsActionFailed'));
+      await load();
     } finally {
       setBusyId(null);
     }
