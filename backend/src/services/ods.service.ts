@@ -395,7 +395,7 @@ export class OdsService {
         eq(schema.orders.merchantId, merchantId),
         inArray(schema.orders.status, [...PREPARING_ORDER_STATUSES, "ready"])
       ),
-      columns: { orderNumber: true, notes: true, status: true, createdAt: true, updatedAt: true },
+      columns: { orderNumber: true, notes: true, status: true, createdAt: true },
       orderBy: [asc(schema.orders.createdAt)],
     });
 
@@ -403,8 +403,7 @@ export class OdsService {
     const ready: string[] = [];
     const seen = new Set<string>();
     for (const row of rows) {
-      const touched = row.updatedAt || row.createdAt;
-      const ageMs = touched ? now - touched.getTime() : 0;
+      const ageMs = row.createdAt ? now - row.createdAt.getTime() : 0;
       const st = String(row.status || "").toLowerCase();
       if (st === "ready") {
         if (ageMs > LIVE_READY_MAX_AGE_MS) continue;
@@ -414,7 +413,6 @@ export class OdsService {
       const num = resolveOdsDisplayNumber(row);
       if (!num || seen.has(num)) continue;
       seen.add(num);
-      const st = String(row.status || "").toLowerCase();
       if (st === "ready") ready.push(num);
       else if ((PREPARING_ORDER_STATUSES as readonly string[]).includes(st)) preparing.push(num);
     }
