@@ -81,6 +81,7 @@ import {
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
   readDeviceAutoPrintKitchen,
+  readMainTillAutoPrintKitchen,
   resolvePrintRetryLocally,
   syncMainTillAutoPrintKitchen,
   writeDeviceAutoPrintKitchen,
@@ -811,9 +812,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [printerName, setPrinterName] = useState(() => localStorage.getItem('manupos_webpos_printer') || '');
   const printerHealAttemptedRef = useRef<Set<string>>(new Set());
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('manupos_webpos_autoprint') !== '0');
-  const [autoPrintKitchenDevice, setAutoPrintKitchenDevice] = useState(() =>
-    readDeviceAutoPrintKitchen(true)
-  );
+  const [autoPrintKitchenDevice, setAutoPrintKitchenDevice] = useState(() => {
+    try {
+      if (localStorage.getItem('manupos_webpos_autoprint_kitchen_device') != null) {
+        return readDeviceAutoPrintKitchen(true);
+      }
+      if (localStorage.getItem('manupos_webpos_autoprint_kitchen') != null) {
+        return readMainTillAutoPrintKitchen();
+      }
+    } catch {
+      /* ignore */
+    }
+    return readDeviceAutoPrintKitchen(true);
+  });
   const [lastReceipt, setLastReceipt] = useState<string>('');
   const [lastReceiptUrl, setLastReceiptUrl] = useState<string>('');
   const [lastDeliveryQrUrl, setLastDeliveryQrUrl] = useState<string>('');
@@ -2563,11 +2574,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     writeDeviceAutoPrintKitchen(autoPrintKitchenDevice);
-  }, [autoPrintKitchenDevice]);
+    if (isLocalPrint) syncMainTillAutoPrintKitchen(autoPrintKitchenDevice);
+  }, [autoPrintKitchenDevice, isLocalPrint]);
 
   useEffect(() => {
     if (!isLocalPrint) return;
-    syncMainTillAutoPrintKitchen(printSettings?.autoPrintKitchen !== false);
+    try {
+      if (
+        localStorage.getItem('manupos_webpos_autoprint_kitchen') != null ||
+        localStorage.getItem('manupos_webpos_autoprint_kitchen_device') != null
+      ) {
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    const def = printSettings?.autoPrintKitchen !== false;
+    setAutoPrintKitchenDevice(def);
+    syncMainTillAutoPrintKitchen(def);
   }, [printSettings?.autoPrintKitchen, isLocalPrint]);
 
   const ensureShift = useCallback(
@@ -6476,7 +6500,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     if (kitchenOpts.orderNumber) lastKitchenTicketRef.current = kitchenOpts.orderNumber;
 
-    // Kitchen display: push new sends; dismiss (not re-create) on void/cancel tickets.
+    // Kitchen display: push new sends; mark cancelled (red card) on void/cancel tickets.
     const ticketKey = kitchenOpts.orderNumber || kdsTicketKey;
     if (opts?.cancelled) {
       if (ticketKey) {
@@ -8278,7 +8302,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setAutoPrint(v);
               writeDeviceAutoPrintReceipt(v);
             }}
-            onAutoPrintKitchenChange={isLocalPrint ? undefined : setAutoPrintKitchenDevice}
+            onAutoPrintKitchenChange={(v) => setAutoPrintKitchenDevice(v)}
             onPostSuccessChange={setPostSuccessTarget}
             onRefreshPrinters={() => {
               void refreshAgent();

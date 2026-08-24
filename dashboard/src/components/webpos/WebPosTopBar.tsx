@@ -692,7 +692,7 @@ export function WebPosSettingsDropdown({
       <p className="text-[10px] leading-snug text-stone-500">
         {isLocalPrintStation ? t('webPosAutoPrintHint') : t('webPosAutoPrintHintRemote')}
       </p>
-      {!isLocalPrintStation && onAutoPrintKitchenChange != null && autoPrintKitchen != null ? (
+      {onAutoPrintKitchenChange != null && autoPrintKitchen != null ? (
         <>
           <label className="flex items-center gap-2 text-xs">
             <input
@@ -703,7 +703,11 @@ export function WebPosSettingsDropdown({
             />
             {t('autoPrintKitchen')}
           </label>
-          <p className="text-[10px] leading-snug text-stone-500">{t('webPosAutoPrintKitchenHintRemote')}</p>
+          <p className="text-[10px] leading-snug text-stone-500">
+            {isLocalPrintStation
+              ? t('webPosAutoPrintKitchenHintMainTill')
+              : t('webPosAutoPrintKitchenHintRemote')}
+          </p>
         </>
       ) : null}
     </div>

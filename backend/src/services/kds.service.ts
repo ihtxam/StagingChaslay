@@ -345,7 +345,7 @@ export class KdsService {
     const tickets = await db.query.kdsTickets.findMany({
       where: and(
         eq(schema.kdsTickets.merchantId, station.merchantId),
-        inArray(schema.kdsTickets.status, ["pending", "completed"])
+        inArray(schema.kdsTickets.status, ["pending", "completed", "cancelled"])
       ),
       orderBy: [asc(schema.kdsTickets.createdAt)],
       with: { items: true },
@@ -358,7 +358,7 @@ export class KdsService {
         );
         if (!items.length) return null;
         if (
-          t.status === "completed" &&
+          (t.status === "completed" || t.status === "cancelled") &&
           t.completedAt &&
           t.completedAt < completedSince
         ) {
@@ -389,6 +389,8 @@ export class KdsService {
       })
       .filter(Boolean)
       .sort((a, b) => {
+        if (a!.status === "cancelled" && b!.status !== "cancelled") return -1;
+        if (b!.status === "cancelled" && a!.status !== "cancelled") return 1;
         if (a!.status === "completed" && b!.status === "completed") {
           const aAt = a!.completedAt ? new Date(a!.completedAt).getTime() : 0;
           const bAt = b!.completedAt ? new Date(b!.completedAt).getTime() : 0;
@@ -426,7 +428,7 @@ export class KdsService {
     const tickets = await db.query.kdsTickets.findMany({
       where: and(
         eq(schema.kdsTickets.merchantId, merchantId),
-        inArray(schema.kdsTickets.status, ["pending", "completed"])
+        inArray(schema.kdsTickets.status, ["pending", "completed", "cancelled"])
       ),
       with: { items: true },
     });
@@ -524,6 +526,13 @@ export class KdsService {
     });
     if (!ticket) throw new Error("Ticket not found");
     const now = new Date();
+    if (ticket.status === "cancelled") {
+      await db
+        .update(schema.kdsTickets)
+        .set({ status: "completed", completedAt: now, updatedAt: now })
+        .where(eq(schema.kdsTickets.id, ticketId));
+      return { ok: true, ticketKey: ticket.ticketKey };
+    }
     await db
       .update(schema.kdsTicketItems)
       .set({ status: "ready", readyAt: now })
@@ -566,7 +575,7 @@ export class KdsService {
     return { ok: true };
   }
 
-  /** Remove pending KDS tickets when POS voids/cancels a kitchen order. */
+  /** Mark KDS tickets cancelled when POS voids/cancels a kitchen order. */
   static async dismissTicketsByKey(merchantId: string, ticketKey: string) {
     await requireAddon(merchantId);
     const raw = String(ticketKey || "").trim();
@@ -589,15 +598,15 @@ export class KdsService {
     });
     if (!matches.length) return { dismissed: 0 };
     const now = new Date();
+    const ids = matches.map((t) => t.id);
     await db
       .update(schema.kdsTickets)
-      .set({ status: "completed", completedAt: now, updatedAt: now })
-      .where(
-        inArray(
-          schema.kdsTickets.id,
-          matches.map((t) => t.id)
-        )
-      );
+      .set({ status: "cancelled", completedAt: now, updatedAt: now })
+      .where(inArray(schema.kdsTickets.id, ids));
+    await db
+      .update(schema.kdsTicketItems)
+      .set({ status: "cancelled", readyAt: null })
+      .where(inArray(schema.kdsTicketItems.ticketId, ids));
     return { dismissed: matches.length };
   }
 

@@ -60,6 +60,9 @@ const KDS_AUTO_COMPLETE_MS = 4000;
 function splitTicketForDisplay(row: KdsTicket): DisplayTicket | null {
   const allItems = row.items || [];
   if (!allItems.length) return null;
+  if (row.status === 'cancelled') {
+    return { ...row, allItems, viewMode: 'pending', items: allItems };
+  }
   const pendingItems = allItems.filter((i) => i.status !== 'ready');
   if (pendingItems.length) {
     return { ...row, allItems, viewMode: 'pending', items: pendingItems };
@@ -188,10 +191,11 @@ function TicketCard({
   const label = [ticket.orderNumber || ticket.ticketKey, ticket.tableLabel || ticket.tabNumber]
     .filter(Boolean)
     .join(' · ');
+  const isCancelled = ticket.status === 'cancelled';
   const isDone = ticket.status === 'completed' || tab === 'archived';
   const rows = groupItemsByCourse(ticket.items);
-  const border = kdsChannelBorderClass(ticket.channel);
-  const header = kdsChannelHeaderClass(ticket.channel);
+  const border = isCancelled ? 'border-red-600' : kdsChannelBorderClass(ticket.channel);
+  const header = isCancelled ? 'bg-red-700 text-white' : kdsChannelHeaderClass(ticket.channel);
   const arrivedMs = ticketArrivedMs(ticket);
   const ageSec = Math.max(0, Math.floor((nowMs - arrivedMs) / 1000));
   const isOverdue = !isDone && ageSec >= overdueMinutes * 60;
@@ -199,13 +203,21 @@ function TicketCard({
   return (
     <article
       className={`flex h-full min-h-0 flex-col rounded-2xl border-2 shadow-lg ${theme.card} ${border} ${
-        isOverdue ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-transparent' : ''
+        isCancelled
+          ? 'bg-red-950/30 ring-2 ring-red-500 ring-offset-2 ring-offset-transparent'
+          : isOverdue
+            ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-transparent'
+            : ''
       }`}
     >
       <div className={`rounded-t-[14px] px-4 py-3 ${header}`}>
         <div className="flex items-start justify-between gap-2">
-          <p className="text-lg font-bold min-w-0 truncate">{label || t('kdsTicket')}</p>
-          {!isDone ? (
+          <p
+            className={`text-lg font-bold min-w-0 truncate ${isCancelled ? 'line-through decoration-red-300 decoration-2' : ''}`}
+          >
+            {label || t('kdsTicket')}
+          </p>
+          {!isDone && !isCancelled ? (
             <span
               className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${
                 isOverdue ? 'bg-amber-500 text-black' : 'bg-black/25'
@@ -218,9 +230,15 @@ function TicketCard({
           ) : null}
         </div>
         <p className="text-xs opacity-90">
-          {kdsChannelLabel(ticket.channel)} · {ready}/{total} {t('kdsReadyShort')}
-          {isDone ? ` · ${t('kdsCompletedBadge')}` : ''}
-          {isOverdue ? ` · ${t('kdsOverdueBadge')}` : ''}
+          {isCancelled ? (
+            <span className="font-bold uppercase tracking-wide text-red-100">{t('kdsCancelledBadge')}</span>
+          ) : (
+            <>
+              {kdsChannelLabel(ticket.channel)} · {ready}/{total} {t('kdsReadyShort')}
+              {isDone ? ` · ${t('kdsCompletedBadge')}` : ''}
+              {isOverdue ? ` · ${t('kdsOverdueBadge')}` : ''}
+            </>
+          )}
         </p>
         {isDone && ticket.completedAt ? (
           <p className="mt-0.5 text-[10px] opacity-75">
@@ -271,21 +289,26 @@ function TicketCard({
             );
           }
           const item = row.item;
+          const itemCancelled = isCancelled || item.status === 'cancelled';
           return (
             <li key={item.id}>
               <button
                 type="button"
-                disabled={busyId === item.id}
+                disabled={busyId === item.id || itemCancelled}
                 onClick={() =>
                   void (isDone && item.status === 'ready'
                     ? onRecallItem(item.id)
-                    : item.status !== 'ready'
+                    : item.status !== 'ready' && !itemCancelled
                       ? onMarkReady(item.id)
                       : undefined)
                 }
                 title={isDone ? t('kdsRecallItemHint') : undefined}
                 className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${
-                  item.status === 'ready' ? theme.itemReady : theme.item
+                  itemCancelled
+                    ? 'border-red-500/50 bg-red-950/50 line-through opacity-90'
+                    : item.status === 'ready'
+                      ? theme.itemReady
+                      : theme.item
                 } ${theme.text}`}
               >
                 <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/20 text-sm font-bold">
@@ -294,7 +317,7 @@ function TicketCard({
                 <span className="min-w-0 flex-1">
                   <span
                     className={`block font-semibold leading-snug ${
-                      item.status === 'ready' ? 'line-through opacity-80' : ''
+                      itemCancelled || item.status === 'ready' ? 'line-through opacity-80' : ''
                     }`}
                   >
                     {item.name}
@@ -312,7 +335,16 @@ function TicketCard({
         })}
       </ul>
       <div className={`border-t p-3 ${shellTheme === 'light' ? 'border-stone-200' : 'border-black/20'}`}>
-        {isDone ? (
+        {isCancelled ? (
+          <button
+            type="button"
+            disabled={busyId === ticket.id}
+            onClick={() => void onComplete(ticket.id)}
+            className="w-full rounded-xl border border-red-400/60 bg-red-900/40 py-3 text-sm font-bold text-red-100 hover:bg-red-900/60 disabled:opacity-50"
+          >
+            {t('kdsDismissCancelled')}
+          </button>
+        ) : isDone ? (
           <button
             type="button"
             disabled={busyId === ticket.id}
@@ -422,6 +454,7 @@ export default function KdsDisplayPage() {
 
       if (!initialLoad.current) {
         for (const row of activeDisplay) {
+          if (row.status === 'cancelled') continue;
           if (!knownTicketIds.current.has(row.id)) {
             knownTicketIds.current.add(row.id);
             playKdsNewOrderOnce();
@@ -503,7 +536,11 @@ export default function KdsDisplayPage() {
   }, [nowMs, displayTickets, checkOverdue]);
 
   const pendingCount = useMemo(
-    () => fullTickets.reduce((n, tk) => n + tk.items.filter((i) => i.status !== 'ready').length, 0),
+    () =>
+      fullTickets.reduce((n, tk) => {
+        if (tk.status === 'cancelled') return n;
+        return n + tk.items.filter((i) => i.status !== 'ready' && i.status !== 'cancelled').length;
+      }, 0),
     [fullTickets]
   );
 
