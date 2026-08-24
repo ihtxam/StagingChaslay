@@ -293,7 +293,7 @@ export default function WebPosProductArea({
                   className="webpos-product-card group"
                 >
                   {showProductImages && imageSrc ? (
-                    <div className="mx-auto mt-1 h-12 w-12 overflow-hidden rounded-md bg-stone-100">
+                    <div className="aspect-square w-full shrink-0 overflow-hidden bg-stone-100">
                       <img
                         src={imageSrc}
                         alt=""
@@ -302,7 +302,11 @@ export default function WebPosProductArea({
                       />
                     </div>
                   ) : null}
-                  <div className="flex min-h-[4rem] flex-1 flex-col px-2 pt-2.5 pb-1">
+                  <div
+                    className={`flex flex-1 flex-col px-2 pb-1 ${
+                      showProductImages && imageSrc ? 'min-h-[2.75rem] pt-1.5' : 'min-h-[4rem] pt-2.5'
+                    }`}
+                  >
                     <span className="line-clamp-3 text-center text-sm font-medium leading-snug text-stone-800">
                       {p.name}
                     </span>
