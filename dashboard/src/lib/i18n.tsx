@@ -2149,6 +2149,8 @@ const en: Dict = {
     'When checked, completing a sale on this phone queues a receipt to the main till (if its auto-print is also on).',
   webPosAutoPrintKitchenHintRemote:
     'When checked, kitchen tickets are sent to the main till printer when you send or pay an order from this device.',
+  webPosAutoPrintKitchenHintMainTill:
+    'When unchecked, this till will not auto-print kitchen tickets (local sends or jobs relayed from phones).',
   webPosRefreshPrinters: 'Refresh printers',
   webPosReloadCatalog: 'Reload catalog',
   webPosPrintersRefreshed: 'Printers refreshed',
@@ -2261,6 +2263,8 @@ const en: Dict = {
   kdsRecallTicket: 'Recall to kitchen',
   kdsRecallItemHint: 'Tap to recall to preparation',
   kdsCompletedBadge: 'Completed',
+  kdsCancelledBadge: 'Cancelled',
+  kdsDismissCancelled: 'Dismiss cancelled order',
   kdsThemeLabel: 'Screen theme',
   kdsThemeHint: 'Background and text colors on the kitchen tablet.',
   kdsTheme_dark: 'Dark',
@@ -5296,6 +5300,8 @@ const fr: Dict = {
     'Si coché, encaisser sur ce téléphone envoie un reçu à la caisse principale (si son auto-impression est aussi activée).',
   webPosAutoPrintKitchenHintRemote:
     'Si coché, les tickets cuisine partent vers l\'imprimante de la caisse quand vous envoyez ou encaissez depuis cet appareil.',
+  webPosAutoPrintKitchenHintMainTill:
+    'Si décoché, cette caisse n\'imprime plus les tickets cuisine (envois locaux ou relais depuis les téléphones).',
   webPosRefreshPrinters: 'Actualiser les imprimantes',
   webPosReloadCatalog: 'Recharger le catalogue',
   webPosPrintersRefreshed: 'Imprimantes actualisées',
@@ -5410,6 +5416,8 @@ const fr: Dict = {
   kdsRecallTicket: 'Rappeler en cuisine',
   kdsRecallItemHint: 'Toucher pour renvoyer en préparation',
   kdsCompletedBadge: 'Terminé',
+  kdsCancelledBadge: 'Annulée',
+  kdsDismissCancelled: 'Retirer la commande annulée',
   kdsThemeLabel: 'Thème écran',
   kdsThemeHint: 'Couleurs de fond et de texte sur la tablette cuisine.',
   kdsTheme_dark: 'Sombre',
@@ -8411,6 +8419,8 @@ const de: Dict = {
     'Wenn aktiv, wird beim Abschluss auf diesem Handy ein Beleg an die Hauptkasse gesendet (wenn dort Auto-Druck ebenfalls an ist).',
   webPosAutoPrintKitchenHintRemote:
     'Wenn aktiv, gehen Küchentickets an den Hauptkassen-Drucker, wenn Sie von diesem Gerät senden oder abschließen.',
+  webPosAutoPrintKitchenHintMainTill:
+    'Wenn deaktiviert, druckt diese Kasse keine Küchentickets (lokal oder von Handys weitergeleitet).',
   webPosRefreshPrinters: 'Drucker aktualisieren',
   webPosReloadCatalog: 'Katalog neu laden',
   webPosPrintersRefreshed: 'Drucker aktualisiert',
@@ -8525,6 +8535,8 @@ const de: Dict = {
   kdsRecallTicket: 'Zurück in Küche',
   kdsRecallItemHint: 'Tippen, um erneut zuzubereiten',
   kdsCompletedBadge: 'Erledigt',
+  kdsCancelledBadge: 'Storniert',
+  kdsDismissCancelled: 'Stornierte Bestellung entfernen',
   kdsThemeLabel: 'Bildschirm-Design',
   kdsThemeHint: 'Hintergrund- und Textfarben auf dem Küchen-Tablet.',
   kdsTheme_dark: 'Dunkel',
