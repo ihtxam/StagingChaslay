@@ -300,6 +300,30 @@ data class CartItem(
         } else {
             (modifiers.map { it.name } + addons.map { it.name }).joinToString(", ")
         }
+
+    fun hasModifierPopupContent(): Boolean =
+        !isCombo && (modifiers.isNotEmpty() || addons.isNotEmpty() || variantName != null)
+
+    fun freeformNotes(): String? {
+        val generated = mutableSetOf<String>()
+        modifiers.forEach { generated.add("${it.quantity}x ${it.name}") }
+        addons.forEach { generated.add("${it.quantity}x ${it.name}") }
+        if (isCombo) {
+            generated.add(COMBO_NOTES_MARKER)
+            comboSelections.forEach { sel ->
+                val extraBits = sel.modifiers.map { it.name } + sel.extras.map { it.name }
+                generated.add(
+                    if (extraBits.isEmpty()) "${sel.slotName}: ${sel.productName}"
+                    else "${sel.slotName}: ${sel.productName} (${extraBits.joinToString(", ")})"
+                )
+            }
+        }
+        return notes?.lines()
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() && it !in generated }
+            ?.joinToString("\n")
+            ?.ifBlank { null }
+    }
 }
 
 data class CartSummary(

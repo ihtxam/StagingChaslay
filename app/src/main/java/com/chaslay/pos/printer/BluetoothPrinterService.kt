@@ -983,12 +983,12 @@ class BluetoothPrinterService @Inject constructor(
                 )
             }
             ReceiptVatCalculator.modifierSummary(item)?.let { mods ->
-                sb.appendLine("  ($mods)")
+                appendReceiptExtraLine(sb, "  ($mods)", settings)
             }
             item.notes?.lines()?.filter { line ->
                 !Regex("^\\d+x\\s+").containsMatchIn(line.trim())
             }?.map { it.trim() }?.filter { it.isNotBlank() }?.forEach { note ->
-                sb.appendLine("  ${labels.note} $note")
+                appendReceiptExtraLine(sb, "  ${labels.note} $note", settings)
             }
         }
 
@@ -1116,7 +1116,7 @@ class BluetoothPrinterService @Inject constructor(
                 )
             }
             ReceiptVatCalculator.modifierSummaryFromNotes(item.notes)?.let { mods ->
-                sb.appendLine("  ($mods)")
+                appendReceiptExtraLine(sb, "  ($mods)", settings)
             }
         }
 
@@ -1918,32 +1918,60 @@ class BluetoothPrinterService @Inject constructor(
         sb.append(escAlignLeft())
         val itemScale = effectiveKitchenItemScale(settings)
         val wrapped = wrapText(line, lineWidth)
-        if (itemScale > 1) {
-            wrapped.forEach { row ->
-                sb.append(escKitchenSize(itemScale, bold = true))
-                sb.appendLine(row)
-                sb.append(escKitchenSizeReset())
-            }
-        } else {
-            wrapped.forEach { row -> sb.appendLine(row) }
+        wrapped.forEach { row ->
+            appendKitchenScaledLine(sb, row, itemScale, bold = true)
         }
-        appendKitchenNotes(sb, item.notes)
+        appendKitchenNotes(sb, item.notes, settings)
     }
 
-    private fun appendKitchenNotes(sb: StringBuilder, notes: String?) {
-        if (notes.isNullOrBlank()) return
+    private fun kitchenExtraNoteLines(notes: String?): List<String> {
+        if (notes.isNullOrBlank()) return emptyList()
         val lines = notes.lines().map { it.trim() }.filter { it.isNotBlank() }
         val startIndex = if (lines.firstOrNull() == com.chaslay.pos.domain.model.COMBO_NOTES_MARKER) 1 else 0
-        lines.drop(startIndex).forEach { noteLine ->
-            if (isKitchenDiscountNote(noteLine)) return@forEach
-            if (kitchenQtyLine.containsMatchIn(noteLine)) {
-                sb.appendLine("  $noteLine")
-            } else if (noteLine.contains(":")) {
-                sb.appendLine("  $noteLine")
-            } else {
-                sb.appendLine("  Note: $noteLine")
+        return lines.drop(startIndex).filterNot { isKitchenDiscountNote(it) }
+    }
+
+    private fun appendKitchenNotes(
+        sb: StringBuilder,
+        notes: String?,
+        settings: BusinessSettingsEntity
+    ) {
+        val extraLines = kitchenExtraNoteLines(notes)
+        if (extraLines.isEmpty()) return
+        val itemScale = effectiveKitchenItemScale(settings)
+        sb.appendLine()
+        extraLines.forEach { noteLine ->
+            val formatted = when {
+                kitchenQtyLine.containsMatchIn(noteLine) -> "  $noteLine"
+                noteLine.contains(":") -> "  $noteLine"
+                else -> "  Note: $noteLine"
             }
+            appendKitchenScaledLine(sb, formatted, itemScale, bold = false)
         }
+    }
+
+    private fun appendKitchenScaledLine(
+        sb: StringBuilder,
+        text: String,
+        scale: Int,
+        bold: Boolean
+    ) {
+        if (scale > 1) {
+            sb.append(escKitchenSize(scale, bold = bold))
+            sb.appendLine(text)
+            sb.append(escKitchenSizeReset())
+        } else {
+            sb.appendLine(text)
+        }
+    }
+
+    private fun appendReceiptExtraLine(
+        sb: StringBuilder,
+        text: String,
+        settings: BusinessSettingsEntity
+    ) {
+        val scale = effectiveKitchenItemScale(settings)
+        appendKitchenScaledLine(sb, text, scale, bold = false)
     }
 
     private fun isKitchenDiscountNote(line: String): Boolean =

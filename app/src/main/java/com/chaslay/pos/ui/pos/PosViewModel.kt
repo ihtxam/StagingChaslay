@@ -1371,6 +1371,13 @@ class PosViewModel @Inject constructor(
             val product = productRepository.getProductWithVariants(item.productId) ?: return@launch
             val modifierGroups = menuRepository.getModifierGroupsForProduct(product.id)
             val addonGroups = menuRepository.getAddonGroupsForProduct(product.id)
+            updateExtras {
+                it.copy(
+                    selectedCartItemId = null,
+                    keypadExpanded = false,
+                    keypadBuffer = ""
+                )
+            }
             _productCustomize.value = ProductCustomizeState(
                 product = product,
                 modifierGroups = modifierGroups,
@@ -1380,7 +1387,8 @@ class PosViewModel @Inject constructor(
                 initialQuantity = item.quantity,
                 initialVariantName = item.variantName,
                 initialModifiers = item.modifiers,
-                initialAddons = item.addons
+                initialAddons = item.addons,
+                initialNotes = item.freeformNotes()
             )
         }
     }

@@ -2417,7 +2417,10 @@ private fun VectronCartRow(
             .background(rowBg)
             .pointerInput(item.id, editable) {
                 detectTapGestures(
-                    onTap = { if (editable) onSelect() },
+                    onTap = {
+                        if (!editable) return@detectTapGestures
+                        if (item.hasModifierPopupContent()) onEdit() else onSelect()
+                    },
                     onDoubleTap = { if (editable) onDoubleTap() },
                     onLongPress = { if (editable) onEdit() }
                 )

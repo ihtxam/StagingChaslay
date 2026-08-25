@@ -92,8 +92,8 @@ fun ProductCustomizeDialog(
         )
     }
     var itemQty by remember(editKey) { mutableIntStateOf(state.initialQuantity.coerceAtLeast(1)) }
-    var userNotes by remember(editKey) { mutableStateOf("") }
-    var showNotes by remember { mutableStateOf(false) }
+    var userNotes by remember(editKey) { mutableStateOf(state.initialNotes.orEmpty()) }
+    var showNotes by remember(editKey) { mutableStateOf(!state.initialNotes.isNullOrBlank()) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val modifierQty = remember(editKey) {
         mutableStateMapOf<Long, Int>().apply {
@@ -203,20 +203,15 @@ fun ProductCustomizeDialog(
                     }
                 }
 
-                Row(
+                Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        if (product.variants.isNotEmpty()) {
+                    if (product.variants.isNotEmpty()) {
                             OptionGroupSection(
                                 title = stringResource(R.string.specification),
                                 subtitle = stringResource(R.string.choose_one)
@@ -311,77 +306,106 @@ fun ProductCustomizeDialog(
                                 null -> Unit
                             }
                         }
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .width(132.dp)
-                            .fillMaxHeight()
-                            .background(Color(0xFF252525))
-                            .padding(horizontal = 10.dp, vertical = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        TextButton(
-                            onClick = { showNotes = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF80CBC4), modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                if (userNotes.isBlank()) stringResource(R.string.add_notes) else stringResource(R.string.edit_notes),
-                                color = Color(0xFF80CBC4),
-                                fontSize = 12.sp,
-                                maxLines = 1
-                            )
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
-                        Box(
-                            modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF00897B))
-                                .clickable { itemQty++ },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
-                        }
-                        Text(
-                            itemQty.toString(),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 28.sp,
-                            modifier = Modifier.padding(vertical = 10.dp)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF424242))
-                                .clickable { if (itemQty > 1) itemQty-- },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Remove, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
-                        Text(
-                            "$currencySymbol ${"%.2f".format(Locale.getDefault(), lineTotal)}",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    }
                 }
 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(Color(0xFF2A2A2A))
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     errorMessage?.let { msg ->
-                        Text(msg, color = Color(0xFFE57373), fontSize = 12.sp)
+                        Text(
+                            msg,
+                            color = Color(0xFFE57373),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        )
+                    }
+
+                    if (showNotes) {
+                        OutlinedTextField(
+                            value = userNotes,
+                            onValueChange = { userNotes = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp),
+                            minLines = 2,
+                            placeholder = { Text(stringResource(R.string.item_notes)) },
+                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                cursorColor = Color(0xFF80CBC4),
+                                focusedBorderColor = Color(0xFF0D9488),
+                                unfocusedBorderColor = Color(0xFF555555)
+                            )
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { showNotes = !showNotes },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = if (showNotes || userNotes.isNotBlank()) {
+                                    Color(0xFF80CBC4)
+                                } else {
+                                    Color(0xFFB0BEC5)
+                                }
+                            )
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                if (userNotes.isBlank()) stringResource(R.string.add_notes) else stringResource(R.string.edit_notes),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .border(1.dp, Color(0xFF555555), RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF333333))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clickable(enabled = itemQty > 1) { if (itemQty > 1) itemQty-- },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Remove,
+                                    contentDescription = null,
+                                    tint = if (itemQty > 1) Color.White else Color(0xFF666666),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Text(
+                                itemQty.toString(),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                modifier = Modifier.width(40.dp),
+                                textAlign = TextAlign.Center
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clickable { itemQty++ },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
+                        }
                     }
 
                     Button(
@@ -390,13 +414,19 @@ fun ProductCustomizeDialog(
                             .fillMaxWidth()
                             .height(50.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B)),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(0.dp)
                     ) {
                         Text(
-                            if (isEditing) {
-                                stringResource(R.string.save).uppercase()
-                            } else {
-                                stringResource(R.string.add_to_cart).uppercase()
+                            buildString {
+                                append(
+                                    if (isEditing) {
+                                        stringResource(R.string.save).uppercase()
+                                    } else {
+                                        stringResource(R.string.add_to_cart).uppercase()
+                                    }
+                                )
+                                append(" · ")
+                                append("$currencySymbol ${"%.2f".format(Locale.getDefault(), lineTotal)}")
                             },
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
@@ -406,24 +436,6 @@ fun ProductCustomizeDialog(
                 }
             }
         }
-    }
-
-    if (showNotes) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { showNotes = false },
-            title = { Text(stringResource(R.string.item_notes)) },
-            text = {
-                OutlinedTextField(
-                    value = userNotes,
-                    onValueChange = { userNotes = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showNotes = false }) { Text(stringResource(R.string.save)) }
-            }
-        )
     }
 }
 
