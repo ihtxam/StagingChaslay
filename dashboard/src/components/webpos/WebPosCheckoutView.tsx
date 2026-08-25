@@ -85,6 +85,17 @@ function newPayId() {
   return `pay-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/** Tenders that mirror amount due (tip/discount resize). Gift card redemption is a fixed amount. */
+function isAutoCoveringTender(method: PosPaymentMethod): boolean {
+  return (
+    method === 'cash' ||
+    method === 'card' ||
+    method === 'terminal' ||
+    method === 'pay_later' ||
+    method === 'invoice'
+  );
+}
+
 export default function WebPosCheckoutView({
   total: baseTotal,
   splitLabel,
@@ -232,8 +243,12 @@ export default function WebPosCheckoutView({
     setPayments((prev) => {
       if (!prev.length) return prev;
       const paidSum = roundMoney2(prev.reduce((s, p) => s + p.amount, 0));
+      const hasFixedTender = prev.some((p) => !isAutoCoveringTender(p.method));
 
-      // Payments exactly covered the previous amount due → resize with tip.
+      // Gift card (etc.) already applied — tip increases remaining, not redemption amount.
+      if (hasFixedTender) return prev;
+
+      // Payments exactly covered the previous amount due → resize auto-covering tenders with tip.
       if (Math.abs(paidSum - prevTotal) < 0.051) {
         if (prev.length === 1) {
           return [{ ...prev[0]!, amount: total }];
@@ -242,6 +257,7 @@ export default function WebPosCheckoutView({
         let left = delta;
         for (let i = next.length - 1; i >= 0 && Math.abs(left) > 0.001; i--) {
           const row = next[i]!;
+          if (!isAutoCoveringTender(row.method)) continue;
           const newAmt = roundMoney2(row.amount + left);
           if (newAmt > 0.001) {
             next[i] = { ...row, amount: newAmt };
@@ -254,9 +270,10 @@ export default function WebPosCheckoutView({
         return next.length ? next : prev;
       }
 
-      // Single tender that still tracked base / previous due.
+      // Single auto-covering tender that still tracked base / previous due.
       if (prev.length === 1) {
         const only = prev[0]!;
+        if (!isAutoCoveringTender(only.method)) return prev;
         const coversBaseOrPrev =
           Math.abs(only.amount - roundMoney2(baseTotal)) < 0.011 ||
           Math.abs(only.amount - prevTotal) < 0.011;
@@ -277,6 +294,7 @@ export default function WebPosCheckoutView({
     setPayments((prev) => {
       if (prev.length !== 1) return prev;
       const only = prev[0]!;
+      if (!isAutoCoveringTender(only.method)) return prev;
       const paidSum = roundMoney2(prev.reduce((s, p) => s + p.amount, 0));
       const coveredBefore =
         Math.abs(paidSum - roundMoney2(total + billDiscountAmount - prevDisc)) < 0.051 ||
