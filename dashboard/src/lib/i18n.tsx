@@ -2579,6 +2579,8 @@ const en: Dict = {
     'Use Fullscreen here, browser F11, or install ChaslayReborn as an app (PWA) for a kiosk-like screen. After leaving fullscreen, open the menu and tap Fullscreen again.',
   webPosEodWhenShiftsOff:
     'Cash shifts are off. Use this for the daily report (late-night venues).',
+  webPosEodMenuHint:
+    'Print today’s sales report. Staff without “View all sales” only see their own sales.',
   webPosShiftCloseTitle: 'Close shift',
   webPosShiftCloseHint: 'Review cash sales and count the drawer before closing.',
   webPosShiftCashSales: 'Cash sales',
@@ -5702,6 +5704,8 @@ const fr: Dict = {
     'Utilisez Plein écran ici, F11 du navigateur, ou installez ChaslayReborn en application (PWA). Après avoir quitté le plein écran, rouvrez le menu et tapez Plein écran.',
   webPosEodWhenShiftsOff:
     'Shifts désactivés. Utilisez ceci pour le rapport du jour (service tardif).',
+  webPosEodMenuHint:
+    'Imprimer le rapport du jour. Sans « Voir toutes les ventes », seules vos ventes apparaissent.',
   webPosShiftCloseTitle: 'Clôturer le shift',
   webPosShiftCloseHint: 'Vérifiez les ventes espèces et comptez la caisse avant de clôturer.',
   webPosShiftCashSales: 'Ventes espèces',
@@ -8832,6 +8836,8 @@ const de: Dict = {
     'Vollbild hier, Browser-F11 oder ChaslayReborn als App (PWA) installieren. Nach Verlassen des Vollbilds: Menü öffnen und erneut Vollbild tippen.',
   webPosEodWhenShiftsOff:
     'Schichten aus. Für den Tagesbericht nutzen (Spätbetrieb).',
+  webPosEodMenuHint:
+    'Tagesbericht drucken. Ohne „Alle Verkäufe“ nur die eigenen Verkäufe.',
   webPosShiftCloseTitle: 'Schicht schliessen',
   webPosShiftCloseHint: 'Barverkäufe prüfen und Kasse zählen vor dem Schliessen.',
   webPosShiftCashSales: 'Barverkäufe',

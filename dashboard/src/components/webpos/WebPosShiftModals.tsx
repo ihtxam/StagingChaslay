@@ -444,7 +444,7 @@ export function WebPosShiftClosedModal({
 }: {
   open: boolean;
   balanced: boolean;
-  /** Whole-day EOD — managers with View all sales + EOD permission only. */
+  /** EOD after shift close — own sales or whole day depending on permissions. */
   showEodPrint?: boolean;
   onPrintShift: (opts: { includeProductsSold: boolean }) => void;
   onPrintEod: (opts: { includeProductsSold: boolean }) => void;

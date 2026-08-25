@@ -894,7 +894,7 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {!shiftsEnabled && showEodButton ? (
+      {showEodButton ? (
         <div className="space-y-2 border-b border-stone-100 pb-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
             {t('webPosEodReport')}
@@ -906,7 +906,7 @@ export function WebPosSettingsDropdown({
           >
             {t('webPosEodPrint')}
           </button>
-          <p className="text-[10px] text-stone-500">{t('webPosEodWhenShiftsOff')}</p>
+          <p className="text-[10px] text-stone-500">{t('webPosEodMenuHint')}</p>
         </div>
       ) : null}
 

@@ -7800,8 +7800,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !staffConfigured ||
     (!!webposStaff && hasPermission(staffPerms, 'VIEW_ALL_SALES', false));
   /** Whole-day EOD: report permission + company-wide sales visibility. */
-  const canPrintDayEod = mayPrintWholeDayEod;
-  const showEodButton = !shiftsEnabled && canPrintEodReport;
+  const showEodButton = canPrintEodReport;
+
+  const printEodAfterShiftClose = async (opts?: { includeProductsSold?: boolean }) => {
+    if (mayPrintWholeDayEod) {
+      await printDayEodFromShiftClose(opts);
+      return;
+    }
+    await printTodayEod(undefined, undefined, opts);
+  };
 
   const openEodPrint = () => {
     setSettingsOpen(false);
@@ -10038,9 +10045,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       <WebPosShiftClosedModal
         open={shiftClosedOpen}
         balanced={shiftBalanced}
-        showEodPrint={canPrintDayEod}
+        showEodPrint={canPrintEodReport}
         onPrintShift={(opts) => void printShiftReport(opts)}
-        onPrintEod={(opts) => void printDayEodFromShiftClose(opts)}
+        onPrintEod={(opts) => void printEodAfterShiftClose(opts)}
         onRestart={handleRestartShift}
         onStay={() => setShiftClosedOpen(false)}
         onLogout={handleStaffLogoutFromShiftClosed}
