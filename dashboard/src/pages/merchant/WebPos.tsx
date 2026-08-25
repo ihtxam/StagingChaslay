@@ -8287,6 +8287,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return [];
   }, [printerMissing, printerName, printers, configuredPrinterNames]);
 
+  const notificationOrders = useMemo(
+    () => onlineOrders.filter((o) => unactionedOrderIdsRef.current.has(o.id)),
+    [onlineOrders, unactionedOrderCount]
+  );
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
@@ -8380,10 +8385,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     (reservationsPosUiEnabled ? reservationPendingCount : 0);
   const orderAlertRing = unactionedOrderCount > 0;
   const reservationAlertRing = reservationAlertUntil > Date.now();
-  const notificationOrders = useMemo(
-    () => onlineOrders.filter((o) => unactionedOrderIdsRef.current.has(o.id)),
-    [onlineOrders, unactionedOrderCount]
-  );
   const currentNewOrderAlert = newOrderAlertQueue[0] ?? null;
   const newOrderAlertAcknowledgeOnly =
     deliveryAutoAccept &&
