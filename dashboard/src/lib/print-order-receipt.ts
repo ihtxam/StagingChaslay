@@ -1,6 +1,5 @@
 import { APP_NAME } from '@/lib/brand';
 import {
-  browserPrintText,
   isPrintAgentAvailable,
   isUnsuitableRawPrinter,
   unsuitableRawPrinterMessage,
@@ -45,6 +44,7 @@ async function printReceiptText(
     qrUrl?: string;
     deliveryQrUrl?: string;
     logoUrl?: string | null;
+    locale?: string;
   }
 ): Promise<void> {
   const targets = printersForRole(opts.printSettings, 'receipt');
@@ -54,13 +54,13 @@ async function printReceiptText(
       : [opts.fallbackPrinterName || localStorage.getItem('manupos_webpos_printer') || ''];
   const named = names.map((n) => (n || '').trim()).filter(Boolean);
   if (named.length > 0 && named.every((n) => isUnsuitableRawPrinter(n))) {
-    browserPrintText(text);
-    return;
+    throw new Error(
+      unsuitableRawPrinterMessage(named[0] || '') || 'Receipt printer is not suitable for thermal print'
+    );
   }
   const agentOk = await isPrintAgentAvailable();
   if (!agentOk && named.length === 0) {
-    browserPrintText(text);
-    return;
+    throw new Error('Print agent is not running and no receipt printer is configured');
   }
   const paper = targets[0]?.paperWidthMm || opts.printSettings?.paperWidthMm || 80;
   const lang = resolveReceiptLanguage(opts.printSettings, opts.locale);
@@ -81,16 +81,7 @@ async function printReceiptText(
     if (label && isUnsuitableRawPrinter(label)) {
       throw new Error(unsuitableRawPrinterMessage(label));
     }
-    try {
-      await printViaAgentOrQueue({ printerName: label || undefined, dataBase64, text });
-    } catch (err: unknown) {
-      const msg = String((err as Error)?.message || '');
-      if (/OneNote|PDF|XPS|ESC-POS|virtual|receipt\/ESC-POS|corrupted|agent|offline/i.test(msg)) {
-        browserPrintText(text);
-        return;
-      }
-      throw err;
-    }
+    await printViaAgentOrQueue({ printerName: label || undefined, dataBase64, text });
   }
 }
 
@@ -129,6 +120,7 @@ export async function printMerchantOrderReceipt(
   await printReceiptText(text, {
     printSettings: opts.printSettings,
     fallbackPrinterName: opts.fallbackPrinterName,
+    locale: opts.locale,
     qrUrl:
       opts.printSettings?.receiptShowQrCode !== false ? receiptPayload.receiptUrl : undefined,
     deliveryQrUrl: deliveryDirectionsUrlForReceipt(receiptPayload),
@@ -162,6 +154,7 @@ export async function printRefundReceipt(
   await printReceiptText(text, {
     printSettings: opts.printSettings,
     fallbackPrinterName: opts.fallbackPrinterName,
+    locale: opts.locale,
     logoUrl: opts.printSettings?.receiptLogoUrl || opts.merchant.shopLogoUrl || null,
   });
 }

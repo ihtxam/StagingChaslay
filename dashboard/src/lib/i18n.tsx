@@ -1519,6 +1519,10 @@ const en: Dict = {
   webPosRefundConfirm: 'Refund {amount}?',
   webPosOrderCancelled: 'Order cancelled',
   webPosOrderRefunded: 'Order refunded',
+  webPosRefundPrintPromptTitle: 'Print refund receipt?',
+  webPosRefundPrintPromptBody:
+    'Print a thermal receipt as proof of this refund for the customer?',
+  webPosRefundPrintPromptAmount: 'Refunded: CHF {amount}',
   webPosCancelFailed: 'Cancel failed',
   webPosRefundFailed: 'Refund failed',
   webPosOrdersLoadFailed: 'Failed to load orders',
@@ -4684,6 +4688,10 @@ const fr: Dict = {
   webPosRefundConfirm: 'Rembourser {amount} ?',
   webPosOrderCancelled: 'Commande annulée',
   webPosOrderRefunded: 'Commande remboursée',
+  webPosRefundPrintPromptTitle: 'Imprimer le reçu de remboursement ?',
+  webPosRefundPrintPromptBody:
+    'Imprimer un reçu thermique comme preuve de ce remboursement pour le client ?',
+  webPosRefundPrintPromptAmount: 'Remboursé : CHF {amount}',
   webPosCancelFailed: 'Échec de l’annulation',
   webPosRefundFailed: 'Échec du remboursement',
   webPosOrdersLoadFailed: 'Échec du chargement des commandes',
@@ -7816,6 +7824,10 @@ const de: Dict = {
   webPosRefundConfirm: '{amount} erstatten?',
   webPosOrderCancelled: 'Bestellung storniert',
   webPosOrderRefunded: 'Bestellung erstattet',
+  webPosRefundPrintPromptTitle: 'Erstattungsbeleg drucken?',
+  webPosRefundPrintPromptBody:
+    'Einen Thermobeleg als Nachweis für diese Erstattung für den Gast drucken?',
+  webPosRefundPrintPromptAmount: 'Erstattet: CHF {amount}',
   webPosCancelFailed: 'Storno fehlgeschlagen',
   webPosRefundFailed: 'Erstattung fehlgeschlagen',
   webPosOrdersLoadFailed: 'Bestellungen konnten nicht geladen werden',

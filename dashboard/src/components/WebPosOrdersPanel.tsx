@@ -72,6 +72,7 @@ import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
   type RefundReasonOption,
 } from '@/components/webpos/WebPosRefundModal';
+import WebPosRefundPrintPromptModal from '@/components/webpos/WebPosRefundPrintPromptModal';
 import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
@@ -481,6 +482,14 @@ export default function WebPosOrdersPanel({
   const [cancelFor, setCancelFor] = useState<PosOrder | null>(null);
   const [cancelHeldFor, setCancelHeldFor] = useState<HeldRow | null>(null);
   const [refundFor, setRefundFor] = useState<PosOrder | null>(null);
+  const [refundPrintPrompt, setRefundPrintPrompt] = useState<{
+    order: PosOrder;
+    refunded: number;
+    refundTotal: number;
+    reason: string;
+    allocation?: { giftCard?: number; cash?: number; terminal?: number; other?: number };
+  } | null>(null);
+  const [refundPrintBusy, setRefundPrintBusy] = useState(false);
   const [paymentEditFor, setPaymentEditFor] = useState<PosOrder | null>(null);
   const [collectFor, setCollectFor] = useState<PosOrder | null>(null);
   const [collectBusy, setCollectBusy] = useState(false);
@@ -830,34 +839,31 @@ export default function WebPosOrdersPanel({
     goodwillMethod?: 'cash' | 'terminal';
   }) => {
     if (!refundFor) return;
+    const orderSnapshot = refundFor;
     setRefundBusy(true);
     try {
       if (payload.refundKind === 'goodwill') {
-        await api.post(`/merchant/pos/orders/${refundFor.id}/goodwill`, {
+        await api.post(`/merchant/pos/orders/${orderSnapshot.id}/goodwill`, {
           amount: payload.goodwillAmount,
           reason: payload.reason,
           method: payload.goodwillMethod || 'cash',
         });
         toast.success(t('webPosGoodwillSubmitted'));
       } else {
-        const res = await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
+        const res = await api.post(`/merchant/pos/orders/${orderSnapshot.id}/refund`, {
           reason: payload.reason,
           fullTicket: payload.mode === 'full',
           items: payload.mode === 'items' ? payload.items : undefined,
         });
         toast.success(t('webPosOrderRefunded'));
         if (onPrintRefund && res.data) {
-          try {
-            await onPrintRefund({
-              order: refundFor,
-              refunded: Number(res.data.refunded || 0),
-              refundTotal: Number(res.data.refundTotal || 0),
-              reason: payload.reason,
-              allocation: res.data.allocation,
-            });
-          } catch {
-            /* print is best-effort */
-          }
+          setRefundPrintPrompt({
+            order: orderSnapshot,
+            refunded: Number(res.data.refunded || 0),
+            refundTotal: Number(res.data.refundTotal || 0),
+            reason: payload.reason,
+            allocation: res.data.allocation,
+          });
         }
       }
       setRefundFor(null);
@@ -2275,6 +2281,27 @@ export default function WebPosOrdersPanel({
         terminalEnabled={terminalEnabled}
         onClose={() => setRefundFor(null)}
         onConfirm={(payload) => void doRefund(payload)}
+      />
+      <WebPosRefundPrintPromptModal
+        open={!!refundPrintPrompt}
+        amount={refundPrintPrompt?.refunded}
+        busy={refundPrintBusy}
+        onSkip={() => setRefundPrintPrompt(null)}
+        onPrint={() => {
+          if (!refundPrintPrompt || !onPrintRefund) {
+            setRefundPrintPrompt(null);
+            return;
+          }
+          setRefundPrintBusy(true);
+          void onPrintRefund(refundPrintPrompt)
+            .catch(() => {
+              toast.error(t('webPosPrintFailed'));
+            })
+            .finally(() => {
+              setRefundPrintBusy(false);
+              setRefundPrintPrompt(null);
+            });
+        }}
       />
       <SalesAdjustmentModal
         open={salesAdjOpen}

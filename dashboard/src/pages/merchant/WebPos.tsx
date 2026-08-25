@@ -21,6 +21,7 @@ import {
   generateKitchenMessageTicketText,
   resolveKitchenPaperWidthMm,
   generateWebPosReceiptText,
+  generateRefundReceiptText,
   generateGiftCardSaleReceiptText,
   giftCardSaleReceiptEscPos,
   computeGiftCardSaleVat,
@@ -311,7 +312,7 @@ import {
   EodIncludeProductsCheckbox,
   useEodIncludeProductsSold,
 } from '@/components/EodIncludeProductsCheckbox';
-import { printRefundReceipt } from '@/lib/print-order-receipt';
+import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
 import WebPosCartPanel from '@/components/webpos/WebPosCartPanel';
 import WebPosProductArea, {
   type ProductGridSort,
@@ -6655,7 +6656,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     reason: string;
     allocation?: { giftCard?: number; cash?: number; terminal?: number; other?: number };
   }) => {
-    await printRefundReceipt(
+    const lang = resolveReceiptLanguage(printSettings, locale);
+    const text = generateRefundReceiptText(
       {
         businessName: merchant?.name || APP_NAME,
         address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
@@ -6668,9 +6670,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         reason: payload.reason,
         allocation: payload.allocation,
         staffName: payload.order.staffName,
+        language: lang,
+        paperWidthMm: printSettings?.paperWidthMm || 80,
+        header: printSettings?.receiptHeader,
+        footer: printSettings?.receiptFooter,
       },
-      { merchant: merchant || {}, printSettings, locale, fallbackPrinterName: printerName }
+      locale
     );
+    await printEscPosToTargets(text, { role: 'receipt' });
   };
 
   const printKitchenForCart = async (
