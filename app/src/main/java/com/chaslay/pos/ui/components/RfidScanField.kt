@@ -51,7 +51,7 @@ fun RfidScanField(
     val keyHandler = Modifier
         .focusRequester(focusRequester)
         .onPreviewKeyEvent { event ->
-            if (event.key == Key.Enter) {
+            if (event.key == Key.Enter || event.key == Key.Tab) {
                 val scanned = (buffer.ifBlank { value }).trim()
                 if (scanned.isNotEmpty()) {
                     onValueChange(scanned)
@@ -68,12 +68,16 @@ fun RfidScanField(
         val now = System.currentTimeMillis()
         val gap = now - lastKeyAt
         lastKeyAt = now
-        val wedge = gap < SCAN_GAP_MS || buffer.isNotEmpty()
-        if (wedge) {
+        if (buffer.isEmpty() && value.isEmpty() && newValue.isNotEmpty()) {
             buffer = newValue
         } else {
-            onValueChange(newValue)
-            buffer = ""
+            val wedge = gap < SCAN_GAP_MS || buffer.isNotEmpty()
+            if (wedge) {
+                buffer = newValue
+            } else {
+                onValueChange(newValue)
+                buffer = ""
+            }
         }
     }
 

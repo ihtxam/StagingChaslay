@@ -209,6 +209,8 @@ fun PosScreen(
         !showBarcodeScanner &&
             !state.showOrderComplete &&
             !state.showMembershipDialog &&
+            !state.showMembershipSellDialog &&
+            !state.showGiftCardOpsMenu &&
             !state.showGiftCardOpsDialog &&
             !state.showGiftCardPayDialog
 

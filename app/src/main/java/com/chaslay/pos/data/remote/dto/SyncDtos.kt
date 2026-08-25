@@ -371,7 +371,9 @@ data class SyncStaffProfileDto(
     val name: String,
     val roleId: String,
     val roleName: String,
-    val permissions: List<String> = emptyList()
+    val permissions: List<String> = emptyList(),
+  /** JWT for dashboard / gift-card APIs (returned by verify-pin). */
+    val accessToken: String? = null
 )
 
 data class PushCatalogCategoryDto(

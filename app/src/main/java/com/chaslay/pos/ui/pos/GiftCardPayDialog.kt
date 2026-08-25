@@ -103,7 +103,7 @@ fun GiftCardPayDialog(
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = { onLookup(code, media ?: "physical") },
-                        enabled = !busy && code.trim().isNotEmpty(),
+                        enabled = !busy && code.trim().length >= 4,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(stringResource(R.string.membership_lookup))
@@ -124,7 +124,8 @@ fun GiftCardPayDialog(
                     lookedUpCard?.let { card ->
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            card.displayName ?: card.cardNumber.orEmpty(),
+                            card.cardNumber?.takeIf { it.isNotBlank() }
+                                ?: card.displayName.orEmpty(),
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(

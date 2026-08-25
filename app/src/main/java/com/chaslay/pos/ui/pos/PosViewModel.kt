@@ -1217,12 +1217,23 @@ class PosViewModel @Inject constructor(
         !syncPreferences.getDashboardToken().isNullOrBlank()
 
     private suspend fun ensureCloudGiftCardSession(): Boolean {
-        if (hasCloudGiftCardSession()) return true
-        updateExtras {
-            it.copy(snackbarMessage = appContext.getString(R.string.gift_card_cloud_login_required))
+        if (!hasCloudGiftCardSession()) {
+            updateExtras {
+                it.copy(snackbarMessage = appContext.getString(R.string.gift_card_cloud_login_required))
+            }
+            return false
         }
-        return false
+        return true
     }
+
+    private suspend fun clearStaleDashboardTokenIfAuthError(error: Throwable?) {
+        if (error != null && isGiftCardAuthError(error)) {
+            syncPreferences.setDashboardToken(null)
+        }
+    }
+
+    private fun cloudGiftCardLoginMessage(): String =
+        appContext.getString(R.string.gift_card_cloud_login_required)
 
     private fun isGiftCardAuthError(error: Throwable): Boolean {
         if (error is IllegalArgumentException &&
@@ -2914,12 +2925,17 @@ class PosViewModel @Inject constructor(
                 .onSuccess { settings ->
                     updateExtras { it.copy(giftCardSettings = settings, showGiftCardOpsMenu = true) }
                 }
-                .onFailure {
-                    updateExtras {
-                        it.copy(
-                            giftCardSettings = resolveGiftCardSettings(),
-                            showGiftCardOpsMenu = true
-                        )
+                .onFailure { e ->
+                    clearStaleDashboardTokenIfAuthError(e)
+                    if (isGiftCardAuthError(e)) {
+                        updateExtras { it.copy(snackbarMessage = cloudGiftCardLoginMessage()) }
+                    } else {
+                        updateExtras {
+                            it.copy(
+                                giftCardSettings = resolveGiftCardSettings(),
+                                showGiftCardOpsMenu = true
+                            )
+                        }
                     }
                 }
         }
@@ -3048,8 +3064,19 @@ class PosViewModel @Inject constructor(
                     it.copy(giftCardSettings = settings, giftCardOpsBusy = false)
                 }
             }
-            .onFailure {
-                updateExtras { it.copy(giftCardOpsBusy = false) }
+            .onFailure { e ->
+                clearStaleDashboardTokenIfAuthError(e)
+                if (isGiftCardAuthError(e)) {
+                    updateExtras {
+                        it.copy(
+                            showGiftCardOpsDialog = false,
+                            giftCardOpsBusy = false,
+                            snackbarMessage = cloudGiftCardLoginMessage()
+                        )
+                    }
+                } else {
+                    updateExtras { it.copy(giftCardOpsBusy = false) }
+                }
             }
     }
 
@@ -3101,9 +3128,11 @@ class PosViewModel @Inject constructor(
     }
 
     fun lookupGiftCardForPay(code: String, mediaType: String) {
+        val trimmed = code.trim()
+        if (trimmed.length < 4) return
         viewModelScope.launch {
             updateExtras { it.copy(giftCardPayBusy = true, giftCardPayError = null) }
-            giftCardRepository.lookupCode(code, mediaType)
+            giftCardRepository.lookupCode(trimmed, mediaType)
                 .onSuccess { card ->
                     updateExtras {
                         it.copy(
@@ -3114,11 +3143,12 @@ class PosViewModel @Inject constructor(
                     }
                 }
                 .onFailure { e ->
+                    clearStaleDashboardTokenIfAuthError(e)
                     updateExtras {
                         it.copy(
                             giftCardPayBusy = false,
                             giftCardPayLookedUpCard = null,
-                            giftCardPayError = e.message ?: appContext.getString(R.string.membership_lookup_failed)
+                            giftCardPayError = mapGiftCardError(e)
                         )
                     }
                 }
@@ -3151,7 +3181,7 @@ class PosViewModel @Inject constructor(
 
     fun lookupGiftCardForOps(rawCode: String) {
         val code = rawCode.trim()
-        if (code.isEmpty()) return
+        if (code.length < 4) return
         viewModelScope.launch {
             updateExtras { it.copy(giftCardOpsBusy = true, giftCardOpsError = null) }
             giftCardRepository.lookupCode(code, mediaType = null)
@@ -3165,6 +3195,7 @@ class PosViewModel @Inject constructor(
                     }
                 }
                 .onFailure { e ->
+                    clearStaleDashboardTokenIfAuthError(e)
                     updateExtras {
                         it.copy(
                             giftCardOpsBusy = false,
