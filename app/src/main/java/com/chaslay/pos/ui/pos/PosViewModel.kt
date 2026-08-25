@@ -4785,16 +4785,65 @@ class PosViewModel @Inject constructor(
     fun dismissClearCartDialog() = updateExtras { it.copy(showClearCartDialog = false) }
 
     fun confirmClearCart() {
+        resetCartForNewOrder(snackbarMessage = "Cart cleared")
+        updateExtras { it.copy(showClearCartDialog = false) }
+    }
+
+    /** Restaurant mode: park the active cart (held / ongoing orders) and start a fresh order. */
+    fun startNewOrder() {
+        if (!isRestaurantMode()) {
+            showNewOrderDialog()
+            return
+        }
+        viewModelScope.launch {
+            val cart = cartManager.snapshot()
+            if (cart.isEmpty) {
+                resetCartForNewOrder()
+                return@launch
+            }
+            val userId = sessionManager.currentUserId.first() ?: 0L
+            val userName = sessionManager.currentUserName.first() ?: "Cashier"
+            val sentToKitchen = cart.items.any { it.sentToKitchen }
+
+            runCatching {
+                if (cart.tableId != null) {
+                    tableOrderMutex.withLock {
+                        flushTableOrderSync()
+                        cartManager.snapshot().tableOrderId?.let { tableOrderRepository.holdOrder(it) }
+                    }
+                }
+            }.onFailure { e -> Log.e("NEW_ORDER", "Persisting table order failed", e) }
+
+            runCatching {
+                heldOrderRepository.createHeldOrder(
+                    cart = cartManager.snapshot(),
+                    sendToKitchen = sentToKitchen,
+                    userId = userId,
+                    userName = userName
+                )
+            }.onSuccess {
+                resetCartForNewOrder(
+                    snackbarMessage = appContext.getString(R.string.snackbar_cart_parked_for_new_order)
+                )
+            }.onFailure { e ->
+                Log.e("NEW_ORDER", "Saving order before new order failed", e)
+                showError("New order", e.message ?: "Could not save current order")
+            }
+        }
+    }
+
+    private fun resetCartForNewOrder(snackbarMessage: String? = null) {
         cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
         clearMembershipOnNewSale()
         updateExtras {
             it.copy(
-                showClearCartDialog = false,
                 orderCommittedForCancel = false,
                 coursesBulkSent = false,
                 receiptPrintedForOrder = false,
                 kitchenSentToPrinter = false,
-                snackbarMessage = "Cart cleared"
+                selectedCartItemId = null,
+                keypadBuffer = "",
+                snackbarMessage = snackbarMessage
             )
         }
         refreshTables()

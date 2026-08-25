@@ -486,6 +486,7 @@ fun PosScreen(
                     viewModel.showDeliveryOrderDialog()
                 },
                 onHold = { viewModel.holdOrder(false) },
+                onNewOrder = viewModel::startNewOrder,
                 onSend = viewModel::sendCurrentOrderToKitchen,
                 onAddCourse = viewModel::addCourse,
                 onSendActiveCourse = viewModel::sendActiveCourseToKitchen,
@@ -2110,6 +2111,7 @@ private fun CartActionSidebar(
     onDelivery: () -> Unit,
     onSend: () -> Unit,
     onHold: () -> Unit,
+    onNewOrder: () -> Unit,
     onAddCourse: () -> Unit,
     onSendActiveCourse: () -> Unit,
     onSendAllCourses: () -> Unit,
@@ -2166,6 +2168,15 @@ private fun CartActionSidebar(
             color = Color(0xFF7D6608),
             onClick = onHold
         )
+        if (isRestaurantMode) {
+            CartSidebarButton(
+                label = stringResource(R.string.new_order),
+                shortLabel = stringResource(R.string.new_short),
+                icon = Icons.Default.Add,
+                color = Color(0xFF2E7D32),
+                onClick = onNewOrder
+            )
+        }
         if (isRestaurantMode && coursesEnabled) {
             CartSidebarButton(
                 label = stringResource(R.string.add_course),
