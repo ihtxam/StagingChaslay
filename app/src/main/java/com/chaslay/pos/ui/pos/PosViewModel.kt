@@ -8,6 +8,7 @@ import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
 import com.chaslay.pos.data.local.entity.isAdyenTerminalCheckoutEnabled
 import com.chaslay.pos.data.local.entity.FloorPlanElementEntity
+import com.chaslay.pos.data.local.entity.TableFloorEntity
 import com.chaslay.pos.data.local.entity.CustomerEntity
 import com.chaslay.pos.data.local.entity.CategoryEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
@@ -191,6 +192,7 @@ data class PosUiState(
     val guestCountSeatCapacity: Int = 4,
     val guestCountDefault: Int = 2,
     val pendingTableId: Long? = null,
+    val tableFloors: List<TableFloorEntity> = emptyList(),
     val floorElementsByFloorId: Map<Long, List<FloorPlanElementEntity>> = emptyMap(),
     val showTableTransferItemsDialog: Boolean = false,
     val showTableTransferDestDialog: Boolean = false,
@@ -278,6 +280,7 @@ class PosViewModel @Inject constructor(
     private val _bestsellerIds = MutableStateFlow<List<Long>>(emptyList())
     private val _uiExtras = MutableStateFlow(PosDialogState())
     private val _tables = MutableStateFlow<List<TableWithOrderInfo>>(emptyList())
+    private val _tableFloors = MutableStateFlow<List<TableFloorEntity>>(emptyList())
     private val _floorElements = MutableStateFlow<Map<Long, List<FloorPlanElementEntity>>>(emptyMap())
     private val _discountPresets = MutableStateFlow<List<DiscountPreset>>(emptyList())
     private var cachedSettings = BusinessSettingsEntity()
@@ -306,8 +309,8 @@ class PosViewModel @Inject constructor(
         ) { categories, categoryId, products, cart, settings ->
             DataBundle(categories, categoryId, products, cart, settings)
         },
-        combine(_uiExtras, _productCustomize, _comboPick, _tables, _floorElements) { extras, productCustomize, comboPick, tables, floorElements ->
-            UiExtrasBundle(extras, productCustomize, comboPick, tables, floorElements)
+        combine(_uiExtras, _productCustomize, _comboPick, _tables, _tableFloors, _floorElements) { extras, productCustomize, comboPick, tables, tableFloors, floorElements ->
+            UiExtrasBundle(extras, productCustomize, comboPick, tables, tableFloors, floorElements)
         },
         _discountPresets
     ) { bundle, extrasBundle, discountPresets ->
@@ -316,6 +319,7 @@ class PosViewModel @Inject constructor(
         val productCustomize = extrasBundle.productCustomize
         val comboPick = extrasBundle.comboPick
         val tables = extrasBundle.tables
+        val tableFloors = extrasBundle.tableFloors
         val floorElements = extrasBundle.floorElements
         val giftCardsOn = extras.giftCardsEnabled
         val displayCategories = buildDisplayCategories(bundle.categories, giftCardsOn)
@@ -406,6 +410,7 @@ class PosViewModel @Inject constructor(
             guestCountSeatCapacity = extras.guestCountSeatCapacity,
             guestCountDefault = extras.guestCountDefault,
             pendingTableId = extras.pendingTableId,
+            tableFloors = tableFloors,
             floorElementsByFloorId = floorElements,
             showTableTransferItemsDialog = extras.showTableTransferItemsDialog,
             showTableTransferDestDialog = extras.showTableTransferDestDialog,
@@ -543,6 +548,7 @@ class PosViewModel @Inject constructor(
             val reservedIds = syncPreferences.getReservedTableIds()
             _tables.value = tableOrderRepository.getTablesWithStatus(reservedIds)
             val floors = tableOrderRepository.getAllFloors()
+            _tableFloors.value = floors
             _floorElements.value = floors.associate { floor ->
                 floor.id to tableOrderRepository.getFloorElements(floor.id)
             }
@@ -5552,6 +5558,7 @@ class PosViewModel @Inject constructor(
         val productCustomize: ProductCustomizeState?,
         val comboPick: ComboPickState?,
         val tables: List<TableWithOrderInfo>,
+        val tableFloors: List<TableFloorEntity>,
         val floorElements: Map<Long, List<FloorPlanElementEntity>>
     )
 }

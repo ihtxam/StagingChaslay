@@ -57,8 +57,7 @@ class TablePlanViewModel @Inject constructor(
                 floors.any { it.id == id }
             } ?: floors.firstOrNull()?.id ?: 1L
             var tables = tableOrderRepository.getTablesForFloor(floorId)
-            // Skip auto-grid when tables were synced from the merchant panel.
-            if (tables.none { !it.remoteId.isNullOrBlank() } && tablesAreClustered(tables)) {
+            if (!isCloudManagedFloor(floors, floorId, tables) && tablesAreClustered(tables)) {
                 tableOrderRepository.autoLayoutFloor(floorId)
                 tables = tableOrderRepository.getTablesForFloor(floorId)
             }
@@ -100,8 +99,9 @@ class TablePlanViewModel @Inject constructor(
 
     fun selectFloor(floorId: Long) {
         viewModelScope.launch {
+            val floors = tableOrderRepository.getAllFloors()
             var tables = tableOrderRepository.getTablesForFloor(floorId)
-            if (tables.none { !it.remoteId.isNullOrBlank() } && tablesAreClustered(tables)) {
+            if (!isCloudManagedFloor(floors, floorId, tables) && tablesAreClustered(tables)) {
                 tableOrderRepository.autoLayoutFloor(floorId)
                 tables = tableOrderRepository.getTablesForFloor(floorId)
             }
@@ -321,11 +321,26 @@ class TablePlanViewModel @Inject constructor(
     }
 
     fun autoLayout() {
+        val floors = _uiState.value.floors
+        val floorId = _uiState.value.selectedFloorId
+        if (isCloudManagedFloor(floors, floorId, _uiState.value.tables)) {
+            _uiState.update { it.copy(message = "This floor is managed in the merchant panel") }
+            return
+        }
         viewModelScope.launch {
-            tableOrderRepository.autoLayoutFloor(_uiState.value.selectedFloorId)
+            tableOrderRepository.autoLayoutFloor(floorId)
             reload()
             _uiState.update { it.copy(message = "Tables arranged in grid") }
         }
+    }
+
+    private fun isCloudManagedFloor(
+        floors: List<TableFloorEntity>,
+        floorId: Long,
+        tables: List<RestaurantTableEntity>
+    ): Boolean {
+        val floor = floors.find { it.id == floorId }
+        return !floor?.remoteId.isNullOrBlank() || tables.any { !it.remoteId.isNullOrBlank() }
     }
 
     fun clearMessage() = _uiState.update { it.copy(message = null) }

@@ -764,6 +764,8 @@
     <string name="table_plan_help">Drag tables anywhere on the floor — position saves automatically. Tap a table to edit name, seats, and shape.</string>
     <string name="table_plan_edit_hint">Drag to move (auto-saves). Use Save below for name, seats, or shape.</string>
     <string name="table_plan_layout_saved">Layout saves automatically when you drag tables.</string>
+    <string name="table_plan_cloud_managed">This floor plan is managed in the merchant panel. Layout is read-only on this device.</string>
+    <string name="table_plan_cloud_help">Scroll the canvas to view the full floor. Edit the layout in Settings → Floor plan on the web dashboard.</string>
     <string name="seat_capacity">Seat capacity</string>
     <string name="table_shape">Table shape</string>
     <string name="shape_round">Round</string>

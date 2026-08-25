@@ -44,7 +44,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -74,7 +74,10 @@ import com.chaslay.pos.ui.pos.ProductCustomizeDialog
 import com.chaslay.pos.ui.pos.TerminalPaymentDialog
 import com.chaslay.pos.ui.theme.VectronColors
 import com.chaslay.pos.ui.theme.vectronColors
+import com.chaslay.pos.ui.tableplan.FloorPlanCanvas
+import com.chaslay.pos.ui.tableplan.FloorPlanElementDisplay
 import com.chaslay.pos.ui.tableplan.GuestCountDialog
+import com.chaslay.pos.ui.tableplan.toFloorPlanDisplay
 
 private enum class WaiterTab { TABLES, ORDER }
 
@@ -88,7 +91,15 @@ fun WaiterPosScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     var tab by remember { mutableStateOf(WaiterTab.TABLES) }
-    var selectedFloorIndex by remember { mutableIntStateOf(0) }
+    var selectedFloorId by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(state.tableFloors, state.tables) {
+        if (selectedFloorId == 0L || state.tableFloors.none { it.id == selectedFloorId }) {
+            selectedFloorId = state.tableFloors.firstOrNull()?.id
+                ?: state.tables.firstOrNull()?.floorId
+                ?: 1L
+        }
+    }
 
     LaunchedEffect(state.snackbarMessage) {
         state.snackbarMessage?.let { msg ->
@@ -174,10 +185,12 @@ fun WaiterPosScreen(
             when (tab) {
                 WaiterTab.TABLES -> WaiterTablesPanel(
                     tables = state.tables,
+                    tableFloors = state.tableFloors,
+                    floorElementsByFloorId = state.floorElementsByFloorId,
                     currencySymbol = state.currencySymbol,
                     activeTableName = state.activeTableName,
-                    selectedFloorIndex = selectedFloorIndex,
-                    onSelectFloor = { selectedFloorIndex = it },
+                    selectedFloorId = selectedFloorId,
+                    onSelectFloor = { selectedFloorId = it },
                     onSelectTable = { tableId ->
                         viewModel.openTable(tableId)
                         tab = WaiterTab.ORDER
@@ -297,27 +310,62 @@ private fun WaiterTopBar(
 @Composable
 private fun WaiterTablesPanel(
     tables: List<TableWithOrderInfo>,
+    tableFloors: List<com.chaslay.pos.data.local.entity.TableFloorEntity>,
+    floorElementsByFloorId: Map<Long, List<com.chaslay.pos.data.local.entity.FloorPlanElementEntity>>,
     currencySymbol: String,
     activeTableName: String?,
-    selectedFloorIndex: Int,
-    onSelectFloor: (Int) -> Unit,
+    selectedFloorId: Long,
+    onSelectFloor: (Long) -> Unit,
     onSelectTable: (Long) -> Unit
 ) {
-    val mainFloorLabel = stringResource(R.string.main_floor)
-    val patioLabel = stringResource(R.string.patio_floor)
-    val floorPairs = remember(tables, mainFloorLabel, patioLabel) {
-        if (tables.size <= 1) {
-            listOf(mainFloorLabel to tables)
+    val floorTabs = remember(tables, tableFloors) {
+        val sortedFloors = tableFloors.filter { it.isActive }.sortedBy { it.sortOrder }
+        if (sortedFloors.isNotEmpty()) {
+            sortedFloors.map { floor ->
+                Triple(floor, floor.name, tables.filter { it.floorId == floor.id })
+            }
         } else {
-            val split = (tables.size + 1) / 2
-            listOf(
-                mainFloorLabel to tables.take(split),
-                patioLabel to tables.drop(split)
-            )
+            tables.groupBy { it.floorId }.toList().sortedBy { it.first }.map { (floorId, floorTables) ->
+                Triple(
+                    com.chaslay.pos.data.local.entity.TableFloorEntity(id = floorId, name = "Floor $floorId"),
+                    "Floor $floorId",
+                    floorTables
+                )
+            }.ifEmpty {
+                listOf(
+                    Triple(
+                        com.chaslay.pos.data.local.entity.TableFloorEntity(id = 1L, name = "Tables"),
+                        "Tables",
+                        tables
+                    )
+                )
+            }
         }
     }
-    val selectedFloor = selectedFloorIndex.coerceIn(0, floorPairs.lastIndex.coerceAtLeast(0))
-    val floorTables = floorPairs.getOrElse(selectedFloor) { floorPairs.first() }.second
+    val safeFloorIndex = floorTabs.indexOfFirst { (floor, _, _) ->
+        floor.id == selectedFloorId
+    }.takeIf { it >= 0 } ?: 0
+    val (currentFloor, _, floorTables) = floorTabs.getOrElse(safeFloorIndex) { floorTabs.first() }
+    val floorId = currentFloor.id
+    val designCanvasWidth = currentFloor.canvasWidth.coerceAtLeast(320)
+    val designCanvasHeight = currentFloor.canvasHeight.coerceAtLeast(240)
+    val planViewAvailable = !currentFloor.remoteId.isNullOrBlank() ||
+        floorTables.any { it.hasPlanPosition }
+    val planElements = floorElementsByFloorId[floorId].orEmpty().map { element ->
+        FloorPlanElementDisplay(
+            id = element.id,
+            elementType = element.elementType,
+            label = element.label,
+            planX = element.planX,
+            planY = element.planY,
+            planWidth = element.planWidth,
+            planHeight = element.planHeight,
+            rotation = element.rotation
+        )
+    }
+    var usePlanView by remember(floorId, planViewAvailable) {
+        mutableStateOf(planViewAvailable)
+    }
 
     Column(
         modifier = Modifier
@@ -325,29 +373,58 @@ private fun WaiterTablesPanel(
             .padding(12.dp)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            floorPairs.forEachIndexed { index, (name, _) ->
+            floorTabs.forEachIndexed { index, (_, name, _) ->
                 FilterChip(
-                    selected = selectedFloor == index,
-                    onClick = { onSelectFloor(index) },
+                    selected = safeFloorIndex == index,
+                    onClick = { floorTabs.getOrNull(index)?.first?.id?.let(onSelectFloor) },
                     label = { Text(name, fontSize = 12.sp) }
                 )
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 100.dp),
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 8.dp)
-        ) {
-            items(floorTables, key = { it.id }) { table ->
-                WaiterTableCard(
-                    table = table,
-                    currencySymbol = currencySymbol,
-                    isActive = table.name == activeTableName,
-                    onClick = { onSelectTable(table.id) }
+        if (planViewAvailable) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = usePlanView,
+                    onClick = { usePlanView = true },
+                    label = { Text(stringResource(R.string.floor_plan_view), fontSize = 12.sp) }
                 )
+                FilterChip(
+                    selected = !usePlanView,
+                    onClick = { usePlanView = false },
+                    label = { Text(stringResource(R.string.grid_view), fontSize = 12.sp) }
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        if (usePlanView && planViewAvailable) {
+            FloorPlanCanvas(
+                tables = floorTables.map { it.toFloorPlanDisplay(activeTableName, currencySymbol) },
+                elements = planElements,
+                editable = false,
+                selectedTableId = null,
+                onTableClick = onSelectTable,
+                onTableMoved = null,
+                designCanvasWidth = designCanvasWidth,
+                designCanvasHeight = designCanvasHeight,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 100.dp),
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 8.dp)
+            ) {
+                items(floorTables, key = { it.id }) { table ->
+                    WaiterTableCard(
+                        table = table,
+                        currencySymbol = currencySymbol,
+                        isActive = table.name == activeTableName,
+                        onClick = { onSelectTable(table.id) }
+                    )
+                }
             }
         }
     }

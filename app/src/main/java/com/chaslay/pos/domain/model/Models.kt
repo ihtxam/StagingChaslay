@@ -646,7 +646,13 @@ data class TableWithOrderInfo(
     val remoteId: String? = null,
     val hasReservation: Boolean = false
 ) {
-    val hasPlanPosition: Boolean get() = planX > 0f || planY > 0f
+    /** True when the table has a meaningful floor-plan placement (incl. cloud-synced at origin). */
+    val hasPlanPosition: Boolean
+        get() = !remoteId.isNullOrBlank() ||
+            planX > 0f ||
+            planY > 0f ||
+            planWidth != 0.12f ||
+            planHeight != 0.12f
 }
 
 data class KitchenMessagePreset(
