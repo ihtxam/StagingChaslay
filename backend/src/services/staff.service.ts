@@ -97,8 +97,8 @@ export class StaffService {
   }
 
   /**
-   * Strip sales / panel / finance from system Waiter templates.
-   * Menu (MANAGE_PRODUCTS) and Orders stay as assigned on the Roles page.
+   * Strip full panel / company sales from system Waiter templates.
+   * Menu, orders, and own-sales EOD (END_OF_DAY) stay as assigned on the Roles page.
    */
   static async enforceWaiterFloorRestrictions(merchantId: string) {
     const db = getDb();

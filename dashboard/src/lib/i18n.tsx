@@ -2686,15 +2686,15 @@ const en: Dict = {
   staffPasswordCreateHint:
     'Set this with an email so they can sign in at app.chaslay.com/login. Leave blank for PIN-only POS access.',
   staffWaiterTemplateHint:
-    'On Role profiles, tick Access menu (catalogue) and/or Access orders so floor staff can open the back office. Leave Sales and reports unchecked unless they should see them.',
+    'On Role profiles, tick Access menu (catalogue) and/or Access orders so floor staff can open the back office. End of day can be ticked for their own sales only — not company-wide reports.',
   staffRoleWaiter: 'Waiter (POS only)',
   staffRoleWaiterMenu: 'Waiter + menu editor',
   staffRoleWaiterHint:
-    'Floor POS by default. Tick Access menu and Access orders on this role for a limited back office. Sales stay off unless you grant those permissions.',
+    'Floor POS by default. Tick Access menu and Access orders for limited back office. End of day prints their own sales unless View all sales is also granted.',
   staffRoleWaiterMenuHint:
-    'Includes catalog access. After /login they enter POS; Back office opens Menu and Orders when those permissions are ticked.',
+    'Includes catalog access. End of day can be enabled for own-sales EOD from POS. Company reports stay blocked unless you grant View reports / View all sales.',
   staffRoleBackOfficeHint:
-    'Access menu (catalogue) and Access orders open a limited back office. They do not include Sales, invoices, reports, or settings.',
+    'Access menu (catalogue) and Access orders open a limited back office. End of day is allowed for own sales. Full Sales / invoices / settings stay off unless granted.',
   staffEmailPanel: 'Email (official login)',
   webPosOpenMenu: 'Menu',
   staffPinCol: 'PIN',
@@ -5809,15 +5809,15 @@ const fr: Dict = {
   staffPasswordCreateHint:
     'À renseigner avec un e-mail pour se connecter sur app.chaslay.com/login. Laisser vide pour un accès caisse par PIN uniquement.',
   staffWaiterTemplateHint:
-    'Dans Profils de rôle, cochez Accès menu (catalogue) et/ou Accès aux commandes pour le back-office. Laissez Ventes et rapports décochés s’ils ne doivent pas les voir.',
+    'Dans Profils de rôle, cochez Accès menu et/ou Accès aux commandes pour le back-office. Fin de journée = leurs ventes uniquement, pas les rapports entreprise.',
   staffRoleWaiter: 'Serveur (caisse uniquement)',
   staffRoleWaiterMenu: 'Serveur + éditeur de menu',
   staffRoleWaiterHint:
-    'Caisse par défaut. Cochez Accès menu et Accès aux commandes pour un back-office limité. Les ventes restent désactivées sauf si vous les accordez.',
+    'Caisse par défaut. Accès menu / commandes pour un back-office limité. Fin de journée imprime leurs ventes sauf si « Voir toutes les ventes » est aussi coché.',
   staffRoleWaiterMenuHint:
-    'Inclut l’accès catalogue. Après /login ils arrivent en caisse ; Back-office ouvre Menu et Commandes si ces permissions sont cochées.',
+    'Inclut l’accès catalogue. Fin de journée possible pour l’EOD personnel depuis la caisse. Rapports entreprise bloqués sans Voir les rapports / toutes les ventes.',
   staffRoleBackOfficeHint:
-    'Accès menu (catalogue) et Accès aux commandes ouvrent un back-office limité. Ils n’incluent pas Ventes, factures, rapports ni paramètres.',
+    'Accès menu et commandes = back-office limité. Fin de journée autorisée pour leurs ventes. Ventes complètes / factures / paramètres restent désactivés sauf droit explicite.',
   staffEmailPanel: 'E-mail (connexion officielle)',
   webPosOpenMenu: 'Menu',
   staffPinCol: 'PIN',
@@ -8939,15 +8939,15 @@ const de: Dict = {
   staffPasswordCreateHint:
     'Zusammen mit einer E-Mail für app.chaslay.com/login setzen. Leer lassen für nur-PIN-Kassenzugang.',
   staffWaiterTemplateHint:
-    'Unter Rollenprofile „Zugang zum Menü (Katalog)“ und/oder „Zugang zu Bestellungen“ ankreuzen für das Backoffice. Verkauf und Berichte nur ankreuzen, wenn sie das sehen dürfen.',
+    'Unter Rollenprofile Menü- und/oder Bestellzugang für das Backoffice ankreuzen. Tagesabschluss = nur eigene Verkäufe, keine Unternehmensberichte.',
   staffRoleWaiter: 'Kellner (nur Kasse)',
   staffRoleWaiterMenu: 'Kellner + Menü-Editor',
   staffRoleWaiterHint:
-    'Standard: nur Kasse. Für ein begrenztes Backoffice „Zugang zum Menü“ und „Zugang zu Bestellungen“ ankreuzen. Verkauf bleibt aus, bis Sie diese Rechte vergeben.',
+    'Standard: nur Kasse. Menü-/Bestellzugang für begrenztes Backoffice. Tagesabschluss druckt eigene Verkäufe, außer „Alle Verkäufe ansehen“ ist auch gesetzt.',
   staffRoleWaiterMenuHint:
-    'Enthält Katalogzugang. Nach /login zuerst die Kasse; Backoffice öffnet Menü und Bestellungen, wenn diese Rechte gesetzt sind.',
+    'Enthält Katalogzugang. Tagesabschluss für eigenen EOD an der Kasse möglich. Unternehmensberichte ohne Berichte-/Alle-Verkäufe-Recht gesperrt.',
   staffRoleBackOfficeHint:
-    'Zugang zum Menü (Katalog) und Zugang zu Bestellungen öffnen ein begrenztes Backoffice. Kein Verkauf, keine Rechnungen, Berichte oder Einstellungen.',
+    'Menü- und Bestellzugang = begrenztes Backoffice. Tagesabschluss für eigene Verkäufe erlaubt. Voller Verkauf / Rechnungen / Einstellungen nur mit explizitem Recht.',
   staffEmailPanel: 'E-Mail (offizielles Login)',
   webPosOpenMenu: 'Menü',
   staffPinCol: 'PIN',

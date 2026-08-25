@@ -246,7 +246,6 @@ export const STAFF_MERCHANT_ENTRY_PERMISSIONS: Permission[] = [
 const WAITER_PRIVILEGED_BLOCKED: Permission[] = [
   "VIEW_REPORTS",
   "VIEW_ALL_SALES",
-  "END_OF_DAY",
   "ACCESS_PANEL",
   "OPEN_CASH_DRAWER",
   "MANAGE_SETTINGS",
@@ -272,6 +271,6 @@ export function waiterSystemKind(name: string): WaiterSystemKind | null {
 }
 
 export function waiterBlockedPermissions(_kind: WaiterSystemKind): Permission[] {
-  // Menu (MANAGE_PRODUCTS) and Orders (VIEW_ORDER_HISTORY) are assigned in Roles.
+  // Menu (MANAGE_PRODUCTS), orders, and own-sales EOD (END_OF_DAY) stay role-assigned.
   return [...WAITER_PRIVILEGED_BLOCKED];
 }
