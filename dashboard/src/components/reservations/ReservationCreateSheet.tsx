@@ -4,6 +4,13 @@ import { useI18n } from '@/lib/i18n';
 import { addDaysYmdZurich, ymdZurich } from '@/lib/date-format';
 import { dayKeyOf, zonedLocalDate, type DayKey } from '@/lib/shop-hours';
 
+const MAX_PHONE_DIGITS = 15;
+const MAX_NAME_LENGTH = 20;
+
+function sanitizePhoneInput(value: string): string {
+  return value.replace(/\D/g, '').slice(0, MAX_PHONE_DIGITS);
+}
+
 const DAY_NUM: Record<DayKey, number> = {
   sun: 0,
   mon: 1,
