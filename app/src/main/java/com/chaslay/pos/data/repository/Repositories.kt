@@ -58,6 +58,7 @@ import com.chaslay.pos.data.remote.PosAuthApi
 import com.chaslay.pos.data.remote.SyncApi
 import com.chaslay.pos.data.remote.dto.VerifyStaffPinRequest
 import com.chaslay.pos.data.remote.dto.PosLoginRequest
+import com.chaslay.pos.data.remote.dto.PosLoginResponse
 import com.chaslay.pos.debug.CrashLogger
 import com.chaslay.pos.domain.model.LoginResult
 import com.chaslay.pos.domain.model.PosPermission
@@ -138,15 +139,32 @@ class AuthRepository @Inject constructor(
         val hash = hash(pin)
         userDao.getPinUsers().find { it.pinHash == hash && it.isActive }?.let { user ->
             val role = roleDao.getById(user.roleId) ?: return null
+            refreshDashboardTokenFromPin(pin)
             return AuthSession(user, role)
         }
         return loginSyncedPinViaApi(pin)
+    }
+
+    /** Staff PIN verify returns a dashboard JWT when the device has a merchant sync key. */
+    private suspend fun refreshDashboardTokenFromPin(pin: String) {
+        if (!syncApiKeyStore.hasKey()) return
+        runCatching {
+            val body = syncApi.verifyStaffPin(VerifyStaffPinRequest(pin))
+            storeDashboardSessionFromPinVerify(body.staff)
+        }
+    }
+
+    private suspend fun storeDashboardSessionFromPinVerify(staff: com.chaslay.pos.data.remote.dto.SyncStaffProfileDto?) {
+        staff?.accessToken?.trim()?.takeIf { it.isNotEmpty() }?.let { token ->
+            syncPreferences.setDashboardToken(token)
+        }
     }
 
     private suspend fun loginSyncedPinViaApi(pin: String): AuthSession? {
         return try {
             val body = syncApi.verifyStaffPin(VerifyStaffPinRequest(pin))
             val remote = body.staff ?: return null
+            storeDashboardSessionFromPinVerify(remote)
             val user = userDao.getByEmail("sync:${remote.id}") ?: return null
             if (!user.isActive) return null
 
@@ -184,6 +202,73 @@ class AuthRepository @Inject constructor(
         return loginCloudWithEmail(email, password)
     }
 
+    /**
+     * Cloud panel login for WebView embed only — stores dashboard JWT/user in [SyncPreferences]
+     * without replacing the active POS PIN session.
+     */
+    suspend fun authenticateDashboard(email: String, password: String): com.chaslay.pos.domain.model.DashboardAuthResult {
+        return try {
+            val response = posAuthApi.login(
+                PosLoginRequest(
+                    email = email.trim(),
+                    password = password,
+                    tenantSlug = resolveTenantSlugForLogin()
+                )
+            )
+            if (!response.isSuccessful) {
+                return com.chaslay.pos.domain.model.DashboardAuthResult.Failure(
+                    readPosAuthError(response.code(), response.errorBody()?.string())
+                )
+            }
+            val body = response.body()
+                ?: return com.chaslay.pos.domain.model.DashboardAuthResult.Failure("Invalid credentials")
+            if (body.dashboardToken.isNullOrBlank() || body.dashboardUser == null) {
+                return com.chaslay.pos.domain.model.DashboardAuthResult.Failure(
+                    "Panel login did not return online settings credentials"
+                )
+            }
+            persistCloudDashboardCredentials(body)
+            com.chaslay.pos.domain.model.DashboardAuthResult.Success
+        } catch (_: IOException) {
+            com.chaslay.pos.domain.model.DashboardAuthResult.Failure(
+                "No internet connection. Connect to Wi‑Fi and try again."
+            )
+        } catch (e: Exception) {
+            com.chaslay.pos.domain.model.DashboardAuthResult.Failure(e.message ?: "Login failed")
+        }
+    }
+
+    private suspend fun persistCloudDashboardCredentials(body: PosLoginResponse) {
+        body.user.tenantSlug?.trim()?.takeIf { it.isNotEmpty() }?.let { licenseManager.setTenantSlug(it) }
+        body.syncApiKey?.trim()?.takeIf { it.isNotEmpty() }?.let { key ->
+            syncApiKeyStore.setKey(key)
+            crashLogger.flushPendingUploads()
+        }
+        body.merchantId?.trim()?.takeIf { it.isNotEmpty() }?.let { id ->
+            syncPreferences.setMerchantId(id)
+        }
+        body.dashboardToken?.trim()?.takeIf { it.isNotEmpty() }?.let { token ->
+            syncPreferences.setDashboardToken(token)
+        }
+        body.dashboardUser?.let { du ->
+            val json = org.json.JSONObject()
+                .put("id", du.id)
+                .put("email", du.email)
+                .put("name", du.name)
+                .put("role", du.role)
+                .put("merchantId", du.merchantId ?: du.id)
+                .put("staffId", du.staffId)
+                .put("isOwner", du.isOwner != false)
+                .put("roleName", du.roleName ?: body.user.roleName)
+                .toString()
+            syncPreferences.setDashboardUserJson(json)
+        }
+        body.dashboardUrl?.trim()?.takeIf { it.isNotEmpty() }?.let { url ->
+            syncPreferences.setDashboardUrl(url)
+        }
+        syncPreferences.resetMenuSyncCursor()
+    }
+
     private suspend fun loginLocalWithEmail(email: String, password: String): AuthSession? {
         val user = userDao.getByEmail(email.trim()) ?: return null
         if (!user.isActive) return null
@@ -215,35 +300,7 @@ class AuthRepository @Inject constructor(
             val body = response.body()
             val cloudUser = body?.user
                 ?: return LoginResult.Failure("Invalid credentials")
-            cloudUser.tenantSlug?.trim()?.takeIf { it.isNotEmpty() }?.let { licenseManager.setTenantSlug(it) }
-            // Bind this device to the merchant's sync key so catalog pull/push hits the right panel.
-            body.syncApiKey?.trim()?.takeIf { it.isNotEmpty() }?.let { key ->
-                syncApiKeyStore.setKey(key)
-                crashLogger.flushPendingUploads()
-            }
-            body.merchantId?.trim()?.takeIf { it.isNotEmpty() }?.let { id ->
-                syncPreferences.setMerchantId(id)
-            }
-            body.dashboardToken?.trim()?.takeIf { it.isNotEmpty() }?.let { token ->
-                syncPreferences.setDashboardToken(token)
-            }
-            body.dashboardUser?.let { du ->
-                val json = org.json.JSONObject()
-                    .put("id", du.id)
-                    .put("email", du.email)
-                    .put("name", du.name)
-                    .put("role", du.role)
-                    .put("merchantId", du.merchantId ?: du.id)
-                    .put("staffId", du.staffId)
-                    .put("isOwner", du.isOwner != false)
-                    .put("roleName", du.roleName ?: cloudUser.roleName)
-                    .toString()
-                syncPreferences.setDashboardUserJson(json)
-            }
-            body.dashboardUrl?.trim()?.takeIf { it.isNotEmpty() }?.let { url ->
-                syncPreferences.setDashboardUrl(url)
-            }
-            syncPreferences.resetMenuSyncCursor()
+            persistCloudDashboardCredentials(body)
             val isOwner = body.dashboardUser?.isOwner != false &&
                 cloudUser.role.equals("MERCHANT", ignoreCase = true)
             val roleName = cloudUser.roleName?.trim()?.takeIf { it.isNotEmpty() }

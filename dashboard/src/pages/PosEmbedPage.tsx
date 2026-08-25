@@ -2,6 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore, type User } from '@/store/auth';
 
+const POS_EMBED_FLAG = 'manupos_pos_embed';
+const POS_EMBED_NEXT_KEY = 'manupos_pos_embed_next';
+
+export function posEmbedReturnPath(): string | null {
+  if (typeof window === 'undefined') return null;
+  if (sessionStorage.getItem(POS_EMBED_FLAG) !== '1') return null;
+  const stored = sessionStorage.getItem(POS_EMBED_NEXT_KEY);
+  if (stored && stored.startsWith('/merchant')) return stored;
+  return '/merchant/settings?embed=1';
+}
+
 /**
  * SSO bridge for Android POS WebView.
  * URL: /pos-embed?next=/merchant/settings#token=...&user=...
@@ -40,7 +51,8 @@ export default function PosEmbedPage() {
       }
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
-      sessionStorage.setItem('manupos_pos_embed', '1');
+      sessionStorage.setItem(POS_EMBED_FLAG, '1');
+      sessionStorage.setItem(POS_EMBED_NEXT_KEY, nextPath);
       setToken(token);
       setUser(user);
       // Clear credentials from the address bar
@@ -65,7 +77,7 @@ export default function PosEmbedPage() {
   if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center text-sm text-slate-600">
-        Opening merchant settingsÖ
+        Opening merchant settingsù
       </div>
     );
   }

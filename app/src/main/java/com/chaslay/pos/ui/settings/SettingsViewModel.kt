@@ -11,6 +11,8 @@ import com.chaslay.pos.data.repository.TableOrderRepository
 import com.chaslay.pos.data.repository.TransactionRepository
 import com.chaslay.pos.debug.CrashLogEntry
 import com.chaslay.pos.debug.CrashLogger
+import com.chaslay.pos.data.repository.AuthRepository
+import com.chaslay.pos.domain.model.DashboardAuthResult
 import com.chaslay.pos.domain.model.AppLanguage
 import androidx.annotation.StringRes
 import com.chaslay.pos.R
@@ -29,6 +31,10 @@ import androidx.core.os.LocaleListCompat
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
+import android.content.Intent
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import android.net.Uri
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -158,7 +164,12 @@ data class SettingsUiState(
     val mainPosLanUrl: String = "",
     val localLanUrl: String? = null,
     val isTestingMainPos: Boolean = false,
-    val isDiscoveringMainPos: Boolean = false
+    val isDiscoveringMainPos: Boolean = false,
+    val showCloudLoginDialog: Boolean = false,
+    val cloudLoginEmail: String = "",
+    val cloudLoginPassword: String = "",
+    val isCloudLoggingIn: Boolean = false,
+    val cloudLoginError: String? = null
 )
 
 @HiltViewModel
@@ -178,8 +189,12 @@ class SettingsViewModel @Inject constructor(
     private val floorSyncRepository: com.chaslay.pos.sync.FloorSyncRepository,
     private val terminalSyncRepository: com.chaslay.pos.sync.TerminalSyncRepository,
     private val syncService: com.chaslay.pos.sync.SyncService,
-    private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences
+    private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
+
+    private val _launchOnlineSettingsIntent = Channel<Intent>(Channel.BUFFERED)
+    val launchOnlineSettingsIntent: Flow<Intent> = _launchOnlineSettingsIntent.receiveAsFlow()
 
     private var currentSettings = BusinessSettingsEntity()
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -325,22 +340,94 @@ class SettingsViewModel @Inject constructor(
             val token = syncPreferences.getDashboardToken()
             val userJson = syncPreferences.getDashboardUserJson()
             if (token.isNullOrBlank() || userJson.isNullOrBlank()) {
-                _uiState.update { it.copy(message = appContext.getString(R.string.online_settings_need_login)) }
+                _uiState.update {
+                    it.copy(
+                        showCloudLoginDialog = true,
+                        cloudLoginError = null,
+                        message = null
+                    )
+                }
                 return@launch
             }
-            // Refresh menu/terminals/settings cache before editing in the panel.
-            runCatching { syncService.syncAll(force = true) }
-            val dashboardUrl = syncPreferences.getDashboardUrl()
-            val intent = OnlineSettingsActivity.createIntent(
-                context = appContext,
-                token = token,
-                userJson = userJson,
-                dashboardUrl = dashboardUrl
-            )
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            appContext.startActivity(intent)
-            _uiState.update { it.copy(message = null) }
+            launchOnlineSettingsScreen()
         }
+    }
+
+    fun dismissCloudLoginDialog() {
+        _uiState.update {
+            it.copy(
+                showCloudLoginDialog = false,
+                cloudLoginEmail = "",
+                cloudLoginPassword = "",
+                cloudLoginError = null,
+                isCloudLoggingIn = false
+            )
+        }
+    }
+
+    fun updateCloudLoginEmail(value: String) {
+        _uiState.update { it.copy(cloudLoginEmail = value, cloudLoginError = null) }
+    }
+
+    fun updateCloudLoginPassword(value: String) {
+        _uiState.update { it.copy(cloudLoginPassword = value, cloudLoginError = null) }
+    }
+
+    fun submitCloudLoginForOnlineSettings() {
+        val email = _uiState.value.cloudLoginEmail.trim()
+        val password = _uiState.value.cloudLoginPassword
+        if (email.isBlank() || password.isBlank()) {
+            _uiState.update { it.copy(cloudLoginError = appContext.getString(R.string.online_settings_login_required)) }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCloudLoggingIn = true, cloudLoginError = null) }
+            when (val result = authRepository.authenticateDashboard(email, password)) {
+                is DashboardAuthResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            showCloudLoginDialog = false,
+                            cloudLoginEmail = "",
+                            cloudLoginPassword = "",
+                            isCloudLoggingIn = false,
+                            cloudLoginError = null
+                        )
+                    }
+                    launchOnlineSettingsScreen()
+                }
+                is DashboardAuthResult.Failure -> {
+                    _uiState.update {
+                        it.copy(
+                            isCloudLoggingIn = false,
+                            cloudLoginError = result.message
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun launchOnlineSettingsScreen() {
+        runCatching { syncService.syncAll(force = true) }
+        val token = syncPreferences.getDashboardToken().orEmpty()
+        val userJson = syncPreferences.getDashboardUserJson().orEmpty()
+        if (token.isBlank() || userJson.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    showCloudLoginDialog = true,
+                    cloudLoginError = appContext.getString(R.string.online_settings_need_login)
+                )
+            }
+            return
+        }
+        val intent = OnlineSettingsActivity.createIntent(
+            context = appContext,
+            token = token,
+            userJson = userJson,
+            dashboardUrl = syncPreferences.getDashboardUrl()
+        )
+        _launchOnlineSettingsIntent.send(intent)
+        _uiState.update { it.copy(message = null) }
     }
 
     fun updatePosThemeMode(mode: PosThemeMode) {

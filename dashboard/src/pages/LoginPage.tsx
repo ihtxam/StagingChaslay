@@ -6,6 +6,7 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { homePathForUser } from '@/lib/auth-home';
+import { posEmbedReturnPath } from '@/pages/PosEmbedPage';
 import { APP_NAME, APP_PANEL_TITLE, APP_TAGLINE } from '@/lib/brand';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { clearWebPosStaffSession } from '@/lib/permissions';
@@ -123,7 +124,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user && token) {
-      navigate(homePathForUser(user), { replace: true });
+      navigate(posEmbedReturnPath() ?? homePathForUser(user), { replace: true });
     }
   }, [user, token, navigate]);
 
@@ -153,7 +154,7 @@ export default function LoginPage() {
       setToken(hit.token);
       setUser(hit.user);
       toast.success(t('loginWelcome'));
-      navigate(homePathForUser(hit.user), { replace: true });
+      navigate(posEmbedReturnPath() ?? homePathForUser(hit.user), { replace: true });
     } catch (error: unknown) {
       const err = error as { response?: { data?: { error?: string } }; message?: string };
       toast.error(err.response?.data?.error || err.message || t('loginFailed'));

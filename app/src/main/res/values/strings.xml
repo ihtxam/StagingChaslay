@@ -46,6 +46,9 @@
     <string name="online_settings_offline">No internet — use local settings. Cloud settings open when you are online.</string>
     <string name="online_settings_need_login">Sign in with your panel email first to open online settings.</string>
     <string name="online_settings_opening">Opening online settings…</string>
+    <string name="online_settings_login_title">Sign in to open online settings</string>
+    <string name="online_settings_login_body">Use your Chaslay merchant panel email and password. Your register session stays active.</string>
+    <string name="online_settings_login_required">Enter your panel email and password.</string>
     <string name="enable_courses">Enable courses</string>
     <string name="enable_courses_help">Group dine-in items into Course 1, Course 2… and fire them to the kitchen one at a time.</string>
     <string name="license_settings_title">License &amp; activation</string>

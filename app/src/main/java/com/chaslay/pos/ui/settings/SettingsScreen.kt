@@ -26,7 +26,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
@@ -122,6 +124,12 @@ fun SettingsScreen(
         state.message?.let { msg ->
             android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
             viewModel.clearMessage()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.launchOnlineSettingsIntent.collect { intent ->
+            context.startActivity(intent)
         }
     }
 
@@ -1169,6 +1177,59 @@ fun SettingsScreen(
         }
         }
         } // end non-tables content
+    }
+
+    if (state.showCloudLoginDialog) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissCloudLoginDialog,
+            title = { Text(stringResource(R.string.online_settings_login_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.online_settings_login_body))
+                    OutlinedTextField(
+                        value = state.cloudLoginEmail,
+                        onValueChange = viewModel::updateCloudLoginEmail,
+                        label = { Text(stringResource(R.string.email)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = state.cloudLoginPassword,
+                        onValueChange = viewModel::updateCloudLoginPassword,
+                        label = { Text(stringResource(R.string.password)) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    state.cloudLoginError?.let { error ->
+                        Text(
+                            error,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = viewModel::submitCloudLoginForOnlineSettings,
+                    enabled = !state.isCloudLoggingIn
+                ) {
+                    Text(
+                        if (state.isCloudLoggingIn) {
+                            stringResource(R.string.online_settings_opening)
+                        } else {
+                            stringResource(R.string.login)
+                        }
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissCloudLoginDialog) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 
     if (state.showAddPrinterDialog) {
