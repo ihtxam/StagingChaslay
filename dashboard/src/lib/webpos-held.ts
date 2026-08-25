@@ -29,7 +29,13 @@ export function parseHeldCartJson(raw: unknown): HeldCartMeta {
   }
   if (!data || typeof data !== 'object') return { cart: [] };
   const o = data as Record<string, unknown>;
-  const cart = Array.isArray(o.cart) ? (o.cart as CartLine[]) : [];
+  const cart = (Array.isArray(o.cart) ? (o.cart as CartLine[]) : []).map((line) => ({
+    ...line,
+    taxable: line.taxable !== false,
+    lineTotal: Number(line.lineTotal) || 0,
+    unitPrice: Number(line.unitPrice) || 0,
+    quantity: Number(line.quantity) || 0,
+  }));
   return {
     cart,
     channel: (o.channel as PosChannel | null) ?? null,

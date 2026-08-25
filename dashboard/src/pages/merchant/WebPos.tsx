@@ -593,6 +593,16 @@ function money(n: number) {
   return `CHF ${n.toFixed(2)}`;
 }
 
+function normalizeCartLines(lines: CartLine[] | null | undefined): CartLine[] {
+  return (lines || []).map((line) => ({
+    ...line,
+    taxable: line.taxable !== false,
+    lineTotal: Number(line.lineTotal) || 0,
+    unitPrice: Number(line.unitPrice) || 0,
+    quantity: Number(line.quantity) || 0,
+  }));
+}
+
 function mergeBillDiscounts(
   source?: BillDiscount | null,
   target?: BillDiscount | null
@@ -673,7 +683,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [bestsellerIds, setBestsellerIds] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState<PosCategoryId>('all');
   const [search, setSearch] = useState('');
-  const [cart, setCart] = useState<CartLine[]>(() => bootActive?.cart || []);
+  const [cart, setCart] = useState<CartLine[]>(() => normalizeCartLines(bootActive?.cart));
   const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? 'takeaway');
   const effectiveChannel: Channel = channel ?? 'takeaway';
   const [posTab, setPosTab] = useState<PosTab>('register');
@@ -4047,7 +4057,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const applyOpenCartDraft = (draft: OpenCartDraft) => {
-    setCart(draft.cart);
+    setCart(normalizeCartLines(draft.cart));
     setChannel(draft.channel);
     setTableId(draft.tableId);
     setTableLabel(draft.tableLabel);
@@ -4077,7 +4087,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const meta = parseHeldCartJson(held.cartJson);
       if (!meta.cart.length) return false;
       resumedHeldIdRef.current = String(held.id).startsWith('local:') ? null : held.id;
-      setCart(meta.cart);
+      setCart(normalizeCartLines(meta.cart));
       setChannel((meta.channel as Channel) || 'dine_in');
       setTableId(meta.tableId || table?.id || null);
       setTableLabel(meta.tableLabel || table?.label || null);
@@ -6928,7 +6938,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       attachedMembership?.customerName?.trim() || attachedMembership?.cardNumber || null;
     const custName = selectedCustomer
       ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(' ')
-      : memberName || undefined;
+      : memberName ||
+        (tableLabel && effectiveChannel !== 'dine_in' ? tableLabel : undefined);
     const ship = selectedCustomer
       ? [selectedCustomer.defaultAddress, selectedCustomer.defaultZip, selectedCustomer.defaultCity]
           .filter(Boolean)

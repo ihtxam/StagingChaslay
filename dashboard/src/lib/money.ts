@@ -118,9 +118,9 @@ export function computeMerchandiseTotals(
   vatIncludedInPrice: boolean,
   roundingStep = 0.05
 ) {
-  const gross = roundMoney2(lines.reduce((s, l) => s + l.lineTotal, 0));
+  const gross = roundMoney2(lines.reduce((s, l) => s + Number(l.lineTotal || 0), 0));
   const taxableGross = roundMoney2(
-    lines.filter((l) => l.taxable).reduce((s, l) => s + l.lineTotal, 0)
+    lines.filter((l) => l.taxable !== false).reduce((s, l) => s + Number(l.lineTotal || 0), 0)
   );
 
   if (vatIncludedInPrice) {

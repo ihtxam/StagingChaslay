@@ -19,6 +19,7 @@ import {
   isDeliveryOrder,
   isOnlineShopOrder,
   isPaidOrder,
+  isProgrammedOrder,
   orderSourceLabel,
   orderChannel,
   ONLINE_CHANNEL_BORDER,
@@ -26,6 +27,7 @@ import {
   orderMatchesSearchQuery,
   orderListPrimaryLabel,
   orderStatusBadgeClass,
+  resolveOrderCustomerDisplay,
   todayIso,
   type MerchantOrder,
 } from '@/lib/order-management';
@@ -49,7 +51,7 @@ import { useAuthStore } from '@/store/auth';
 import { hasPermission, type Permission } from '@/lib/permissions';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
-type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online' | 'invoice';
+type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online' | 'invoice' | 'programmed';
 
 const CHANNEL_STYLE: Record<string, string> = {
   takeaway:
@@ -163,6 +165,7 @@ function matchesChannelFilter(o: MerchantOrder, filter: ChannelFilter) {
 
 function matchesTypeFilter(o: MerchantOrder, filter: TypeFilter) {
   if (filter === 'all') return true;
+  if (filter === 'programmed') return isProgrammedOrder(o);
   if (filter === 'kitchen') return isKitchenTypeOrder(o);
   if (filter === 'online') return isOnlineShopOrder(o);
   if (filter === 'invoice') return isInvoiceOrder(o);
@@ -885,6 +888,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               ['takeaway', t('takeaway')],
               ['dine_in', t('dineIn')],
               ['online', t('webPosOnlineOrders')],
+              ['programmed', t('ordersProgrammed')],
               ['invoice', t('webPosInvoice')],
             ] as const
           ).map(([id, label]) => (
@@ -1002,9 +1006,9 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                 </span>
               </div>
 
-              {(order.customerName || order.customerPhone) && (
+              {(order.customerName || order.customerPhone || resolveOrderCustomerDisplay(order)) && (
                 <p className="mt-1.5 truncate text-xs">
-                  {order.customerName}
+                  {resolveOrderCustomerDisplay(order) || order.customerName}
                   {order.customerPhone ? ` · ${order.customerPhone}` : ''}
                 </p>
               )}
@@ -1069,7 +1073,8 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               <div className="space-y-1.5 text-sm">
                 <p>
                   <span className="text-[var(--text-muted)]">{t('ordersCustomer')}:</span>{' '}
-                  {selected.customerName || '—'} {selected.customerPhone || ''}
+                  {resolveOrderCustomerDisplay(selected) || '—'}{' '}
+                  {selected.customerPhone || ''}
                 </p>
                 {selected.shippingAddress ? (
                   <p>

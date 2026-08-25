@@ -49,6 +49,30 @@ type HeldCartLine = {
   isOpenPrice?: boolean;
 };
 
+function resolveOrderCustomerName(
+  order: {
+    customerName?: string | null;
+    tableLabel?: string | null;
+    fulfillmentChannel?: string | null;
+    notes?: string | null;
+    customer?: { firstName?: string | null; lastName?: string | null } | null;
+  }
+): string | null {
+  const direct = String(order.customerName || "").trim();
+  if (direct) return direct;
+  const linked = order.customer;
+  if (linked) {
+    const name = [linked.firstName, linked.lastName].filter(Boolean).join(" ").trim();
+    if (name) return name;
+  }
+  const memberMatch = String(order.notes || "").match(/\[member:([^\]]+)\]/i);
+  if (memberMatch?.[1]?.trim()) return memberMatch[1].trim();
+  const ch = String(order.fulfillmentChannel || "takeaway").toLowerCase();
+  const table = String(order.tableLabel || "").trim();
+  if (table && ch !== "dine_in") return table;
+  return null;
+}
+
 function parseHeldCart(cartJson: unknown): {
   lines: HeldCartLine[];
   channel: string;
@@ -244,6 +268,7 @@ export class PosOrdersService {
         items: {
           with: { product: true },
         },
+        customer: true,
       },
       orderBy: [desc(schema.orders.createdAt)],
       limit,
@@ -343,7 +368,7 @@ export class PosOrdersService {
         : null,
       masterOrderId: o.masterOrderId,
       splitCheckNumber: o.splitCheckNumber,
-      customerName: o.customerName,
+      customerName: resolveOrderCustomerName(o),
       pointsEarned: o.pointsEarned ?? 0,
       pointsRedeemed: o.pointsRedeemed ?? 0,
       customerPhone: o.customerPhone,

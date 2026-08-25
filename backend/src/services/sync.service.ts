@@ -666,7 +666,12 @@ export class SyncService {
         }),
         scheduledFor,
         customerId: asUuidOrNull(sale.customerId),
-        customerName: sale.customerName || null,
+        customerName:
+          sale.customerName ||
+          (sale.tableLabel && String(sale.fulfillmentChannel || sale.channel || "") !== "dine_in"
+            ? String(sale.tableLabel).trim()
+            : null) ||
+          null,
         customerPhone: sale.customerPhone || null,
         customerEmail: sale.customerEmail || null,
         shippingAddress: sale.shippingAddress || null,

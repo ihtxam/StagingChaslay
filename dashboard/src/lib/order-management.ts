@@ -284,9 +284,34 @@ export function isAwaitingPaymentOrder(o: MerchantOrder): boolean {
   return false;
 }
 
+/** Scheduled pickup/delivery ticket still open or awaiting payment. */
 export function isProgrammedOrder(o: MerchantOrder): boolean {
-  if (!isAwaitingPaymentOrder(o)) return false;
-  return o.orderType === 'pos' || isOnlineShopOrder(o);
+  if (o.scheduledFor == null || o.scheduledFor === '') return false;
+  const status = (o.status || '').toLowerCase();
+  if (['cancelled', 'refunded'].includes(status)) return false;
+  if (status === 'completed' && !isAwaitingPaymentOrder(o)) return false;
+  return true;
+}
+
+/** Best-effort customer label for order lists and detail panels. */
+export function resolveOrderCustomerDisplay(
+  o: MerchantOrder & {
+    customer?: { firstName?: string | null; lastName?: string | null } | null;
+  }
+): string | null {
+  const direct = String(o.customerName || '').trim();
+  if (direct) return direct;
+  const linked = o.customer;
+  if (linked) {
+    const name = [linked.firstName, linked.lastName].filter(Boolean).join(' ').trim();
+    if (name) return name;
+  }
+  const meta = parseOrderMetaNotes(o.notes);
+  if (meta.memberName?.trim()) return meta.memberName.trim();
+  const ch = orderChannel(o);
+  const table = String(o.tableLabel || '').trim();
+  if (table && ch !== 'dine_in') return table;
+  return null;
 }
 
 export function isAwaitingApproval(status: string): boolean {
@@ -323,7 +348,7 @@ export function orderListPrimaryLabel(o: MerchantOrder): string {
     refs.ticketDisplay,
     refs.tabNumber ? `#${refs.tabNumber.replace(/^#/, '')}` : null,
     o.tableLabel ? String(o.tableLabel) : null,
-    o.customerName || null,
+    resolveOrderCustomerDisplay(o),
   ].filter(Boolean);
   if (parts.length) return parts.join(' · ');
   return formatOrderNumberDisplay(o.orderNumber) || o.orderNumber || o.id.slice(0, 8);
