@@ -255,7 +255,7 @@ export default function Offers() {
       featured: form.featured,
       isActive: form.isActive,
       badgeLabel: form.badgeLabel.trim() || null,
-      priority: priorityNum,
+      priority: Math.max(0, Math.floor(Number(form.priority) || 0)),
       stackable: form.stackable,
     };
   };
@@ -266,7 +266,6 @@ export default function Offers() {
       toast.error(t('offerNameRequired'));
       return;
     }
-    const priorityNum = Math.max(0, Math.floor(Number(form.priority) || 0));
     if (form.offerType === 'percent_category' || form.offerType === 'percent_order') {
       const pct = Number(form.percentOff) || 0;
       if (pct < 1 || pct > MAX_PERCENT_OFF) {
