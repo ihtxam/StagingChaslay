@@ -179,20 +179,12 @@ export default function Reservations() {
   const createReservation = async (sheetForm: ReservationCreateForm) => {
     if (!enabled) {
       toast.error(t('reservationsDisabledHint'));
-      return;
+      throw new Error('reservations_disabled');
     }
     const guestName = [sheetForm.guestFirstName, sheetForm.guestLastName]
       .map((s) => s.trim())
       .filter(Boolean)
       .join(' ');
-    if (!guestName.trim()) {
-      toast.error(t('name'));
-      return;
-    }
-    if (!sheetForm.guestPhone.trim()) {
-      toast.error(t('phone'));
-      return;
-    }
     try {
       await api.post('/merchant/reservations', {
         guestName,

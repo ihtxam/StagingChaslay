@@ -73,22 +73,31 @@ const chipClass = (active: boolean) =>
       : 'border-[var(--border)] hover:bg-[var(--bg-muted)]'
   }`;
 
+type FieldErrors = {
+  guestFirstName?: string;
+  guestLastName?: string;
+  guestPhone?: string;
+};
+
+const emptyForm = (): ReservationCreateForm => ({
+  guestLastName: '',
+  guestFirstName: '',
+  guestPhone: '',
+  guestEmail: '',
+  partySize: 2,
+  date: ymdZurich(),
+  time: '20:00',
+  notes: '',
+  tableId: '',
+  status: 'confirmed',
+  source: 'phone',
+});
+
 export default function ReservationCreateSheet({ open, tables, onClose, onSubmit }: Props) {
   const { t, formatDate } = useI18n();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<ReservationCreateForm>({
-    guestLastName: '',
-    guestFirstName: '',
-    guestPhone: '',
-    guestEmail: '',
-    partySize: 2,
-    date: ymdZurich(),
-    time: '20:00',
-    notes: '',
-    tableId: '',
-    status: 'confirmed',
-    source: 'phone',
-  });
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [form, setForm] = useState<ReservationCreateForm>(emptyForm);
 
   const timeSlots = useMemo(() => buildTimeSlots('20:00', 4), []);
   const dateLabel = useMemo(() => {
@@ -110,22 +119,27 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    const nextErrors: FieldErrors = {};
+    if (!form.guestFirstName.trim()) {
+      nextErrors.guestFirstName = t('reservationsFirstNameRequired');
+    }
+    if (!form.guestLastName.trim()) {
+      nextErrors.guestLastName = t('reservationsLastNameRequired');
+    }
+    if (!form.guestPhone.trim()) {
+      nextErrors.guestPhone = t('reservationsPhoneRequired');
+    }
+    if (nextErrors.guestFirstName || nextErrors.guestLastName || nextErrors.guestPhone) {
+      setFieldErrors(nextErrors);
+      return;
+    }
+    setFieldErrors({});
     setSaving(true);
     try {
       await onSubmit(form);
-      setForm({
-        guestLastName: '',
-        guestFirstName: '',
-        guestPhone: '',
-        guestEmail: '',
-        partySize: 2,
-        date: ymdZurich(),
-        time: '20:00',
-        notes: '',
-        tableId: '',
-        status: 'confirmed',
-        source: 'phone',
-      });
+      setForm(emptyForm());
+    } catch {
+      // Keep entered values when the API rejects the save.
     } finally {
       setSaving(false);
     }
@@ -270,25 +284,55 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
                   <input
                     className="input w-full py-2 text-sm"
                     value={form.guestLastName}
-                    onChange={(e) => setForm({ ...form, guestLastName: e.target.value })}
+                    maxLength={MAX_NAME_LENGTH}
+                    aria-invalid={!!fieldErrors.guestLastName}
+                    onChange={(e) => {
+                      setForm({ ...form, guestLastName: e.target.value.slice(0, MAX_NAME_LENGTH) });
+                      if (fieldErrors.guestLastName) {
+                        setFieldErrors((prev) => ({ ...prev, guestLastName: undefined }));
+                      }
+                    }}
                   />
+                  {fieldErrors.guestLastName ? (
+                    <p className="mt-1 text-xs text-red-600">{fieldErrors.guestLastName}</p>
+                  ) : null}
                 </label>
                 <label className="block text-xs">
                   <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsFirstName')}</span>
                   <input
                     className="input w-full py-2 text-sm"
                     value={form.guestFirstName}
-                    onChange={(e) => setForm({ ...form, guestFirstName: e.target.value })}
+                    maxLength={MAX_NAME_LENGTH}
+                    aria-invalid={!!fieldErrors.guestFirstName}
+                    onChange={(e) => {
+                      setForm({ ...form, guestFirstName: e.target.value.slice(0, MAX_NAME_LENGTH) });
+                      if (fieldErrors.guestFirstName) {
+                        setFieldErrors((prev) => ({ ...prev, guestFirstName: undefined }));
+                      }
+                    }}
                   />
+                  {fieldErrors.guestFirstName ? (
+                    <p className="mt-1 text-xs text-red-600">{fieldErrors.guestFirstName}</p>
+                  ) : null}
                 </label>
                 <label className="block text-xs">
                   <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsPhone')}</span>
                   <input
                     className="input w-full py-2 text-sm"
                     type="tel"
+                    inputMode="numeric"
                     value={form.guestPhone}
-                    onChange={(e) => setForm({ ...form, guestPhone: e.target.value })}
+                    aria-invalid={!!fieldErrors.guestPhone}
+                    onChange={(e) => {
+                      setForm({ ...form, guestPhone: sanitizePhoneInput(e.target.value) });
+                      if (fieldErrors.guestPhone) {
+                        setFieldErrors((prev) => ({ ...prev, guestPhone: undefined }));
+                      }
+                    }}
                   />
+                  {fieldErrors.guestPhone ? (
+                    <p className="mt-1 text-xs text-red-600">{fieldErrors.guestPhone}</p>
+                  ) : null}
                 </label>
                 <label className="block text-xs">
                   <span className="mb-1 block text-[var(--text-muted)]">{t('email')}</span>
