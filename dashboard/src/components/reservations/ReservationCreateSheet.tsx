@@ -122,12 +122,19 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
     const nextErrors: FieldErrors = {};
     if (!form.guestFirstName.trim()) {
       nextErrors.guestFirstName = t('reservationsFirstNameRequired');
+    } else if (form.guestFirstName.length > MAX_NAME_LENGTH) {
+      nextErrors.guestFirstName = t('reservationsFirstNameTooLong');
     }
     if (!form.guestLastName.trim()) {
       nextErrors.guestLastName = t('reservationsLastNameRequired');
+    } else if (form.guestLastName.length > MAX_NAME_LENGTH) {
+      nextErrors.guestLastName = t('reservationsLastNameTooLong');
     }
-    if (!form.guestPhone.trim()) {
+    const phoneDigits = form.guestPhone.replace(/\D/g, '');
+    if (!phoneDigits) {
       nextErrors.guestPhone = t('reservationsPhoneRequired');
+    } else if (phoneDigits.length > MAX_PHONE_DIGITS) {
+      nextErrors.guestPhone = t('reservationsPhoneTooLong');
     }
     if (nextErrors.guestFirstName || nextErrors.guestLastName || nextErrors.guestPhone) {
       setFieldErrors(nextErrors);
@@ -293,6 +300,9 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
                       }
                     }}
                   />
+                  <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                    {t('maxCharacters').replace('{n}', String(MAX_NAME_LENGTH))}
+                  </p>
                   {fieldErrors.guestLastName ? (
                     <p className="mt-1 text-xs text-red-600">{fieldErrors.guestLastName}</p>
                   ) : null}
@@ -311,6 +321,9 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
                       }
                     }}
                   />
+                  <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                    {t('maxCharacters').replace('{n}', String(MAX_NAME_LENGTH))}
+                  </p>
                   {fieldErrors.guestFirstName ? (
                     <p className="mt-1 text-xs text-red-600">{fieldErrors.guestFirstName}</p>
                   ) : null}
@@ -321,6 +334,7 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
                     className="input w-full py-2 text-sm"
                     type="tel"
                     inputMode="numeric"
+                    maxLength={MAX_PHONE_DIGITS}
                     value={form.guestPhone}
                     aria-invalid={!!fieldErrors.guestPhone}
                     onChange={(e) => {
@@ -330,6 +344,7 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
                       }
                     }}
                   />
+                  <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{t('customersPhoneHint')}</p>
                   {fieldErrors.guestPhone ? (
                     <p className="mt-1 text-xs text-red-600">{fieldErrors.guestPhone}</p>
                   ) : null}
