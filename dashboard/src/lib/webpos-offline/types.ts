@@ -31,6 +31,7 @@ export type OfflineSalePayload = {
   guestCount?: number | null;
   masterOrderId?: string | null;
   splitCheckNumber?: number | null;
+  splitPartCount?: number | null;
   items: Array<{
     productClientId?: string;
     productId?: string;

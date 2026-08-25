@@ -63,6 +63,7 @@ import WebPosCheckoutModal, {
 import WebPosSplitBillModal, {
   type SplitPart,
 } from '@/components/WebPosSplitBillModal';
+import { removePaidSplitLines } from '@/lib/split-bill';
 import { localDateTimeToIso, type StoreHours } from '@/lib/shop-hours';
 import {
   browserPrintText,
@@ -6301,12 +6302,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (!guardOfflineCheckout(saleMethod, { payments })) {
         return;
       }
-      const remainingSplits = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
       // Deduct gift balance after order exists (orderId links redeem → refund).
       await finalizeSale(saleMethod, undefined, undefined, extras, true, { payments });
-      if (remainingSplits) {
-        setSplitIndex((i) => i + 1);
-      }
     } catch (e: any) {
       toast.error(e.response?.data?.error || e.message || t('webPosSaleFailed'));
     } finally {
@@ -6850,7 +6847,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     extras?: CheckoutExtras | null,
     saleLines: CartLine[] = cart,
     saleTotals = activeSale.totals,
-    splitMeta?: { masterOrderId?: string; splitCheckNumber?: number },
+    splitMeta?: { masterOrderId?: string; splitCheckNumber?: number; splitPartCount?: number },
     ticketMeta?: { display?: string | null; orderNumber?: string | null } | null,
     terminalCapture?: {
       reference: string;
@@ -6956,6 +6953,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       })(),
       masterOrderId: splitMeta?.masterOrderId || null,
       splitCheckNumber: splitMeta?.splitCheckNumber ?? null,
+      splitPartCount: splitMeta?.splitPartCount ?? null,
       ticketDisplay: saleTicketDisplay || undefined,
       tabNumber: saleTabNumber || undefined,
       adyenReference: terminalCapture?.reference || undefined,
@@ -7077,7 +7075,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         : computeMerchandiseTotals(saleLines, taxRate, vatIncludedInPrice, roundingStep);
     const splitMeta =
       splitQueue.length > 0 && splitMasterIdRef.current
-        ? { masterOrderId: splitMasterIdRef.current, splitCheckNumber: splitIndex + 1 }
+        ? {
+            masterOrderId: splitMasterIdRef.current,
+            splitCheckNumber: splitIndex + 1,
+            splitPartCount: splitQueue.length,
+          }
         : undefined;
     const discExtras = checkoutBillDiscountExtras();
     const extrasWithDisc: CheckoutExtras | null = extras
@@ -7362,6 +7364,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!queuedOffline) void refreshBestsellers();
     if (shiftsEnabled) void refreshCurrentShift(true);
     const moreSplits = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
+    const nextSplitNum = splitIndex + 2;
+    if (moreSplits) {
+      const paidPart = splitQueue[splitIndex];
+      const isItemSplit =
+        !!paidPart &&
+        (paidPart.lineIds.length > 0 ||
+          (paidPart.lineQtys && Object.keys(paidPart.lineQtys).length > 0));
+      const remainingCart = isItemSplit
+        ? removePaidSplitLines(cartSnapshot, paidPart)
+        : cartSnapshot;
+      if (isItemSplit) {
+        setCart(remainingCart);
+      }
+      if (remainingCart.length > 0) {
+        try {
+          await persistHeldOrder(
+            remainingCart,
+            orderSent || remainingCart.some((l) => l.sentToKitchen),
+            { ticket }
+          );
+        } catch (heldErr) {
+          console.warn('[WebPOS] held persist after split payment failed', heldErr);
+        }
+      }
+      setSplitIndex((i) => i + 1);
+      setCheckoutSeedMethod('cash');
+      setPosView('checkout');
+    }
     if (!moreSplits) {
       const payLaterSale = method === 'pay_later' || method === 'invoice';
       if (!payLaterSale) {
@@ -7421,7 +7451,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
     setCheckoutExtras(null);
-    setCheckoutOpen(false);
+    setCheckoutOpen(moreSplits);
     const payLater = method === 'pay_later' || method === 'invoice';
     const paidTotal = sale.total;
     const splitPaidTotal = roundMoney2(
@@ -7447,7 +7477,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           : payLater
           ? t('webPosProgrammedSaved')
           : moreSplits
-            ? t('webPosSplitNext').replace('{n}', String(splitIndex + 2)).replace('{total}', String(splitQueue.length))
+            ? t('webPosSplitNext').replace('{n}', String(nextSplitNum)).replace('{total}', String(splitQueue.length))
             : t('webPosSaleCompleteAmount').replace('{amount}', money(paidTotal))
       );
     }
@@ -7595,13 +7625,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     setBusy(true);
     try {
-      const remaining = splitQueue.length > 0 && splitIndex + 1 < splitQueue.length;
       await finalizeSale(adjusted.method, undefined, undefined, adjusted, true);
-      if (remaining) {
-        setSplitIndex((i) => i + 1);
-        setCheckoutSeedMethod('cash');
-        setPosView('checkout');
-      }
     } catch (e: any) {
       toast.error(e.response?.data?.error || e.message || t('webPosSaleFailed'));
       setPosView('checkout');
