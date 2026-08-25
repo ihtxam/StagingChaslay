@@ -1,4 +1,9 @@
-import { MERCHANT_TZ } from '@/lib/shop-hours';
+import {
+  addCalendarDaysZurich,
+  MERCHANT_TZ,
+  pad2,
+  zonedLocalDate,
+} from '@/lib/shop-hours';
 
 export { MERCHANT_TZ };
 
@@ -48,4 +53,35 @@ export function formatDateTimeDDMMYYYY(input: DateInput): string {
   if (!datePart) return '';
   const timePart = formatTimeHHMM(input);
   return timePart ? `${datePart} ${timePart}` : datePart;
+}
+
+/** YYYY-MM-DD and HH:mm in merchant TZ for reservation form fields. */
+export function reservationFormParts(input: DateInput): { date: string; time: string } {
+  return {
+    date: ymdZurich(input),
+    time: formatTimeHHMM(input),
+  };
+}
+
+/** Today + N calendar days as YYYY-MM-DD in merchant TZ. */
+export function addDaysYmdZurich(days: number, from: DateInput = new Date()): string {
+  const baseYmd = ymdZurich(from);
+  if (!baseYmd) return '';
+  const [y, m, d] = baseYmd.split('-').map(Number);
+  const noon = zonedLocalDate(y, m, d, 12, 0);
+  const next = addCalendarDaysZurich(noon, days);
+  return `${next.year}-${pad2(next.month)}-${pad2(next.day)}`;
+}
+
+/** Start of a merchant-TZ calendar day (00:00) as UTC Date. */
+export function zurichDayStartFromYmd(ymd: string): Date {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return zonedLocalDate(y, m, d, 0, 0);
+}
+
+/** End of a merchant-TZ calendar day (23:59:59.999) as UTC Date. */
+export function zurichDayEndFromYmd(ymd: string): Date {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const next = addCalendarDaysZurich(zonedLocalDate(y, m, d, 12, 0), 1);
+  return new Date(zonedLocalDate(next.year, next.month, next.day, 0, 0).getTime() - 1);
 }

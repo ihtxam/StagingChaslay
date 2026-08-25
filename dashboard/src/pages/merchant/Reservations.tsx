@@ -6,6 +6,13 @@ import ReservationCancelModal from '@/components/reservations/ReservationCancelM
 import ReservationCreateSheet, {
   type ReservationCreateForm,
 } from '@/components/reservations/ReservationCreateSheet';
+import {
+  addDaysYmdZurich,
+  reservationFormParts,
+  ymdZurich,
+  zurichDayEndFromYmd,
+  zurichDayStartFromYmd,
+} from '@/lib/date-format';
 
 type Reservation = {
   id: string;
@@ -28,17 +35,6 @@ type Reservation = {
 
 type Table = { id: string; label: string; capacity: number; status: string; floorPlanName?: string };
 
-function ymd(d = new Date()) {
-  const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return z.toISOString().slice(0, 10);
-}
-
-function addDaysYmd(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return ymd(d);
-}
-
 export default function Reservations() {
   const { t, formatDate, formatDateTime, formatTime } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -47,7 +43,7 @@ export default function Reservations() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [bookingsScope, setBookingsScope] = useState<'today' | 'future'>('today');
-  const [dateFilter, setDateFilter] = useState(ymd());
+  const [dateFilter, setDateFilter] = useState(ymdZurich());
   const [statusFilter, setStatusFilter] = useState('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -57,7 +53,7 @@ export default function Reservations() {
     guestPhone: '',
     guestEmail: '',
     partySize: 2,
-    date: ymd(),
+    date: ymdZurich(),
     time: '19:00',
     notes: '',
     tableId: '',
@@ -71,15 +67,15 @@ export default function Reservations() {
   }, []);
 
   const loadList = useCallback(async () => {
-    const today = ymd();
+    const today = ymdZurich();
     const from =
       bookingsScope === 'today'
-        ? new Date(`${today}T00:00:00`)
-        : new Date(`${addDaysYmd(1)}T00:00:00`);
+        ? zurichDayStartFromYmd(today)
+        : zurichDayStartFromYmd(addDaysYmdZurich(1));
     const to =
       bookingsScope === 'today'
-        ? new Date(`${today}T23:59:59`)
-        : new Date(`${addDaysYmd(maxDaysAhead)}T23:59:59`);
+        ? zurichDayEndFromYmd(today)
+        : zurichDayEndFromYmd(addDaysYmdZurich(maxDaysAhead));
     const res = await api.get('/merchant/reservations', {
       params: {
         from: from.toISOString(),
@@ -116,15 +112,14 @@ export default function Reservations() {
   );
 
   const openEdit = (r: Reservation) => {
-    const dt = new Date(r.reservedAt);
-    const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
+    const { date, time } = reservationFormParts(r.reservedAt);
     setEditForm({
       guestName: r.guestName,
       guestPhone: r.guestPhone,
       guestEmail: r.guestEmail || '',
       partySize: r.partySize,
-      date: local.toISOString().slice(0, 10),
-      time: local.toISOString().slice(11, 16),
+      date,
+      time,
       notes: r.notes || '',
       tableId: r.tableId || '',
     });

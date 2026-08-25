@@ -1,6 +1,18 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { addDaysYmdZurich, ymdZurich } from '@/lib/date-format';
+import { dayKeyOf, zonedLocalDate, type DayKey } from '@/lib/shop-hours';
+
+const DAY_NUM: Record<DayKey, number> = {
+  sun: 0,
+  mon: 1,
+  tue: 2,
+  wed: 3,
+  thu: 4,
+  fri: 5,
+  sat: 6,
+};
 
 export type ReservationCreateForm = {
   guestLastName: string;
@@ -18,23 +30,13 @@ export type ReservationCreateForm = {
 
 type Table = { id: string; label: string; capacity: number };
 
-function ymd(d = new Date()) {
-  const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return z.toISOString().slice(0, 10);
-}
-
-function addDaysYmd(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return ymd(d);
-}
-
 function nextThursdayYmd() {
-  const d = new Date();
-  const day = d.getDay();
+  const today = ymdZurich();
+  const [y, m, d] = today.split('-').map(Number);
+  const noon = zonedLocalDate(y, m, d, 12, 0);
+  const day = DAY_NUM[dayKeyOf(noon)];
   const add = day <= 4 ? 4 - day : 7 - day + 4;
-  d.setDate(d.getDate() + (add || 7));
-  return ymd(d);
+  return addDaysYmdZurich(add || 7, noon);
 }
 
 function buildTimeSlots(start = '18:00', count = 8, stepMin = 15) {
@@ -73,7 +75,7 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
     guestPhone: '',
     guestEmail: '',
     partySize: 2,
-    date: ymd(),
+    date: ymdZurich(),
     time: '20:00',
     notes: '',
     tableId: '',
@@ -84,15 +86,17 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
   const timeSlots = useMemo(() => buildTimeSlots('20:00', 4), []);
   const dateLabel = useMemo(() => {
     try {
-      return formatDate(new Date(`${form.date}T12:00:00`));
+      const [y, m, d] = form.date.split('-').map(Number);
+      return formatDate(zonedLocalDate(y, m, d, 12, 0));
     } catch {
       return form.date;
     }
   }, [form.date, formatDate]);
 
   const isPast = useMemo(() => {
-    const dt = new Date(`${form.date}T${form.time}:00`);
-    return dt.getTime() < Date.now();
+    const [y, m, d] = form.date.split('-').map(Number);
+    const [hh, mm] = form.time.split(':').map(Number);
+    return zonedLocalDate(y, m, d, hh, mm).getTime() < Date.now();
   }, [form.date, form.time]);
 
   if (!open) return null;
@@ -108,7 +112,7 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
         guestPhone: '',
         guestEmail: '',
         partySize: 2,
-        date: ymd(),
+        date: ymdZurich(),
         time: '20:00',
         notes: '',
         tableId: '',
@@ -169,8 +173,8 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
               <p className="mb-2 text-sm font-medium">{dateLabel}</p>
               <div className="flex flex-wrap gap-1.5">
                 {[
-                  [ymd(), t('reportsToday')],
-                  [addDaysYmd(1), t('reservationsTomorrow')],
+                  [ymdZurich(), t('reportsToday')],
+                  [addDaysYmdZurich(1), t('reservationsTomorrow')],
                   [nextThursdayYmd(), t('reservationsThisThursday')],
                 ].map(([d, label]) => (
                   <button
