@@ -194,7 +194,7 @@ type Props = {
   shiftOpen?: boolean;
   onCloseShift?: () => void;
   onStartShift?: () => void;
-  /** When shifts are off: show EOD for managers with END_OF_DAY / VIEW_REPORTS */
+  /** When shifts are off: EOD for staff with END_OF_DAY / VIEW_REPORTS (own sales without VIEW_ALL_SALES). */
   showEodButton?: boolean;
   onEodReport?: () => void;
   /** Hide Tables tab (retail mode). */

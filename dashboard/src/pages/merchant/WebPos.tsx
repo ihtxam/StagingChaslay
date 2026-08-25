@@ -3147,14 +3147,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ? webposStaff.name
       : null;
 
-  /** Whole-day EOD: END_OF_DAY/VIEW_REPORTS plus VIEW_ALL_SALES (managers). */
-  const mayPrintWholeDayEod =
+  /** EOD from POS menu: END_OF_DAY or VIEW_REPORTS (own sales when VIEW_ALL_SALES is off). */
+  const canPrintEodReport =
     ownerOnRegister ||
     !staffConfigured ||
     (!!webposStaff &&
       (hasPermission(webposStaff.permissions, 'VIEW_REPORTS') ||
-        hasPermission(webposStaff.permissions, 'END_OF_DAY')) &&
-      hasPermission(webposStaff.permissions, 'VIEW_ALL_SALES', false));
+        hasPermission(webposStaff.permissions, 'END_OF_DAY')));
+
+  /** Whole-day EOD: END_OF_DAY/VIEW_REPORTS plus VIEW_ALL_SALES (managers). */
+  const mayPrintWholeDayEod =
+    canPrintEodReport &&
+    (ownerOnRegister ||
+      !staffConfigured ||
+      hasPermission(webposStaff?.permissions, 'VIEW_ALL_SALES', false));
 
   const buildClosedShiftPrintPayload = (
     report: PosReportPayload | null,
@@ -3345,7 +3351,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     opts?: { includeProductsSold?: boolean }
   ) => {
     const includeProductsSold = opts?.includeProductsSold !== false;
-    if (!mayPrintWholeDayEod) {
+    if (!canPrintEodReport) {
       toast.error(t('webPosEodPermissionDenied'));
       return;
     }
@@ -7795,7 +7801,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     (!!webposStaff && hasPermission(staffPerms, 'VIEW_ALL_SALES', false));
   /** Whole-day EOD: report permission + company-wide sales visibility. */
   const canPrintDayEod = mayPrintWholeDayEod;
-  const showEodButton = !shiftsEnabled && canPrintDayEod;
+  const showEodButton = !shiftsEnabled && canPrintEodReport;
 
   const openEodPrint = () => {
     setSettingsOpen(false);
