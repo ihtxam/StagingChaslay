@@ -1,6 +1,7 @@
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
 import { parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
 import { formatOrderNumberDisplay, guestOrderNumber } from '@/lib/order-number';
+import { ticketQueryMatches } from '@/lib/webpos-held';
 
 export type MerchantOrder = PosOrderForReceipt & {
   status: string;
@@ -540,7 +541,13 @@ export function orderChannelBorderClass(o: MerchantOrder): string {
 export function orderSearchHaystack(o: MerchantOrder): string {
   const refs = orderPublicRefs(o);
   const ch = orderChannel(o);
+  const guest = guestOrderNumber({
+    orderNumber: o.orderNumber,
+    orderDisplay: refs.ticketDisplay || undefined,
+    tabNumber: refs.tabNumber || undefined,
+  });
   return [
+    guest,
     o.orderNumber,
     formatOrderNumberDisplay(o.orderNumber),
     o.clientId,
@@ -556,10 +563,42 @@ export function orderSearchHaystack(o: MerchantOrder): string {
     o.invoiceNumber,
     o.paymentStatus,
     o.status,
+    (o as { orderSource?: string | null }).orderSource,
+    (o as { externalOrderId?: string | null }).externalOrderId,
   ]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
+}
+
+/** Match kitchen shout / tab / opaque ids — same rules as WebPOS Orders search. */
+export function orderMatchesSearchQuery(o: MerchantOrder, query: string): boolean {
+  const q = query.trim();
+  if (!q) return true;
+  const refs = orderPublicRefs(o);
+  const guest = guestOrderNumber({
+    orderNumber: o.orderNumber,
+    orderDisplay: refs.ticketDisplay || undefined,
+    tabNumber: refs.tabNumber || undefined,
+  });
+  return ticketQueryMatches(
+    q,
+    guest,
+    o.orderNumber,
+    formatOrderNumberDisplay(o.orderNumber),
+    o.clientId,
+    o.customerName,
+    o.customerPhone,
+    o.tableLabel,
+    o.orderType,
+    o.staffName,
+    refs.ticketDisplay,
+    refs.tabNumber,
+    o.invoiceNumber,
+    o.paymentMethod,
+    (o as { orderSource?: string | null }).orderSource,
+    (o as { externalOrderId?: string | null }).externalOrderId
+  );
 }
 
 export function todayIso(): string {

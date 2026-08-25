@@ -195,10 +195,16 @@ export class PosOrdersService {
       );
     }
     if (/^\d{1,6}$/.test(bareQ)) {
+      const guestNum = Number(bareQ);
       searchParts.push(
         ilike(schema.orders.notes, `%[ticket:${bareQ}]%`),
-        ilike(schema.orders.notes, `%[tab:${bareQ}]%`)
+        ilike(schema.orders.notes, `%[tab:${bareQ}]%`),
+        ilike(schema.orders.notes, `%[ticket:#${bareQ}]%`),
+        ilike(schema.orders.notes, `%[tab:#${bareQ}]%`)
       );
+      if (Number.isFinite(guestNum)) {
+        searchParts.push(eq(schema.orders.guestCount, guestNum));
+      }
     }
     const searchCond = searchParts.length ? or(...searchParts) : null;
 

@@ -23,14 +23,15 @@ import {
   orderChannel,
   ONLINE_CHANNEL_BORDER,
   ONLINE_CHANNEL_STYLE,
-  orderPublicRefs,
-  orderSearchHaystack,
+  orderMatchesSearchQuery,
+  orderListPrimaryLabel,
   orderStatusBadgeClass,
   todayIso,
   type MerchantOrder,
 } from '@/lib/order-management';
 import { collectPaymentAction } from '@/lib/order-to-cart';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
+import { parseHeldCartJson, resolveHeldChannel } from '@/lib/webpos-held';
 import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
 import { toastPrintError } from '@/lib/webpos-print-toast';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
@@ -64,6 +65,75 @@ const CHANNEL_BORDER: Record<string, string> = {
   dine_in: 'border-l-sky-500',
   delivery: 'border-l-emerald-500',
 };
+
+type HeldRow = {
+  id: string;
+  label?: string | null;
+  status: string;
+  channel?: string | null;
+  cartJson: unknown;
+  staffName?: string | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+};
+
+function isHeldListRow(order: MerchantOrder): boolean {
+  return String(order.id).startsWith('held:');
+}
+
+function heldToMerchantOrder(h: HeldRow): MerchantOrder {
+  const meta = parseHeldCartJson(h.cartJson);
+  const lines = meta.cart || [];
+  const total = lines.reduce((s, l) => s + Number(l.lineTotal || 0), 0);
+  const ch = resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson });
+  const tabShout = meta.tabNumber ? `#${String(meta.tabNumber).replace(/^#/, '')}` : null;
+  return {
+    id: `held:${h.id}`,
+    orderNumber: meta.ticketOrderNumber || '',
+    ticketDisplay: meta.ticketDisplay || tabShout,
+    tabNumber: meta.tabNumber,
+    channel: ch,
+    fulfillmentChannel: ch,
+    orderType: 'pos',
+    status: h.status === 'sent_to_kitchen' ? 'preparing' : 'pending',
+    paymentStatus: 'awaiting_payment',
+    paymentMethod: 'pay_later',
+    total,
+    subtotal: total,
+    taxAmount: 0,
+    refundAmount: 0,
+    staffName: h.staffName || null,
+    tableLabel: meta.tableLabel,
+    customerName: meta.tableLabel,
+    createdAt: h.createdAt || h.updatedAt || new Date().toISOString(),
+    items: lines.map((l, i) => ({
+      id: l.lineId || `held-line-${i}`,
+      name: l.name,
+      productName: l.name,
+      quantity: l.quantity,
+      unitPrice: l.unitPrice,
+      totalPrice: l.lineTotal,
+    })),
+  } as MerchantOrder;
+}
+
+function heldMatchesStatusFilter(h: HeldRow, filter: string): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'cancelled' || filter === 'completed' || filter === 'refunded') return false;
+  if (filter === 'pending') return h.status === 'held';
+  if (filter === 'preparing' || filter === 'accepted' || filter === 'sent_to_kitchen') {
+    return h.status === 'sent_to_kitchen';
+  }
+  return true;
+}
+
+function orderInDateWindow(order: MerchantOrder, from: string, to: string): boolean {
+  const ts = new Date(order.createdAt).getTime();
+  if (!Number.isFinite(ts)) return false;
+  const start = new Date(`${from}T00:00:00`).getTime();
+  const end = new Date(`${to}T23:59:59.999`).getTime();
+  return ts >= start && ts <= end;
+}
 
 function orderItemName(item: NonNullable<MerchantOrder['items']>[number]) {
   return resolveOrderItemName(item.productName, item.name, item.product?.name);
@@ -282,6 +352,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     hasPermission(user?.permissions as Permission[] | undefined, 'VIEW_ALL_SALES', false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
+  const [heldRows, setHeldRows] = useState<HeldRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<MerchantOrder | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -371,6 +442,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         if (searchQ) params.set('q', searchQ);
         const response = await api.get(`/merchant/invoices?${params.toString()}`);
         setOrders((response.data.invoices || []) as MerchantOrder[]);
+        setHeldRows([]);
       } else {
         const params = new URLSearchParams({
           limit: '200',
@@ -379,9 +451,13 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         });
         if (statusFilter !== 'all') params.set('status', statusFilter);
         if (searchQ) params.set('q', searchQ);
-        const response = await api.get(`/merchant/pos/orders?${params.toString()}`);
-        setOrders((response.data.orders || []) as MerchantOrder[]);
-        setRefundReasons(response.data.refundReasons || []);
+        const [ordersRes, heldRes] = await Promise.all([
+          api.get(`/merchant/pos/orders?${params.toString()}`),
+          api.get('/merchant/pos/held'),
+        ]);
+        setOrders((ordersRes.data.orders || []) as MerchantOrder[]);
+        setHeldRows((heldRes.data.held || []) as HeldRow[]);
+        setRefundReasons(ordersRes.data.refundReasons || []);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('ordersLoadFailed'));
@@ -421,10 +497,26 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     return [...names].sort((a, b) => a.localeCompare(b));
   }, [orders]);
 
+  const heldOrders = useMemo(() => heldRows.map(heldToMerchantOrder), [heldRows]);
+
   const list = useMemo(() => {
-    const q = searchQ.trim().toLowerCase();
-    return orders
+    const q = searchQ.trim();
+    const combined = showingInvoices
+      ? orders
+      : [
+          ...orders,
+          ...heldOrders.filter((o) => {
+            if (q) return orderMatchesSearchQuery(o, q);
+            return orderInDateWindow(o, dateFrom, dateTo);
+          }),
+        ];
+    return combined
       .filter((o) => {
+        if (isHeldListRow(o)) {
+          const held = heldRows.find((h) => `held:${h.id}` === o.id);
+          if (!held) return false;
+          if (!heldMatchesStatusFilter(held, statusFilter)) return false;
+        }
         if (paymentFilter === 'invoice') {
           if (!isInvoiceOrder(o)) return false;
         } else if (
@@ -440,12 +532,14 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
           const target = staffRow?.name || staffFilter;
           if ((o.staffName || '').trim() !== target) return false;
         }
-        if (q && !orderSearchHaystack(o).includes(q)) return false;
+        if (q && !orderMatchesSearchQuery(o, q)) return false;
         return true;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [
     orders,
+    heldOrders,
+    heldRows,
     paymentFilter,
     typeFilter,
     channelFilter,
@@ -453,6 +547,9 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     staffList,
     searchQ,
     showingInvoices,
+    statusFilter,
+    dateFrom,
+    dateTo,
   ]);
 
   const openInvoice = async (order: MerchantOrder, mode: 'view' | 'download') => {
@@ -472,6 +569,10 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
 
   const openDetail = async (order: MerchantOrder) => {
     setCollectOpen(false);
+    if (isHeldListRow(order)) {
+      setSelected(order);
+      return;
+    }
     try {
       const res = await api.get(`/merchant/orders/${order.id}`);
       setSelected((res.data.order as MerchantOrder) || order);
@@ -811,16 +912,13 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         )}
         {list.map((order) => {
           const ch = orderChannel(order);
-          const refs = orderPublicRefs(order);
           const online = isOnlineShopOrder(order);
           const title = showingInvoices
             ? order.invoiceNumber ||
               formatOrderNumberDisplay(order.orderNumber) ||
               order.id.slice(0, 8)
-            : refs.ticketDisplay ||
-              (refs.tabNumber ? `#${refs.tabNumber}` : null) ||
-              formatOrderNumberDisplay(order.orderNumber) ||
-              order.id.slice(0, 8);
+            : orderListPrimaryLabel(order) || order.id.slice(0, 8);
+          const heldKitchen = isHeldListRow(order);
           const invoicePaid = isPaidOrder(order);
           return (
             <article
@@ -842,10 +940,12 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                 <div className="min-w-0">
                   <h3 className="truncate text-sm font-extrabold">{title}</h3>
                   <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                    {isOnlineShopOrder(order)
-                      ? orderSourceLabel((order as { orderSource?: string | null }).orderSource) ||
-                        t('ordersOnlineShop')
-                      : t('ordersPos')}{' '}
+                    {heldKitchen
+                      ? t('webPosOngoing')
+                      : isOnlineShopOrder(order)
+                        ? orderSourceLabel((order as { orderSource?: string | null }).orderSource) ||
+                          t('ordersOnlineShop')
+                        : t('ordersPos')}{' '}
                     · {formatDateTime(order.createdAt)}
                   </p>
                 </div>
