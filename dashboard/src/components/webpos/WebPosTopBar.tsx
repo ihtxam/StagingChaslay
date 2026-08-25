@@ -175,9 +175,12 @@ type Props = {
   onSearchSubmit?: () => void;
   showSearch: boolean;
   onlinePendingCount: number;
+  /** Combined bell badge: unactioned online orders + pending reservations */
+  notificationCount?: number;
   /** Pulsing ring on bell while unactioned online orders remain */
   orderAlertRing?: boolean;
   reservationPendingCount?: number;
+  reservationAlertRing?: boolean;
   staffName?: string | null;
   canDrawer: boolean;
   appMode: boolean;
@@ -187,6 +190,11 @@ type Props = {
   settingsPanel: React.ReactNode;
   settingsRef: React.RefObject<HTMLDivElement | null>;
   onOnlineOrders: () => void;
+  notificationsOpen?: boolean;
+  onToggleNotifications?: () => void;
+  onCloseNotifications?: () => void;
+  notificationsRef?: React.RefObject<HTMLDivElement | null>;
+  notificationsPanel?: React.ReactNode;
   onSwitchUser: () => void;
   onOpenDrawer: () => void;
   tableBadge?: string | null;
@@ -231,8 +239,10 @@ export default function WebPosTopBar({
   onSearchSubmit,
   showSearch,
   onlinePendingCount,
+  notificationCount,
   orderAlertRing = false,
   reservationPendingCount = 0,
+  reservationAlertRing = false,
   staffName,
   canDrawer,
   appMode,
@@ -242,6 +252,11 @@ export default function WebPosTopBar({
   settingsPanel,
   settingsRef,
   onOnlineOrders,
+  notificationsOpen = false,
+  onToggleNotifications,
+  onCloseNotifications,
+  notificationsRef,
+  notificationsPanel,
   onSwitchUser,
   onOpenDrawer,
   tableBadge,
@@ -289,6 +304,9 @@ export default function WebPosTopBar({
       onSearchChange('');
     }
   }, [showSearch, onSearchChange]);
+
+  const bellBadgeCount = notificationCount ?? onlinePendingCount;
+  const bellRing = orderAlertRing || reservationAlertRing;
 
   const tabs: Array<{ id: PosTab; label: string; Icon: typeof Pencil }> = [
     ...(!hideTablesTab
@@ -385,29 +403,46 @@ export default function WebPosTopBar({
             </>
           ) : null}
 
-          {/* Desktop / tablet: online orders bell. Mobile: orders tab badge only. */}
-          <button
-            type="button"
-            className={`relative hidden h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:inline-flex ${
-              orderAlertRing
-                ? 'ring-2 ring-red-400 ring-offset-1 animate-pulse'
-                : ''
-            }`}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onOnlineOrders();
-            }}
-            title={t('webPosOnlineOrders')}
-            aria-label={t('webPosOnlineOrders')}
-          >
-            <Bell size={17} />
-            {onlinePendingCount > 0 ? (
-              <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
-                {onlinePendingCount > 99 ? '99+' : onlinePendingCount}
-              </span>
+          {/* Notifications bell — badge for online orders + pending bookings */}
+          <div className="relative" ref={notificationsRef}>
+            <button
+              type="button"
+              className={`relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9 ${
+                bellRing ? 'ring-2 ring-red-400 ring-offset-1 animate-pulse' : ''
+              }`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onToggleNotifications) {
+                  onToggleNotifications();
+                  return;
+                }
+                onOnlineOrders();
+              }}
+              title={t('webPosNotificationsTitle')}
+              aria-label={t('webPosNotificationsTitle')}
+              aria-expanded={notificationsOpen}
+            >
+              <Bell size={17} />
+              {bellBadgeCount > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                  {bellBadgeCount > 99 ? '99+' : bellBadgeCount}
+                </span>
+              ) : null}
+            </button>
+            {notificationsOpen && notificationsPanel ? (
+              <>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={t('close')}
+                  className="fixed inset-0 z-[54] cursor-default border-0 bg-black/10 p-0"
+                  onClick={onCloseNotifications}
+                />
+                {notificationsPanel}
+              </>
             ) : null}
-          </button>
+          </div>
 
           <button
             type="button"

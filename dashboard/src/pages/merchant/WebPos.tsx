@@ -142,6 +142,9 @@ import WebPosOnlineOrdersPanel, {
   type OnlineOrder,
 } from '@/components/WebPosOnlineOrdersPanel';
 import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
+import WebPosNotificationsPanel, {
+  type WebPosReservationAlert,
+} from '@/components/webpos/WebPosNotificationsPanel';
 import WebPosRejectOrderModal from '@/components/webpos/WebPosRejectOrderModal';
 import WebPosTopBar, {
   WebPosSettingsDropdown,
@@ -380,6 +383,7 @@ import {
   INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
   isInvoiceOrder,
+  isOnlineShopOrder,
   isPaidOrder,
   isTerminalOrderStatus,
   orderPublicRefs,
@@ -886,7 +890,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const localHeldBellSuppressRef = useRef<Map<string, number>>(new Map());
   const onlinePanelOpenRef = useRef(false);
   const [reservationPendingCount, setReservationPendingCount] = useState(0);
+  const [pendingReservationAlerts, setPendingReservationAlerts] = useState<
+    WebPosReservationAlert[]
+  >([]);
   const [reservationAlertUntil, setReservationAlertUntil] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationsRef = useRef<HTMLDivElement | null>(null);
   const splitMasterIdRef = useRef<string | null>(null);
   const [fulfillmentWhen, setFulfillmentWhen] = useState<FulfillmentWhen | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<WebPosCustomer | null>(() => {
@@ -2347,7 +2356,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     try {
       const res = await api.get('/merchant/orders', { params: { limit: 80 } });
       const all = (res.data.orders || []) as OnlineOrder[];
-      const online = all.filter((o) => o.orderType === 'web_shop');
+      const online = all.filter((o) => isOnlineShopOrder(o));
       setOnlineOrders(online);
 
       const alertStatuses = onlineOrderAlertStatuses(deliveryAutoAccept);
@@ -2358,6 +2367,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
       if (knownOnlineIdsRef.current == null) {
         knownOnlineIdsRef.current = new Set(newIds);
+        for (const o of newOnes) {
+          unactionedOrderIdsRef.current.add(o.id);
+        }
+        setUnactionedOrderCount(unactionedOrderIdsRef.current.size);
         return;
       }
 
@@ -2513,10 +2526,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       const rows = (res.data.reservations || []) as Array<{
         id: string;
+        code?: string;
+        guestName: string;
+        partySize: number;
+        reservedAt: string;
         status: string;
       }>;
       const actionable = rows.filter((r) => r.status === 'pending' || r.status === 'confirmed');
-      setReservationPendingCount(rows.filter((r) => r.status === 'pending').length);
+      const pending = rows.filter((r) => r.status === 'pending');
+      setReservationPendingCount(pending.length);
+      setPendingReservationAlerts(
+        pending.map((r) => ({
+          id: r.id,
+          code: r.code,
+          guestName: r.guestName,
+          partySize: r.partySize,
+          reservedAt: r.reservedAt,
+          status: r.status,
+        }))
+      );
 
       const alertIds = actionable.map((r) => r.id);
       if (knownReservationIdsRef.current == null) {
@@ -2551,23 +2579,38 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [posView, ordersChannelPref]);
 
   useEffect(() => {
+    if (pinGateRequired || loading) {
+      knownOnlineIdsRef.current = null;
+      knownReservationIdsRef.current = null;
+      unactionedOrderIdsRef.current.clear();
+      setUnactionedOrderCount(0);
+      setNewOrderAlertQueue([]);
+      setPendingReservationAlerts([]);
+      setReservationPendingCount(0);
+      stopOrderAlertLoop();
+      return;
+    }
     void pollOnlineOrders();
     const id = setInterval(() => void pollOnlineOrders(), 8000);
     return () => {
       clearInterval(id);
       stopOrderAlertLoop();
     };
-  }, [pollOnlineOrders]);
+  }, [pinGateRequired, loading, pollOnlineOrders]);
 
   useEffect(() => {
-    if (!reservationsPosUiEnabled) {
+    if (!reservationsPosUiEnabled || pinGateRequired || loading) {
       setReservationPendingCount(0);
+      setPendingReservationAlerts([]);
+      if (!reservationsPosUiEnabled) {
+        knownReservationIdsRef.current = null;
+      }
       return;
     }
     void pollReservations();
     const id = setInterval(() => void pollReservations(), 8000);
     return () => clearInterval(id);
-  }, [pollReservations, reservationsPosUiEnabled]);
+  }, [pollReservations, reservationsPosUiEnabled, pinGateRequired, loading]);
 
   // Browsers block audio until a user gesture - unlock AudioContext on first tap
   useEffect(() => {
@@ -8332,7 +8375,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
 
   const onlinePendingCount = unactionedOrderCount;
+  const notificationCount =
+    unactionedOrderCount +
+    (reservationsPosUiEnabled ? reservationPendingCount : 0);
   const orderAlertRing = unactionedOrderCount > 0;
+  const reservationAlertRing = reservationAlertUntil > Date.now();
+  const notificationOrders = useMemo(
+    () => onlineOrders.filter((o) => unactionedOrderIdsRef.current.has(o.id)),
+    [onlineOrders, unactionedOrderCount]
+  );
   const currentNewOrderAlert = newOrderAlertQueue[0] ?? null;
   const newOrderAlertAcknowledgeOnly =
     deliveryAutoAccept &&
@@ -8431,8 +8482,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }}
         showSearch={posView === 'register'}
         onlinePendingCount={onlinePendingCount}
+        notificationCount={notificationCount}
         orderAlertRing={orderAlertRing}
         reservationPendingCount={reservationPendingCount}
+        reservationAlertRing={reservationAlertRing}
         staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
         canDrawer={canDrawer}
         appMode={appMode}
@@ -8441,6 +8494,36 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onCloseSettings={() => setSettingsOpen(false)}
         settingsRef={settingsRef}
         onOnlineOrders={() => openOnlineOrdersInTab()}
+        notificationsOpen={notificationsOpen}
+        onToggleNotifications={() => {
+          setNotificationsOpen((open) => {
+            const next = !open;
+            if (next && settingsOpen) setSettingsOpen(false);
+            return next;
+          });
+        }}
+        onCloseNotifications={() => setNotificationsOpen(false)}
+        notificationsRef={notificationsRef}
+        notificationsPanel={
+          <WebPosNotificationsPanel
+            orders={notificationOrders}
+            reservations={pendingReservationAlerts}
+            showBookings={reservationsPosUiEnabled}
+            onOpenOrder={(orderId) => {
+              setNotificationsOpen(false);
+              openOnlineOrdersInTab(orderId);
+            }}
+            onOpenBookings={() => {
+              setNotificationsOpen(false);
+              setPosTab('bookings');
+              setPosView('bookings');
+            }}
+            onViewAllOrders={() => {
+              setNotificationsOpen(false);
+              openOnlineOrdersInTab();
+            }}
+          />
+        }
         onSwitchUser={openSwitchUserPin}
         onOpenDrawer={() => void openCashDrawer()}
         tableBadge={tableBadge}

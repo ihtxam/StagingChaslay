@@ -10,7 +10,7 @@ import {
 import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import { isAwaitingApproval } from '@/lib/order-management';
+import { isAwaitingApproval, isOnlineShopOrder } from '@/lib/order-management';
 import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
 
 type Props = {
@@ -75,13 +75,18 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
     if (!enabled) return;
     try {
       const res = await api.get('/merchant/orders', { params: { limit: 80 } });
-      const online = ((res.data.orders || []) as OnlineOrder[]).filter((o) => o.orderType === 'web_shop');
+      const online = ((res.data.orders || []) as OnlineOrder[]).filter((o) =>
+        isOnlineShopOrder(o)
+      );
       const alertStatuses = onlineOrderAlertStatuses(autoAccept);
       const pending = online.filter((o) => alertStatuses.has(String(o.status || '').toLowerCase()));
       const pendingIds = pending.map((o) => o.id);
 
       if (knownIdsRef.current == null) {
         knownIdsRef.current = new Set(pendingIds);
+        for (const o of pending) {
+          unactionedRef.current.add(o.id);
+        }
         return;
       }
 
