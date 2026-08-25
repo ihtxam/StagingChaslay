@@ -268,7 +268,10 @@ function OrderDeliveryPanel({
 }
 
 const compactControl =
-  'h-8 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text)] shadow-sm';
+  'h-9 min-h-9 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 text-xs text-[var(--text)] shadow-sm';
+const compactSelect = `${compactControl} w-auto min-w-[9rem] max-w-full sm:min-w-[10rem]`;
+const filterPill =
+  'inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border px-2.5 text-xs font-semibold transition-colors';
 
 export default function Orders({ invoiceLedger = false }: { invoiceLedger?: boolean }) {
   const { t, formatDateTime, locale } = useI18n();
@@ -637,40 +640,101 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {showingInvoices ? null : (
-          <>
-            <input
-              type="date"
-              className={`${compactControl} w-[7.25rem]`}
-              value={dateFrom}
-              aria-label={t('ordersFilterFrom')}
-              onChange={(e) => setDateFrom(e.target.value)}
+      <div className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]/60 p-2.5 sm:p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {showingInvoices ? null : (
+            <>
+              <input
+                type="date"
+                className={`${compactControl} w-[8.5rem] shrink-0`}
+                value={dateFrom}
+                aria-label={t('ordersFilterFrom')}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+              <input
+                type="date"
+                className={`${compactControl} w-[8.5rem] shrink-0`}
+                value={dateTo}
+                aria-label={t('ordersFilterTo')}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </>
+          )}
+          {canSalesAdjust ? (
+            <SecretSearchTapButton
+              onUnlock={() => setSalesAdjOpen(true)}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)] hover:bg-[var(--bg-elevated)] active:scale-95"
             />
-            <input
-              type="date"
-              className={`${compactControl} w-[7.25rem]`}
-              value={dateTo}
-              aria-label={t('ordersFilterTo')}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
-          </>
-        )}
-        {canSalesAdjust ? (
-          <SecretSearchTapButton
-            onUnlock={() => setSalesAdjOpen(true)}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)] hover:bg-[var(--bg-elevated)] active:scale-95"
+          ) : null}
+          <input
+            type="search"
+            className={`${compactControl} min-w-[10rem] flex-1 basis-[12rem] sm:max-w-[16rem]`}
+            placeholder={t('webPosSearchOrders')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
-        ) : null}
-        <input
-          type="search"
-          className={`${compactControl} min-w-[7rem] flex-1 sm:max-w-[11rem]`}
-          placeholder={t('webPosSearchOrders')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+          {!showingInvoices ? (
+            <>
+              <select
+                className={compactSelect}
+                value={statusFilter}
+                aria-label={t('ordersFilterStatus')}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">{t('ordersAllStatuses')}</option>
+                <option value="pending">{t('orderStatusPending')}</option>
+                <option value="accepted">{t('orderStatusAccepted')}</option>
+                <option value="preparing">{t('orderStatusPreparing')}</option>
+                <option value="ready">{t('orderStatusReady')}</option>
+                <option value="out_for_delivery">{t('orderStatusOutForDelivery')}</option>
+                <option value="completed">{t('orderStatusCompleted')}</option>
+                <option value="cancelled">{t('orderStatusCancelled')}</option>
+                <option value="refunded">{t('webPosStatusRefunded')}</option>
+                <option value="partially_refunded">{t('webPosStatusPartialRefund')}</option>
+              </select>
+              <select
+                className={compactSelect}
+                value={paymentFilter}
+                aria-label={t('ordersFilterPayment')}
+                onChange={(e) => setPaymentFilter(e.target.value)}
+              >
+                <option value="all">{t('ordersAllPayments')}</option>
+                <option value="cash">{t('webPosCash')}</option>
+                <option value="card">{t('webPosCard')}</option>
+                <option value="terminal">{t('webPosTerminal')}</option>
+                <option value="express">{t('webPosExpress')}</option>
+                <option value="pay_later">{t('webPosPayLater')}</option>
+                <option value="invoice">{t('webPosInvoice')}</option>
+              </select>
+              <select
+                className={compactSelect}
+                value={staffFilter}
+                aria-label={t('ordersFilterStaff')}
+                onChange={(e) => setStaffFilter(e.target.value)}
+              >
+                <option value="all">{t('ordersAllStaff')}</option>
+                {staffList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+                {staffNamesInOrders
+                  .filter((n) => !staffList.some((s) => s.name === n))
+                  .map((n) => (
+                    <option key={`name-${n}`} value={n}>
+                      {n}
+                    </option>
+                  ))}
+              </select>
+            </>
+          ) : null}
+        </div>
+
         {showingInvoices ? (
-          <>
+          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-2">
+            <span className="w-full text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)] sm:w-auto">
+              {t('ordersFilterPayment')}
+            </span>
             {(
               [
                 ['all', t('invoicesAll')],
@@ -682,7 +746,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                 key={id}
                 type="button"
                 onClick={() => setInvoicePayFilter(id)}
-                className={`h-8 shrink-0 rounded-md border px-2 text-[11px] font-semibold transition-colors ${
+                className={`${filterPill} ${
                   invoicePayFilter === id
                     ? 'border-indigo-700 bg-indigo-700 text-white'
                     : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-indigo-400'
@@ -691,78 +755,27 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                 {label}
               </button>
             ))}
-          </>
-        ) : (
-          <>
-            <select
-              className={`${compactControl} max-w-[6.5rem]`}
-              value={statusFilter}
-              aria-label={t('ordersFilterStatus')}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="all">{t('ordersAllStatuses')}</option>
-              <option value="pending">{t('orderStatusPending')}</option>
-              <option value="accepted">{t('orderStatusAccepted')}</option>
-              <option value="preparing">{t('orderStatusPreparing')}</option>
-              <option value="ready">{t('orderStatusReady')}</option>
-              <option value="out_for_delivery">{t('orderStatusOutForDelivery')}</option>
-              <option value="completed">{t('orderStatusCompleted')}</option>
-              <option value="cancelled">{t('orderStatusCancelled')}</option>
-              <option value="refunded">{t('webPosStatusRefunded')}</option>
-              <option value="partially_refunded">{t('webPosStatusPartialRefund')}</option>
-            </select>
-            <select
-              className={`${compactControl} max-w-[5.5rem]`}
-              value={paymentFilter}
-              aria-label={t('ordersFilterPayment')}
-              onChange={(e) => setPaymentFilter(e.target.value)}
-            >
-              <option value="all">{t('ordersAllPayments')}</option>
-              <option value="cash">{t('webPosCash')}</option>
-              <option value="card">{t('webPosCard')}</option>
-              <option value="terminal">{t('webPosTerminal')}</option>
-              <option value="express">{t('webPosExpress')}</option>
-              <option value="pay_later">{t('webPosPayLater')}</option>
-              <option value="invoice">{t('webPosInvoice')}</option>
-            </select>
-            <select
-              className={`${compactControl} max-w-[6.5rem]`}
-              value={staffFilter}
-              aria-label={t('ordersFilterStaff')}
-              onChange={(e) => setStaffFilter(e.target.value)}
-            >
-              <option value="all">{t('ordersAllStaff')}</option>
-              {staffList.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-              {staffNamesInOrders
-                .filter((n) => !staffList.some((s) => s.name === n))
-                .map((n) => (
-                  <option key={`name-${n}`} value={n}>
-                    {n}
-                  </option>
-                ))}
-            </select>
-          </>
-        )}
-        <span className="shrink-0 text-[10px] font-medium tabular-nums text-[var(--text-muted)]">
-          {t('ordersResults').replace('{n}', String(list.length))}
-        </span>
-        {hasActiveFilters ? (
-          <button
-            type="button"
-            className="h-8 shrink-0 rounded-md px-1.5 text-[11px] font-semibold text-teal-700 hover:bg-teal-50 dark:hover:bg-teal-950/30"
-            onClick={clearFilters}
-          >
-            {t('ordersClearFilters')}
-          </button>
+          </div>
         ) : null}
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2">
+          <span className="text-xs font-medium tabular-nums text-[var(--text-muted)]">
+            {t('ordersResults').replace('{n}', String(list.length))}
+          </span>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className="inline-flex h-9 shrink-0 items-center rounded-md px-2 text-xs font-semibold text-teal-700 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+              onClick={clearFilters}
+            >
+              {t('ordersClearFilters')}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {invoiceLedger ? null : (
-        <div className="flex flex-nowrap gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex flex-wrap gap-1.5">
           {(
             [
               ['all', t('ordersTabAll')],
@@ -778,7 +791,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               key={id}
               type="button"
               onClick={() => setTypeTab(id)}
-              className={`h-7 shrink-0 rounded-md border px-2 text-[10px] font-semibold transition-colors ${
+              className={`${filterPill} h-8 text-[11px] ${
                 typeFilter === id
                   ? 'border-slate-900 bg-slate-900 text-white'
                   : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-slate-400'
