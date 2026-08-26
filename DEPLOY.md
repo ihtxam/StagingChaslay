@@ -190,6 +190,50 @@ EOF
 
 After a successful deploy, `https://app.rebornsense.com/` should show the **Reborn** brand (not the old teal `#0f766e` Chaslay theme).
 
+#### Default panel login (Rebornsense)
+
+Fresh deploys use a **new** Postgres volume (`rebornsense_postgres_data`). Old FoodTruckPOS merchants are **not** copied automatically.
+
+**Do not guess the email** — read it from secrets (deploy forces the password on every run):
+
+```bash
+ssh root@91.98.41.165
+grep -E '^SEED_SUPERADMIN_' /root/chaslay-secrets/.env.production
+```
+
+Typical values after `scripts/deploy-hetzner.sh` with `DEPLOY_STACK=rebornsense`:
+
+| Field | Usual value | Notes |
+|-------|-------------|--------|
+| Email | `admin@chaslay.com` | If `.env.production` was created from `.env.production.example` |
+| Email | `admin@rebornsense.com` | If created from `deploy/env.rebornsense.example` |
+| Password | `ChaslayAdmin123!` | Forced by deploy (`FORCE_CHASLAY_ADMIN_BOOTSTRAP=1`) |
+
+Seed also creates a **demo merchant** (unless `SEED_DEMO_SHOP=false`): `demo@chaslay.com` / `DemoShop123!` (slug `demo`).
+
+Login at **https://app.rebornsense.com/login**. Wrong credentials show **Invalid email or password** (401 from `/api/auth/login`).
+
+**Reset superadmin password on the server:**
+
+```bash
+cd /root/rebornSense
+export DEPLOY_STACK=rebornsense DEPLOY_PATH=/root/rebornSense
+
+# Option A — re-sync from env (updates hash from SEED_SUPERADMIN_PASSWORD)
+docker compose --env-file .env.production run --rm migrate
+
+# Option B — set a new password directly
+bash scripts/set-superadmin-password.sh 'YourNewPassword123'
+# or with explicit email:
+bash scripts/set-superadmin-password.sh 'YourNewPassword123' admin@chaslay.com
+
+# Verify row exists
+docker compose --env-file .env.production exec -T db \
+  psql -U manupos -d manupos -c 'SELECT email, is_active FROM superadmins;'
+```
+
+**Old FoodTruckPOS data** lives on volume `foodtruckpos_postgres_data` (compose project from `/root/FoodTruckPOS`). Rebornsense uses `rebornsense_postgres_data`. To recover old merchants, dump/restore Postgres from the old volume or recreate tenants in the superadmin panel.
+
 Manual deploy anytime:
 
 ```bash
