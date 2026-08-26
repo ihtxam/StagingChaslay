@@ -506,6 +506,8 @@ export class ChaslayCompatService {
       scale: {
         enabled: posPrintSettings.scaleEnabled === true,
         com_port: posPrintSettings.scaleComPort || null,
+        device_name: posPrintSettings.scaleDeviceName || null,
+        device_id: posPrintSettings.scaleDeviceId || null,
         usb_address: posPrintSettings.scaleUsbAddress || null,
       },
       print: {

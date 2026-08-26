@@ -18,6 +18,9 @@ type Props = {
   weightUnit?: 'kg' | 'g' | 'lb' | string | null;
   /** Merchant Settings → Print → Scale COM port (Print Agent). */
   configuredPort?: string | null;
+  /** Friendly USB/Bluetooth name so we can find a new COM port after replug. */
+  configuredDeviceName?: string | null;
+  configuredDeviceId?: string | null;
   onClose: () => void;
   onConfirm: (weightKg: number) => void;
 };
@@ -32,6 +35,8 @@ export default function WebPosWeightModal({
   pricePerKg,
   weightUnit = 'kg',
   configuredPort,
+  configuredDeviceName,
+  configuredDeviceId,
   onClose,
   onConfirm,
 }: Props) {
@@ -44,6 +49,9 @@ export default function WebPosWeightModal({
 
   const fixedPort = (configuredPort || '').trim();
   const portLabel = fixedPort ? formatScalePortLabel(fixedPort) : '';
+  const deviceHint = (configuredDeviceName || '').trim();
+  const deviceId = (configuredDeviceId || '').trim();
+  const scaleConfigured = !!(fixedPort || deviceHint || deviceId);
 
   useEffect(() => {
     if (!open) return;
@@ -51,19 +59,22 @@ export default function WebPosWeightModal({
     setScaleReading(null);
     setScaleMsg('');
     setEntryUnit(weightUnit === 'g' ? 'g' : 'kg');
-    if (!fixedPort) return;
+    if (!scaleConfigured) return;
     void (async () => {
       const ok = await isPrintAgentAvailable();
       setAgentOk(ok);
     })();
-  }, [open, weightUnit, fixedPort]);
+  }, [open, weightUnit, scaleConfigured]);
 
   useEffect(() => {
-    if (!open || !fixedPort || !agentOk) return;
+    if (!open || !scaleConfigured || !agentOk) return;
     let cancelled = false;
     const tick = async () => {
       try {
-        const res = await readScaleWeight(portLabel, 800);
+        const res = await readScaleWeight(portLabel, 800, {
+          hint: deviceHint || null,
+          deviceId: deviceId || null,
+        });
         if (cancelled) return;
         if (res.reading) {
           setScaleReading(res.reading);
@@ -89,7 +100,7 @@ export default function WebPosWeightModal({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [open, agentOk, portLabel, entryUnit, t, fixedPort]);
+  }, [open, agentOk, portLabel, deviceHint, deviceId, entryUnit, t, scaleConfigured]);
 
   const weightKg = useMemo(() => {
     const n = Number(buffer);
@@ -172,7 +183,7 @@ export default function WebPosWeightModal({
               <Scale size={14} />
               {t('webPosScale')}
             </div>
-            {!fixedPort ? (
+            {!scaleConfigured ? (
               <p className="text-[11px] text-amber-800">{t('webPosScalePortMissing')}</p>
             ) : !agentOk ? (
               <p className="text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">

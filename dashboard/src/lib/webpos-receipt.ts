@@ -263,6 +263,8 @@ export type PosPrintSettingsClient = {
   kitchenPrintRetryIntervalSec?: number;
   /** Print Agent USB scale COM port (WebPOS). */
   scaleComPort?: string | null;
+  scaleDeviceName?: string | null;
+  scaleDeviceId?: string | null;
   /** Android USB scale address synced from panel. */
   scaleUsbAddress?: string | null;
     scaleEnabled?: boolean;

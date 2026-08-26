@@ -1067,13 +1067,14 @@ const en: Dict = {
   webPosScaleLive: 'Scale',
   webPosScaleWaiting: 'Waiting for scale reading…',
   webPosScaleAgentOffline: 'Start Print Agent on this PC to read the USB scale (manual entry still works).',
-  webPosScalePortMissing: 'Configure the scale COM port in Settings → Print (Scan scale).',
+  webPosScalePortMissing: 'Configure the scale in Settings → Print (Scan scale and tap the device name).',
   webPosScaleReadFailed: 'Could not read scale',
   settingsScaleTitle: 'Scale (Aclas USB)',
-  settingsScaleHint: 'Connect the scale to this PC, start Print Agent, then scan and tap your COM port — it saves automatically.',
+  settingsScaleHint:
+    'Connect the scale to this PC, start Reborn Print Agent, then scan and tap the device (for example USB-SERIAL CH340). We remember the name, not just the COM port, so USB replugs keep working.',
   settingsScaleScan: 'Scan scale',
   settingsScaleScanning: 'Scanning…',
-  settingsScaleNoPorts: 'No COM ports found — connect the scale via USB and scan again.',
+  settingsScaleNoPorts: 'No serial devices found — connect the scale via USB and scan again.',
   settingsScaleSelected: 'Selected',
   settingsScaleSaved: 'Scale port saved',
   settingsScaleScanFailed: 'Could not scan scale ports',
@@ -1390,18 +1391,18 @@ const en: Dict = {
     'When a kitchen ticket fails to print, Reborn retries automatically on the register PC before alerting staff.',
   kitchenPrintRetryAttempts: 'Max print attempts',
   kitchenPrintRetryIntervalSec: 'Seconds between retries',
-  printAgentDownload: 'Windows print agent',
+  printAgentDownload: 'Reborn Print Agent',
   printAgentDownloadHint:
-    'Install once on the Reborn PC. The agent starts with Windows - no need to re-run start.bat. Use a thermal ESC/POS printer (not OneNote/PDF).',
-  downloadPrintAgent: 'Download Print Agent (Windows)',
+    'Install Reborn Print Agent once on the till PC. It starts with Windows — no need to re-run start.bat. Use a thermal ESC/POS printer (not OneNote/PDF).',
+  downloadPrintAgent: 'Download Reborn Print Agent (Windows)',
   printAgentInstallSteps:
-    'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
+    'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Files stay in %LOCALAPPDATA%\\ChaslayPrintAgent so existing installs keep working.',
   printerProfiles: 'Printer profiles',
   printerProfilesHint:
-    'Map Windows printer names (print-agent) to receipt, kitchen, or end-of-day roles. For kitchen printers, pick categories and products in the two-column picker.',
-  printerName: 'Windows printer name',
+    'Pick the printer by its Windows / manufacturer name. Bluetooth COM numbers can change; the agent matches the printer name again on the next start.',
+  printerName: 'Printer',
   settingsPrinterManualEntry:
-    'Print agent offline — type the exact Windows printer name. Install and start the agent on this PC, then click Refresh printers.',
+    'Reborn Print Agent offline — type the Windows printer name. Install and start the agent on this PC, then click Refresh printers.',
   printRoleReceipts: 'Receipts',
   printRoleKitchen: 'Kitchen',
   printRoleEod: 'End of day',
@@ -1579,7 +1580,7 @@ const en: Dict = {
   webPosPrinterAutoHealed: 'Printer updated to {name}',
   webPosPrintAgentUpdateShort: 'Update Print Agent',
   webPosPrintAgentOutdatedHint:
-    'Print Agent is outdated. Download and reinstall from Settings (same folder %LOCALAPPDATA%\\ChaslayPrintAgent).',
+    'Reborn Print Agent is outdated. Download and reinstall from Settings (same folder %LOCALAPPDATA%\\ChaslayPrintAgent).',
   webPosKitchenPrintIssuesTitle: 'Not printed',
   webPosKitchenPrintIssuesHint:
     'Select tickets and tap Reprint. Failed kitchen tickets retry automatically (see Settings → Receipts & printers) before appearing here.',
@@ -4568,12 +4569,12 @@ const fr: Dict = {
     'Si un ticket cuisine ne s’imprime pas, Reborn réessaie automatiquement sur la caisse avant d’alerter le personnel.',
   kitchenPrintRetryAttempts: 'Nombre max. de tentatives',
   kitchenPrintRetryIntervalSec: 'Secondes entre les tentatives',
-  printAgentDownload: 'Agent d’impression Windows',
+  printAgentDownload: 'Reborn Print Agent',
   printAgentDownloadHint:
     'Installez une seule fois sur le PC Reborn. L’agent démarre avec Windows - plus besoin de relancer start.bat. Utilisez une imprimante tickets ESC/POS (pas OneNote/PDF).',
-  downloadPrintAgent: 'Télécharger l’agent d’impression (Windows)',
+  downloadPrintAgent: 'Télécharger Reborn Print Agent (Windows)',
   printAgentInstallSteps:
-    'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Journal : %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
+    'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Les fichiers restent dans %LOCALAPPDATA%\\ChaslayPrintAgent.',
   printerProfiles: 'Profils imprimantes',
   printerProfilesHint:
     'Associez les noms Windows (print-agent) aux rôles reçu, cuisine ou fin de journée. Pour la cuisine, choisissez les catégories par imprimante.',
@@ -4758,7 +4759,7 @@ const fr: Dict = {
   webPosPrinterAutoHealed: 'Imprimante mise à jour : {name}',
   webPosPrintAgentUpdateShort: 'Mettre à jour l’agent',
   webPosPrintAgentOutdatedHint:
-    'Agent d’impression obsolète. Téléchargez et réinstallez depuis Paramètres (dossier %LOCALAPPDATA%\\ChaslayPrintAgent).',
+    'Reborn Print Agent est obsolète. Téléchargez et réinstallez depuis Paramètres (dossier %LOCALAPPDATA%\\ChaslayPrintAgent).',
   webPosKitchenPrintIssuesTitle: 'Non imprimé',
   webPosKitchenPrintIssuesHint:
     'Sélectionnez les tickets puis Réimprimer. Les échecs cuisine sont réessayés automatiquement (Réglages → Reçus et imprimantes) avant d’apparaître ici.',
@@ -7711,12 +7712,12 @@ const de: Dict = {
     'Wenn ein Küchenticket nicht druckt, versucht Reborn automatisch erneut an der Kasse, bevor das Personal benachrichtigt wird.',
   kitchenPrintRetryAttempts: 'Max. Druckversuche',
   kitchenPrintRetryIntervalSec: 'Sekunden zwischen Versuchen',
-  printAgentDownload: 'Windows-Druckagent',
+  printAgentDownload: 'Reborn Print Agent',
   printAgentDownloadHint:
     'Einmal auf dem Reborn-PC installieren. Der Agent startet mit Windows - start.bat nicht mehr nötig. ESC/POS-Bondrucker verwenden (nicht OneNote/PDF).',
-  downloadPrintAgent: 'Druckagent herunterladen (Windows)',
+  downloadPrintAgent: 'Reborn Print Agent herunterladen (Windows)',
   printAgentInstallSteps:
-    'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
+    'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Dateien bleiben in %LOCALAPPDATA%\\ChaslayPrintAgent.',
   printerProfiles: 'Druckerprofile',
   printerProfilesHint:
     'Windows-Druckernamen (Print-Agent) Rollen zuweisen: Beleg, Küche, Tagesabschluss. Für Küche Kategorien pro Drucker wählen.',
@@ -7901,7 +7902,7 @@ const de: Dict = {
   webPosPrinterAutoHealed: 'Drucker aktualisiert: {name}',
   webPosPrintAgentUpdateShort: 'Druckagent aktualisieren',
   webPosPrintAgentOutdatedHint:
-    'Druckagent veraltet. Unter Einstellungen neu herunterladen und installieren (%LOCALAPPDATA%\\ChaslayPrintAgent).',
+    'Reborn Print Agent ist veraltet. Unter Einstellungen neu herunterladen und installieren (%LOCALAPPDATA%\\ChaslayPrintAgent).',
   webPosKitchenPrintIssuesTitle: 'Nicht gedruckt',
   webPosKitchenPrintIssuesHint:
     'Tickets wählen und erneut drucken. Fehlgeschlagene Küchentickets werden automatisch wiederholt (Einstellungen → Belege & Drucker), bevor sie hier erscheinen.',

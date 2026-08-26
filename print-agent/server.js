@@ -20,10 +20,11 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.6.0";
+const VERSION = "1.7.0";
 const APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "chaslay-print-agent.exe";
 const RUN_VALUE_NAME = "ChaslayPrintAgent";
+const DISPLAY_NAME = "Reborn Print Agent";
 
 const isPkg = typeof process.pkg !== "undefined";
 
@@ -570,8 +571,13 @@ async function listPrinters() {
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
 $items = Get-CimInstance -ClassName Win32_Printer | ForEach-Object {
+  $hint = [regex]::Replace([string]$_.Name, '\s*\(COM\d+\)\s*', ' ')
+  $hint = $hint.Trim()
   [PSCustomObject]@{
     name = $_.Name
+    portName = [string]$_.PortName
+    driverName = [string]$_.DriverName
+    matchHint = $hint
     isDefault = [bool]$_.Default
     status = [string]$_.PrinterStatus
     unsuitableForRaw = $false
@@ -594,8 +600,56 @@ $json = ($items | ConvertTo-Json -Compress -Depth 4)
   const list = Array.isArray(parsed) ? parsed : [parsed];
   return list.map((p) => ({
     ...p,
+    name: String(p.name || ""),
+    portName: p.portName ? String(p.portName) : "",
+    driverName: p.driverName ? String(p.driverName) : "",
+    matchHint: p.matchHint ? String(p.matchHint) : String(p.name || "").replace(/\s*\(COM\d+\)\s*/gi, " ").trim(),
     unsuitableForRaw: isUnsuitableRawPrinter(p.name),
   }));
+}
+
+function stableDeviceKey(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/\(com\d+\)/gi, "")
+    .replace(/com\d+/gi, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function scoreDeviceMatch(configured, candidate) {
+  const cfg = stableDeviceKey(configured);
+  const cand = stableDeviceKey(candidate);
+  if (!cfg || !cand) return 0;
+  if (cfg === cand) return 20;
+  if (cand.includes(cfg) || cfg.includes(cand)) return 12;
+  return 0;
+}
+
+async function resolvePrinterName(requested) {
+  const want = String(requested || "").trim();
+  if (!want) return "";
+  const printers = await listPrinters();
+  const exact = printers.find((p) => p.name === want);
+  if (exact) return exact.name;
+  const ci = printers.find((p) => p.name.toLowerCase() === want.toLowerCase());
+  if (ci) return ci.name;
+  const wantPort = want.toUpperCase().match(/^COM\d+$/) ? want.toUpperCase() : "";
+  if (wantPort) {
+    const byPort = printers.find((p) => String(p.portName || "").toUpperCase() === wantPort);
+    if (byPort) return byPort.name;
+  }
+  const scored = printers
+    .map((p) => ({
+      p,
+      score: Math.max(
+        scoreDeviceMatch(want, p.name),
+        scoreDeviceMatch(want, p.matchHint),
+        scoreDeviceMatch(want, p.driverName)
+      ),
+    }))
+    .filter((x) => x.score >= 12)
+    .sort((a, b) => b.score - a.score);
+  return scored[0] ? scored[0].p.name : want;
 }
 
 async function printRaw({ printerName, dataBase64 }) {
@@ -606,7 +660,8 @@ async function printRaw({ printerName, dataBase64 }) {
     throw new Error("dataBase64 is required.");
   }
 
-  const name = printerName && String(printerName).trim() ? String(printerName).trim() : "";
+  const requested = printerName && String(printerName).trim() ? String(printerName).trim() : "";
+  const name = requested ? await resolvePrinterName(requested) : "";
   if (name && isUnsuitableRawPrinter(name)) {
     throw new Error(unsuitablePrinterError(name));
   }
@@ -673,7 +728,16 @@ function startServer() {
       platform: process.platform,
       windows: isWindows(),
       installDir: installDir(),
-      features: ["print", "printers", "drawer", "scale", "install", "unicode-printer-names", "virtual-printer-guard"],
+      features: [
+        "print",
+        "printers",
+        "drawer",
+        "scale",
+        "install",
+        "unicode-printer-names",
+        "virtual-printer-guard",
+        "device-name-match",
+      ],
     });
   });
 
@@ -737,7 +801,11 @@ function startServer() {
       }
       const stdout = await runPowerShell(scriptPath, ["-ListPorts"]);
       const parsed = JSON.parse(stdout || "{}");
-      res.json({ ok: true, ports: Array.isArray(parsed.ports) ? parsed.ports : [] });
+      const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
+      const ports = Array.isArray(parsed.ports)
+        ? parsed.ports
+        : devices.map((d) => d.port).filter(Boolean);
+      res.json({ ok: true, ports, devices });
     } catch (error) {
       const safe = sanitizePrintAgentError(error, undefined, "Failed to list scale ports");
       console.error("[print-agent] scale ports failed:", safe);
@@ -752,8 +820,10 @@ function startServer() {
         return res.json({ ok: true, reading: null, message: "Scale supported on Windows only" });
       }
       const port = normalizeComPort(String(req.query.port || "").trim());
-      if (!port) {
-        return res.status(400).json({ error: "port query param required (e.g. COM3)" });
+      const hint = String(req.query.hint || req.query.deviceName || "").trim();
+      const pnp = String(req.query.pnp || req.query.deviceId || "").trim();
+      if (!port && !hint && !pnp) {
+        return res.status(400).json({ error: "port, hint, or deviceId query param required" });
       }
       const timeoutMs = Math.min(
         5000,
@@ -765,12 +835,11 @@ function startServer() {
           error: `win-scale-read.ps1 not found at ${scriptPath}. Reinstall Reborn Print Agent.`,
         });
       }
-      const stdout = await runPowerShell(scriptPath, [
-        "-PortName",
-        port,
-        "-TimeoutMs",
-        String(timeoutMs),
-      ]);
+      const args = ["-TimeoutMs", String(timeoutMs)];
+      if (port) args.push("-PortName", port);
+      if (hint) args.push("-Hint", hint);
+      if (pnp) args.push("-PnpDeviceId", pnp);
+      const stdout = await runPowerShell(scriptPath, args);
       const parsed = JSON.parse(stdout || "{}");
       if (!parsed.ok) {
         return res.status(500).json({ error: parsed.error || "Scale read failed" });
