@@ -4,6 +4,7 @@ exports.EditionService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const edition_features_1 = require("@/lib/edition-features");
+const business_module_1 = require("@/lib/business-module");
 function serialize(row) {
     return {
         id: row.id,
@@ -179,10 +180,11 @@ class EditionService {
             return null;
         return edition.features;
     }
-    static async applyEditionDefaultsToMerchant(merchantId, editionId) {
+    static async applyEditionDefaultsToMerchant(merchantId, editionId, opts) {
         const edition = await this.getById(editionId);
         if (!edition)
             return;
+        const module = (0, business_module_1.businessModuleFromEditionCategory)(edition.businessCategory, (0, business_module_1.normalizeBusinessModule)(opts?.businessCategory));
         const defaults = (0, edition_features_1.retailDefaultsFromFeatures)(edition.features);
         const db = (0, db_1.getDb)();
         const checkout = await db.query.merchants.findFirst({
@@ -192,24 +194,26 @@ class EditionService {
         const prev = checkout?.posCheckoutSettings && typeof checkout.posCheckoutSettings === "object"
             ? { ...checkout.posCheckoutSettings }
             : {};
-        prev.posMode = defaults.posMode;
-        if (defaults.posMode === "retail") {
+        prev.posMode = module === "retail" ? "retail" : defaults.posMode;
+        if (module === "retail") {
             prev.retailTakeawayEnabled = edition.features.includes("channel_takeaway");
             prev.retailDeliveryEnabled = edition.features.includes("channel_delivery");
         }
+        const modulePatch = (0, business_module_1.businessModuleMerchantPatch)(module, prev);
         await db
             .update(db_1.schema.merchants)
             .set({
             editionId,
-            floorPlanEnabled: defaults.floorPlanEnabled,
-            coursesEnabled: defaults.coursesEnabled,
-            reservationsEnabled: defaults.reservationsEnabled,
+            floorPlanEnabled: module === "retail" ? false : defaults.floorPlanEnabled,
+            coursesEnabled: module === "retail" ? false : defaults.coursesEnabled,
+            reservationsEnabled: module === "retail" ? false : defaults.reservationsEnabled,
             shopEnabled: defaults.shopEnabled,
             pickupEnabled: defaults.pickupEnabled,
             deliveryEnabled: defaults.deliveryEnabled,
             loyaltyEnabled: defaults.loyaltyEnabled,
             webposGiftCardEnabled: defaults.webposGiftCardEnabled,
-            posCheckoutSettings: prev,
+            businessCategory: module,
+            posCheckoutSettings: modulePatch.posCheckoutSettings,
             updatedAt: new Date(),
         })
             .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId));

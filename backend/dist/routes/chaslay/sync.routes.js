@@ -106,5 +106,35 @@ router.post("/staff/verify-pin", async (req, res) => {
         res.status(401).json({ error: error instanceof Error ? error.message : "Invalid PIN" });
     }
 });
+/** Android POS crash/error logs — superadmin System Logs only. */
+router.post("/diagnostic-report", async (req, res) => {
+    try {
+        const { SupportTicketService } = await Promise.resolve().then(() => __importStar(require("@/services/support-ticket.service")));
+        const { subject, body, auto, deviceId, appVersion } = req.body || {};
+        if (!subject?.trim() || !body?.trim()) {
+            return res.status(400).json({ error: "Subject and body are required" });
+        }
+        const header = [
+            "--- Chaslay Android POS diagnostics ---",
+            JSON.stringify({
+                deviceId: deviceId ? String(deviceId).slice(0, 64) : null,
+                appVersion: appVersion ? String(appVersion).slice(0, 64) : null,
+                auto: auto === true || auto === "true",
+            }, null, 2),
+            "--- Log ---",
+        ].join("\n");
+        const log = await SupportTicketService.createDiagnosticReport(req.chaslayMerchantId, {
+            source: "android",
+            subject: String(subject).slice(0, 255),
+            body: `${header}\n${String(body)}`,
+            auto: auto === true || auto === "true",
+            authorName: "Android POS",
+        });
+        res.json({ ok: true, logId: log.id });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to submit report" });
+    }
+});
 exports.default = router;
 //# sourceMappingURL=sync.routes.js.map

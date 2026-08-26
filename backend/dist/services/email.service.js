@@ -52,7 +52,8 @@ function zurichYm(d = new Date()) {
     return zurichYmd(d).slice(0, 7);
 }
 /**
- * Prefer merchant SMTP, then merchant Brevo, then platform Brevo, then SendGrid.
+ * Prefer platform Brevo when merchant emailDeliveryMode is platform;
+ * otherwise merchant SMTP, then merchant Brevo, then platform Brevo, then SendGrid.
  */
 class EmailService {
     static envBrevoApiKey() {
@@ -77,7 +78,14 @@ class EmailService {
             process.env.EMAIL_FROM_NAME ||
             "Chaslay").trim();
     }
+    /** Merchant emails show the shop name as sender; Brevo/SMTP from address stays authenticated. */
+    static merchantSenderName(merchantName) {
+        const name = String(merchantName || "").trim();
+        return name || "Shop";
+    }
     static async resolveConfig(merchantId) {
+        let merchantName = null;
+        let useOwnDelivery = false;
         if (merchantId) {
             try {
                 const { getDb, schema } = await Promise.resolve().then(() => __importStar(require("@/db")));
@@ -86,38 +94,48 @@ class EmailService {
                 const db = getDb();
                 const merchant = await db.query.merchants.findFirst({
                     where: eq(schema.merchants.id, merchantId),
-                    columns: { emailSmtpSettings: true, emailBrevoSettings: true, name: true },
+                    columns: {
+                        emailSmtpSettings: true,
+                        emailBrevoSettings: true,
+                        emailDeliveryMode: true,
+                        name: true,
+                    },
                 });
-                const smtp = MarketingService.normalizeSmtp(merchant?.emailSmtpSettings || null);
-                if (smtp.enabled &&
-                    smtp.host &&
-                    smtp.fromEmail &&
-                    String(smtp.host).trim() &&
-                    String(smtp.fromEmail).trim()) {
-                    return {
-                        provider: "smtp",
-                        apiKey: "",
-                        fromEmail: String(smtp.fromEmail).trim(),
-                        fromName: String(smtp.fromName || merchant?.name || "Shop").trim(),
-                        source: "merchant_smtp",
-                        smtp,
-                        merchantId,
-                    };
-                }
-                const brevo = MarketingService.normalizeBrevo(merchant?.emailBrevoSettings || null);
-                if (brevo.enabled &&
-                    brevo.apiKey &&
-                    brevo.fromEmail &&
-                    String(brevo.apiKey).trim() &&
-                    String(brevo.fromEmail).trim()) {
-                    return {
-                        provider: "brevo",
-                        apiKey: String(brevo.apiKey).trim(),
-                        fromEmail: String(brevo.fromEmail).trim(),
-                        fromName: String(brevo.fromName || merchant?.name || "Shop").trim(),
-                        source: "merchant_brevo",
-                        merchantId,
-                    };
+                merchantName = merchant?.name || null;
+                const mode = String(merchant?.emailDeliveryMode || "platform").toLowerCase();
+                useOwnDelivery = mode === "own";
+                if (useOwnDelivery) {
+                    const smtp = MarketingService.normalizeSmtp(merchant?.emailSmtpSettings || null);
+                    if (smtp.enabled &&
+                        smtp.host &&
+                        smtp.fromEmail &&
+                        String(smtp.host).trim() &&
+                        String(smtp.fromEmail).trim()) {
+                        return {
+                            provider: "smtp",
+                            apiKey: "",
+                            fromEmail: String(smtp.fromEmail).trim(),
+                            fromName: this.merchantSenderName(merchant?.name),
+                            source: "merchant_smtp",
+                            smtp,
+                            merchantId,
+                        };
+                    }
+                    const brevo = MarketingService.normalizeBrevo(merchant?.emailBrevoSettings || null);
+                    if (brevo.enabled &&
+                        brevo.apiKey &&
+                        brevo.fromEmail &&
+                        String(brevo.apiKey).trim() &&
+                        String(brevo.fromEmail).trim()) {
+                        return {
+                            provider: "brevo",
+                            apiKey: String(brevo.apiKey).trim(),
+                            fromEmail: String(brevo.fromEmail).trim(),
+                            fromName: this.merchantSenderName(merchant?.name),
+                            source: "merchant_brevo",
+                            merchantId,
+                        };
+                    }
                 }
             }
             catch {
@@ -139,7 +157,9 @@ class EmailService {
         }
         const apiKey = dbApiKey || this.envBrevoApiKey();
         const fromEmail = dbFromEmail || this.envFromAddress();
-        const fromName = dbFromName || this.envFromName();
+        const fromName = merchantId
+            ? this.merchantSenderName(merchantName)
+            : dbFromName || this.envFromName();
         const source = dbApiKey
             ? "database"
             : this.envBrevoApiKey() || process.env.SENDGRID_API_KEY
@@ -330,49 +350,76 @@ class EmailService {
                 apiKeySet,
             sendgridKeySet: !!process.env.SENDGRID_API_KEY,
             smtpEnabled: cfg.provider === "smtp",
+            usingPlatformEmail: cfg.source === "database" || cfg.source === "env" || cfg.source === "none",
             merchantBrevo,
         };
     }
     static async send(input) {
         const cfg = await this.resolveConfig(input.merchantId);
         if (!cfg.provider) {
-            throw new Error("Email is not configured. Add SMTP or Brevo API in Settings → Email.");
+            throw new Error("Email is not configured. Configure platform Brevo in Superadmin → Settings, or add SMTP/Brevo in Settings → Email.");
         }
-        if (cfg.provider === "smtp") {
-            await this.sendViaSmtp(cfg, input);
-            return;
-        }
-        if (cfg.provider === "brevo") {
-            if (cfg.source === "merchant_brevo" && cfg.merchantId) {
-                await this.assertMerchantBrevoLimits(cfg.merchantId);
+        const emailType = input.emailType || "general";
+        const { EmailUsageService } = await Promise.resolve().then(() => __importStar(require("@/services/email-usage.service")));
+        try {
+            if (cfg.provider === "smtp") {
+                await this.sendViaSmtp(cfg, input);
             }
-            await this.sendViaBrevo(cfg, input);
-            if (cfg.source === "merchant_brevo" && cfg.merchantId) {
-                try {
-                    await this.incrementMerchantBrevoUsage(cfg.merchantId, 1);
+            else if (cfg.provider === "brevo") {
+                if (cfg.source === "merchant_brevo" && cfg.merchantId) {
+                    await this.assertMerchantBrevoLimits(cfg.merchantId);
                 }
-                catch (e) {
-                    console.warn("[email] failed to increment Brevo usage", e);
+                await this.sendViaBrevo(cfg, input);
+                if (cfg.source === "merchant_brevo" && cfg.merchantId) {
+                    try {
+                        await this.incrementMerchantBrevoUsage(cfg.merchantId, 1);
+                    }
+                    catch (e) {
+                        console.warn("[email] failed to increment Brevo usage", e);
+                    }
                 }
             }
-            return;
+            else {
+                mail_1.default.setApiKey(cfg.apiKey);
+                await mail_1.default.send({
+                    to: input.to,
+                    from: cfg.fromEmail,
+                    subject: input.subject,
+                    html: input.html,
+                    text: input.text || input.html.replace(/<[^>]+>/g, " "),
+                    attachments: (input.attachments || []).map((a) => ({
+                        filename: a.filename,
+                        content: (Buffer.isBuffer(a.content)
+                            ? a.content
+                            : Buffer.from(String(a.content))).toString("base64"),
+                        type: a.contentType,
+                        disposition: "attachment",
+                    })),
+                });
+            }
+            await EmailUsageService.logSend({
+                merchantId: input.merchantId || cfg.merchantId,
+                provider: cfg.provider,
+                source: cfg.source,
+                emailType,
+                recipient: input.to,
+                subject: input.subject,
+                status: "sent",
+            });
         }
-        mail_1.default.setApiKey(cfg.apiKey);
-        await mail_1.default.send({
-            to: input.to,
-            from: cfg.fromEmail,
-            subject: input.subject,
-            html: input.html,
-            text: input.text || input.html.replace(/<[^>]+>/g, " "),
-            attachments: (input.attachments || []).map((a) => ({
-                filename: a.filename,
-                content: (Buffer.isBuffer(a.content)
-                    ? a.content
-                    : Buffer.from(String(a.content))).toString("base64"),
-                type: a.contentType,
-                disposition: "attachment",
-            })),
-        });
+        catch (error) {
+            await EmailUsageService.logSend({
+                merchantId: input.merchantId || cfg.merchantId,
+                provider: cfg.provider,
+                source: cfg.source,
+                emailType,
+                recipient: input.to,
+                subject: input.subject,
+                status: "failed",
+                error: error?.message || "Send failed",
+            });
+            throw error;
+        }
     }
     static async sendViaSmtp(cfg, input) {
         const smtp = cfg.smtp || {};

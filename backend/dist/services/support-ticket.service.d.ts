@@ -22,6 +22,8 @@ export declare class SupportTicketService {
         } | null;
         authorName?: string;
         authorId?: string;
+        /** Superadmin-only tickets (POS diagnostic logs). Default true. */
+        merchantVisible?: boolean;
     }): Promise<{
         id: string;
         createdAt: Date;
@@ -34,9 +36,30 @@ export declare class SupportTicketService {
         closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
+        merchantVisible: boolean;
         assignedToSuperadminId: string | null;
         lastMessageAt: Date;
         autoCloseAt: Date;
+    }>;
+    /** Internal POS/Web diagnostic report — platform System Logs only (not support inbox). */
+    static createDiagnosticReport(merchantId: string, input: {
+        source: 'webpos' | 'android';
+        subject: string;
+        body: string;
+        auto?: boolean;
+        authorName?: string;
+        actorId?: string | null;
+    }): Promise<{
+        id: string;
+        createdAt: Date;
+        resellerId: string | null;
+        merchantId: string | null;
+        message: string;
+        category: string;
+        level: string;
+        metadata: Record<string, unknown> | null;
+        actorRole: string | null;
+        actorId: string | null;
     }>;
     static setFirstMessageAttachment(ticketId: string, attachment: {
         url: string;
@@ -54,6 +77,7 @@ export declare class SupportTicketService {
         closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
+        merchantVisible: boolean;
         assignedToSuperadminId: string | null;
         lastMessageAt: Date;
         autoCloseAt: Date;
@@ -70,6 +94,7 @@ export declare class SupportTicketService {
         closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
+        merchantVisible: boolean;
         assignedToSuperadminId: string | null;
         lastMessageAt: Date;
         autoCloseAt: Date;
@@ -95,6 +120,7 @@ export declare class SupportTicketService {
         closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
+        merchantVisible: boolean;
         assignedToSuperadminId: string | null;
         lastMessageAt: Date;
         autoCloseAt: Date;
@@ -123,6 +149,7 @@ export declare class SupportTicketService {
         closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
+        merchantVisible: boolean;
         assignedToSuperadminId: string | null;
         lastMessageAt: Date;
         autoCloseAt: Date;
@@ -172,6 +199,7 @@ export declare class SupportTicketService {
         closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
+        merchantVisible: boolean;
         assignedToSuperadminId: string | null;
         lastMessageAt: Date;
         autoCloseAt: Date;
@@ -205,6 +233,7 @@ export declare class SupportTicketService {
         subcategory: string | null;
         subject: string;
         status: string;
+        merchantVisible: boolean;
         assignedToSuperadminId: string | null;
         lastMessageAt: Date;
         closedAt: Date | null;

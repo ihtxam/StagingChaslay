@@ -95,5 +95,14 @@ merchantRouter.post("/dismiss", async (req, res) => {
         handleError(res, error, "Failed");
     }
 });
+merchantRouter.post("/clear-all", async (req, res) => {
+    try {
+        const result = await ods_service_1.OdsService.clearAllOrders(req.merchantId);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        handleError(res, error, "Failed");
+    }
+});
 exports.default = router;
 //# sourceMappingURL=ods.routes.js.map

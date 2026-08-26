@@ -7,6 +7,10 @@ import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/invent
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
+import {
+  businessModuleMerchantPatch,
+  normalizeBusinessModule,
+} from "@/lib/business-module";
 
 export interface JWTPayload {
   id: string;
@@ -69,7 +73,8 @@ export class AuthService {
     email: string,
     password: string,
     name: string,
-    businessName: string
+    businessName: string,
+    businessCategory?: "retail" | "restaurant"
   ) {
     const db = getDb();
 
@@ -86,6 +91,8 @@ export class AuthService {
       // Hash password
       const passwordHash = await this.hashPassword(password);
 
+      const lockedModule = normalizeBusinessModule(businessCategory);
+
       // Create merchant
       const merchant = await db
         .insert(schema.merchants)
@@ -95,8 +102,17 @@ export class AuthService {
           name: businessName,
           status: "active",
           subscriptionPlan: "free",
+          businessCategory: lockedModule,
         })
         .returning();
+
+      if (lockedModule) {
+        const modulePatch = businessModuleMerchantPatch(lockedModule, {});
+        await db
+          .update(schema.merchants)
+          .set(modulePatch)
+          .where(eq(schema.merchants.id, merchant[0].id));
+      }
 
       return {
         id: merchant[0].id,

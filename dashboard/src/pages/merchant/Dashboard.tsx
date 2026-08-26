@@ -77,7 +77,7 @@ import {
 } from '@/lib/permissions';
 import type { EditionFeatureKey } from '@/lib/edition-features';
 import type { BusinessModule } from '@/lib/business-module';
-import { normalizeBusinessModule } from '@/lib/business-module';
+import { isRestaurantModule, normalizeBusinessModule } from '@/lib/business-module';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import SignagePage from './SignagePage';
@@ -427,6 +427,17 @@ function MerchantShell() {
             { label: t('invNavReport'), path: '/merchant/inventory/report', icon: '📑' },
             { label: t('invNavConsumption'), path: '/merchant/inventory/consumption', icon: '🍽️' },
           ]
+            .filter((item) => {
+              if ('heading' in item && item.heading) return true;
+              const path = 'path' in item ? item.path : '';
+              if (
+                path === '/merchant/inventory/cookbook' ||
+                path === '/merchant/inventory/consumption'
+              ) {
+                return isRestaurantModule(businessModule);
+              }
+              return true;
+            })
         : [],
     },
     {

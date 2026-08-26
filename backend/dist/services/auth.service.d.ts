@@ -35,7 +35,7 @@ export declare class AuthService {
     /**
      * Register a new merchant
      */
-    static registerMerchant(email: string, password: string, name: string, businessName: string): Promise<{
+    static registerMerchant(email: string, password: string, name: string, businessName: string, businessCategory?: "retail" | "restaurant"): Promise<{
         id: string;
         email: string;
         name: string;

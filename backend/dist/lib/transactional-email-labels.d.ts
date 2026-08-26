@@ -21,7 +21,7 @@ export declare function reservationEmailCopy(kind: ReservationKind, shop: string
     body: string;
     labels: (typeof RES_LABELS)['en'];
 };
-type ShopOrderKind = 'received' | 'confirmed' | 'ready' | 'cancelled';
+type ShopOrderKind = 'received' | 'confirmed' | 'ready' | 'out_for_delivery' | 'cancelled';
 export declare function shopOrderEmailCopy(kind: ShopOrderKind, shop: string, orderNumber: string, locale?: string | null): {
     subject: string;
     body: string;

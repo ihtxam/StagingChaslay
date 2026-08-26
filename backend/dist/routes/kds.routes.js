@@ -121,6 +121,18 @@ merchantRouter.post("/push", async (req, res) => {
         handleError(res, error, "Failed");
     }
 });
+merchantRouter.post("/dismiss", async (req, res) => {
+    try {
+        const ticketKey = String(req.body?.ticketKey || "").trim();
+        if (!ticketKey)
+            return res.status(400).json({ error: "ticketKey required" });
+        const result = await kds_service_1.KdsService.dismissTicketsByKey(req.merchantId, ticketKey);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        handleError(res, error, "Failed");
+    }
+});
 merchantRouter.get("/ticket-status", async (req, res) => {
     try {
         const ticketKey = String(req.query.ticketKey || "").trim();
@@ -128,6 +140,15 @@ merchantRouter.get("/ticket-status", async (req, res) => {
             return res.status(400).json({ error: "ticketKey required" });
         const status = await kds_service_1.KdsService.ticketStatusForPos(req.merchantId, ticketKey);
         res.json({ success: true, ...status });
+    }
+    catch (error) {
+        handleError(res, error, "Failed");
+    }
+});
+merchantRouter.get("/board-status", async (req, res) => {
+    try {
+        const tickets = await kds_service_1.KdsService.boardStatusForMerchant(req.merchantId);
+        res.json({ success: true, tickets });
     }
     catch (error) {
         handleError(res, error, "Failed");

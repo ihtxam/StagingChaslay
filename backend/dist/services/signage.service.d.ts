@@ -41,8 +41,8 @@ export declare class SignageService {
         updatedAt: Date;
         merchantId: string;
         token: string;
-        template: string;
         shortCode: string | null;
+        template: string;
         orientation: string;
         screenSizeIn: number;
         playlistId: string | null;
@@ -54,8 +54,8 @@ export declare class SignageService {
         updatedAt: Date;
         merchantId: string;
         token: string;
-        template: string;
         shortCode: string | null;
+        template: string;
         orientation: string;
         screenSizeIn: number;
         playlistId: string | null;

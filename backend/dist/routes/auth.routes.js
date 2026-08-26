@@ -79,11 +79,17 @@ router.post("/login", async (req, res) => {
  */
 router.post("/merchant/register", async (req, res) => {
     try {
-        const { email, password, name, businessName } = req.body;
+        const { email, password, name, businessName, businessCategory } = req.body;
         if (!email || !password || !name || !businessName) {
             return res.status(400).json({ error: "Email, password, name, and business name are required" });
         }
-        const merchant = await auth_service_1.AuthService.registerMerchant(email, password, name, businessName);
+        const category = businessCategory === "retail" || businessCategory === "restaurant"
+            ? businessCategory
+            : undefined;
+        if (!category) {
+            return res.status(400).json({ error: "businessCategory must be retail or restaurant" });
+        }
+        const merchant = await auth_service_1.AuthService.registerMerchant(email, password, name, businessName, category);
         res.status(201).json({
             success: true,
             message: "Merchant registered successfully",

@@ -3841,6 +3841,7 @@ export default function Settings() {
                 </button>
               </Section>
 
+              {settings.businessCategory !== 'restaurant' ? (
               <Section
                 id="barcode-labels"
                 icon={Printer}
@@ -3923,6 +3924,7 @@ export default function Settings() {
                   ))}
                 </div>
               </Section>
+              ) : null}
 
               <SettingsSaveBar saving={savingReceipt} />
             </form>

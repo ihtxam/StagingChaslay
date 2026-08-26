@@ -61,6 +61,63 @@ function encodeOrderMetaNotes(opts) {
     const joined = [...tags, base].filter(Boolean).join(" ").trim();
     return joined || null;
 }
+function parseTicketFromNotes(notes) {
+    const m = String(notes || "").match(TICKET_NOTE_RE);
+    return m?.[1]?.trim() || null;
+}
+function parseTabFromNotes(notes) {
+    const m = String(notes || "").match(TAB_NOTE_RE);
+    return m?.[1]?.trim() || null;
+}
+function normTicketKey(value) {
+    const raw = String(value || "")
+        .trim()
+        .replace(/^#/, "");
+    return raw ? `#${raw}` : "";
+}
+async function findRecentPaidDuplicateOrder(db, merchantId, opts) {
+    const since = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const rows = await db.query.orders.findMany({
+        where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), (0, drizzle_orm_1.gt)(db_1.schema.orders.createdAt, since), (0, drizzle_orm_1.inArray)(db_1.schema.orders.paymentStatus, ["completed", "paid"])),
+        orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.orders.createdAt)],
+        limit: 150,
+        columns: { id: true, notes: true, tableId: true, status: true },
+    });
+    const ticket = normTicketKey(opts.ticketDisplay);
+    const tab = String(opts.tabNumber || "")
+        .trim()
+        .replace(/^#/, "");
+    for (const row of rows) {
+        if (String(row.status || "").toLowerCase() === "cancelled")
+            continue;
+        const rowTicket = normTicketKey(parseTicketFromNotes(row.notes));
+        const rowTab = String(parseTabFromNotes(row.notes) || "")
+            .trim()
+            .replace(/^#/, "");
+        if (ticket && rowTicket && ticket === rowTicket)
+            return row;
+        if (tab && rowTab && tab === rowTab)
+            return row;
+        if (opts.tableId && row.tableId === opts.tableId) {
+            if (ticket && rowTicket) {
+                if (ticket === rowTicket)
+                    return row;
+                continue;
+            }
+            if (ticket || rowTicket)
+                continue;
+            if (tab && rowTab) {
+                if (tab === rowTab)
+                    return row;
+                continue;
+            }
+            if (tab || rowTab)
+                continue;
+            return row;
+        }
+    }
+    return null;
+}
 function normalizeFulfillmentChannel(sale) {
     const raw = String(sale.fulfillmentChannel || sale.channel || sale.fulfillment_type || sale.fulfillmentType || "")
         .toLowerCase()
@@ -288,6 +345,20 @@ class SyncService {
                 results.push({ clientId: sale.clientId, orderId: "", created: false, skipped: true });
                 continue;
             }
+            const payLaterEarly = String(sale.paymentStatus || "").toLowerCase() === "awaiting_payment" ||
+                sale.paymentMethod === "pay_later" ||
+                sale.paymentMethod === "pay-later" ||
+                String(sale.paymentMethod || "").toLowerCase() === "invoice";
+            if (!isCancelledEarly && !payLaterEarly) {
+                const dup = await findRecentPaidDuplicateOrder(db, merchantId, {
+                    ticketDisplay: sale.ticketDisplay,
+                    tabNumber: sale.tabNumber,
+                    tableId: sale.tableId,
+                });
+                if (dup) {
+                    throw new Error(`Ticket ${sale.ticketDisplay || sale.tabNumber || "unknown"} was already paid`);
+                }
+            }
             const baseOrderNumber = String(sale.orderNumber || `POS-${sale.clientId}`).slice(0, 40);
             const subtotal = (0, money_1.roundMoney2)(Number(sale.subtotal) || 0);
             const taxAmount = (0, money_1.roundMoney2)(Number(sale.taxAmount) || 0);
@@ -345,6 +416,34 @@ class SyncService {
             if (completedAt && Number.isNaN(completedAt.getTime())) {
                 throw new Error("Invalid completedAt on sale");
             }
+            let deliveryLat = null;
+            let deliveryLng = null;
+            let deliveryTrackingToken = null;
+            if (channel === "delivery") {
+                const { generateDeliveryTrackingToken } = await Promise.resolve().then(() => __importStar(require("@/lib/delivery-tracking-url")));
+                deliveryTrackingToken = generateDeliveryTrackingToken();
+                const latRaw = sale.deliveryLatitude ?? sale.lat;
+                const lngRaw = sale.deliveryLongitude ?? sale.lng;
+                const latNum = latRaw != null ? Number(latRaw) : NaN;
+                const lngNum = lngRaw != null ? Number(lngRaw) : NaN;
+                if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+                    deliveryLat = String(latNum);
+                    deliveryLng = String(lngNum);
+                }
+                else if (sale.shippingAddress?.trim()) {
+                    try {
+                        const { geocodeQuery } = await Promise.resolve().then(() => __importStar(require("@/lib/geocode")));
+                        const geo = await geocodeQuery(sale.shippingAddress.trim());
+                        if (geo.found) {
+                            deliveryLat = String(geo.lat);
+                            deliveryLng = String(geo.lng);
+                        }
+                    }
+                    catch {
+                        /* geocode optional */
+                    }
+                }
+            }
             const orderValuesBase = {
                 merchantId,
                 orderType: "pos",
@@ -400,10 +499,17 @@ class SyncService {
                 }),
                 scheduledFor,
                 customerId: asUuidOrNull(sale.customerId),
-                customerName: sale.customerName || null,
+                customerName: sale.customerName ||
+                    (sale.tableLabel && String(sale.fulfillmentChannel || sale.channel || "") !== "dine_in"
+                        ? String(sale.tableLabel).trim()
+                        : null) ||
+                    null,
                 customerPhone: sale.customerPhone || null,
                 customerEmail: sale.customerEmail || null,
                 shippingAddress: sale.shippingAddress || null,
+                deliveryLatitude: deliveryLat,
+                deliveryLongitude: deliveryLng,
+                deliveryTrackingToken,
                 tableId: asUuidOrNull(sale.tableId),
                 tableLabel: sale.tableLabel || null,
                 guestCount: sale.guestCount != null && Number.isFinite(Number(sale.guestCount))
@@ -507,6 +613,10 @@ class SyncService {
                 try {
                     const { InvoiceService } = await Promise.resolve().then(() => __importStar(require("@/services/invoice.service")));
                     invoiceNumber = await InvoiceService.ensureInvoiceNumber(merchantId, order.id);
+                    const customerEmail = String(sale.customerEmail || "").trim();
+                    if (customerEmail) {
+                        void InvoiceService.sendEmail(merchantId, order.id, { to: customerEmail }).catch((err) => console.warn("[sync] invoice email failed:", err));
+                    }
                 }
                 catch (err) {
                     console.warn("[sync] invoice number assign failed:", err);
@@ -524,6 +634,25 @@ class SyncService {
                 catch (invErr) {
                     console.warn("[sync] inventory deduct failed:", invErr);
                 }
+                try {
+                    const { PosOrdersService } = await Promise.resolve().then(() => __importStar(require("@/services/pos-orders.service")));
+                    await PosOrdersService.releaseHeldByIdentity(merchantId, {
+                        ticketDisplay: sale.ticketDisplay,
+                        tabNumber: sale.tabNumber,
+                        tableId: sale.tableId,
+                    });
+                }
+                catch (heldErr) {
+                    console.warn("[sync] held release failed:", heldErr);
+                }
+            }
+            if (!isCancelled) {
+                void Promise.resolve().then(() => __importStar(require("@/services/ods.service"))).then(({ OdsService }) => OdsService.syncFromOrder(merchantId, {
+                    orderNumber,
+                    notes: orderValuesBase.notes,
+                    status: orderValuesBase.status,
+                }))
+                    .catch(() => { });
             }
             results.push({ clientId: sale.clientId, orderId: order.id, created: true, invoiceNumber });
         }

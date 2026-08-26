@@ -392,6 +392,7 @@ class PasswordResetService {
                 subject,
                 html,
                 text: `Reset your Chaslay password: ${resetUrl}`,
+                emailType: "password_reset",
             });
         }
         catch (error) {

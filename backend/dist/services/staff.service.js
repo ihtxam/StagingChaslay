@@ -75,8 +75,8 @@ class StaffService {
         return this.enforceWaiterFloorRestrictions(merchantId);
     }
     /**
-     * Strip sales / panel / finance from system Waiter templates.
-     * Menu (MANAGE_PRODUCTS) and Orders stay as assigned on the Roles page.
+     * Strip full panel / company sales from system Waiter templates.
+     * Menu, orders, and own-sales EOD (END_OF_DAY) stay as assigned on the Roles page.
      */
     static async enforceWaiterFloorRestrictions(merchantId) {
         const db = (0, db_1.getDb)();
@@ -188,6 +188,8 @@ class StaffService {
                 isActive: s.isActive,
                 pinSet: !!s.pinHash,
                 passwordSet: !!s.passwordHash,
+                deliveryHourlyRateOverride: s.deliveryHourlyRateOverride ?? null,
+                deliveryPerOrderFeeOverride: s.deliveryPerOrderFeeOverride ?? null,
                 createdAt: s.createdAt,
             };
         });
@@ -212,7 +214,7 @@ class StaffService {
         }
         const pin = input.pin?.trim();
         if (pin && (pin.length < 4 || pin.length > 8)) {
-            throw new Error("PIN must be 4�8 digits");
+            throw new Error("PIN must be 4-8 digits");
         }
         const password = input.password?.trim() || "";
         // Email + password on create always enables official /login (do not require a checkbox).
@@ -278,7 +280,7 @@ class StaffService {
             else {
                 const pin = String(input.pin).trim();
                 if (pin.length < 4 || pin.length > 8)
-                    throw new Error("PIN must be 4�8 digits");
+                    throw new Error("PIN must be 4-8 digits");
                 patch.pinHash = await auth_service_1.AuthService.hashPassword(pin);
             }
         }
@@ -292,6 +294,18 @@ class StaffService {
         }
         if (input.isActive !== undefined)
             patch.isActive = !!input.isActive;
+        if (input.deliveryHourlyRateOverride !== undefined) {
+            patch.deliveryHourlyRateOverride =
+                input.deliveryHourlyRateOverride == null || input.deliveryHourlyRateOverride === ''
+                    ? null
+                    : String(Number(input.deliveryHourlyRateOverride));
+        }
+        if (input.deliveryPerOrderFeeOverride !== undefined) {
+            patch.deliveryPerOrderFeeOverride =
+                input.deliveryPerOrderFeeOverride == null || input.deliveryPerOrderFeeOverride === ''
+                    ? null
+                    : String(Number(input.deliveryPerOrderFeeOverride));
+        }
         const nextEmail = input.email !== undefined
             ? input.email?.trim().toLowerCase() || null
             : staff.email;
@@ -339,6 +353,9 @@ class StaffService {
         const normalized = pin.trim();
         if (!normalized)
             throw new Error("PIN is required");
+        if (normalized.length < 4 || normalized.length > 8) {
+            throw new Error("PIN must be 4-8 digits");
+        }
         // Ensure system Waiter privileges stay floor-only before returning PIN session.
         await this.enforceWaiterFloorRestrictions(merchantId);
         const staffList = await db.query.merchantStaff.findMany({
@@ -370,6 +387,7 @@ class StaffService {
                 roleId: staff.roleId,
                 roleName: role?.name || "Staff",
                 permissions,
+                preferredTerminalId: staff.preferredTerminalId || null,
                 accessToken,
                 /** Android PosPermission-compatible keys for clients that consume this payload. */
                 androidPermissions: (0, permissions_1.toAndroidPermissions)(permissions),
@@ -397,7 +415,31 @@ class StaffService {
             roleName: role?.name || "Staff",
             permissions,
             canAccessPanel: staff.canAccessPanel,
+            preferredTerminalId: staff.preferredTerminalId || null,
         };
+    }
+    /** Waiter / cashier saves their preferred payment terminal for WebPOS. */
+    static async updatePosPreferences(merchantId, staffId, prefs) {
+        const db = (0, db_1.getDb)();
+        const staff = await db.query.merchantStaff.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.id, staffId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.isActive, true)),
+        });
+        if (!staff)
+            throw new Error("Staff member not found");
+        let terminalId = null;
+        if (prefs.preferredTerminalId != null && String(prefs.preferredTerminalId).trim()) {
+            terminalId = String(prefs.preferredTerminalId).trim();
+            const terminal = await db.query.paymentTerminals.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.paymentTerminals.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.paymentTerminals.terminalId, terminalId)),
+            });
+            if (!terminal)
+                throw new Error("Terminal not found");
+        }
+        await db
+            .update(db_1.schema.merchantStaff)
+            .set({ preferredTerminalId: terminalId, updatedAt: new Date() })
+            .where((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.id, staffId));
+        return { preferredTerminalId: terminalId };
     }
     static async loginStaff(email, password) {
         const db = (0, db_1.getDb)();

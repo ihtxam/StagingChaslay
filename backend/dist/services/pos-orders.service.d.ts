@@ -103,6 +103,8 @@ export declare class PosOrdersService {
         ticketDisplay: string | null;
         tabNumber: string | null;
         staffName: string | null;
+        assignedDeliveryStaffId: string | null;
+        assignedDriverName: string | null;
         masterOrderId: string | null;
         splitCheckNumber: number | null;
         customerName: string | null;
@@ -110,6 +112,9 @@ export declare class PosOrdersService {
         pointsRedeemed: number;
         customerPhone: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: number | null;
+        deliveryLongitude: number | null;
+        deliveryTrackingToken: string | null;
         scheduledFor: Date | null;
         createdAt: Date;
         completedAt: Date | null;
@@ -181,6 +186,10 @@ export declare class PosOrdersService {
         adyenCashierReceiptJson: string | null;
         notes: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
         deliveryZoneId: string | null;
         scheduledFor: Date | null;
         customerName: string | null;
@@ -254,6 +263,10 @@ export declare class PosOrdersService {
         adyenCashierReceiptJson: string | null;
         notes: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
         deliveryZoneId: string | null;
         scheduledFor: Date | null;
         customerName: string | null;
@@ -338,6 +351,10 @@ export declare class PosOrdersService {
             adyenCashierReceiptJson: string | null;
             notes: string | null;
             shippingAddress: string | null;
+            deliveryLatitude: string | null;
+            deliveryLongitude: string | null;
+            assignedDeliveryStaffId: string | null;
+            deliveryTrackingToken: string | null;
             deliveryZoneId: string | null;
             scheduledFor: Date | null;
             customerName: string | null;
@@ -435,6 +452,10 @@ export declare class PosOrdersService {
             adyenCashierReceiptJson: string | null;
             notes: string | null;
             shippingAddress: string | null;
+            deliveryLatitude: string | null;
+            deliveryLongitude: string | null;
+            assignedDeliveryStaffId: string | null;
+            deliveryTrackingToken: string | null;
             deliveryZoneId: string | null;
             scheduledFor: Date | null;
             customerName: string | null;
@@ -517,6 +538,18 @@ export declare class PosOrdersService {
         ok: boolean;
     }>;
     /**
+     * Remove open held rows after payment — matches ticket #, table, or tab identity.
+     * Used by POS checkout (staff may lack CANCEL_ORDERS) and server-side sale sync.
+     */
+    static releaseHeldByIdentity(merchantId: string, opts: {
+        heldId?: string | null;
+        ticketDisplay?: string | null;
+        tableId?: string | null;
+        tabNumber?: string | null;
+    }): Promise<{
+        released: number;
+    }>;
+    /**
      * Cancel a held / kitchen-sent order with a required reason.
      * Records a cancelled POS sale for EOD and sales reports, then removes the hold.
      */
@@ -566,6 +599,10 @@ export declare class PosOrdersService {
             adyenCashierReceiptJson: string | null;
             notes: string | null;
             shippingAddress: string | null;
+            deliveryLatitude: string | null;
+            deliveryLongitude: string | null;
+            assignedDeliveryStaffId: string | null;
+            deliveryTrackingToken: string | null;
             deliveryZoneId: string | null;
             scheduledFor: Date | null;
             customerName: string | null;

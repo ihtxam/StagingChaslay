@@ -59,7 +59,11 @@ router.post("/pos/sessions/heartbeat", async (req, res) => {
         if (!sessionId) {
             return res.status(400).json({ error: "sessionId is required" });
         }
-        const result = await pos_sessions_service_1.PosSessionsService.heartbeat(merchantId, sessionId);
+        const result = await pos_sessions_service_1.PosSessionsService.heartbeat(merchantId, sessionId, {
+            printAgentOnline: typeof req.body?.printAgentOnline === "boolean"
+                ? req.body.printAgentOnline
+                : undefined,
+        });
         res.json({ success: true, ...result });
     }
     catch (error) {

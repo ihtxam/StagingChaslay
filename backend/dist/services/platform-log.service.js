@@ -47,6 +47,25 @@ class PlatformLogService {
             .where(where.length ? (0, drizzle_orm_1.and)(...where) : undefined);
         return { logs: rows, page, limit, total: Number(count) || 0 };
     }
+    /** POS / Android diagnostic reports — superadmin System Logs only, never support tickets. */
+    static async writeMerchantDiagnostic(merchantId, input) {
+        const body = String(input.body || "").slice(0, 120000);
+        return this.write({
+            level: input.auto ? "warn" : "info",
+            category: "merchant_diagnostic",
+            message: String(input.subject || "Diagnostic report").trim().slice(0, 2000),
+            merchantId,
+            resellerId: input.resellerId || null,
+            actorRole: "merchant",
+            actorId: input.actorId || null,
+            metadata: {
+                source: input.source,
+                auto: !!input.auto,
+                authorName: input.authorName || null,
+                body,
+            },
+        });
+    }
 }
 exports.PlatformLogService = PlatformLogService;
 //# sourceMappingURL=platform-log.service.js.map

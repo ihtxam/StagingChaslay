@@ -473,6 +473,10 @@ class ChaslayCompatService {
                 adyen_receipt_digital_only: posPrintSettings.adyenReceiptDigitalOnly === true,
                 receipt_delivery_directions_qr: posPrintSettings.receiptDeliveryDirectionsQr !== false,
                 auto_print_kitchen: posPrintSettings.autoPrintKitchen !== false,
+                waiter_till_bell_enabled: posPrintSettings.waiterTillBellEnabled !== false,
+                kitchen_print_retry_enabled: posPrintSettings.kitchenPrintRetryEnabled !== false,
+                kitchen_print_retry_attempts: posPrintSettings.kitchenPrintRetryAttempts ?? 5,
+                kitchen_print_retry_interval_sec: posPrintSettings.kitchenPrintRetryIntervalSec ?? 5,
             },
         };
     }

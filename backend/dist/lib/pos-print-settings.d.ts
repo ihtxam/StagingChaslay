@@ -41,8 +41,18 @@ export type PosPrintSettings = {
     receiptLanguage?: "en" | "fr" | "de" | "panel";
     /** Override logo; empty/null falls back to shopLogoUrl */
     receiptLogoUrl?: string | null;
+    /** Printed logo width in pixels (48–200, default 200). */
+    receiptLogoWidthPx?: number;
     autoPrintReceipt?: boolean;
     autoPrintKitchen?: boolean;
+    /** Play a bell on the main till when a waiter/mobile kitchen order arrives. */
+    waiterTillBellEnabled?: boolean;
+    /** Auto-retry failed kitchen prints before showing an error (WebPOS local queue). */
+    kitchenPrintRetryEnabled?: boolean;
+    /** Total print attempts before marking kitchen job failed (default 5). */
+    kitchenPrintRetryAttempts?: number;
+    /** Seconds between kitchen print retries (default 5). */
+    kitchenPrintRetryIntervalSec?: number;
     /** WebPOS / Print Agent USB scale COM port (e.g. COM3). Skips port discovery when set. */
     scaleComPort?: string | null;
     /** Android USB scale stable address synced from panel (optional). */

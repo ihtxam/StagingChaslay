@@ -22,6 +22,7 @@ const MERCHANT_COLUMN_PATCHES = {
     shifts_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS shifts_enabled boolean NOT NULL DEFAULT false",
     pos_color_theme: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_color_theme varchar(20) NOT NULL DEFAULT 'teal'",
     edition_id: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS edition_id uuid",
+    business_category: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS business_category varchar(20)",
     plan_billing_paid: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS plan_billing_paid boolean NOT NULL DEFAULT true",
     reseller_id: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reseller_id uuid",
     report_email_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS report_email_settings jsonb",
@@ -205,9 +206,16 @@ const TABLE_PATCHES = [
     category_ids jsonb NOT NULL DEFAULT '[]',
     product_ids jsonb NOT NULL DEFAULT '[]',
     is_active boolean NOT NULL DEFAULT true,
+    theme varchar(32) NOT NULL DEFAULT 'dark',
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   )`,
+    `ALTER TABLE kds_stations ADD COLUMN IF NOT EXISTS theme varchar(32) NOT NULL DEFAULT 'dark'`,
+    `ALTER TABLE kds_stations ADD COLUMN IF NOT EXISTS layout_mode varchar(16) NOT NULL DEFAULT 'grid'`,
+    `ALTER TABLE kds_stations ADD COLUMN IF NOT EXISTS grid_columns integer NOT NULL DEFAULT 3`,
+    `ALTER TABLE kds_stations ADD COLUMN IF NOT EXISTS overdue_minutes integer NOT NULL DEFAULT 20`,
+    `ALTER TABLE kds_stations ADD COLUMN IF NOT EXISTS short_code varchar(8)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS kds_stations_short_code_uidx ON kds_stations(short_code) WHERE short_code IS NOT NULL`,
     `CREATE UNIQUE INDEX IF NOT EXISTS kds_stations_token_uidx ON kds_stations(token)`,
     `CREATE INDEX IF NOT EXISTS kds_stations_merchant_id_idx ON kds_stations(merchant_id)`,
     `CREATE TABLE IF NOT EXISTS kds_tickets (
@@ -254,6 +262,8 @@ const TABLE_PATCHES = [
   )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS ods_displays_token_uidx ON ods_displays(token)`,
     `CREATE INDEX IF NOT EXISTS ods_displays_merchant_id_idx ON ods_displays(merchant_id)`,
+    `ALTER TABLE ods_displays ADD COLUMN IF NOT EXISTS short_code varchar(8)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS ods_displays_short_code_uidx ON ods_displays(short_code) WHERE short_code IS NOT NULL`,
     `CREATE TABLE IF NOT EXISTS ods_orders (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
@@ -265,6 +275,14 @@ const TABLE_PATCHES = [
   )`,
     `CREATE INDEX IF NOT EXISTS ods_orders_merchant_id_idx ON ods_orders(merchant_id)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS ods_orders_merchant_order_uidx ON ods_orders(merchant_id, order_number)`,
+    `CREATE TABLE IF NOT EXISTS ods_dismissed_orders (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    order_number varchar(64) NOT NULL,
+    dismissed_at timestamptz NOT NULL DEFAULT now()
+  )`,
+    `CREATE INDEX IF NOT EXISTS ods_dismissed_merchant_id_idx ON ods_dismissed_orders(merchant_id)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS ods_dismissed_merchant_order_uidx ON ods_dismissed_orders(merchant_id, order_number)`,
     `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_number varchar(50)`,
     `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_issued_at timestamptz`,
     `ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_due_at timestamptz`,

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -106,6 +139,7 @@ class SupportTicketService {
             subcategory: input.subcategory?.slice(0, 80) || null,
             subject: input.subject.trim().slice(0, 255),
             status: 'open',
+            merchantVisible: input.merchantVisible !== false,
             lastMessageAt: now,
             autoCloseAt: addDays(now, 3),
         })
@@ -120,6 +154,27 @@ class SupportTicketService {
             attachmentName: input.attachment?.name || null,
         });
         return ticket;
+    }
+    /** Internal POS/Web diagnostic report — platform System Logs only (not support inbox). */
+    static async createDiagnosticReport(merchantId, input) {
+        const db = (0, db_1.getDb)();
+        const merchant = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { id: true, resellerId: true },
+        });
+        if (!merchant)
+            throw new Error('Merchant not found');
+        const { PlatformLogService } = await Promise.resolve().then(() => __importStar(require('@/services/platform-log.service')));
+        const log = await PlatformLogService.writeMerchantDiagnostic(merchantId, {
+            source: input.source,
+            subject: input.subject,
+            body: input.body,
+            auto: input.auto,
+            authorName: input.authorName,
+            actorId: input.actorId,
+            resellerId: merchant.resellerId,
+        });
+        return log;
     }
     static async setFirstMessageAttachment(ticketId, attachment) {
         const db = (0, db_1.getDb)();
@@ -140,7 +195,10 @@ class SupportTicketService {
     static async listMerchantTickets(merchantId, status) {
         await this.autoCloseExpired();
         const db = (0, db_1.getDb)();
-        const where = [(0, drizzle_orm_1.eq)(db_1.schema.supportTickets.merchantId, merchantId)];
+        const where = [
+            (0, drizzle_orm_1.eq)(db_1.schema.supportTickets.merchantId, merchantId),
+            (0, drizzle_orm_1.eq)(db_1.schema.supportTickets.merchantVisible, true),
+        ];
         if (status && status !== 'all') {
             where.push((0, drizzle_orm_1.eq)(db_1.schema.supportTickets.status, status));
         }
@@ -153,7 +211,10 @@ class SupportTicketService {
     static async listResellerTickets(resellerId, status) {
         await this.autoCloseExpired();
         const db = (0, db_1.getDb)();
-        const where = [(0, drizzle_orm_1.eq)(db_1.schema.supportTickets.resellerId, resellerId)];
+        const where = [
+            (0, drizzle_orm_1.eq)(db_1.schema.supportTickets.resellerId, resellerId),
+            (0, drizzle_orm_1.eq)(db_1.schema.supportTickets.merchantVisible, true),
+        ];
         if (status && status !== 'all') {
             where.push((0, drizzle_orm_1.eq)(db_1.schema.supportTickets.status, status));
         }
@@ -167,7 +228,7 @@ class SupportTicketService {
     static async listAllTickets(opts) {
         await this.autoCloseExpired();
         const db = (0, db_1.getDb)();
-        const where = [];
+        const where = [(0, drizzle_orm_1.eq)(db_1.schema.supportTickets.merchantVisible, true)];
         if (opts?.status && opts.status !== 'all') {
             where.push((0, drizzle_orm_1.eq)(db_1.schema.supportTickets.status, opts.status));
         }
@@ -201,6 +262,9 @@ class SupportTicketService {
         if (!ticket)
             throw new Error('Ticket not found');
         if (scope?.merchantId && ticket.merchantId !== scope.merchantId) {
+            throw new Error('Ticket not found');
+        }
+        if (scope?.merchantId && ticket.merchantVisible === false) {
             throw new Error('Ticket not found');
         }
         if (scope?.resellerId && ticket.resellerId !== scope.resellerId) {

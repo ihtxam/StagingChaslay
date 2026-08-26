@@ -1,4 +1,9 @@
 export type ReportPreset = "today" | "yesterday" | "last_week" | "this_month" | "last_month" | "last_3_months" | "custom";
+/** Paid tickets count as sales even while kitchen fulfillment is still open. */
+export declare function isCountableSale(o: {
+    status?: string | null;
+    paymentStatus?: string | null;
+}): boolean;
 export declare function resolveReportRange(preset: ReportPreset, from?: string, to?: string): {
     start: Date;
     end: Date;
@@ -313,6 +318,10 @@ export declare class PosReportsService {
             label: string;
             amount: number;
         }[];
+        salesByHour: {
+            label: string;
+            amount: number;
+        }[];
         paymentMethods: {
             method: string;
             label: string;
@@ -501,5 +510,26 @@ export declare class PosReportsService {
         limit?: number;
         days?: number;
     }): Promise<string[]>;
+    /** Revenue list by day, calendar week, or month (SumUp-style reporting). */
+    static getRevenueBreakdown(merchantId: string, opts: {
+        mode: "days" | "weeks" | "months" | "custom";
+        year: number;
+        month?: number;
+        from?: string;
+        to?: string;
+    } & SalesScopeOpts): Promise<{
+        mode: "custom" | "weeks" | "days" | "months";
+        year: number;
+        month: number | null;
+        rows: {
+            id: string;
+            label: string;
+            sublabel?: string;
+            total: number;
+            sortKey: string;
+            from: string;
+            to: string;
+        }[];
+    }>;
 }
 //# sourceMappingURL=pos-reports.service.d.ts.map

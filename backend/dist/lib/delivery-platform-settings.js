@@ -35,6 +35,7 @@ function normalizeDeliveryPlatformSettings(raw) {
     return {
         justEat: normalizeCreds(o.justEat),
         uberEats: normalizeCreds(o.uberEats),
+        onlineShopAutoAccept: o.onlineShopAutoAccept === true,
     };
 }
 function getDeliveryPlatformPublic(raw) {
@@ -88,6 +89,9 @@ function mergeDeliveryPlatformSettings(prevRaw, updatesRaw) {
     return {
         justEat: mergeOne("justEat", updates.justEat),
         uberEats: mergeOne("uberEats", updates.uberEats),
+        onlineShopAutoAccept: updates.onlineShopAutoAccept !== undefined
+            ? updates.onlineShopAutoAccept === true
+            : prev.onlineShopAutoAccept,
     };
 }
 /** Production API credentials present → live webhooks (test mode off). */

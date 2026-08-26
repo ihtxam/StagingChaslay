@@ -1,8 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deliveryZones = exports.rfidReaders = exports.paymentTerminals = exports.chaslayFloorPrintJobs = exports.chaslayFloorTableOrders = exports.chaslayFloorDevices = exports.reservations = exports.tableQrCodes = exports.diningTables = exports.floorPlans = exports.orderRefunds = exports.orderItems = exports.signageSlides = exports.signageScreens = exports.signagePlaylists = exports.SIGNAGE_SLIDE_TYPES = exports.SIGNAGE_ORIENTATIONS = exports.SIGNAGE_TEMPLATES = exports.odsOrders = exports.odsDisplays = exports.ODS_THEMES = exports.kdsTicketItems = exports.kdsTickets = exports.kdsStations = exports.deliveryDriverShifts = exports.deliveryDriverLocations = exports.posSessions = exports.heldOrders = exports.orders = exports.customerAddresses = exports.customers = exports.productModifierGroups = exports.modifierOptions = exports.modifierGroups = exports.products = exports.categories = exports.vatSettings = exports.licenseTransactions = exports.licenses = exports.devices = exports.subscriptionPayments = exports.passwordResetTokens = exports.platformSettings = exports.subscriptionPlans = exports.merchantStaff = exports.merchantRoles = exports.merchants = exports.editions = exports.resellers = exports.superadmins = void 0;
-exports.rfidReadersRelations = exports.loyaltyPointEventsRelations = exports.loyaltyPointLotsRelations = exports.giftCardTransactionsRelations = exports.giftCardPurchasesRelations = exports.giftCardsRelations = exports.loyaltyCardsRelations = exports.orderRefundsRelations = exports.orderItemsRelations = exports.customerAddressesRelations = exports.signageSlidesRelations = exports.signagePlaylistsRelations = exports.signageScreensRelations = exports.kdsTicketItemsRelations = exports.kdsTicketsRelations = exports.odsOrdersRelations = exports.odsDisplaysRelations = exports.kdsStationsRelations = exports.heldOrdersRelations = exports.paymentTransactionsRelations = exports.ordersRelations = exports.productModifierGroupsRelations = exports.modifierOptionsRelations = exports.modifierGroupsRelations = exports.productsRelations = exports.licensesRelations = exports.devicesRelations = exports.tableQrCodesRelations = exports.diningTablesRelations = exports.floorPlansRelations = exports.reservationsRelations = exports.voucherRedemptionsRelations = exports.vouchersRelations = exports.merchantsRelations = exports.editionsRelations = exports.resellersRelations = exports.cmsPagesRelations = exports.cmsPages = exports.dailyReports = exports.voucherRedemptions = exports.vouchers = exports.offers = exports.loyaltyPointEvents = exports.loyaltyPointLots = exports.giftCardTransactions = exports.giftCardPurchases = exports.giftCards = exports.loyaltyTransactions = exports.loyaltyCards = exports.paymentTransactions = void 0;
-exports.supportTicketMessagesRelations = exports.supportTicketsRelations = exports.supportTicketMessages = exports.supportTickets = exports.platformMessageDismissals = exports.platformMessages = exports.platformEventLogs = exports.platformShopOrdersRelations = exports.platformShopOrders = exports.platformShopVouchers = exports.platformShopProducts = exports.subscriptionPaymentsRelations = exports.subscriptionPlansRelations = exports.productRecipesRelations = exports.inventoryMovementsRelations = exports.inventoryUnitRatiosRelations = exports.inventoryUnitsRelations = exports.inventoryCategoriesRelations = exports.inventoryItemsRelations = exports.inventorySuppliersRelations = exports.productRecipes = exports.inventoryMovements = exports.inventoryUnitRatios = exports.inventoryUnits = exports.inventoryCategories = exports.inventoryItems = exports.inventorySuppliers = exports.posCashMovements = exports.posShifts = exports.marketingEmailLog = exports.emailSendLog = exports.newsletterCampaigns = exports.paymentTerminalsRelations = exports.deliveryZonesRelations = void 0;
+exports.chaslayFloorPrintJobs = exports.chaslayFloorTableOrders = exports.chaslayFloorDevices = exports.reservations = exports.tableQrCodes = exports.diningTables = exports.floorPlans = exports.orderRefunds = exports.orderItems = exports.signageSlides = exports.signageScreens = exports.signagePlaylists = exports.SIGNAGE_SLIDE_TYPES = exports.SIGNAGE_ORIENTATIONS = exports.SIGNAGE_TEMPLATES = exports.odsDismissedOrders = exports.odsOrders = exports.odsDisplays = exports.ODS_THEMES = exports.kdsTicketItems = exports.kdsTickets = exports.KDS_LAYOUT_MODES = exports.KDS_THEMES = exports.kdsStations = exports.deliveryDriverShifts = exports.deliveryDriverLocations = exports.posSessions = exports.heldOrders = exports.orders = exports.customerAddresses = exports.customers = exports.productModifierGroups = exports.modifierOptions = exports.modifierGroups = exports.products = exports.categories = exports.vatSettings = exports.licenseTransactions = exports.licenses = exports.devices = exports.subscriptionPayments = exports.passwordResetTokens = exports.platformSettings = exports.subscriptionPlans = exports.merchantStaff = exports.merchantRoles = exports.merchants = exports.editions = exports.resellers = exports.superadmins = void 0;
+exports.giftCardPurchasesRelations = exports.giftCardsRelations = exports.loyaltyCardsRelations = exports.orderRefundsRelations = exports.orderItemsRelations = exports.customerAddressesRelations = exports.signageSlidesRelations = exports.signagePlaylistsRelations = exports.signageScreensRelations = exports.kdsTicketItemsRelations = exports.kdsTicketsRelations = exports.odsDismissedOrdersRelations = exports.odsOrdersRelations = exports.odsDisplaysRelations = exports.kdsStationsRelations = exports.heldOrdersRelations = exports.paymentTransactionsRelations = exports.ordersRelations = exports.productModifierGroupsRelations = exports.modifierOptionsRelations = exports.modifierGroupsRelations = exports.productsRelations = exports.licensesRelations = exports.devicesRelations = exports.tableQrCodesRelations = exports.diningTablesRelations = exports.floorPlansRelations = exports.reservationsRelations = exports.voucherRedemptionsRelations = exports.vouchersRelations = exports.merchantsRelations = exports.editionsRelations = exports.resellersRelations = exports.cmsPagesRelations = exports.cmsPages = exports.dailyReports = exports.voucherRedemptions = exports.vouchers = exports.offers = exports.loyaltyPointEvents = exports.loyaltyPointLots = exports.giftCardTransactions = exports.giftCardPurchases = exports.giftCards = exports.loyaltyTransactions = exports.loyaltyCards = exports.paymentTransactions = exports.deliveryZones = exports.rfidReaders = exports.paymentTerminals = void 0;
+exports.supportTicketMessagesRelations = exports.supportTicketsRelations = exports.supportTicketMessages = exports.supportTickets = exports.platformMessageDismissals = exports.platformMessages = exports.platformEventLogs = exports.platformShopOrdersRelations = exports.platformShopOrders = exports.platformShopVouchers = exports.platformShopProducts = exports.subscriptionPaymentsRelations = exports.subscriptionPlansRelations = exports.productRecipesRelations = exports.inventoryMovementsRelations = exports.inventoryUnitRatiosRelations = exports.inventoryUnitsRelations = exports.inventoryCategoriesRelations = exports.inventoryItemsRelations = exports.inventorySuppliersRelations = exports.productRecipes = exports.inventoryMovements = exports.inventoryUnitRatios = exports.inventoryUnits = exports.inventoryCategories = exports.inventoryItems = exports.inventorySuppliers = exports.posCashMovements = exports.posShifts = exports.marketingEmailLog = exports.emailSendLog = exports.newsletterCampaigns = exports.paymentTerminalsRelations = exports.deliveryZonesRelations = exports.rfidReadersRelations = exports.loyaltyPointEventsRelations = exports.loyaltyPointLotsRelations = exports.giftCardTransactionsRelations = void 0;
 const pg_core_1 = require("drizzle-orm/pg-core");
 const drizzle_orm_1 = require("drizzle-orm");
 // ============================================================================
@@ -335,6 +335,8 @@ exports.merchants = (0, pg_core_1.pgTable)("merchants", {
     resellerId: (0, pg_core_1.uuid)("reseller_id").references(() => exports.resellers.id, { onDelete: "set null" }),
     /** Assigned POS edition / feature pack (null = legacy full access) */
     editionId: (0, pg_core_1.uuid)("edition_id").references(() => exports.editions.id, { onDelete: "set null" }),
+    /** Locked vertical: retail shop vs restaurant / food service. */
+    businessCategory: (0, pg_core_1.varchar)("business_category", { length: 20 }),
     /** Reseller/agency billing flag — paid plan assigned by superadmin or owning reseller */
     planBillingPaid: (0, pg_core_1.boolean)("plan_billing_paid").default(true).notNull(),
     passwordHash: (0, pg_core_1.varchar)("password_hash", { length: 255 }).notNull(),
@@ -958,16 +960,29 @@ exports.kdsStations = (0, pg_core_1.pgTable)("kds_stations", {
         .references(() => exports.merchants.id, { onDelete: "cascade" }),
     name: (0, pg_core_1.varchar)("name", { length: 255 }).notNull(),
     token: (0, pg_core_1.varchar)("token", { length: 128 }).notNull(),
+    /** Short numeric code for /kds/{code} URLs (like TV signage) */
+    shortCode: (0, pg_core_1.varchar)("short_code", { length: 8 }),
     orderTypes: (0, pg_core_1.json)("order_types").$type().default([]).notNull(),
     categoryIds: (0, pg_core_1.json)("category_ids").$type().default([]).notNull(),
     productIds: (0, pg_core_1.json)("product_ids").$type().default([]).notNull(),
+    /** Display theme: dark | light | teal */
+    theme: (0, pg_core_1.varchar)("theme", { length: 32 }).default("dark").notNull(),
+    /** Ticket layout: grid | rows | slider */
+    layoutMode: (0, pg_core_1.varchar)("layout_mode", { length: 16 }).default("grid").notNull(),
+    /** Grid columns when layoutMode=grid (1–6) */
+    gridColumns: (0, pg_core_1.integer)("grid_columns").default(3).notNull(),
+    /** Play alert when a pending ticket exceeds this many minutes */
+    overdueMinutes: (0, pg_core_1.integer)("overdue_minutes").default(20).notNull(),
     isActive: (0, pg_core_1.boolean)("is_active").default(true).notNull(),
     createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
     updatedAt: (0, pg_core_1.timestamp)("updated_at").defaultNow().notNull(),
 }, (table) => ({
     merchantIdx: (0, pg_core_1.index)("kds_stations_merchant_id_idx").on(table.merchantId),
     tokenIdx: (0, pg_core_1.index)("kds_stations_token_idx").on(table.token),
+    shortCodeIdx: (0, pg_core_1.uniqueIndex)("kds_stations_short_code_uidx").on(table.shortCode),
 }));
+exports.KDS_THEMES = ["dark", "light", "teal"];
+exports.KDS_LAYOUT_MODES = ["grid", "rows", "slider"];
 exports.kdsTickets = (0, pg_core_1.pgTable)("kds_tickets", {
     id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
     merchantId: (0, pg_core_1.uuid)("merchant_id")
@@ -1014,6 +1029,8 @@ exports.odsDisplays = (0, pg_core_1.pgTable)("ods_displays", {
         .references(() => exports.merchants.id, { onDelete: "cascade" }),
     name: (0, pg_core_1.varchar)("name", { length: 255 }).notNull(),
     token: (0, pg_core_1.varchar)("token", { length: 128 }).notNull(),
+    /** Short numeric code for /ods/{code} URLs (like TV signage) */
+    shortCode: (0, pg_core_1.varchar)("short_code", { length: 8 }),
     /** Customer board color theme */
     theme: (0, pg_core_1.varchar)("theme", { length: 32 }).default("light").notNull(),
     isActive: (0, pg_core_1.boolean)("is_active").default(true).notNull(),
@@ -1022,6 +1039,7 @@ exports.odsDisplays = (0, pg_core_1.pgTable)("ods_displays", {
 }, (table) => ({
     merchantIdx: (0, pg_core_1.index)("ods_displays_merchant_id_idx").on(table.merchantId),
     tokenIdx: (0, pg_core_1.uniqueIndex)("ods_displays_token_uidx").on(table.token),
+    shortCodeIdx: (0, pg_core_1.uniqueIndex)("ods_displays_short_code_uidx").on(table.shortCode),
 }));
 exports.odsOrders = (0, pg_core_1.pgTable)("ods_orders", {
     id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
@@ -1036,6 +1054,18 @@ exports.odsOrders = (0, pg_core_1.pgTable)("ods_orders", {
 }, (table) => ({
     merchantIdx: (0, pg_core_1.index)("ods_orders_merchant_id_idx").on(table.merchantId),
     merchantOrderIdx: (0, pg_core_1.uniqueIndex)("ods_orders_merchant_order_uidx").on(table.merchantId, table.orderNumber),
+}));
+/** Staff-dismissed pickup numbers — survives clear-all and blocks live merge re-appearance. */
+exports.odsDismissedOrders = (0, pg_core_1.pgTable)("ods_dismissed_orders", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    merchantId: (0, pg_core_1.uuid)("merchant_id")
+        .notNull()
+        .references(() => exports.merchants.id, { onDelete: "cascade" }),
+    orderNumber: (0, pg_core_1.varchar)("order_number", { length: 64 }).notNull(),
+    dismissedAt: (0, pg_core_1.timestamp)("dismissed_at").defaultNow().notNull(),
+}, (table) => ({
+    merchantIdx: (0, pg_core_1.index)("ods_dismissed_merchant_id_idx").on(table.merchantId),
+    merchantOrderIdx: (0, pg_core_1.uniqueIndex)("ods_dismissed_merchant_order_uidx").on(table.merchantId, table.orderNumber),
 }));
 exports.SIGNAGE_TEMPLATES = [
     "dark_pizza",
@@ -1834,6 +1864,9 @@ exports.odsDisplaysRelations = (0, drizzle_orm_1.relations)(exports.odsDisplays,
 }));
 exports.odsOrdersRelations = (0, drizzle_orm_1.relations)(exports.odsOrders, ({ one }) => ({
     merchant: one(exports.merchants, { fields: [exports.odsOrders.merchantId], references: [exports.merchants.id] }),
+}));
+exports.odsDismissedOrdersRelations = (0, drizzle_orm_1.relations)(exports.odsDismissedOrders, ({ one }) => ({
+    merchant: one(exports.merchants, { fields: [exports.odsDismissedOrders.merchantId], references: [exports.merchants.id] }),
 }));
 exports.kdsTicketsRelations = (0, drizzle_orm_1.relations)(exports.kdsTickets, ({ one, many }) => ({
     merchant: one(exports.merchants, { fields: [exports.kdsTickets.merchantId], references: [exports.merchants.id] }),

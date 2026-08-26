@@ -41,6 +41,7 @@ const vacation_1 = require("@/lib/vacation");
 const marketing_service_1 = require("@/services/marketing.service");
 const pos_print_settings_1 = require("@/lib/pos-print-settings");
 const pos_checkout_settings_1 = require("@/lib/pos-checkout-settings");
+const business_module_1 = require("@/lib/business-module");
 const table_qr_settings_1 = require("@/lib/table-qr-settings");
 const delivery_platform_settings_1 = require("@/lib/delivery-platform-settings");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
@@ -229,6 +230,7 @@ class MerchantSettingsService {
             status: merchant.status,
             subscriptionPlan: merchant.subscriptionPlan,
             editionId: merchant.editionId || null,
+            businessCategory: (0, business_module_1.normalizeBusinessModule)(merchant.businessCategory),
             resellerId: merchant.resellerId || null,
             /**
              * null = legacy full access for edition routes.
@@ -537,7 +539,16 @@ class MerchantSettingsService {
             patch.tableQrSettings = (0, table_qr_settings_1.normalizeTableQrSettings)(updates.tableQrSettings);
         }
         if (updates.posCheckoutSettings !== undefined) {
-            patch.posCheckoutSettings = (0, pos_checkout_settings_1.normalizePosCheckoutSettings)(updates.posCheckoutSettings);
+            const currentMerchant = await db.query.merchants.findFirst({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+                columns: { businessCategory: true },
+            });
+            const locked = (0, business_module_1.normalizeBusinessModule)(currentMerchant?.businessCategory);
+            let checkout = (0, pos_checkout_settings_1.normalizePosCheckoutSettings)(updates.posCheckoutSettings);
+            if (locked) {
+                checkout = { ...checkout, posMode: (0, business_module_1.posModeForModule)(locked) };
+            }
+            patch.posCheckoutSettings = checkout;
         }
         if (updates.deliveryPlatformSettings !== undefined) {
             const current = await db.query.merchants.findFirst({

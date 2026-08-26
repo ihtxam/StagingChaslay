@@ -1,4 +1,4 @@
-import type { MerchantBrevoSettings, MerchantSmtpSettings } from "@/db/schema";
+import type { MerchantBrevoSettings, MerchantSmtpSettings, EmailSendType } from "@/db/schema";
 export type EmailAttachment = {
     filename: string;
     content: Buffer | string;
@@ -12,6 +12,8 @@ export type SendEmailInput = {
     /** Optional merchant override for SMTP / from */
     merchantId?: string;
     attachments?: EmailAttachment[];
+    /** Category for platform usage reporting */
+    emailType?: EmailSendType | string;
 };
 type EmailProvider = "smtp" | "brevo" | "sendgrid" | null;
 type ResolvedEmailConfig = {
@@ -24,12 +26,15 @@ type ResolvedEmailConfig = {
     merchantId?: string | null;
 };
 /**
- * Prefer merchant SMTP, then merchant Brevo, then platform Brevo, then SendGrid.
+ * Prefer platform Brevo when merchant emailDeliveryMode is platform;
+ * otherwise merchant SMTP, then merchant Brevo, then platform Brevo, then SendGrid.
  */
 export declare class EmailService {
     private static envBrevoApiKey;
     private static envFromAddress;
     private static envFromName;
+    /** Merchant emails show the shop name as sender; Brevo/SMTP from address stays authenticated. */
+    private static merchantSenderName;
     static resolveConfig(merchantId?: string | null): Promise<ResolvedEmailConfig>;
     static isConfigured(merchantId?: string | null): Promise<boolean>;
     /** Roll daily/monthly counters for the current Zurich calendar periods. */
@@ -71,12 +76,13 @@ export declare class EmailService {
         provider: EmailProvider;
         fromEmail: string;
         fromName: string;
-        source: "none" | "merchant_smtp" | "merchant_brevo" | "database" | "env";
+        source: "none" | "database" | "env" | "merchant_smtp" | "merchant_brevo";
         apiKeySet: boolean;
         apiKeyMasked: string;
         brevoKeySet: boolean;
         sendgridKeySet: boolean;
         smtpEnabled: boolean;
+        usingPlatformEmail: boolean;
         merchantBrevo: {
             dailyRemaining: number | null;
             monthlyRemaining: number | null;
