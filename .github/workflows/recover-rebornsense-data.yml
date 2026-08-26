@@ -16,13 +16,18 @@ concurrency:
 
 jobs:
   recover:
-    if: >-
-      ${{
-        secrets.REBORN_HETZNER_HOST != '' &&
-        (secrets.HETZNER_HOST != '' || secrets.REBORN_HETZNER_HOST == '91.98.41.165')
-      }}
     runs-on: ubuntu-latest
     steps:
+      - name: Check required secrets
+        run: |
+          if [[ -z "${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}" ]]; then
+            echo "Missing REBORN_HETZNER_SSH_KEY (or HETZNER_SSH_KEY fallback)"
+            exit 1
+          fi
+          if [[ -z "${{ secrets.HETZNER_SSH_KEY }}" ]]; then
+            echo "Missing HETZNER_SSH_KEY for legacy host dump"
+            exit 1
+          fi
       - name: Dump legacy Postgres on Chaslay host
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -56,7 +61,9 @@ jobs:
               exit 1
             fi
             test -s "$DUMP"
-            echo "DUMP_PATH=$DUMP" > /root/rebornsense-recovery-backups/latest-dump-path.env
+            mkdir -p /root/rebornsense-recovery-backups/latest
+            cp -f "$DUMP" /root/rebornsense-recovery-backups/latest/legacy-manupos.dump
+            echo "DUMP_PATH=/root/rebornsense-recovery-backups/latest/legacy-manupos.dump" > /root/rebornsense-recovery-backups/latest-dump-path.env
             docker exec foodtruckpos-db-1 psql -U manupos -d manupos -t -c "SELECT count(*) FROM merchants;" 2>/dev/null || true
             ls -lh "$DUMP"
 
@@ -67,9 +74,9 @@ jobs:
           username: ${{ secrets.HETZNER_USER || 'root' }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
           port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
-          source: "/root/rebornsense-recovery-backups/ci-*/*.dump"
+          source: "/root/rebornsense-recovery-backups/latest/legacy-manupos.dump"
           target: /tmp/rebornsense-recovery/
-          strip_components: 2
+          strip_components: 4
 
       - name: Upload dump to Rebornsense host
         uses: appleboy/scp-action@v0.1.7
@@ -78,8 +85,8 @@ jobs:
           username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER || 'root' }}
           key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
           port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
-          source: /tmp/rebornsense-recovery/*.dump
-          target: /root/rebornsense-recovery-backups/ci-import/
+          source: "/tmp/rebornsense-recovery/legacy-manupos.dump"
+          target: /root/rebornsense-recovery-backups/latest/
           strip_components: 0
 
       - name: Restore on Rebornsense host
@@ -93,8 +100,8 @@ jobs:
           script: |
             set -euo pipefail
             DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
-            DUMP="$(ls -t /root/rebornsense-recovery-backups/ci-import/*.dump 2>/dev/null | head -1)"
-            if [[ -z "$DUMP" ]]; then
+            DUMP="/root/rebornsense-recovery-backups/latest/legacy-manupos.dump"
+            if [[ ! -s "$DUMP" ]]; then
               DUMP="$(ls -t /root/rebornsense-recovery-backups/*/*.dump 2>/dev/null | head -1)"
             fi
             test -n "$DUMP"
@@ -104,5 +111,5 @@ jobs:
             git reset --hard origin/main
             chmod +x scripts/restore-rebornsense-dump.sh
             DUMP_FILE="$DUMP" CONFIRM=1 bash scripts/restore-rebornsense-dump.sh
-            docker compose --env-file "$DEPLOY_PATH/.env.production" exec -T db psql -U manupos -d manupos -c \
+            docker compose -p rebornsense --env-file "$DEPLOY_PATH/.env.production" exec -T db psql -U manupos -d manupos -c \
               "SELECT 'merchants' AS tbl, count(*) FROM merchants UNION ALL SELECT 'superadmins', count(*) FROM superadmins;"
