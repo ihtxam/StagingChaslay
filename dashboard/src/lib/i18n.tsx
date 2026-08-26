@@ -1097,6 +1097,10 @@ const en: Dict = {
   addModifiers: 'Add modifiers',
   noModifiersLinked: 'No modifiers linked yet.',
   noProductsFound: 'No products found',
+  selectAllFiltered: 'Select all (filtered)',
+  selectAll: 'Select all',
+  deselectAll: 'Deselect all',
+  selectedCount: '{n} selected',
   createOrImport: 'Create one or import an Excel catalog.',
   dragToReorder: 'Drag to reorder',
 
@@ -4274,6 +4278,10 @@ const fr: Dict = {
   addModifiers: 'Ajouter des modificateurs',
   noModifiersLinked: 'Aucun modificateur lié.',
   noProductsFound: 'Aucun produit trouvé',
+  selectAllFiltered: 'Tout sélectionner (filtré)',
+  selectAll: 'Tout sélectionner',
+  deselectAll: 'Tout désélectionner',
+  selectedCount: '{n} sélectionné(s)',
   createOrImport: 'Créez-en un ou importez un catalogue Excel.',
   dragToReorder: 'Glisser pour réordonner',
 
@@ -7417,6 +7425,10 @@ const de: Dict = {
   addModifiers: 'Modifieren hinzufügen',
   noModifiersLinked: 'Noch keine Modifier verknüpft.',
   noProductsFound: 'Keine Produkte gefunden',
+  selectAllFiltered: 'Alle auswählen (gefiltert)',
+  selectAll: 'Alle auswählen',
+  deselectAll: 'Auswahl aufheben',
+  selectedCount: '{n} ausgewählt',
   createOrImport: 'Erstellen oder Excel-Katalog importieren.',
   dragToReorder: 'Ziehen zum Sortieren',
 

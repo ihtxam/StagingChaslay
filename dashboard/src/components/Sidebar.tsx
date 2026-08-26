@@ -225,8 +225,8 @@ export default function Sidebar({
       nested ? 'px-2.5 py-1.5 pl-9' : 'px-2.5 py-2'
     } ${
       active
-        ? 'bg-teal-900 text-white shadow-sm'
-        : 'text-teal-50/95 hover:bg-teal-900/45 hover:text-white'
+        ? 'bg-black/25 text-white shadow-sm'
+        : 'text-white/90 hover:bg-white/10 hover:text-white'
     }`;
 
   return (
@@ -237,14 +237,21 @@ export default function Sidebar({
         } fixed lg:relative lg:translate-x-0 lg:pointer-events-auto w-56 h-dvh max-h-dvh lg:h-full lg:max-h-full transition-transform duration-200 z-40 flex flex-col shrink-0`}
       >
         <div className="panel-sidebar-divider px-4 py-3 border-b flex items-center justify-between shrink-0">
-          <div>
-            <h1 className="text-base font-semibold tracking-tight text-white">{headerShopName}</h1>
-            <p className="text-[11px] text-teal-100/70 mt-0.5">{t('panel')}</p>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <img
+              src="/brand/logo-mark.png"
+              alt=""
+              className="h-8 w-8 shrink-0 object-contain"
+            />
+            <div className="min-w-0">
+              <h1 className="text-base font-semibold tracking-tight text-white truncate">{headerShopName}</h1>
+              <p className="text-[11px] text-white/70 mt-0.5">{t('panel')}</p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onToggle}
-            className="lg:hidden p-1.5 rounded-md text-teal-50/95 hover:bg-teal-900/45 hover:text-white"
+            className="lg:hidden p-1.5 rounded-md text-white/90 hover:bg-white/10 hover:text-white"
             aria-label="Close menu"
           >
             <X className="w-4 h-4" />
@@ -323,8 +330,8 @@ export default function Sidebar({
                   aria-expanded={isOpenGroup}
                   className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
                     parentActive
-                      ? 'bg-teal-900/90 text-white shadow-sm'
-                      : 'text-teal-50/95 hover:bg-teal-900/45 hover:text-white'
+                      ? 'bg-black/25 text-white shadow-sm'
+                      : 'text-white/90 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
@@ -344,7 +351,7 @@ export default function Sidebar({
                         return (
                           <p
                             key={`h-${child.label}-${idx}`}
-                            className="px-2.5 pt-2 pb-0.5 pl-9 text-[10px] font-semibold uppercase tracking-wide text-teal-200/55"
+                            className="px-2.5 pt-2 pb-0.5 pl-9 text-[10px] font-semibold uppercase tracking-wide text-white/55"
                           >
                             {child.label}
                           </p>
@@ -379,8 +386,8 @@ export default function Sidebar({
               onClick={closeMobile}
               className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
                 isPathActive(location.pathname, shopPath)
-                  ? 'bg-teal-900 text-white shadow-sm'
-                  : 'text-teal-50/95 hover:bg-teal-900/45 hover:text-white'
+                  ? 'bg-black/25 text-white shadow-sm'
+                  : 'text-white/90 hover:bg-white/10 hover:text-white'
               }`}
             >
               <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
@@ -396,8 +403,8 @@ export default function Sidebar({
               onClick={closeMobile}
               className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
                 isPathActive(location.pathname, profileMenu.settingsPath)
-                  ? 'bg-teal-900 text-white shadow-sm'
-                  : 'text-teal-50/95 hover:bg-teal-900/45 hover:text-white'
+                  ? 'bg-black/25 text-white shadow-sm'
+                  : 'text-white/90 hover:bg-white/10 hover:text-white'
               }`}
             >
               <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
@@ -423,21 +430,21 @@ export default function Sidebar({
               <button
                 type="button"
                 onClick={() => setProfileOpen((v) => !v)}
-                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-md hover:bg-teal-900/45 transition-colors"
+                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-md hover:bg-white/10 transition-colors"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-900 text-teal-50">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/30 text-white">
                   <User className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1 text-left">
                   <p className="truncate text-sm font-medium text-white">{accountName}</p>
-                  <p className="truncate text-[11px] text-teal-100/70">{roleLabel}</p>
+                  <p className="truncate text-[11px] text-white/70">{roleLabel}</p>
                 </div>
                 <ChevronDown
-                  className={`w-4 h-4 text-teal-100/70 shrink-0 transition-transform ${profileOpen ? 'rotate-180' : ''}`}
+                  className={`w-4 h-4 text-white/70 shrink-0 transition-transform ${profileOpen ? 'rotate-180' : ''}`}
                 />
               </button>
               {profileOpen ? (
-                <div className="mt-1 rounded-lg border border-white/15 bg-teal-950/90 overflow-hidden">
+                <div className="mt-1 rounded-lg border border-white/15 bg-black/35 overflow-hidden">
                   {profileMenu.supportPath ? (
                     <Link
                       to={profileMenu.supportPath}
@@ -445,7 +452,7 @@ export default function Sidebar({
                         setProfileOpen(false);
                         closeMobile();
                       }}
-                      className="flex items-center gap-2 px-3 py-2.5 text-sm text-teal-50 hover:bg-teal-900/60"
+                      className="flex items-center gap-2 px-3 py-2.5 text-sm text-white/90 hover:bg-white/10"
                     >
                       <LifeBuoy className="w-4 h-4" />
                       {t('support')}
@@ -458,7 +465,7 @@ export default function Sidebar({
                         setProfileOpen(false);
                         closeMobile();
                       }}
-                      className="flex items-center gap-2 px-3 py-2.5 text-sm text-teal-50 hover:bg-teal-900/60"
+                      className="flex items-center gap-2 px-3 py-2.5 text-sm text-white/90 hover:bg-white/10"
                     >
                       <CreditCard className="w-4 h-4" />
                       {t('billing')}
@@ -466,7 +473,7 @@ export default function Sidebar({
                   ) : null}
                   {onLanguageChange ? (
                     <div className="px-3 py-2.5 border-t border-white/10">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-200/60 mb-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-white/60 mb-2">
                         {t('language')}
                       </p>
                       <div className="grid grid-cols-3 gap-1">
@@ -481,8 +488,8 @@ export default function Sidebar({
                             onClick={() => onLanguageChange(code)}
                             className={`rounded-md px-2 py-1.5 text-xs font-semibold transition-colors ${
                               (language || 'en') === code
-                                ? 'bg-teal-600 text-white'
-                                : 'bg-teal-900/50 text-teal-100 hover:bg-teal-900/80'
+                                ? 'bg-white/25 text-white'
+                                : 'bg-black/20 text-white/80 hover:bg-black/35'
                             }`}
                           >
                             {label}
@@ -504,12 +511,12 @@ export default function Sidebar({
             </div>
           ) : (
             <div className="flex items-center gap-2.5 px-2 py-1.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-900 text-teal-50">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/30 text-white">
                 <User className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-white">{accountName}</p>
-                <p className="truncate text-[11px] text-teal-100/70" title={roleLabel}>
+                <p className="truncate text-[11px] text-white/70" title={roleLabel}>
                   {roleLabel}
                 </p>
               </div>
@@ -518,7 +525,7 @@ export default function Sidebar({
 
           {onLanguageChange && !profileMenu ? (
             <select
-              className="w-full rounded-md border border-white/25 bg-teal-900/40 px-2.5 py-1.5 text-xs text-teal-50"
+              className="w-full rounded-md border border-white/25 bg-black/25 px-2.5 py-1.5 text-xs text-white/90"
               value={language || 'en'}
               onChange={(e) => onLanguageChange(e.target.value as Locale)}
               aria-label={t('language')}

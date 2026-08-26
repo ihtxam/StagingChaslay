@@ -35,7 +35,22 @@ export default function Categories() {
   const [imageUrl, setImageUrl] = useState('');
   const [color, setColor] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const allSelected = categories.length > 0 && categories.every((c) => selectedIds.includes(c.id));
+  const someSelected = categories.some((c) => selectedIds.includes(c.id));
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (allSelected) return prev.filter((id) => !categories.some((c) => c.id === id));
+      return [...new Set([...prev, ...categories.map((c) => c.id)])];
+    });
+  };
 
   const load = async () => {
     try {
@@ -292,9 +307,33 @@ export default function Categories() {
       </div>
 
       <div className="card table-scroll !p-0">
+        {categories.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border)] px-3 py-2 text-sm">
+            <label className="inline-flex items-center gap-2 font-medium">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = someSelected && !allSelected;
+                }}
+                onChange={toggleSelectAll}
+              />
+              {t('selectAll')}
+            </label>
+            {selectedIds.length > 0 ? (
+              <span className="muted">{t('selectedCount').replace('{n}', String(selectedIds.length))}</span>
+            ) : null}
+            {selectedIds.length > 0 ? (
+              <button type="button" className="text-sm underline muted" onClick={() => setSelectedIds([])}>
+                {t('deselectAll')}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <table className="w-full text-sm min-w-[480px]">
           <thead>
             <tr className="text-left border-b border-[var(--border)]">
+              <th className="py-2 px-2 w-10" />
               <th className="py-2 px-2 w-10" />
               <th className="py-2 px-2">{t('name')}</th>
               <th className="py-2 px-2">{t('description')}</th>
@@ -309,7 +348,7 @@ export default function Categories() {
           >
             {categories.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-6 px-3 muted">
+                <td colSpan={5} className="py-6 px-3 muted">
                   {t('noCategoriesYet')}
                 </td>
               </tr>
@@ -324,6 +363,14 @@ export default function Categories() {
               >
                 {({ attributes, listeners }) => (
                   <>
+                    <td className="py-2.5 px-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(category.id)}
+                        onChange={() => toggleSelected(category.id)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
                     <td className="py-2.5 px-2">
                       <DragHandle attributes={attributes} listeners={listeners} />
                     </td>

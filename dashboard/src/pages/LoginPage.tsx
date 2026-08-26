@@ -8,6 +8,7 @@ import api from '@/lib/api';
 import { homePathForUser } from '@/lib/auth-home';
 import { posEmbedReturnPath } from '@/pages/PosEmbedPage';
 import { APP_NAME, APP_PANEL_TITLE, APP_TAGLINE } from '@/lib/brand';
+import { BRAND_BLUE_CHARCOAL, BRAND_BURGUNDY, BRAND_WARM_WHITE } from '@/lib/brand-colors';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { clearWebPosStaffSession } from '@/lib/permissions';
 import { useAuthStore, type User } from '@/store/auth';
@@ -189,31 +190,38 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b3d3a] flex flex-col items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(15,118,110,0.35),_transparent_55%)] pointer-events-none" />
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-4"
+      style={{ backgroundColor: BRAND_BLUE_CHARCOAL }}
+    >
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: `radial-gradient(ellipse at top, rgba(128, 0, 32, 0.35), transparent 55%)`,
+        }}
+      />
 
       <div className="relative w-full max-w-[420px]">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg ring-1 ring-white/15">
+          <div
+            className="flex h-20 w-20 items-center justify-center rounded-2xl shadow-lg ring-1 ring-white/10"
+            style={{ backgroundColor: BRAND_BURGUNDY }}
+          >
             <img
-              src="/favicon.png"
+              src="/brand/logo-mark.png"
               alt=""
-              className="h-12 w-12 object-contain"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
-                if (fallback) fallback.hidden = false;
-              }}
+              className="h-14 w-14 object-contain"
             />
-            <span hidden className="text-2xl font-bold tracking-tight text-teal-800">
-              C
-            </span>
           </div>
-          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-white">{APP_NAME}</h1>
-          <p className="mt-1 text-sm text-teal-100/80">{t('loginTagline')}</p>
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight" style={{ color: BRAND_WARM_WHITE }}>
+            {APP_NAME}
+          </h1>
+          <p className="mt-1 text-sm opacity-80" style={{ color: BRAND_WARM_WHITE }}>
+            {t('loginTagline')}
+          </p>
         </div>
 
-        <div className="rounded-2xl bg-white p-8 shadow-2xl">
+        <div className="rounded-2xl p-8 shadow-2xl" style={{ backgroundColor: BRAND_WARM_WHITE }}>
           {view === 'login' && (
             <>
               <h2 className="text-lg font-semibold text-slate-900">{t('loginTitle')}</h2>
@@ -246,7 +254,8 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setView('forgot')}
-                      className="text-sm font-medium text-teal-800 hover:underline"
+                      className="text-sm font-medium hover:underline"
+                      style={{ color: BRAND_BURGUNDY }}
                     >
                       {t('forgotPassword')}
                     </button>
@@ -267,7 +276,8 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full rounded-lg bg-teal-800 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                  className="w-full rounded-lg py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ backgroundColor: BRAND_BURGUNDY }}
                 >
                   {isLoading ? t('loginSigningIn') : t('loginSignIn')}
                 </button>
@@ -299,7 +309,8 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={forgotLoading}
-                  className="w-full rounded-lg bg-teal-800 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                  className="w-full rounded-lg py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ backgroundColor: BRAND_BURGUNDY }}
                 >
                   {forgotLoading ? t('forgotPasswordSending') : t('forgotPasswordSubmit')}
                 </button>
@@ -321,7 +332,8 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setView('login')}
-                className="mt-6 w-full rounded-lg bg-teal-800 py-2.5 text-sm font-semibold text-white hover:bg-teal-700"
+                className="mt-6 w-full rounded-lg py-2.5 text-sm font-semibold text-white"
+                style={{ backgroundColor: BRAND_BURGUNDY }}
               >
                 {t('forgotPasswordBack')}
               </button>
@@ -337,15 +349,16 @@ export default function LoginPage() {
               onClick={() => setLocale(code)}
               className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${
                 locale === code
-                  ? 'bg-white text-teal-900'
-                  : 'text-teal-100/80 hover:text-white'
+                  ? 'text-white'
+                  : 'opacity-75 hover:opacity-100'
               }`}
+              style={locale === code ? { backgroundColor: BRAND_BURGUNDY } : { color: BRAND_WARM_WHITE }}
             >
               {code}
             </button>
           ))}
         </div>
-        <p className="mt-4 text-center text-[11px] text-teal-100/50">{APP_TAGLINE}</p>
+        <p className="mt-4 text-center text-[11px] opacity-50" style={{ color: BRAND_WARM_WHITE }}>{APP_TAGLINE}</p>
       </div>
     </div>
   );

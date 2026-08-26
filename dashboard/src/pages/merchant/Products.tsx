@@ -480,6 +480,21 @@ export default function Products() {
     });
   }, [products, selectedCategory, search, categories]);
 
+  const filteredIds = useMemo(() => filteredProducts.map((p) => p.id), [filteredProducts]);
+  const allFilteredSelected =
+    filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
+  const someFilteredSelected = filteredIds.some((id) => selectedIds.includes(id));
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedIds((prev) => {
+      if (allFilteredSelected) {
+        const filteredSet = new Set(filteredIds);
+        return prev.filter((id) => !filteredSet.has(id));
+      }
+      return [...new Set([...prev, ...filteredIds])];
+    });
+  };
+
   const openCreate = () => {
     if (atProductLimit) {
       toast.error(t('productLimitReached'));
@@ -1212,6 +1227,29 @@ export default function Products() {
       </section>
 
       <section className="space-y-2">
+        {filteredProducts.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm">
+            <label className="inline-flex items-center gap-2 font-medium">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = someFilteredSelected && !allFilteredSelected;
+                }}
+                onChange={toggleSelectAllFiltered}
+              />
+              {t('selectAllFiltered')}
+            </label>
+            {selectedIds.length > 0 ? (
+              <span className="muted">{t('selectedCount').replace('{n}', String(selectedIds.length))}</span>
+            ) : null}
+            {selectedIds.length > 0 ? (
+              <button type="button" className="text-sm underline muted" onClick={() => setSelectedIds([])}>
+                {t('deselectAll')}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {filteredProducts.length === 0 && (
           <div className="card border-dashed px-4 py-10 text-center">
             <Package className="mx-auto muted" size={28} />
