@@ -72,5 +72,14 @@ jobs:
                 sh -c 'mkdir -p /to && tar xzf /backup/legacy-uploads.tar.gz -C /to'
             fi
             docker compose -p rebornsense --env-file "$DEPLOY_PATH/.env.production" up -d
+            COUNT="$(docker compose -p rebornsense --env-file "$DEPLOY_PATH/.env.production" exec -T db psql -U manupos -d manupos -t -c "SELECT count(*) FROM merchants;" | tr -d '[:space:]')"
+            echo "Merchant count after restore: $COUNT"
+            if [[ "${COUNT:-0}" -lt 5 ]]; then
+              echo "ERROR: expected legacy merchants (>=5), got $COUNT"
+              exit 1
+            fi
             docker compose -p rebornsense --env-file "$DEPLOY_PATH/.env.production" exec -T db psql -U manupos -d manupos -c \
               "SELECT 'merchants' AS tbl, count(*) FROM merchants UNION ALL SELECT 'superadmins', count(*) FROM superadmins;"
+            if [[ -f scripts/set-superadmin-password.sh ]]; then
+              bash scripts/set-superadmin-password.sh 'ChaslayAdmin123!' admin@chaslay.com || true
+            fi
