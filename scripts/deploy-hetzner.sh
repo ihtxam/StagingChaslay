@@ -326,12 +326,82 @@ if [[ ! -f "$SETUP_EXE" ]] || [[ "$(wc -c < "$SETUP_EXE" | tr -d " ")" -lt 10000
   echo "WARNING: $SETUP_EXE missing or too small - Windows will report a corrupted download"
 fi
 
-echo "=== Stop legacy backend compose (frees :80/:443) ==="
-if [[ -f "$REPO_DIR/backend/docker-compose.yml" ]]; then
-  (cd "$REPO_DIR/backend" && docker compose down || true)
-fi
-# Also stop any leftover containers from old stack names
-docker rm -f backend-caddy-1 backend-api-1 backend-receipts-1 backend-postgres-1 2>/dev/null || true
+compose_project_name() {
+  local dir="${1:-$REPO_DIR}"
+  if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
+    printf '%s' "$COMPOSE_PROJECT_NAME"
+    return 0
+  fi
+  basename "$dir" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g'
+}
+
+stop_compose_stack() {
+  local dir="$1"
+  [[ -f "$dir/docker-compose.yml" ]] || return 0
+  echo "docker compose down: $dir"
+  (cd "$dir" && docker compose down --remove-orphans 2>/dev/null) || true
+}
+
+stop_conflicting_http_stacks() {
+  local current_project dir project name port repo_real legacy_real
+  current_project="$(compose_project_name "$REPO_DIR")"
+  repo_real="$(realpath "$REPO_DIR" 2>/dev/null || echo "$REPO_DIR")"
+
+  echo "=== Free ports 80/443 (compose project: $current_project) ==="
+
+  # Known trees that may still run an old Caddy on :80/:443
+  local legacy_dirs=(
+    /root/FoodTruckPOS
+    /root/FoodTruckPOS/backend
+    /root/chaslay
+    /root/Chaslay
+    /root/rebornSense
+  )
+  for dir in "${legacy_dirs[@]}"; do
+    legacy_real="$(realpath "$dir" 2>/dev/null || echo "$dir")"
+    [[ "$legacy_real" == "$repo_real" ]] && continue
+    stop_compose_stack "$dir"
+  done
+
+  # Legacy backend-only compose inside the current repo (pre-root docker-compose.yml layout)
+  if [[ -f "$REPO_DIR/backend/docker-compose.yml" && ! -f "$REPO_DIR/docker-compose.yml" ]]; then
+    stop_compose_stack "$REPO_DIR/backend"
+  elif [[ -f "$REPO_DIR/backend/docker-compose.yml" ]]; then
+    stop_compose_stack "$REPO_DIR/backend"
+  fi
+
+  # Old compose project names (directory-derived or hand-set)
+  for project in backend foodtruckpos chaslay reborn rebornsense; do
+    [[ "$project" == "$current_project" ]] && continue
+    echo "docker compose -p $project down"
+    docker compose -p "$project" down --remove-orphans 2>/dev/null || true
+  done
+
+  # Remove any container still publishing :80 or :443 outside this deploy's project
+  for port in 80 443; do
+    while IFS= read -r name; do
+      [[ -z "$name" ]] && continue
+      if [[ "$name" == "${current_project}-caddy-"* ]]; then
+        continue
+      fi
+      project="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$name" 2>/dev/null || true)"
+      if [[ -n "$project" && "$project" == "$current_project" ]]; then
+        continue
+      fi
+      echo "Removing port blocker: $name (publish $port)"
+      docker rm -f "$name" 2>/dev/null || true
+    done < <(docker ps --filter "publish=$port" --format '{{.Names}}' 2>/dev/null || true)
+  done
+
+  docker rm -f \
+    backend-caddy-1 backend-api-1 backend-receipts-1 backend-postgres-1 \
+    foodtruckpos-caddy-1 chaslay-caddy-1 2>/dev/null || true
+
+  echo "Port 80: $(docker ps --filter publish=80 --format '{{.Names}}' 2>/dev/null | paste -sd' ' - || echo 'free')"
+  echo "Port 443: $(docker ps --filter publish=443 --format '{{.Names}}' 2>/dev/null | paste -sd' ' - || echo 'free')"
+}
+
+stop_conflicting_http_stacks
 
 echo "=== Docker build & start ==="
 if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then

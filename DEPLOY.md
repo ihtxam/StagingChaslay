@@ -201,8 +201,44 @@ ssh root@91.98.41.165 'export DEPLOY_STACK=rebornsense DEPLOY_PATH=/root/rebornS
 | `not a git repository` | Use Option A or B above; deploy always runs `git fetch` |
 | `Permission denied (publickey)` on clone | Add `/root/.ssh/rebornsense_deploy.pub` to GitHub deploy keys |
 | `404` on `https://github.com/.../rebornSense` in browser | Repo is private — use SSH (`git@github.com:...`), not HTTPS without a PAT |
+| `Bind for 0.0.0.0:80 failed: port is already allocated` | Old stack still running (often `/root/FoodTruckPOS`). See [Port 80/443 already in use](#port-80443-already-in-use-rebornsense) below |
 | Old teal UI still showing | Deploy never completed; run bootstrap + deploy again |
 | Wrong path in GitHub Actions | Set `REBORN_HETZNER_DEPLOY_PATH=/root/rebornSense` |
+
+#### Port 80/443 already in use (Rebornsense)
+
+Caddy needs host ports **80** and **443**. If an old FoodTruckPOS / Chaslay compose stack is still up, `rebornsense-caddy-1` fails with `port is already allocated`.
+
+**Find what holds the ports (run on `91.98.41.165`):**
+
+```bash
+docker ps --filter publish=80 --format 'table {{.Names}}\t{{.Ports}}\t{{.Status}}'
+docker ps --filter publish=443 --format 'table {{.Names}}\t{{.Ports}}\t{{.Status}}'
+ss -tlnp | grep -E ':80 |:443 '
+```
+
+**Stop the old stack safely, then finish Rebornsense deploy:**
+
+```bash
+# Stop legacy FoodTruckPOS / backend compose (common culprit)
+cd /root/FoodTruckPOS 2>/dev/null && docker compose down --remove-orphans || true
+cd /root/FoodTruckPOS/backend 2>/dev/null && docker compose down --remove-orphans || true
+docker compose -p foodtruckpos down --remove-orphans 2>/dev/null || true
+docker compose -p backend down --remove-orphans 2>/dev/null || true
+
+# Start / complete Rebornsense (deploy script now stops conflicts automatically)
+export DEPLOY_STACK=rebornsense DEPLOY_PATH=/root/rebornSense
+bash /root/rebornSense/scripts/deploy-hetzner.sh
+```
+
+**Verify Reborn branding (burgundy `#800020`, not teal `#0f766e`):**
+
+```bash
+curl -sI https://app.rebornsense.com/ | head -5
+curl -sL https://app.rebornsense.com/ | grep -E 'theme-color|#800020|#0f766e' | head -3
+```
+
+Expect `theme-color` content `#800020`. Teal `#0f766e` means the old stack or a failed deploy is still serving traffic.
 
 Manual deploy anytime:
 
@@ -399,6 +435,7 @@ Orders appear in POS **Ongoing Orders** when the tablet is online and `SYNC_API_
 | Sync does nothing | Set tenant `SYNC_API_KEY` in app (from `create-tenant`) |
 | Shop 404 | Run `create-tenant` or `seed`; slug must be lowercase `a-z`, `0-9`, hyphens |
 | SSL not ready | Wait for DNS propagation; Caddy issues certs automatically |
+| `port is already allocated` (80/443) | Another Docker stack’s Caddy is still running. `docker ps --filter publish=80`; stop old compose (`docker compose down` in `/root/FoodTruckPOS` or project `foodtruckpos` / `backend`). Rebornsense: see [Port 80/443 already in use](#port-80443-already-in-use-rebornsense) |
 
 ---
 
