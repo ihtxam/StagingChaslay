@@ -1,0 +1,29 @@
+name: Restore Rebornsense dump now
+
+on:
+  workflow_dispatch:
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore legacy dump on Rebornsense host
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.REBORN_HETZNER_HOST || '91.98.41.165' }}
+          username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER || 'root' }}
+          key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
+          command_timeout: 30m
+          script: |
+            set -euxo pipefail
+            DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
+            mkdir -p /root/rebornsense-recovery-backups/latest
+            LEGACY_DUMP_URL="http://116.202.26.15:9876/legacy-manupos.dump"
+            curl -fsSL "$LEGACY_DUMP_URL" -o /root/rebornsense-recovery-backups/latest/legacy-manupos.dump
+            ls -lh /root/rebornsense-recovery-backups/latest/legacy-manupos.dump
+            cd "$DEPLOY_PATH"
+            git fetch origin main
+            git reset --hard origin/main
+            chmod +x scripts/restore-rebornsense-dump.sh
+            DUMP_FILE="/root/rebornsense-recovery-backups/latest/legacy-manupos.dump" CONFIRM=1 bash scripts/restore-rebornsense-dump.sh
