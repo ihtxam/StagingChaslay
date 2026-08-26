@@ -240,6 +240,55 @@ curl -sL https://app.rebornsense.com/ | grep -E 'theme-color|#800020|#0f766e' | 
 
 Expect `theme-color` content `#800020`. Teal `#0f766e` means the old stack or a failed deploy is still serving traffic.
 
+#### Rebornsense SSL (`ERR_SSL_PROTOCOL_ERROR`)
+
+Symptom: HTTP redirects to HTTPS, but `curl -vk https://app.rebornsense.com` fails with **TLS alert internal error** / browser shows `ERR_SSL_PROTOCOL_ERROR`.
+
+**Cause:** Caddy is serving with `deploy/Caddyfile.chaslay` (compose default). `app.rebornsense.com` then hits the catch-all `https:// { tls on_demand }` block; the API `/api/shop/tls-ask` rejects it, so **no certificate** is issued.
+
+**Fix on `91.98.41.165`:**
+
+```bash
+ssh root@91.98.41.165
+cd /root/rebornSense
+
+# 1) Ensure env points at the Rebornsense Caddyfile
+grep -E '^(DOMAIN|CADDYFILE|ACME_EMAIL)=' /root/chaslay-secrets/.env.production
+# Expected:
+#   DOMAIN=rebornsense.com
+#   CADDYFILE=./deploy/Caddyfile.rebornsense
+#   ACME_EMAIL=admin@rebornsense.com
+
+# If CADDYFILE is missing or wrong:
+sed -i 's|^CADDYFILE=.*|CADDYFILE=./deploy/Caddyfile.rebornsense|' /root/chaslay-secrets/.env.production \
+  || echo 'CADDYFILE=./deploy/Caddyfile.rebornsense' >> /root/chaslay-secrets/.env.production
+sed -i 's|^DOMAIN=.*|DOMAIN=rebornsense.com|' /root/chaslay-secrets/.env.production
+grep -q '^ACME_EMAIL=' /root/chaslay-secrets/.env.production \
+  || echo 'ACME_EMAIL=admin@rebornsense.com' >> /root/chaslay-secrets/.env.production
+
+# 2) Stop any old stack still binding 80/443
+docker compose -p foodtruckpos down --remove-orphans 2>/dev/null || true
+cd /root/FoodTruckPOS 2>/dev/null && docker compose down --remove-orphans || true
+
+# 3) Recreate Caddy with correct mount + reload
+export DEPLOY_STACK=rebornsense DEPLOY_PATH=/root/rebornSense
+docker compose --env-file .env.production up -d --force-recreate caddy
+docker compose --env-file .env.production exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+
+# 4) Diagnose
+docker logs rebornsense-caddy-1 --tail 80
+docker compose --env-file .env.production exec -T caddy head -20 /etc/caddy/Caddyfile
+curl -vk https://app.rebornsense.com/ 2>&1 | head -30
+```
+
+If ACME still fails after the correct Caddyfile is mounted, clear stale certs and retry:
+
+```bash
+docker compose --env-file .env.production stop caddy
+docker volume rm rebornsense_caddy_data rebornsense_caddy_config 2>/dev/null || true
+docker compose --env-file .env.production up -d caddy
+```
+
 Manual deploy anytime:
 
 ```bash
@@ -435,6 +484,7 @@ Orders appear in POS **Ongoing Orders** when the tablet is online and `SYNC_API_
 | Sync does nothing | Set tenant `SYNC_API_KEY` in app (from `create-tenant`) |
 | Shop 404 | Run `create-tenant` or `seed`; slug must be lowercase `a-z`, `0-9`, hyphens |
 | SSL not ready | Wait for DNS propagation; Caddy issues certs automatically |
+| `ERR_SSL_PROTOCOL_ERROR` on Rebornsense | Wrong Caddyfile mounted (defaults to `Caddyfile.chaslay`). See [Rebornsense SSL fix](#rebornsense-ssl-err_ssl_protocol_error) below |
 | `port is already allocated` (80/443) | Another Docker stack’s Caddy is still running. `docker ps --filter publish=80`; stop old compose (`docker compose down` in `/root/FoodTruckPOS` or project `foodtruckpos` / `backend`). Rebornsense: see [Port 80/443 already in use](#port-80443-already-in-use-rebornsense) |
 
 ---

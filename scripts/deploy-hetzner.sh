@@ -113,14 +113,20 @@ ensure_env_production() {
     echo "Forced SEED_SUPERADMIN_PASSWORD=ChaslayAdmin123! (set FORCE_CHASLAY_ADMIN_BOOTSTRAP=0 to keep custom)"
   fi
 
-  # Ensure host defaults per stack
+  # Ensure host defaults per stack (CADDYFILE must live in .env.production — compose defaults to chaslay)
   if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
     grep -qE '^DOMAIN=' "$ENV_FILE" || echo 'DOMAIN=rebornsense.com' >>"$ENV_FILE"
     grep -qE '^PUBLIC_APP_URL=' "$ENV_FILE" || echo 'PUBLIC_APP_URL=https://app.rebornsense.com' >>"$ENV_FILE"
     grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE" || echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.rebornsense.com' >>"$ENV_FILE"
     grep -qE '^CORS_ALLOW_ALL=' "$ENV_FILE" || echo 'CORS_ALLOW_ALL=true' >>"$ENV_FILE"
+    grep -qE '^ACME_EMAIL=' "$ENV_FILE" || echo 'ACME_EMAIL=admin@rebornsense.com' >>"$ENV_FILE"
     sed -i 's|^DOMAIN=.*|DOMAIN=rebornsense.com|' "$ENV_FILE"
     sed -i 's|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=https://app.rebornsense.com|' "$ENV_FILE"
+    if grep -qE '^CADDYFILE=' "$ENV_FILE"; then
+      sed -i 's|^CADDYFILE=.*|CADDYFILE=./deploy/Caddyfile.rebornsense|' "$ENV_FILE"
+    else
+      echo 'CADDYFILE=./deploy/Caddyfile.rebornsense' >>"$ENV_FILE"
+    fi
     if grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE"; then
       sed -i 's|^PUBLIC_RECEIPT_BASE_URL=.*|PUBLIC_RECEIPT_BASE_URL=https://pay.rebornsense.com|' "$ENV_FILE"
     else
@@ -132,8 +138,14 @@ ensure_env_production() {
     grep -qE '^PUBLIC_APP_URL=' "$ENV_FILE" || echo 'PUBLIC_APP_URL=https://app.chaslay.com' >>"$ENV_FILE"
     grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE" || echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com' >>"$ENV_FILE"
     grep -qE '^CORS_ALLOW_ALL=' "$ENV_FILE" || echo 'CORS_ALLOW_ALL=true' >>"$ENV_FILE"
+    grep -qE '^ACME_EMAIL=' "$ENV_FILE" || echo 'ACME_EMAIL=admin@chaslay.com' >>"$ENV_FILE"
     sed -i 's|^DOMAIN=.*|DOMAIN=chaslay.com|' "$ENV_FILE"
     sed -i 's|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=https://app.chaslay.com|' "$ENV_FILE"
+    if grep -qE '^CADDYFILE=' "$ENV_FILE"; then
+      sed -i 's|^CADDYFILE=.*|CADDYFILE=./deploy/Caddyfile.chaslay|' "$ENV_FILE"
+    else
+      echo 'CADDYFILE=./deploy/Caddyfile.chaslay' >>"$ENV_FILE"
+    fi
     if grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE"; then
       sed -i 's|^PUBLIC_RECEIPT_BASE_URL=.*|PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com|' "$ENV_FILE"
     else
@@ -419,6 +431,21 @@ docker compose --env-file .env.production up -d --build
 echo "=== Reload Caddy ==="
 docker compose --env-file .env.production up -d --force-recreate caddy
 docker compose --env-file .env.production exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || true
+
+echo "=== Verify Caddy TLS config ==="
+CADDY_CONTAINER="$(docker compose --env-file .env.production ps -q caddy 2>/dev/null | head -1)"
+if [[ -n "$CADDY_CONTAINER" ]]; then
+  if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
+    if ! docker exec "$CADDY_CONTAINER" grep -q 'app.rebornsense.com' /etc/caddy/Caddyfile 2>/dev/null; then
+      echo "ERROR: Caddy is not using deploy/Caddyfile.rebornsense (wrong bind mount)."
+      echo "  Fix: grep CADDYFILE /root/chaslay-secrets/.env.production"
+      echo "  Expected: CADDYFILE=./deploy/Caddyfile.rebornsense"
+      exit 1
+    fi
+  fi
+  echo "Caddyfile host block sample:"
+  docker exec "$CADDY_CONTAINER" grep -E '^[a-z*].*\.(rebornsense|chaslay)\.com|^https://' /etc/caddy/Caddyfile 2>/dev/null | head -8 || true
+fi
 
 echo "=== Wait for services ==="
 sleep 20
