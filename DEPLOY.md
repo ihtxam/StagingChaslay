@@ -11,7 +11,9 @@ Product name: **Reborn**. Login and API: **https://app.rebornsense.com** (same `
 | `status.rebornsense.com` | Public system status |
 | `rebornsense.com` | Redirects to `app.rebornsense.com` |
 
-Previous production IP (old server): `116.202.26.15`. Point new DNS **A records** at the **new** server IP.
+New production IP: **`91.98.41.165`**. Previous IP: `116.202.26.15`.
+
+This host already serves other nginx sites (wearedispatcher). Reborn uses Docker on `127.0.0.1:13000` (API) and `127.0.0.1:13080` (dashboard), with `deploy/nginx-rebornsense.conf` — do **not** bind Caddy to :80/:443 there.
 
 ---
 
