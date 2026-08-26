@@ -32,7 +32,7 @@ jobs:
       - name: Dump legacy Postgres on Chaslay host
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.HETZNER_HOST || '116.202.26.15' }}
+          host: 116.202.26.15
           username: ${{ secrets.HETZNER_USER || 'root' }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
           port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
@@ -68,7 +68,7 @@ jobs:
 
       - name: Transfer dump to Rebornsense host
         env:
-          LEGACY_HOST: ${{ secrets.HETZNER_HOST || '116.202.26.15' }}
+          LEGACY_HOST: 116.202.26.15
           LEGACY_USER: ${{ secrets.HETZNER_USER || 'root' }}
           LEGACY_PORT: ${{ secrets.HETZNER_SSH_PORT || 22 }}
           REBORN_HOST: ${{ secrets.REBORN_HETZNER_HOST || '91.98.41.165' }}
