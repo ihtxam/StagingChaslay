@@ -837,6 +837,7 @@ const en: Dict = {
   productPhotosImported: '{n} product photo(s) imported',
   productPhotosNoneMissing: 'All products already have a photo',
   productPhotosImportFailed: 'Could not import product photos',
+  catalogNoProducts: 'No products in your catalog yet',
   cmsSeoTitle: 'SEO title',
   cmsSeoDescription: 'Meta description',
   cmsSeoHint: 'Search engines and social previews use these fields on your published homepage.',
@@ -1395,7 +1396,7 @@ const en: Dict = {
     'Install once on the ChaslayReborn PC. The agent starts with Windows - no need to re-run start.bat. Use a thermal ESC/POS printer (not OneNote/PDF).',
   downloadPrintAgent: 'Download Print Agent (Windows)',
   printAgentInstallSteps:
-    'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
+    'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Files stay in %LOCALAPPDATA%\\ChaslayPrintAgent so existing installs keep working.',
   printerProfiles: 'Printer profiles',
   printerProfilesHint:
     'Map Windows printer names (print-agent) to receipt, kitchen, or end-of-day roles. For kitchen printers, pick categories and products in the two-column picker.',
@@ -4011,6 +4012,7 @@ const fr: Dict = {
   productPhotosImported: '{n} photo(s) de produit importée(s)',
   productPhotosNoneMissing: 'Tous les produits ont déjà une photo',
   productPhotosImportFailed: 'Impossible d’importer les photos',
+  catalogNoProducts: 'Aucun produit dans votre catalogue',
   cmsSeoTitle: 'Titre SEO',
   cmsSeoDescription: 'Meta description',
   cmsSeoHint: 'Moteurs de recherche et aperçus sociaux utilisent ces champs sur votre page publiée.',
@@ -4573,7 +4575,7 @@ const fr: Dict = {
     'Installez une seule fois sur le PC ChaslayReborn. L’agent démarre avec Windows - plus besoin de relancer start.bat. Utilisez une imprimante tickets ESC/POS (pas OneNote/PDF).',
   downloadPrintAgent: 'Télécharger l’agent d’impression (Windows)',
   printAgentInstallSteps:
-    'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Journal : %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
+    'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Les fichiers restent dans %LOCALAPPDATA%\\ChaslayPrintAgent pour préserver les installations existantes.',
   printerProfiles: 'Profils imprimantes',
   printerProfilesHint:
     'Associez les noms Windows (print-agent) aux rôles reçu, cuisine ou fin de journée. Pour la cuisine, choisissez les catégories par imprimante.',
@@ -7154,6 +7156,7 @@ const de: Dict = {
   productPhotosImported: '{n} Produktfoto(s) importiert',
   productPhotosNoneMissing: 'Alle Produkte haben bereits ein Foto',
   productPhotosImportFailed: 'Produktfotos konnten nicht importiert werden',
+  catalogNoProducts: 'Noch keine Produkte in Ihrem Katalog',
   cmsSeoTitle: 'SEO-Titel',
   cmsSeoDescription: 'Meta-Beschreibung',
   cmsSeoHint: 'Suchmaschinen und Social-Vorschau nutzen diese Felder auf Ihrer veröffentlichten Homepage.',
@@ -7716,7 +7719,7 @@ const de: Dict = {
     'Einmal auf dem ChaslayReborn-PC installieren. Der Agent startet mit Windows - start.bat nicht mehr nötig. ESC/POS-Bondrucker verwenden (nicht OneNote/PDF).',
   downloadPrintAgent: 'Druckagent herunterladen (Windows)',
   printAgentInstallSteps:
-    'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
+    'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Dateien bleiben in %LOCALAPPDATA%\\ChaslayPrintAgent, damit bestehende Installationen weiter funktionieren.',
   printerProfiles: 'Druckerprofile',
   printerProfilesHint:
     'Windows-Druckernamen (Print-Agent) Rollen zuweisen: Beleg, Küche, Tagesabschluss. Für Küche Kategorien pro Drucker wählen.',
