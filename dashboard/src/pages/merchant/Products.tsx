@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { useI18n } from '@/lib/i18n';
+import { isRetailPosMode } from '@/lib/pos-checkout';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 import { BarcodePreview } from '@/components/BarcodePreview';
@@ -280,6 +281,7 @@ export default function Products() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [printOpen, setPrintOpen] = useState(false);
   const [printTargets, setPrintTargets] = useState<LabelProduct[]>([]);
+  const [showBarcodeCatalog, setShowBarcodeCatalog] = useState(false);
   const [labelOpts, setLabelOpts] = useState<LabelPrintOptions>({
     heightMm: 20,
     widthMm: 40,
@@ -399,6 +401,7 @@ export default function Products() {
         const setRes = await api.get('/merchant/settings');
         const s = setRes.data?.settings;
         setStoreName(s?.name || '');
+        setShowBarcodeCatalog(isRetailPosMode(s?.posCheckoutSettings));
         const ps = s?.posPrintSettings || {};
         setLabelOpts((prev) => ({
           ...prev,
@@ -1111,24 +1114,28 @@ export default function Products() {
             <Package size={14} />
             {importingPhotos ? t('productPhotosImporting') : t('productPhotosImportMissing')}
           </button>
-          <button
-            type="button"
-            onClick={() => void generateMissing(selectedIds.length ? selectedIds : undefined)}
-            className="btn-secondary"
-          >
-            <Barcode size={14} />
-            {t('barcodeGenerateMissing')}
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              openPrintFor(selectedIds.length ? selectedProducts : filteredProducts)
-            }
-            className="btn-secondary"
-          >
-            <Printer size={14} />
-            {t('barcodePrintLabels')}
-          </button>
+          {showBarcodeCatalog ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void generateMissing(selectedIds.length ? selectedIds : undefined)}
+                className="btn-secondary"
+              >
+                <Barcode size={14} />
+                {t('barcodeGenerateMissing')}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  openPrintFor(selectedIds.length ? selectedProducts : filteredProducts)
+                }
+                className="btn-secondary"
+              >
+                <Printer size={14} />
+                {t('barcodePrintLabels')}
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             onClick={openCreate}
@@ -1307,19 +1314,23 @@ export default function Products() {
                       <p className="mt-0.5 text-sm text-slate-500 line-clamp-1">{product.description}</p>
                     )}
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                      <button
-                        type="button"
-                        className="font-semibold text-emerald-700 hover:underline disabled:no-underline"
-                        disabled={!product.barcode}
-                        title={product.barcode ? t('barcodePrintLabels') : undefined}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (product.barcode) openPrintFor([product]);
-                        }}
-                      >
-                        {money(product.price)}
-                      </button>
-                      {product.barcode ? (
+                      {showBarcodeCatalog ? (
+                        <button
+                          type="button"
+                          className="font-semibold text-emerald-700 hover:underline disabled:no-underline"
+                          disabled={!product.barcode}
+                          title={product.barcode ? t('barcodePrintLabels') : undefined}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (product.barcode) openPrintFor([product]);
+                          }}
+                        >
+                          {money(product.price)}
+                        </button>
+                      ) : (
+                        <span className="font-semibold text-emerald-700">{money(product.price)}</span>
+                      )}
+                      {showBarcodeCatalog && product.barcode ? (
                         <button
                           type="button"
                           className="inline-flex items-center rounded hover:opacity-80"
@@ -1357,7 +1368,7 @@ export default function Products() {
                 </button>
 
                 <div className="flex items-center gap-1">
-                  {product.barcode ? (
+                  {showBarcodeCatalog && product.barcode ? (
                     <button
                       type="button"
                       onClick={() => openPrintFor([product])}
@@ -1454,7 +1465,9 @@ export default function Products() {
                       label={t('stock')}
                       value={t('stockUnits').replace('{n}', String(product.stock))}
                     />
-                    <InfoCard label={t('barcode')} value={product.barcode || '-'} />
+                    {showBarcodeCatalog ? (
+                      <InfoCard label={t('barcode')} value={product.barcode || '-'} />
+                    ) : null}
                   </div>
                 </div>
               )}
@@ -1926,6 +1939,7 @@ export default function Products() {
                         {t('maxCharacters').replace('{n}', String(SKU_MAX_LEN))}
                       </p>
                     </Field>
+                    {showBarcodeCatalog ? (
                     <Field label={t('barcode')}>
                       <input
                         className="field-input"
@@ -1980,6 +1994,7 @@ export default function Products() {
                         )}
                       </div>
                     </Field>
+                    ) : null}
                     <Field label={t('stock')}>
                       <input
                         className="field-input"
@@ -2226,7 +2241,7 @@ export default function Products() {
         </div>
       )}
 
-      {printOpen && (
+      {showBarcodeCatalog && printOpen && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 p-3" onClick={() => setPrintOpen(false)}>
           <div
             className="w-full max-w-lg rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4 space-y-3"
