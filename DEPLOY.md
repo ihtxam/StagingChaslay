@@ -190,6 +190,65 @@ EOF
 
 After a successful deploy, `https://app.rebornsense.com/` should show the **Reborn** brand (not the old teal `#0f766e` Chaslay theme).
 
+#### Recover ALL legacy data (merchants, products, orders, uploads)
+
+`docker-compose.yml` defines volumes `postgres_data` and `uploads_data`. Docker prefixes them with the compose **project name** (directory basename):
+
+| Stack | Path | Project | Postgres volume | Uploads volume |
+|-------|------|---------|-----------------|----------------|
+| Legacy FoodTruckPOS | `/root/FoodTruckPOS` | `foodtruckpos` | `foodtruckpos_postgres_data` | `foodtruckpos_uploads_data` |
+| Rebornsense | `/root/rebornSense` | `rebornsense` | `rebornsense_postgres_data` | `rebornsense_uploads_data` |
+
+Old volumes are **not** removed when the new stack deploys — data remains on disk unless volumes were deleted manually.
+
+**Inspect on the server (safe, read-only):**
+
+```bash
+ssh root@91.98.41.165
+
+docker volume ls | grep -E 'postgres|uploads'
+docker ps -a --format 'table {{.Names}}\t{{.Status}}' | grep -E 'db|foodtruck|reborn'
+
+cd /root/rebornSense
+DRY_RUN=1 bash scripts/recover-rebornsense-data.sh
+```
+
+**Automated recovery (backs up current Rebornsense volumes first; does not delete old volumes):**
+
+```bash
+ssh root@91.98.41.165
+cd /root/rebornSense
+git pull origin main
+CONFIRM=1 bash scripts/recover-rebornsense-data.sh
+```
+
+The script:
+
+1. Backs up `rebornsense_postgres_data` and `rebornsense_uploads_data` to `/root/rebornsense-recovery-backups/<timestamp>/`
+2. Stops Rebornsense `api` / `dashboard` / `migrate` (keeps `db` running)
+3. `pg_dump` from `foodtruckpos_postgres_data` (or `foodtruckpos-db-1` if still running)
+4. `pg_restore` into Rebornsense Postgres
+5. Copies uploads `foodtruckpos_uploads_data` → `rebornsense_uploads_data` (`cp -an` merge)
+6. Runs `migrate`, restarts the stack
+
+After recovery, log in at **https://app.rebornsense.com/login** with **legacy** superadmin or merchant credentials.
+
+**Alternative: point Rebornsense at old volumes (fast, risky)**
+
+Edit `docker-compose.yml` volumes:
+
+```yaml
+volumes:
+  postgres_data:
+    external: true
+    name: foodtruckpos_postgres_data
+  uploads_data:
+    external: true
+    name: foodtruckpos_uploads_data
+```
+
+Risks: `migrate` may alter the legacy data directory; both stacks cannot use one Postgres volume; rollback requires editing compose again. Prefer `scripts/recover-rebornsense-data.sh` so old volumes stay untouched.
+
 Manual deploy anytime:
 
 ```bash
