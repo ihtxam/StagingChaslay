@@ -2,8 +2,10 @@
  * Online barcode product lookup for Storekeeper intake.
  * 1. Merchant inventory (handled by caller)
  * 2. Optional custom API (BARCODE_LOOKUP_URL with {barcode} placeholder)
- * 3. Open Food Facts (default fallback for EAN/GTIN)
+ * 3. Open Food Facts, then Open Products Facts (Open*Facts family)
  */
+
+export type BarcodeLookupSource = "openfoodfacts" | "openproductsfacts" | "custom";
 
 export type BarcodeLookupSuggestion = {
   barcode: string;
@@ -16,8 +18,30 @@ export type BarcodeLookupSuggestion = {
   unit?: string | null;
   weightGrams?: number | null;
   imageUrl?: string | null;
-  source: "openfoodfacts" | "custom";
+  source: BarcodeLookupSource;
 };
+
+type OpenFactsProduct = {
+  product_name?: string;
+  product_name_en?: string;
+  product_name_fr?: string;
+  product_name_de?: string;
+  brands?: string;
+  categories?: string;
+  categories_tags?: string[];
+  quantity?: string;
+  product_quantity?: string;
+  product_quantity_unit?: string;
+  image_front_small_url?: string;
+  image_url?: string;
+};
+
+const OPEN_FACTS_USER_AGENT = "RebornPOS-Storekeeper/1.0 (contact@rebornsense.com)";
+
+const OPEN_FACTS_SOURCES: Array<{ baseUrl: string; source: BarcodeLookupSource }> = [
+  { baseUrl: "https://world.openfoodfacts.org", source: "openfoodfacts" },
+  { baseUrl: "https://world.openproductsfacts.org", source: "openproductsfacts" },
+];
 
 function normalizeBarcode(raw: string): string {
   return String(raw || "").replace(/\D/g, "");
@@ -93,56 +117,51 @@ function buildName(productName: string, brand?: string | null): string {
   return `${b} ${name}`.trim();
 }
 
-async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeLookupSuggestion | null> {
+function suggestionFromOpenFactsProduct(
+  code: string,
+  p: OpenFactsProduct,
+  source: BarcodeLookupSource
+): BarcodeLookupSuggestion | null {
+  const productName =
+    p.product_name?.trim() ||
+    p.product_name_en?.trim() ||
+    p.product_name_fr?.trim() ||
+    p.product_name_de?.trim() ||
+    "";
+  if (!productName) return null;
+  const brand = p.brands?.split(",")[0]?.trim() || null;
+  const pkg = parsePackageSize(p.product_quantity, p.product_quantity_unit, p.quantity);
+  return {
+    barcode: code,
+    name: buildName(productName, brand),
+    brand,
+    categoryHint: pickCategoryHint(p.categories, p.categories_tags),
+    packageSize: pkg.packageSize,
+    unit: pkg.unit,
+    weightGrams: pkg.weightGrams,
+    imageUrl: p.image_front_small_url || p.image_url || null,
+    source,
+  };
+}
+
+async function lookupOpenFacts(
+  barcode: string,
+  baseUrl: string,
+  source: BarcodeLookupSource
+): Promise<BarcodeLookupSuggestion | null> {
   const code = normalizeBarcode(barcode);
   if (code.length < 8) return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`, {
+    const res = await fetch(`${baseUrl}/api/v2/product/${code}.json`, {
       signal: controller.signal,
-      headers: { "User-Agent": "RebornPOS-Storekeeper/1.0 (contact@rebornsense.com)" },
+      headers: { "User-Agent": OPEN_FACTS_USER_AGENT },
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as {
-      status?: number;
-      product?: {
-        product_name?: string;
-        product_name_en?: string;
-        product_name_fr?: string;
-        product_name_de?: string;
-        brands?: string;
-        categories?: string;
-        categories_tags?: string[];
-        quantity?: string;
-        product_quantity?: string;
-        product_quantity_unit?: string;
-        image_front_small_url?: string;
-        image_url?: string;
-      };
-    };
+    const data = (await res.json()) as { status?: number; product?: OpenFactsProduct };
     if (data.status !== 1 || !data.product) return null;
-    const p = data.product;
-    const productName =
-      p.product_name?.trim() ||
-      p.product_name_en?.trim() ||
-      p.product_name_fr?.trim() ||
-      p.product_name_de?.trim() ||
-      "";
-    if (!productName) return null;
-    const brand = p.brands?.split(",")[0]?.trim() || null;
-    const pkg = parsePackageSize(p.product_quantity, p.product_quantity_unit, p.quantity);
-    return {
-      barcode: code,
-      name: buildName(productName, brand),
-      brand,
-      categoryHint: pickCategoryHint(p.categories, p.categories_tags),
-      packageSize: pkg.packageSize,
-      unit: pkg.unit,
-      weightGrams: pkg.weightGrams,
-      imageUrl: p.image_front_small_url || p.image_url || null,
-      source: "openfoodfacts",
-    };
+    return suggestionFromOpenFactsProduct(code, data.product, source);
   } catch {
     return null;
   } finally {
@@ -221,7 +240,12 @@ export class BarcodeProductLookupService {
   static async lookupExternal(barcode: string): Promise<BarcodeLookupSuggestion | null> {
     const custom = await lookupCustomApi(barcode);
     if (custom) return custom;
-    return lookupOpenFoodFacts(barcode);
+
+    for (const { baseUrl, source } of OPEN_FACTS_SOURCES) {
+      const hit = await lookupOpenFacts(barcode, baseUrl, source);
+      if (hit) return hit;
+    }
+    return null;
   }
 }
 
