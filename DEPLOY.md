@@ -82,7 +82,7 @@ Repo ? **Settings ? Secrets and variables ? Actions** ? add:
 | `HETZNER_HOST` | `116.202.26.15` |
 | `HETZNER_USER` | `root` |
 | `HETZNER_SSH_KEY` | Private key (PEM) that can SSH to the server |
-| `HETZNER_DEPLOY_PATH` | `/root/FoodTruckPOS` (optional) |
+| `HETZNER_DEPLOY_PATH` | `/root/rebornSense` on Rebornsense (`91.98.41.165`); `/root/FoodTruckPOS` on Chaslay (optional) |
 | `HETZNER_SSH_PORT` | `22` (optional) |
 
 On the server, add the matching **public key** to `~/.ssh/authorized_keys`.
@@ -98,14 +98,14 @@ After that, every `git push` to `main` rebuilds Docker and runs migrations autom
 | `REBORN_HETZNER_HOST` | `91.98.41.165` |
 | `REBORN_HETZNER_USER` | `root` |
 | `REBORN_HETZNER_SSH_KEY` | Private key for the Rebornsense server |
-| `REBORN_HETZNER_DEPLOY_PATH` | `/root/FoodTruckPOS` (optional) |
+| `REBORN_HETZNER_DEPLOY_PATH` | `/root/rebornSense` (optional) |
 
 Workflow: `.github/workflows/deploy-rebornsense.yml` (runs on every `main` push when secrets exist).
 
 Manual deploy on the Rebornsense server:
 
 ```bash
-ssh root@91.98.41.165 'export DEPLOY_STACK=rebornsense && bash /root/FoodTruckPOS/scripts/deploy-hetzner.sh'
+ssh root@91.98.41.165 'export DEPLOY_STACK=rebornsense && bash /root/rebornSense/scripts/deploy-hetzner.sh'
 ```
 
 Caddy config: `deploy/Caddyfile.rebornsense`
