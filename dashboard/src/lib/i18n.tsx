@@ -1006,7 +1006,7 @@ const en: Dict = {
   deleteFailed: 'Delete failed',
   failedDownloadTemplate: 'Failed to download template',
   importDone:
-    'Import done: +{categories} categories, +{products} products, ~{updated} updated',
+    'Import done: +{categories} categories, +{modifiers} modifier groups, +{products} products, ~{updated} updated',
   importRowErrors: '{n} row error(s) — check file',
   importFailed: 'Import failed',
   importing: 'Importing…',
@@ -4180,7 +4180,7 @@ const fr: Dict = {
   deleteFailed: 'Échec de la suppression',
   failedDownloadTemplate: 'Échec du téléchargement du modèle',
   importDone:
-    'Import terminé : +{categories} catégories, +{products} produits, ~{updated} mis à jour',
+    'Import terminé : +{categories} catégories, +{modifiers} groupes modificateurs, +{products} produits, ~{updated} mis à jour',
   importRowErrors: '{n} erreur(s) de ligne — vérifiez le fichier',
   importFailed: 'Échec de l’import',
   importing: 'Import…',
@@ -7323,7 +7323,7 @@ const de: Dict = {
   deleteFailed: 'Löschen fehlgeschlagen',
   failedDownloadTemplate: 'Vorlage konnte nicht heruntergeladen werden',
   importDone:
-    'Import fertig: +{categories} Kategorien, +{products} Produkte, ~{updated} aktualisiert',
+    'Import fertig: +{categories} Kategorien, +{modifiers} Modifier-Gruppen, +{products} Produkte, ~{updated} aktualisiert',
   importRowErrors: '{n} Zeilenfehler — Datei prüfen',
   importFailed: 'Import fehlgeschlagen',
   importing: 'Import…',
