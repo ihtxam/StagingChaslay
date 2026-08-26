@@ -6,7 +6,7 @@ Served by the API at `GET /downloads/<filename>` and proxied on `app.chaslay.com
 
 `*.exe` files are **gitignored** (~40MB). They must be built and present on the server at:
 
-`backend/public/downloads/chaslay-print-agent-setup.exe`
+`backend/public/downloads/chaslayreborn-print-agent-setup.exe`
 
 ### Build on Windows (local)
 
@@ -27,7 +27,7 @@ Skip with `SKIP_PRINT_AGENT_BUILD=1` if you already uploaded a binary.
 
 ```bash
 # After local build:
-scp backend/public/downloads/chaslay-print-agent-setup.exe \
+scp backend/public/downloads/chaslayreborn-print-agent-setup.exe \
   root@YOUR_HOST:/root/FoodTruckPOS/backend/public/downloads/
 # Restart or recreate API so the mount is fresh (usually not required for bind mounts):
 docker compose --env-file .env.production up -d api caddy
@@ -36,15 +36,15 @@ docker compose --env-file .env.production up -d api caddy
 ### Verify
 
 ```bash
-curl -sI https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe
+curl -sI https://app.chaslay.com/downloads/chaslayreborn-print-agent-setup.exe
 # Expect: 200, Content-Type: application/octet-stream, Content-Length ~40MB
 # First bytes must be MZ (4D 5A), not <!doctype or {"error"
 
-curl -sL https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe | head -c 2 | xxd
+curl -sL https://app.chaslay.com/downloads/chaslayreborn-print-agent-setup.exe | head -c 2 | xxd
 # 00000000: 4d5a  MZ
 ```
 
 Public URLs:
 
-- `https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe`
-- `https://api.chaslay.com/downloads/chaslay-print-agent-setup.exe`
+- `https://app.chaslay.com/downloads/chaslayreborn-print-agent-setup.exe`
+- `https://api.chaslay.com/downloads/chaslayreborn-print-agent-setup.exe`

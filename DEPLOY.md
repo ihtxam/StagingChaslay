@@ -425,7 +425,7 @@ See `backend/sql/ensure-shifts.sql`.
 **Print agent EXE:** `backend/public/downloads/*.exe` is gitignored. Deploy cross-compiles it with `pkg` (Docker `node:20-bookworm`) into that folder and Caddy proxies `/downloads/*` on `app.chaslay.com` to the API (so the SPA never returns HTML as a fake `.exe`). Verify after deploy:
 
 ```bash
-curl -sI https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe
+curl -sI https://app.chaslay.com/downloads/chaslayreborn-print-agent-setup.exe
 # 200 + application/octet-stream + ~40MB Content-Length
 ```
 

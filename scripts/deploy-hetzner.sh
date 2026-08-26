@@ -317,7 +317,7 @@ ln -sfn "$ENV_FILE" "$REPO_DIR/.env"
 echo "=== Build print-agent Windows EXE ==="
 DOWNLOADS_DIR="$REPO_DIR/backend/public/downloads"
 mkdir -p "$DOWNLOADS_DIR"
-SETUP_EXE="$DOWNLOADS_DIR/chaslay-print-agent-setup.exe"
+SETUP_EXE="$DOWNLOADS_DIR/chaslayreborn-print-agent-setup.exe"
 if [[ "${SKIP_PRINT_AGENT_BUILD:-0}" != "1" ]]; then
   BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   if docker run --rm \
@@ -330,21 +330,21 @@ if [[ "${SKIP_PRINT_AGENT_BUILD:-0}" != "1" ]]; then
       npm ci
       mkdir -p dist
       npx pkg . --targets node18-win-x64 --output dist/chaslay-print-agent.exe
-      cp -f dist/chaslay-print-agent.exe dist/chaslay-print-agent-setup.exe
+      cp -f dist/chaslay-print-agent.exe dist/chaslayreborn-print-agent-setup.exe
       cp -f dist/chaslay-print-agent.exe /out/chaslay-print-agent.exe
-      cp -f dist/chaslay-print-agent-setup.exe /out/chaslay-print-agent-setup.exe
+      cp -f dist/chaslayreborn-print-agent-setup.exe /out/chaslayreborn-print-agent-setup.exe
       printf "%s\n" \
         "{" \
-        "  \"name\": \"chaslay-print-agent\"," \
+        "  \"name\": \"chaslayreborn-print-agent\"," \
         "  \"version\": \"1.2.0\"," \
-        "  \"setupFile\": \"chaslay-print-agent-setup.exe\"," \
+        "  \"setupFile\": \"chaslayreborn-print-agent-setup.exe\"," \
         "  \"builtAt\": \"${BUILT_AT}\"," \
         "  \"platform\": \"win32-x64\"," \
         "  \"signed\": false" \
-        "}" > /out/chaslay-print-agent.json
+        "}" > /out/chaslayreborn-print-agent.json
       # Sanity: PE MZ header
-      head -c 2 /out/chaslay-print-agent-setup.exe | grep -q MZ
-      ls -la /out/chaslay-print-agent*.exe
+      head -c 2 /out/chaslayreborn-print-agent-setup.exe | grep -q MZ
+      ls -la /out/chaslayreborn-print-agent*.exe /out/chaslay-print-agent.exe 2>/dev/null || ls -la /out/*.exe
     '; then
     echo "Print-agent EXE ready: $SETUP_EXE ($(wc -c < "$SETUP_EXE" | tr -d " ") bytes)"
   else
@@ -550,10 +550,10 @@ curl -sf "${API_URL}/health" || true
 echo
 
 # Print-agent download must be a real PE, not SPA HTML / JSON 404
-PRINT_HDR="$(curl -sI "${APP_URL}/downloads/chaslay-print-agent-setup.exe" || true)"
+PRINT_HDR="$(curl -sI "${APP_URL}/downloads/chaslayreborn-print-agent-setup.exe" || true)"
 PRINT_LEN="$(printf '%s' "$PRINT_HDR" | awk -F': ' 'tolower($1)=="content-length"{gsub(/\r/,""); print $2; exit}')"
 PRINT_CT="$(printf '%s' "$PRINT_HDR" | awk -F': ' 'tolower($1)=="content-type"{gsub(/\r/,""); print $2; exit}')"
-PRINT_MAGIC="$(curl -sL "${APP_URL}/downloads/chaslay-print-agent-setup.exe" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
+PRINT_MAGIC="$(curl -sL "${APP_URL}/downloads/chaslayreborn-print-agent-setup.exe" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
 echo "print-agent download: Content-Type=${PRINT_CT:-?} Content-Length=${PRINT_LEN:-?} magic=${PRINT_MAGIC:-?}"
 if [[ "${PRINT_MAGIC:-}" != "4d5a" ]] || [[ "${PRINT_LEN:-0}" -lt 1000000 ]]; then
   echo "WARNING: print-agent download is not a valid Windows EXE (expected MZ / ~40MB)"
