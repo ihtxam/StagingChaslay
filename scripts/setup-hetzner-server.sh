@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# First-time Hetzner bootstrap. Run as root on a fresh VPS.
+# First-time Hetzner bootstrap for Chaslay (116.202.26.15).
+# For Rebornsense (91.98.41.165) use scripts/setup-rebornsense-server.sh instead.
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/ihtxam/FoodTruckPOS.git}"

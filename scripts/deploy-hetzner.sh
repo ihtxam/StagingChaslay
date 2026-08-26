@@ -1,10 +1,33 @@
 #!/usr/bin/env bash
-# Deploy FoodTruckPOS (ManuPOS panel + Android API) on Hetzner.
+# Deploy Chaslay / Rebornsense stack on Hetzner.
 set -euo pipefail
 
-REPO_DIR="${DEPLOY_PATH:-$HOME/FoodTruckPOS}"
-SECRETS_DIR="${CHASLAY_SECRETS_DIR:-/root/chaslay-secrets}"
 DEPLOY_STACK="${DEPLOY_STACK:-chaslay}"
+if [[ -n "${DEPLOY_PATH:-}" ]]; then
+  REPO_DIR="$DEPLOY_PATH"
+elif [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
+  REPO_DIR="/root/rebornSense"
+else
+  REPO_DIR="${HOME}/FoodTruckPOS"
+fi
+SECRETS_DIR="${CHASLAY_SECRETS_DIR:-/root/chaslay-secrets}"
+
+if [[ ! -d "$REPO_DIR" ]]; then
+  echo "ERROR: deploy path does not exist: $REPO_DIR"
+  echo ""
+  if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
+    echo "Bootstrap Rebornsense (91.98.41.165):"
+    echo "  ssh root@91.98.41.165"
+    echo "  bash /root/rebornSense/scripts/setup-rebornsense-server.sh"
+    echo "  # or re-init /root/FoodTruckPOS:"
+    echo "  LEGACY_PATH=/root/FoodTruckPOS bash /root/rebornSense/scripts/setup-rebornsense-server.sh"
+  else
+    echo "Bootstrap Chaslay:"
+    echo "  bash scripts/setup-hetzner-server.sh"
+  fi
+  exit 1
+fi
+
 cd "$REPO_DIR"
 
 echo "=== ChaslayReborn deploy ($DEPLOY_STACK) @ $(date -u +"%Y-%m-%dT%H:%M:%SZ") ==="
@@ -219,6 +242,31 @@ ln -sfn "$ENV_FILE" "$REPO_DIR/.env.production"
 ln -sfn "$ENV_FILE" "$REPO_DIR/.env"
 
 echo "=== Git pull ==="
+if [[ ! -d "$REPO_DIR/.git" ]]; then
+  echo "ERROR: $REPO_DIR is not a git repository (no .git directory)."
+  echo ""
+  echo "Deploy needs 'git fetch' to pull latest code. Common fixes:"
+  echo ""
+  if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
+    echo "  A) Fresh clone (recommended):"
+    echo "     bash $REPO_DIR/scripts/setup-rebornsense-server.sh"
+    echo "     # from any copy of the script, or after manual clone to /root/rebornSense"
+    echo ""
+    echo "  B) Re-init existing /root/FoodTruckPOS files in place:"
+    echo "     LEGACY_PATH=/root/FoodTruckPOS DEPLOY_PATH=$REPO_DIR bash scripts/setup-rebornsense-server.sh"
+    echo ""
+    echo "  C) Manual re-init in $REPO_DIR:"
+    echo "     cd $REPO_DIR"
+    echo "     git init && git remote add origin git@github.com:ihtxam/rebornSense.git"
+    echo "     git fetch origin main && git reset --hard origin/main"
+    echo ""
+    echo "GitHub is private — use SSH deploy key /root/.ssh/rebornsense_deploy (see DEPLOY.md)."
+  else
+    echo "  bash scripts/setup-hetzner-server.sh"
+    echo "  # or: git clone https://github.com/ihtxam/FoodTruckPOS.git $REPO_DIR"
+  fi
+  exit 1
+fi
 git fetch origin main
 git reset --hard origin/main
 chmod +x "$REPO_DIR/scripts/deploy-hetzner.sh" || true

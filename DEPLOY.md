@@ -91,7 +91,17 @@ After that, every `git push` to `main` rebuilds Docker and runs migrations autom
 
 ### Rebornsense (`app.rebornsense.com`)
 
-`app.rebornsense.com` runs on a **separate** VPS (`91.98.41.165`). Pushes to `main` only auto-deploy **chaslay.com** unless you add Rebornsense GitHub secrets:
+`app.rebornsense.com` runs on a **separate** VPS:
+
+| | |
+|--|--|
+| **Server IP** | `91.98.41.165` |
+| **Deploy path** | `/root/rebornSense` (GitHub Actions default) |
+| **Legacy path** | `/root/FoodTruckPOS` (old name; may exist without `.git`) |
+| **Repo** | `git@github.com:ihtxam/rebornSense.git` (private) |
+| **Stack flag** | `DEPLOY_STACK=rebornsense` |
+
+Pushes to `main` only auto-deploy **chaslay.com** unless you add Rebornsense GitHub secrets:
 
 | Secret | Example |
 |--------|---------|
@@ -102,13 +112,97 @@ After that, every `git push` to `main` rebuilds Docker and runs migrations autom
 
 Workflow: `.github/workflows/deploy-rebornsense.yml` (runs on every `main` push when secrets exist).
 
-Manual deploy on the Rebornsense server:
+Caddy config: `deploy/Caddyfile.rebornsense`
+
+#### First-time / broken deploy on `91.98.41.165`
+
+If `bash scripts/deploy-hetzner.sh` fails with **`fatal: not a git repository`**, the server tree was copied or cloned without git history. Fix with one of the options below (run on the server as **root**).
+
+**Prerequisite:** GitHub deploy key at `/root/.ssh/rebornsense_deploy` (public key added under repo **Settings → Deploy keys** on `ihtxam/rebornSense`). You likely already have this for GitHub Actions.
+
+**Option A — fresh clone to `/root/rebornSense` (recommended):**
 
 ```bash
-ssh root@91.98.41.165 'export DEPLOY_STACK=rebornsense && bash /root/rebornSense/scripts/deploy-hetzner.sh'
+ssh root@91.98.41.165
+
+mkdir -p /root/.ssh && chmod 700 /root/.ssh
+cat >> /root/.ssh/config <<'EOF'
+
+Host github.com
+  HostName github.com
+  User git
+  IdentityFile /root/.ssh/rebornsense_deploy
+  IdentitiesOnly yes
+EOF
+chmod 600 /root/.ssh/config
+ssh -T git@github.com   # expect: "Hi ihtxam/rebornSense! ... successfully authenticated"
+
+# If old non-git tree exists, move it aside (keeps secrets/docker volumes on disk)
+mv /root/FoodTruckPOS /root/FoodTruckPOS.bak 2>/dev/null || true
+
+git clone git@github.com:ihtxam/rebornSense.git /root/rebornSense
+export DEPLOY_STACK=rebornsense
+export DEPLOY_PATH=/root/rebornSense
+bash /root/rebornSense/scripts/setup-rebornsense-server.sh
 ```
 
-Caddy config: `deploy/Caddyfile.rebornsense`
+**Option B — re-init git in existing `/root/FoodTruckPOS` (keep same path):**
+
+```bash
+ssh root@91.98.41.165
+
+# SSH config (same as option A) if not already set
+mkdir -p /root/.ssh && chmod 700 /root/.ssh
+grep -q 'IdentityFile /root/.ssh/rebornsense_deploy' /root/.ssh/config 2>/dev/null || cat >> /root/.ssh/config <<'EOF'
+
+Host github.com
+  HostName github.com
+  User git
+  IdentityFile /root/.ssh/rebornsense_deploy
+  IdentitiesOnly yes
+EOF
+chmod 600 /root/.ssh/config
+
+cd /root/FoodTruckPOS
+git init
+git remote add origin git@github.com:ihtxam/rebornSense.git
+git fetch origin main
+git checkout -B main
+git reset --hard origin/main
+
+export DEPLOY_STACK=rebornsense
+export DEPLOY_PATH=/root/FoodTruckPOS
+bash /root/FoodTruckPOS/scripts/deploy-hetzner.sh
+```
+
+**Option C — one-liner bootstrap script (after clone or if script is present):**
+
+```bash
+ssh root@91.98.41.165 'LEGACY_PATH=/root/FoodTruckPOS DEPLOY_PATH=/root/rebornSense bash -s' <<'EOF'
+set -euo pipefail
+if [[ ! -f /root/rebornSense/scripts/setup-rebornsense-server.sh ]]; then
+  echo "Clone first: git clone git@github.com:ihtxam/rebornSense.git /root/rebornSense"
+  exit 1
+fi
+bash /root/rebornSense/scripts/setup-rebornsense-server.sh
+EOF
+```
+
+After a successful deploy, `https://app.rebornsense.com/` should show the **Reborn** brand (not the old teal `#0f766e` Chaslay theme).
+
+Manual deploy anytime:
+
+```bash
+ssh root@91.98.41.165 'export DEPLOY_STACK=rebornsense DEPLOY_PATH=/root/rebornSense && bash /root/rebornSense/scripts/deploy-hetzner.sh'
+```
+
+| Problem | Fix |
+|---------|-----|
+| `not a git repository` | Use Option A or B above; deploy always runs `git fetch` |
+| `Permission denied (publickey)` on clone | Add `/root/.ssh/rebornsense_deploy.pub` to GitHub deploy keys |
+| `404` on `https://github.com/.../rebornSense` in browser | Repo is private — use SSH (`git@github.com:...`), not HTTPS without a PAT |
+| Old teal UI still showing | Deploy never completed; run bootstrap + deploy again |
+| Wrong path in GitHub Actions | Set `REBORN_HETZNER_DEPLOY_PATH=/root/rebornSense` |
 
 Manual deploy anytime:
 
