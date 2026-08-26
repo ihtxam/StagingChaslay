@@ -31,6 +31,17 @@ type RecentIntake = {
   at: string;
 };
 
+type LookupSuggestion = {
+  name: string;
+  brand?: string | null;
+  categoryHint?: string | null;
+  categoryId?: string | null;
+  packageSize?: string | null;
+  unit?: string | null;
+  imageUrl?: string | null;
+  source?: string;
+};
+
 export default function StorekeeperApp() {
   const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
@@ -46,6 +57,8 @@ export default function StorekeeperApp() {
   const [qty, setQty] = useState('1');
   const [expiryDate, setExpiryDate] = useState('');
   const [existingItem, setExistingItem] = useState<InvItem | null>(null);
+  const [suggestion, setSuggestion] = useState<LookupSuggestion | null>(null);
+  const [lookupBusy, setLookupBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [recent, setRecent] = useState<RecentIntake[]>([]);
@@ -81,6 +94,8 @@ export default function StorekeeperApp() {
       const trimmed = code.trim();
       if (!trimmed) return;
       setBarcode(trimmed);
+      setSuggestion(null);
+      setLookupBusy(true);
       try {
         const res = await api.get(`/merchant/storekeeper/lookup/${encodeURIComponent(trimmed)}`, {
           headers: apiHeaders,
@@ -91,15 +106,33 @@ export default function StorekeeperApp() {
           setName(item.name);
           setUnit(item.unit || 'piece');
           setCategoryId(item.categoryId || '');
+          return;
+        }
+
+        setExistingItem(null);
+        const ext = res.data.suggestion as LookupSuggestion | null;
+        if (ext?.name) {
+          setSuggestion(ext);
+          setName(ext.name);
+          if (ext.unit) {
+            const hasUnit = units.some((u) => u.code === ext.unit);
+            if (hasUnit) setUnit(ext.unit);
+          }
+          if (ext.categoryId) setCategoryId(ext.categoryId);
+          toast.success(t('storekeeperOnlineFound'));
         } else {
-          setExistingItem(null);
           setName('');
+          setCategoryId('');
+          toast(t('storekeeperOnlineNotFound'), { icon: 'ℹ️' });
         }
       } catch {
         setExistingItem(null);
+        setSuggestion(null);
+      } finally {
+        setLookupBusy(false);
       }
     },
-    [apiHeaders]
+    [apiHeaders, t, units]
   );
 
   // Bluetooth / USB keyboard-wedge scanner
@@ -135,6 +168,7 @@ export default function StorekeeperApp() {
     setQty('1');
     setExpiryDate('');
     setExistingItem(null);
+    setSuggestion(null);
   };
 
   const submit = async (e: FormEvent) => {
@@ -265,8 +299,15 @@ export default function StorekeeperApp() {
           </div>
           {existingItem ? (
             <p className="mt-1 text-xs text-teal-800">{t('storekeeperExistingItem', { stock: existingItem.onHand })}</p>
+          ) : suggestion ? (
+            <p className="mt-1 text-xs text-teal-800">
+              {t('storekeeperOnlineFound')}
+              {suggestion.packageSize ? ` · ${t('storekeeperPackageSize', { size: suggestion.packageSize })}` : ''}
+            </p>
           ) : barcode ? (
-            <p className="mt-1 text-xs text-amber-800">{t('storekeeperNewItem')}</p>
+            <p className="mt-1 text-xs text-amber-800">
+              {lookupBusy ? t('loading') : t('storekeeperNewItem')}
+            </p>
           ) : null}
         </div>
 
