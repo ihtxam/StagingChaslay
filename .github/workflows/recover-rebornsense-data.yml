@@ -1,0 +1,108 @@
+name: Recover Rebornsense data
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/recover-rebornsense-data.yml'
+      - 'scripts/recover-rebornsense-data.sh'
+      - 'scripts/restore-rebornsense-dump.sh'
+
+concurrency:
+  group: recover-rebornsense-data
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: >-
+      ${{
+        secrets.REBORN_HETZNER_HOST != '' &&
+        (secrets.HETZNER_HOST != '' || secrets.REBORN_HETZNER_HOST == '91.98.41.165')
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump legacy Postgres on Chaslay host
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST || '116.202.26.15' }}
+          username: ${{ secrets.HETZNER_USER || 'root' }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            BACKUP_DIR="/root/rebornsense-recovery-backups/ci-$(date +%Y%m%d-%H%M%S)"
+            mkdir -p "$BACKUP_DIR"
+            DUMP="$BACKUP_DIR/legacy-manupos.dump"
+            if docker inspect foodtruckpos-db-1 >/dev/null 2>&1; then
+              docker exec foodtruckpos-db-1 pg_dump -U manupos -d manupos -Fc >"$DUMP"
+            elif docker volume inspect foodtruckpos_postgres_data >/dev/null 2>&1; then
+              TEMP_OLD="recover-old-pg-ci"
+              docker rm -f "$TEMP_OLD" >/dev/null 2>&1 || true
+              docker run -d --name "$TEMP_OLD" \
+                -e POSTGRES_HOST_AUTH_METHOD=trust \
+                -v foodtruckpos_postgres_data:/var/lib/postgresql/data \
+                postgres:16-alpine >/dev/null
+              for i in $(seq 1 30); do
+                docker exec "$TEMP_OLD" pg_isready -U manupos -d manupos >/dev/null 2>&1 && break
+                sleep 2
+              done
+              docker exec "$TEMP_OLD" pg_dump -U manupos -d manupos -Fc >"$DUMP"
+              docker rm -f "$TEMP_OLD" >/dev/null 2>&1 || true
+            else
+              echo "ERROR: no foodtruckpos db container or volume on legacy host"
+              exit 1
+            fi
+            test -s "$DUMP"
+            echo "DUMP_PATH=$DUMP" > /root/rebornsense-recovery-backups/latest-dump-path.env
+            docker exec foodtruckpos-db-1 psql -U manupos -d manupos -t -c "SELECT count(*) FROM merchants;" 2>/dev/null || true
+            ls -lh "$DUMP"
+
+      - name: Download legacy dump to runner
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HETZNER_HOST || '116.202.26.15' }}
+          username: ${{ secrets.HETZNER_USER || 'root' }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          source: "/root/rebornsense-recovery-backups/ci-*/*.dump"
+          target: /tmp/rebornsense-recovery/
+          strip_components: 2
+
+      - name: Upload dump to Rebornsense host
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.REBORN_HETZNER_HOST || secrets.HETZNER_HOST }}
+          username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER || 'root' }}
+          key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
+          source: /tmp/rebornsense-recovery/*.dump
+          target: /root/rebornsense-recovery-backups/ci-import/
+          strip_components: 0
+
+      - name: Restore on Rebornsense host
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.REBORN_HETZNER_HOST || secrets.HETZNER_HOST }}
+          username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER || 'root' }}
+          key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
+            DUMP="$(ls -t /root/rebornsense-recovery-backups/ci-import/*.dump 2>/dev/null | head -1)"
+            if [[ -z "$DUMP" ]]; then
+              DUMP="$(ls -t /root/rebornsense-recovery-backups/*/*.dump 2>/dev/null | head -1)"
+            fi
+            test -n "$DUMP"
+            test -s "$DUMP"
+            cd "$DEPLOY_PATH"
+            git fetch origin main
+            git reset --hard origin/main
+            chmod +x scripts/restore-rebornsense-dump.sh
+            DUMP_FILE="$DUMP" CONFIRM=1 bash scripts/restore-rebornsense-dump.sh
+            docker compose --env-file "$DEPLOY_PATH/.env.production" exec -T db psql -U manupos -d manupos -c \
+              "SELECT 'merchants' AS tbl, count(*) FROM merchants UNION ALL SELECT 'superadmins', count(*) FROM superadmins;"

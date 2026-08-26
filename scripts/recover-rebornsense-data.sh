@@ -76,7 +76,7 @@ export_stack_caddyfile() {
 
 dc() {
   export_stack_caddyfile
-  docker compose --env-file "$DEPLOY_PATH/.env.production" "$@"
+  docker compose -p "$NEW_PROJECT" --env-file "$DEPLOY_PATH/.env.production" "$@"
 }
 
 find_old_db_container() {
@@ -127,7 +127,7 @@ if [[ "${DRY_RUN:-}" == "1" ]]; then
   if running="$(find_old_db_container || true)"; then
     info "Running legacy DB container: $running"
     docker exec "$running" psql -U "$OLD_DB_USER" -d "$OLD_DB_NAME" -c \
-      "SELECT count(*) AS tenants FROM tenants;" 2>/dev/null || true
+      "SELECT count(*) AS merchants FROM merchants;" 2>/dev/null || true
   fi
   exit 0
 fi
@@ -227,7 +227,7 @@ cat "$DUMP_FILE" | dc exec -T db pg_restore \
 
 info "Post-restore counts:"
 dc exec -T db psql -U "$NEW_DB_USER" -d "$NEW_DB_NAME" -c \
-  "SELECT 'tenants' AS tbl, count(*) FROM tenants UNION ALL SELECT 'products', count(*) FROM products UNION ALL SELECT 'orders', count(*) FROM orders;" \
+  "SELECT 'merchants' AS tbl, count(*) FROM merchants UNION ALL SELECT 'products', count(*) FROM products UNION ALL SELECT 'orders', count(*) FROM orders UNION ALL SELECT 'superadmins', count(*) FROM superadmins;" \
   2>/dev/null || echo "(could not query — run migrate then recount)"
 
 if [[ "${SKIP_UPLOADS:-}" != "1" ]]; then
