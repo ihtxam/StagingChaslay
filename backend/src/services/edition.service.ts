@@ -6,6 +6,12 @@ import {
   retailDefaultsFromFeatures,
   type EditionFeatureKey,
 } from "@/lib/edition-features";
+import {
+  businessModuleFromEditionCategory,
+  businessModuleMerchantPatch,
+  normalizeBusinessModule,
+  type BusinessModule,
+} from "@/lib/business-module";
 
 export type EditionRow = typeof schema.editions.$inferSelect;
 
@@ -219,9 +225,17 @@ export class EditionService {
     return edition.features;
   }
 
-  static async applyEditionDefaultsToMerchant(merchantId: string, editionId: string) {
+  static async applyEditionDefaultsToMerchant(
+    merchantId: string,
+    editionId: string,
+    opts?: { businessCategory?: BusinessModule | "retail" | "restaurant" }
+  ) {
     const edition = await this.getById(editionId);
     if (!edition) return;
+    const module = businessModuleFromEditionCategory(
+      edition.businessCategory,
+      normalizeBusinessModule(opts?.businessCategory)
+    );
     const defaults = retailDefaultsFromFeatures(edition.features);
     const db = getDb();
     const checkout = await db.query.merchants.findFirst({
@@ -232,24 +246,26 @@ export class EditionService {
       checkout?.posCheckoutSettings && typeof checkout.posCheckoutSettings === "object"
         ? { ...(checkout.posCheckoutSettings as Record<string, unknown>) }
         : {};
-    prev.posMode = defaults.posMode;
-    if (defaults.posMode === "retail") {
+    prev.posMode = module === "retail" ? "retail" : defaults.posMode;
+    if (module === "retail") {
       prev.retailTakeawayEnabled = edition.features.includes("channel_takeaway");
       prev.retailDeliveryEnabled = edition.features.includes("channel_delivery");
     }
+    const modulePatch = businessModuleMerchantPatch(module, prev);
     await db
       .update(schema.merchants)
       .set({
         editionId,
-        floorPlanEnabled: defaults.floorPlanEnabled,
-        coursesEnabled: defaults.coursesEnabled,
-        reservationsEnabled: defaults.reservationsEnabled,
+        floorPlanEnabled: module === "retail" ? false : defaults.floorPlanEnabled,
+        coursesEnabled: module === "retail" ? false : defaults.coursesEnabled,
+        reservationsEnabled: module === "retail" ? false : defaults.reservationsEnabled,
         shopEnabled: defaults.shopEnabled,
         pickupEnabled: defaults.pickupEnabled,
         deliveryEnabled: defaults.deliveryEnabled,
         loyaltyEnabled: defaults.loyaltyEnabled,
         webposGiftCardEnabled: defaults.webposGiftCardEnabled,
-        posCheckoutSettings: prev,
+        businessCategory: module,
+        posCheckoutSettings: modulePatch.posCheckoutSettings,
         updatedAt: new Date(),
       })
       .where(eq(schema.merchants.id, merchantId));

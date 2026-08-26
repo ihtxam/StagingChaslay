@@ -818,6 +818,13 @@ export default function Merchants() {
                       setForm({
                         ...form,
                         businessCategory: e.target.value as 'retail' | 'restaurant',
+                        editionId:
+                          form.editionId &&
+                          editions.find((ed) => ed.id === form.editionId)?.businessCategory &&
+                          editions.find((ed) => ed.id === form.editionId)?.businessCategory !== 'both' &&
+                          editions.find((ed) => ed.id === form.editionId)?.businessCategory !== e.target.value
+                            ? ''
+                            : form.editionId,
                       })
                     }
                   >
@@ -834,7 +841,12 @@ export default function Merchants() {
                     required
                   >
                     <option value="">Select POS version…</option>
-                    {editions.map((ed) => (
+                    {editions
+                      .filter(
+                        (ed) =>
+                          ed.businessCategory === 'both' || ed.businessCategory === form.businessCategory
+                      )
+                      .map((ed) => (
                       <option key={ed.id} value={ed.id}>
                         {ed.name}
                       </option>

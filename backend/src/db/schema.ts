@@ -369,6 +369,8 @@ export const merchants = pgTable(
     resellerId: uuid("reseller_id").references(() => resellers.id, { onDelete: "set null" }),
     /** Assigned POS edition / feature pack (null = legacy full access) */
     editionId: uuid("edition_id").references(() => editions.id, { onDelete: "set null" }),
+    /** Locked vertical: retail shop vs restaurant / food service. */
+    businessCategory: varchar("business_category", { length: 20 }),
     /** Reseller/agency billing flag — paid plan assigned by superadmin or owning reseller */
     planBillingPaid: boolean("plan_billing_paid").default(true).notNull(),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),

@@ -17,6 +17,7 @@ import {
   normalizePosCheckoutSettings,
   type PosCheckoutSettings,
 } from "@/lib/pos-checkout-settings";
+import { normalizeBusinessModule, posModeForModule } from "@/lib/business-module";
 import {
   normalizeTableQrSettings,
   type TableQrSettings,
@@ -241,6 +242,9 @@ export class MerchantSettingsService {
       status: merchant.status,
       subscriptionPlan: merchant.subscriptionPlan,
       editionId: (merchant as { editionId?: string | null }).editionId || null,
+      businessCategory: normalizeBusinessModule(
+        (merchant as { businessCategory?: string | null }).businessCategory
+      ),
       resellerId: (merchant as { resellerId?: string | null }).resellerId || null,
       /**
        * null = legacy full access for edition routes.
@@ -587,7 +591,16 @@ export class MerchantSettingsService {
       patch.tableQrSettings = normalizeTableQrSettings(updates.tableQrSettings);
     }
     if (updates.posCheckoutSettings !== undefined) {
-      patch.posCheckoutSettings = normalizePosCheckoutSettings(updates.posCheckoutSettings);
+      const currentMerchant = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: { businessCategory: true },
+      });
+      const locked = normalizeBusinessModule(currentMerchant?.businessCategory);
+      let checkout = normalizePosCheckoutSettings(updates.posCheckoutSettings);
+      if (locked) {
+        checkout = { ...checkout, posMode: posModeForModule(locked) };
+      }
+      patch.posCheckoutSettings = checkout;
     }
     if (updates.deliveryPlatformSettings !== undefined) {
       const current = await db.query.merchants.findFirst({
