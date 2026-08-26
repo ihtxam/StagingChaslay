@@ -4618,7 +4618,7 @@ const fr: Dict = {
   printBridgeDownloadHint:
     'Installez sur tablette Sunmi (D3 Mini, D2s Plus), Feitian F310A ou autre Android. Impression intégrée, USB, Bluetooth ou Wi‑Fi — sans second PC.',
   printBridgeInstallSteps:
-    'Installez l’APK, autorisez USB et Bluetooth, choisissez l’imprimante dans l’assistant (intégrée Sunmi ou USB), puis revenez au WebPOS (port 9101).',
+    'Installez l’APK, autorisez USB et Bluetooth, choisissez l’imprimante dans l’assistant (intégrée, USB, BT ou LAN), puis revenez au WebPOS (port 9101).',
   printAgentInstallSteps:
     'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Journal : %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Profils imprimantes',
@@ -7803,7 +7803,7 @@ const de: Dict = {
   printBridgeDownloadHint:
     'Für Sunmi D3 Mini, D2s Plus, Feitian F310A oder andere Android-Geräte. Integrierter, USB-, Bluetooth- oder WLAN-Druck — ohne zweiten PC.',
   printBridgeInstallSteps:
-    'APK installieren, USB und Bluetooth erlauben, Drucker im Assistenten wählen (Sunmi intern oder USB), dann zurück zum WebPOS (Port 9101).',
+    'APK installieren, USB und Bluetooth erlauben, Drucker im Assistenten wählen (integriert, USB, BT oder LAN), dann zurück zum WebPOS (Port 9101).',
   printAgentInstallSteps:
     'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Druckerprofile',
