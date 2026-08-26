@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { isInventoryLicensed } from '@/lib/inventory-addon';
+import { isRetailModule, normalizeBusinessModule, type BusinessModule } from '@/lib/business-module';
 import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
@@ -280,6 +280,8 @@ export default function Products() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [printOpen, setPrintOpen] = useState(false);
   const [printTargets, setPrintTargets] = useState<LabelProduct[]>([]);
+  const [businessModule, setBusinessModule] = useState<BusinessModule | null>(null);
+  const showBarcodeTools = businessModule !== 'restaurant';
   const [labelOpts, setLabelOpts] = useState<LabelPrintOptions>({
     heightMm: 20,
     widthMm: 40,
@@ -423,6 +425,10 @@ export default function Products() {
 
   useEffect(() => {
     void load();
+    void api
+      .get('/merchant/settings')
+      .then((r) => setBusinessModule(normalizeBusinessModule(r.data?.settings?.businessCategory)))
+      .catch(() => undefined);
   }, []);
 
   const categoryName = (categoryId?: string | null) =>
@@ -1111,6 +1117,8 @@ export default function Products() {
             <Package size={14} />
             {importingPhotos ? t('productPhotosImporting') : t('productPhotosImportMissing')}
           </button>
+          {showBarcodeTools ? (
+            <>
           <button
             type="button"
             onClick={() => void generateMissing(selectedIds.length ? selectedIds : undefined)}
@@ -1129,6 +1137,8 @@ export default function Products() {
             <Printer size={14} />
             {t('barcodePrintLabels')}
           </button>
+            </>
+          ) : null}
           <button
             type="button"
             onClick={openCreate}
@@ -1926,6 +1936,7 @@ export default function Products() {
                         {t('maxCharacters').replace('{n}', String(SKU_MAX_LEN))}
                       </p>
                     </Field>
+                    {showBarcodeTools ? (
                     <Field label={t('barcode')}>
                       <input
                         className="field-input"
@@ -1980,6 +1991,7 @@ export default function Products() {
                         )}
                       </div>
                     </Field>
+                    ) : null}
                     <Field label={t('stock')}>
                       <input
                         className="field-input"

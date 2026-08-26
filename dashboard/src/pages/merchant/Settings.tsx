@@ -95,6 +95,7 @@ interface SettingsData {
   signageScreenLimit?: number;
   inventoryWasteFactor?: number;
   inventoryAutoReorderEmailEnabled?: boolean;
+  businessCategory?: 'retail' | 'restaurant' | null;
   posColorTheme?: string;
   posCheckoutSettings?: {
     tipsEnabled?: boolean;
@@ -1680,6 +1681,16 @@ export default function Settings() {
                 highlight={isSectionHighlight('pos-mode')}
                 dimmed={normalizedQuery ? !isSectionVisible('pos-mode') : false}
               >
+                {settings.businessCategory ? (
+                  <p className="text-sm">
+                    {t('businessModuleLocked', {
+                      module:
+                        settings.businessCategory === 'retail'
+                          ? t('businessModuleRetail')
+                          : t('businessModuleRestaurant'),
+                    })}
+                  </p>
+                ) : (
                 <Field label={t('posMode')} hint={t('posModeHint')}>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {(
@@ -1723,7 +1734,10 @@ export default function Settings() {
                     })}
                   </div>
                 </Field>
-                {(settings.posCheckoutSettings?.posMode || 'restaurant') === 'retail' ? (
+                )}
+                {(settings.businessCategory === 'retail' ||
+                  (!settings.businessCategory &&
+                    (settings.posCheckoutSettings?.posMode || 'restaurant') === 'retail')) ? (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {(
                       [

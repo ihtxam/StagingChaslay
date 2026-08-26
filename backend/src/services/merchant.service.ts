@@ -9,6 +9,10 @@ import {
   withMerchantSchemaRetry,
 } from "@/lib/ensure-merchant-schema";
 import {
+  businessModuleMerchantPatch,
+  normalizeBusinessModule,
+} from "@/lib/business-module";
+import {
   isInventoryAddonEnabled,
   readInventoryAddonEnabled,
   readInventoryAddonEnabledMap,
@@ -325,6 +329,8 @@ export class MerchantService {
         }
       }
 
+      const lockedModule = normalizeBusinessModule(options?.businessCategory);
+
       const merchant = await db
         .insert(schema.merchants)
         .values({
@@ -344,6 +350,7 @@ export class MerchantService {
           syncApiKey: generateSyncApiKey(),
           editionId: options?.editionId || null,
           resellerId: options?.resellerId || null,
+          businessCategory: lockedModule,
           maxPosPosts: normalizePosPostLimit(options?.maxPosPosts ?? 0),
           maxWaiterPosts: normalizePosPostLimit(options?.maxWaiterPosts ?? 0),
           inventoryAddonEnabled: options?.inventoryAddonEnabled === true,
@@ -358,7 +365,15 @@ export class MerchantService {
 
       if (options?.editionId) {
         const { EditionService } = await import("./edition.service");
-        await EditionService.applyEditionDefaultsToMerchant(created.id, options.editionId);
+        await EditionService.applyEditionDefaultsToMerchant(created.id, options.editionId, {
+          businessCategory: lockedModule || options?.businessCategory,
+        });
+      } else if (lockedModule) {
+        const modulePatch = businessModuleMerchantPatch(lockedModule, {});
+        await db
+          .update(schema.merchants)
+          .set(modulePatch)
+          .where(eq(schema.merchants.id, created.id));
       } else if (options?.businessCategory === "retail") {
         const checkout =
           created.posCheckoutSettings && typeof created.posCheckoutSettings === "object"

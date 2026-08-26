@@ -2,6 +2,7 @@ import {
   canAccessEditionRoute,
   type EditionFeatureKey,
 } from './edition-features';
+import { canAccessBusinessModuleRoute, type BusinessModule } from './business-module';
 import { isStandalonePwa } from './pwa';
 
 export type Permission =
@@ -214,8 +215,10 @@ export function canAccessRoute(
   path: string,
   permissions: Permission[] | undefined,
   isOwner: boolean,
-  editionFeatures?: EditionFeatureKey[] | null
+  editionFeatures?: EditionFeatureKey[] | null,
+  businessModule?: BusinessModule | null
 ): boolean {
+  if (!canAccessBusinessModuleRoute(path, businessModule)) return false;
   if (!canAccessEditionRoute(path, editionFeatures ?? null)) return false;
   if (isOwner) return true;
   const required = resolvePanelRoutePermissions(path);

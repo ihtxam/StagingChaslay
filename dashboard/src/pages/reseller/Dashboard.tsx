@@ -414,6 +414,13 @@ function MerchantsPage() {
                 setForm((f) => ({
                   ...f,
                   businessCategory: e.target.value as 'retail' | 'restaurant',
+                  editionId:
+                    f.editionId &&
+                    editions.find((ed) => ed.id === f.editionId)?.businessCategory &&
+                    editions.find((ed) => ed.id === f.editionId)?.businessCategory !== 'both' &&
+                    editions.find((ed) => ed.id === f.editionId)?.businessCategory !== e.target.value
+                      ? ''
+                      : f.editionId,
                 }))
               }
             >
@@ -430,7 +437,12 @@ function MerchantsPage() {
               onChange={(e) => setForm((f) => ({ ...f, editionId: e.target.value }))}
             >
               <option value="">{t('posVersionSelect')}</option>
-              {editions.map((ed) => (
+              {editions
+                .filter(
+                  (ed) =>
+                    ed.businessCategory === 'both' || ed.businessCategory === form.businessCategory
+                )
+                .map((ed) => (
                 <option key={ed.id} value={ed.id}>
                   {ed.name} ({ed.ownerType})
                 </option>

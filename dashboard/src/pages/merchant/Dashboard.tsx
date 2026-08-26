@@ -76,6 +76,8 @@ import {
   type WebPosStaffSession,
 } from '@/lib/permissions';
 import type { EditionFeatureKey } from '@/lib/edition-features';
+import type { BusinessModule } from '@/lib/business-module';
+import { normalizeBusinessModule } from '@/lib/business-module';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import SignagePage from './SignagePage';
@@ -140,6 +142,7 @@ function MerchantShell() {
   const [editionFeatures, setEditionFeatures] = useState<EditionFeatureKey[] | null>(null);
   const [inventoryLicensed, setInventoryLicensed] = useState(() => isInventoryLicensed(user));
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
+  const [businessModule, setBusinessModule] = useState<BusinessModule | null>(null);
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
   );
@@ -216,6 +219,7 @@ function MerchantShell() {
     const applySettings = (settings: {
       name?: string | null;
       editionFeatures?: EditionFeatureKey[] | null;
+      businessCategory?: string | null;
       inventoryAddonEnabled?: boolean;
       inventoryEnabled?: boolean;
       signageAddonEnabled?: boolean;
@@ -223,6 +227,7 @@ function MerchantShell() {
     } | null) => {
       const feats = settings?.editionFeatures;
       setEditionFeatures(Array.isArray(feats) ? feats : null);
+      setBusinessModule(normalizeBusinessModule(settings?.businessCategory));
       setInventoryLicensed(isInventoryLicensed(settings) || isInventoryLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
@@ -329,23 +334,23 @@ function MerchantShell() {
 
   const allow = useCallback(
     (path: string) =>
-      canAccessRoute(path, effective.permissions, effective.isOwner, editionFeatures),
-    [effective.permissions, effective.isOwner, editionFeatures]
+      canAccessRoute(path, effective.permissions, effective.isOwner, editionFeatures, businessModule),
+    [effective.permissions, effective.isOwner, editionFeatures, businessModule]
   );
 
   /** Inventory is a paid merchant addon — never gate it on edition feature lists. */
   const allowInventory = useCallback(
     (path: string) =>
       inventoryLicensed &&
-      canAccessRoute(path, effective.permissions, effective.isOwner, null),
-    [inventoryLicensed, effective.permissions, effective.isOwner]
+      canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
+    [inventoryLicensed, effective.permissions, effective.isOwner, businessModule]
   );
 
   const allowSignage = useCallback(
     (path: string) =>
       signageLicensed &&
-      canAccessRoute(path, effective.permissions, effective.isOwner, null),
-    [signageLicensed, effective.permissions, effective.isOwner]
+      canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
+    [signageLicensed, effective.permissions, effective.isOwner, businessModule]
   );
 
   // Block direct URL access to panel pages the role may not open.
@@ -554,7 +559,14 @@ function MerchantShell() {
                 </WebPosErrorBoundary>
               }
             />
-            <Route path="waiter" element={<WaiterApp appMode={hideChrome} />} />
+            <Route
+              path="waiter"
+              element={
+                <PanelRouteGuard path="/merchant/waiter" allow={allow}>
+                  <WaiterApp appMode={hideChrome} />
+                </PanelRouteGuard>
+              }
+            />
             <Route
               path="reports"
               element={
