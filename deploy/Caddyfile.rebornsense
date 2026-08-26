@@ -6,7 +6,11 @@
 }
 
 # Only hosts whose DNS already points at this server.
-# Add rebornsense.com / www and leftover chaslay.com names after those A records move here.
+# Apex rebornsense.com still resolves elsewhere — add it after that A record moves here.
+
+www.rebornsense.com {
+	redir https://app.rebornsense.com{uri} permanent
+}
 
 app.rebornsense.com {
 	handle /receipt/* {
