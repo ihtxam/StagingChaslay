@@ -102,7 +102,7 @@ services:
       DOMAIN: ${DOMAIN:?set DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:-admin@${DOMAIN}}
     volumes:
-      - ./deploy/Caddyfile.chaslay:/etc/caddy/Caddyfile:ro
+      - ./deploy/${CADDYFILE:-Caddyfile.chaslay}:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

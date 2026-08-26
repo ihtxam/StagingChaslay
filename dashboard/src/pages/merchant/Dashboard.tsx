@@ -77,7 +77,7 @@ import {
 } from '@/lib/permissions';
 import type { EditionFeatureKey } from '@/lib/edition-features';
 import type { BusinessModule } from '@/lib/business-module';
-import { isRestaurantModule, normalizeBusinessModule } from '@/lib/business-module';
+import { normalizeBusinessModule } from '@/lib/business-module';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import SignagePage from './SignagePage';
@@ -434,7 +434,7 @@ function MerchantShell() {
                 path === '/merchant/inventory/cookbook' ||
                 path === '/merchant/inventory/consumption'
               ) {
-                return isRestaurantModule(businessModule);
+                return false;
               }
               return true;
             })

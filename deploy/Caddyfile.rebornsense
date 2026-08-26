@@ -1,0 +1,149 @@
+{
+	email {$ACME_EMAIL}
+	on_demand_tls {
+		ask http://api:3000/api/shop/tls-ask
+	}
+}
+
+# Marketing apex + www — send visitors to the app until a landing page exists.
+rebornsense.com, www.rebornsense.com {
+	redir https://app.rebornsense.com{uri} permanent
+}
+
+app.rebornsense.com {
+	handle /receipt/* {
+		redir https://pay.rebornsense.com{uri} permanent
+	}
+
+	handle /receipts/* {
+		redir https://pay.rebornsense.com{uri} permanent
+	}
+
+	handle /downloads/* {
+		reverse_proxy api:3000
+	}
+
+	encode gzip zstd
+
+	handle /health {
+		reverse_proxy api:3000
+	}
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle /v1/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy dashboard:80
+	}
+}
+
+api.rebornsense.com {
+	handle /downloads/* {
+		reverse_proxy api:3000
+	}
+
+	encode gzip zstd
+
+	handle /health {
+		reverse_proxy api:3000
+	}
+
+	handle /v1/* {
+		reverse_proxy api:3000
+	}
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy api:3000
+	}
+}
+
+shop.rebornsense.com {
+	encode gzip zstd
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy dashboard:80
+	}
+}
+
+pay.rebornsense.com {
+	encode gzip zstd
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle /receipt/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /receipts/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle {
+		reverse_proxy dashboard:80
+	}
+}
+
+status.rebornsense.com {
+	encode gzip zstd
+
+	handle /health {
+		reverse_proxy api:3000
+	}
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy dashboard:80
+	}
+}
+
+# Merchant shops: https://{subdomain}.rebornsense.com
+*.rebornsense.com {
+	tls {
+		on_demand
+	}
+
+	encode gzip zstd
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy dashboard:80
+	}
+}
+
+# Custom merchant domains (CNAME → shop.rebornsense.com)
+https:// {
+	tls {
+		on_demand
+	}
+
+	encode gzip zstd
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy dashboard:80
+	}
+}

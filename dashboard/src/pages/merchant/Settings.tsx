@@ -2057,11 +2057,6 @@ export default function Settings() {
                     <span className="text-xs muted">{t('invAutoReorderMasterHint')}</span>
                   </span>
                 </label>
-                {isInventoryLicensed(settings) && (
-                  <Link to="/merchant/inventory/cookbook" className="btn-secondary mt-3 inline-flex">
-                    {t('invNavCookbook')}
-                  </Link>
-                )}
                 <button
                   type="button"
                   className="btn-primary mt-3"
@@ -3841,7 +3836,6 @@ export default function Settings() {
                 </button>
               </Section>
 
-              {settings.businessCategory !== 'restaurant' ? (
               <Section
                 id="barcode-labels"
                 icon={Printer}
@@ -3924,7 +3918,6 @@ export default function Settings() {
                   ))}
                 </div>
               </Section>
-              ) : null}
 
               <SettingsSaveBar saving={savingReceipt} />
             </form>

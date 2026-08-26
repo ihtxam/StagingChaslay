@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchant, requirePermission, setMerchantContext } from "@/middleware/auth.middleware";
-import { requireRestaurantModule } from "@/middleware/business-module.middleware";
+import { requireRetailModule } from "@/middleware/business-module.middleware";
 import { InventoryLicenseError, InventoryService } from "@/services/inventory.service";
 import { DemoInventoryService } from "@/services/demo-inventory.service";
 
@@ -10,6 +10,14 @@ router.use(verifyToken);
 router.use(requireMerchant);
 router.use(setMerchantContext);
 router.use(requirePermission("MANAGE_INVENTORY"));
+router.use(requireRetailModule);
+
+function denyInventoryRecipes(_req: Request, res: Response) {
+  return res.status(403).json({
+    error: "Recipes and consumption reports are not available in retail inventory",
+    code: "INVENTORY_RECIPES_DISABLED",
+  });
+}
 
 function handleError(res: Response, error: unknown, fallback: string) {
   if (error instanceof InventoryLicenseError) {
@@ -183,7 +191,7 @@ router.get("/low-stock", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/usage", requireRestaurantModule, async (req: Request, res: Response) => {
+router.get("/usage", denyInventoryRecipes, async (req: Request, res: Response) => {
   try {
     const days = Number(req.query.days) || 30;
     const rows = await InventoryService.usageReport(req.merchantId!, days);
@@ -379,7 +387,7 @@ router.get("/purchase-report", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/cookbook", requireRestaurantModule, async (req: Request, res: Response) => {
+router.get("/cookbook", denyInventoryRecipes, async (req: Request, res: Response) => {
   try {
     const entries = await InventoryService.listCookbook(req.merchantId!);
     res.json({ success: true, entries });
@@ -388,7 +396,7 @@ router.get("/cookbook", requireRestaurantModule, async (req: Request, res: Respo
   }
 });
 
-router.get("/products/:productId/recipe", requireRestaurantModule, async (req: Request, res: Response) => {
+router.get("/products/:productId/recipe", denyInventoryRecipes, async (req: Request, res: Response) => {
   try {
     const recipe = await InventoryService.getRecipe(req.merchantId!, req.params.productId);
     res.json({ success: true, recipe });
@@ -397,7 +405,7 @@ router.get("/products/:productId/recipe", requireRestaurantModule, async (req: R
   }
 });
 
-router.put("/products/:productId/recipe", requireRestaurantModule, async (req: Request, res: Response) => {
+router.put("/products/:productId/recipe", denyInventoryRecipes, async (req: Request, res: Response) => {
   try {
     const recipe = await InventoryService.setRecipe(
       req.merchantId!,

@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { isRestaurantModule, normalizeBusinessModule, type BusinessModule } from '@/lib/business-module';
 import { InventoryUpsell, useInventoryLicense } from './shared';
 
 type LinkItem = { to: string; labelKey: string };
@@ -42,30 +40,18 @@ export default function InventoryLayout() {
   const { t } = useI18n();
   const { pathname } = useLocation();
   const { licensed, loading } = useInventoryLicense();
-  const [businessModule, setBusinessModule] = useState<BusinessModule | null>(null);
-
-  useEffect(() => {
-    void api
-      .get('/merchant/settings')
-      .then((r) => setBusinessModule(normalizeBusinessModule(r.data?.settings?.businessCategory)))
-      .catch(() => undefined);
-  }, []);
 
   const groups = useMemo(
     () =>
       GROUPS.map((group) => ({
         ...group,
-        items: group.items.filter((item) => {
-          if (item.to === '/merchant/inventory/cookbook') {
-            return isRestaurantModule(businessModule);
-          }
-          if (item.to === '/merchant/inventory/consumption') {
-            return isRestaurantModule(businessModule);
-          }
-          return true;
-        }),
+        items: group.items.filter(
+          (item) =>
+            item.to !== '/merchant/inventory/cookbook' &&
+            item.to !== '/merchant/inventory/consumption'
+        ),
       })),
-    [businessModule]
+    []
   );
 
   if (loading && licensed === null) {

@@ -281,7 +281,7 @@ export default function Products() {
   const [printOpen, setPrintOpen] = useState(false);
   const [printTargets, setPrintTargets] = useState<LabelProduct[]>([]);
   const [businessModule, setBusinessModule] = useState<BusinessModule | null>(null);
-  const showBarcodeTools = businessModule !== 'restaurant';
+  const showBarcodeCatalog = businessModule !== 'restaurant';
   const [labelOpts, setLabelOpts] = useState<LabelPrintOptions>({
     heightMm: 20,
     widthMm: 40,
@@ -293,6 +293,7 @@ export default function Products() {
     copies: 1,
   });
   const [inventoryOn, setInventoryOn] = useState(false);
+  const showProductRecipes = inventoryOn && businessModule !== 'retail';
   const [recipeLines, setRecipeLines] = useState<Array<{ itemId: string; qty: string; name?: string; unit?: string }>>([]);
   const [recipeYield, setRecipeYield] = useState('1');
   const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
@@ -534,7 +535,7 @@ export default function Products() {
               },
             ];
       const comboSlots = normalizeComboSlotsFromProduct(full.comboItems);
-      if (inventoryOn) {
+      if (showProductRecipes) {
         try {
           const rec = await api.get(`/merchant/inventory/products/${product.id}/recipe`);
           setRecipeYield(String(rec.data.recipe?.recipeYield || 1));
@@ -781,7 +782,7 @@ export default function Products() {
         productId = created.data?.product?.id || null;
         toast.success(t('productCreated'));
       }
-      if (inventoryOn && productId) {
+      if (showProductRecipes && productId) {
         try {
           await api.put(`/merchant/inventory/products/${productId}/recipe`, {
             recipeYield: Number(recipeYield) || 1,
@@ -1117,8 +1118,7 @@ export default function Products() {
             <Package size={14} />
             {importingPhotos ? t('productPhotosImporting') : t('productPhotosImportMissing')}
           </button>
-          {showBarcodeTools ? (
-            <>
+          {showBarcodeCatalog ? (
           <button
             type="button"
             onClick={() => void generateMissing(selectedIds.length ? selectedIds : undefined)}
@@ -1127,6 +1127,7 @@ export default function Products() {
             <Barcode size={14} />
             {t('barcodeGenerateMissing')}
           </button>
+          ) : null}
           <button
             type="button"
             onClick={() =>
@@ -1137,8 +1138,6 @@ export default function Products() {
             <Printer size={14} />
             {t('barcodePrintLabels')}
           </button>
-            </>
-          ) : null}
           <button
             type="button"
             onClick={openCreate}
@@ -1936,7 +1935,7 @@ export default function Products() {
                         {t('maxCharacters').replace('{n}', String(SKU_MAX_LEN))}
                       </p>
                     </Field>
-                    {showBarcodeTools ? (
+                    {showBarcodeCatalog ? (
                     <Field label={t('barcode')}>
                       <input
                         className="field-input"
@@ -2144,7 +2143,7 @@ export default function Products() {
                 </div>
               )}
 
-              {inventoryOn && (
+              {showProductRecipes && (
                 <div className="space-y-2 rounded-md border border-[var(--border)] p-3">
                   <p className="text-sm font-semibold">{t('invRecipeTab')}</p>
                   <p className="text-xs muted">{t('invRecipeHint')}</p>

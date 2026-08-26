@@ -33,12 +33,18 @@ export const RESTAURANT_MODULE_ROUTES: string[] = [
   '/merchant/tables/qr',
   '/merchant/reservations',
   '/merchant/sales/reservations',
-  '/merchant/inventory/cookbook',
-  '/merchant/inventory/consumption',
   '/merchant/signage',
 ];
 
-export const RETAIL_MODULE_ROUTES: string[] = ['/merchant/storekeeper'];
+export const RETAIL_MODULE_ROUTES: string[] = [
+  '/merchant/storekeeper',
+  '/merchant/inventory',
+];
+
+export const RETAIL_INVENTORY_RECIPE_ROUTES: string[] = [
+  '/merchant/inventory/cookbook',
+  '/merchant/inventory/consumption',
+];
 
 export function normalizePanelPath(path: string): string {
   const p = String(path || '').replace(/\/$/, '') || '/merchant';
@@ -61,6 +67,11 @@ export function canAccessBusinessModuleRoute(
   const normalized = normalizePanelPath(path);
   if (module === 'retail') {
     if (RESTAURANT_MODULE_ROUTES.some((r) => normalized === r || normalized.startsWith(`${r}/`))) {
+      return false;
+    }
+    if (
+      RETAIL_INVENTORY_RECIPE_ROUTES.some((r) => normalized === r || normalized.startsWith(`${r}/`))
+    ) {
       return false;
     }
     return true;

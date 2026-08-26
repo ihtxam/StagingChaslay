@@ -89,19 +89,35 @@ ensure_env_production() {
     echo "Forced SEED_SUPERADMIN_PASSWORD=ChaslayAdmin123! (set FORCE_CHASLAY_ADMIN_BOOTSTRAP=0 to keep custom)"
   fi
 
-  # Ensure Chaslay host defaults
-  grep -qE '^DOMAIN=' "$ENV_FILE" || echo 'DOMAIN=chaslay.com' >>"$ENV_FILE"
-  grep -qE '^PUBLIC_APP_URL=' "$ENV_FILE" || echo 'PUBLIC_APP_URL=https://app.chaslay.com' >>"$ENV_FILE"
-  grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE" || echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com' >>"$ENV_FILE"
-  grep -qE '^CORS_ALLOW_ALL=' "$ENV_FILE" || echo 'CORS_ALLOW_ALL=true' >>"$ENV_FILE"
-
-  # Force known-good public URLs for this stack
-  sed -i 's|^DOMAIN=.*|DOMAIN=chaslay.com|' "$ENV_FILE"
-  sed -i 's|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=https://app.chaslay.com|' "$ENV_FILE"
-  if grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE"; then
-    sed -i 's|^PUBLIC_RECEIPT_BASE_URL=.*|PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com|' "$ENV_FILE"
+  # Host defaults — rebornsense.com stack vs legacy chaslay.com
+  local domain_val
+  domain_val="$(env_get DOMAIN "$ENV_FILE")"
+  if [[ "$domain_val" == "rebornsense.com" ]]; then
+    sed -i 's|^DOMAIN=.*|DOMAIN=rebornsense.com|' "$ENV_FILE"
+    sed -i 's|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=https://app.rebornsense.com|' "$ENV_FILE"
+    if grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE"; then
+      sed -i 's|^PUBLIC_RECEIPT_BASE_URL=.*|PUBLIC_RECEIPT_BASE_URL=https://pay.rebornsense.com|' "$ENV_FILE"
+    else
+      echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.rebornsense.com' >>"$ENV_FILE"
+    fi
+    grep -qE '^ACME_EMAIL=' "$ENV_FILE" || echo 'ACME_EMAIL=admin@rebornsense.com' >>"$ENV_FILE"
+    grep -qE '^CADDYFILE=' "$ENV_FILE" || echo 'CADDYFILE=Caddyfile.rebornsense' >>"$ENV_FILE"
+    sed -i 's|^CADDYFILE=.*|CADDYFILE=Caddyfile.rebornsense|' "$ENV_FILE"
+    echo "Rebornsense production URLs + Caddyfile.rebornsense"
   else
-    echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com' >>"$ENV_FILE"
+    grep -qE '^DOMAIN=' "$ENV_FILE" || echo 'DOMAIN=chaslay.com' >>"$ENV_FILE"
+    grep -qE '^PUBLIC_APP_URL=' "$ENV_FILE" || echo 'PUBLIC_APP_URL=https://app.chaslay.com' >>"$ENV_FILE"
+    grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE" || echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com' >>"$ENV_FILE"
+    grep -qE '^CORS_ALLOW_ALL=' "$ENV_FILE" || echo 'CORS_ALLOW_ALL=true' >>"$ENV_FILE"
+    sed -i 's|^DOMAIN=.*|DOMAIN=chaslay.com|' "$ENV_FILE"
+    sed -i 's|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=https://app.chaslay.com|' "$ENV_FILE"
+    if grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE"; then
+      sed -i 's|^PUBLIC_RECEIPT_BASE_URL=.*|PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com|' "$ENV_FILE"
+    else
+      echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com' >>"$ENV_FILE"
+    fi
+    grep -qE '^CADDYFILE=' "$ENV_FILE" || echo 'CADDYFILE=Caddyfile.chaslay' >>"$ENV_FILE"
+    sed -i 's|^CADDYFILE=.*|CADDYFILE=Caddyfile.chaslay|' "$ENV_FILE"
   fi
 
   # Recover / normalize Brevo (Sendinblue) keys from this file or legacy Chaslay envs
@@ -350,14 +366,16 @@ fi
 echo "=== Health checks ==="
 API_HEALTH="$(curl -sf http://127.0.0.1:3000/health || docker compose --env-file .env.production exec -T api wget -qO- http://127.0.0.1:3000/health || true)"
 echo "local api: ${API_HEALTH:-unreachable}"
-curl -sf https://api.chaslay.com/health || true
+DEPLOY_DOMAIN="$(grep -E '^DOMAIN=' .env.production | tail -1 | cut -d= -f2- || echo chaslay.com)"
+curl -sf "https://api.${DEPLOY_DOMAIN}/health" || true
 echo
+curl -sf -o /dev/null -w "app panel HTTP %{http_code}\n" "https://app.${DEPLOY_DOMAIN}/" || true
 
 # Print-agent download must be a real PE, not SPA HTML / JSON 404
-PRINT_HDR="$(curl -sI https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe || true)"
+PRINT_HDR="$(curl -sI "https://app.${DEPLOY_DOMAIN}/downloads/chaslay-print-agent-setup.exe" || true)"
 PRINT_LEN="$(printf '%s' "$PRINT_HDR" | awk -F': ' 'tolower($1)=="content-length"{gsub(/\r/,""); print $2; exit}')"
 PRINT_CT="$(printf '%s' "$PRINT_HDR" | awk -F': ' 'tolower($1)=="content-type"{gsub(/\r/,""); print $2; exit}')"
-PRINT_MAGIC="$(curl -sL https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
+PRINT_MAGIC="$(curl -sL "https://app.${DEPLOY_DOMAIN}/downloads/chaslay-print-agent-setup.exe" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
 echo "print-agent download: Content-Type=${PRINT_CT:-?} Content-Length=${PRINT_LEN:-?} magic=${PRINT_MAGIC:-?}"
 if [[ "${PRINT_MAGIC:-}" != "4d5a" ]] || [[ "${PRINT_LEN:-0}" -lt 1000000 ]]; then
   echo "WARNING: print-agent download is not a valid Windows EXE (expected MZ / ~40MB)"
@@ -393,9 +411,9 @@ else
 fi
 
 echo "=== Deploy complete ==="
-echo "  Admin:  https://app.chaslay.com/"
-echo "  API:    https://api.chaslay.com/health"
-echo "  Shop:   https://shop.chaslay.com/"
-echo "  Pay:    https://pay.chaslay.com/receipt/"
-echo "  Status: https://status.chaslay.com/"
+echo "  Admin:  https://app.${DEPLOY_DOMAIN}/"
+echo "  API:    https://api.${DEPLOY_DOMAIN}/health"
+echo "  Shop:   https://shop.${DEPLOY_DOMAIN}/"
+echo "  Pay:    https://pay.${DEPLOY_DOMAIN}/receipt/"
+echo "  Status: https://status.${DEPLOY_DOMAIN}/"
 echo "  Secrets: $ENV_FILE"
