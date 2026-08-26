@@ -115,7 +115,7 @@ router.get("/products/export", async (req: Request, res: Response) => {
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
-    res.setHeader("Content-Disposition", 'attachment; filename="chaslay-catalog-export.xlsx"');
+    res.setHeader("Content-Disposition", 'attachment; filename="chaslayreborn-catalog-export.xlsx"');
     res.send(buffer);
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to export catalog" });

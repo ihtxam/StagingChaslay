@@ -810,7 +810,17 @@ export default function Products() {
 
   const selectedProducts = products.filter((p) => selectedIds.includes(p.id));
 
+  const catalogProductScope = (ids?: string[]) => {
+    if (ids?.length) return products.filter((p) => ids.includes(p.id));
+    return products;
+  };
+
   const generateMissing = async (ids?: string[], useSku = false) => {
+    const scope = catalogProductScope(ids);
+    if (!scope.length) {
+      toast.error(t('catalogNoProducts'));
+      return;
+    }
     try {
       const res = await api.post('/merchant/products/barcodes/generate', {
         productIds: ids?.length ? ids : undefined,
@@ -820,7 +830,7 @@ export default function Products() {
       if (generated > 0) {
         toast.success(t('barcodeGeneratedCount').replace('{n}', String(generated)));
       } else {
-        toast(t('barcodeNoneMissing'));
+        toast.info(t('barcodeNoneMissing'));
       }
       const updated = (res.data.products || []) as Array<{ id: string; barcode: string }>;
       if (editingId) {
@@ -834,6 +844,11 @@ export default function Products() {
   };
 
   const importMissingPhotos = async (ids?: string[]) => {
+    const scope = catalogProductScope(ids);
+    if (!scope.length) {
+      toast.error(t('catalogNoProducts'));
+      return;
+    }
     setImportingPhotos(true);
     try {
       const res = await api.post('/merchant/products/photos/import-missing', {
@@ -844,7 +859,7 @@ export default function Products() {
       if (n > 0) {
         toast.success(t('productPhotosImported').replace('{n}', String(n)));
       } else {
-        toast(t('productPhotosNoneMissing'));
+        toast.info(t('productPhotosNoneMissing'));
       }
       await load();
     } catch (error: any) {
@@ -855,6 +870,10 @@ export default function Products() {
   };
 
   const openPrintFor = (list: Array<Pick<Product, 'id' | 'name' | 'barcode' | 'price' | 'sku'>>) => {
+    if (!list.length) {
+      toast.error(t(products.length ? 'noProductsFound' : 'catalogNoProducts'));
+      return;
+    }
     const withCodes = list.filter((p) => String(p.barcode || '').trim());
     if (!withCodes.length) {
       toast.error(t('barcodePrintNone'));
@@ -933,7 +952,7 @@ export default function Products() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'chaslay-catalog-export.xlsx';
+      a.download = 'chaslayreborn-catalog-export.xlsx';
       a.click();
       window.URL.revokeObjectURL(url);
       toast.success(t('exportCatalogSuccess'));
