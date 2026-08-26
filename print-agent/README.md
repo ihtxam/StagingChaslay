@@ -6,7 +6,7 @@ Local HTTP service (`http://127.0.0.1:9101`) used by WebPOS for silent ESC/POS R
 
 1. Download **Chaslay Print Agent** from the merchant dashboard:
    - **Settings ? Receipts & printers ? Download Print Agent**
-   - Or open: `https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe`
+   - Or open: `https://app.chaslay.com/downloads/chaslayreborn-print-agent-setup.exe`
      (same file via `https://api.chaslay.com/downloads/...`)
 2. Run the setup EXE once.
 3. It installs to `%LOCALAPPDATA%\ChaslayPrintAgent\`, registers **Windows Startup**, and starts the agent.
@@ -15,7 +15,7 @@ Local HTTP service (`http://127.0.0.1:9101`) used by WebPOS for silent ESC/POS R
 ### Manual CLI
 
 ```bat
-chaslay-print-agent-setup.exe
+chaslayreborn-print-agent-setup.exe
 REM or:
 chaslay-print-agent.exe --install
 chaslay-print-agent.exe --uninstall
@@ -44,8 +44,8 @@ Outputs:
 | File | Purpose |
 |------|---------|
 | `dist/chaslay-print-agent.exe` | Runtime agent |
-| `dist/chaslay-print-agent-setup.exe` | Same binary; double-click installs + auto-start |
-| `backend/public/downloads/chaslay-print-agent-setup.exe` | Served by API at `/downloads/...` (gitignored; deploy rebuilds) |
+| `dist/chaslayreborn-print-agent-setup.exe` | Same binary; double-click installs + auto-start |
+| `backend/public/downloads/chaslayreborn-print-agent-setup.exe` | Served by API at `/downloads/...` (gitignored; deploy rebuilds) |
 
 **Deploy note:** EXEs are not in git. `scripts/deploy-hetzner.sh` cross-compiles with `pkg` and bind-mounts `backend/public/downloads` into the API container. See `backend/public/downloads/README.md`.
 

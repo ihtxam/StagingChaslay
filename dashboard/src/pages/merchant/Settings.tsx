@@ -46,6 +46,7 @@ import {
   listScalePorts,
   type AgentPrinter,
 } from '@/lib/print-agent';
+import { printAgentDownloadUrl } from '@/lib/print-agent-platform';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { compressImageIfNeeded } from '@/lib/compress-image';
 import {
@@ -3580,21 +3581,7 @@ export default function Settings() {
                 <div className="flex flex-wrap items-center gap-3">
                   <a
                     className="btn-primary inline-flex"
-                    href={
-                      // Production dashboard uses VITE_API_URL=/api → same-origin /downloads/*
-                      // (Caddy proxies /downloads to the API; never hit SPA index.html).
-                      // Absolute API hosts (local / custom) keep their origin.
-                      (() => {
-                        const api = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(
-                          /\/api\/?$/,
-                          ''
-                        );
-                        if (!api || api.startsWith('/')) {
-                          return '/downloads/chaslay-print-agent-setup.exe';
-                        }
-                        return `${api}/downloads/chaslay-print-agent-setup.exe`;
-                      })()
-                    }
+                    href={printAgentDownloadUrl()}
                     download
                   >
                     {t('downloadPrintAgent')}

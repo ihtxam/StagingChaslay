@@ -20,13 +20,13 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "pkg build (agent) failed" }
 
   Write-Host "==> Building setup EXE (same binary; auto-installs when filename contains 'setup')..."
-  Copy-Item -Force (Join-Path $Dist "chaslay-print-agent.exe") (Join-Path $Dist "chaslay-print-agent-setup.exe")
+  Copy-Item -Force (Join-Path $Dist "chaslay-print-agent.exe") (Join-Path $Dist "chaslayreborn-print-agent-setup.exe")
 
   # Companion script for portable installs
   Copy-Item -Force (Join-Path $Root "win-raw-print.ps1") (Join-Path $Dist "win-raw-print.ps1")
 
-  $setupSrc = Join-Path $Dist "chaslay-print-agent-setup.exe"
-  $setupDest = Join-Path $Downloads "chaslay-print-agent-setup.exe"
+  $setupSrc = Join-Path $Dist "chaslayreborn-print-agent-setup.exe"
+  $setupDest = Join-Path $Downloads "chaslayreborn-print-agent-setup.exe"
 
   # Reject empty / non-PE output (would surface as "corrupted" on Windows)
   $bytes = [System.IO.File]::ReadAllBytes($setupSrc)
@@ -41,20 +41,20 @@ try {
   # Write a small version marker for the dashboard
   @"
 {
-  "name": "chaslay-print-agent",
+  "name": "chaslayreborn-print-agent",
   "version": "1.3.1",
-  "setupFile": "chaslay-print-agent-setup.exe",
+  "setupFile": "chaslayreborn-print-agent-setup.exe",
   "builtAt": "$(Get-Date -Format o)",
   "platform": "win32-x64",
   "signed": false
 }
-"@ | Set-Content -Encoding utf8 (Join-Path $Downloads "chaslay-print-agent.json")
+"@ | Set-Content -Encoding utf8 (Join-Path $Downloads "chaslayreborn-print-agent.json")
 
   Write-Host ""
   Write-Host "Build complete."
   Write-Host "  Agent:  $(Join-Path $Dist 'chaslay-print-agent.exe')"
   Write-Host "  Setup:  $setupDest ($([math]::Round($bytes.Length/1MB, 1)) MB, MZ OK)"
-  Write-Host "  URL:    /downloads/chaslay-print-agent-setup.exe"
+  Write-Host "  URL:    /downloads/chaslayreborn-print-agent-setup.exe"
   Write-Host ""
   Write-Host "Note: EXE is unsigned. Windows SmartScreen may warn on first run."
   Write-Host "Deploy: push these fixes, then run scripts/deploy-hetzner.sh on Hetzner"
