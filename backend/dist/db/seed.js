@@ -204,67 +204,167 @@ async function seedDemoShop() {
     });
     if (existingCats.length > 0) {
         console.log("Demo catalog already present");
+    }
+    else {
+        const catFood = (await db
+            .insert(index_1.schema.categories)
+            .values({
+            merchantId: merchant.id,
+            name: "Food",
+            sortOrder: 1,
+            color: "#F97316",
+            clientId: "cat-food",
+        })
+            .returning())[0];
+        const catDrinks = (await db
+            .insert(index_1.schema.categories)
+            .values({
+            merchantId: merchant.id,
+            name: "Drinks",
+            sortOrder: 2,
+            color: "#0EA5E9",
+            clientId: "cat-drinks",
+        })
+            .returning())[0];
+        await db.insert(index_1.schema.products).values([
+            {
+                merchantId: merchant.id,
+                categoryId: catFood.id,
+                name: "Cheeseburger",
+                description: "Beef patty, cheese, house sauce",
+                price: "12.50",
+                stock: 100,
+                isActive: true,
+                isTaxable: true,
+                clientId: "prod-burger",
+                sku: "BURGER-01",
+            },
+            {
+                merchantId: merchant.id,
+                categoryId: catFood.id,
+                name: "Fries",
+                description: "Crispy fries",
+                price: "5.00",
+                stock: 100,
+                isActive: true,
+                isTaxable: true,
+                clientId: "prod-fries",
+                sku: "FRIES-01",
+            },
+            {
+                merchantId: merchant.id,
+                categoryId: catDrinks.id,
+                name: "Cola",
+                description: "0.33L",
+                price: "3.50",
+                stock: 100,
+                isActive: true,
+                isTaxable: true,
+                clientId: "prod-cola",
+                sku: "COLA-01",
+            },
+        ]);
+        console.log("Seeded demo categories + products");
+    }
+    await seedDemoInventoryBundle(merchant.id);
+    await seedDemoDeliveryStaff(merchant.id);
+}
+async function seedDemoInventoryBundle(merchantId) {
+    if (process.env.SEED_DEMO_INVENTORY === "false") {
+        console.log("SEED_DEMO_INVENTORY=false — skipping demo inventory");
         return;
     }
-    const catFood = (await db
-        .insert(index_1.schema.categories)
-        .values({
-        merchantId: merchant.id,
-        name: "Food",
-        sortOrder: 1,
-        color: "#F97316",
-        clientId: "cat-food",
+    const { writeInventoryAddonEnabled } = await Promise.resolve().then(() => __importStar(require("../lib/inventory-addon")));
+    await writeInventoryAddonEnabled(merchantId, true);
+    const db = (0, index_1.getDb)();
+    const { DemoCatalogService } = await Promise.resolve().then(() => __importStar(require("../services/demo-catalog.service")));
+    const { DemoInventoryService } = await Promise.resolve().then(() => __importStar(require("../services/demo-inventory.service")));
+    const demoProd = await db.query.products.findFirst({
+        where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(index_1.schema.products.merchantId, merchantId), (0, drizzle_orm_1.like)(index_1.schema.products.clientId, "demo-prod-%")),
+    });
+    if (!demoProd) {
+        try {
+            const catResult = await DemoCatalogService.importDemo(merchantId, {
+                mode: "merge",
+                force: true,
+            });
+            console.log(`Seeded demo café catalog: ${catResult.productsCreated} products, ${catResult.categoriesCreated} categories`);
+        }
+        catch (err) {
+            console.warn("Demo catalog import skipped:", err instanceof Error ? err.message : err);
+        }
+    }
+    try {
+        if (!(await DemoInventoryService.hasDemoData(merchantId))) {
+            const inv = await DemoInventoryService.importDemo(merchantId);
+            console.log(`Seeded demo inventory: ${inv.itemsCreated} items, ${inv.recipesCreated} recipe lines, ${inv.stockMovementsCreated} movements`);
+        }
+        else {
+            console.log("Demo inventory already present");
+        }
+    }
+    catch (err) {
+        console.warn("Demo inventory import skipped:", err instanceof Error ? err.message : err);
+    }
+}
+async function seedDemoDeliveryStaff(merchantId) {
+    if (process.env.SEED_DEMO_DELIVERY === "false") {
+        console.log("SEED_DEMO_DELIVERY=false — skipping demo delivery drivers");
+        return;
+    }
+    const db = (0, index_1.getDb)();
+    const baseLat = 47.3769;
+    const baseLng = 8.5417;
+    if (!merchantId)
+        return;
+    await db
+        .update(index_1.schema.merchants)
+        .set({
+        latitude: String(baseLat),
+        longitude: String(baseLng),
+        updatedAt: new Date(),
     })
-        .returning())[0];
-    const catDrinks = (await db
-        .insert(index_1.schema.categories)
-        .values({
-        merchantId: merchant.id,
-        name: "Drinks",
-        sortOrder: 2,
-        color: "#0EA5E9",
-        clientId: "cat-drinks",
-    })
-        .returning())[0];
-    await db.insert(index_1.schema.products).values([
-        {
-            merchantId: merchant.id,
-            categoryId: catFood.id,
-            name: "Cheeseburger",
-            description: "Beef patty, cheese, house sauce",
-            price: "12.50",
-            stock: 100,
-            isActive: true,
-            isTaxable: true,
-            clientId: "prod-burger",
-            sku: "BURGER-01",
-        },
-        {
-            merchantId: merchant.id,
-            categoryId: catFood.id,
-            name: "Fries",
-            description: "Crispy fries",
-            price: "5.00",
-            stock: 100,
-            isActive: true,
-            isTaxable: true,
-            clientId: "prod-fries",
-            sku: "FRIES-01",
-        },
-        {
-            merchantId: merchant.id,
-            categoryId: catDrinks.id,
-            name: "Cola",
-            description: "0.33L",
-            price: "3.50",
-            stock: 100,
-            isActive: true,
-            isTaxable: true,
-            clientId: "prod-cola",
-            sku: "COLA-01",
-        },
-    ]);
-    console.log("Seeded demo categories + products");
+        .where((0, drizzle_orm_1.eq)(index_1.schema.merchants.id, merchantId));
+    const { StaffService } = await Promise.resolve().then(() => __importStar(require("../services/staff.service")));
+    const { DeliveryTrackingService } = await Promise.resolve().then(() => __importStar(require("../services/delivery-tracking.service")));
+    await StaffService.ensureDefaultRoles(merchantId);
+    const deliveryRole = await db.query.merchantRoles.findFirst({
+        where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(index_1.schema.merchantRoles.merchantId, merchantId), (0, drizzle_orm_1.eq)(index_1.schema.merchantRoles.name, "Delivery")),
+    });
+    if (!deliveryRole)
+        return;
+    const existing = await db.query.merchantStaff.findMany({
+        where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(index_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.eq)(index_1.schema.merchantStaff.roleId, deliveryRole.id)),
+    });
+    const drivers = [];
+    const demoNames = ["Alex (demo driver)", "Sam (demo driver)"];
+    for (let i = 0; i < demoNames.length; i++) {
+        const name = demoNames[i];
+        let staff = existing.find((s) => s.name === name);
+        if (!staff) {
+            try {
+                staff = await StaffService.createStaff(merchantId, {
+                    name,
+                    roleId: deliveryRole.id,
+                    pin: String(4000 + i),
+                });
+                console.log(`Seeded demo delivery driver ${name} (PIN ${4000 + i})`);
+            }
+            catch (err) {
+                console.warn(`Demo driver ${name} skipped:`, err instanceof Error ? err.message : err);
+                continue;
+            }
+        }
+        drivers.push({
+            staffId: staff.id,
+            lat: baseLat + 0.006 * (i + 1),
+            lng: baseLng + 0.005 * (i + 1),
+        });
+    }
+    if (drivers.length) {
+        await DeliveryTrackingService.seedDemoDriverLocations(merchantId, drivers);
+        console.log(`Seeded ${drivers.length} demo delivery driver map positions`);
+    }
 }
 async function seedEditionsAndReseller() {
     const { EditionService } = await Promise.resolve().then(() => __importStar(require("../services/edition.service")));

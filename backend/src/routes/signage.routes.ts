@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchantAccess, setMerchantContext } from "@/middleware/auth.middleware";
+import { requireRestaurantModule } from "@/middleware/business-module.middleware";
 import { SignageLicenseError, SignageService } from "@/services/signage.service";
 
 const router = Router();
@@ -27,6 +28,7 @@ const merchantRouter = Router();
 merchantRouter.use(verifyToken);
 merchantRouter.use(requireMerchantAccess);
 merchantRouter.use(setMerchantContext);
+merchantRouter.use(requireRestaurantModule);
 
 merchantRouter.get("/overview", async (req: Request, res: Response) => {
   try {

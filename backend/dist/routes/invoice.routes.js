@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isInvoicePaymentMethod = void 0;
 exports.merchantListInvoices = merchantListInvoices;
+exports.merchantEmailInvoice = merchantEmailInvoice;
 exports.merchantInvoicePdf = merchantInvoicePdf;
 exports.merchantRecordInvoicePayment = merchantRecordInvoicePayment;
 exports.chaslayInvoiceRouter = chaslayInvoiceRouter;
@@ -31,6 +32,22 @@ async function merchantListInvoices(req, res) {
     catch (error) {
         const msg = error instanceof Error ? error.message : "Failed to list invoices";
         res.status(400).json({ error: msg });
+    }
+}
+/** POST /api/merchant/orders/:orderId/email-invoice */
+async function merchantEmailInvoice(req, res) {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const to = req.body?.to ? String(req.body.to).trim() : undefined;
+        const result = await invoice_service_1.InvoiceService.sendEmail(merchantId, String(req.params.orderId), { to });
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        const msg = error instanceof Error ? error.message : "Failed to email invoice";
+        const code = msg === "Order not found" ? 404 : 400;
+        res.status(code).json({ error: msg });
     }
 }
 /** GET /api/merchant/orders/:orderId/invoice.pdf */

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DeliveryPlatformService = void 0;
 const crypto_1 = require("crypto");
@@ -422,9 +455,17 @@ class DeliveryPlatformService {
         }
         await DeliveryPlatformService.enqueueAutoPrint(merchantId, order.id, source, {
             printKitchen: status === "preparing",
-            printNotification: status !== "preparing",
-            printReceipt: order.paymentStatus === "completed" || order.paymentStatus === "paid",
+            printDeliveryReceipt: channel === "delivery",
+            printNotification: channel !== "delivery" && status !== "preparing",
+            printReceipt: channel !== "delivery" &&
+                (order.paymentStatus === "completed" || order.paymentStatus === "paid"),
         });
+        if (status === "preparing") {
+            void Promise.resolve().then(() => __importStar(require("@/services/kitchen-ingress.service"))).then(({ enterKitchenFromOrder }) => enterKitchenFromOrder(merchantId, order.id, {
+                orderSource: source,
+            }))
+                .catch(() => { });
+        }
         return { order, created: true };
     }
     static async enqueueAutoPrint(merchantId, orderId, orderSource, opts) {
@@ -440,8 +481,9 @@ class DeliveryPlatformService {
             !(0, pos_checkout_settings_1.isRetailPosMode)(merchant.posCheckoutSettings) &&
             printSettings.autoPrintKitchen !== false;
         const printReceipt = opts?.printReceipt === true && printSettings.autoPrintReceipt !== false;
+        const printDeliveryReceipt = opts?.printDeliveryReceipt === true;
         const printNotification = opts?.printNotification === true;
-        if (!printKitchen && !printReceipt && !printNotification)
+        if (!printKitchen && !printReceipt && !printDeliveryReceipt && !printNotification)
             return;
         await chaslay_floor_service_1.ChaslayFloorService.createPrintJob(merchantId, {
             jobType: "ESCPOS",
@@ -450,6 +492,7 @@ class DeliveryPlatformService {
                 orderId,
                 printKitchen,
                 printReceipt,
+                printDeliveryReceipt,
                 printNotification,
                 orderSource,
             },

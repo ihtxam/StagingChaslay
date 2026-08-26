@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.signageMerchantRoutes = void 0;
 const express_1 = require("express");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
+const business_module_middleware_1 = require("@/middleware/business-module.middleware");
 const signage_service_1 = require("@/services/signage.service");
 const router = (0, express_1.Router)();
 function sendError(res, error, fallback) {
@@ -28,6 +29,7 @@ exports.signageMerchantRoutes = merchantRouter;
 merchantRouter.use(auth_middleware_1.verifyToken);
 merchantRouter.use(auth_middleware_1.requireMerchantAccess);
 merchantRouter.use(auth_middleware_1.setMerchantContext);
+merchantRouter.use(business_module_middleware_1.requireRestaurantModule);
 merchantRouter.get("/overview", async (req, res) => {
     try {
         const overview = await signage_service_1.SignageService.overview(req.merchantId);

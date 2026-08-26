@@ -45,6 +45,7 @@ const auth_service_1 = require("./auth.service");
 const chaslay_compat_service_1 = require("./chaslay-compat.service");
 const ensure_licenses_schema_1 = require("@/lib/ensure-licenses-schema");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
+const business_module_1 = require("@/lib/business-module");
 const inventory_addon_1 = require("@/lib/inventory-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
@@ -259,6 +260,7 @@ class MerchantService {
                     slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
                 }
             }
+            const lockedModule = (0, business_module_1.normalizeBusinessModule)(options?.businessCategory);
             const merchant = await db
                 .insert(db_1.schema.merchants)
                 .values({
@@ -278,6 +280,7 @@ class MerchantService {
                 syncApiKey: (0, chaslay_compat_service_1.generateSyncApiKey)(),
                 editionId: options?.editionId || null,
                 resellerId: options?.resellerId || null,
+                businessCategory: lockedModule,
                 maxPosPosts: normalizePosPostLimit(options?.maxPosPosts ?? 0),
                 maxWaiterPosts: normalizePosPostLimit(options?.maxWaiterPosts ?? 0),
                 inventoryAddonEnabled: options?.inventoryAddonEnabled === true,
@@ -290,7 +293,16 @@ class MerchantService {
             const created = merchant[0];
             if (options?.editionId) {
                 const { EditionService } = await Promise.resolve().then(() => __importStar(require("./edition.service")));
-                await EditionService.applyEditionDefaultsToMerchant(created.id, options.editionId);
+                await EditionService.applyEditionDefaultsToMerchant(created.id, options.editionId, {
+                    businessCategory: lockedModule || options?.businessCategory,
+                });
+            }
+            else if (lockedModule) {
+                const modulePatch = (0, business_module_1.businessModuleMerchantPatch)(lockedModule, {});
+                await db
+                    .update(db_1.schema.merchants)
+                    .set(modulePatch)
+                    .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, created.id));
             }
             else if (options?.businessCategory === "retail") {
                 const checkout = created.posCheckoutSettings && typeof created.posCheckoutSettings === "object"

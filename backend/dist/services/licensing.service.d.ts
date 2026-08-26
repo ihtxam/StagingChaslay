@@ -134,6 +134,7 @@ export declare class LicensingService {
             updatedAt: Date;
             phone: string | null;
             status: string;
+            businessCategory: string | null;
             businessLicense: string | null;
             address: string | null;
             city: string | null;
@@ -172,6 +173,9 @@ export declare class LicensingService {
             deliveryEtaMinutes: number | null;
             minPreOrderDelayMinutes: number | null;
             deliveryMenuMarkup: string | null;
+            deliveryDriverPayMode: string;
+            deliveryDriverHourlyRate: string | null;
+            deliveryPerOrderFee: string | null;
             adyenMerchantAccount: string | null;
             adyenApiKey: string | null;
             adyenClientId: string | null;
@@ -208,6 +212,8 @@ export declare class LicensingService {
             inventoryAddonEnabled: boolean;
             signageAddonEnabled: boolean;
             signageScreenLimit: number;
+            kdsAddonEnabled: boolean;
+            odsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             posColorTheme: string;
@@ -216,6 +222,7 @@ export declare class LicensingService {
             vacationSettings: schema.VacationSettings | null;
             emailSmtpSettings: schema.MerchantSmtpSettings | null;
             emailBrevoSettings: schema.MerchantBrevoSettings | null;
+            emailDeliveryMode: string;
             marketingSettings: schema.MarketingSettings | null;
             reportEmailSettings: schema.ReportEmailSettings | null;
             posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;

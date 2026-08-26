@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
+const business_module_middleware_1 = require("@/middleware/business-module.middleware");
 const inventory_service_1 = require("@/services/inventory.service");
 const demo_inventory_service_1 = require("@/services/demo-inventory.service");
 const router = (0, express_1.Router)();
@@ -185,7 +186,7 @@ router.get("/low-stock", async (req, res) => {
         handleError(res, error, "Failed to load low stock");
     }
 });
-router.get("/usage", async (req, res) => {
+router.get("/usage", business_module_middleware_1.requireRestaurantModule, async (req, res) => {
     try {
         const days = Number(req.query.days) || 30;
         const rows = await inventory_service_1.InventoryService.usageReport(req.merchantId, days);
@@ -370,7 +371,7 @@ router.get("/purchase-report", async (req, res) => {
         handleError(res, error, "Failed to load purchase report");
     }
 });
-router.get("/cookbook", async (req, res) => {
+router.get("/cookbook", business_module_middleware_1.requireRestaurantModule, async (req, res) => {
     try {
         const entries = await inventory_service_1.InventoryService.listCookbook(req.merchantId);
         res.json({ success: true, entries });
@@ -379,7 +380,7 @@ router.get("/cookbook", async (req, res) => {
         handleError(res, error, "Failed to load cookbook");
     }
 });
-router.get("/products/:productId/recipe", async (req, res) => {
+router.get("/products/:productId/recipe", business_module_middleware_1.requireRestaurantModule, async (req, res) => {
     try {
         const recipe = await inventory_service_1.InventoryService.getRecipe(req.merchantId, req.params.productId);
         res.json({ success: true, recipe });
@@ -388,7 +389,7 @@ router.get("/products/:productId/recipe", async (req, res) => {
         handleError(res, error, "Failed to load recipe");
     }
 });
-router.put("/products/:productId/recipe", async (req, res) => {
+router.put("/products/:productId/recipe", business_module_middleware_1.requireRestaurantModule, async (req, res) => {
     try {
         const recipe = await inventory_service_1.InventoryService.setRecipe(req.merchantId, req.params.productId, req.body?.lines || [], req.body?.recipeYield != null ? Number(req.body.recipeYield) : undefined);
         res.json({ success: true, recipe });

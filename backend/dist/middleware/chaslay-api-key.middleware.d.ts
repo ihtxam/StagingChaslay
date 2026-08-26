@@ -22,6 +22,7 @@ export declare function resolveChaslayMerchantBySlug(slug?: string | null): Prom
     updatedAt: Date;
     phone: string | null;
     status: string;
+    businessCategory: string | null;
     businessLicense: string | null;
     address: string | null;
     city: string | null;
@@ -60,6 +61,9 @@ export declare function resolveChaslayMerchantBySlug(slug?: string | null): Prom
     deliveryEtaMinutes: number | null;
     minPreOrderDelayMinutes: number | null;
     deliveryMenuMarkup: string | null;
+    deliveryDriverPayMode: string;
+    deliveryDriverHourlyRate: string | null;
+    deliveryPerOrderFee: string | null;
     adyenMerchantAccount: string | null;
     adyenApiKey: string | null;
     adyenClientId: string | null;
@@ -96,6 +100,8 @@ export declare function resolveChaslayMerchantBySlug(slug?: string | null): Prom
     inventoryAddonEnabled: boolean;
     signageAddonEnabled: boolean;
     signageScreenLimit: number;
+    kdsAddonEnabled: boolean;
+    odsAddonEnabled: boolean;
     inventoryWasteFactor: string;
     inventoryAutoReorderEmailEnabled: boolean;
     posColorTheme: string;
@@ -104,6 +110,7 @@ export declare function resolveChaslayMerchantBySlug(slug?: string | null): Prom
     vacationSettings: schema.VacationSettings | null;
     emailSmtpSettings: schema.MerchantSmtpSettings | null;
     emailBrevoSettings: schema.MerchantBrevoSettings | null;
+    emailDeliveryMode: string;
     marketingSettings: schema.MarketingSettings | null;
     reportEmailSettings: schema.ReportEmailSettings | null;
     posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;

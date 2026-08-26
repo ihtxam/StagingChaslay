@@ -46,5 +46,26 @@ export declare class PlatformLogService {
         limit: number;
         total: number;
     }>;
+    /** POS / Android diagnostic reports — superadmin System Logs only, never support tickets. */
+    static writeMerchantDiagnostic(merchantId: string, input: {
+        source: "webpos" | "android";
+        subject: string;
+        body: string;
+        auto?: boolean;
+        authorName?: string;
+        actorId?: string | null;
+        resellerId?: string | null;
+    }): Promise<{
+        id: string;
+        createdAt: Date;
+        resellerId: string | null;
+        merchantId: string | null;
+        message: string;
+        category: string;
+        level: string;
+        metadata: Record<string, unknown> | null;
+        actorRole: string | null;
+        actorId: string | null;
+    }>;
 }
 //# sourceMappingURL=platform-log.service.d.ts.map

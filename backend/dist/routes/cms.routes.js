@@ -141,5 +141,47 @@ router.delete("/pages/:pageId", async (req, res) => {
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete page" });
     }
 });
+/**
+ * GET /api/merchant/cms/catalog — lightweight product/category list for homepage builder blocks
+ */
+router.get("/catalog", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const db = (0, db_1.getDb)();
+        const [categories, products] = await Promise.all([
+            db.query.categories.findMany({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchantId),
+                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.categories.sortOrder), (0, drizzle_orm_1.asc)(db_1.schema.categories.name)],
+                columns: { id: true, name: true },
+            }),
+            db.query.products.findMany({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId),
+                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.products.name)],
+                columns: {
+                    id: true,
+                    name: true,
+                    categoryId: true,
+                    price: true,
+                    imageUrl: true,
+                },
+                limit: 5000,
+            }),
+        ]);
+        res.json({
+            success: true,
+            categories,
+            products: products.map((p) => ({
+                id: p.id,
+                name: p.name,
+                categoryId: p.categoryId,
+                price: p.price,
+                image: p.imageUrl,
+            })),
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load catalog" });
+    }
+});
 exports.default = router;
 //# sourceMappingURL=cms.routes.js.map

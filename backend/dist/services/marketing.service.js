@@ -108,6 +108,7 @@ function htmlWrap(body) {
     const content = looksHtml ? body : body.replace(/\n/g, "<br/>");
     return `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#1c1917;max-width:560px;margin:0 auto;padding:24px">${content}</body></html>`;
 }
+/** Normalize audience/selected email payloads from API bodies or JSON columns. */
 function normalizeAudienceMode(raw) {
     return String(raw || "")
         .trim()
@@ -393,6 +394,7 @@ class MarketingService {
                         businessName: merchant.name || "us",
                     }),
                     html: htmlWrap(html),
+                    emailType: "newsletter",
                 });
                 sent += 1;
                 await db.insert(db_1.schema.marketingEmailLog).values({
@@ -514,6 +516,7 @@ class MarketingService {
                         to: email,
                         subject,
                         html: htmlWrap(body),
+                        emailType: "reorder_reminder",
                     });
                     await db
                         .update(db_1.schema.customers)

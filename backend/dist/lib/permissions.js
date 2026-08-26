@@ -19,6 +19,7 @@ exports.PERMISSIONS = [
     "MANAGE_TABLES",
     "TAKEAWAY_ORDERS",
     "DELIVERY_ORDERS",
+    "VIEW_DELIVERY_TRACKING",
     "VIEW_ORDER_HISTORY",
     "CANCEL_ORDERS",
     "REFUND_ORDERS",
@@ -76,6 +77,7 @@ exports.DEFAULT_ROLE_TEMPLATES = [
             "MANAGE_TABLES",
             "TAKEAWAY_ORDERS",
             "DELIVERY_ORDERS",
+            "VIEW_DELIVERY_TRACKING",
             "VIEW_ORDER_HISTORY",
             "CANCEL_ORDERS",
             "REFUND_ORDERS",
@@ -106,7 +108,6 @@ exports.DEFAULT_ROLE_TEMPLATES = [
             "MANAGE_TABLES",
             "TAKEAWAY_ORDERS",
             "VIEW_ORDER_HISTORY",
-            "CANCEL_ORDERS",
             "MANAGE_PRODUCTS",
         ],
     },
@@ -124,7 +125,6 @@ exports.DEFAULT_ROLE_TEMPLATES = [
             "MANAGE_TABLES",
             "TAKEAWAY_ORDERS",
             "VIEW_ORDER_HISTORY",
-            "CANCEL_ORDERS",
             "MANAGE_PRODUCTS",
         ],
     },
@@ -132,7 +132,7 @@ exports.DEFAULT_ROLE_TEMPLATES = [
         name: "Delivery",
         isSystem: true,
         sortOrder: 30,
-        permissions: ["USE_POS", "DELIVERY_ORDERS", "VIEW_ORDER_HISTORY", "SEND_KITCHEN", "PROCESS_PAYMENTS"],
+        permissions: ["DELIVERY_ORDERS"],
     },
     {
         name: "User",
@@ -240,7 +240,6 @@ exports.STAFF_MERCHANT_ENTRY_PERMISSIONS = [
 const WAITER_PRIVILEGED_BLOCKED = [
     "VIEW_REPORTS",
     "VIEW_ALL_SALES",
-    "END_OF_DAY",
     "ACCESS_PANEL",
     "OPEN_CASH_DRAWER",
     "MANAGE_SETTINGS",
@@ -252,6 +251,7 @@ const WAITER_PRIVILEGED_BLOCKED = [
     "MANAGE_OFFERS",
     "MANAGE_ONLINE_SHOP",
     "REFUND_ORDERS",
+    "CANCEL_ORDERS",
 ];
 /** Classify system Waiter templates. Custom roles are not matched. */
 function waiterSystemKind(name) {
@@ -263,7 +263,7 @@ function waiterSystemKind(name) {
     return "pos-only";
 }
 function waiterBlockedPermissions(_kind) {
-    // Menu (MANAGE_PRODUCTS) and Orders (VIEW_ORDER_HISTORY) are assigned in Roles.
+    // Menu (MANAGE_PRODUCTS), orders, and own-sales EOD (END_OF_DAY) stay role-assigned.
     return [...WAITER_PRIVILEGED_BLOCKED];
 }
 //# sourceMappingURL=permissions.js.map

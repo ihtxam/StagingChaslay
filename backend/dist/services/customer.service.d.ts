@@ -226,6 +226,10 @@ export declare class CustomerService {
             adyenCashierReceiptJson: string | null;
             notes: string | null;
             shippingAddress: string | null;
+            deliveryLatitude: string | null;
+            deliveryLongitude: string | null;
+            assignedDeliveryStaffId: string | null;
+            deliveryTrackingToken: string | null;
             deliveryZoneId: string | null;
             scheduledFor: Date | null;
             customerName: string | null;

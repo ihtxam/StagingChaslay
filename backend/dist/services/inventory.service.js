@@ -816,6 +816,7 @@ class InventoryService {
                 subject,
                 text,
                 html: `<p>${text.replace(/\n/g, "<br/>")}</p>`,
+                emailType: "inventory_reorder",
             });
             await db
                 .update(db_1.schema.inventorySuppliers)

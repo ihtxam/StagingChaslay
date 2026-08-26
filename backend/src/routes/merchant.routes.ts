@@ -7,6 +7,7 @@ import {
   setMerchantContext,
   requirePermission,
 } from "@/middleware/auth.middleware";
+import { requireRetailModule } from "@/middleware/business-module.middleware";
 import { ProductService } from "@/services/product.service";
 import { CategoryService } from "@/services/category.service";
 import { isValidHexColor, normalizeHexColor } from "@/lib/category-colors";
@@ -127,7 +128,7 @@ router.get("/products/export", async (req: Request, res: Response) => {
  * Assign numeric-only barcodes (12-digit 20 + 10 internal series) to products missing a barcode.
  * Never overwrites existing EAN/UPC or other barcodes. Optional useSku only if SKU is 8–12 digits.
  */
-router.post("/products/barcodes/generate", async (req: Request, res: Response) => {
+router.post("/products/barcodes/generate", requireRetailModule, async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });

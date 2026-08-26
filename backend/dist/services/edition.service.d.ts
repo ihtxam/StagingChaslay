@@ -1,5 +1,6 @@
 import { schema } from "@/db";
 import { type EditionFeatureKey } from "@/lib/edition-features";
+import { type BusinessModule } from "@/lib/business-module";
 export type EditionRow = typeof schema.editions.$inferSelect;
 export declare class EditionService {
     static ensureDefaults(): Promise<void>;
@@ -103,7 +104,9 @@ export declare class EditionService {
     }>;
     /** Features for a merchant; null means legacy full access */
     static getMerchantFeatures(merchantId: string): Promise<EditionFeatureKey[] | null>;
-    static applyEditionDefaultsToMerchant(merchantId: string, editionId: string): Promise<void>;
+    static applyEditionDefaultsToMerchant(merchantId: string, editionId: string, opts?: {
+        businessCategory?: BusinessModule | "retail" | "restaurant";
+    }): Promise<void>;
     static getLegacyFullEditionId(): Promise<string | null>;
 }
 //# sourceMappingURL=edition.service.d.ts.map

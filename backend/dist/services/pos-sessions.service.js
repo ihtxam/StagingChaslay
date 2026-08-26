@@ -37,6 +37,7 @@ class PosSessionsService {
             deviceLabel: r.deviceLabel,
             staffId: r.staffId,
             staffName: r.staffName,
+            printAgentOnline: r.printAgentOnline ?? null,
             lastHeartbeat: r.lastHeartbeat,
             createdAt: r.createdAt,
         }));
@@ -113,7 +114,7 @@ class PosSessionsService {
             kickedSessionIds,
         };
     }
-    static async heartbeat(merchantId, sessionId) {
+    static async heartbeat(merchantId, sessionId, opts) {
         const db = (0, db_1.getDb)();
         const row = await db.query.posSessions.findFirst({
             where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.posSessions.id, sessionId), (0, drizzle_orm_1.eq)(db_1.schema.posSessions.merchantId, merchantId), (0, drizzle_orm_1.isNull)(db_1.schema.posSessions.revokedAt)),
@@ -122,9 +123,20 @@ class PosSessionsService {
             throw new Error("POS session expired or revoked");
         }
         const now = new Date();
+        const patch = {
+            lastHeartbeat: now,
+        };
+        if (opts && "printAgentOnline" in opts) {
+            patch.printAgentOnline =
+                opts.printAgentOnline === true
+                    ? true
+                    : opts.printAgentOnline === false
+                        ? false
+                        : null;
+        }
         await db
             .update(db_1.schema.posSessions)
-            .set({ lastHeartbeat: now })
+            .set(patch)
             .where((0, drizzle_orm_1.eq)(db_1.schema.posSessions.id, sessionId));
         return { ok: true, lastHeartbeat: now };
     }

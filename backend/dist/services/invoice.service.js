@@ -341,6 +341,52 @@ class InvoiceService {
         }
         return updated;
     }
+    /** Email invoice PDF to customer (uses platform Brevo when delivery mode is platform). */
+    static async sendEmail(merchantId, orderRef, opts) {
+        const db = (0, db_1.getDb)();
+        const order = await this.findOrder(merchantId, orderRef);
+        if (!order)
+            throw new Error("Order not found");
+        const to = String(opts?.to || order.customerEmail || order.customer?.email || "").trim();
+        if (!to)
+            throw new Error("No customer email on this invoice");
+        const merchant = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { name: true, panelLanguage: true },
+        });
+        if (!merchant)
+            throw new Error("Merchant not found");
+        const pdf = await this.renderPdf(merchantId, order.id);
+        const shop = String(merchant.name || "Shop");
+        const lang = langOf(merchant.panelLanguage);
+        const subject = lang === "fr"
+            ? `Facture ${pdf.invoiceNumber} — ${shop}`
+            : lang === "de"
+                ? `Rechnung ${pdf.invoiceNumber} — ${shop}`
+                : `Invoice ${pdf.invoiceNumber} — ${shop}`;
+        const body = lang === "fr"
+            ? `Veuillez trouver ci-joint votre facture ${pdf.invoiceNumber}.`
+            : lang === "de"
+                ? `Anbei finden Sie Ihre Rechnung ${pdf.invoiceNumber}.`
+                : `Please find your invoice ${pdf.invoiceNumber} attached.`;
+        const { EmailService } = await Promise.resolve().then(() => __importStar(require("@/services/email.service")));
+        await EmailService.send({
+            merchantId,
+            to,
+            subject,
+            html: `<div style="font-family:system-ui,sans-serif;max-width:560px"><p>${body}</p><p>— ${shop}</p></div>`,
+            text: `${body}\n— ${shop}`,
+            attachments: [
+                {
+                    filename: pdf.filename,
+                    content: pdf.buffer,
+                    contentType: "application/pdf",
+                },
+            ],
+            emailType: "invoice",
+        });
+        return { to, invoiceNumber: pdf.invoiceNumber };
+    }
     static async renderPdf(merchantId, orderRef) {
         const db = (0, db_1.getDb)();
         const order = await this.findOrder(merchantId, orderRef);

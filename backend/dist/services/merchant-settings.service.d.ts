@@ -146,6 +146,7 @@ export declare class MerchantSettingsService {
         status: string;
         subscriptionPlan: string | null;
         editionId: string | null;
+        businessCategory: import("@/lib/business-module").BusinessModule | null;
         resellerId: string | null;
         /**
          * null = legacy full access for edition routes.
@@ -371,6 +372,7 @@ export declare class MerchantSettingsService {
         status: string;
         subscriptionPlan: string | null;
         editionId: string | null;
+        businessCategory: import("@/lib/business-module").BusinessModule | null;
         resellerId: string | null;
         /**
          * null = legacy full access for edition routes.
@@ -559,6 +561,7 @@ export declare class MerchantSettingsService {
         status: string;
         subscriptionPlan: string | null;
         editionId: string | null;
+        businessCategory: import("@/lib/business-module").BusinessModule | null;
         resellerId: string | null;
         /**
          * null = legacy full access for edition routes.
@@ -713,6 +716,7 @@ export declare class MerchantSettingsService {
         status: string;
         subscriptionPlan: string | null;
         editionId: string | null;
+        businessCategory: import("@/lib/business-module").BusinessModule | null;
         resellerId: string | null;
         /**
          * null = legacy full access for edition routes.
@@ -730,6 +734,7 @@ export declare class MerchantSettingsService {
         updatedAt: Date;
         phone: string | null;
         status: string;
+        businessCategory: string | null;
         businessLicense: string | null;
         address: string | null;
         city: string | null;

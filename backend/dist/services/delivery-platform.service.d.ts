@@ -126,6 +126,10 @@ export declare class DeliveryPlatformService {
             adyenCashierReceiptJson: string | null;
             notes: string | null;
             shippingAddress: string | null;
+            deliveryLatitude: string | null;
+            deliveryLongitude: string | null;
+            assignedDeliveryStaffId: string | null;
+            deliveryTrackingToken: string | null;
             deliveryZoneId: string | null;
             scheduledFor: Date | null;
             customerName: string | null;
@@ -165,6 +169,7 @@ export declare class DeliveryPlatformService {
     static enqueueAutoPrint(merchantId: string, orderId: string, orderSource: OrderSource, opts?: {
         printKitchen?: boolean;
         printReceipt?: boolean;
+        printDeliveryReceipt?: boolean;
         printNotification?: boolean;
     }): Promise<void>;
     static webhookUrl(platform: string, merchantId: string): string;

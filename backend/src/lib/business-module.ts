@@ -37,6 +37,7 @@ export const RESTAURANT_MODULE_ROUTES: string[] = [
   "/merchant/reservations",
   "/merchant/sales/reservations",
   "/merchant/inventory/cookbook",
+  "/merchant/inventory/consumption",
   "/merchant/signage",
 ];
 

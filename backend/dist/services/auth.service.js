@@ -46,6 +46,7 @@ const inventory_addon_1 = require("@/lib/inventory-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
+const business_module_1 = require("@/lib/business-module");
 class AuthService {
     /**
      * Hash a password
@@ -81,7 +82,7 @@ class AuthService {
     /**
      * Register a new merchant
      */
-    static async registerMerchant(email, password, name, businessName) {
+    static async registerMerchant(email, password, name, businessName, businessCategory) {
         const db = (0, db_1.getDb)();
         try {
             // Check if merchant already exists
@@ -93,6 +94,7 @@ class AuthService {
             }
             // Hash password
             const passwordHash = await this.hashPassword(password);
+            const lockedModule = (0, business_module_1.normalizeBusinessModule)(businessCategory);
             // Create merchant
             const merchant = await db
                 .insert(db_1.schema.merchants)
@@ -102,8 +104,16 @@ class AuthService {
                 name: businessName,
                 status: "active",
                 subscriptionPlan: "free",
+                businessCategory: lockedModule,
             })
                 .returning();
+            if (lockedModule) {
+                const modulePatch = (0, business_module_1.businessModuleMerchantPatch)(lockedModule, {});
+                await db
+                    .update(db_1.schema.merchants)
+                    .set(modulePatch)
+                    .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchant[0].id));
+            }
             return {
                 id: merchant[0].id,
                 email: merchant[0].email,

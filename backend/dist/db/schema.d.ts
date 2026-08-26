@@ -2406,6 +2406,25 @@ export declare const merchants: import("drizzle-orm/pg-core").PgTableWithColumns
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        businessCategory: import("drizzle-orm/pg-core").PgColumn<{
+            name: "business_category";
+            tableName: "merchants";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 20;
+        }>;
         planBillingPaid: import("drizzle-orm/pg-core").PgColumn<{
             name: "plan_billing_paid";
             tableName: "merchants";
@@ -8291,6 +8310,25 @@ export declare const kdsStations: import("drizzle-orm/pg-core").PgTableWithColum
         }, {}, {
             length: 128;
         }>;
+        shortCode: import("drizzle-orm/pg-core").PgColumn<{
+            name: "short_code";
+            tableName: "kds_stations";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 8;
+        }>;
         orderTypes: import("drizzle-orm/pg-core").PgColumn<{
             name: "order_types";
             tableName: "kds_stations";
@@ -8348,6 +8386,78 @@ export declare const kdsStations: import("drizzle-orm/pg-core").PgTableWithColum
         }, {}, {
             $type: string[];
         }>;
+        theme: import("drizzle-orm/pg-core").PgColumn<{
+            name: "theme";
+            tableName: "kds_stations";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 32;
+        }>;
+        layoutMode: import("drizzle-orm/pg-core").PgColumn<{
+            name: "layout_mode";
+            tableName: "kds_stations";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 16;
+        }>;
+        gridColumns: import("drizzle-orm/pg-core").PgColumn<{
+            name: "grid_columns";
+            tableName: "kds_stations";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        overdueMinutes: import("drizzle-orm/pg-core").PgColumn<{
+            name: "overdue_minutes";
+            tableName: "kds_stations";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         isActive: import("drizzle-orm/pg-core").PgColumn<{
             name: "is_active";
             tableName: "kds_stations";
@@ -8402,6 +8512,10 @@ export declare const kdsStations: import("drizzle-orm/pg-core").PgTableWithColum
     };
     dialect: "pg";
 }>;
+export declare const KDS_THEMES: readonly ["dark", "light", "teal"];
+export type KdsTheme = (typeof KDS_THEMES)[number];
+export declare const KDS_LAYOUT_MODES: readonly ["grid", "rows", "slider"];
+export type KdsLayoutMode = (typeof KDS_LAYOUT_MODES)[number];
 export declare const kdsTickets: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "kds_tickets";
     schema: undefined;
@@ -8922,6 +9036,25 @@ export declare const odsDisplays: import("drizzle-orm/pg-core").PgTableWithColum
         }, {}, {
             length: 128;
         }>;
+        shortCode: import("drizzle-orm/pg-core").PgColumn<{
+            name: "short_code";
+            tableName: "ods_displays";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 8;
+        }>;
         theme: import("drizzle-orm/pg-core").PgColumn<{
             name: "theme";
             tableName: "ods_displays";
@@ -9108,6 +9241,84 @@ export declare const odsOrders: import("drizzle-orm/pg-core").PgTableWithColumns
         updatedAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "updated_at";
             tableName: "ods_orders";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+    };
+    dialect: "pg";
+}>;
+/** Staff-dismissed pickup numbers — survives clear-all and blocks live merge re-appearance. */
+export declare const odsDismissedOrders: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "ods_dismissed_orders";
+    schema: undefined;
+    columns: {
+        id: import("drizzle-orm/pg-core").PgColumn<{
+            name: "id";
+            tableName: "ods_dismissed_orders";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        merchantId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "merchant_id";
+            tableName: "ods_dismissed_orders";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        orderNumber: import("drizzle-orm/pg-core").PgColumn<{
+            name: "order_number";
+            tableName: "ods_dismissed_orders";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 64;
+        }>;
+        dismissedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "dismissed_at";
+            tableName: "ods_dismissed_orders";
             dataType: "date";
             columnType: "PgTimestamp";
             data: Date;
@@ -15859,6 +16070,9 @@ export declare const odsDisplaysRelations: import("drizzle-orm").Relations<"ods_
     merchant: import("drizzle-orm").One<"merchants", true>;
 }>;
 export declare const odsOrdersRelations: import("drizzle-orm").Relations<"ods_orders", {
+    merchant: import("drizzle-orm").One<"merchants", true>;
+}>;
+export declare const odsDismissedOrdersRelations: import("drizzle-orm").Relations<"ods_dismissed_orders", {
     merchant: import("drizzle-orm").One<"merchants", true>;
 }>;
 export declare const kdsTicketsRelations: import("drizzle-orm").Relations<"kds_tickets", {

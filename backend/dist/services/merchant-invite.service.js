@@ -86,6 +86,7 @@ class MerchantInviteService {
                     subject,
                     html,
                     text: `Create your password: ${inviteUrl}`,
+                    emailType: "merchant_invite",
                 });
                 emailed = true;
             }

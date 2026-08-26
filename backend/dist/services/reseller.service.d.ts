@@ -240,6 +240,7 @@ export declare class ResellerService {
         updatedAt: Date;
         phone: string | null;
         status: string;
+        businessCategory: string | null;
         businessLicense: string | null;
         address: string | null;
         city: string | null;
@@ -371,6 +372,7 @@ export declare class ResellerService {
         updatedAt: Date;
         phone: string | null;
         status: string;
+        businessCategory: string | null;
         businessLicense: string | null;
         address: string | null;
         city: string | null;
@@ -615,6 +617,7 @@ export declare class ResellerService {
         updatedAt: Date;
         phone: string | null;
         status: string;
+        businessCategory: string | null;
         businessLicense: string | null;
         address: string | null;
         city: string | null;
@@ -946,6 +949,7 @@ export declare class ResellerService {
         adyenRecurringDetailReference: string | null;
         resellerId: string | null;
         editionId: string | null;
+        businessCategory: string | null;
         planBillingPaid: boolean;
         passwordHash: string;
         passwordSetAt: Date | null;
@@ -991,6 +995,7 @@ export declare class ResellerService {
             updatedAt: Date;
             phone: string | null;
             status: string;
+            businessCategory: string | null;
             businessLicense: string | null;
             address: string | null;
             city: string | null;

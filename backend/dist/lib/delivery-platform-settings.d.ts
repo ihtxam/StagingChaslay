@@ -17,6 +17,8 @@ export type DeliveryPlatformCredentials = {
 export type DeliveryPlatformSettings = {
     justEat?: DeliveryPlatformCredentials;
     uberEats?: DeliveryPlatformCredentials;
+    /** Online shop orders skip pending_approval and go straight to preparing. */
+    onlineShopAutoAccept?: boolean;
 };
 export declare function normalizeDeliveryPlatformSettings(raw: unknown): DeliveryPlatformSettings;
 export declare function getDeliveryPlatformPublic(raw: unknown): DeliveryPlatformSettings & {

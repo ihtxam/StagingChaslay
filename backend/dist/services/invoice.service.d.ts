@@ -164,6 +164,10 @@ export declare class InvoiceService {
         adyenCashierReceiptJson: string | null;
         notes: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
         deliveryZoneId: string | null;
         scheduledFor: Date | null;
         customerName: string | null;
@@ -341,6 +345,10 @@ export declare class InvoiceService {
         adyenCashierReceiptJson: string | null;
         notes: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
         deliveryZoneId: string | null;
         scheduledFor: Date | null;
         customerName: string | null;
@@ -377,6 +385,14 @@ export declare class InvoiceService {
             method: string;
             amount: number;
         }[] | null;
+    }>;
+    /** Email invoice PDF to customer (uses platform Brevo when delivery mode is platform). */
+    static sendEmail(merchantId: string, orderRef: string, opts?: {
+        to?: string | null;
+        guestLocale?: string | null;
+    }): Promise<{
+        to: string;
+        invoiceNumber: string;
     }>;
     static renderPdf(merchantId: string, orderRef: string): Promise<{
         buffer: Buffer;

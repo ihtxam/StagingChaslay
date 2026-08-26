@@ -28,8 +28,13 @@ exports.DEFAULT_POS_PRINT_SETTINGS = {
     paperWidthMm: 80,
     receiptLanguage: "panel",
     receiptLogoUrl: null,
+    receiptLogoWidthPx: 200,
     autoPrintReceipt: true,
     autoPrintKitchen: true,
+    waiterTillBellEnabled: true,
+    kitchenPrintRetryEnabled: true,
+    kitchenPrintRetryAttempts: 5,
+    kitchenPrintRetryIntervalSec: 5,
     scaleComPort: null,
     scaleUsbAddress: null,
     scaleEnabled: false,
@@ -42,6 +47,12 @@ exports.DEFAULT_POS_PRINT_SETTINGS = {
     labelShowPrice: false,
     labelShowSku: false,
 };
+function clampInt(value, min, max, fallback) {
+    const n = Number(value);
+    if (!Number.isFinite(n))
+        return fallback;
+    return Math.min(max, Math.max(min, Math.round(n)));
+}
 function normalizePosPrintSettings(raw) {
     const src = raw && typeof raw === "object" ? raw : {};
     const paper = Number(src.paperWidthMm) === 58 ? 58 : 80;
@@ -133,8 +144,13 @@ function normalizePosPrintSettings(raw) {
         receiptLogoUrl: src.receiptLogoUrl === null || src.receiptLogoUrl === undefined
             ? null
             : String(src.receiptLogoUrl).trim().slice(0, 500) || null,
+        receiptLogoWidthPx: clampInt(src.receiptLogoWidthPx, 48, 200, exports.DEFAULT_POS_PRINT_SETTINGS.receiptLogoWidthPx),
         autoPrintReceipt: src.autoPrintReceipt !== false,
         autoPrintKitchen: src.autoPrintKitchen !== false,
+        waiterTillBellEnabled: src.waiterTillBellEnabled !== false,
+        kitchenPrintRetryEnabled: src.kitchenPrintRetryEnabled !== false,
+        kitchenPrintRetryAttempts: clampInt(src.kitchenPrintRetryAttempts, 1, 20, 5),
+        kitchenPrintRetryIntervalSec: clampInt(src.kitchenPrintRetryIntervalSec, 2, 60, 5),
         scaleComPort: src.scaleComPort === null || src.scaleComPort === undefined
             ? null
             : String(src.scaleComPort).trim().slice(0, 32) || null,

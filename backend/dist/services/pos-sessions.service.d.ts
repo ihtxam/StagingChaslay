@@ -15,6 +15,7 @@ export declare class PosSessionsService {
         deviceLabel: string | null;
         staffId: string | null;
         staffName: string | null;
+        printAgentOnline: boolean | null;
         lastHeartbeat: Date;
         createdAt: Date;
     }[]>;
@@ -34,7 +35,9 @@ export declare class PosSessionsService {
         maxWaiterPosts: number;
         kickedSessionIds: string[];
     }>;
-    static heartbeat(merchantId: string, sessionId: string): Promise<{
+    static heartbeat(merchantId: string, sessionId: string, opts?: {
+        printAgentOnline?: boolean | null;
+    }): Promise<{
         ok: boolean;
         lastHeartbeat: Date;
     }>;

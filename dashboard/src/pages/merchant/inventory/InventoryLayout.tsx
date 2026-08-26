@@ -55,10 +55,15 @@ export default function InventoryLayout() {
     () =>
       GROUPS.map((group) => ({
         ...group,
-        items: group.items.filter(
-          (item) =>
-            item.to !== '/merchant/inventory/cookbook' || isRestaurantModule(businessModule)
-        ),
+        items: group.items.filter((item) => {
+          if (item.to === '/merchant/inventory/cookbook') {
+            return isRestaurantModule(businessModule);
+          }
+          if (item.to === '/merchant/inventory/consumption') {
+            return isRestaurantModule(businessModule);
+          }
+          return true;
+        }),
       })),
     [businessModule]
   );

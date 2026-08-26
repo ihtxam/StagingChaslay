@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchant, requirePermission, setMerchantContext } from "@/middleware/auth.middleware";
+import { requireRestaurantModule } from "@/middleware/business-module.middleware";
 import { InventoryLicenseError, InventoryService } from "@/services/inventory.service";
 import { DemoInventoryService } from "@/services/demo-inventory.service";
 
@@ -182,7 +183,7 @@ router.get("/low-stock", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/usage", async (req: Request, res: Response) => {
+router.get("/usage", requireRestaurantModule, async (req: Request, res: Response) => {
   try {
     const days = Number(req.query.days) || 30;
     const rows = await InventoryService.usageReport(req.merchantId!, days);
@@ -378,7 +379,7 @@ router.get("/purchase-report", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/cookbook", async (req: Request, res: Response) => {
+router.get("/cookbook", requireRestaurantModule, async (req: Request, res: Response) => {
   try {
     const entries = await InventoryService.listCookbook(req.merchantId!);
     res.json({ success: true, entries });
@@ -387,7 +388,7 @@ router.get("/cookbook", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/products/:productId/recipe", async (req: Request, res: Response) => {
+router.get("/products/:productId/recipe", requireRestaurantModule, async (req: Request, res: Response) => {
   try {
     const recipe = await InventoryService.getRecipe(req.merchantId!, req.params.productId);
     res.json({ success: true, recipe });
@@ -396,7 +397,7 @@ router.get("/products/:productId/recipe", async (req: Request, res: Response) =>
   }
 });
 
-router.put("/products/:productId/recipe", async (req: Request, res: Response) => {
+router.put("/products/:productId/recipe", requireRestaurantModule, async (req: Request, res: Response) => {
   try {
     const recipe = await InventoryService.setRecipe(
       req.merchantId!,

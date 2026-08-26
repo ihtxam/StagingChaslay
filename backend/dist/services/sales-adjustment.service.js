@@ -1,50 +1,109 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SalesAdjustmentService = void 0;
+exports.resolveSalesAdjustmentRange = resolveSalesAdjustmentRange;
+exports.orderCashNet = orderCashNet;
+exports.isCompletedPaidCashAdjustmentOrder = isCompletedPaidCashAdjustmentOrder;
 exports.isCashOnlyOrder = isCashOnlyOrder;
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
 const money_1 = require("@/lib/money");
 const vacation_1 = require("@/lib/vacation");
 const payment_breakdown_1 = require("@/lib/payment-breakdown");
-const ALLOWED_PERCENTS = [20, 40];
-function zurichMonthBounds(monthKey) {
-    let year;
-    let month;
-    if (monthKey && /^\d{4}-\d{2}$/.test(monthKey)) {
-        [year, month] = monthKey.split("-").map(Number);
+const pos_reports_service_1 = require("@/services/pos-reports.service");
+function validatePercent(targetPercent) {
+    const p = Math.round(Number(targetPercent));
+    if (!Number.isFinite(p) || p < 1 || p > 99) {
+        throw new Error("Target percent must be between 1 and 99");
     }
-    else {
-        const parts = new Intl.DateTimeFormat("en-CA", {
-            timeZone: "Europe/Zurich",
-            year: "numeric",
-            month: "2-digit",
-        }).formatToParts(new Date());
-        year = Number(parts.find((p) => p.type === "year").value);
-        month = Number(parts.find((p) => p.type === "month").value);
+    return p;
+}
+function calendarMonthBounds(monthKey) {
+    if (!/^\d{4}-\d{2}$/.test(monthKey)) {
+        throw new Error("month must be YYYY-MM");
     }
-    const key = `${year}-${String(month).padStart(2, "0")}`;
+    const [year, month] = monthKey.split("-").map(Number);
     const lastDay = new Date(year, month, 0).getDate();
+    const from = `${monthKey}-01`;
+    const to = `${monthKey}-${String(lastDay).padStart(2, "0")}`;
     return {
-        monthKey: key,
-        start: (0, vacation_1.zurichDayBounds)(`${key}-01`).start,
-        end: (0, vacation_1.zurichDayBounds)(`${key}-${String(lastDay).padStart(2, "0")}`).end,
+        from,
+        to,
+        label: monthKey,
+        start: (0, vacation_1.zurichDayBounds)(from).start,
+        end: (0, vacation_1.zurichDayBounds)(to).end,
     };
+}
+function resolveSalesAdjustmentRange(opts) {
+    if (opts.month) {
+        return calendarMonthBounds(opts.month);
+    }
+    const preset = (opts.preset || "today");
+    if (!["today", "last_week", "this_month", "last_month", "custom"].includes(preset)) {
+        throw new Error("Invalid period preset");
+    }
+    if (preset === "custom") {
+        const range = (0, pos_reports_service_1.resolveReportRange)("custom", opts.from, opts.to);
+        return { start: range.start, end: range.end, from: range.from, to: range.to, label: range.label };
+    }
+    const range = (0, pos_reports_service_1.resolveReportRange)(preset);
+    return { start: range.start, end: range.end, from: range.from, to: range.to, label: range.label };
 }
 function orderNetTotal(order) {
     return (0, money_1.roundMoney2)(Math.max(0, Number(order.total) || 0) - (Number(order.refundAmount) || 0));
+}
+/** Net cash collected on this order (matches report payment buckets). */
+function orderCashNet(order) {
+    return (0, money_1.roundMoney2)((0, payment_breakdown_1.netPaymentBucketsAfterRefund)(Number(order.total) || 0, Number(order.refundAmount) || 0, order.paymentBreakdown, order.paymentMethod).get("cash") || 0);
+}
+/** Completed POS sale paid in full — excludes open tickets, pay later, and invoices. */
+function isCompletedPaidCashAdjustmentOrder(order) {
+    const status = String(order.status || "").toLowerCase();
+    const payStatus = String(order.paymentStatus || "").toLowerCase();
+    if (status !== "completed")
+        return false;
+    if (!["completed", "paid"].includes(payStatus))
+        return false;
+    if (order.invoiceNumber)
+        return false;
+    const rawMethod = String(order.paymentMethod || "")
+        .trim()
+        .toLowerCase()
+        .replace(/-/g, "_");
+    if (rawMethod === "pay_later" ||
+        rawMethod.startsWith("pay_later:") ||
+        rawMethod.startsWith("pay_later_") ||
+        rawMethod === "invoice" ||
+        rawMethod === "bank_transfer" ||
+        rawMethod === "bank") {
+        return false;
+    }
+    const tenders = (0, payment_breakdown_1.parsePaymentBreakdown)(order.paymentBreakdown, order.paymentMethod, Number(order.total) || 0);
+    for (const t of tenders) {
+        const raw = String(t.method || "")
+            .trim()
+            .toLowerCase()
+            .replace(/-/g, "_");
+        const method = (0, payment_breakdown_1.normalizePaymentMethod)(t.method);
+        if (method === "pay_later" ||
+            method === "invoice" ||
+            method === "bank_transfer" ||
+            raw.startsWith("pay_later")) {
+            return false;
+        }
+    }
+    return true;
 }
 /** True when the order was paid entirely in cash (card/terminal/gift portions excluded). */
 function isCashOnlyOrder(order) {
     const net = orderNetTotal(order);
     if (net <= 0)
         return false;
-    const method = (0, payment_breakdown_1.normalizePaymentMethod)(String(order.paymentMethod || ""));
-    if (["card", "terminal"].includes(method))
-        return false;
     const tenders = (0, payment_breakdown_1.parsePaymentBreakdown)(order.paymentBreakdown, order.paymentMethod, Number(order.total) || 0);
-    if (!tenders.length)
+    if (!tenders.length) {
+        const method = (0, payment_breakdown_1.normalizePaymentMethod)(String(order.paymentMethod || ""));
         return method === "cash";
+    }
     const { cash, terminal, giftCard, other } = (0, payment_breakdown_1.paymentBreakdownTotals)(tenders);
     if (terminal > 0.001 || giftCard > 0.001 || other > 0.001)
         return false;
@@ -66,8 +125,8 @@ function scaleOrderAmounts(order, ratio) {
     const subtotal = (0, money_1.roundMoney2)(Number(order.subtotal) * r);
     const taxAmount = (0, money_1.roundMoney2)(Number(order.taxAmount) * r);
     const discountAmount = (0, money_1.roundMoney2)(Number(order.discountAmount || 0) * r);
-    const tip = (0, money_1.roundMoney2)(Number(order.tipAmount || 0));
-    const rounding = (0, money_1.roundMoney2)(Number(order.roundingAmount || 0));
+    const tip = (0, money_1.roundMoney2)(Number(order.tipAmount || 0) * r);
+    const rounding = (0, money_1.roundMoney2)(Number(order.roundingAmount || 0) * r);
     const total = (0, money_1.roundMoney2)(subtotal + taxAmount - discountAmount + tip + rounding);
     return {
         subtotal: subtotal.toFixed(2),
@@ -99,51 +158,66 @@ function scalePaymentBreakdown(order, newTotal) {
 }
 class SalesAdjustmentService {
     static allowedPercents() {
-        return ALLOWED_PERCENTS;
+        return [10, 20, 30, 40, 50, 60, 70, 80];
     }
-    static async preview(merchantId, targetPercent, monthKey) {
-        if (!ALLOWED_PERCENTS.includes(targetPercent)) {
-            throw new Error("Target percent must be 20 or 40");
-        }
-        const { start, end, monthKey: key } = zurichMonthBounds(monthKey);
+    static async preview(merchantId, targetPercent, rangeOpts) {
+        const percent = validatePercent(targetPercent);
+        const { start, end, from, to, label } = resolveSalesAdjustmentRange(rangeOpts || {});
         const orders = await SalesAdjustmentService.loadEligibleOrders(merchantId, start, end);
+        let reportCashTotal = 0;
         let currentCashTotal = 0;
         let eligibleOrderCount = 0;
         let adjustableItemCount = 0;
         for (const o of orders) {
+            if (!isCompletedPaidCashAdjustmentOrder(o))
+                continue;
+            const cashNet = orderCashNet(o);
+            if (cashNet > 0.001) {
+                reportCashTotal = (0, money_1.roundMoney2)(reportCashTotal + cashNet);
+            }
             if (!isCashOnlyOrder(o))
                 continue;
-            const net = orderNetTotal(o);
-            currentCashTotal = (0, money_1.roundMoney2)(currentCashTotal + net);
+            currentCashTotal = (0, money_1.roundMoney2)(currentCashTotal + cashNet);
             eligibleOrderCount += 1;
             for (const item of o.items || []) {
                 if (item.weightKg != null && Number(item.weightKg) > 0)
                     continue;
-                if (effectiveQty(item) >= 1)
+                if (effectiveQty(item) > 0)
                     adjustableItemCount += 1;
             }
         }
-        const reductionNeeded = (0, money_1.roundMoney2)(currentCashTotal * (targetPercent / 100));
+        const reductionNeeded = (0, money_1.roundMoney2)(currentCashTotal * (percent / 100));
         const targetCashTotal = (0, money_1.roundMoney2)(currentCashTotal - reductionNeeded);
         return {
-            monthKey: key,
-            targetPercent,
+            periodLabel: label,
+            from,
+            to,
+            targetPercent: percent,
+            reportCashTotal,
             currentCashTotal,
             targetCashTotal,
             reductionNeeded,
             eligibleOrderCount,
             adjustableItemCount,
+            monthKey: from.slice(0, 7),
         };
     }
-    static async apply(merchantId, targetPercent, monthKey) {
-        const preview = await SalesAdjustmentService.preview(merchantId, targetPercent, monthKey);
+    static async apply(merchantId, targetPercent, rangeOpts) {
+        const percent = validatePercent(targetPercent);
+        const preview = await SalesAdjustmentService.preview(merchantId, percent, rangeOpts);
+        if (preview.currentCashTotal <= 0.01) {
+            if (preview.reportCashTotal > 0.01) {
+                throw new Error(`Reports show CHF ${preview.reportCashTotal.toFixed(2)} cash for this period, but none of it is on 100% cash orders (card/terminal/mixed payments are excluded).`);
+            }
+            throw new Error("Nothing to adjust — no cash sales found for this period.");
+        }
         if (preview.reductionNeeded <= 0.01) {
             throw new Error("Nothing to adjust — cash sales are already at or below the target.");
         }
         if (preview.adjustableItemCount === 0) {
-            throw new Error("No adjustable cash order lines found for this month.");
+            throw new Error("No adjustable cash order lines found for this period.");
         }
-        const { start, end, monthKey: key } = zurichMonthBounds(monthKey);
+        const { start, end, from, to, label } = resolveSalesAdjustmentRange(rangeOpts || {});
         const orders = await SalesAdjustmentService.loadEligibleOrders(merchantId, start, end);
         const db = (0, db_1.getDb)();
         let remaining = preview.reductionNeeded;
@@ -159,7 +233,7 @@ class SalesAdjustmentService {
                     if (item.weightKg != null && Number(item.weightKg) > 0)
                         continue;
                     const qty = effectiveQty(item);
-                    if (qty < 1)
+                    if (qty <= 0)
                         continue;
                     const unitValue = unitLineValue(item);
                     if (unitValue <= 0)
@@ -176,11 +250,12 @@ class SalesAdjustmentService {
                 break;
             const pick = candidates[0];
             const oldQty = effectiveQty(pick.item);
-            const newQty = (0, money_1.roundMoney2)(Math.max(0, oldQty - 1));
+            const newQty = oldQty >= 1 ? (0, money_1.roundMoney2)(Math.max(0, oldQty - 1)) : 0;
             const ratio = oldQty > 0 ? newQty / oldQty : 0;
             const newTotalPrice = (0, money_1.roundMoney2)(Number(pick.item.totalPrice) * ratio);
             const newTaxAmount = (0, money_1.roundMoney2)(Number(pick.item.taxAmount) * ratio);
-            const newQuantity = (0, money_1.roundMoney2)(Number(pick.item.quantity) - 1);
+            const qtyDelta = (0, money_1.roundMoney2)(oldQty - newQty);
+            const newQuantity = (0, money_1.roundMoney2)(Math.max(0, Number(pick.item.quantity) - qtyDelta));
             await db
                 .update(db_1.schema.orderItems)
                 .set({
@@ -222,30 +297,40 @@ class SalesAdjustmentService {
                 discountAmount: order.discountAmount || "0",
                 total: order.total,
                 paymentBreakdown,
-                updatedAt: new Date(),
             })
                 .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId));
         }
-        const afterPreview = await SalesAdjustmentService.preview(merchantId, targetPercent, key);
+        const afterPreview = await SalesAdjustmentService.preview(merchantId, percent, rangeOpts);
         const beforeCashTotal = preview.currentCashTotal;
         const afterCashTotal = afterPreview.currentCashTotal;
+        const reductionApplied = (0, money_1.roundMoney2)(beforeCashTotal - afterCashTotal);
+        if (reductionApplied <= 0.01 && preview.reductionNeeded > 0.01) {
+            throw new Error("Adjustment did not change cash totals — reload reports and try again, or pick a shorter period with more cash-only orders.");
+        }
+        if (reductionApplied + 0.02 < preview.reductionNeeded * 0.25) {
+            throw new Error(`Only CHF ${reductionApplied.toFixed(2)} of CHF ${preview.reductionNeeded.toFixed(2)} could be reduced — not enough adjustable line items.`);
+        }
         return {
-            monthKey: key,
-            targetPercent,
+            periodLabel: label,
+            from,
+            to,
+            targetPercent: percent,
             beforeCashTotal,
             afterCashTotal,
-            reductionApplied: (0, money_1.roundMoney2)(beforeCashTotal - afterCashTotal),
+            reductionApplied,
             ordersAdjusted,
             itemsAdjusted,
+            monthKey: from.slice(0, 7),
         };
     }
     static async loadEligibleOrders(merchantId, start, end) {
         const db = (0, db_1.getDb)();
-        return db.query.orders.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.orders.orderType, ["pos"]), (0, drizzle_orm_1.eq)(db_1.schema.orders.status, "completed"), (0, drizzle_orm_1.gte)(db_1.schema.orders.completedAt, start), (0, drizzle_orm_1.lte)(db_1.schema.orders.completedAt, end)),
+        const rows = (await db.query.orders.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.orders.status, "completed"), (0, drizzle_orm_1.inArray)(db_1.schema.orders.paymentStatus, ["completed", "paid"]), (0, drizzle_orm_1.gte)(db_1.schema.orders.createdAt, start), (0, drizzle_orm_1.lte)(db_1.schema.orders.createdAt, end)),
             with: { items: true },
-            orderBy: (orders, { desc }) => [desc(orders.completedAt)],
-        });
+            orderBy: (orders, { desc }) => [desc(orders.createdAt)],
+        }));
+        return rows.filter(isCompletedPaidCashAdjustmentOrder);
     }
 }
 exports.SalesAdjustmentService = SalesAdjustmentService;

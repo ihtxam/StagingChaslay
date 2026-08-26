@@ -67,6 +67,10 @@ export declare class ReportEmailService {
             label: string;
             amount: number;
         }[];
+        salesByHour: {
+            label: string;
+            amount: number;
+        }[];
         paymentMethods: {
             method: string;
             label: string;

@@ -99,5 +99,28 @@ router.post('/tickets/:ticketId/reply', upload.single('attachment'), async (req,
         res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to send reply' });
     }
 });
+/** POS diagnostic logs — superadmin System Logs only (not merchant Support or inbox). */
+router.post('/diagnostic-report', async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const { source, subject, body, auto } = req.body || {};
+        if (!subject?.trim() || !body?.trim()) {
+            return res.status(400).json({ error: 'Subject and body are required' });
+        }
+        const src = source === 'android' ? 'android' : 'webpos';
+        const log = await support_ticket_service_1.SupportTicketService.createDiagnosticReport(merchantId, {
+            source: src,
+            subject: String(subject),
+            body: String(body),
+            auto: auto === true || auto === 'true',
+            authorName: req.user?.name || undefined,
+            actorId: req.user?.staffId || req.user?.id || null,
+        });
+        res.status(201).json({ success: true, ok: true, logId: log.id });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to submit report' });
+    }
+});
 exports.default = router;
 //# sourceMappingURL=merchant-support.routes.js.map

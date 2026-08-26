@@ -21,8 +21,8 @@ export declare class StaffService {
     /** @deprecated use enforceWaiterFloorRestrictions */
     static enforceWaiterReportRestrictions(merchantId: string): Promise<void>;
     /**
-     * Strip sales / panel / finance from system Waiter templates.
-     * Menu (MANAGE_PRODUCTS) and Orders stay as assigned on the Roles page.
+     * Strip full panel / company sales from system Waiter templates.
+     * Menu, orders, and own-sales EOD (END_OF_DAY) stay as assigned on the Roles page.
      */
     static enforceWaiterFloorRestrictions(merchantId: string): Promise<void>;
     static listRoles(merchantId: string): Promise<{
@@ -65,11 +65,13 @@ export declare class StaffService {
         email: string | null;
         roleId: string;
         roleName: string;
-        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
+        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
         canAccessPanel: boolean;
         isActive: boolean;
         pinSet: boolean;
         passwordSet: boolean;
+        deliveryHourlyRateOverride: string | null;
+        deliveryPerOrderFeeOverride: string | null;
         createdAt: Date;
     }[]>;
     static createStaff(merchantId: string, input: {
@@ -85,7 +87,7 @@ export declare class StaffService {
         email: string | null;
         roleId: string;
         roleName: string;
-        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
+        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
         canAccessPanel: boolean;
         isActive: boolean;
         pinSet: boolean;
@@ -99,13 +101,15 @@ export declare class StaffService {
         password?: string | null;
         canAccessPanel?: boolean;
         isActive?: boolean;
+        deliveryHourlyRateOverride?: number | null;
+        deliveryPerOrderFeeOverride?: number | null;
     }): Promise<{
         id: string;
         name: string;
         email: string | null;
         roleId: string;
         roleName: string;
-        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
+        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
         canAccessPanel: boolean;
         isActive: boolean;
         pinSet: boolean;
@@ -117,7 +121,8 @@ export declare class StaffService {
         name: string;
         roleId: string;
         roleName: string;
-        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
+        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
+        preferredTerminalId: string | null;
         accessToken: string;
         /** Android PosPermission-compatible keys for clients that consume this payload. */
         androidPermissions: string[];
@@ -129,8 +134,15 @@ export declare class StaffService {
         email: string | null;
         roleId: string;
         roleName: string;
-        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
+        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
         canAccessPanel: boolean;
+        preferredTerminalId: string | null;
+    }>;
+    /** Waiter / cashier saves their preferred payment terminal for WebPOS. */
+    static updatePosPreferences(merchantId: string, staffId: string, prefs: {
+        preferredTerminalId?: string | null;
+    }): Promise<{
+        preferredTerminalId: string | null;
     }>;
     static loginStaff(email: string, password: string): Promise<{
         staff: {
@@ -142,6 +154,9 @@ export declare class StaffService {
             pinHash: string | null;
             passwordHash: string | null;
             canAccessPanel: boolean;
+            preferredTerminalId: string | null;
+            deliveryHourlyRateOverride: string | null;
+            deliveryPerOrderFeeOverride: string | null;
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
@@ -156,7 +171,7 @@ export declare class StaffService {
             isSystem: boolean;
             sortOrder: number;
         } | undefined;
-        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
+        permissions: ("USE_POS" | "USE_WEBPOS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "MANAGE_TABLES" | "TAKEAWAY_ORDERS" | "DELIVERY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "VIEW_ORDER_HISTORY" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_PRODUCTS" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "ACCESS_PANEL" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "MANAGE_INVENTORY")[];
     }>;
     static getSyncPayload(merchantId: string): Promise<{
         roles: {

@@ -51,13 +51,26 @@ router.post("/login", async (req: Request, res: Response) => {
  */
 router.post("/merchant/register", async (req: Request, res: Response) => {
   try {
-    const { email, password, name, businessName } = req.body;
+    const { email, password, name, businessName, businessCategory } = req.body;
 
     if (!email || !password || !name || !businessName) {
       return res.status(400).json({ error: "Email, password, name, and business name are required" });
     }
 
-    const merchant = await AuthService.registerMerchant(email, password, name, businessName);
+    const category = businessCategory === "retail" || businessCategory === "restaurant"
+      ? businessCategory
+      : undefined;
+    if (!category) {
+      return res.status(400).json({ error: "businessCategory must be retail or restaurant" });
+    }
+
+    const merchant = await AuthService.registerMerchant(
+      email,
+      password,
+      name,
+      businessName,
+      category
+    );
 
     res.status(201).json({
       success: true,
