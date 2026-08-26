@@ -39,6 +39,8 @@ const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
+const display_short_code_1 = require("@/lib/display-short-code");
+const guest_order_number_1 = require("@/lib/guest-order-number");
 class KdsLicenseError extends Error {
     constructor() {
         super("Kitchen display (KDS) addon is not enabled for this merchant");
@@ -52,16 +54,56 @@ async function requireAddon(merchantId) {
     if (!enabled)
         throw new KdsLicenseError();
 }
-async function maybePushOdsReady(merchantId, orderNumber) {
-    if (!orderNumber?.trim())
+function resolveKdsOdsNumber(ticket) {
+    return ((0, guest_order_number_1.resolveOdsPushNumber)(ticket.ticketKey) ||
+        (0, guest_order_number_1.resolveOdsPushNumber)(ticket.orderNumber) ||
+        "");
+}
+async function maybePushOdsReady(merchantId, ticket) {
+    const orderNumber = resolveKdsOdsNumber(ticket);
+    if (!orderNumber)
         return;
     try {
         const { OdsService } = await Promise.resolve().then(() => __importStar(require("@/services/ods.service")));
-        await OdsService.pushOrder(merchantId, { orderNumber: orderNumber.trim(), status: "ready" });
+        await OdsService.pushOrder(merchantId, { orderNumber, status: "ready" });
     }
     catch {
         /* ODS optional */
     }
+}
+async function maybePushOdsPreparing(merchantId, ticket) {
+    const orderNumber = resolveKdsOdsNumber(ticket);
+    if (!orderNumber)
+        return;
+    try {
+        const { OdsService } = await Promise.resolve().then(() => __importStar(require("@/services/ods.service")));
+        await OdsService.pushOrder(merchantId, { orderNumber, status: "preparing" });
+    }
+    catch {
+        /* ODS optional */
+    }
+}
+const KDS_THEMES = new Set(["dark", "light", "teal"]);
+const KDS_LAYOUT_MODES = new Set(["grid", "rows", "slider"]);
+function normalizeKdsTheme(value) {
+    const t = String(value || "dark").toLowerCase();
+    return KDS_THEMES.has(t) ? t : "dark";
+}
+function normalizeKdsLayoutMode(value) {
+    const m = String(value || "grid").toLowerCase();
+    return KDS_LAYOUT_MODES.has(m) ? m : "grid";
+}
+function clampGridColumns(value) {
+    const n = Math.round(Number(value));
+    if (!Number.isFinite(n))
+        return 3;
+    return Math.min(6, Math.max(1, n));
+}
+function clampOverdueMinutes(value) {
+    const n = Math.round(Number(value));
+    if (!Number.isFinite(n))
+        return 20;
+    return Math.min(120, Math.max(5, n));
 }
 function newToken() {
     return (0, crypto_1.randomBytes)(24).toString("hex");
@@ -85,6 +127,7 @@ class KdsService {
     static async listStations(merchantId) {
         await requireAddon(merchantId);
         const db = (0, db_1.getDb)();
+        await (0, display_short_code_1.ensureKdsStationShortCodes)(db, merchantId);
         return db.query.kdsStations.findMany({
             where: (0, drizzle_orm_1.eq)(db_1.schema.kdsStations.merchantId, merchantId),
             orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.kdsStations.name)],
@@ -102,9 +145,14 @@ class KdsService {
             merchantId,
             name,
             token: newToken(),
+            shortCode: await (0, display_short_code_1.allocateDisplayShortCode)(db),
             orderTypes: input.orderTypes || [],
             categoryIds: input.categoryIds || [],
             productIds: input.productIds || [],
+            theme: normalizeKdsTheme(input.theme),
+            layoutMode: normalizeKdsLayoutMode(input.layoutMode),
+            gridColumns: clampGridColumns(input.gridColumns),
+            overdueMinutes: clampOverdueMinutes(input.overdueMinutes),
             isActive: input.isActive !== false,
         })
             .returning();
@@ -122,6 +170,14 @@ class KdsService {
             patch.categoryIds = input.categoryIds;
         if (input.productIds != null)
             patch.productIds = input.productIds;
+        if (input.theme != null)
+            patch.theme = normalizeKdsTheme(input.theme);
+        if (input.layoutMode != null)
+            patch.layoutMode = normalizeKdsLayoutMode(input.layoutMode);
+        if (input.gridColumns != null)
+            patch.gridColumns = clampGridColumns(input.gridColumns);
+        if (input.overdueMinutes != null)
+            patch.overdueMinutes = clampOverdueMinutes(input.overdueMinutes);
         if (input.isActive != null)
             patch.isActive = !!input.isActive;
         const [row] = await db
@@ -146,17 +202,62 @@ class KdsService {
         const db = (0, db_1.getDb)();
         const [row] = await db
             .update(db_1.schema.kdsStations)
-            .set({ token: newToken(), updatedAt: new Date() })
+            .set({
+            token: newToken(),
+            shortCode: await (0, display_short_code_1.allocateDisplayShortCode)(db),
+            updatedAt: new Date(),
+        })
             .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsStations.id, id), (0, drizzle_orm_1.eq)(db_1.schema.kdsStations.merchantId, merchantId)))
             .returning();
         if (!row)
             throw new Error("KDS station not found");
         return row;
     }
-    static async stationByToken(token) {
+    static async stationByToken(accessKey) {
+        const trimmed = String(accessKey || "").trim();
+        if (!trimmed)
+            return null;
         const db = (0, db_1.getDb)();
         return db.query.kdsStations.findFirst({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsStations.token, token), (0, drizzle_orm_1.eq)(db_1.schema.kdsStations.isActive, true)),
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.or)((0, drizzle_orm_1.eq)(db_1.schema.kdsStations.shortCode, trimmed), (0, drizzle_orm_1.eq)(db_1.schema.kdsStations.token, trimmed)), (0, drizzle_orm_1.eq)(db_1.schema.kdsStations.isActive, true)),
+        });
+    }
+    /**
+     * Push a saved order (online shop / partner) onto the KDS board.
+     * POS register tickets use pushKitchen directly from WebPOS "Send to kitchen".
+     */
+    static async pushOrderToKitchen(merchantId, orderId) {
+        const db = (0, db_1.getDb)();
+        const order = await db.query.orders.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId), (0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId)),
+            with: {
+                items: {
+                    with: { product: { columns: { categoryId: true } } },
+                },
+            },
+        });
+        if (!order?.items?.length)
+            return { ok: true, added: 0 };
+        const { formatWebOrderNumberDisplay } = await Promise.resolve().then(() => __importStar(require("@/lib/web-order-number")));
+        const { resolveOrderItemName } = await Promise.resolve().then(() => __importStar(require("@/lib/order-item-name")));
+        const displayNum = formatWebOrderNumberDisplay(order.orderNumber || "") ||
+            order.orderNumber ||
+            order.id;
+        const items = order.items.map((i) => ({
+            lineId: i.id,
+            productId: i.productId || undefined,
+            categoryId: i.product?.categoryId || undefined,
+            name: resolveOrderItemName(i.productName),
+            quantity: String(i.quantity || 1),
+            selectedExtras: i.selectedExtras || [],
+            comboSelections: i.comboSelections || [],
+        }));
+        return this.pushKitchen(merchantId, {
+            ticketKey: displayNum,
+            orderNumber: displayNum,
+            tableLabel: order.customerName?.trim()?.slice(0, 120) || null,
+            channel: order.fulfillmentChannel || "takeaway",
+            items,
         });
     }
     /** Upsert ticket + append new line items when kitchen receives an order. */
@@ -233,7 +334,7 @@ class KdsService {
         const sinceDate = since ? new Date(since) : null;
         const completedSince = new Date(Date.now() - COMPLETED_RETENTION_MS);
         const tickets = await db.query.kdsTickets.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.merchantId, station.merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.kdsTickets.status, ["pending", "completed"])),
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.merchantId, station.merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.kdsTickets.status, ["pending", "completed", "cancelled"])),
             orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.kdsTickets.createdAt)],
             with: { items: true },
         });
@@ -242,7 +343,7 @@ class KdsService {
             const items = (t.items || []).filter((item) => itemMatchesStation(item, station, t.channel));
             if (!items.length)
                 return null;
-            if (t.status === "completed" &&
+            if ((t.status === "completed" || t.status === "cancelled") &&
                 t.completedAt &&
                 t.completedAt < completedSince) {
                 return null;
@@ -272,6 +373,10 @@ class KdsService {
         })
             .filter(Boolean)
             .sort((a, b) => {
+            if (a.status === "cancelled" && b.status !== "cancelled")
+                return -1;
+            if (b.status === "cancelled" && a.status !== "cancelled")
+                return 1;
             if (a.status === "completed" && b.status === "completed") {
                 const aAt = a.completedAt ? new Date(a.completedAt).getTime() : 0;
                 const bAt = b.completedAt ? new Date(b.completedAt).getTime() : 0;
@@ -287,11 +392,42 @@ class KdsService {
             ? tickets.some((t) => t.updatedAt > sinceDate)
             : true;
         return {
-            station: { id: station.id, name: station.name },
+            station: {
+                id: station.id,
+                name: station.name,
+                theme: normalizeKdsTheme(station.theme),
+                layoutMode: normalizeKdsLayoutMode(station.layoutMode),
+                gridColumns: clampGridColumns(station.gridColumns),
+                overdueMinutes: clampOverdueMinutes(station.overdueMinutes),
+            },
             serverTime: new Date().toISOString(),
             updated: updatedSince,
             tickets: filtered,
         };
+    }
+    /** POS sync: all open/recent KDS tickets with ready line ids and completion state. */
+    static async boardStatusForMerchant(merchantId) {
+        await requireAddon(merchantId);
+        const db = (0, db_1.getDb)();
+        const completedSince = new Date(Date.now() - COMPLETED_RETENTION_MS);
+        const tickets = await db.query.kdsTickets.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.kdsTickets.status, ["pending", "completed", "cancelled"])),
+            with: { items: true },
+        });
+        return tickets
+            .filter((t) => t.status === "pending" ||
+            (t.completedAt && t.completedAt >= completedSince))
+            .map((t) => {
+            const items = t.items || [];
+            return {
+                ticketKey: t.ticketKey,
+                status: t.status,
+                completedAt: t.completedAt?.toISOString() ?? null,
+                readyLineIds: items.filter((i) => i.status === "ready").map((i) => i.lineId),
+                total: items.length,
+                ready: items.filter((i) => i.status === "ready").length,
+            };
+        });
     }
     static async markItemReady(token, itemId) {
         const station = await this.stationByToken(token);
@@ -319,7 +455,7 @@ class KdsService {
         });
         const allReady = allItems.length > 0 && allItems.every((i) => i.status === "ready");
         if (allReady) {
-            await maybePushOdsReady(station.merchantId, item.ticket.orderNumber);
+            await maybePushOdsReady(station.merchantId, item.ticket);
         }
         return { ok: true, lineId: item.lineId, ticketKey: item.ticket.ticketKey };
     }
@@ -349,6 +485,7 @@ class KdsService {
             .update(db_1.schema.kdsTickets)
             .set({ status: "pending", completedAt: null, updatedAt: now })
             .where((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.id, item.ticketId));
+        await maybePushOdsPreparing(station.merchantId, item.ticket);
         return { ok: true, lineId: item.lineId, ticketKey: item.ticket.ticketKey };
     }
     static async completeTicket(token, ticketId) {
@@ -364,6 +501,13 @@ class KdsService {
         if (!ticket)
             throw new Error("Ticket not found");
         const now = new Date();
+        if (ticket.status === "cancelled") {
+            await db
+                .update(db_1.schema.kdsTickets)
+                .set({ status: "completed", completedAt: now, updatedAt: now })
+                .where((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.id, ticketId));
+            return { ok: true, ticketKey: ticket.ticketKey };
+        }
         await db
             .update(db_1.schema.kdsTicketItems)
             .set({ status: "ready", readyAt: now })
@@ -372,7 +516,7 @@ class KdsService {
             .update(db_1.schema.kdsTickets)
             .set({ status: "completed", completedAt: now, updatedAt: now })
             .where((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.id, ticketId));
-        await maybePushOdsReady(station.merchantId, ticket.orderNumber);
+        await maybePushOdsReady(station.merchantId, ticket);
         return { ok: true, ticketKey: ticket.ticketKey };
     }
     static async recallTicket(token, ticketId) {
@@ -394,23 +538,65 @@ class KdsService {
             .update(db_1.schema.kdsTicketItems)
             .set({ status: "pending", readyAt: null })
             .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTicketItems.ticketId, ticketId), (0, drizzle_orm_1.eq)(db_1.schema.kdsTicketItems.status, "ready")));
+        await maybePushOdsPreparing(station.merchantId, ticket);
         return { ok: true };
+    }
+    /** Mark KDS tickets cancelled when POS voids/cancels a kitchen order. */
+    static async dismissTicketsByKey(merchantId, ticketKey) {
+        await requireAddon(merchantId);
+        const raw = String(ticketKey || "").trim();
+        const base = raw.split("@")[0];
+        if (!base)
+            return { dismissed: 0 };
+        const digits = base.replace(/^#/, "");
+        const db = (0, db_1.getDb)();
+        const pending = await db.query.kdsTickets.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.status, "pending")),
+        });
+        const matches = pending.filter((t) => {
+            const key = String(t.ticketKey || "").trim();
+            const keyBase = key.split("@")[0];
+            if (keyBase === base || key === raw)
+                return true;
+            if (digits && (keyBase === `#${digits}` || keyBase === digits))
+                return true;
+            return false;
+        });
+        if (!matches.length)
+            return { dismissed: 0 };
+        const now = new Date();
+        const ids = matches.map((t) => t.id);
+        await db
+            .update(db_1.schema.kdsTickets)
+            .set({ status: "cancelled", completedAt: now, updatedAt: now })
+            .where((0, drizzle_orm_1.inArray)(db_1.schema.kdsTickets.id, ids));
+        await db
+            .update(db_1.schema.kdsTicketItems)
+            .set({ status: "cancelled", readyAt: null })
+            .where((0, drizzle_orm_1.inArray)(db_1.schema.kdsTicketItems.ticketId, ids));
+        return { dismissed: matches.length };
     }
     static async ticketStatusForPos(merchantId, ticketKey) {
         await requireAddon(merchantId);
+        const base = String(ticketKey || "")
+            .trim()
+            .split("@")[0];
+        if (!base)
+            return { readyLineIds: [], total: 0, ready: 0, sent: 0 };
         const db = (0, db_1.getDb)();
-        const ticket = await db.query.kdsTickets.findFirst({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.ticketKey, ticketKey)),
+        const tickets = await db.query.kdsTickets.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.merchantId, merchantId), (0, drizzle_orm_1.or)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.ticketKey, base), (0, drizzle_orm_1.sql) `${db_1.schema.kdsTickets.ticketKey} LIKE ${`${base}@%`}`)),
             with: { items: true },
         });
-        if (!ticket)
-            return { readyLineIds: [], total: 0, ready: 0 };
-        const items = ticket.items || [];
+        if (!tickets.length)
+            return { readyLineIds: [], total: 0, ready: 0, sent: 0 };
+        const items = tickets.flatMap((t) => t.items || []);
         const readyLineIds = items.filter((i) => i.status === "ready").map((i) => i.lineId);
         return {
-            status: ticket.status,
+            status: tickets.some((t) => t.status === "pending") ? "pending" : "completed",
             readyLineIds,
             total: items.length,
+            sent: items.length,
             ready: readyLineIds.length,
         };
     }

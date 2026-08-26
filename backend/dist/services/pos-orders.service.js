@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PosOrdersService = void 0;
 const db_1 = require("@/db");
@@ -29,6 +62,25 @@ const ALLOWED_PAYMENT_METHODS = new Set([
     "invoice",
     "bank_transfer",
 ]);
+function resolveOrderCustomerName(order) {
+    const direct = String(order.customerName || "").trim();
+    if (direct)
+        return direct;
+    const linked = order.customer;
+    if (linked) {
+        const name = [linked.firstName, linked.lastName].filter(Boolean).join(" ").trim();
+        if (name)
+            return name;
+    }
+    const memberMatch = String(order.notes || "").match(/\[member:([^\]]+)\]/i);
+    if (memberMatch?.[1]?.trim())
+        return memberMatch[1].trim();
+    const ch = String(order.fulfillmentChannel || "takeaway").toLowerCase();
+    const table = String(order.tableLabel || "").trim();
+    if (table && ch !== "dine_in")
+        return table;
+    return null;
+}
 function parseHeldCart(cartJson) {
     const data = normalizeHeldCartJson(cartJson);
     const lines = Array.isArray(data) ? data : data?.cart || [];
@@ -67,13 +119,18 @@ function heldIdentity(cartJson) {
     };
 }
 function sameHeldIdentity(a, b) {
-    if (a.tableId && b.tableId && a.tableId === b.tableId)
+    if (a.ticketDisplay && b.ticketDisplay && a.ticketDisplay === b.ticketDisplay)
         return true;
+    if (a.tableId && b.tableId && a.tableId === b.tableId) {
+        if (a.ticketDisplay && b.ticketDisplay)
+            return a.ticketDisplay === b.ticketDisplay;
+        if (a.ticketDisplay || b.ticketDisplay)
+            return false;
+        return true;
+    }
     if (!a.tableId && !b.tableId && a.tabNumber && b.tabNumber && a.tabNumber === b.tabNumber) {
         return true;
     }
-    if (a.ticketDisplay && b.ticketDisplay && a.ticketDisplay === b.ticketDisplay)
-        return true;
     return false;
 }
 class PosOrdersService {
@@ -101,20 +158,41 @@ class PosOrdersService {
             }
         }
         const q = String(opts.q || "").trim();
-        const searchCond = q
-            ? (0, drizzle_orm_1.or)((0, drizzle_orm_1.ilike)(db_1.schema.orders.orderNumber, `%${q}%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.clientId, `%${q}%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.invoiceNumber, `%${q}%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.customerName, `%${q}%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.paymentMethod, `%${q}%`))
-            : null;
+        const bareQ = q.replace(/^#/, "");
+        const searchParts = q
+            ? [
+                (0, drizzle_orm_1.ilike)(db_1.schema.orders.orderNumber, `%${q}%`),
+                (0, drizzle_orm_1.ilike)(db_1.schema.orders.clientId, `%${q}%`),
+                (0, drizzle_orm_1.ilike)(db_1.schema.orders.invoiceNumber, `%${q}%`),
+                (0, drizzle_orm_1.ilike)(db_1.schema.orders.customerName, `%${q}%`),
+                (0, drizzle_orm_1.ilike)(db_1.schema.orders.paymentMethod, `%${q}%`),
+                (0, drizzle_orm_1.ilike)(db_1.schema.orders.tableLabel, `%${q}%`),
+                (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%${q}%`),
+            ]
+            : [];
+        if (bareQ && bareQ !== q) {
+            searchParts.push((0, drizzle_orm_1.ilike)(db_1.schema.orders.orderNumber, `%${bareQ}%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%${bareQ}%`));
+        }
+        if (/^\d{1,6}$/.test(bareQ)) {
+            const guestNum = Number(bareQ);
+            searchParts.push((0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[ticket:${bareQ}]%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[tab:${bareQ}]%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[ticket:#${bareQ}]%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[tab:#${bareQ}]%`));
+            if (Number.isFinite(guestNum)) {
+                searchParts.push((0, drizzle_orm_1.eq)(db_1.schema.orders.guestCount, guestNum));
+            }
+        }
+        const searchCond = searchParts.length ? (0, drizzle_orm_1.or)(...searchParts) : null;
         // Include orders created in range OR scheduled (pickup/delivery) in range so a
         // future delivery time does not hide a ticket from today's history.
-        // A ref search (WP-… / INV-…) also matches outside the date window — invoice
-        // and awaiting_payment POS sales were otherwise invisible when staff searched.
+        // A ref search (WP-… / INV-… / kitchen #1001) also matches outside the date window.
         if (opts.from || opts.to) {
             const start = opts.from ? (0, vacation_1.zurichDayBounds)(opts.from).start : new Date(0);
             const end = opts.to ? (0, vacation_1.zurichDayBounds)(opts.to).end : new Date("9999-12-31T23:59:59.999Z");
             const createdInRange = (0, drizzle_orm_1.and)((0, drizzle_orm_1.gte)(db_1.schema.orders.createdAt, start), (0, drizzle_orm_1.lte)(db_1.schema.orders.createdAt, end));
             const scheduledInRange = (0, drizzle_orm_1.and)((0, drizzle_orm_1.gte)(db_1.schema.orders.scheduledFor, start), (0, drizzle_orm_1.lte)(db_1.schema.orders.scheduledFor, end));
             const inRange = (0, drizzle_orm_1.or)(createdInRange, scheduledInRange);
-            const looksLikeRef = /^(WP-|INV-|ORD-|#)/i.test(q) || q.replace(/[^A-Za-z0-9-]/g, "").length >= 8;
+            const looksLikeRef = /^(WP-|INV-|ORD-|TX-|WEB-|DI-|#)/i.test(q) ||
+                /^\d{1,6}$/.test(bareQ) ||
+                q.replace(/[^A-Za-z0-9-]/g, "").length >= 8;
             if (searchCond && looksLikeRef) {
                 conditions.push((0, drizzle_orm_1.or)(inRange, searchCond));
             }
@@ -134,11 +212,24 @@ class PosOrdersService {
                 items: {
                     with: { product: true },
                 },
+                customer: true,
             },
             orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.orders.createdAt)],
             limit,
         });
         const orderIds = rows.map((o) => o.id);
+        const assignedIds = [
+            ...new Set(rows.map((r) => r.assignedDeliveryStaffId).filter(Boolean)),
+        ];
+        const driverNameById = new Map();
+        if (assignedIds.length) {
+            const drivers = await db.query.merchantStaff.findMany({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.merchantStaff.id, assignedIds)),
+                columns: { id: true, name: true },
+            });
+            for (const d of drivers)
+                driverNameById.set(d.id, d.name);
+        }
         const refundsByOrder = new Map();
         if (orderIds.length) {
             try {
@@ -208,13 +299,24 @@ class PosOrdersService {
                 ticketDisplay,
                 tabNumber,
                 staffName: o.staffName,
+                assignedDeliveryStaffId: o.assignedDeliveryStaffId || null,
+                assignedDriverName: o.assignedDeliveryStaffId
+                    ? driverNameById.get(o.assignedDeliveryStaffId) || null
+                    : null,
                 masterOrderId: o.masterOrderId,
                 splitCheckNumber: o.splitCheckNumber,
-                customerName: o.customerName,
+                customerName: resolveOrderCustomerName(o),
                 pointsEarned: o.pointsEarned ?? 0,
                 pointsRedeemed: o.pointsRedeemed ?? 0,
                 customerPhone: o.customerPhone,
                 shippingAddress: o.shippingAddress,
+                deliveryLatitude: o.deliveryLatitude != null && o.deliveryLatitude !== ""
+                    ? Number(o.deliveryLatitude)
+                    : null,
+                deliveryLongitude: o.deliveryLongitude != null && o.deliveryLongitude !== ""
+                    ? Number(o.deliveryLongitude)
+                    : null,
+                deliveryTrackingToken: o.deliveryTrackingToken || null,
                 scheduledFor: o.scheduledFor,
                 createdAt: o.createdAt,
                 completedAt: o.completedAt,
@@ -251,8 +353,12 @@ class PosOrdersService {
             throw new Error("Order already cancelled");
         if (order.status === "refunded")
             throw new Error("Order already refunded");
-        if (BLOCKED_CANCEL_STATUSES.has(String(order.status)) ||
-            COMPLETED_STATUSES.has(String(order.paymentStatus || ""))) {
+        const payStatus = String(order.paymentStatus || "").toLowerCase();
+        const awaitingPayment = payStatus === "awaiting_payment" ||
+            String(order.paymentMethod || "").toLowerCase().replace(/-/g, "_") === "pay_later";
+        if (!awaitingPayment &&
+            (BLOCKED_CANCEL_STATUSES.has(String(order.status)) ||
+                COMPLETED_STATUSES.has(payStatus))) {
             throw new Error("Completed orders cannot be cancelled. Change the payment method or issue a refund.");
         }
         const reasonText = (0, pos_print_settings_1.resolvePosCancelReason)(reason);
@@ -268,6 +374,12 @@ class PosOrdersService {
         })
             .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId))
             .returning();
+        void Promise.resolve().then(() => __importStar(require("@/services/ods.service"))).then(({ OdsService }) => OdsService.syncFromOrder(merchantId, {
+            orderNumber: updated.orderNumber,
+            notes: updated.notes,
+            status: "cancelled",
+        }))
+            .catch(() => { });
         return updated;
     }
     static async updatePaymentMethod(merchantId, orderId, paymentMethod) {
@@ -678,6 +790,47 @@ class PosOrdersService {
             throw new Error("Held order not found");
         await db.delete(db_1.schema.heldOrders).where((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id));
         return { ok: true };
+    }
+    /**
+     * Remove open held rows after payment — matches ticket #, table, or tab identity.
+     * Used by POS checkout (staff may lack CANCEL_ORDERS) and server-side sale sync.
+     */
+    static async releaseHeldByIdentity(merchantId, opts) {
+        const db = (0, db_1.getDb)();
+        const target = heldIdentity({
+            ticketDisplay: opts.ticketDisplay,
+            tableId: opts.tableId,
+            tabNumber: opts.tabNumber,
+        });
+        const hasTarget = !!target.ticketDisplay || !!target.tableId || !!target.tabNumber || !!opts.heldId;
+        if (!hasTarget)
+            return { released: 0 };
+        const open = await db.query.heldOrders.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.heldOrders.status, ["held", "sent_to_kitchen"])),
+        });
+        const toDelete = new Set();
+        if (opts.heldId)
+            toDelete.add(opts.heldId);
+        for (const row of open) {
+            if (sameHeldIdentity(heldIdentity(row.cartJson), target)) {
+                toDelete.add(row.id);
+            }
+        }
+        for (const id of toDelete) {
+            await db
+                .delete(db_1.schema.heldOrders)
+                .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId)));
+        }
+        if (toDelete.size) {
+            console.info("[pos-held] release", {
+                merchantId,
+                released: toDelete.size,
+                ticket: target.ticketDisplay,
+                tableId: target.tableId,
+                tab: target.tabNumber,
+            });
+        }
+        return { released: toDelete.size };
     }
     /**
      * Cancel a held / kitchen-sent order with a required reason.

@@ -76,6 +76,25 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 function isUuid(raw) {
     return !!raw && UUID_RE.test(raw);
 }
+function clampExpiryAlertDays(raw) {
+    const n = Math.round(num(raw, 30));
+    if (n < 1)
+        return 1;
+    if (n > 365)
+        return 365;
+    return n;
+}
+function parseExpiryDate(raw) {
+    if (!raw)
+        return null;
+    const s = String(raw).trim();
+    if (!s)
+        return null;
+    const d = new Date(s.includes("T") ? s : `${s}T12:00:00`);
+    if (Number.isNaN(d.getTime()))
+        return null;
+    return d;
+}
 class InventoryLicenseError extends Error {
     constructor(message = "Restaurant inventory addon is not enabled") {
         super(message);
@@ -95,6 +114,7 @@ class InventoryService {
                 inventoryAddonEnabled: true,
                 inventoryWasteFactor: true,
                 inventoryAutoReorderEmailEnabled: true,
+                inventoryExpiryAlertDays: true,
             },
         }));
         if (!merchant)
@@ -106,6 +126,7 @@ class InventoryService {
             inventoryEnabled: enabled,
             wasteFactor: clampWasteFactor(merchant.inventoryWasteFactor),
             autoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
+            expiryAlertDays: clampExpiryAlertDays(merchant.inventoryExpiryAlertDays),
             merchantName: merchant.name,
         };
     }
@@ -124,6 +145,9 @@ class InventoryService {
         }
         if (updates.autoReorderEmailEnabled !== undefined) {
             patch.inventoryAutoReorderEmailEnabled = !!updates.autoReorderEmailEnabled;
+        }
+        if (updates.expiryAlertDays !== undefined) {
+            patch.inventoryExpiryAlertDays = clampExpiryAlertDays(updates.expiryAlertDays);
         }
         await db.update(db_1.schema.merchants).set(patch).where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId));
         return this.getLicense(merchantId);
@@ -301,6 +325,9 @@ class InventoryService {
         const name = String(input.name || "").trim().slice(0, 255);
         if (!name)
             throw new Error("Item name is required");
+        const barcode = input.barcode != null ? String(input.barcode).trim().slice(0, 255) || null : null;
+        if (barcode)
+            await this.assertBarcodeAvailable(merchantId, barcode);
         const db = (0, db_1.getDb)();
         const supplierId = await this.assertSupplier(merchantId, input.supplierId);
         const categoryId = await this.assertCategory(merchantId, input.categoryId);
@@ -309,6 +336,7 @@ class InventoryService {
             .values({
             merchantId,
             name,
+            barcode,
             unit: normalizeUnit(input.unit),
             cost: qtyStr(Math.max(0, num(input.cost))),
             onHand: qtyStr(Math.max(0, num(input.onHand))),
@@ -343,6 +371,12 @@ class InventoryService {
             if (!name)
                 throw new Error("Item name is required");
             patch.name = name;
+        }
+        if (input.barcode !== undefined) {
+            const barcode = String(input.barcode || "").trim().slice(0, 255) || null;
+            if (barcode)
+                await this.assertBarcodeAvailable(merchantId, barcode, itemId);
+            patch.barcode = barcode;
         }
         if (input.unit !== undefined)
             patch.unit = normalizeUnit(input.unit);
@@ -387,13 +421,25 @@ class InventoryService {
         const qty = await this.toBaseQty(merchantId, num(input.qty), input.unit, item.unit);
         if (!(qty > 0))
             throw new Error("Quantity must be greater than 0");
-        return this.applyMovement(merchantId, itemId, {
+        const { item: updated, movementId } = await this.applyMovement(merchantId, itemId, {
             type: "in",
             qty,
             unitCost: input.unitCost,
             note: input.note,
             supplierName: input.supplierName,
         });
+        const expiry = parseExpiryDate(input.expiryDate);
+        if (expiry) {
+            await this.createStockLot(merchantId, itemId, movementId, qty, expiry, input.note);
+            if (!item.perishable) {
+                const db = (0, db_1.getDb)();
+                await db
+                    .update(db_1.schema.inventoryItems)
+                    .set({ perishable: true, updatedAt: new Date() })
+                    .where((0, drizzle_orm_1.eq)(db_1.schema.inventoryItems.id, itemId));
+            }
+        }
+        return updated;
     }
     static async stockOut(merchantId, itemId, input) {
         await this.assertLicensed(merchantId);
@@ -401,7 +447,7 @@ class InventoryService {
         if (!(qty > 0))
             throw new Error("Quantity must be greater than 0");
         const type = input.reason === "out" ? "out" : "waste";
-        return this.applyMovement(merchantId, itemId, { type, qty, note: input.note });
+        return this.applyMovement(merchantId, itemId, { type, qty, note: input.note }).then((r) => r.item);
     }
     static async waste(merchantId, itemId, input) {
         return this.stockOut(merchantId, itemId, { ...input, reason: "waste" });
@@ -420,7 +466,7 @@ class InventoryService {
             qty: Math.abs(delta),
             note: input.note || `Count: system ${systemQty} → real ${realQty}`,
             adjustSign: delta > 0 ? 1 : -1,
-        });
+        }).then((r) => r.item);
     }
     static async listMovements(merchantId, itemId, limit = 100) {
         await this.assertLicensed(merchantId);
@@ -439,6 +485,144 @@ class InventoryService {
         await this.assertLicensed(merchantId);
         const items = await this.listItems(merchantId);
         return items.filter((i) => i.lowStock);
+    }
+    static async getItemByBarcode(merchantId, barcode) {
+        await this.assertLicensed(merchantId);
+        const code = String(barcode || "").trim();
+        if (!code)
+            return null;
+        const db = (0, db_1.getDb)();
+        const row = await db.query.inventoryItems.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.inventoryItems.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.inventoryItems.barcode, code)),
+            with: { supplier: true, category: true },
+        });
+        if (!row)
+            return null;
+        return this.serializeItem(row);
+    }
+    static async listExpiringSoon(merchantId) {
+        const license = await this.getLicense(merchantId);
+        if (!license.enabled)
+            return { leadDays: license.expiryAlertDays, lots: [] };
+        const leadDays = license.expiryAlertDays;
+        const horizon = new Date(Date.now() + leadDays * 24 * 60 * 60 * 1000);
+        const db = (0, db_1.getDb)();
+        const rows = await db.query.inventoryStockLots.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.inventoryStockLots.merchantId, merchantId), (0, drizzle_orm_1.sql) `${db_1.schema.inventoryStockLots.remainingQty}::numeric > 0`, (0, drizzle_orm_1.sql) `${db_1.schema.inventoryStockLots.expiryDate} IS NOT NULL`, (0, drizzle_orm_1.lte)(db_1.schema.inventoryStockLots.expiryDate, horizon)),
+            with: { item: true },
+            orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.inventoryStockLots.expiryDate)],
+            limit: 200,
+        });
+        const now = Date.now();
+        const lots = rows.map((lot) => {
+            const expiryMs = lot.expiryDate ? new Date(lot.expiryDate).getTime() : 0;
+            const daysLeft = expiryMs ? Math.ceil((expiryMs - now) / (24 * 60 * 60 * 1000)) : null;
+            return {
+                id: lot.id,
+                itemId: lot.itemId,
+                itemName: lot.item?.name || "",
+                unit: lot.item?.unit || "piece",
+                qty: num(lot.remainingQty),
+                expiryDate: lot.expiryDate,
+                daysLeft,
+                expired: daysLeft != null && daysLeft < 0,
+            };
+        });
+        return { leadDays, lots };
+    }
+    static async getStorekeeperBootstrap(merchantId) {
+        const license = await this.getLicense(merchantId);
+        if (!license.enabled)
+            throw new InventoryLicenseError();
+        const db = (0, db_1.getDb)();
+        const [categories, units] = await Promise.all([
+            db.query.inventoryCategories.findMany({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.inventoryCategories.merchantId, merchantId),
+                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.inventoryCategories.name)],
+            }),
+            db.query.inventoryUnits.findMany({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.inventoryUnits.merchantId, merchantId),
+                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.inventoryUnits.code)],
+            }),
+        ]);
+        return {
+            ...license,
+            categories: categories.map((c) => ({ id: c.id, name: c.name })),
+            units: units.length
+                ? units.map((u) => ({ code: u.code, name: u.name }))
+                : DEFAULT_UNITS,
+        };
+    }
+    static async storekeeperIntake(merchantId, input) {
+        await this.assertLicensed(merchantId);
+        const barcode = String(input.barcode || "").trim();
+        if (!barcode)
+            throw new Error("Barcode is required");
+        const qty = num(input.qty);
+        if (!(qty > 0))
+            throw new Error("Quantity must be greater than 0");
+        let item = await this.getItemByBarcode(merchantId, barcode);
+        let created = false;
+        if (!item) {
+            const name = String(input.name || "").trim();
+            if (!name)
+                throw new Error("Product name is required for new items");
+            created = true;
+            item = await this.createItem(merchantId, {
+                name,
+                barcode,
+                unit: input.unit,
+                categoryId: input.categoryId,
+                perishable: !!parseExpiryDate(input.expiryDate),
+                onHand: 0,
+                cost: input.cost,
+            });
+        }
+        else {
+            const patch = {};
+            const name = String(input.name || "").trim();
+            if (name && name !== item.name)
+                patch.name = name;
+            if (input.unit)
+                patch.unit = input.unit;
+            if (input.categoryId !== undefined)
+                patch.categoryId = input.categoryId;
+            if (parseExpiryDate(input.expiryDate))
+                patch.perishable = true;
+            if (Object.keys(patch).length) {
+                item = await this.updateItem(merchantId, item.id, patch);
+            }
+        }
+        const updated = await this.stockIn(merchantId, item.id, {
+            qty,
+            unit: input.unit,
+            unitCost: input.cost,
+            note: input.note || "Storekeeper intake",
+            expiryDate: input.expiryDate,
+        });
+        return { item: updated, created };
+    }
+    static async assertBarcodeAvailable(merchantId, barcode, excludeItemId) {
+        const db = (0, db_1.getDb)();
+        const existing = await db.query.inventoryItems.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.inventoryItems.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.inventoryItems.barcode, barcode)),
+            columns: { id: true },
+        });
+        if (existing && existing.id !== excludeItemId) {
+            throw new Error("Barcode already used by another stock item");
+        }
+    }
+    static async createStockLot(merchantId, itemId, movementId, qty, expiryDate, note) {
+        const db = (0, db_1.getDb)();
+        await db.insert(db_1.schema.inventoryStockLots).values({
+            merchantId,
+            itemId,
+            movementId,
+            qty: qtyStr(qty),
+            remainingQty: qtyStr(qty),
+            expiryDate,
+            note: note ? String(note).slice(0, 500) : null,
+        });
     }
     static async usageReport(merchantId, days = 30) {
         await this.assertLicensed(merchantId);
@@ -816,6 +1000,7 @@ class InventoryService {
                 subject,
                 text,
                 html: `<p>${text.replace(/\n/g, "<br/>")}</p>`,
+                emailType: "inventory_reorder",
             });
             await db
                 .update(db_1.schema.inventorySuppliers)
@@ -1050,7 +1235,7 @@ class InventoryService {
                 : -input.qty;
         const next = Math.round((prev + signed) * 10000) / 10000;
         const db = (0, db_1.getDb)();
-        await db.insert(db_1.schema.inventoryMovements).values({
+        const [movement] = await db.insert(db_1.schema.inventoryMovements).values({
             merchantId,
             itemId,
             type: input.type,
@@ -1059,7 +1244,7 @@ class InventoryService {
             note: input.note ? String(input.note).slice(0, 500) : null,
             supplierName: input.supplierName ? String(input.supplierName).slice(0, 255) : null,
             orderId: input.orderId || null,
-        });
+        }).returning({ id: db_1.schema.inventoryMovements.id });
         const [updated] = await db
             .update(db_1.schema.inventoryItems)
             .set({ onHand: qtyStr(next), updatedAt: new Date() })
@@ -1074,7 +1259,7 @@ class InventoryService {
         if (!input.skipAutoReorder) {
             void this.maybeAutoReorder(merchantId, [itemId], prev, next).catch((err) => console.warn("[inventory] auto-reorder failed:", err));
         }
-        return this.serializeItem({ ...(updated || item), supplier: null });
+        return { item: this.serializeItem({ ...(updated || item), supplier: null }), movementId: movement.id };
     }
     static async maybeAutoReorder(merchantId, itemIds, previousOnHand, newOnHand) {
         if (!itemIds.length)

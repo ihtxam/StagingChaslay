@@ -197,6 +197,7 @@ router.post("/:id/email", chaslay_api_key_middleware_1.requireChaslayApiKey, asy
             subject,
             html,
             text,
+            emailType: "receipt",
         });
         res.json({ success: true, message: `Receipt sent to ${email}`, url: receiptUrl });
     }

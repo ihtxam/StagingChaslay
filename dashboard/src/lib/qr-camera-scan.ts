@@ -8,7 +8,8 @@ export type QrCameraScanHandle = {
 
 export function startQrCameraScan(
   video: HTMLVideoElement,
-  onCode: (raw: string) => boolean
+  onCode: (raw: string) => boolean,
+  formats: string[] = ['qr_code']
 ): QrCameraScanHandle {
   let stopped = false;
   let loopId: number | null = null;
@@ -18,7 +19,7 @@ export function startQrCameraScan(
 
   const Detector = (window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => BarcodeDetectorLike })
     .BarcodeDetector;
-  const detector = Detector ? new Detector({ formats: ['qr_code'] }) : null;
+  const detector = Detector ? new Detector({ formats }) : null;
 
   let jsQrDecode: ((data: Uint8ClampedArray, width: number, height: number) => { data: string } | null) | null =
     null;

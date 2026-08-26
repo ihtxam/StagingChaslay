@@ -48,6 +48,10 @@ export declare class ReportExportService {
                 label: string;
                 amount: number;
             }[];
+            salesByHour: {
+                label: string;
+                amount: number;
+            }[];
             paymentMethods: {
                 method: string;
                 label: string;
@@ -262,6 +266,10 @@ export declare class ReportExportService {
                 totalSales: number;
             };
             salesOverTime: {
+                label: string;
+                amount: number;
+            }[];
+            salesByHour: {
                 label: string;
                 amount: number;
             }[];

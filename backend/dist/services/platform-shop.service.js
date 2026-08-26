@@ -409,6 +409,7 @@ class PlatformShopService {
                     html: `<div style="font-family:system-ui,sans-serif">${merchantCopy.html}</div>`,
                     text: merchantCopy.text,
                     merchantId: merchant.id,
+                    emailType: "platform_shop_order",
                 });
             }
             const adminTo = process.env.PLATFORM_SHOP_ADMIN_EMAIL || process.env.SUPERADMIN_EMAIL;
@@ -424,6 +425,7 @@ class PlatformShopService {
               ${order.notes ? `<p style="font-size:13px;color:#78716c">Notes: ${order.notes}</p>` : ''}
             </div>`,
                     text: `${adminCopy.text} from ${merchant.name}`,
+                    emailType: "platform_shop_order",
                 });
             }
         }

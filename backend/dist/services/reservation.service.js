@@ -386,7 +386,7 @@ class ReservationService {
         const db = (0, db_1.getDb)();
         const merchant = await getMerchant(merchantId);
         const cfg = this.getSettingsForMerchant(merchant);
-        if (!cfg.enabled && input.source === "web") {
+        if (!cfg.enabled) {
             throw new Error("Reservations are not enabled");
         }
         const settings = cfg.settings;
@@ -836,6 +836,7 @@ class ReservationService {
                 html,
                 text: `${copy.subject}\n${copy.body}\n${labels.code}: ${reservation.code}\n${labels.when}: ${when}\n${labels.guests}: ${reservation.partySize}`,
                 merchantId: merchant.id,
+                emailType: kind === "reminder" ? "reservation_status" : "reservation_confirmation",
             });
             const db = (0, db_1.getDb)();
             if (kind === "reminder") {
@@ -913,6 +914,7 @@ class ReservationService {
                 html,
                 text: `${subjects[kind]}\n${reservation.guestName} · ${reservation.partySize} guests · ${when}`,
                 merchantId: merchant.id,
+                emailType: "reservation_admin",
             });
         }
         catch (err) {
@@ -1074,6 +1076,7 @@ class ReservationService {
                     html,
                     text,
                     merchantId: merchant.id,
+                    emailType: "reservation_daily",
                 });
                 const nextSettings = {
                     ...settings,

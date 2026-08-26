@@ -139,6 +139,7 @@ export declare class MerchantService {
         maxWaiterPosts: number;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -415,6 +416,7 @@ export declare class MerchantService {
         maxWaiterPosts: number;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -529,6 +531,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -666,6 +669,7 @@ export declare class MerchantService {
         maxWaiterPosts: number;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -913,6 +917,7 @@ export declare class MerchantService {
         maxWaiterPosts: number;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1159,6 +1164,7 @@ export declare class MerchantService {
         maxWaiterPosts: number;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1389,6 +1395,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1508,6 +1515,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1627,6 +1635,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1767,6 +1776,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1890,6 +1900,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -2010,6 +2021,7 @@ export declare class MerchantService {
             odsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
+            inventoryExpiryAlertDays: number;
             posColorTheme: string;
             reservationsEnabled: boolean;
             reservationSettings: schema.ReservationSettings | null;

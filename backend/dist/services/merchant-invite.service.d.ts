@@ -55,6 +55,9 @@ export declare class MerchantInviteService {
             deliveryEtaMinutes: number | null;
             minPreOrderDelayMinutes: number | null;
             deliveryMenuMarkup: string | null;
+            deliveryDriverPayMode: string;
+            deliveryDriverHourlyRate: string | null;
+            deliveryPerOrderFee: string | null;
             adyenMerchantAccount: string | null;
             adyenApiKey: string | null;
             adyenClientId: string | null;
@@ -91,14 +94,18 @@ export declare class MerchantInviteService {
             inventoryAddonEnabled: boolean;
             signageAddonEnabled: boolean;
             signageScreenLimit: number;
+            kdsAddonEnabled: boolean;
+            odsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
+            inventoryExpiryAlertDays: number;
             posColorTheme: string;
             reservationsEnabled: boolean;
             reservationSettings: schema.ReservationSettings | null;
             vacationSettings: schema.VacationSettings | null;
             emailSmtpSettings: schema.MerchantSmtpSettings | null;
             emailBrevoSettings: schema.MerchantBrevoSettings | null;
+            emailDeliveryMode: string;
             marketingSettings: schema.MarketingSettings | null;
             reportEmailSettings: schema.ReportEmailSettings | null;
             posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;

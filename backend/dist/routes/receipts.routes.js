@@ -134,7 +134,7 @@ async function findReceiptByKitchenShout(ref) {
             id: db_1.schema.orders.id,
             clientId: db_1.schema.orders.clientId,
             orderNumber: db_1.schema.orders.orderNumber,
-        tabNumber: db_1.schema.orders.tabNumber,
+            tabNumber: db_1.schema.orders.tabNumber,
             notes: db_1.schema.orders.notes,
             customerName: db_1.schema.orders.customerName,
             fulfillmentChannel: db_1.schema.orders.fulfillmentChannel,

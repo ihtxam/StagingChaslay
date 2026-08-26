@@ -19,6 +19,7 @@ exports.PERMISSIONS = [
     "MANAGE_TABLES",
     "TAKEAWAY_ORDERS",
     "DELIVERY_ORDERS",
+    "VIEW_DELIVERY_TRACKING",
     "VIEW_ORDER_HISTORY",
     "CANCEL_ORDERS",
     "REFUND_ORDERS",
@@ -36,6 +37,7 @@ exports.PERMISSIONS = [
     "MANAGE_BILLING",
     "END_OF_DAY",
     "MANAGE_INVENTORY",
+    "STOREKEEPER_INTAKE",
 ];
 function parsePermissions(raw) {
     if (!raw)
@@ -76,6 +78,7 @@ exports.DEFAULT_ROLE_TEMPLATES = [
             "MANAGE_TABLES",
             "TAKEAWAY_ORDERS",
             "DELIVERY_ORDERS",
+            "VIEW_DELIVERY_TRACKING",
             "VIEW_ORDER_HISTORY",
             "CANCEL_ORDERS",
             "REFUND_ORDERS",
@@ -106,7 +109,6 @@ exports.DEFAULT_ROLE_TEMPLATES = [
             "MANAGE_TABLES",
             "TAKEAWAY_ORDERS",
             "VIEW_ORDER_HISTORY",
-            "CANCEL_ORDERS",
             "MANAGE_PRODUCTS",
         ],
     },
@@ -124,7 +126,6 @@ exports.DEFAULT_ROLE_TEMPLATES = [
             "MANAGE_TABLES",
             "TAKEAWAY_ORDERS",
             "VIEW_ORDER_HISTORY",
-            "CANCEL_ORDERS",
             "MANAGE_PRODUCTS",
         ],
     },
@@ -132,7 +133,7 @@ exports.DEFAULT_ROLE_TEMPLATES = [
         name: "Delivery",
         isSystem: true,
         sortOrder: 30,
-        permissions: ["USE_POS", "DELIVERY_ORDERS", "VIEW_ORDER_HISTORY", "SEND_KITCHEN", "PROCESS_PAYMENTS"],
+        permissions: ["DELIVERY_ORDERS"],
     },
     {
         name: "User",
@@ -161,6 +162,13 @@ exports.DEFAULT_ROLE_TEMPLATES = [
             "APPLY_DISCOUNTS",
             "END_OF_DAY",
         ],
+    },
+    {
+        /** Mobile stock intake — scan barcodes, receive stock, expiry lots. No full panel. */
+        name: "Storekeeper",
+        isSystem: true,
+        sortOrder: 55,
+        permissions: ["STOREKEEPER_INTAKE"],
     },
 ];
 /**
@@ -227,6 +235,7 @@ exports.PANEL_ROUTE_PERMISSIONS = {
     "/merchant/inventory/units": ["MANAGE_INVENTORY"],
     "/merchant/inventory/report": ["MANAGE_INVENTORY"],
     "/merchant/inventory/consumption": ["MANAGE_INVENTORY"],
+    "/merchant/storekeeper": ["STOREKEEPER_INTAKE", "MANAGE_INVENTORY"],
 };
 /** Staff JWT may enter merchant APIs with any of these (POS, waiter, catalog, or full panel). */
 exports.STAFF_MERCHANT_ENTRY_PERMISSIONS = [
@@ -236,11 +245,12 @@ exports.STAFF_MERCHANT_ENTRY_PERMISSIONS = [
     "MANAGE_PRODUCTS",
     "MANAGE_TABLES",
     "SEND_KITCHEN",
+    "MANAGE_INVENTORY",
+    "STOREKEEPER_INTAKE",
 ];
 const WAITER_PRIVILEGED_BLOCKED = [
     "VIEW_REPORTS",
     "VIEW_ALL_SALES",
-    "END_OF_DAY",
     "ACCESS_PANEL",
     "OPEN_CASH_DRAWER",
     "MANAGE_SETTINGS",
@@ -252,6 +262,7 @@ const WAITER_PRIVILEGED_BLOCKED = [
     "MANAGE_OFFERS",
     "MANAGE_ONLINE_SHOP",
     "REFUND_ORDERS",
+    "CANCEL_ORDERS",
 ];
 /** Classify system Waiter templates. Custom roles are not matched. */
 function waiterSystemKind(name) {
@@ -263,7 +274,7 @@ function waiterSystemKind(name) {
     return "pos-only";
 }
 function waiterBlockedPermissions(_kind) {
-    // Menu (MANAGE_PRODUCTS) and Orders (VIEW_ORDER_HISTORY) are assigned in Roles.
+    // Menu (MANAGE_PRODUCTS), orders, and own-sales EOD (END_OF_DAY) stay role-assigned.
     return [...WAITER_PRIVILEGED_BLOCKED];
 }
 //# sourceMappingURL=permissions.js.map

@@ -27,6 +27,7 @@ export const PERMISSIONS = [
   "MANAGE_BILLING",
   "END_OF_DAY",
   "MANAGE_INVENTORY",
+  "STOREKEEPER_INTAKE",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -164,6 +165,13 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "END_OF_DAY",
     ],
   },
+  {
+    /** Mobile stock intake — scan barcodes, receive stock, expiry lots. No full panel. */
+    name: "Storekeeper",
+    isSystem: true,
+    sortOrder: 55,
+    permissions: ["STOREKEEPER_INTAKE"],
+  },
 ];
 
 /**
@@ -231,6 +239,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   "/merchant/inventory/units": ["MANAGE_INVENTORY"],
   "/merchant/inventory/report": ["MANAGE_INVENTORY"],
   "/merchant/inventory/consumption": ["MANAGE_INVENTORY"],
+  "/merchant/storekeeper": ["STOREKEEPER_INTAKE", "MANAGE_INVENTORY"],
 };
 
 /** Staff JWT may enter merchant APIs with any of these (POS, waiter, catalog, or full panel). */
@@ -241,6 +250,8 @@ export const STAFF_MERCHANT_ENTRY_PERMISSIONS: Permission[] = [
   "MANAGE_PRODUCTS",
   "MANAGE_TABLES",
   "SEND_KITCHEN",
+  "MANAGE_INVENTORY",
+  "STOREKEEPER_INTAKE",
 ];
 
 const WAITER_PRIVILEGED_BLOCKED: Permission[] = [

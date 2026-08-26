@@ -68,6 +68,10 @@ export interface SyncSalePayload {
     customerPhone?: string | null;
     customerEmail?: string | null;
     shippingAddress?: string | null;
+    deliveryLatitude?: number | string | null;
+    deliveryLongitude?: number | string | null;
+    lat?: number | string | null;
+    lng?: number | string | null;
     tableId?: string | null;
     tableLabel?: string | null;
     guestCount?: number | null;
@@ -233,6 +237,10 @@ export declare class SyncService {
             adyenCashierReceiptJson: string | null;
             notes: string | null;
             shippingAddress: string | null;
+            deliveryLatitude: string | null;
+            deliveryLongitude: string | null;
+            assignedDeliveryStaffId: string | null;
+            deliveryTrackingToken: string | null;
             deliveryZoneId: string | null;
             scheduledFor: Date | null;
             customerName: string | null;

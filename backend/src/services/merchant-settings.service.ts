@@ -188,6 +188,7 @@ export class MerchantSettingsService {
       odsEnabled: odsOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
+      inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),
       posColorTheme: (merchant.posColorTheme as string) || "teal",
       storeHours: merchant.storeHours || {},
       shopLogoUrl: merchant.shopLogoUrl,
@@ -344,6 +345,7 @@ export class MerchantSettingsService {
       deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
       inventoryWasteFactor?: number;
       inventoryAutoReorderEmailEnabled?: boolean;
+      inventoryExpiryAlertDays?: number;
     }
   ) {
     const db = getDb();
@@ -579,6 +581,13 @@ export class MerchantSettingsService {
     }
     if (updates.inventoryAutoReorderEmailEnabled !== undefined) {
       patch.inventoryAutoReorderEmailEnabled = !!updates.inventoryAutoReorderEmailEnabled;
+    }
+    if (updates.inventoryExpiryAlertDays !== undefined) {
+      const n = Math.round(Number(updates.inventoryExpiryAlertDays));
+      if (!Number.isFinite(n) || n < 1 || n > 365) {
+        throw new Error("inventoryExpiryAlertDays must be between 1 and 365");
+      }
+      patch.inventoryExpiryAlertDays = n;
     }
     if (updates.posPrintSettings !== undefined) {
       patch.posPrintSettings = normalizePosPrintSettings(updates.posPrintSettings);

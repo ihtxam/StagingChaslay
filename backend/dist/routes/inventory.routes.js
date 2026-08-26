@@ -93,6 +93,7 @@ router.put("/settings", async (req, res) => {
         const license = await inventory_service_1.InventoryService.updateSettings(merchantId, {
             wasteFactor: req.body?.wasteFactor != null ? Number(req.body.wasteFactor) : undefined,
             autoReorderEmailEnabled: req.body?.autoReorderEmailEnabled != null ? !!req.body.autoReorderEmailEnabled : undefined,
+            expiryAlertDays: req.body?.expiryAlertDays != null ? Number(req.body.expiryAlertDays) : undefined,
         });
         res.json({ success: true, ...license });
     }
@@ -183,6 +184,18 @@ router.get("/low-stock", async (req, res) => {
     }
     catch (error) {
         handleError(res, error, "Failed to load low stock");
+    }
+});
+router.get("/expiring-soon", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const data = await inventory_service_1.InventoryService.listExpiringSoon(merchantId);
+        res.json({ success: true, ...data });
+    }
+    catch (error) {
+        handleError(res, error, "Failed to load expiring stock");
     }
 });
 router.get("/usage", async (req, res) => {

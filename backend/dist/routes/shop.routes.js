@@ -501,6 +501,9 @@ router.get("/:slug", async (req, res) => {
             },
         };
         const displayHours = (0, geo_1.getDisplayHoursNow)(hours, "takeaway");
+        const cmsTheme = merchant.cmsHomepageEnabled
+            ? await cms_service_1.CmsService.getPublishedTheme(merchant.id)
+            : null;
         res.json({
             success: true,
             data: {
@@ -510,6 +513,7 @@ router.get("/:slug", async (req, res) => {
                 subdomain: merchant.subdomain,
                 customDomain: merchant.customDomain,
                 cmsHomepageEnabled: !!merchant.cmsHomepageEnabled,
+                cmsTheme,
                 address: merchant.address,
                 city: merchant.city,
                 phone: merchant.phone,
@@ -1845,10 +1849,39 @@ router.post("/:slug/orders", async (req, res) => {
         const estimatedReadyAt = scheduledFor
             ? new Date(scheduledFor)
             : new Date(Date.now() + prepMinutes * 60 * 1000);
+        let deliveryLat = null;
+        let deliveryLng = null;
+        let deliveryTrackingToken = null;
+        if (channel === "delivery") {
+            const { generateDeliveryTrackingToken } = await Promise.resolve().then(() => __importStar(require("@/lib/delivery-tracking-url")));
+            deliveryTrackingToken = generateDeliveryTrackingToken();
+            const latNum = lat != null ? Number(lat) : NaN;
+            const lngNum = lng != null ? Number(lng) : NaN;
+            if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+                deliveryLat = String(latNum);
+                deliveryLng = String(lngNum);
+            }
+            else if (addressText) {
+                try {
+                    const geo = await (0, geocode_1.geocodeQuery)(addressText);
+                    if (geo?.lat != null && geo?.lng != null) {
+                        deliveryLat = String(geo.lat);
+                        deliveryLng = String(geo.lng);
+                    }
+                }
+                catch {
+                    /* geocode optional */
+                }
+            }
+        }
         // Prefer logged-in customer for loyalty redemptions
         if ((totalPointsRedeemed > 0 || requestedCashPoints > 0) && authCustomer.customerId) {
             customerId = authCustomer.customerId;
         }
+        const { normalizeDeliveryPlatformSettings } = await Promise.resolve().then(() => __importStar(require("@/lib/delivery-platform-settings")));
+        const shopAutoAccept = normalizeDeliveryPlatformSettings(merchant.deliveryPlatformSettings)
+            .onlineShopAutoAccept;
+        const initialOrderStatus = shopAutoAccept ? "preparing" : "pending_approval";
         const [order] = await db
             .insert(db_1.schema.orders)
             .values({
@@ -1858,7 +1891,7 @@ router.post("/:slug/orders", async (req, res) => {
             orderType: "web_shop",
             orderSource: "online_shop",
             fulfillmentChannel: channel,
-            status: "pending_approval",
+            status: initialOrderStatus,
             subtotal: subtotal.toFixed(2),
             taxAmount: taxAmount.toFixed(2),
             discountAmount: (0, money_1.roundMoney2)(offerDiscount + voucherDiscount + pointsDiscount + giftCardDiscount).toFixed(2),
@@ -1885,6 +1918,9 @@ router.post("/:slug/orders", async (req, res) => {
             customerName: customerName.trim(),
             customerPhone: customerPhone.trim(),
             customerEmail: emailNorm || null,
+            deliveryLatitude: deliveryLat,
+            deliveryLongitude: deliveryLng,
+            deliveryTrackingToken,
         })
             .returning();
         try {
@@ -1993,11 +2029,19 @@ router.post("/:slug/orders", async (req, res) => {
         if (payMethod === "cash" && customerId && loyaltyProgram.enabled) {
             finalOrder = (await earnLoyaltyForOrder(merchant, order));
         }
-        // Till notification on arrival; kitchen on Accept; customer receipt on payment.
+        if (shopAutoAccept) {
+            const { enterKitchenFromOrder } = await Promise.resolve().then(() => __importStar(require("@/services/kitchen-ingress.service")));
+            void enterKitchenFromOrder(merchant.id, order.id, {
+                printKitchen: true,
+                orderSource: "online_shop",
+            });
+        }
+        // Till notification on arrival; kitchen ticket when auto-accept or on manual Accept.
         try {
             const { DeliveryPlatformService } = await Promise.resolve().then(() => __importStar(require("@/services/delivery-platform.service")));
             await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
-                printNotification: true,
+                printDeliveryReceipt: order.fulfillmentChannel === "delivery",
+                printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
                 printKitchen: false,
                 printReceipt: false,
             });
@@ -2067,6 +2111,26 @@ router.post("/:slug/orders", async (req, res) => {
     catch (error) {
         console.error("Shop order error:", error);
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create order" });
+    }
+});
+/**
+ * GET /api/shop/:slug/orders/:orderId/tracking?token= — guest live driver map
+ */
+router.get("/:slug/orders/:orderId/tracking", async (req, res) => {
+    try {
+        const merchant = await resolveMerchant(req.params.slug);
+        if (!merchant?.shopEnabled)
+            return res.status(404).json({ error: "Shop not found" });
+        const token = String(req.query.token || "").trim();
+        if (!token)
+            return res.status(400).json({ error: "Tracking token required" });
+        const { DeliveryTrackingService } = await Promise.resolve().then(() => __importStar(require("@/services/delivery-tracking.service")));
+        const payload = await DeliveryTrackingService.getPublicTracking(merchant.id, req.params.orderId, token);
+        res.json({ success: true, ...payload });
+    }
+    catch (error) {
+        const msg = error instanceof Error ? error.message : "Failed to load tracking";
+        res.status(msg.includes("Invalid") ? 403 : 404).json({ error: msg });
     }
 });
 /**
@@ -2209,8 +2273,9 @@ router.post("/:slug/orders/:orderId/confirm-payment", async (req, res) => {
             const { DeliveryPlatformService } = await Promise.resolve().then(() => __importStar(require("@/services/delivery-platform.service")));
             await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
                 printKitchen: false,
+                printDeliveryReceipt: updated.fulfillmentChannel === "delivery",
                 printNotification: false,
-                printReceipt: true,
+                printReceipt: updated.fulfillmentChannel !== "delivery",
             });
         }
         catch (printErr) {

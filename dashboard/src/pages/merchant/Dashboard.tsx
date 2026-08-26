@@ -45,7 +45,9 @@ import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
 import WaiterApp from './WaiterApp';
 import DeliveryTrackingPage from './DeliveryTracking';
 import DeliveryDriverPage from './DeliveryDriver';
+import StorekeeperApp from './StorekeeperApp';
 import MerchantOrderAlerts from '@/components/merchant/MerchantOrderAlerts';
+import InventoryExpiryAlerts from '@/components/merchant/InventoryExpiryAlerts';
 import Reports from './Reports';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
@@ -64,6 +66,8 @@ import {
   getEffectiveRegisterDisplay,
   isCatalogPanelPath,
   isDeliveryDriverOnlyStaff,
+  isStorekeeperOnlyStaff,
+  storekeeperHomePath,
   isOrdersPanelPath,
   isReportsPanelPath,
   isStaffJwt,
@@ -126,7 +130,8 @@ function MerchantShell() {
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
   const isWaiterRoute = /^\/merchant\/waiter\/?$/.test(location.pathname);
   const isDriverRoute = /^\/merchant\/delivery\/driver\/?$/.test(location.pathname);
-  const isPosLikeRoute = isPosRoute || isWaiterRoute;
+  const isStorekeeperRoute = /^\/merchant\/storekeeper\/?$/.test(location.pathname);
+  const isPosLikeRoute = isPosRoute || isWaiterRoute || isStorekeeperRoute;
   const isPosEmbed =
     typeof window !== 'undefined' &&
     (new URLSearchParams(location.search).get('embed') === '1' ||
@@ -341,6 +346,13 @@ function MerchantShell() {
     [inventoryLicensed, effective.permissions, effective.isOwner]
   );
 
+  const allowStorekeeper = useCallback(
+    (path: string) =>
+      inventoryLicensed &&
+      canAccessRoute(path, effective.permissions, effective.isOwner, null),
+    [inventoryLicensed, effective.permissions, effective.isOwner]
+  );
+
   const allowSignage = useCallback(
     (path: string) =>
       signageLicensed &&
@@ -366,6 +378,15 @@ function MerchantShell() {
     if (path === '/merchant/pos' || path === '/merchant/waiter' || path.startsWith('/merchant/pos/')) {
       navigate(deliveryDriverHomePath(), { replace: true });
     }
+  }, [effective.isOwner, effective.permissions, location.pathname, navigate]);
+
+  // Storekeeper-only staff use the mobile intake app, not the full panel.
+  useEffect(() => {
+    if (effective.isOwner) return;
+    if (!isStorekeeperOnlyStaff(effective.permissions, false)) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (path === storekeeperHomePath()) return;
+    navigate(storekeeperHomePath(), { replace: true });
   }, [effective.isOwner, effective.permissions, location.pathname, navigate]);
 
   const showWebPosQuickAction = useMemo(
@@ -409,6 +430,7 @@ function MerchantShell() {
             { label: t('invNavList'), path: '/merchant/inventory', icon: '📋' },
             { label: t('invNavStockTable'), path: '/merchant/inventory/list', icon: '📊' },
             { label: t('invNavInbound'), path: '/merchant/inventory/inbound', icon: '⬇️' },
+            { label: t('storekeeperTitle'), path: '/merchant/storekeeper', icon: '📱' },
             { label: t('invNavOutbound'), path: '/merchant/inventory/outbound', icon: '⬆️' },
             { label: t('invNavCounting'), path: '/merchant/inventory/counting', icon: '🧮' },
             { label: t('invNavHistory'), path: '/merchant/inventory/history', icon: '🕓' },
@@ -501,6 +523,7 @@ function MerchantShell() {
         )}
 
         {!hideChrome ? <PlatformStatusBannerSlot /> : null}
+        {!hideChrome && allowInventory('/merchant/inventory') ? <InventoryExpiryAlerts /> : null}
 
         <main
           className={
@@ -555,6 +578,14 @@ function MerchantShell() {
               }
             />
             <Route path="waiter" element={<WaiterApp appMode={hideChrome} />} />
+            <Route
+              path="storekeeper"
+              element={
+                <PanelRouteGuard path="/merchant/storekeeper" allow={allowStorekeeper}>
+                  <StorekeeperApp />
+                </PanelRouteGuard>
+              }
+            />
             <Route
               path="reports"
               element={

@@ -655,6 +655,26 @@ class CmsService {
             return null;
         return { ...page, blocks: normalizeCmsBlocks(page.blocks, page.title) };
     }
+    /** Theme tokens from published homepage (for shop / menu / reservations styling). */
+    static getThemeFromBlocks(blocks) {
+        if (!blocks || typeof blocks !== "object")
+            return null;
+        const raw = blocks;
+        if (raw.engine === "openpage" && raw.config && typeof raw.config === "object") {
+            const theme = raw.config.theme;
+            if (theme && typeof theme === "object")
+                return theme;
+        }
+        return null;
+    }
+    static async getPublishedTheme(merchantId) {
+        const page = await this.getPublishedHomepage(merchantId);
+        if (!page)
+            return null;
+        return (CmsService.getThemeFromBlocks(page.blocks) ||
+            page.theme ||
+            null);
+    }
     static async getPublishedBySlug(merchantId, slug) {
         const db = (0, db_1.getDb)();
         const page = await db.query.cmsPages.findFirst({

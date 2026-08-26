@@ -45,6 +45,10 @@ export declare class OrderService {
         adyenCashierReceiptJson: string | null;
         notes: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
         deliveryZoneId: string | null;
         scheduledFor: Date | null;
         customerName: string | null;
@@ -121,6 +125,10 @@ export declare class OrderService {
         adyenCashierReceiptJson: string | null;
         notes: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
         deliveryZoneId: string | null;
         scheduledFor: Date | null;
         customerName: string | null;
@@ -304,6 +312,10 @@ export declare class OrderService {
         adyenCashierReceiptJson: string | null;
         notes: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
         deliveryZoneId: string | null;
         scheduledFor: Date | null;
         customerName: string | null;
@@ -500,6 +512,10 @@ export declare class OrderService {
         adyenCashierReceiptJson: string | null;
         notes: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
         deliveryZoneId: string | null;
         scheduledFor: Date | null;
         customerName: string | null;
@@ -554,6 +570,8 @@ export declare class OrderService {
         rejectReason?: string | null;
         estimatedReadyAt?: string | Date | null;
         etaAdjustMinutes?: number | null;
+        /** WebPOS already printed the guest receipt locally on collect. */
+        skipReceiptPrint?: boolean;
     }): Promise<{
         id: string;
         merchantId: string;
@@ -590,6 +608,10 @@ export declare class OrderService {
         adyenCashierReceiptJson: string | null;
         notes: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
         deliveryZoneId: string | null;
         scheduledFor: Date | null;
         customerName: string | null;
@@ -666,6 +688,10 @@ export declare class OrderService {
         adyenCashierReceiptJson: string | null;
         notes: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
         deliveryZoneId: string | null;
         scheduledFor: Date | null;
         customerName: string | null;
@@ -757,6 +783,10 @@ export declare class OrderService {
         adyenCashierReceiptJson: string | null;
         notes: string | null;
         shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
         deliveryZoneId: string | null;
         scheduledFor: Date | null;
         customerName: string | null;

@@ -51,10 +51,10 @@ export declare class CmsService {
         slug: string;
         merchantId: string;
         title: string;
+        theme: schema.CmsTheme | null;
         isHomepage: boolean;
         templateKey: string | null;
         blocks: schema.CmsOpenPageData | schema.CmsPuckData | schema.CmsBlock[];
-        theme: schema.CmsTheme | null;
         seoTitle: string | null;
         seoDescription: string | null;
         publishedAt: Date | null;
@@ -68,9 +68,9 @@ export declare class CmsService {
         slug: string;
         merchantId: string;
         title: string;
+        theme: schema.CmsTheme | null;
         isHomepage: boolean;
         templateKey: string | null;
-        theme: schema.CmsTheme | null;
         seoTitle: string | null;
         seoDescription: string | null;
         publishedAt: Date | null;
@@ -94,9 +94,9 @@ export declare class CmsService {
         slug: string;
         merchantId: string;
         title: string;
+        theme: schema.CmsTheme | null;
         isHomepage: boolean;
         templateKey: string | null;
-        theme: schema.CmsTheme | null;
         seoTitle: string | null;
         seoDescription: string | null;
         publishedAt: Date | null;
@@ -139,13 +139,16 @@ export declare class CmsService {
         slug: string;
         merchantId: string;
         title: string;
+        theme: schema.CmsTheme | null;
         isHomepage: boolean;
         templateKey: string | null;
-        theme: schema.CmsTheme | null;
         seoTitle: string | null;
         seoDescription: string | null;
         publishedAt: Date | null;
     } | null>;
+    /** Theme tokens from published homepage (for shop / menu / reservations styling). */
+    static getThemeFromBlocks(blocks: unknown): Record<string, unknown> | null;
+    static getPublishedTheme(merchantId: string): Promise<Record<string, unknown> | null>;
     static getPublishedBySlug(merchantId: string, slug: string): Promise<{
         blocks: CmsOpenPageData;
         id: string;
@@ -155,9 +158,9 @@ export declare class CmsService {
         slug: string;
         merchantId: string;
         title: string;
+        theme: schema.CmsTheme | null;
         isHomepage: boolean;
         templateKey: string | null;
-        theme: schema.CmsTheme | null;
         seoTitle: string | null;
         seoDescription: string | null;
         publishedAt: Date | null;

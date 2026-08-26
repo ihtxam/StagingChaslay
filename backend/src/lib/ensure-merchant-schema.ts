@@ -86,6 +86,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_waste_factor numeric(5,4) NOT NULL DEFAULT 0.20",
   inventory_auto_reorder_email_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_auto_reorder_email_enabled boolean NOT NULL DEFAULT false",
+  inventory_expiry_alert_days:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_expiry_alert_days integer NOT NULL DEFAULT 30",
   signage_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS signage_addon_enabled boolean NOT NULL DEFAULT false",
   signage_screen_limit:
@@ -103,6 +105,7 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   inventory_item_id: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid",
   inventory_qty: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_qty numeric(14,4) NOT NULL DEFAULT 0",
   category_id: "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS category_id uuid",
+  inventory_items_barcode: "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS barcode varchar(255)",
   inventory_items_is_demo:
     "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
   inventory_categories_is_demo:
@@ -405,6 +408,23 @@ const TABLE_PATCHES: string[] = [
   `CREATE INDEX IF NOT EXISTS inventory_movements_item_idx ON inventory_movements(item_id, created_at)`,
   `CREATE INDEX IF NOT EXISTS inventory_movements_order_idx ON inventory_movements(order_id)`,
   `CREATE INDEX IF NOT EXISTS inventory_movements_type_idx ON inventory_movements(merchant_id, type)`,
+  `CREATE TABLE IF NOT EXISTS inventory_stock_lots (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    item_id uuid NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+    movement_id uuid REFERENCES inventory_movements(id) ON DELETE SET NULL,
+    qty numeric(14, 4) NOT NULL,
+    remaining_qty numeric(14, 4) NOT NULL,
+    expiry_date timestamptz,
+    note text,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS inventory_stock_lots_merchant_idx ON inventory_stock_lots(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS inventory_stock_lots_item_idx ON inventory_stock_lots(item_id, expiry_date)`,
+  `CREATE INDEX IF NOT EXISTS inventory_stock_lots_expiry_idx ON inventory_stock_lots(merchant_id, expiry_date)`,
+  `ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS barcode varchar(255)`,
+  `CREATE INDEX IF NOT EXISTS inventory_items_merchant_barcode_idx ON inventory_items(merchant_id, barcode)`,
+  `ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_expiry_alert_days integer NOT NULL DEFAULT 30`,
   `CREATE TABLE IF NOT EXISTS product_recipes (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,

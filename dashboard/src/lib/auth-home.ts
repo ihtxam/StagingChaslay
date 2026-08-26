@@ -4,6 +4,8 @@ import {
   hasFullPanelAccess,
   hasPermission,
   isDeliveryDriverOnlyStaff,
+  isStorekeeperOnlyStaff,
+  storekeeperHomePath,
 } from '@/lib/permissions';
 import type { User } from '@/store/auth';
 
@@ -15,6 +17,7 @@ export function homePathForUser(user: Pick<User, 'role' | 'permissions' | 'isOwn
 
   const perms = user.permissions as Permission[] | undefined;
   if (isDeliveryDriverOnlyStaff(perms, user.isOwner === true)) return deliveryDriverHomePath();
+  if (isStorekeeperOnlyStaff(perms, user.isOwner === true)) return storekeeperHomePath();
   if (hasFullPanelAccess(perms, user.isOwner === true)) return '/merchant';
   if (hasPermission(perms, 'USE_WEBPOS', false)) return '/merchant/pos';
   if (hasPermission(perms, 'MANAGE_TABLES', false)) return '/merchant/waiter';

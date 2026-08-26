@@ -95,6 +95,7 @@ interface SettingsData {
   signageScreenLimit?: number;
   inventoryWasteFactor?: number;
   inventoryAutoReorderEmailEnabled?: boolean;
+  inventoryExpiryAlertDays?: number;
   posColorTheme?: string;
   posCheckoutSettings?: {
     tipsEnabled?: boolean;
@@ -2043,6 +2044,28 @@ export default function Settings() {
                     <span className="text-xs muted">{t('invAutoReorderMasterHint')}</span>
                   </span>
                 </label>
+                <SettingsField label={t('invExpiryAlertDays')} hint={t('invExpiryAlertDaysHint')}>
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    max={365}
+                    step={1}
+                    disabled={!isInventoryLicensed(settings)}
+                    value={Number(settings.inventoryExpiryAlertDays) || 30}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        inventoryExpiryAlertDays: Math.min(365, Math.max(1, Number(e.target.value) || 30)),
+                      })
+                    }
+                  />
+                </SettingsField>
+                <p className="mt-2 text-xs muted">
+                  <Link to="/merchant/storekeeper" className="font-medium text-teal-700 hover:underline">
+                    {t('storekeeperOpenApp')}
+                  </Link>
+                </p>
                 {isInventoryLicensed(settings) && (
                   <Link to="/merchant/inventory/cookbook" className="btn-secondary mt-3 inline-flex">
                     {t('invNavCookbook')}
@@ -2057,6 +2080,7 @@ export default function Settings() {
                       await api.put('/merchant/settings', {
                         inventoryWasteFactor: Number(settings.inventoryWasteFactor) || 0.2,
                         inventoryAutoReorderEmailEnabled: !!settings.inventoryAutoReorderEmailEnabled,
+                        inventoryExpiryAlertDays: Number(settings.inventoryExpiryAlertDays) || 30,
                       });
                       toast.success(t('saved'));
                     } catch (error: any) {

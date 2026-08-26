@@ -20,6 +20,7 @@ export type Supplier = {
 export type InvItem = {
   id: string;
   name: string;
+  barcode?: string | null;
   unit: string;
   cost: number;
   onHand: number;

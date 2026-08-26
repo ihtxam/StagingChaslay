@@ -57,6 +57,7 @@ const db_1 = require("@/db");
 const subscription_billing_service_1 = require("@/services/subscription-billing.service");
 const subscription_plans_service_1 = require("@/services/subscription-plans.service");
 const pos_sessions_routes_1 = __importDefault(require("@/routes/pos-sessions.routes"));
+const client_errors_routes_1 = __importDefault(require("@/routes/client-errors.routes"));
 const router = (0, express_1.Router)();
 const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const imageUpload = (0, multer_1.default)({
@@ -1063,6 +1064,10 @@ router.post("/orders/:orderId/record-invoice-payment", async (req, res) => {
     const { merchantRecordInvoicePayment } = await Promise.resolve().then(() => __importStar(require("@/routes/invoice.routes")));
     return merchantRecordInvoicePayment(req, res);
 });
+router.post("/orders/:orderId/email-invoice", async (req, res) => {
+    const { merchantEmailInvoice } = await Promise.resolve().then(() => __importStar(require("@/routes/invoice.routes")));
+    return merchantEmailInvoice(req, res);
+});
 /**
  * POST /api/merchant/orders/:orderId/action
  * Lifecycle action: accept | start_preparing | mark_ready | out_for_delivery |
@@ -1072,7 +1077,7 @@ router.post("/orders/:orderId/action", async (req, res) => {
     try {
         const merchantId = req.merchantId;
         const { orderId } = req.params;
-        const { action, paymentMethod, rejectReason, estimatedReadyAt, etaAdjustMinutes } = req.body;
+        const { action, paymentMethod, rejectReason, estimatedReadyAt, etaAdjustMinutes, skipReceiptPrint, } = req.body;
         if (!merchantId)
             return res.status(400).json({ error: "Merchant ID is required" });
         if (!action)
@@ -1082,6 +1087,7 @@ router.post("/orders/:orderId/action", async (req, res) => {
             rejectReason: rejectReason || null,
             estimatedReadyAt: estimatedReadyAt || null,
             etaAdjustMinutes: etaAdjustMinutes ?? null,
+            skipReceiptPrint: skipReceiptPrint === true,
         });
         res.json({ success: true, order });
     }
@@ -1330,6 +1336,17 @@ router.get("/webpos-config", async (req, res) => {
         const giftCardSettings = normalizeGiftCardSettings(merchant.giftCardSettings);
         const { WebPosEntitlementService } = await Promise.resolve().then(() => __importStar(require("@/services/webpos-entitlement.service")));
         const entitlement = await WebPosEntitlementService.getEntitlement(merchantId);
+        let staffPreferredTerminalId = null;
+        const clockedStaffId = req.user?.staffId;
+        if (clockedStaffId) {
+            const staffRow = await db.query.merchantStaff.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.id, clockedStaffId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId)),
+            });
+            const pref = staffRow?.preferredTerminalId?.trim() || null;
+            if (pref && activeTerminals.some((t) => t.terminalId === pref)) {
+                staffPreferredTerminalId = pref;
+            }
+        }
         res.json({
             success: true,
             config: {
@@ -1348,6 +1365,7 @@ router.get("/webpos-config", async (req, res) => {
                 adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,
                 adyenUseLegacyEndpoint: !!merchant.adyenUseLegacyEndpoint,
                 defaultTerminalId: activeTerminals[0]?.terminalId || null,
+                staffPreferredTerminalId,
                 terminals: terminals.map((t) => ({
                     id: t.id,
                     terminalId: t.terminalId,
@@ -1593,8 +1611,8 @@ router.put("/settings", async (req, res) => {
  * GET /api/merchant/reports/eod
  * End-of-day / sales report (POS + synced sales in orders table)
  * Query: preset=today|yesterday|last_week|last_month|last_3_months|custom&from=&to=
- * Requires VIEW_REPORTS or END_OF_DAY, plus VIEW_ALL_SALES for company-wide totals.
- * Staff without View all sales should use GET /reports/shift for their own shift window.
+ * Requires VIEW_REPORTS or END_OF_DAY.
+ * Company-wide totals need VIEW_ALL_SALES; otherwise scoped to PIN staff (own sales).
  */
 router.get("/reports/eod", (0, auth_middleware_1.requirePermission)("VIEW_REPORTS", "END_OF_DAY"), async (req, res) => {
     try {
@@ -1612,14 +1630,14 @@ router.get("/reports/eod", (0, auth_middleware_1.requirePermission)("VIEW_REPORT
             }
         }
         const scope = salesScopeForActor(actor);
-        if (!scope.viewAll) {
+        if (!scope.viewAll && !scope.staffId) {
             return res.status(403).json({
-                error: "Whole-day report requires View all sales permission",
+                error: "Own-sales reports require a staff PIN session",
             });
         }
-        let staffId = null;
-        let staffName = null;
-        if (req.query.staffId) {
+        let staffId = scope.staffId ?? null;
+        let staffName = scope.staffName ?? null;
+        if (scope.viewAll && req.query.staffId) {
             staffId = String(req.query.staffId);
             staffName = req.query.staffName ? String(req.query.staffName) : null;
         }
@@ -1716,6 +1734,57 @@ router.get("/reports/overview", (0, auth_middleware_1.requirePermission)("VIEW_R
         console.error("Overview report failed:", error);
         res.status(500).json({
             error: error instanceof Error ? error.message : "Failed to load overview",
+        });
+    }
+});
+/**
+ * GET /api/merchant/reports/revenue?mode=days|weeks|months&year=2026&month=6
+ * SumUp-style revenue breakdown by day, calendar week, or month.
+ */
+router.get("/reports/revenue", (0, auth_middleware_1.requirePermission)("VIEW_REPORTS", "END_OF_DAY"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { resolveReportActor, salesScopeForActor } = await Promise.resolve().then(() => __importStar(require("@/lib/report-sales-scope")));
+        const actor = resolveReportActor(req);
+        if (actor.kind === "pin") {
+            const ok = actor.permissions.includes("VIEW_REPORTS") ||
+                actor.permissions.includes("END_OF_DAY");
+            if (!ok) {
+                return res.status(403).json({ error: "Permission denied" });
+            }
+        }
+        const scope = salesScopeForActor(actor);
+        if (!scope.viewAll && !scope.staffId) {
+            return res.status(403).json({
+                error: "Own-sales reports require a staff PIN session",
+            });
+        }
+        const mode = String(req.query.mode || "days").toLowerCase();
+        if (mode !== "days" && mode !== "weeks" && mode !== "months" && mode !== "custom") {
+            return res.status(400).json({ error: "mode must be days, weeks, months, or custom" });
+        }
+        const year = Number(req.query.year) || new Date().getFullYear();
+        const month = req.query.month != null ? Number(req.query.month) : undefined;
+        const from = req.query.from ? String(req.query.from) : undefined;
+        const to = req.query.to ? String(req.query.to) : undefined;
+        const { PosReportsService } = await Promise.resolve().then(() => __importStar(require("@/services/pos-reports.service")));
+        const breakdown = await PosReportsService.getRevenueBreakdown(merchantId, {
+            mode: mode,
+            year,
+            month,
+            from,
+            to,
+            staffId: scope.staffId,
+            staffName: scope.staffName,
+        });
+        res.json({ success: true, breakdown });
+    }
+    catch (error) {
+        console.error("Revenue breakdown failed:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load revenue",
         });
     }
 });
@@ -1909,6 +1978,7 @@ router.post("/pos/send-receipt-email", async (req, res) => {
             subject,
             html,
             text,
+            emailType: "receipt",
         });
         res.json({ success: true });
     }
@@ -2020,7 +2090,7 @@ router.get("/pos/orders", async (req, res) => {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list orders" });
     }
 });
-router.post("/pos/orders/:id/cancel", async (req, res) => {
+router.post("/pos/orders/:id/cancel", (0, auth_middleware_1.requirePermission)("CANCEL_ORDERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         if (!merchantId)
@@ -2095,15 +2165,23 @@ router.post("/pos/orders/:id/goodwill", async (req, res) => {
     }
 });
 /** Preview monthly cash sales reduction (quantity adjustments, cash-only). */
-router.get("/pos/sales-adjustment/preview", async (req, res) => {
+router.get("/pos/sales-adjustment/preview", (0, auth_middleware_1.requirePermission)("VIEW_ALL_SALES"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         if (!merchantId)
             return res.status(400).json({ error: "Merchant ID is required" });
         const { SalesAdjustmentService } = await Promise.resolve().then(() => __importStar(require("@/services/sales-adjustment.service")));
         const percent = Number(req.query.percent);
+        const preset = req.query.preset ? String(req.query.preset) : undefined;
+        const from = req.query.from ? String(req.query.from) : undefined;
+        const to = req.query.to ? String(req.query.to) : undefined;
         const month = req.query.month ? String(req.query.month) : undefined;
-        const preview = await SalesAdjustmentService.preview(merchantId, percent, month);
+        const preview = await SalesAdjustmentService.preview(merchantId, percent, {
+            preset,
+            from,
+            to,
+            month,
+        });
         res.json({ success: true, preview, allowedPercents: SalesAdjustmentService.allowedPercents() });
     }
     catch (error) {
@@ -2113,20 +2191,50 @@ router.get("/pos/sales-adjustment/preview", async (req, res) => {
     }
 });
 /** Apply monthly cash sales reduction by lowering line quantities (no deletions). */
-router.post("/pos/sales-adjustment/apply", async (req, res) => {
+router.post("/pos/sales-adjustment/apply", (0, auth_middleware_1.requirePermission)("VIEW_ALL_SALES"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         if (!merchantId)
             return res.status(400).json({ error: "Merchant ID is required" });
         const { SalesAdjustmentService } = await Promise.resolve().then(() => __importStar(require("@/services/sales-adjustment.service")));
         const percent = Number(req.body?.percent);
+        const preset = req.body?.preset ? String(req.body.preset) : undefined;
+        const from = req.body?.from ? String(req.body.from) : undefined;
+        const to = req.body?.to ? String(req.body.to) : undefined;
         const month = req.body?.month ? String(req.body.month) : undefined;
-        const result = await SalesAdjustmentService.apply(merchantId, percent, month);
+        const result = await SalesAdjustmentService.apply(merchantId, percent, {
+            preset,
+            from,
+            to,
+            month,
+        });
         res.json({ success: true, result });
     }
     catch (error) {
         res.status(400).json({
             error: error instanceof Error ? error.message : "Sales adjustment failed",
+        });
+    }
+});
+/** Save clocked-in staff POS preferences (e.g. preferred payment terminal). */
+router.put("/pos/staff-preferences", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const staffId = req.user?.staffId;
+        if (!staffId) {
+            return res.status(403).json({ error: "Clock in with your staff PIN to save preferences" });
+        }
+        const { StaffService } = await Promise.resolve().then(() => __importStar(require("@/services/staff.service")));
+        const prefs = await StaffService.updatePosPreferences(merchantId, staffId, {
+            preferredTerminalId: req.body?.preferredTerminalId ?? null,
+        });
+        res.json({ success: true, ...prefs });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to save preferences",
         });
     }
 });
@@ -2159,6 +2267,29 @@ router.post("/pos/held", async (req, res) => {
         res.status(400).json({ error: error instanceof Error ? error.message : "Hold failed" });
     }
 });
+/** Release held rows after payment — does not require CANCEL_ORDERS */
+router.post("/pos/held/release", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { WebPosEntitlementService } = await Promise.resolve().then(() => __importStar(require("@/services/webpos-entitlement.service")));
+        if (!(await WebPosEntitlementService.guard(merchantId, res)))
+            return;
+        const body = req.body || {};
+        const { PosOrdersService } = await Promise.resolve().then(() => __importStar(require("@/services/pos-orders.service")));
+        const result = await PosOrdersService.releaseHeldByIdentity(merchantId, {
+            heldId: body.heldId ? String(body.heldId) : null,
+            ticketDisplay: body.ticketDisplay != null ? String(body.ticketDisplay) : null,
+            tableId: body.tableId != null ? String(body.tableId) : null,
+            tabNumber: body.tabNumber != null ? String(body.tabNumber) : null,
+        });
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Release failed" });
+    }
+});
 router.post("/pos/held/:id/resume", async (req, res) => {
     try {
         const merchantId = req.merchantId;
@@ -2172,7 +2303,7 @@ router.post("/pos/held/:id/resume", async (req, res) => {
         res.status(400).json({ error: error instanceof Error ? error.message : "Resume failed" });
     }
 });
-router.delete("/pos/held/:id", async (req, res) => {
+router.delete("/pos/held/:id", (0, auth_middleware_1.requirePermission)("CANCEL_ORDERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         if (!merchantId)
@@ -2186,7 +2317,7 @@ router.delete("/pos/held/:id", async (req, res) => {
     }
 });
 /** Cancel held / kitchen-sent order with reason — records cancellation for reports */
-router.post("/pos/held/:id/cancel", async (req, res) => {
+router.post("/pos/held/:id/cancel", (0, auth_middleware_1.requirePermission)("CANCEL_ORDERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         if (!merchantId)
@@ -2557,5 +2688,6 @@ router.post("/platform-shop/confirm", async (req, res) => {
     }
 });
 router.use(pos_sessions_routes_1.default);
+router.use("/client-errors", client_errors_routes_1.default);
 exports.default = router;
 //# sourceMappingURL=merchant.routes.js.map

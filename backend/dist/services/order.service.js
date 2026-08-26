@@ -41,6 +41,35 @@ const money_1 = require("@/lib/money");
 const tax_discount_1 = require("@/lib/tax-discount");
 const order_item_name_1 = require("@/lib/order-item-name");
 const pos_print_settings_1 = require("@/lib/pos-print-settings");
+const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
+const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
+async function releaseHeldAfterPosPayment(merchantId, order) {
+    try {
+        const ticketMatch = String(order.notes || "").match(TICKET_NOTE_RE);
+        const tabMatch = String(order.notes || "").match(TAB_NOTE_RE);
+        const { PosOrdersService } = await Promise.resolve().then(() => __importStar(require("@/services/pos-orders.service")));
+        await PosOrdersService.releaseHeldByIdentity(merchantId, {
+            ticketDisplay: ticketMatch?.[1]?.trim() || null,
+            tabNumber: tabMatch?.[1]?.trim() ||
+                (order.guestCount != null && Number(order.guestCount) > 0
+                    ? String(order.guestCount)
+                    : null),
+            tableId: order.tableId || null,
+        });
+    }
+    catch (err) {
+        console.warn("Held release after payment failed:", err);
+    }
+    if (order.tableId) {
+        try {
+            const { FloorPlanService } = await Promise.resolve().then(() => __importStar(require("@/services/floor-plan.service")));
+            await FloorPlanService.setTableStatus(merchantId, order.tableId, "available", null);
+        }
+        catch {
+            /* table may have been removed */
+        }
+    }
+}
 function computeEstimatedReadyAt(order, merchant) {
     if (order.scheduledFor) {
         return new Date(order.scheduledFor);
@@ -57,13 +86,23 @@ function isInvoiceOrderRecord(order) {
         .replace(/-/g, "_");
     return method === "invoice" || !!order.invoiceNumber;
 }
+function isCounterTender(method) {
+    const m = String(method || "")
+        .trim()
+        .toLowerCase()
+        .replace(/-/g, "_");
+    return m === "cash" || m === "card" || m === "terminal";
+}
 function resolveCollectPaymentMethod(requested, order) {
-    if (isInvoiceOrderRecord(order))
-        return "invoice";
     const requestedRaw = String(requested || "")
         .trim()
         .toLowerCase()
         .replace(/-/g, "_");
+    if (isInvoiceOrderRecord(order)) {
+        if (isCounterTender(requestedRaw))
+            return requestedRaw;
+        return "invoice";
+    }
     const requestedLater = requestedRaw.match(/^pay_later[:_](.+)$/);
     const existingRaw = String(order.paymentMethod || "cash")
         .trim()
@@ -104,10 +143,12 @@ async function enqueueOnlineOrderReceiptPrint(merchantId, orderId, order) {
     const source = order.orderSource === "justeat" || order.orderSource === "ubereats"
         ? order.orderSource
         : "online_shop";
+    const isDelivery = order.fulfillmentChannel === "delivery";
     await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
         printKitchen: false,
-        printNotification: false,
-        printReceipt: true,
+        printNotification: !isDelivery,
+        printDeliveryReceipt: isDelivery,
+        printReceipt: !isDelivery,
     });
 }
 async function sendOrderRejectedEmail(merchantId, order, merchantName) {
@@ -127,10 +168,22 @@ ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
 <p>Please contact us if you have questions.</p>
 <p>— ${merchantName}</p>`,
             text: `Your order ${order.orderNumber || ""} could not be accepted.${reason ? ` Reason: ${reason}` : ""} — ${merchantName}`,
+            emailType: "shop_order",
         });
     }
     catch (err) {
         console.warn("Order rejection email failed:", err);
+    }
+}
+async function sendGuestShopOrderEmail(merchantId, orderId, kind, order) {
+    if (String(order.orderType || "").toLowerCase() !== "web_shop" || !order.customerEmail)
+        return;
+    try {
+        const { ShopOrderEmailService } = await Promise.resolve().then(() => __importStar(require("@/services/shop-order-email.service")));
+        await ShopOrderEmailService.sendGuestOrderEmail(merchantId, orderId, kind);
+    }
+    catch (err) {
+        console.warn(`Shop order ${kind} email failed:`, err);
     }
 }
 function withResolvedItemNames(order) {
@@ -340,6 +393,8 @@ class OrderService {
             if (order.length === 0) {
                 throw new Error("Order not found");
             }
+            void Promise.resolve().then(() => __importStar(require("@/services/ods.service"))).then(({ OdsService }) => OdsService.syncFromOrder(merchantId, order[0]))
+                .catch(() => { });
             return order[0];
         }
         catch (error) {
@@ -390,6 +445,10 @@ class OrderService {
                 .set(patch)
                 .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId), (0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId)))
                 .returning();
+            if (updated) {
+                void Promise.resolve().then(() => __importStar(require("@/services/ods.service"))).then(({ OdsService }) => OdsService.syncFromOrder(merchantId, updated))
+                    .catch(() => { });
+            }
             return updated;
         };
         switch (action) {
@@ -412,6 +471,7 @@ class OrderService {
                         : "online_shop";
                     await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
                         printKitchen: true,
+                        printDeliveryReceipt: false,
                         printReceipt: false,
                         printNotification: false,
                     });
@@ -423,26 +483,49 @@ class OrderService {
                 catch (printErr) {
                     console.warn("Accept auto-print enqueue failed:", printErr);
                 }
+                void Promise.resolve().then(() => __importStar(require("@/services/kitchen-ingress.service"))).then(({ enterKitchenFromOrder }) => enterKitchenFromOrder(merchantId, orderId, {
+                    printKitchen: false,
+                    orderSource: order.orderSource === "justeat" || order.orderSource === "ubereats"
+                        ? order.orderSource
+                        : "online_shop",
+                }))
+                    .catch(() => { });
+                void sendGuestShopOrderEmail(merchantId, orderId, "confirmed", order);
                 return set({ status: "preparing" });
             }
             case "start_preparing": {
                 if (status !== "accepted" && !awaitingApproval) {
                     throw new Error("Order cannot start preparing from current status");
                 }
-                return set({ status: "preparing" });
+                const updated = await set({ status: "preparing" });
+                void Promise.resolve().then(() => __importStar(require("@/services/kitchen-ingress.service"))).then(({ enterKitchenFromOrder }) => enterKitchenFromOrder(merchantId, orderId))
+                    .catch(() => { });
+                return updated;
             }
             case "mark_ready": {
                 if (status !== "preparing" && status !== "accepted") {
                     throw new Error("Order is not being prepared");
                 }
-                return set({ status: "ready" });
+                const updated = await set({ status: "ready" });
+                void sendGuestShopOrderEmail(merchantId, orderId, "ready", order);
+                return updated;
             }
             case "out_for_delivery": {
                 if (channel !== "delivery")
                     throw new Error("Only delivery orders can go out for delivery");
                 if (status !== "ready")
                     throw new Error("Order must be ready before delivery");
-                return set({ status: "out_for_delivery" });
+                const updated = await set({ status: "out_for_delivery" });
+                if (order.orderType === "web_shop" && order.customerEmail) {
+                    try {
+                        const { ShopOrderEmailService } = await Promise.resolve().then(() => __importStar(require("@/services/shop-order-email.service")));
+                        await ShopOrderEmailService.sendGuestOrderEmail(merchantId, orderId, "out_for_delivery");
+                    }
+                    catch (emailErr) {
+                        console.warn("Out for delivery email failed:", emailErr);
+                    }
+                }
+                return updated;
             }
             case "collect_payment": {
                 if (paymentDone)
@@ -472,10 +555,11 @@ class OrderService {
                     catch (invErr) {
                         console.warn("Inventory deduct after collect_payment failed:", invErr);
                     }
-                    // Invoice A4 was printed at sale — do not print a second receipt/invoice.
-                    // POS Pay Later: WebPOS prints the guest receipt on collect (one copy).
+                    void releaseHeldAfterPosPayment(merchantId, order);
+                    // Invoice A4 at sale — skip auto receipt unless counter cash/card collection.
                     const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
-                    if (!invoiceOrder && !wasPayLater) {
+                    const invoiceCounter = invoiceOrder && isCounterTender(method);
+                    if ((!invoiceOrder || invoiceCounter) && !wasPayLater && !opts?.skipReceiptPrint) {
                         try {
                             await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
                         }
@@ -544,10 +628,11 @@ class OrderService {
                     catch (invErr) {
                         console.warn("Inventory deduct after complete_and_collect failed:", invErr);
                     }
-                    // Invoice A4 was printed at sale — do not print a second receipt/invoice.
-                    // POS Pay Later: WebPOS prints the guest receipt on collect (one copy).
+                    void releaseHeldAfterPosPayment(merchantId, order);
+                    // Invoice A4 at sale — skip auto receipt unless counter cash/card collection.
                     const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
-                    if (!invoiceOrder && !wasPayLater) {
+                    const invoiceCounter = invoiceOrder && isCounterTender(method);
+                    if ((!invoiceOrder || invoiceCounter) && !wasPayLater && !opts?.skipReceiptPrint) {
                         try {
                             await enqueueOnlineOrderReceiptPrint(merchantId, orderId, order);
                         }
@@ -569,7 +654,15 @@ class OrderService {
                     cancelledAt: new Date(),
                 });
                 if (action === "reject") {
-                    void sendOrderRejectedEmail(merchantId, { ...order, cancelReason: reasonText }, merchant?.name || "Store");
+                    if (order.orderType === "web_shop" && order.customerEmail) {
+                        void sendGuestShopOrderEmail(merchantId, orderId, "cancelled", order);
+                    }
+                    else {
+                        void sendOrderRejectedEmail(merchantId, { ...order, cancelReason: reasonText }, merchant?.name || "Store");
+                    }
+                }
+                else if (order.orderType === "web_shop" && order.customerEmail) {
+                    void sendGuestShopOrderEmail(merchantId, orderId, "cancelled", order);
                 }
                 return updated;
             }

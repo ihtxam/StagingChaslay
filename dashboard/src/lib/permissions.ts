@@ -30,7 +30,8 @@ export type Permission =
   | 'MANAGE_ROLES'
   | 'MANAGE_BILLING'
   | 'END_OF_DAY'
-  | 'MANAGE_INVENTORY';
+  | 'MANAGE_INVENTORY'
+  | 'STOREKEEPER_INTAKE';
 
 export const ALL_PERMISSIONS: Permission[] = [
   'USE_POS',
@@ -59,6 +60,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'MANAGE_BILLING',
   'END_OF_DAY',
   'MANAGE_INVENTORY',
+  'STOREKEEPER_INTAKE',
 ];
 
 export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
@@ -108,6 +110,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/inventory/units': ['MANAGE_INVENTORY'],
   '/merchant/inventory/report': ['MANAGE_INVENTORY'],
   '/merchant/inventory/consumption': ['MANAGE_INVENTORY'],
+  '/merchant/storekeeper': ['STOREKEEPER_INTAKE', 'MANAGE_INVENTORY'],
   '/merchant/signage': ['MANAGE_SETTINGS', 'MANAGE_PRODUCTS', 'ACCESS_PANEL'],
 };
 
@@ -175,6 +178,8 @@ export function backOfficeHomePath(
     return '/merchant';
   }
   if (hasPermission(permissions, 'MANAGE_PRODUCTS', false)) return '/merchant/products';
+  if (hasPermission(permissions, 'STOREKEEPER_INTAKE', false)) return storekeeperHomePath();
+  if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return '/merchant/inventory';
   if (hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return '/merchant/orders';
   return '/merchant/pos';
 }
@@ -249,6 +254,23 @@ export function isDeliveryDriverOnlyStaff(
 
 export function deliveryDriverHomePath(): string {
   return '/merchant/delivery/driver';
+}
+
+/** Storekeeper-only staff — mobile stock intake, not full panel. */
+export function isStorekeeperOnlyStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  if (!hasPermission(permissions, 'STOREKEEPER_INTAKE', false)) return false;
+  if (hasPermission(permissions, 'ACCESS_PANEL', false)) return false;
+  if (hasPermission(permissions, 'USE_WEBPOS', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return false;
+  return true;
+}
+
+export function storekeeperHomePath(): string {
+  return '/merchant/storekeeper';
 }
 
 /**
