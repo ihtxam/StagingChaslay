@@ -62,7 +62,7 @@ jobs:
                 -o scripts/restore-rebornsense-dump.sh
             fi
             chmod +x scripts/restore-rebornsense-dump.sh
-            DUMP_FILE="$DUMP" CONFIRM=1 SKIP_UPLOADS=1 bash scripts/restore-rebornsense-dump.sh
+            DUMP_FILE="$DUMP" CONFIRM=1 SKIP_UPLOADS=1 SKIP_MIGRATE=1 bash scripts/restore-rebornsense-dump.sh
             if [[ -f "$UPLOADS" ]]; then
               docker volume create rebornsense_uploads_data >/dev/null 2>&1 || true
               docker run --rm \
