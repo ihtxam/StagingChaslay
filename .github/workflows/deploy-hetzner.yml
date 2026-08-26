@@ -23,4 +23,9 @@ jobs:
           script_stop: true
           script: |
             export DEPLOY_PATH="${{ secrets.HETZNER_DEPLOY_PATH || '/root/FoodTruckPOS' }}"
+            if [[ "${{ secrets.HETZNER_HOST }}" == "91.98.41.165" ]]; then
+              export DEPLOY_STACK=rebornsense
+            elif [[ -n "${{ secrets.HETZNER_DEPLOY_STACK }}" ]]; then
+              export DEPLOY_STACK="${{ secrets.HETZNER_DEPLOY_STACK }}"
+            fi
             bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"
