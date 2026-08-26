@@ -1396,9 +1396,9 @@ const en: Dict = {
   downloadPrintAgent: 'Download Print Agent (Windows)',
   downloadPrintBridge: 'Download Print Bridge (Android)',
   printBridgeDownloadHint:
-    'Install once on your Sunmi or Android tablet. Keeps running in the background so WebPOS can print receipts and kitchen tickets without a second PC.',
+    'Install once on your Android POS tablet or handheld (Sunmi D3 Mini, D2s Plus, Feitian F310A, or other). Runs in the background so WebPOS can print via built-in, USB, Bluetooth, or Wi‑Fi printers — no second PC.',
   printBridgeInstallSteps:
-    'Install the APK, allow notifications and Bluetooth, pick your printer in the setup wizard, then return to WebPOS. The bridge listens on port 9101 (same as Windows Print Agent).',
+    'Install the APK, allow notifications, USB, and Bluetooth, then pick your printer(s) in the setup wizard. Supports built-in Sunmi printers and USB-connected thermals. Returns to WebPOS when the bridge shows ready (port 9101).',
   printAgentInstallSteps:
     'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Printer profiles',
@@ -4614,6 +4614,11 @@ const fr: Dict = {
   printAgentDownloadHint:
     'Installez une seule fois sur le PC ChaslayReborn. L’agent démarre avec Windows - plus besoin de relancer start.bat. Utilisez une imprimante tickets ESC/POS (pas OneNote/PDF).',
   downloadPrintAgent: 'Télécharger l’agent d’impression (Windows)',
+  downloadPrintBridge: 'Télécharger Print Bridge (Android)',
+  printBridgeDownloadHint:
+    'Installez une fois sur votre tablette Sunmi ou Android. Tourne en arrière-plan pour que le WebPOS imprime sans second PC.',
+  printBridgeInstallSteps:
+    'Installez l’APK, autorisez notifications et Bluetooth, choisissez l’imprimante dans l’assistant, puis revenez au WebPOS (port 9101).',
   printAgentInstallSteps:
     'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Journal : %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Profils imprimantes',
@@ -7794,6 +7799,11 @@ const de: Dict = {
   printAgentDownloadHint:
     'Einmal auf dem ChaslayReborn-PC installieren. Der Agent startet mit Windows - start.bat nicht mehr nötig. ESC/POS-Bondrucker verwenden (nicht OneNote/PDF).',
   downloadPrintAgent: 'Druckagent herunterladen (Windows)',
+  downloadPrintBridge: 'Print Bridge herunterladen (Android)',
+  printBridgeDownloadHint:
+    'Einmal auf Sunmi- oder Android-Tablet installieren. Läuft im Hintergrund — WebPOS druckt ohne zweiten PC.',
+  printBridgeInstallSteps:
+    'APK installieren, Benachrichtigungen und Bluetooth erlauben, Drucker im Assistenten wählen, dann zurück zum WebPOS (Port 9101).',
   printAgentInstallSteps:
     'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Druckerprofile',

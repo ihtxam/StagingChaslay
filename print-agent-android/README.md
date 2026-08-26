@@ -1,16 +1,16 @@
 # Reborn Print Bridge (Android)
 
-Companion app for **WebPOS on Sunmi and other Android tablets** — not a POS app.  
+Companion app for **WebPOS on Android POS hardware** — not a POS app.  
 WebPOS stays 100% in Chrome/PWA; this bridge is the local print layer (same role as Windows Print Agent).
 
 ## Problem
 
 Browsers on Android cannot send ESC/POS bytes to Bluetooth, USB, or LAN printers.  
-Merchants use **one device only** (15″ tablet) — no Windows hub PC.
+Merchants use **one device only** (tablet or handheld) — no Windows hub PC.
 
 ## Solution
 
-A small **always-on foreground service** on the tablet:
+A small **always-on foreground service** on the device:
 
 ```
 WebPOS (Chrome/PWA)  →  http://127.0.0.1:9101  →  Print Bridge  →  printer
@@ -20,52 +20,109 @@ WebPOS (Chrome/PWA)  →  http://127.0.0.1:9101  →  Print Bridge  →  printer
 
 ---
 
+## Supported hardware (Reborn stock & roadmap)
+
+We do **not** assume Sunmi-only. The bridge uses a **pluggable driver** model and auto-detects what is available on each device.
+
+| Device | Type | Built-in printer | USB host | Typical external printer |
+|--------|------|------------------|----------|-------------------------|
+| **Sunmi D3 Mini** | 10.1″ counter | ✅ 58 mm or 80 mm thermal | ✅ 3× USB 3.0 Type-A | USB receipt / kitchen on Type-A ports |
+| **Sunmi D2s Plus** | Desktop terminal | ✅ 80 mm thermal | ✅ (peripheral ports) | USB or LAN |
+| **Feitian F310A** | 6.5″ handheld | ❌ (base unit) | ✅ Type-C OTG | BT printer, F310-1 print module, USB thermal |
+| **Feitian F310 + modules** | Modular | Optional F310-1 / F310-18 | ✅ | Module via pogo pin + SDK |
+| **Generic Android tablets** | 15″ and custom | ❌ usually | ✅ OTG (varies) | BT, USB, or Wi‑Fi LAN |
+
+### Driver matrix
+
+| Driver | When used | Devices |
+|--------|-----------|---------|
+| `SunmiInternalDriver` | Sunmi PrinterService detected | D3 Mini, D2s Plus, other Sunmi |
+| `UsbEscPosDriver` | USB thermal printer attached | **All** — D3 Mini Type-A, OTG handhelds, generic tablets |
+| `BluetoothEscPosDriver` | Paired SPP ESC/POS printer | F310A, tablets without USB path |
+| `NetworkRawDriver` | TCP :9100 on LAN | Counter setups with Ethernet/Wi‑Fi printers |
+| `FeitianModuleDriver` | F310 print module attached (future) | F310A + F310-1 / F310-18 |
+
+On setup, the wizard lists **every printer the drivers find** and merchant picks defaults per role (receipt / kitchen / labels).
+
+---
+
 ## API contract (must match Windows agent)
 
 | Endpoint | Method | Body / response |
 |----------|--------|-----------------|
-| `/health` | GET | `{ ok, version, platform: "android", features: [...] }` |
-| `/printers` | GET | `{ printers: [{ name, isDefault?, connectionType }] }` |
-| `/print` | POST | `{ printerName?, dataBase64 }` → `{ ok, printer }` |
+| `/health` | GET | `{ ok, version, platform: "android", deviceProfile, features, printerReady, queueDepth }` |
+| `/printers` | GET | `{ printers: [{ name, isDefault?, connectionType, driver }] }` |
+| `/print` | POST | `{ printerName?, dataBase64 }` → `{ ok, printer, queued? }` |
 | `/drawer` | POST | `{ printerName? }` — cash drawer kick |
+
+`connectionType`: `sunmi-internal` | `usb` | `bluetooth` | `lan`
 
 Bind **127.0.0.1:9101** only (not LAN-exposed).
 
-Optional later: `/scale/reading` for USB serial scales on Android OTG.
+Optional later: `/scale/reading` for USB serial scales (Aclas on OTG / RJ11 adapters).
 
 ---
 
-## Printer support (priority order)
+## Printer connections (priority for development)
 
-### P1 — Sunmi built-in printer (ship first)
+### P1 — Sunmi built-in (stock devices: D3 Mini, D2s Plus)
 
-Most Sunmi V2/V3/T2/L2 counters have an **internal thermal printer** via Sunmi PrinterService (AIDL).
+- Sunmi Printer Interface Library (`com.sunmi:printerlibrary`) or AIDL `woyou.aidlservice.jiuiv5`
+- Accepts ESC/POS byte stream via buffer API
+- D3 Mini: 58 mm or 80 mm variant — auto-detect paper width in `/health`
 
-- Most reliable on Sunmi hardware
-- No Bluetooth pairing
-- Detect: `Build.MANUFACTURER` + Sunmi SDK / package `woyou.aidlservice.jiuiv5`
+### P1 — USB ESC/POS (required — same phase as Sunmi)
+
+**Merchants need USB**, not only built-in print.
+
+- `UsbManager` + `UsbDeviceConnection` bulk transfer
+- Common USB thermal chips: Prolific, CH340, Epson USB class
+- **Sunmi D3 Mini**: printers on rear **USB 3.0 Type-A** ports (host mode — ideal for kitchen printer on USB)
+- **Handheld / generic**: USB-C OTG adapter → USB thermal
+- Persist permission per device VID/PID; re-request only when device changes
+- Hot-plug: `ACTION_USB_DEVICE_ATTACHED` → rescan `/printers`
 
 ### P2 — Bluetooth ESC/POS (SPP)
 
-Classic Bluetooth serial profile (`00001101-0000-1000-8000-00805F9B34FB`).
+Classic Bluetooth serial (`00001101-0000-1000-8000-00805F9B34FB`).
 
-- Pair once in Android Settings → stored as saved printer profile
-- Reconnect automatically on disconnect
-- Chunk large jobs (4–8 KB) with flow control
+- Primary path for **Feitian F310A** without print module
+- Pair once → saved profile; auto-reconnect on drop
+- Chunk jobs 4–8 KB
 
 ### P3 — LAN / Wi‑Fi RAW (TCP 9100)
 
-Printer on same Wi‑Fi with fixed IP or mDNS.
+- Fixed IP or mDNS (`_pdl-datastream._tcp`)
+- D3 Mini has **RJ45 LAN** — kitchen printer on Ethernet is common
 
-- `Socket(host, 9100)` + write ESC/POS bytes
-- Timeout + retry (3×)
+### P4 — Feitian print module (F310-1 / F310-18)
 
-### P4 — USB OTG
+- Detect module via Feitian SDK or USB/BT endpoint when attached to F310A
+- Ship after core USB/BT stable
 
-USB thermal printers (vendor ID allowlist).
+---
 
-- `UsbManager` + permission intent
-- Sunmi devices often lack OTG — lower priority
+## Device detection (`deviceProfile` in `/health`)
+
+```json
+{
+  "ok": true,
+  "platform": "android",
+  "deviceProfile": "sunmi-d3-mini",
+  "manufacturer": "SUNMI",
+  "model": "D3 MINI",
+  "features": ["sunmi-internal", "usb-host", "bluetooth", "lan", "queue", "drawer"]
+}
+```
+
+Profiles we recognise:
+
+- `sunmi-d3-mini`
+- `sunmi-d2s-plus`
+- `feitian-f310a`
+- `generic-android`
+
+Detection: `Build.MANUFACTURER` / `Build.MODEL` + capability probes (Sunmi service bind, USB host, etc.).
 
 ---
 
@@ -73,71 +130,61 @@ USB thermal printers (vendor ID allowlist).
 
 ### 1. Foreground service + persistent notification
 
-Android kills background apps. Print Bridge runs as a **foreground service** with a low-profile notification (“Reborn Print Bridge — ready”).
-
-- `START_STICKY` — OS restarts service if killed
-- `BOOT_COMPLETED` receiver — auto-start after reboot
-- `RECEIVE_BOOT_COMPLETED` + merchant opt-in “Start with device”
+- `START_STICKY`, `BOOT_COMPLETED`, merchant opt-in “Start with device”
+- Works on Sunmi, Feitian, and generic OEMs
 
 ### 2. Local print queue (never lose a ticket)
 
 ```
-WebPOS POST /print  →  queue in Room DB  →  worker prints  →  ack / retry
+WebPOS POST /print  →  Room DB queue  →  worker  →  driver  →  ack / retry
 ```
 
-- If printer busy/offline: job stays queued, WebPOS gets `{ ok: true, queued: true }` **or** HTTP 202
-- Worker retries: 1s, 2s, 5s, 10s, 30s (max 10 attempts)
-- Survives WebPOS tab refresh (queue is in the bridge app)
-- Optional: sync with WebPOS `webpos-print-queue` localStorage (belt + suspenders)
+- Retries: 1s → 2s → 5s → 10s → 30s (max 10)
+- USB unplugged / BT drop: job stays queued until printer returns
 
 ### 3. Connection watchdog
 
-- Every 30s: ping default printer (short status command or test line in dev mode)
-- On BT drop: auto-reconnect before next job
-- Expose `/health` `printerReady: true|false` so WebPOS shows clear status
+- Per-driver health check every 30s
+- USB: re-enumerate on attach/detach
+- BT: reconnect socket before next job
+- `/health.printerReady` for WebPOS status bar
 
-### 4. Battery / Doze exemption
+### 4. OEM battery / autostart wizard
 
-On first run, guide merchant to:
+Tailored steps per profile:
 
-- Disable battery optimization for Print Bridge
-- Allow autostart (Sunmi/Xiaomi/Oppo have extra toggles)
-- Pin app or add to “locked apps”
+| OEM | Extra step |
+|-----|------------|
+| Sunmi | Sunmi autostart whitelist |
+| Feitian | Background activity allow |
+| Generic Chinese tablets | Battery “unrestricted” + locked recent apps |
 
-### 5. Single-tap setup wizard
+### 5. Setup wizard
 
-1. Install APK (from panel download link)
-2. Grant Bluetooth / notification permissions
-3. Pick default printer (Sunmi internal / BT / IP)
-4. Test print
-5. Open WebPOS — green “Print Bridge ready”
+1. Install APK from panel
+2. Grants: notifications, Bluetooth (nearby devices), USB
+3. Scan printers (internal + USB + BT + LAN)
+4. Assign **receipt** and **kitchen** default
+5. Test print each
+6. Open WebPOS
 
-### 6. WebPOS integration (already mostly done)
+### 6. WebPOS integration
 
-- `dashboard/src/lib/print-agent.ts` polls `http://127.0.0.1:9101/health`
-- `retryLocally: true` on main till uses local queue + agent
-- On Android: **disable cloud relay-to-main-till** when local agent is up (single-device mode)
-- Settings: show **Download Print Bridge (Android)** when `navigator.userAgent` is Android
-
-### 7. Diagnostics
-
-- Rolling log file (last 500 lines) — upload from Settings in bridge app
-- `/health` includes `lastError`, `lastPrintAt`, `queueDepth`
-- Superadmin can request logs via existing client-error pipeline (future)
+- `dashboard/src/lib/print-agent.ts` → `localhost:9101`
+- Android single-device: local print only, no cloud hub relay
+- Settings → **Download Print Bridge (Android)**
 
 ---
 
-## Distribution (like Windows Print Agent)
+## Distribution
 
 | Channel | Path |
 |---------|------|
-| Merchant panel | Settings → Receipts & printers → **Download Print Bridge (Android)** |
+| Merchant panel | Settings → Receipts & printers |
 | API | `GET /downloads/reborn-print-bridge.apk` |
-| Deploy | `scripts/deploy-hetzner.sh` copies signed APK to `backend/public/downloads/` |
+| Deploy | `backend/public/downloads/` (build in CI) |
 
-Versioning: `versionName` in APK + `/health.version` — WebPOS shows “Update Print Bridge” when outdated (same as Windows 1.6.0 check).
-
-**Sunmi app store** (optional later): private channel for auto-updates on Sunmi devices.
+One **universal APK** for all devices (Sunmi, Feitian, generic). Drivers load at runtime based on detection.
 
 ---
 
@@ -145,77 +192,73 @@ Versioning: `versionName` in APK + `/health.version` — WebPOS shows “Update 
 
 ```
 print-agent-android/
-  app/
-    src/main/
-      java/com/rebornsense/printbridge/
-        service/PrintBridgeService.kt      # Foreground service + NanoHTTPD
-        print/SunmiPrinterDriver.kt
-        print/BluetoothEscPosDriver.kt
-        print/NetworkRawPrinterDriver.kt
-        print/UsbEscPosDriver.kt
-        queue/PrintJobQueue.kt             # Room DB + worker
-        setup/SetupWizardActivity.kt
-      AndroidManifest.xml
-  build.gradle.kts
+  app/src/main/java/com/rebornsense/printbridge/
+    service/PrintBridgeService.kt       # Foreground + NanoHTTPD :9101
+    device/DeviceProfiler.kt          # D3 Mini / D2s Plus / F310A / generic
+    print/PrinterDriver.kt            # Interface
+    print/SunmiInternalDriver.kt
+    print/UsbEscPosDriver.kt            # P1 — USB host + OTG
+    print/BluetoothEscPosDriver.kt
+    print/NetworkRawPrinterDriver.kt
+    print/FeitianModuleDriver.kt        # P4
+    print/DriverRegistry.kt             # Pick driver by printer profile
+    queue/PrintJobQueue.kt
+    setup/SetupWizardActivity.kt
+    usb/UsbAttachReceiver.kt
 ```
 
-Tech stack:
-
-- **Kotlin** + min SDK 24 (Android 7), target SDK 34
-- **NanoHTTPD** or Ktor CIO for localhost HTTP (lightweight)
-- **Room** for persistent queue
-- **Sunmi printer SDK** (vendor AAR)
-- **No WebView** — not a POS UI
+Tech: Kotlin, min SDK 24, Room, NanoHTTPD/Ktor, Sunmi printerlibrary, Android USB Host API.
 
 ---
 
-## Implementation phases
+## Implementation phases (revised)
 
-| Phase | Scope | Outcome |
-|-------|--------|---------|
-| **1** | Sunmi internal printer + `/health` `/print` `/printers` | Sunmi tablets print receipts from WebPOS |
-| **2** | BT ESC/POS + queue + boot autostart | Generic Android tablets + BT printers |
-| **3** | LAN RAW + setup wizard + panel APK download | Full retail deployment |
-| **4** | USB OTG + scale serial | Butcher / weighed goods |
+| Phase | Scope | Validates on |
+|-------|--------|--------------|
+| **1a** | HTTP service + queue + **Sunmi internal** | D3 Mini, D2s Plus |
+| **1b** | **USB ESC/POS** + hot-plug | D3 Mini USB Type-A, OTG tablets |
+| **2** | Bluetooth SPP + setup wizard | F310A, BT thermals |
+| **3** | LAN RAW :9100 + panel APK release | Ethernet kitchen printers |
+| **4** | Feitian F310-1 module + USB scale serial | F310A roadmap |
 
-**Phase 1 target:** 1–2 weeks of focused Android work for Sunmi-only pilot.
+**Pilot hardware:** D3 Mini + D2s Plus (internal + USB) in parallel with one Feitian F310A (BT/USB).
 
 ---
 
-## WebPOS behaviour on Android (single device)
+## WebPOS behaviour (single device)
 
 | Feature | Behaviour |
 |---------|-----------|
-| Receipt print | Local agent only (`retryLocally: true`) |
-| Kitchen print | Local agent (same tablet) |
-| Cloud relay queue | **Off** when Android agent healthy |
-| Offline sales | PWA offline + queue prints when agent returns |
-| Printer status | Header shows bridge green/red (existing WebPOS UI) |
+| Receipt / kitchen | Local bridge only |
+| Cloud relay to PC | **Disabled** when bridge healthy |
+| Printer roles | Same as Windows — map names in Settings |
+| D3 Mini 58 vs 80 mm | Bridge reports width; WebPOS receipt layout unchanged |
 
 ---
 
 ## Security
 
-- HTTP bound to `127.0.0.1` only
-- Optional shared secret header `X-Print-Bridge-Token` (generated per install) if we ever allow LAN
-- APK signed with Reborn release key; Play Protect / Sunmi trust
+- `127.0.0.1` bind only
+- USB: explicit user grant per device (Android permission dialog)
+- Signed release APK (Reborn keystore)
 
 ---
 
 ## Testing checklist
 
-- [ ] Cold boot → service auto-starts → `/health` OK within 10s
-- [ ] WebPOS sale → receipt prints &lt; 2s
-- [ ] Kill bridge app → OS restarts → next print works
-- [ ] BT printer powered off → job queued → prints when powered on
-- [ ] 50 consecutive receipts without stall
-- [ ] Sunmi V2/V3 + generic 15″ tablet
-- [ ] Battery saver on — still prints after wizard exemption
+- [ ] D3 Mini — built-in receipt + USB kitchen printer simultaneously
+- [ ] D2s Plus — built-in 80 mm + cash drawer kick
+- [ ] F310A — Bluetooth ESC/POS printer
+- [ ] F310A — USB OTG thermal
+- [ ] Generic 15″ tablet — USB OTG or BT only
+- [ ] USB unplug mid-print → queue → replug → prints
+- [ ] 50 consecutive tickets per device profile
+- [ ] Cold boot → service up &lt; 10s
 
 ---
 
 ## Related
 
 - Windows agent: `print-agent/`
-- WebPOS client: `dashboard/src/lib/print-agent.ts`
-- Print queue: `dashboard/src/lib/webpos-print-queue.ts`
+- WebPOS: `dashboard/src/lib/print-agent.ts`
+- Panel download: `dashboard/src/lib/print-agent-platform.ts`
