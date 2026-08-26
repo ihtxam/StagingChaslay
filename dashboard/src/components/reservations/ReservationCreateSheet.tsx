@@ -159,14 +159,9 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
       aria-modal="true"
       aria-labelledby="reservation-create-title"
     >
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/45"
-        aria-label={t('cancel')}
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/45" aria-hidden="true" />
 
-      <div className="relative flex max-h-[min(92vh,640px)] w-full flex-col overflow-hidden rounded-t-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl sm:max-w-[24rem] sm:rounded-2xl">
+      <div className="relative flex max-h-[min(92vh,640px)] w-full flex-col overflow-hidden rounded-t-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl sm:max-w-[48rem] sm:rounded-2xl">
         <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
           <h2 id="reservation-create-title" className="text-base font-semibold">
             {t('reservationsCreateTitle')}
