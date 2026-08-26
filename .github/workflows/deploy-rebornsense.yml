@@ -12,9 +12,14 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ secrets.REBORN_HETZNER_HOST != '' || secrets.HETZNER_HOST == '91.98.41.165' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Check Rebornsense deploy target
+        run: |
+          if [[ -z "${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}" ]]; then
+            echo "Skipping Rebornsense deploy: missing SSH key secret"
+            exit 0
+          fi
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
