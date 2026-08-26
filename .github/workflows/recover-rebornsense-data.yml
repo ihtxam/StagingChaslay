@@ -75,8 +75,8 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
           source: "/root/rebornsense-recovery-backups/latest/legacy-manupos.dump"
-          target: /tmp/rebornsense-recovery/
-          strip_components: 4
+          target: /tmp/rebornsense-recovery/legacy-manupos.dump
+          strip_components: 0
 
       - name: Upload dump to Rebornsense host
         uses: appleboy/scp-action@v0.1.7
