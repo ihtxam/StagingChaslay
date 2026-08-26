@@ -128,4 +128,5 @@ chmod +x scripts/deploy-hetzner.sh scripts/setup-rebornsense-server.sh 2>/dev/nu
 echo ""
 echo "=== Run deploy ==="
 export DEPLOY_STACK DEPLOY_PATH="$DEPLOY_PATH"
+export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.rebornsense"
 exec bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"

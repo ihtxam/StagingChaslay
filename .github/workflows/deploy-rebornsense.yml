@@ -26,4 +26,5 @@ jobs:
           script: |
             export DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
             export DEPLOY_STACK=rebornsense
+            export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.rebornsense"
             bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"

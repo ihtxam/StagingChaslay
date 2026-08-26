@@ -12,6 +12,21 @@ else
 fi
 SECRETS_DIR="${CHASLAY_SECRETS_DIR:-/root/chaslay-secrets}"
 
+# CADDYFILE must be exported before ANY docker compose command (compose defaults to chaslay).
+export_stack_caddyfile() {
+  if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
+    export CADDYFILE="${CADDYFILE:-$REPO_DIR/deploy/Caddyfile.rebornsense}"
+  else
+    export CADDYFILE="${CADDYFILE:-$REPO_DIR/deploy/Caddyfile.chaslay}"
+  fi
+}
+
+# docker compose with stack CADDYFILE + secrets env file (never rely on compose default).
+dc() {
+  export_stack_caddyfile
+  docker compose --env-file .env.production "$@"
+}
+
 if [[ ! -d "$REPO_DIR" ]]; then
   echo "ERROR: deploy path does not exist: $REPO_DIR"
   echo ""
@@ -29,6 +44,7 @@ if [[ ! -d "$REPO_DIR" ]]; then
 fi
 
 cd "$REPO_DIR"
+export_stack_caddyfile
 
 echo "=== ChaslayReborn deploy ($DEPLOY_STACK) @ $(date -u +"%Y-%m-%dT%H:%M:%SZ") ==="
 
@@ -119,7 +135,11 @@ ensure_env_production() {
     grep -qE '^PUBLIC_APP_URL=' "$ENV_FILE" || echo 'PUBLIC_APP_URL=https://app.rebornsense.com' >>"$ENV_FILE"
     grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE" || echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.rebornsense.com' >>"$ENV_FILE"
     grep -qE '^CORS_ALLOW_ALL=' "$ENV_FILE" || echo 'CORS_ALLOW_ALL=true' >>"$ENV_FILE"
-    grep -qE '^ACME_EMAIL=' "$ENV_FILE" || echo 'ACME_EMAIL=admin@rebornsense.com' >>"$ENV_FILE"
+    if grep -qE '^ACME_EMAIL=' "$ENV_FILE"; then
+      sed -i 's|^ACME_EMAIL=.*|ACME_EMAIL=admin@rebornsense.com|' "$ENV_FILE"
+    else
+      echo 'ACME_EMAIL=admin@rebornsense.com' >>"$ENV_FILE"
+    fi
     sed -i 's|^DOMAIN=.*|DOMAIN=rebornsense.com|' "$ENV_FILE"
     sed -i 's|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=https://app.rebornsense.com|' "$ENV_FILE"
     if grep -qE '^CADDYFILE=' "$ENV_FILE"; then
@@ -132,7 +152,7 @@ ensure_env_production() {
     else
       echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.rebornsense.com' >>"$ENV_FILE"
     fi
-    export CADDYFILE="$REPO_DIR/deploy/Caddyfile.rebornsense"
+    export_stack_caddyfile
   else
     grep -qE '^DOMAIN=' "$ENV_FILE" || echo 'DOMAIN=chaslay.com' >>"$ENV_FILE"
     grep -qE '^PUBLIC_APP_URL=' "$ENV_FILE" || echo 'PUBLIC_APP_URL=https://app.chaslay.com' >>"$ENV_FILE"
@@ -151,7 +171,7 @@ ensure_env_production() {
     else
       echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com' >>"$ENV_FILE"
     fi
-    export CADDYFILE="$REPO_DIR/deploy/Caddyfile.chaslay"
+    export_stack_caddyfile
   fi
 
   # Recover / normalize Brevo (Sendinblue) keys from this file or legacy Chaslay envs
@@ -351,7 +371,14 @@ stop_compose_stack() {
   local dir="$1"
   [[ -f "$dir/docker-compose.yml" ]] || return 0
   echo "docker compose down: $dir"
-  (cd "$dir" && docker compose down --remove-orphans 2>/dev/null) || true
+  (
+    cd "$dir"
+    if [[ "$(realpath "$dir" 2>/dev/null || echo "$dir")" == "$(realpath "$REPO_DIR" 2>/dev/null || echo "$REPO_DIR")" ]]; then
+      dc down --remove-orphans 2>/dev/null || true
+    else
+      docker compose down --remove-orphans 2>/dev/null || true
+    fi
+  ) || true
 }
 
 stop_conflicting_http_stacks() {
@@ -416,24 +443,24 @@ stop_conflicting_http_stacks() {
 stop_conflicting_http_stacks
 
 echo "=== Docker build & start ==="
+export_stack_caddyfile
 if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
-  export CADDYFILE="$REPO_DIR/deploy/Caddyfile.rebornsense"
   APP_URL="https://app.rebornsense.com"
   API_URL="https://api.rebornsense.com"
 else
-  export CADDYFILE="$REPO_DIR/deploy/Caddyfile.chaslay"
   APP_URL="https://app.chaslay.com"
   API_URL="https://api.chaslay.com"
 fi
-docker compose --env-file .env.production up -d --build
+echo "CADDYFILE=$CADDYFILE"
+dc up -d --build
 
 # Caddyfile is bind-mounted; force reload so host/site changes apply immediately
 echo "=== Reload Caddy ==="
-docker compose --env-file .env.production up -d --force-recreate caddy
-docker compose --env-file .env.production exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || true
+dc up -d --force-recreate caddy
+dc exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || true
 
 echo "=== Verify Caddy TLS config ==="
-CADDY_CONTAINER="$(docker compose --env-file .env.production ps -q caddy 2>/dev/null | head -1)"
+CADDY_CONTAINER="$(dc ps -q caddy 2>/dev/null | head -1)"
 if [[ -n "$CADDY_CONTAINER" ]]; then
   if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
     if ! docker exec "$CADDY_CONTAINER" grep -q 'app.rebornsense.com' /etc/caddy/Caddyfile 2>/dev/null; then
@@ -451,73 +478,73 @@ echo "=== Wait for services ==="
 sleep 20
 
 echo "=== Database migrate / seed ==="
-docker compose --env-file .env.production run --rm migrate
+dc run --rm migrate
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-adyen-features.sql" ]]; then
   echo "=== Apply Adyen feature SQL patches ==="
-  docker compose --env-file .env.production exec -T db \
+  dc exec -T db \
     psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
     < "$REPO_DIR/backend/sql/ensure-adyen-features.sql" || true
 fi
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-gift-cards-ecard.sql" ]]; then
   echo "=== Apply e-gift card SQL patches ==="
-  docker compose --env-file .env.production exec -T db \
+  dc exec -T db \
     psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
     < "$REPO_DIR/backend/sql/ensure-gift-cards-ecard.sql" || true
 fi
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-refunds.sql" ]]; then
   echo "=== Apply refund / payment breakdown SQL patches ==="
-  docker compose --env-file .env.production exec -T db \
+  dc exec -T db \
     psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
     < "$REPO_DIR/backend/sql/ensure-refunds.sql" || true
 fi
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-delivery-platforms.sql" ]]; then
   echo "=== Apply delivery platform SQL patches ==="
-  docker compose --env-file .env.production exec -T db \
+  dc exec -T db \
     psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
     < "$REPO_DIR/backend/sql/ensure-delivery-platforms.sql" || true
 fi
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-vat-after-discount.sql" ]]; then
   echo "=== Apply VAT after discount SQL patch ==="
-  docker compose --env-file .env.production exec -T db \
+  dc exec -T db \
     psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
     < "$REPO_DIR/backend/sql/ensure-vat-after-discount.sql" || true
 fi
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-cash-movements.sql" ]]; then
   echo "=== Apply POS cash in/out SQL patch ==="
-  docker compose --env-file .env.production exec -T db \
+  dc exec -T db \
     psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
     < "$REPO_DIR/backend/sql/ensure-cash-movements.sql" || true
 fi
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-order-center.sql" ]]; then
   echo "=== Apply order-center SQL patches ==="
-  docker compose --env-file .env.production exec -T db \
+  dc exec -T db \
     psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
     < "$REPO_DIR/backend/sql/ensure-order-center.sql" || true
 fi
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-orders-staff-id.sql" ]]; then
   echo "=== Apply orders.staff_id SQL patch ==="
-  docker compose --env-file .env.production exec -T db \
+  dc exec -T db \
     psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
     < "$REPO_DIR/backend/sql/ensure-orders-staff-id.sql" || true
 fi
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-pos-sessions-print-agent.sql" ]]; then
   echo "=== Apply pos_sessions.print_agent_online SQL patch ==="
-  docker compose --env-file .env.production exec -T db \
+  dc exec -T db \
     psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
     < "$REPO_DIR/backend/sql/ensure-pos-sessions-print-agent.sql" || true
 fi
 
 echo "=== Health checks ==="
-API_HEALTH="$(curl -sf http://127.0.0.1:3000/health || docker compose --env-file .env.production exec -T api wget -qO- http://127.0.0.1:3000/health || true)"
+API_HEALTH="$(curl -sf http://127.0.0.1:3000/health || dc exec -T api wget -qO- http://127.0.0.1:3000/health || true)"
 echo "local api: ${API_HEALTH:-unreachable}"
 curl -sf "${API_URL}/health" || true
 echo
