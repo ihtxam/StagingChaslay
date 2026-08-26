@@ -1044,6 +1044,7 @@ export default function Products() {
       toast.success(
         t('importDone')
           .replace('{categories}', String(r.categoriesCreated))
+          .replace('{modifiers}', String((r.modifierGroupsCreated ?? 0) + (r.modifierGroupsUpdated ?? 0)))
           .replace('{products}', String(r.productsCreated))
           .replace('{updated}', String(r.productsUpdated))
       );
