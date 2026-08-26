@@ -13,7 +13,31 @@ jobs:
   restore:
     runs-on: ubuntu-latest
     steps:
-      - name: Restore legacy dump on Rebornsense host
+      - name: Download legacy dump from Chaslay host
+        run: |
+          set -euo pipefail
+          curl -fsSL "http://116.202.26.15:9876/legacy-manupos.dump" -o /tmp/legacy-manupos.dump
+          ls -lh /tmp/legacy-manupos.dump
+          test -s /tmp/legacy-manupos.dump
+
+      - name: Upload dump to Rebornsense host
+        env:
+          REBORN_HOST: ${{ secrets.REBORN_HETZNER_HOST || '91.98.41.165' }}
+          REBORN_USER: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER || 'root' }}
+          REBORN_PORT: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
+          REBORN_KEY: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$REBORN_KEY" > ~/.ssh/reborn_key
+          chmod 600 ~/.ssh/reborn_key
+          ssh -p "$REBORN_PORT" -i ~/.ssh/reborn_key -o StrictHostKeyChecking=no \
+            "${REBORN_USER}@${REBORN_HOST}" 'mkdir -p /root/rebornsense-recovery-backups/latest'
+          scp -P "$REBORN_PORT" -i ~/.ssh/reborn_key -o StrictHostKeyChecking=no \
+            /tmp/legacy-manupos.dump \
+            "${REBORN_USER}@${REBORN_HOST}:/root/rebornsense-recovery-backups/latest/legacy-manupos.dump"
+
+      - name: Restore on Rebornsense host
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.REBORN_HETZNER_HOST || '91.98.41.165' }}
@@ -24,12 +48,10 @@ jobs:
           script: |
             set -euxo pipefail
             DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
-            mkdir -p /root/rebornsense-recovery-backups/latest
-            LEGACY_DUMP_URL="http://116.202.26.15:9876/legacy-manupos.dump"
-            curl -fsSL "$LEGACY_DUMP_URL" -o /root/rebornsense-recovery-backups/latest/legacy-manupos.dump
-            ls -lh /root/rebornsense-recovery-backups/latest/legacy-manupos.dump
+            DUMP="/root/rebornsense-recovery-backups/latest/legacy-manupos.dump"
+            test -s "$DUMP"
             cd "$DEPLOY_PATH"
             git fetch origin main
             git reset --hard origin/main
             chmod +x scripts/restore-rebornsense-dump.sh
-            DUMP_FILE="/root/rebornsense-recovery-backups/latest/legacy-manupos.dump" CONFIRM=1 bash scripts/restore-rebornsense-dump.sh
+            DUMP_FILE="$DUMP" CONFIRM=1 bash scripts/restore-rebornsense-dump.sh
