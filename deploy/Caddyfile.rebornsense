@@ -5,10 +5,8 @@
 	}
 }
 
-# Only hosts whose DNS already points at this server.
-# Apex rebornsense.com still resolves elsewhere — add it after that A record moves here.
-
-www.rebornsense.com {
+# Marketing apex + www. Point Emergent/landing HTML here later; until then send visitors to the app.
+rebornsense.com, www.rebornsense.com {
 	redir https://app.rebornsense.com{uri} permanent
 }
 
