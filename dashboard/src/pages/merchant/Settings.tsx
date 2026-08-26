@@ -3606,7 +3606,12 @@ export default function Settings() {
                 </label>
               </Section>
 
-              <Section icon={Printer} accent={settingsDash.info} title={t('printAgentDownload')} description={t('printAgentDownloadHint')}>
+              <Section
+                icon={Printer}
+                accent={settingsDash.info}
+                title={isAndroidDevice() ? t('downloadPrintBridge') : t('printAgentDownload')}
+                description={isAndroidDevice() ? t('printBridgeDownloadHint') : t('printAgentDownloadHint')}
+              >
                 <div className="flex flex-wrap items-center gap-3">
                   {preferredPrintCompanion() !== 'android-bridge' ? (
                     <a

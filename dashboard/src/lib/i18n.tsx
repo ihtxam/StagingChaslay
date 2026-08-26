@@ -1398,7 +1398,7 @@ const en: Dict = {
   printBridgeDownloadHint:
     'Install once on your Android POS tablet or handheld (Sunmi D3 Mini, D2s Plus, Feitian F310A, or other). Runs in the background so WebPOS can print via built-in, USB, Bluetooth, or Wi‑Fi printers — no second PC.',
   printBridgeInstallSteps:
-    'Install the APK, allow notifications, USB, and Bluetooth, then pick your printer(s) in the setup wizard. Supports built-in Sunmi printers and USB-connected thermals. Returns to WebPOS when the bridge shows ready (port 9101).',
+    'Install the APK, allow notifications, USB, and Bluetooth, then pick your printer(s) in the setup wizard. Works with built-in printers (D3 Mini, D2s Plus), USB thermals, Bluetooth, and LAN. Returns to WebPOS when the bridge shows ready (port 9101).',
   printAgentInstallSteps:
     'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Printer profiles',
@@ -4616,9 +4616,9 @@ const fr: Dict = {
   downloadPrintAgent: 'Télécharger l’agent d’impression (Windows)',
   downloadPrintBridge: 'Télécharger Print Bridge (Android)',
   printBridgeDownloadHint:
-    'Installez une fois sur votre tablette Sunmi ou Android. Tourne en arrière-plan pour que le WebPOS imprime sans second PC.',
+    'Installez sur tablette Sunmi (D3 Mini, D2s Plus), Feitian F310A ou autre Android. Impression intégrée, USB, Bluetooth ou Wi‑Fi — sans second PC.',
   printBridgeInstallSteps:
-    'Installez l’APK, autorisez notifications et Bluetooth, choisissez l’imprimante dans l’assistant, puis revenez au WebPOS (port 9101).',
+    'Installez l’APK, autorisez USB et Bluetooth, choisissez l’imprimante dans l’assistant (intégrée Sunmi ou USB), puis revenez au WebPOS (port 9101).',
   printAgentInstallSteps:
     'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Journal : %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Profils imprimantes',
@@ -7801,9 +7801,9 @@ const de: Dict = {
   downloadPrintAgent: 'Druckagent herunterladen (Windows)',
   downloadPrintBridge: 'Print Bridge herunterladen (Android)',
   printBridgeDownloadHint:
-    'Einmal auf Sunmi- oder Android-Tablet installieren. Läuft im Hintergrund — WebPOS druckt ohne zweiten PC.',
+    'Für Sunmi D3 Mini, D2s Plus, Feitian F310A oder andere Android-Geräte. Integrierter, USB-, Bluetooth- oder WLAN-Druck — ohne zweiten PC.',
   printBridgeInstallSteps:
-    'APK installieren, Benachrichtigungen und Bluetooth erlauben, Drucker im Assistenten wählen, dann zurück zum WebPOS (Port 9101).',
+    'APK installieren, USB und Bluetooth erlauben, Drucker im Assistenten wählen (Sunmi intern oder USB), dann zurück zum WebPOS (Port 9101).',
   printAgentInstallSteps:
     'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Log: %LOCALAPPDATA%\\ChaslayPrintAgent\\install.log.',
   printerProfiles: 'Druckerprofile',

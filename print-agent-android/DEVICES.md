@@ -2,6 +2,26 @@
 
 Reference for Print Bridge driver development and QA devices.
 
+**One universal APK** — drivers are chosen at runtime. We do **not** ship Sunmi-only builds.
+
+## In stock (pilot QA)
+
+| Device | Built-in print | USB printers |
+|--------|----------------|--------------|
+| **Sunmi D3 Mini** | ✅ 58/80 mm | ✅ 3× USB 3.0 Type-A host (kitchen/receipt/label on USB) |
+| **Sunmi D2s Plus** | ✅ 80 mm | ✅ USB peripheral ports |
+
+## Roadmap
+
+| Device | Notes |
+|--------|--------|
+| **Feitian F310A** | Handheld — BT + USB-C OTG; optional F310-1 print module later |
+| **Generic local Android** | 15″ tablets and OEM POS — USB OTG, BT, LAN :9100 |
+
+USB ESC/POS is **phase 1** alongside Sunmi built-in — not a later add-on.
+
+---
+
 ## Sunmi D3 Mini
 
 - **Role:** Main counter / 10.1″ WebPOS tablet
