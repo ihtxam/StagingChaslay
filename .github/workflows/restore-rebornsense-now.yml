@@ -17,7 +17,8 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL "http://116.202.26.15:9876/legacy-manupos.dump" -o /tmp/legacy-manupos.dump
-          ls -lh /tmp/legacy-manupos.dump
+          curl -fsSL "http://116.202.26.15:9876/legacy-uploads.tar.gz" -o /tmp/legacy-uploads.tar.gz
+          ls -lh /tmp/legacy-manupos.dump /tmp/legacy-uploads.tar.gz
           test -s /tmp/legacy-manupos.dump
 
       - name: Upload dump to Rebornsense host
@@ -36,6 +37,9 @@ jobs:
           scp -P "$REBORN_PORT" -i ~/.ssh/reborn_key -o StrictHostKeyChecking=no \
             /tmp/legacy-manupos.dump \
             "${REBORN_USER}@${REBORN_HOST}:/root/rebornsense-recovery-backups/latest/legacy-manupos.dump"
+          scp -P "$REBORN_PORT" -i ~/.ssh/reborn_key -o StrictHostKeyChecking=no \
+            /tmp/legacy-uploads.tar.gz \
+            "${REBORN_USER}@${REBORN_HOST}:/root/rebornsense-recovery-backups/latest/legacy-uploads.tar.gz"
 
       - name: Restore on Rebornsense host
         uses: appleboy/ssh-action@v1.2.0
@@ -46,12 +50,27 @@ jobs:
           port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
           command_timeout: 30m
           script: |
-            set -euxo pipefail
+            set -uxo pipefail
             DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
             DUMP="/root/rebornsense-recovery-backups/latest/legacy-manupos.dump"
+            UPLOADS="/root/rebornsense-recovery-backups/latest/legacy-uploads.tar.gz"
             test -s "$DUMP"
             cd "$DEPLOY_PATH"
-            git fetch origin main
-            git reset --hard origin/main
+            git fetch origin main && git reset --hard origin/main || true
+            if [[ ! -f scripts/restore-rebornsense-dump.sh ]]; then
+              curl -fsSL "https://raw.githubusercontent.com/ihtxam/rebornSense/main/scripts/restore-rebornsense-dump.sh" \
+                -o scripts/restore-rebornsense-dump.sh
+            fi
             chmod +x scripts/restore-rebornsense-dump.sh
-            DUMP_FILE="$DUMP" CONFIRM=1 bash scripts/restore-rebornsense-dump.sh
+            DUMP_FILE="$DUMP" CONFIRM=1 SKIP_UPLOADS=1 bash scripts/restore-rebornsense-dump.sh
+            if [[ -f "$UPLOADS" ]]; then
+              docker volume create rebornsense_uploads_data >/dev/null 2>&1 || true
+              docker run --rm \
+                -v rebornsense_uploads_data:/to \
+                -v /root/rebornsense-recovery-backups/latest:/backup:ro \
+                alpine:3.20 \
+                sh -c 'mkdir -p /to && tar xzf /backup/legacy-uploads.tar.gz -C /to'
+            fi
+            docker compose -p rebornsense --env-file "$DEPLOY_PATH/.env.production" up -d
+            docker compose -p rebornsense --env-file "$DEPLOY_PATH/.env.production" exec -T db psql -U manupos -d manupos -c \
+              "SELECT 'merchants' AS tbl, count(*) FROM merchants UNION ALL SELECT 'superadmins', count(*) FROM superadmins;"
