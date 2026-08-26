@@ -1355,19 +1355,23 @@ export default function Products() {
                       <p className="mt-0.5 text-sm text-slate-500 line-clamp-1">{product.description}</p>
                     )}
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                      <button
-                        type="button"
-                        className="font-semibold text-emerald-700 hover:underline disabled:no-underline"
-                        disabled={!product.barcode}
-                        title={product.barcode ? t('barcodePrintLabels') : undefined}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (product.barcode) openPrintFor([product]);
-                        }}
-                      >
-                        {money(product.price)}
-                      </button>
-                      {product.barcode ? (
+                      {showBarcodeTools ? (
+                        <button
+                          type="button"
+                          className="font-semibold text-emerald-700 hover:underline disabled:no-underline"
+                          disabled={!product.barcode}
+                          title={product.barcode ? t('barcodePrintLabels') : undefined}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (product.barcode) openPrintFor([product]);
+                          }}
+                        >
+                          {money(product.price)}
+                        </button>
+                      ) : (
+                        <span className="font-semibold text-emerald-700">{money(product.price)}</span>
+                      )}
+                      {showBarcodeTools && product.barcode ? (
                         <button
                           type="button"
                           className="inline-flex items-center rounded hover:opacity-80"
@@ -1405,7 +1409,7 @@ export default function Products() {
                 </button>
 
                 <div className="flex items-center gap-1">
-                  {product.barcode ? (
+                  {showBarcodeTools && product.barcode ? (
                     <button
                       type="button"
                       onClick={() => openPrintFor([product])}
@@ -1502,7 +1506,9 @@ export default function Products() {
                       label={t('stock')}
                       value={t('stockUnits').replace('{n}', String(product.stock))}
                     />
-                    <InfoCard label={t('barcode')} value={product.barcode || '-'} />
+                    {showBarcodeTools ? (
+                      <InfoCard label={t('barcode')} value={product.barcode || '-'} />
+                    ) : null}
                   </div>
                 </div>
               )}
@@ -2276,7 +2282,7 @@ export default function Products() {
         </div>
       )}
 
-      {printOpen && (
+      {showBarcodeTools && printOpen && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 p-3" onClick={() => setPrintOpen(false)}>
           <div
             className="w-full max-w-lg rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4 space-y-3"
