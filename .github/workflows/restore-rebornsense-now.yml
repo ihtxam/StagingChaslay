@@ -16,10 +16,10 @@ jobs:
       - name: Download legacy dump from Chaslay host
         run: |
           set -euo pipefail
-          curl -fsSL "http://116.202.26.15:9876/legacy-manupos.dump" -o /tmp/legacy-manupos.dump
+          curl -fsSL "http://116.202.26.15:9876/legacy-manupos.sql" -o /tmp/legacy-manupos.sql
           curl -fsSL "http://116.202.26.15:9876/legacy-uploads.tar.gz" -o /tmp/legacy-uploads.tar.gz
-          ls -lh /tmp/legacy-manupos.dump /tmp/legacy-uploads.tar.gz
-          test -s /tmp/legacy-manupos.dump
+          ls -lh /tmp/legacy-manupos.sql /tmp/legacy-uploads.tar.gz
+          test -s /tmp/legacy-manupos.sql
 
       - name: Upload dump to Rebornsense host
         env:
@@ -35,8 +35,8 @@ jobs:
           ssh -p "$REBORN_PORT" -i ~/.ssh/reborn_key -o StrictHostKeyChecking=no \
             "${REBORN_USER}@${REBORN_HOST}" 'mkdir -p /root/rebornsense-recovery-backups/latest'
           scp -P "$REBORN_PORT" -i ~/.ssh/reborn_key -o StrictHostKeyChecking=no \
-            /tmp/legacy-manupos.dump \
-            "${REBORN_USER}@${REBORN_HOST}:/root/rebornsense-recovery-backups/latest/legacy-manupos.dump"
+            /tmp/legacy-manupos.sql \
+            "${REBORN_USER}@${REBORN_HOST}:/root/rebornsense-recovery-backups/latest/legacy-manupos.sql"
           scp -P "$REBORN_PORT" -i ~/.ssh/reborn_key -o StrictHostKeyChecking=no \
             /tmp/legacy-uploads.tar.gz \
             "${REBORN_USER}@${REBORN_HOST}:/root/rebornsense-recovery-backups/latest/legacy-uploads.tar.gz"
@@ -52,17 +52,33 @@ jobs:
           script: |
             set -uxo pipefail
             DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
-            DUMP="/root/rebornsense-recovery-backups/latest/legacy-manupos.dump"
+            SQL="/root/rebornsense-recovery-backups/latest/legacy-manupos.sql"
             UPLOADS="/root/rebornsense-recovery-backups/latest/legacy-uploads.tar.gz"
-            test -s "$DUMP"
+            test -s "$SQL"
             cd "$DEPLOY_PATH"
-            git fetch origin main && git reset --hard origin/main || true
-            if [[ ! -f scripts/restore-rebornsense-dump.sh ]]; then
-              curl -fsSL "https://raw.githubusercontent.com/ihtxam/rebornSense/main/scripts/restore-rebornsense-dump.sh" \
-                -o scripts/restore-rebornsense-dump.sh
+            export_stack() {
+              if [[ -f deploy/Caddyfile.rebornsense ]]; then
+                export CADDYFILE="${CADDYFILE:-$DEPLOY_PATH/deploy/Caddyfile.rebornsense}"
+              fi
+            }
+            dc() {
+              export_stack
+              docker compose -p rebornsense --env-file "$DEPLOY_PATH/.env.production" "$@"
+            }
+            dc stop api dashboard migrate 2>/dev/null || true
+            dc up -d db
+            for i in $(seq 1 30); do
+              dc exec -T db pg_isready -U manupos -d manupos >/dev/null 2>&1 && break
+              sleep 2
+            done
+            echo "Restoring SQL dump..."
+            cat "$SQL" | dc exec -T db psql -U manupos -d manupos -v ON_ERROR_STOP=0
+            COUNT="$(dc exec -T db psql -U manupos -d manupos -t -c "SELECT count(*) FROM merchants;" | tr -d '[:space:]')"
+            echo "Merchant count after restore: $COUNT"
+            if [[ "${COUNT:-0}" -lt 5 ]]; then
+              echo "ERROR: expected legacy merchants (>=5), got $COUNT"
+              exit 1
             fi
-            chmod +x scripts/restore-rebornsense-dump.sh
-            DUMP_FILE="$DUMP" CONFIRM=1 SKIP_UPLOADS=1 SKIP_MIGRATE=1 bash scripts/restore-rebornsense-dump.sh
             if [[ -f "$UPLOADS" ]]; then
               docker volume create rebornsense_uploads_data >/dev/null 2>&1 || true
               docker run --rm \
@@ -71,15 +87,10 @@ jobs:
                 alpine:3.20 \
                 sh -c 'mkdir -p /to && tar xzf /backup/legacy-uploads.tar.gz -C /to'
             fi
-            docker compose -p rebornsense --env-file "$DEPLOY_PATH/.env.production" up -d
-            COUNT="$(docker compose -p rebornsense --env-file "$DEPLOY_PATH/.env.production" exec -T db psql -U manupos -d manupos -t -c "SELECT count(*) FROM merchants;" | tr -d '[:space:]')"
-            echo "Merchant count after restore: $COUNT"
-            if [[ "${COUNT:-0}" -lt 5 ]]; then
-              echo "ERROR: expected legacy merchants (>=5), got $COUNT"
-              exit 1
-            fi
-            docker compose -p rebornsense --env-file "$DEPLOY_PATH/.env.production" exec -T db psql -U manupos -d manupos -c \
-              "SELECT 'merchants' AS tbl, count(*) FROM merchants UNION ALL SELECT 'superadmins', count(*) FROM superadmins;"
             if [[ -f scripts/set-superadmin-password.sh ]]; then
+              git fetch origin main && git reset --hard origin/main || true
               bash scripts/set-superadmin-password.sh 'ChaslayAdmin123!' admin@chaslay.com || true
             fi
+            dc up -d
+            dc exec -T db psql -U manupos -d manupos -c \
+              "SELECT 'merchants' AS tbl, count(*) FROM merchants UNION ALL SELECT 'superadmins', count(*) FROM superadmins;"
