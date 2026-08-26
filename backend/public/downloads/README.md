@@ -8,6 +8,12 @@ Served by the API at `GET /downloads/<filename>` and proxied on `app.chaslay.com
 
 `backend/public/downloads/chaslay-print-agent-setup.exe`
 
+## Print Bridge (Android APK)
+
+`reborn-print-bridge.apk` is **gitignored**. Built from `print-agent-android/` (see README there).
+
+Served at `GET /downloads/reborn-print-bridge.apk` — merchants on Sunmi/Android tablets install this instead of the Windows EXE.
+
 ### Build on Windows (local)
 
 ```powershell

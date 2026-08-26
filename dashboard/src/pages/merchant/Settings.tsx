@@ -46,6 +46,12 @@ import {
   listScalePorts,
   type AgentPrinter,
 } from '@/lib/print-agent';
+import {
+  isAndroidDevice,
+  printAgentDownloadUrl,
+  printBridgeDownloadUrl,
+  preferredPrintCompanion,
+} from '@/lib/print-agent-platform';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { compressImageIfNeeded } from '@/lib/compress-image';
 import {
@@ -3602,29 +3608,26 @@ export default function Settings() {
 
               <Section icon={Printer} accent={settingsDash.info} title={t('printAgentDownload')} description={t('printAgentDownloadHint')}>
                 <div className="flex flex-wrap items-center gap-3">
-                  <a
-                    className="btn-primary inline-flex"
-                    href={
-                      // Production dashboard uses VITE_API_URL=/api → same-origin /downloads/*
-                      // (Caddy proxies /downloads to the API; never hit SPA index.html).
-                      // Absolute API hosts (local / custom) keep their origin.
-                      (() => {
-                        const api = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(
-                          /\/api\/?$/,
-                          ''
-                        );
-                        if (!api || api.startsWith('/')) {
-                          return '/downloads/chaslay-print-agent-setup.exe';
-                        }
-                        return `${api}/downloads/chaslay-print-agent-setup.exe`;
-                      })()
-                    }
-                    download
-                  >
-                    {t('downloadPrintAgent')}
-                  </a>
+                  {preferredPrintCompanion() !== 'android-bridge' ? (
+                    <a
+                      className="btn-primary inline-flex"
+                      href={printAgentDownloadUrl()}
+                      download
+                    >
+                      {t('downloadPrintAgent')}
+                    </a>
+                  ) : null}
+                  {preferredPrintCompanion() !== 'windows-agent' ? (
+                    <a
+                      className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
+                      href={printBridgeDownloadUrl()}
+                      download
+                    >
+                      {t('downloadPrintBridge')}
+                    </a>
+                  ) : null}
                   <p className="text-sm text-[var(--muted)] max-w-xl m-0">
-                    {t('printAgentInstallSteps')}
+                    {isAndroidDevice() ? t('printBridgeInstallSteps') : t('printAgentInstallSteps')}
                   </p>
                 </div>
               </Section>
