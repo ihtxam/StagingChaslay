@@ -5,7 +5,8 @@
 	}
 }
 
-# Reborn production — same API paths as before (/api, /v1). Login on app.rebornsense.com.
+# Only hosts whose DNS already points at this server.
+# Add rebornsense.com / www and leftover chaslay.com names after those A records move here.
 
 app.rebornsense.com {
 	handle /receipt/* {
@@ -39,7 +40,6 @@ app.rebornsense.com {
 	}
 }
 
-# API alias — same backend as app (paths unchanged)
 api.rebornsense.com {
 	handle /downloads/* {
 		reverse_proxy api:3000
@@ -57,10 +57,6 @@ api.rebornsense.com {
 
 	handle /api/* {
 		reverse_proxy api:3000
-	}
-
-	handle /receipt/* {
-		reverse_proxy dashboard:80
 	}
 
 	handle {
@@ -116,10 +112,6 @@ status.rebornsense.com {
 	}
 }
 
-rebornsense.com www.rebornsense.com {
-	redir https://app.rebornsense.com{uri} permanent
-}
-
 # Merchant shops: https://{subdomain}.rebornsense.com
 *.rebornsense.com {
 	tls {
@@ -152,29 +144,4 @@ https:// {
 	handle {
 		reverse_proxy dashboard:80
 	}
-}
-
-# --- Legacy Chaslay hosts (point old DNS here during cutover) ---
-api.chaslay.com {
-	redir https://app.rebornsense.com{uri} permanent
-}
-
-app.chaslay.com {
-	redir https://app.rebornsense.com{uri} permanent
-}
-
-admin.chaslay.com {
-	redir https://app.rebornsense.com{uri} permanent
-}
-
-shop.chaslay.com {
-	redir https://shop.rebornsense.com{uri} permanent
-}
-
-pay.chaslay.com {
-	redir https://pay.rebornsense.com{uri} permanent
-}
-
-status.chaslay.com {
-	redir https://status.rebornsense.com{uri} permanent
 }
