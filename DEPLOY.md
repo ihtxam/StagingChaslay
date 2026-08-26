@@ -89,6 +89,27 @@ On the server, add the matching **public key** to `~/.ssh/authorized_keys`.
 
 After that, every `git push` to `main` rebuilds Docker and runs migrations automatically.
 
+### Rebornsense (`app.rebornsense.com`)
+
+`app.rebornsense.com` runs on a **separate** VPS (`91.98.41.165`). Pushes to `main` only auto-deploy **chaslay.com** unless you add Rebornsense GitHub secrets:
+
+| Secret | Example |
+|--------|---------|
+| `REBORN_HETZNER_HOST` | `91.98.41.165` |
+| `REBORN_HETZNER_USER` | `root` |
+| `REBORN_HETZNER_SSH_KEY` | Private key for the Rebornsense server |
+| `REBORN_HETZNER_DEPLOY_PATH` | `/root/FoodTruckPOS` (optional) |
+
+Workflow: `.github/workflows/deploy-rebornsense.yml` (runs on every `main` push when secrets exist).
+
+Manual deploy on the Rebornsense server:
+
+```bash
+ssh root@91.98.41.165 'export DEPLOY_STACK=rebornsense && bash /root/FoodTruckPOS/scripts/deploy-hetzner.sh'
+```
+
+Caddy config: `deploy/Caddyfile.rebornsense`
+
 Manual deploy anytime:
 
 ```bash

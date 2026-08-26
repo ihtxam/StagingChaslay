@@ -4,9 +4,10 @@ set -euo pipefail
 
 REPO_DIR="${DEPLOY_PATH:-$HOME/FoodTruckPOS}"
 SECRETS_DIR="${CHASLAY_SECRETS_DIR:-/root/chaslay-secrets}"
+DEPLOY_STACK="${DEPLOY_STACK:-chaslay}"
 cd "$REPO_DIR"
 
-echo "=== ChaslayReborn deploy @ $(date -u +"%Y-%m-%dT%H:%M:%SZ") ==="
+echo "=== ChaslayReborn deploy ($DEPLOY_STACK) @ $(date -u +"%Y-%m-%dT%H:%M:%SZ") ==="
 
 mkdir -p "$SECRETS_DIR"
 ENV_FILE="$SECRETS_DIR/.env.production"
@@ -89,19 +90,33 @@ ensure_env_production() {
     echo "Forced SEED_SUPERADMIN_PASSWORD=ChaslayAdmin123! (set FORCE_CHASLAY_ADMIN_BOOTSTRAP=0 to keep custom)"
   fi
 
-  # Ensure Chaslay host defaults
-  grep -qE '^DOMAIN=' "$ENV_FILE" || echo 'DOMAIN=chaslay.com' >>"$ENV_FILE"
-  grep -qE '^PUBLIC_APP_URL=' "$ENV_FILE" || echo 'PUBLIC_APP_URL=https://app.chaslay.com' >>"$ENV_FILE"
-  grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE" || echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com' >>"$ENV_FILE"
-  grep -qE '^CORS_ALLOW_ALL=' "$ENV_FILE" || echo 'CORS_ALLOW_ALL=true' >>"$ENV_FILE"
-
-  # Force known-good public URLs for this stack
-  sed -i 's|^DOMAIN=.*|DOMAIN=chaslay.com|' "$ENV_FILE"
-  sed -i 's|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=https://app.chaslay.com|' "$ENV_FILE"
-  if grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE"; then
-    sed -i 's|^PUBLIC_RECEIPT_BASE_URL=.*|PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com|' "$ENV_FILE"
+  # Ensure host defaults per stack
+  if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
+    grep -qE '^DOMAIN=' "$ENV_FILE" || echo 'DOMAIN=rebornsense.com' >>"$ENV_FILE"
+    grep -qE '^PUBLIC_APP_URL=' "$ENV_FILE" || echo 'PUBLIC_APP_URL=https://app.rebornsense.com' >>"$ENV_FILE"
+    grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE" || echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.rebornsense.com' >>"$ENV_FILE"
+    grep -qE '^CORS_ALLOW_ALL=' "$ENV_FILE" || echo 'CORS_ALLOW_ALL=true' >>"$ENV_FILE"
+    sed -i 's|^DOMAIN=.*|DOMAIN=rebornsense.com|' "$ENV_FILE"
+    sed -i 's|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=https://app.rebornsense.com|' "$ENV_FILE"
+    if grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE"; then
+      sed -i 's|^PUBLIC_RECEIPT_BASE_URL=.*|PUBLIC_RECEIPT_BASE_URL=https://pay.rebornsense.com|' "$ENV_FILE"
+    else
+      echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.rebornsense.com' >>"$ENV_FILE"
+    fi
+    export CADDYFILE="$REPO_DIR/deploy/Caddyfile.rebornsense"
   else
-    echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com' >>"$ENV_FILE"
+    grep -qE '^DOMAIN=' "$ENV_FILE" || echo 'DOMAIN=chaslay.com' >>"$ENV_FILE"
+    grep -qE '^PUBLIC_APP_URL=' "$ENV_FILE" || echo 'PUBLIC_APP_URL=https://app.chaslay.com' >>"$ENV_FILE"
+    grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE" || echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com' >>"$ENV_FILE"
+    grep -qE '^CORS_ALLOW_ALL=' "$ENV_FILE" || echo 'CORS_ALLOW_ALL=true' >>"$ENV_FILE"
+    sed -i 's|^DOMAIN=.*|DOMAIN=chaslay.com|' "$ENV_FILE"
+    sed -i 's|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=https://app.chaslay.com|' "$ENV_FILE"
+    if grep -qE '^PUBLIC_RECEIPT_BASE_URL=' "$ENV_FILE"; then
+      sed -i 's|^PUBLIC_RECEIPT_BASE_URL=.*|PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com|' "$ENV_FILE"
+    else
+      echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com' >>"$ENV_FILE"
+    fi
+    export CADDYFILE="$REPO_DIR/deploy/Caddyfile.chaslay"
   fi
 
   # Recover / normalize Brevo (Sendinblue) keys from this file or legacy Chaslay envs
@@ -271,6 +286,15 @@ fi
 docker rm -f backend-caddy-1 backend-api-1 backend-receipts-1 backend-postgres-1 2>/dev/null || true
 
 echo "=== Docker build & start ==="
+if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
+  export CADDYFILE="$REPO_DIR/deploy/Caddyfile.rebornsense"
+  APP_URL="https://app.rebornsense.com"
+  API_URL="https://api.rebornsense.com"
+else
+  export CADDYFILE="$REPO_DIR/deploy/Caddyfile.chaslay"
+  APP_URL="https://app.chaslay.com"
+  API_URL="https://api.chaslay.com"
+fi
 docker compose --env-file .env.production up -d --build
 
 # Caddyfile is bind-mounted; force reload so host/site changes apply immediately
@@ -350,14 +374,14 @@ fi
 echo "=== Health checks ==="
 API_HEALTH="$(curl -sf http://127.0.0.1:3000/health || docker compose --env-file .env.production exec -T api wget -qO- http://127.0.0.1:3000/health || true)"
 echo "local api: ${API_HEALTH:-unreachable}"
-curl -sf https://api.chaslay.com/health || true
+curl -sf "${API_URL}/health" || true
 echo
 
 # Print-agent download must be a real PE, not SPA HTML / JSON 404
-PRINT_HDR="$(curl -sI https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe || true)"
+PRINT_HDR="$(curl -sI "${APP_URL}/downloads/chaslay-print-agent-setup.exe" || true)"
 PRINT_LEN="$(printf '%s' "$PRINT_HDR" | awk -F': ' 'tolower($1)=="content-length"{gsub(/\r/,""); print $2; exit}')"
 PRINT_CT="$(printf '%s' "$PRINT_HDR" | awk -F': ' 'tolower($1)=="content-type"{gsub(/\r/,""); print $2; exit}')"
-PRINT_MAGIC="$(curl -sL https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
+PRINT_MAGIC="$(curl -sL "${APP_URL}/downloads/chaslay-print-agent-setup.exe" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
 echo "print-agent download: Content-Type=${PRINT_CT:-?} Content-Length=${PRINT_LEN:-?} magic=${PRINT_MAGIC:-?}"
 if [[ "${PRINT_MAGIC:-}" != "4d5a" ]] || [[ "${PRINT_LEN:-0}" -lt 1000000 ]]; then
   echo "WARNING: print-agent download is not a valid Windows EXE (expected MZ / ~40MB)"
@@ -393,9 +417,17 @@ else
 fi
 
 echo "=== Deploy complete ==="
-echo "  Admin:  https://app.chaslay.com/"
-echo "  API:    https://api.chaslay.com/health"
-echo "  Shop:   https://shop.chaslay.com/"
-echo "  Pay:    https://pay.chaslay.com/receipt/"
-echo "  Status: https://status.chaslay.com/"
+if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
+  echo "  Admin:  https://app.rebornsense.com/"
+  echo "  API:    https://api.rebornsense.com/health"
+  echo "  Shop:   https://shop.rebornsense.com/"
+  echo "  Pay:    https://pay.rebornsense.com/receipt/"
+  echo "  Status: https://status.rebornsense.com/"
+else
+  echo "  Admin:  https://app.chaslay.com/"
+  echo "  API:    https://api.chaslay.com/health"
+  echo "  Shop:   https://shop.chaslay.com/"
+  echo "  Pay:    https://pay.chaslay.com/receipt/"
+  echo "  Status: https://status.chaslay.com/"
+fi
 echo "  Secrets: $ENV_FILE"

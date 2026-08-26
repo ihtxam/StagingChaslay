@@ -1,0 +1,29 @@
+name: Deploy to Rebornsense
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-rebornsense
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: ${{ secrets.REBORN_HETZNER_HOST != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.REBORN_HETZNER_HOST }}
+          username: ${{ secrets.REBORN_HETZNER_USER }}
+          key: ${{ secrets.REBORN_HETZNER_SSH_KEY }}
+          port: ${{ secrets.REBORN_HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            export DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/FoodTruckPOS' }}"
+            export DEPLOY_STACK=rebornsense
+            bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"
