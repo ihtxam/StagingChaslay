@@ -1,6 +1,6 @@
 # Public downloads
 
-Served by the API at `GET /downloads/<filename>` and proxied on `app.chaslay.com` / `api.chaslay.com` (Caddy → API, **not** the SPA).
+Served by the API at `GET /downloads/<filename>` and proxied on `app.rebornsense.com` / `app.rebornsense.com` (Caddy → API, **not** the SPA).
 
 ## Print agent (Windows EXE)
 
@@ -36,15 +36,15 @@ docker compose --env-file .env.production up -d api caddy
 ### Verify
 
 ```bash
-curl -sI https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe
+curl -sI https://app.rebornsense.com/downloads/chaslay-print-agent-setup.exe
 # Expect: 200, Content-Type: application/octet-stream, Content-Length ~40MB
 # First bytes must be MZ (4D 5A), not <!doctype or {"error"
 
-curl -sL https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe | head -c 2 | xxd
+curl -sL https://app.rebornsense.com/downloads/chaslay-print-agent-setup.exe | head -c 2 | xxd
 # 00000000: 4d5a  MZ
 ```
 
 Public URLs:
 
-- `https://app.chaslay.com/downloads/chaslay-print-agent-setup.exe`
-- `https://api.chaslay.com/downloads/chaslay-print-agent-setup.exe`
+- `https://app.rebornsense.com/downloads/chaslay-print-agent-setup.exe`
+- `https://app.rebornsense.com/downloads/chaslay-print-agent-setup.exe`

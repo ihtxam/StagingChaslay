@@ -12,7 +12,7 @@ export async function geocodeQuery(
   const response = await fetch(url, {
     headers: {
       Accept: "application/json",
-      "User-Agent": "Chaslay-POS/1.0 (https://app.chaslay.com)",
+      "User-Agent": "Reborn-POS/1.0 (https://app.rebornsense.com)",
     },
   });
   if (!response.ok) {

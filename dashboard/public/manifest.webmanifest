@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "ChaslayReborn",
-  "short_name": "ChaslayReborn",
-  "description": "ChaslayReborn — installable Windows app",
+  "name": "Reborn",
+  "short_name": "Reborn",
+  "description": "Reborn — installable Windows app",
   "start_url": "/merchant/pos",
   "scope": "/",
   "display": "standalone",

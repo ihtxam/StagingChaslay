@@ -238,7 +238,7 @@ export const merchants = pgTable(
     panelLanguage: varchar("panel_language", { length: 10 }).default("en").notNull(), // en | fr | de
     /** Default language for online shop + CMS homepage (null = fall back to panelLanguage) */
     shopLanguage: varchar("shop_language", { length: 10 }), // en | fr | de
-    /** Chaslay/FoodTruck Android POS sync key (X-Api-Key header) */
+    /** Reborn/FoodTruck Android POS sync key (X-Api-Key header) */
     syncApiKey: varchar("sync_api_key", { length: 64 }),
     // Restaurant floor / PAX
     floorPlanEnabled: boolean("floor_plan_enabled").default(false).notNull(),
@@ -267,7 +267,7 @@ export const merchants = pgTable(
      */
     inventoryAddonEnabled: boolean("inventory_addon_enabled").default(false).notNull(),
     /**
-     * Paid Chaslay Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
+     * Paid Reborn Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
      */
     signageAddonEnabled: boolean("signage_addon_enabled").default(false).notNull(),
     /** Max TV screens when the signage addon is on. Default 2. */
@@ -3154,7 +3154,7 @@ export type PlatformShopOrderLine = {
   lineTotal: number;
 };
 
-/** Catalog items sold by Chaslay to merchants */
+/** Catalog items sold by Reborn to merchants */
 export const platformShopProducts = pgTable(
   "platform_shop_products",
   {

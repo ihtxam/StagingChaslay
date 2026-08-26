@@ -15,8 +15,8 @@ curl -sf http://localhost:8080/health && echo "  receipts:8080 OK" || echo "  re
 
 echo ""
 echo "=== Public HTTPS ==="
-curl -sf https://api.chaslay.com/health && echo "  api.chaslay.com OK" || echo "  api.chaslay.com FAIL"
-curl -sf https://pay.chaslay.com/health && echo "  pay.chaslay.com OK" || echo "  pay.chaslay.com FAIL (check Caddy TLS for pay.chaslay.com)"
+curl -sf https://app.rebornsense.com/health && echo "  app.rebornsense.com OK" || echo "  app.rebornsense.com FAIL"
+curl -sf https://pay.rebornsense.com/health && echo "  pay.rebornsense.com OK" || echo "  pay.rebornsense.com FAIL (check Caddy TLS for pay.rebornsense.com)"
 
 echo ""
 echo "=== API_KEY loaded in receipts container (restart does NOT reload env_file) ==="
@@ -39,18 +39,18 @@ if [[ -z "$API_KEY" ]]; then
 else
   TEST_ID="diag-$(date +%s)"
   CODE=$(curl -sS -o /tmp/receipt-test.json -w "%{http_code}" \
-    -X POST "https://api.chaslay.com/v1/receipts" \
+    -X POST "https://app.rebornsense.com/v1/receipts" \
     -H "Content-Type: application/json" \
     -H "X-Api-Key: $API_KEY" \
     -d "{\"id\":\"$TEST_ID\",\"transaction_number\":\"TEST\",\"total\":9.90,\"currency\":\"CHF\",\"payment_method\":\"CASH\",\"business_name\":\"Test\",\"created_at\":$(date +%s000),\"items\":[]}")
-  echo "  POST api.chaslay.com/v1/receipts -> HTTP $CODE"
+  echo "  POST app.rebornsense.com/v1/receipts -> HTTP $CODE"
   cat /tmp/receipt-test.json
   echo ""
-  curl -sf "https://pay.chaslay.com/receipts/$TEST_ID" >/dev/null && echo "  pay URL OK" || echo "  pay URL FAIL"
+  curl -sf "https://pay.rebornsense.com/receipts/$TEST_ID" >/dev/null && echo "  pay URL OK" || echo "  pay URL FAIL"
 fi
 
 echo ""
-echo "=== Recent Caddy logs (TLS / pay.chaslay.com) ==="
+echo "=== Recent Caddy logs (TLS / pay.rebornsense.com) ==="
 docker compose logs caddy --tail 30
 
 echo ""

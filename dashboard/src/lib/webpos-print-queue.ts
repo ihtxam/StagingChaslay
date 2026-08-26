@@ -43,7 +43,7 @@ const DEFAULT_RETRY_CONFIG: PrintQueueRetryConfig = {
 /** @deprecated use getPrintQueueRetryConfig().intervalMs */
 export const PRINT_QUEUE_RETRY_MS = DEFAULT_RETRY_CONFIG.intervalMs;
 
-const STORAGE_KEY = 'chaslayreborn_webpos_print_queue_v1';
+const STORAGE_KEY = 'reborn_webpos_print_queue_v1';
 const MAX_JOBS = 40;
 const MAX_AGE_MS = 36 * 60 * 60 * 1000;
 

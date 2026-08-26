@@ -2,7 +2,7 @@ import { and, count, eq, gt, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { PlatformSettingsService } from "@/services/platform-settings.service";
 
-/** Platform settings key for reseller ? Chaslay monthly price list (CHF). */
+/** Platform settings key for reseller ? Reborn monthly price list (CHF). */
 export const RESELLER_BILLING_PRICES_KEY = "reseller_billing_prices";
 
 /** Billable add-on keys (feature prices map). */
@@ -373,7 +373,7 @@ export class ResellerBillingService {
         label: `${year}-${String(month).padStart(2, "0")}`,
         start: start.toISOString(),
         end: end.toISOString(),
-        note: "Amounts are monthly platform fees owed by the reseller to Chaslay for the selected calendar month.",
+        note: "Amounts are monthly platform fees owed by the reseller to Reborn for the selected calendar month.",
       },
       pricingUnit:
         "Merchants with ?1 active (non-expired) POS device license; suspended/expired merchants excluded.",

@@ -291,7 +291,7 @@ export class PlatformSettingsService {
       process.env.FROM_EMAIL ||
       process.env.MAIL_FROM ||
       "";
-    const envName = process.env.BREVO_FROM_NAME || process.env.SENDINBLUE_FROM_NAME || "Chaslay";
+    const envName = process.env.BREVO_FROM_NAME || process.env.SENDINBLUE_FROM_NAME || "Reborn";
     const apiKey = s.apiKey || envKey;
     const fromEmail = s.fromEmail || envFrom;
     return {

@@ -116,7 +116,7 @@ router.post("/test-email", async (req: Request, res: Response) => {
     await EmailService.send({
       merchantId: req.merchantId!,
       to,
-      subject: `Test email from ${merchant?.name || "ChaslayReborn"}`,
+      subject: `Test email from ${merchant?.name || "Reborn"}`,
       html: `<p>This is a test message from your SMTP / email settings.</p><p>${new Date().toISOString()}</p>`,
       emailType: "marketing_test",
     });

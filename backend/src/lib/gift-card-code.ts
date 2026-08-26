@@ -108,7 +108,7 @@ export function buildGiftCardRedeemUrl(code: string): string {
   const base = (
     process.env.GIFT_CARD_PUBLIC_BASE_URL ||
     process.env.PUBLIC_APP_URL ||
-    "https://app.chaslay.com"
+    "https://app.rebornsense.com"
   )
     .replace(/\/$/, "")
     .replace(/^https?:\/\/pay\./i, "https://app.");

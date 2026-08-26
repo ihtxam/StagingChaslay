@@ -84,7 +84,7 @@ export async function merchantRecordInvoicePayment(req: Request, res: Response) 
 
 export default router;
 
-/** Chaslay Android routes mounted at /v1/invoices */
+/** Reborn Android routes mounted at /v1/invoices */
 export function chaslayInvoiceRouter() {
   const r = Router();
   r.get("/:id/pdf", async (req: Request, res: Response) => {

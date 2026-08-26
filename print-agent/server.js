@@ -1,5 +1,5 @@
 /**
- * ChaslayReborn Windows Print Agent
+ * Reborn Windows Print Agent
  * Exposes localhost HTTP API for WebPOS silent thermal printing (ESC/POS RAW).
  *
  * CLI:
@@ -389,24 +389,24 @@ async function doInstall() {
 
   if (running) {
     const msg =
-      `Chaslay Print Agent installed and running on port ${PORT}.\n\n` +
+      `Reborn Print Agent installed and running on port ${PORT}.\n\n` +
       `Installed to:\n${dir}\n\n` +
       `It will also start automatically when you log in to Windows.\n\n` +
       `Log: ${installLogPath()}`;
     console.log(msg);
     appendInstallLog("Install success (running)");
-    await showMessage("Chaslay Print Agent", msg);
+    await showMessage("Reborn Print Agent", msg);
     return;
   }
 
   const warn =
-    `Chaslay Print Agent files were installed to:\n${dir}\n\n` +
+    `Reborn Print Agent files were installed to:\n${dir}\n\n` +
     `Startup registration succeeded, but the agent is not responding on port ${PORT} yet.\n` +
     `Try running:\n${launchPath}\n\n` +
     `Log: ${installLogPath()}`;
   console.warn(warn);
   appendInstallLog("Install finished (not healthy yet)");
-  await showMessage("Chaslay Print Agent — Warning", warn);
+  await showMessage("Reborn Print Agent — Warning", warn);
   // Files + Startup are in place; do not throw a second dialog. Exit non-zero from CLI.
   const err = new Error(`Installed but agent is not running on port ${PORT}. See ${installLogPath()}`);
   err.alreadyShown = true;
@@ -420,11 +420,11 @@ async function doUninstall() {
     "Removed Windows Startup entry.\n" +
     `Files remain in ${installDir()} — delete that folder manually if desired.`;
   console.log(msg);
-  await showMessage("Chaslay Print Agent", msg);
+  await showMessage("Reborn Print Agent", msg);
 }
 
 function printHelp() {
-  console.log(`ChaslayReborn Print Agent v${VERSION}
+  console.log(`Reborn Print Agent v${VERSION}
 Usage:
   --install      Install permanently and register Windows Startup
   --uninstall    Remove Startup registration
@@ -448,7 +448,7 @@ async function runCli() {
       console.error(e);
       appendInstallLog(`Install error: ${e.message || e}`);
       if (!e.alreadyShown) {
-        await showMessage("Chaslay Print Agent — Error", e.message || String(e));
+        await showMessage("Reborn Print Agent — Error", e.message || String(e));
       }
       process.exit(1);
     }
@@ -461,7 +461,7 @@ async function runCli() {
     } catch (e) {
       console.error(e);
       appendInstallLog(`Uninstall error: ${e.message || e}`);
-      await showMessage("Chaslay Print Agent — Error", e.message || String(e));
+      await showMessage("Reborn Print Agent — Error", e.message || String(e));
       process.exit(1);
     }
   }
@@ -477,7 +477,7 @@ async function runCli() {
       console.error(e);
       appendInstallLog(`Setup error: ${e.message || e}`);
       if (!e.alreadyShown) {
-        await showMessage("Chaslay Print Agent — Error", e.message || String(e));
+        await showMessage("Reborn Print Agent — Error", e.message || String(e));
       }
       process.exit(1);
     }
@@ -485,7 +485,7 @@ async function runCli() {
 }
 
 function isShellDump(text) {
-  return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|chaslayreborn-print-|manupos-print-|chaslayprintagent|at c:\\|\.ps1\b/i.test(
+  return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|reborn-print-|manupos-print-|chaslayprintagent|at c:\\|\.ps1\b/i.test(
     String(text || "")
   );
 }
@@ -600,7 +600,7 @@ $json = ($items | ConvertTo-Json -Compress -Depth 4)
 
 async function printRaw({ printerName, dataBase64 }) {
   if (!isWindows()) {
-    throw new Error("ChaslayReborn Print Agent supports Windows only.");
+    throw new Error("Reborn Print Agent supports Windows only.");
   }
   if (!dataBase64) {
     throw new Error("dataBase64 is required.");
@@ -617,8 +617,8 @@ async function printRaw({ printerName, dataBase64 }) {
   }
 
   const bytes = Buffer.from(dataBase64, "base64");
-  // 1.6.0+: chaslayreborn-print-* (older installed EXEs still used manupos-print-*).
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "chaslayreborn-print-"));
+  // 1.6.0+: reborn-print-* (older installed EXEs still used manupos-print-*).
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-print-"));
   const tmpFile = path.join(tmpDir, "receipt.bin");
   const nameFile = path.join(tmpDir, "printer-name.txt");
   fs.writeFileSync(tmpFile, bytes);
@@ -732,7 +732,7 @@ function startServer() {
       const scriptPath = ensureScaleScriptOnDisk();
       if (!fs.existsSync(scriptPath)) {
         return res.status(500).json({
-          error: `win-scale-read.ps1 not found at ${scriptPath}. Reinstall Chaslay Print Agent.`,
+          error: `win-scale-read.ps1 not found at ${scriptPath}. Reinstall Reborn Print Agent.`,
         });
       }
       const stdout = await runPowerShell(scriptPath, ["-ListPorts"]);
@@ -762,7 +762,7 @@ function startServer() {
       const scriptPath = ensureScaleScriptOnDisk();
       if (!fs.existsSync(scriptPath)) {
         return res.status(500).json({
-          error: `win-scale-read.ps1 not found at ${scriptPath}. Reinstall Chaslay Print Agent.`,
+          error: `win-scale-read.ps1 not found at ${scriptPath}. Reinstall Reborn Print Agent.`,
         });
       }
       const stdout = await runPowerShell(scriptPath, [
@@ -791,7 +791,7 @@ function startServer() {
   });
 
   app.listen(PORT, "127.0.0.1", () => {
-    console.log(`ChaslayReborn Print Agent v${VERSION} listening on http://127.0.0.1:${PORT}`);
+    console.log(`Reborn Print Agent v${VERSION} listening on http://127.0.0.1:${PORT}`);
     if (!isWindows()) {
       console.warn("Warning: RAW thermal printing is only supported on Windows.");
     }
@@ -806,7 +806,7 @@ function startServer() {
   console.error(err);
   appendInstallLog(`Fatal: ${err.message || err}`);
   try {
-    await showMessage("Chaslay Print Agent — Error", err.message || String(err));
+    await showMessage("Reborn Print Agent — Error", err.message || String(err));
   } catch {
     /* ignore */
   }

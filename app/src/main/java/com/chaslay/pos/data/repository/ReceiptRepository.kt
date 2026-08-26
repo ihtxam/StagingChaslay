@@ -21,11 +21,11 @@ import javax.inject.Singleton
 import retrofit2.HttpException
 
 object ReceiptPublicUrls {
-    private const val DEFAULT_BASE = "https://pay.chaslay.com/receipt"
+    private const val DEFAULT_BASE = "https://pay.rebornsense.com/receipt"
 
     fun normalizeBase(raw: String): String {
         var base = raw.trim().trimEnd('/')
-            .replace(Regex("chasly\\.com", RegexOption.IGNORE_CASE), "chaslay.com")
+            .replace(Regex("chasly\\.com", RegexOption.IGNORE_CASE), "rebornsense.com")
         if (Regex("^https?://app\\.", RegexOption.IGNORE_CASE).containsMatchIn(base)) {
             base = base.replace(Regex("^https?://app\\.", RegexOption.IGNORE_CASE), "https://pay.")
         }

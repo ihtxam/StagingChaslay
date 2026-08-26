@@ -841,7 +841,7 @@ function isGiftCardMerchandiseItem(item: WebPosReceiptItem): boolean {
  * Order/payment receipt VAT — merchandise tax for thermal / digital receipts.
  * VAT-included (CH/EU): TTC = bill total excl. tips & rounding; NET = TTC/(1+rate); TVA = TTC−NET.
  */
-/** Totals block for the public digital receipt page (pay.chaslay.com/receipt/…). */
+/** Totals block for the public digital receipt page (pay.rebornsense.com/receipt/…). */
 export function buildDigitalReceiptTotals(order: {
   items: Array<{
     name?: string | null;

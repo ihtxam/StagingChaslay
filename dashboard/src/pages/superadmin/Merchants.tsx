@@ -910,7 +910,7 @@ export default function Merchants() {
                   )}
                 </div>
                 <p className="text-xs text-gray-500">
-                  Each seat creates a POS device slot + license key the Android/ChaslayReborn app can activate.
+                  Each seat creates a POS device slot + license key the Android/Reborn app can activate.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-200">
                   <label className="block">
@@ -960,7 +960,7 @@ export default function Merchants() {
                     onChange={(e) => setForm({ ...form, signageAddonEnabled: e.target.checked })}
                   />
                   <span>
-                    <span className="font-medium block">Chaslay Screens (digital signage)</span>
+                    <span className="font-medium block">Reborn Screens (digital signage)</span>
                     <span className="text-xs text-gray-500">
                       TV menu boards and promo playlists. Does not consume POS seats.
                     </span>
@@ -1254,7 +1254,7 @@ export default function Merchants() {
                       }
                     />
                     <span>
-                      <span className="font-medium block">Chaslay Screens (digital signage)</span>
+                      <span className="font-medium block">Reborn Screens (digital signage)</span>
                       <span className="text-xs text-gray-500">
                         Paid extra: live menu boards on restaurant TVs. Does not use POS seats.
                       </span>
@@ -1372,7 +1372,7 @@ export default function Merchants() {
                     <Eraser className="w-4 h-4" /> Purge test sales data
                   </p>
                   <p className="text-xs text-red-800">
-                    Deletes all POS / ChaslayReborn / online orders, held carts, payment records, shifts,
+                    Deletes all POS / Reborn / online orders, held carts, payment records, shifts,
                     daily reports, floor sync orders, and loyalty/gift history. Keeps menu, staff,
                     settings, licenses, and devices. Use after merchant testing to start from zero.
                   </p>

@@ -1,5 +1,5 @@
 /**
- * ChaslayReborn Windows Print Agent (localhost).
+ * Reborn Windows Print Agent (localhost).
  * Electron desktop also exposes window.manuposDesktop (legacy API name).
  */
 
@@ -169,7 +169,7 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-/** Reinstall prompt: 1.6.0+ uses chaslayreborn-print-* temps and sanitizes Win32 1801. */
+/** Reinstall prompt: 1.6.0+ uses reborn-print-* temps and sanitizes Win32 1801. */
 export const MIN_PRINT_AGENT_VERSION = '1.6.0';
 
 function asPrintText(value: unknown): string {
@@ -222,7 +222,7 @@ export function isPrinterDisconnectedError(raw: unknown): boolean {
 
 export function isNoisyPrintAgentDump(raw: unknown): boolean {
   const msg = collectPrintErrorText(raw);
-  return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|chaslayreborn-print-|manupos-print-|chaslayprintagent|at c:\\|\\temp\\|-\s*file\s+c:\\|\.ps1\b/i.test(
+  return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|reborn-print-|manupos-print-|chaslayprintagent|at c:\\|\\temp\\|-\s*file\s+c:\\|\.ps1\b/i.test(
     msg
   );
 }
@@ -249,7 +249,7 @@ export function isPrintAgentVersionOutdated(version?: string | null): boolean {
   return compareAgentVersion(String(version).trim(), MIN_PRINT_AGENT_VERSION) < 0;
 }
 
-/** Collapse PowerShell / Win32 dumps into a one-line ChaslayReborn message. */
+/** Collapse PowerShell / Win32 dumps into a one-line Reborn message. */
 export function friendlyPrintAgentError(raw: unknown, printerName?: string): string {
   const msg = collectPrintErrorText(raw);
   if (!msg) return 'Print failed';
@@ -346,7 +346,7 @@ export async function printViaAgent(opts: {
   }
   if (looksCorruptedPrinterName(name)) {
     throw new Error(
-      `Printer name looks corrupted ('${name}'). Re-select the printer in ChaslayReborn after updating the Print Agent.`
+      `Printer name looks corrupted ('${name}'). Re-select the printer in Reborn after updating the Print Agent.`
     );
   }
 
@@ -452,7 +452,7 @@ export async function listScalePorts(): Promise<string[]> {
     const msg = String(e?.message || '');
     if (/HTTP 404|Cannot GET \/scale\/ports/i.test(msg)) {
       throw new Error(
-        'Print Agent is outdated — reinstall Chaslay Print Agent to enable scale support.'
+        'Print Agent is outdated — reinstall Reborn Print Agent to enable scale support.'
       );
     }
     throw e;

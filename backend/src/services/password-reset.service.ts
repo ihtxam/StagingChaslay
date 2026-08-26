@@ -34,7 +34,7 @@ function publicAppBase() {
     process.env.PUBLIC_APP_URL ||
     process.env.MERCHANT_DASHBOARD_URL ||
     process.env.SUPERADMIN_URL ||
-    "https://app.chaslay.com"
+    "https://app.rebornsense.com"
   ).replace(/\/$/, "");
 }
 
@@ -389,7 +389,7 @@ export class PasswordResetService {
   }
 
   private static async sendResetEmail(account: ResetAccount, resetUrl: string, expiresAt: Date) {
-    const subject = "Reset your Chaslay password";
+    const subject = "Reset your Reborn password";
     const html = `
       <div style="font-family: system-ui, sans-serif; line-height: 1.5; color: #111;">
         <h2 style="margin: 0 0 12px;">Reset your password</h2>
@@ -427,7 +427,7 @@ export class PasswordResetService {
         to: account.email,
         subject,
         html,
-        text: `Reset your Chaslay password: ${resetUrl}`,
+        text: `Reset your Reborn password: ${resetUrl}`,
         emailType: "password_reset",
       });
     } catch (error) {

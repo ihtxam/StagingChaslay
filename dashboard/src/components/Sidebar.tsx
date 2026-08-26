@@ -46,7 +46,7 @@ interface SidebarProps {
   };
   /** Merchant shop name in the sidebar header (defaults to "Shop"). */
   shopName?: string | null;
-  /** Optional Chaslay platform shop shortcut pinned above the footer. */
+  /** Optional Reborn platform shop shortcut pinned above the footer. */
   shopPath?: string | null;
 }
 

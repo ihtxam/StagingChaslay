@@ -26,7 +26,7 @@ const en: HelpCategory[] = [
         id: 'first-login',
         title: 'First login & dashboard',
         summary: 'Access your merchant panel and overview.',
-        body: 'Open app.chaslay.com and sign in with the email and password from your welcome message. The Overview shows today\'s sales, open orders, and quick links to Web POS and your online shop.',
+        body: 'Open app.rebornsense.com and sign in with the email and password from your welcome message. The Overview shows today\'s sales, open orders, and quick links to Web POS and your online shop.',
       },
       {
         id: 'business-info',
@@ -81,8 +81,8 @@ const en: HelpCategory[] = [
       {
         id: 'print-agent',
         title: 'Install printer software',
-        summary: 'Chaslay Print Agent for receipts and kitchen tickets.',
-        body: 'On the PC connected to your receipt or kitchen printer, download and install the Chaslay Print Agent from Settings → Terminals. Keep the agent running while Web POS is open. In Web POS, open the menu (⋯) → Printing, pick your thermal printer, and click Refresh printers. The status should show Print agent online.',
+        summary: 'Reborn Print Agent for receipts and kitchen tickets.',
+        body: 'On the PC connected to your receipt or kitchen printer, download and install the Reborn Print Agent from Settings → Terminals. Keep the agent running while Web POS is open. In Web POS, open the menu (⋯) → Printing, pick your thermal printer, and click Refresh printers. The status should show Print agent online.',
       },
       {
         id: 'webpos-basics',
@@ -165,7 +165,7 @@ const en: HelpCategory[] = [
         id: 'subscription',
         title: 'Subscription & billing',
         summary: 'Upgrade plan and pay online.',
-        body: 'Account → Billing shows your plan, device limits, and product caps. Pay securely via Adyen. Order supplies from the Chaslay shop in the same account menu.',
+        body: 'Account → Billing shows your plan, device limits, and product caps. Pay securely via Adyen. Order supplies from the Reborn shop in the same account menu.',
       },
     ],
   },
@@ -177,7 +177,7 @@ const en: HelpCategory[] = [
       {
         id: 'tickets',
         title: 'Support tickets',
-        summary: 'Contact your agency or Chaslay support.',
+        summary: 'Contact your agency or Reborn support.',
         body: 'Open Support from the sidebar profile menu. Browse help articles first, then create a ticket if needed. Tickets auto-close after 3 days — open a new ticket for ongoing issues. Check the bell icon for platform announcements.',
       },
     ],

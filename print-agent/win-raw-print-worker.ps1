@@ -1,4 +1,4 @@
-# Persistent RAW print worker for Chaslay Print Agent.
+# Persistent RAW print worker for Reborn Print Agent.
 # Loads Win32 OpenPrinter once, then reads JSON lines from stdin:
 #   {"cmd":"print","printerName":"...","dataBase64":"..."}
 #   {"cmd":"ping"}
@@ -79,7 +79,7 @@ function Send-RawToPrinter {
     )
 
     $docInfo = New-Object RawPrinterHelper+DOCINFO
-    $docInfo.pDocName = "ChaslayReborn Receipt"
+    $docInfo.pDocName = "Reborn Receipt"
     $docInfo.pDataType = "RAW"
 
     $handle = [IntPtr]::Zero

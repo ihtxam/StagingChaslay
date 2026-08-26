@@ -1584,7 +1584,7 @@ export default function Settings() {
                           <th className="bg-[var(--bg-muted)] px-2 py-1.5 text-left font-medium">
                             {t('cmsDnsPointsTo')}
                           </th>
-                          <td className="px-2 py-1.5 font-mono">shop.chaslay.com</td>
+                          <td className="px-2 py-1.5 font-mono">shop.rebornsense.com</td>
                         </tr>
                       </tbody>
                     </table>
@@ -2277,7 +2277,7 @@ export default function Settings() {
                         className="input"
                         value={merchantAccount}
                         onChange={(e) => setMerchantAccount(e.target.value)}
-                        placeholder="ChaslayReborn_COM"
+                        placeholder="Reborn_COM"
                       />
                     </Field>
                     <Field label={t('clientId')}>

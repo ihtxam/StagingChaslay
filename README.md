@@ -1,4 +1,4 @@
-# FoodTruckPOS (ChaslayPOS)
+# FoodTruckPOS (RebornPOS)
 
 Native **Android POS** (`app/`) plus **ManuPOS** backend panel, online shop, and `/v1/*` API compatibility.
 
@@ -9,16 +9,16 @@ Native **Android POS** (`app/`) plus **ManuPOS** backend panel, online shop, and
 | Android POS | `app/` (unchanged) |
 | API (TypeScript / Drizzle) | `backend/` |
 | Superadmin + merchant + shop UI | `dashboard/` (PWA install: see `dashboard/PWA.md`) |
-| Chaslay domains | `deploy/Caddyfile.chaslay` |
+| Reborn domains | `deploy/Caddyfile.chaslay` |
 | Compose | `docker-compose.yml` |
 
 See **[INTEGRATION.md](./INTEGRATION.md)** for deploy and Android `SYNC_API_KEY` / license setup.
 
 ---
 
-# ChaslayPOS
+# RebornPOS
 
-A native Android Point of Sale app built for Chaslays and small businesses. Optimized for fast touchscreen checkout � similar simplicity to SumUp mPOS.
+A native Android Point of Sale app built for Reborns and small businesses. Optimized for fast touchscreen checkout � similar simplicity to SumUp mPOS.
 
 ## Features
 
@@ -60,7 +60,7 @@ A native Android Point of Sale app built for Chaslays and small businesses. Opti
 
 ### Open & Run
 
-1. In Android Studio, choose **File ? Open** and select the **`ChaslayPOS`** folder (not the parent `Downloads` folder).
+1. In Android Studio, choose **File ? Open** and select the **`RebornPOS`** folder (not the parent `Downloads` folder).
 2. When prompted, trust the project and wait for **Gradle Sync** to finish.
 3. Go to **Settings ? Build, Execution, Deployment ? Build Tools ? Gradle** and set **Gradle JDK** to **Embedded JDK (17)**. Do **not** use JDK 24+ or OpenJDK 26.
 4. Click **File ? Sync Project with Gradle Files**.
@@ -70,7 +70,7 @@ A native Android Point of Sale app built for Chaslays and small businesses. Opti
 > 1. Open **`FoodTruckPOS`** (the folder that contains `settings.gradle.kts` and `app/`) — not `Downloads` or the `app` subfolder alone.
 > 2. **File → Sync Project with Gradle Files** and wait until it finishes (check the Build tool window for errors).
 > 3. **Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK** → pick **JDK 17** (not JDK 25+).
-> 4. **Run → Edit Configurations → app** → set **Module** to **`ChaslayPOS.app.main`** (or **`app`** if that is the only option).
+> 4. **Run → Edit Configurations → app** → set **Module** to **`RebornPOS.app.main`** (or **`app`** if that is the only option).
 > 5. If the module dropdown is empty, use **File → Invalidate Caches → Invalidate and Restart**, then sync again.
 
 ### Demo Login
@@ -116,4 +116,4 @@ These are scaffolded with simulation � replace with real SDKs:
 
 ## License
 
-Private � for your Chaslay business.
+Private � for your Reborn business.

@@ -1,6 +1,6 @@
-# Install ChaslayReborn as a Windows app (PWA)
+# Install Reborn as a Windows app (PWA)
 
-The merchant dashboard is a Progressive Web App. On Windows this gives you a **Start Menu / desktop shortcut** that opens ChaslayReborn in its own window (`display: standalone`), not a browser tab.
+The merchant dashboard is a Progressive Web App. On Windows this gives you a **Start Menu / desktop shortcut** that opens Reborn in its own window (`display: standalone`), not a browser tab.
 
 **PWA is the right first step.** Electron/Tauri would ship a full desktop runtime; a Chromium PWA reuses Edge/Chrome and is much lighter for ?double-click the POS.?
 
@@ -19,7 +19,7 @@ The merchant dashboard is a Progressive Web App. On Windows this gives you a **S
      or click the **install** icon in the address bar.
    - **Chrome**: menu (?) ? **Cast, save, and share** ? **Install page as app?**  
      or the install icon in the address bar.
-4. Confirm the name (**ChaslayReborn**).
+4. Confirm the name (**Reborn**).
 5. Launch from the **Start Menu**, desktop shortcut, or taskbar pin.
 6. Optional: in the app window menu, enable **Open as window** / fullscreen so it does not show browser chrome.
 
@@ -68,4 +68,4 @@ After login, PIN session is cleared. Owner/manager refresh without clock-in show
 
 ## Uninstall
 
-Edge/Chrome ? `edge://apps` or `chrome://apps` ? remove **ChaslayReborn**, or Windows **Settings ? Apps**.
+Edge/Chrome ? `edge://apps` or `chrome://apps` ? remove **Reborn**, or Windows **Settings ? Apps**.

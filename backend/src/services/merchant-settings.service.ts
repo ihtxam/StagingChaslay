@@ -133,7 +133,7 @@ export class MerchantSettingsService {
     const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
     const shopHost =
       process.env.SHOP_PUBLIC_HOST ||
-      (domain.includes("chaslay.com") ? "shop.chaslay.com" : domain.startsWith("shop.") ? domain : `shop.${domain}`);
+      (domain.includes("rebornsense.com") ? "shop.rebornsense.com" : domain.startsWith("shop.") ? domain : `shop.${domain}`);
     const apex = domain.replace(/^shop\./, "");
 
     return {

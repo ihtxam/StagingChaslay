@@ -19,7 +19,7 @@ const TEMPLATES = SIGNAGE_TEMPLATES;
 function signagePublicUrl(screen: Pick<SignageScreen, 'shortCode' | 'token'>): string {
   const origin =
     (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com');
+    (typeof window !== 'undefined' ? window.location.origin : 'https://app.rebornsense.com');
   const code = (screen.shortCode || screen.token).trim();
   return `${origin.replace(/\/$/, '')}/tv/${code}`;
 }

@@ -11,7 +11,7 @@ const ECARD_BODY_RE = /EC[-' ]?([0-9A-F]{6,12})/i;
 export function normalizeReceiptDomain(raw: string): string {
   let base = String(raw || '')
     .trim()
-    .replace(/chasly\.com/gi, 'chaslay.com')
+    .replace(/chasly\.com/gi, 'rebornsense.com')
     .replace(/^https?:\/\/app\./i, 'https://pay.');
   return base;
 }
@@ -30,7 +30,7 @@ export function normalizeReceiptPublicBase(raw: string): string {
 /** Fix chasly typo and force receipt links onto pay.* (not app.*). */
 export function sanitizeReceiptOrigin(raw: string): string {
   let base = normalizeReceiptDomain(raw).replace(/\/+$/, '');
-  if (!base) return 'https://pay.chaslay.com';
+  if (!base) return 'https://pay.rebornsense.com';
   base = base.replace(/^https?:\/\/app\./i, 'https://pay.');
   return base;
 }
@@ -38,7 +38,7 @@ export function sanitizeReceiptOrigin(raw: string): string {
 /** Public receipt page origin + /receipt path (no trailing slash). */
 export function receiptPublicBase(_origin?: string): string {
   const envBase = import.meta.env.VITE_PUBLIC_RECEIPT_BASE_URL as string | undefined;
-  return normalizeReceiptPublicBase(sanitizeReceiptOrigin(envBase || 'https://pay.chaslay.com'));
+  return normalizeReceiptPublicBase(sanitizeReceiptOrigin(envBase || 'https://pay.rebornsense.com'));
 }
 
 /** Build a public digital-receipt URL for a sale id */
@@ -455,11 +455,11 @@ export function concatBytes(...parts: Uint8Array[]): Uint8Array {
 // Table QR (dine-in)
 // ---------------------------------------------------------------------------
 
-/** Compact POS scan payload: CHASLAY:T:{merchantSlug}:{tableUuid} */
+/** Compact POS scan payload: REBORN:T:{merchantSlug}:{tableUuid} (also reads legacy CHASLAY:T:). */
 export function buildTableQrPayload(merchantSlug: string, tableId: string): string {
   const slug = String(merchantSlug || '').trim();
   const tid = String(tableId || '').trim();
-  return `CHASLAY:T:${slug}:${tid}`;
+  return `REBORN:T:${slug}:${tid}`;
 }
 
 export type ParsedTableQr = {
@@ -472,7 +472,7 @@ export function parseTableQrPayload(raw: string): ParsedTableQr | null {
   const trimmed = String(raw || '').trim();
   if (!trimmed) return null;
 
-  const compact = trimmed.match(/^CHASLAY:T:([^:]+):([a-f0-9-]+)$/i);
+  const compact = trimmed.match(/^(?:REBORN|CHASLAY):T:([^:]+):([a-f0-9-]+)$/i);
   if (compact) {
     return { merchantSlug: compact[1], tableId: compact[2]! };
   }
@@ -504,7 +504,7 @@ export function buildTableShopUrl(
   tableId: string,
   origin?: string
 ): string {
-  const base = String(origin || (typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com')).replace(/\/$/, '');
+  const base = String(origin || (typeof window !== 'undefined' ? window.location.origin : 'https://app.rebornsense.com')).replace(/\/$/, '');
   const slug = encodeURIComponent(merchantSlug);
   const table = encodeURIComponent(tableId);
   return `${base}/shop/${slug}/menu?channel=dine_in&table=${table}`;
@@ -512,7 +512,7 @@ export function buildTableShopUrl(
 
 /** Waiter ordering URL — opens waiter app on a specific table (not customer menu). */
 export function buildWaiterTableUrl(tableId: string, origin?: string): string {
-  const base = String(origin || (typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com')).replace(/\/$/, '');
+  const base = String(origin || (typeof window !== 'undefined' ? window.location.origin : 'https://app.rebornsense.com')).replace(/\/$/, '');
   return `${base}/merchant/waiter?table=${encodeURIComponent(tableId)}`;
 }
 

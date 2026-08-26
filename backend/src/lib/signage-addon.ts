@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { ensureSignageAddonColumn } from "@/lib/ensure-merchant-schema";
 
-/** Paid digital signage (Chaslay Screens) addon — merchant-level, not edition-gated. */
+/** Paid digital signage (Reborn Screens) addon — merchant-level, not edition-gated. */
 export function isSignageAddonEnabled(value: unknown): boolean {
   return value === true || value === 1 || value === "1" || value === "true" || value === "t";
 }

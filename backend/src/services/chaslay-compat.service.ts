@@ -262,7 +262,7 @@ export class ChaslayCompatService {
       dashboardUrl:
         process.env.MERCHANT_DASHBOARD_URL ||
         process.env.PUBLIC_APP_URL ||
-        "https://app.chaslay.com",
+        "https://app.rebornsense.com",
     };
   }
 
@@ -325,7 +325,7 @@ export class ChaslayCompatService {
       dashboardUrl:
         process.env.MERCHANT_DASHBOARD_URL ||
         process.env.PUBLIC_APP_URL ||
-        "https://app.chaslay.com",
+        "https://app.rebornsense.com",
     };
   }
 

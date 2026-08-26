@@ -108,9 +108,11 @@ export default function ReceiptPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const host = window.location.hostname.toLowerCase().replace(/chasly\.com/gi, 'chaslay.com');
-    if (host.startsWith('app.')) {
-      const target = `https://pay.chaslay.com${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const host = window.location.hostname.toLowerCase()
+      .replace(/chasly\.com/gi, 'rebornsense.com')
+      .replace(/chaslay\.com/gi, 'rebornsense.com');
+    if (host.startsWith('app.') || host.includes('chaslay.') || host.includes('chasly.')) {
+      const target = `https://pay.rebornsense.com${window.location.pathname}${window.location.search}${window.location.hash}`;
       window.location.replace(target);
     }
   }, []);
@@ -352,12 +354,12 @@ export default function ReceiptPage() {
         <p className="mt-3 text-center text-xs text-gray-400">
           {t('receiptPosByPrefix')}{' '}
           <a
-            href="https://chaslay.com"
+            href="https://rebornsense.com"
             target="_blank"
             rel="noopener noreferrer"
             className="font-medium text-violet-600 hover:underline"
           >
-            chaslay.com
+            rebornsense.com
           </a>
         </p>
       </div>

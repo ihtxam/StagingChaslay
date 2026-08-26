@@ -27,8 +27,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-manupos}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-manupos}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       JWT_EXPIRY: ${JWT_EXPIRY:-24h}
-      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://manupos.webprintmedia.swiss}
-      PUBLIC_RECEIPT_BASE_URL: ${PUBLIC_RECEIPT_BASE_URL:-https://pay.chaslay.com}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://app.rebornsense.com}
+      PUBLIC_RECEIPT_BASE_URL: ${PUBLIC_RECEIPT_BASE_URL:-https://pay.rebornsense.com}
       SUPERADMIN_URL: ${PUBLIC_APP_URL:-https://manupos.webprintmedia.swiss}
       MERCHANT_DASHBOARD_URL: ${PUBLIC_APP_URL:-https://manupos.webprintmedia.swiss}
       WEB_SHOP_URL: ${PUBLIC_APP_URL:-https://manupos.webprintmedia.swiss}
@@ -39,7 +39,7 @@ services:
       # Brevo (preferred) — EmailService also accepts SENDINBLUE_*/SIB_*/FROM_EMAIL aliases
       BREVO_API_KEY: ${BREVO_API_KEY:-}
       BREVO_FROM_EMAIL: ${BREVO_FROM_EMAIL:-}
-      BREVO_FROM_NAME: ${BREVO_FROM_NAME:-Chaslay}
+      BREVO_FROM_NAME: ${BREVO_FROM_NAME:-Reborn}
       BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
       SENDINBLUE_API_KEY: ${SENDINBLUE_API_KEY:-}
       SENDINBLUE_FROM_EMAIL: ${SENDINBLUE_FROM_EMAIL:-}
@@ -50,7 +50,7 @@ services:
       SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-}
       SEED_SUPERADMIN_EMAIL: ${SEED_SUPERADMIN_EMAIL:-admin@manupos.webprintmedia.swiss}
       SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-}
-      SEED_SUPERADMIN_NAME: ${SEED_SUPERADMIN_NAME:-Chaslay Admin}
+      SEED_SUPERADMIN_NAME: ${SEED_SUPERADMIN_NAME:-Reborn Admin}
     volumes:
       - uploads_data:/app/uploads
       # Host-built print-agent EXE (gitignored). Deploy script rebuilds into this path.
@@ -73,7 +73,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       SEED_SUPERADMIN_EMAIL: ${SEED_SUPERADMIN_EMAIL:-admin@manupos.webprintmedia.swiss}
       SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-ChangeMeNow!123}
-      SEED_SUPERADMIN_NAME: ${SEED_SUPERADMIN_NAME:-Chaslay Admin}
+      SEED_SUPERADMIN_NAME: ${SEED_SUPERADMIN_NAME:-Reborn Admin}
     command: >
       sh -c "npx drizzle-kit push --force &&
              npx tsx src/db/seed.ts || true"
@@ -85,8 +85,8 @@ services:
       dockerfile: dashboard/Dockerfile
       args:
         VITE_API_URL: /api
-        VITE_PUBLIC_DOMAIN: ${DOMAIN:-manupos.webprintmedia.swiss}
-        VITE_PUBLIC_RECEIPT_BASE_URL: ${PUBLIC_RECEIPT_BASE_URL:-https://pay.chaslay.com}
+        VITE_PUBLIC_DOMAIN: ${DOMAIN:-rebornsense.com}
+        VITE_PUBLIC_RECEIPT_BASE_URL: ${PUBLIC_RECEIPT_BASE_URL:-https://pay.rebornsense.com}
     restart: unless-stopped
     depends_on:
       api:
@@ -102,7 +102,7 @@ services:
       DOMAIN: ${DOMAIN:?set DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:-admin@${DOMAIN}}
     volumes:
-      - ./deploy/Caddyfile.chaslay:/etc/caddy/Caddyfile:ro
+      - ./deploy/Caddyfile.rebornsense:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

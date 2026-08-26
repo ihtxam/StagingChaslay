@@ -178,8 +178,8 @@ router.post("/email/test", async (req: Request, res: Response) => {
     const { EmailService } = await import("@/services/email.service");
     await EmailService.send({
       to,
-      subject: "Chaslay platform email test",
-      html: "<p>This is a test email from Chaslay platform Brevo.</p>",
+      subject: "Reborn platform email test",
+      html: "<p>This is a test email from Reborn platform Brevo.</p>",
       emailType: "marketing_test",
     });
     res.json({ success: true });
@@ -1089,7 +1089,7 @@ router.post("/resellers/:resellerId/allocate-seats", async (req: Request, res: R
 
 /**
  * GET /api/superadmin/resellers/:resellerId/billing
- * Invoice-style platform billing summary (what reseller owes Chaslay)
+ * Invoice-style platform billing summary (what reseller owes Reborn)
  */
 router.get("/resellers/:resellerId/billing", async (req: Request, res: Response) => {
   try {

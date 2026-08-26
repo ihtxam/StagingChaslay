@@ -332,7 +332,7 @@ export function resolveShopKey(paramSlug?: string) {
   return '';
 }
 
-/** Frontend path prefix for a shop (Chaslay shop hub vs /shop/:slug vs subdomain / custom domain root). */
+/** Frontend path prefix for a shop (Reborn shop hub vs /shop/:slug vs subdomain / custom domain root). */
 export function shopBasePath(shopKey: string) {
   const label = subdomainLabel();
   if (label && !RESERVED_SUBDOMAINS.has(label)) return ''; // {slug}.domain → /
