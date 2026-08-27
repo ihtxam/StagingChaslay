@@ -393,6 +393,7 @@ class ResellerService {
             signageScreenLimit: input.signageScreenLimit,
             kdsAddonEnabled: input.kdsAddonEnabled,
             odsAddonEnabled: input.odsAddonEnabled,
+            storekeeperAddonEnabled: input.storekeeperAddonEnabled,
         });
         return created;
     }
@@ -407,6 +408,7 @@ class ResellerService {
             signageScreenLimit: limits.signageScreenLimit,
             kdsAddonEnabled: limits.kdsAddonEnabled,
             odsAddonEnabled: limits.odsAddonEnabled,
+            storekeeperAddonEnabled: limits.storekeeperAddonEnabled,
         });
         return MerchantService.getMerchantById(merchantId);
     }

@@ -21,5 +21,7 @@ export declare class BarcodeService {
         }>;
     }>;
     static normalizeForSave(raw?: string | null): string | null;
+    /** Allocate a merchant-unique internal barcode (products + inventory items). */
+    static allocateForStorekeeper(merchantId: string): Promise<string>;
 }
 //# sourceMappingURL=barcode.service.d.ts.map

@@ -8,6 +8,7 @@ exports.ensureKdsAddonColumn = ensureKdsAddonColumn;
 exports.ensureOdsAddonColumn = ensureOdsAddonColumn;
 exports.ensureJustEatAddonColumn = ensureJustEatAddonColumn;
 exports.ensureUberEatsAddonColumn = ensureUberEatsAddonColumn;
+exports.ensureStorekeeperAddonColumn = ensureStorekeeperAddonColumn;
 exports.ensureMerchantSchemaAtStartup = ensureMerchantSchemaAtStartup;
 exports.withMerchantSchemaRetry = withMerchantSchemaRetry;
 exports.patchMerchantSchemaFromError = patchMerchantSchemaFromError;
@@ -71,6 +72,7 @@ const MERCHANT_COLUMN_PATCHES = {
     ods_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ods_addon_enabled boolean NOT NULL DEFAULT false",
     just_eat_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS just_eat_addon_enabled boolean NOT NULL DEFAULT false",
     uber_eats_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS uber_eats_addon_enabled boolean NOT NULL DEFAULT false",
+    storekeeper_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS storekeeper_addon_enabled boolean NOT NULL DEFAULT false",
 };
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
 const EXTRA_COLUMN_PATCHES = {
@@ -81,6 +83,7 @@ const EXTRA_COLUMN_PATCHES = {
     category_id: "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS category_id uuid",
     inventory_items_barcode: "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS barcode varchar(255)",
     inventory_items_is_demo: "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
+    inventory_items_do_not_reorder: "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS do_not_reorder boolean NOT NULL DEFAULT false",
     inventory_categories_is_demo: "ALTER TABLE inventory_categories ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
     inventory_suppliers_is_demo: "ALTER TABLE inventory_suppliers ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
     inventory_units_is_demo: "ALTER TABLE inventory_units ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
@@ -96,6 +99,7 @@ const EXTRA_COLUMN_PATCHES = {
     delivery_per_order_fee: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_per_order_fee numeric(10,2) DEFAULT 0",
     delivery_hourly_rate_override: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS delivery_hourly_rate_override numeric(10,2)",
     delivery_per_order_fee_override: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS delivery_per_order_fee_override numeric(10,2)",
+    login_home: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS login_home varchar(20) NOT NULL DEFAULT 'auto'",
 };
 /** Idempotent CREATE TABLE for features added after initial deploy. */
 const TABLE_PATCHES = [
@@ -715,6 +719,7 @@ async function ensureInventoryAddonColumn() {
     await runPatch("category_id");
     await runPatch("inventory_suppliers_is_demo");
     await runPatch("inventory_items_is_demo");
+    await runPatch("inventory_items_do_not_reorder");
     await runPatch("inventory_categories_is_demo");
     await runPatch("inventory_units_is_demo");
     await runPatch("inventory_unit_ratios_is_demo");
@@ -743,6 +748,10 @@ async function ensureJustEatAddonColumn() {
 }
 async function ensureUberEatsAddonColumn() {
     await runPatch("uber_eats_addon_enabled");
+    await ensureMerchantTables();
+}
+async function ensureStorekeeperAddonColumn() {
+    await runPatch("storekeeper_addon_enabled");
     await ensureMerchantTables();
 }
 /** Apply all known optional merchant columns once at startup (non-blocking). */

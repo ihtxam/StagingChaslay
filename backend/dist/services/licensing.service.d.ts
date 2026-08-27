@@ -217,6 +217,7 @@ export declare class LicensingService {
             odsAddonEnabled: boolean;
             justEatAddonEnabled: boolean;
             uberEatsAddonEnabled: boolean;
+            storekeeperAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             inventoryExpiryAlertDays: number;

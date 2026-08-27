@@ -46,6 +46,8 @@ const inventory_addon_1 = require("@/lib/inventory-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
+const staff_login_home_1 = require("@/lib/staff-login-home");
+const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
 const business_module_1 = require("@/lib/business-module");
 class AuthService {
     /**
@@ -183,6 +185,7 @@ class AuthService {
         }));
         const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchant.id).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
         const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchant.id).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
+        const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(merchant.id).catch(() => false);
         return {
             token,
             merchant: {
@@ -200,6 +203,7 @@ class AuthService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
+                storekeeperAddonEnabled: storekeeperOn,
             },
             isOwner: true,
         };
@@ -232,6 +236,7 @@ class AuthService {
         }));
         const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(staff.merchantId).catch(() => false);
         const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(staff.merchantId).catch(() => false);
+        const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(staff.merchantId).catch(() => false);
         return {
             token,
             merchant: {
@@ -242,6 +247,7 @@ class AuthService {
                 staffId: staff.id,
                 roleName: role?.name,
                 permissions,
+                loginHome: (0, staff_login_home_1.normalizeStaffLoginHome)(staff.loginHome),
                 inventoryAddonEnabled: inventoryOn,
                 inventoryEnabled: inventoryOn,
                 signageAddonEnabled: signage.enabled,
@@ -251,6 +257,7 @@ class AuthService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
+                storekeeperAddonEnabled: storekeeperOn,
             },
             isOwner: false,
         };
@@ -438,6 +445,7 @@ class AuthService {
         }));
         const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchant.id).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
         const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchant.id).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
+        const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(merchant.id).catch(() => false);
         return {
             token,
             merchant: {
@@ -454,6 +462,7 @@ class AuthService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
+                storekeeperAddonEnabled: storekeeperOn,
             },
             impersonatedBy: superadminId,
         };
@@ -477,6 +486,7 @@ class AuthService {
             }));
             const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchantId).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
             const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
+            const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(merchantId).catch(() => false);
             return {
                 id: merchant.id,
                 email: merchant.email,
@@ -491,6 +501,7 @@ class AuthService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
+                storekeeperAddonEnabled: storekeeperOn,
             };
         }
         catch (error) {

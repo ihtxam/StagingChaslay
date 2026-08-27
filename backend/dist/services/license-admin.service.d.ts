@@ -185,6 +185,7 @@ export declare class LicenseAdminService {
             odsAddonEnabled: boolean;
             justEatAddonEnabled: boolean;
             uberEatsAddonEnabled: boolean;
+            storekeeperAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             inventoryExpiryAlertDays: number;
@@ -336,6 +337,7 @@ export declare class LicenseAdminService {
             odsAddonEnabled: boolean;
             justEatAddonEnabled: boolean;
             uberEatsAddonEnabled: boolean;
+            storekeeperAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             inventoryExpiryAlertDays: number;
@@ -550,6 +552,7 @@ export declare class LicenseAdminService {
                 odsAddonEnabled: boolean;
                 justEatAddonEnabled: boolean;
                 uberEatsAddonEnabled: boolean;
+                storekeeperAddonEnabled: boolean;
                 inventoryWasteFactor: string;
                 inventoryAutoReorderEmailEnabled: boolean;
                 inventoryExpiryAlertDays: number;

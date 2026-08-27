@@ -19,6 +19,7 @@ export declare class SubscriptionBillingService {
             signageAddonEnabled: boolean;
             kdsAddonEnabled: boolean;
             odsAddonEnabled: boolean;
+            storekeeperAddonEnabled: boolean;
         };
         currentPlan: {
             id: string;

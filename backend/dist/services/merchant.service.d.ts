@@ -33,6 +33,7 @@ export declare class MerchantService {
         kdsEnabled: boolean;
         odsAddonEnabled: boolean;
         odsEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         createdAt: Date;
         devices: number;
         licenses: number;
@@ -51,6 +52,7 @@ export declare class MerchantService {
         kdsEnabled: boolean;
         odsAddonEnabled: boolean;
         odsEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         editionName: string | null;
         planBillingPaid: boolean;
         lastAppVersion: string | null;
@@ -312,6 +314,7 @@ export declare class MerchantService {
         signageScreenLimit?: number;
         kdsAddonEnabled?: boolean;
         odsAddonEnabled?: boolean;
+        storekeeperAddonEnabled?: boolean;
     }): Promise<{
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
@@ -422,6 +425,7 @@ export declare class MerchantService {
         maxStaff: number;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -540,6 +544,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -583,6 +588,7 @@ export declare class MerchantService {
         signageScreenLimit?: number;
         kdsAddonEnabled?: boolean;
         odsAddonEnabled?: boolean;
+        storekeeperAddonEnabled?: boolean;
     }): Promise<{
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
@@ -593,6 +599,7 @@ export declare class MerchantService {
         kdsEnabled: boolean;
         odsAddonEnabled: boolean;
         odsEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         editionName: string | null;
         planBillingPaid: boolean;
         lastAppVersion: string | null;
@@ -845,6 +852,7 @@ export declare class MerchantService {
         kdsEnabled: boolean;
         odsAddonEnabled: boolean;
         odsEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         editionName: string | null;
         planBillingPaid: boolean;
         lastAppVersion: string | null;
@@ -1088,6 +1096,7 @@ export declare class MerchantService {
         odsAddonEnabled?: boolean;
         justEatAddonEnabled?: boolean;
         uberEatsAddonEnabled?: boolean;
+        storekeeperAddonEnabled?: boolean;
     }): Promise<{
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
@@ -1098,6 +1107,7 @@ export declare class MerchantService {
         kdsEnabled: boolean;
         odsAddonEnabled: boolean;
         odsEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         editionName: string | null;
         planBillingPaid: boolean;
         lastAppVersion: string | null;
@@ -1422,6 +1432,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1546,6 +1557,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1670,6 +1682,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1815,6 +1828,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1944,6 +1958,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -2069,6 +2084,7 @@ export declare class MerchantService {
             odsAddonEnabled: boolean;
             justEatAddonEnabled: boolean;
             uberEatsAddonEnabled: boolean;
+            storekeeperAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             inventoryExpiryAlertDays: number;

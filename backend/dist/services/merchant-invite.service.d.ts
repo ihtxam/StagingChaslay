@@ -100,6 +100,7 @@ export declare class MerchantInviteService {
             odsAddonEnabled: boolean;
             justEatAddonEnabled: boolean;
             uberEatsAddonEnabled: boolean;
+            storekeeperAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             inventoryExpiryAlertDays: number;

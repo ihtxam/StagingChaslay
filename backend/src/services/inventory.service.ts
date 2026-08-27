@@ -384,6 +384,7 @@ export class InventoryService {
             archivedAt: row.supplier.archivedAt,
           }
         : null,
+      doNotReorder: !!row.doNotReorder,
     };
   }
 
@@ -400,6 +401,7 @@ export class InventoryService {
       supplierId?: string | null;
       perishable?: boolean;
       autoReorderEnabled?: boolean;
+      doNotReorder?: boolean;
       categoryId?: string | null;
     }
   ) {
@@ -455,6 +457,7 @@ export class InventoryService {
       supplierId?: string | null;
       perishable?: boolean;
       autoReorderEnabled?: boolean;
+      doNotReorder?: boolean;
       categoryId?: string | null;
     }
   ) {
@@ -481,6 +484,7 @@ export class InventoryService {
     }
     if (input.perishable !== undefined) patch.perishable = !!input.perishable;
     if (input.autoReorderEnabled !== undefined) patch.autoReorderEnabled = !!input.autoReorderEnabled;
+    if (input.doNotReorder !== undefined) patch.doNotReorder = !!input.doNotReorder;
     if (input.categoryId !== undefined) {
       patch.categoryId = await this.assertCategory(merchantId, input.categoryId);
     }
@@ -1252,6 +1256,7 @@ export class InventoryService {
       items = items.filter((i) => set.has(i.id));
     }
     const targets = items.filter((i) => {
+      if (i.doNotReorder) return false;
       if (!i.supplier?.email || i.supplier.archivedAt) return false;
       if (opts.force) return num(i.reorderQty) > 0 || i.lowStock;
       return i.lowStock && num(i.reorderQty) > 0;
@@ -1516,6 +1521,238 @@ export class InventoryService {
     };
   }
 
+  static async stopOrderingItems(merchantId: string, itemIds: string[]) {
+    await this.assertLicensed(merchantId);
+    const ids = [...new Set(itemIds.map(String).filter(Boolean))].slice(0, 200);
+    if (!ids.length) throw new Error("No items selected");
+    const db = getDb();
+    const updated = await db
+      .update(schema.inventoryItems)
+      .set({ doNotReorder: true, autoReorderEnabled: false, updatedAt: new Date() })
+      .where(and(eq(schema.inventoryItems.merchantId, merchantId), inArray(schema.inventoryItems.id, ids)))
+      .returning({ id: schema.inventoryItems.id });
+    return { updated: updated.length };
+  }
+
+  /** Dead / slow movers — recommend stopping supplier orders for items that do not sell. */
+  static async deadStockReport(merchantId: string, days = 90) {
+    await this.assertLicensed(merchantId);
+    const period = Math.max(7, Math.min(365, Math.floor(num(days, 90))));
+    const since = new Date(Date.now() - period * 24 * 60 * 60 * 1000);
+    const db = getDb();
+
+    const items = await this.listItems(merchantId);
+    const movementRows = await db
+      .select({
+        itemId: schema.inventoryMovements.itemId,
+        type: schema.inventoryMovements.type,
+        qty: sql<string>`sum(${schema.inventoryMovements.qty})`,
+      })
+      .from(schema.inventoryMovements)
+      .where(
+        and(
+          eq(schema.inventoryMovements.merchantId, merchantId),
+          gte(schema.inventoryMovements.createdAt, since)
+        )
+      )
+      .groupBy(schema.inventoryMovements.itemId, schema.inventoryMovements.type);
+
+    const lastSaleRows = await db
+      .select({
+        itemId: schema.inventoryMovements.itemId,
+        lastAt: sql<Date>`max(${schema.inventoryMovements.createdAt})`,
+      })
+      .from(schema.inventoryMovements)
+      .where(
+        and(
+          eq(schema.inventoryMovements.merchantId, merchantId),
+          eq(schema.inventoryMovements.type, "sale")
+        )
+      )
+      .groupBy(schema.inventoryMovements.itemId);
+
+    const byItem = new Map<string, { sale: number; waste: number; inn: number }>();
+    for (const r of movementRows) {
+      const cur = byItem.get(r.itemId) || { sale: 0, waste: 0, inn: 0 };
+      const q = num(r.qty);
+      if (r.type === "sale") cur.sale += q;
+      else if (r.type === "waste") cur.waste += q;
+      else if (r.type === "in") cur.inn += q;
+      byItem.set(r.itemId, cur);
+    }
+    const lastSaleByItem = new Map(
+      lastSaleRows.map((r) => [r.itemId, r.lastAt ? new Date(r.lastAt) : null])
+    );
+
+    const classify = (soldQty: number, onHand: number, purchasedQty: number) => {
+      const velocity = soldQty / period;
+      const daysOfStock =
+        soldQty > 0 && onHand > 0 ? Math.round((onHand / soldQty) * period) : onHand > 0 ? null : 0;
+      let tier: "dead" | "slow" | "healthy" = "healthy";
+      if (soldQty <= 0 && onHand > 0) tier = "dead";
+      else if (velocity < 1 / 30 || (daysOfStock != null && daysOfStock > 60)) tier = "slow";
+
+      let recommendation: "stop_ordering" | "review" | "ok" = "ok";
+      if (tier === "dead") recommendation = "stop_ordering";
+      else if (tier === "slow" && (onHand > 0 || purchasedQty > 0)) recommendation = "review";
+      if (tier === "slow" && daysOfStock != null && daysOfStock > 90) recommendation = "stop_ordering";
+      if (soldQty <= 0 && purchasedQty > 0 && onHand > 0) recommendation = "stop_ordering";
+
+      return { tier, recommendation, velocity, daysOfStock };
+    };
+
+    const inventoryRows = items.map((item) => {
+      const u = byItem.get(item.id) || { sale: 0, waste: 0, inn: 0 };
+      const onHand = num(item.onHand);
+      const cost = num(item.cost);
+      const lastSoldAt = lastSaleByItem.get(item.id) || null;
+      const daysSinceSale = lastSoldAt
+        ? Math.floor((Date.now() - lastSoldAt.getTime()) / (24 * 60 * 60 * 1000))
+        : null;
+      const { tier, recommendation, velocity, daysOfStock } = classify(u.sale, onHand, u.inn);
+      return {
+        id: item.id,
+        kind: "inventory" as const,
+        name: item.name,
+        unit: item.unit,
+        onHand,
+        soldQty: u.sale,
+        purchasedQty: u.inn,
+        wasteQty: u.waste,
+        stockValue: Math.round(onHand * cost * 100) / 100,
+        lastSoldAt: lastSoldAt ? lastSoldAt.toISOString() : null,
+        daysSinceSale,
+        daysOfStock,
+        velocityPerDay: Math.round(velocity * 1000) / 1000,
+        tier,
+        recommendation,
+        doNotReorder: !!item.doNotReorder,
+        autoReorderEnabled: !!item.autoReorderEnabled,
+        supplierName: item.supplier?.name || null,
+      };
+    });
+
+    const products = await db.query.products.findMany({
+      where: eq(schema.products.merchantId, merchantId),
+      columns: {
+        id: true,
+        name: true,
+        sku: true,
+        stock: true,
+        cost: true,
+        price: true,
+        isActive: true,
+      },
+    });
+
+    const orders = await db.query.orders.findMany({
+      where: and(
+        eq(schema.orders.merchantId, merchantId),
+        gte(schema.orders.createdAt, since),
+        or(
+          eq(schema.orders.status, "completed"),
+          eq(schema.orders.status, "partially_refunded"),
+          eq(schema.orders.paymentStatus, "completed"),
+          eq(schema.orders.paymentStatus, "paid"),
+          eq(schema.orders.paymentStatus, "partially_refunded")
+        )
+      ),
+      columns: { id: true, createdAt: true },
+      with: {
+        items: {
+          columns: {
+            productId: true,
+            quantity: true,
+            totalPrice: true,
+            refundedQuantity: true,
+          },
+        },
+      },
+    });
+
+    const productStats = new Map<
+      string,
+      { soldQty: number; revenue: number; lastSoldAt: Date | null }
+    >();
+    for (const order of orders) {
+      const orderAt = order.createdAt ? new Date(order.createdAt) : null;
+      for (const line of order.items || []) {
+        const pid = line.productId ? String(line.productId) : "";
+        if (!pid) continue;
+        const qty = Number(line.quantity) || 0;
+        const refunded = Number(line.refundedQuantity) || 0;
+        const kept = Math.max(0, qty - refunded);
+        if (kept <= 0) continue;
+        const cur = productStats.get(pid) || { soldQty: 0, revenue: 0, lastSoldAt: null };
+        cur.soldQty += kept;
+        cur.revenue += Number(line.totalPrice) || 0;
+        if (orderAt && (!cur.lastSoldAt || orderAt > cur.lastSoldAt)) cur.lastSoldAt = orderAt;
+        productStats.set(pid, cur);
+      }
+    }
+
+    const productRows = products
+      .filter((p) => p.isActive !== false)
+      .map((p) => {
+        const stats = productStats.get(p.id) || { soldQty: 0, revenue: 0, lastSoldAt: null };
+        const onHand = Math.max(0, Math.floor(Number(p.stock) || 0));
+        const cost = num(p.cost);
+        const lastSoldAt = stats.lastSoldAt;
+        const daysSinceSale = lastSoldAt
+          ? Math.floor((Date.now() - lastSoldAt.getTime()) / (24 * 60 * 60 * 1000))
+          : null;
+        const { tier, recommendation, velocity, daysOfStock } = classify(stats.soldQty, onHand, 0);
+        return {
+          id: p.id,
+          kind: "product" as const,
+          name: p.name,
+          sku: p.sku,
+          onHand,
+          soldQty: stats.soldQty,
+          purchasedQty: 0,
+          wasteQty: 0,
+          revenue: Math.round(stats.revenue * 100) / 100,
+          stockValue: Math.round(onHand * cost * 100) / 100,
+          lastSoldAt: lastSoldAt ? lastSoldAt.toISOString() : null,
+          daysSinceSale,
+          daysOfStock,
+          velocityPerDay: Math.round(velocity * 1000) / 1000,
+          tier,
+          recommendation,
+          doNotReorder: false,
+          autoReorderEnabled: false,
+          supplierName: null,
+        };
+      })
+      .filter((p) => p.tier !== "healthy" || p.onHand > 0);
+
+    const deadInventory = inventoryRows.filter((r) => r.tier === "dead");
+    const slowInventory = inventoryRows.filter((r) => r.tier === "slow");
+    const stopRecommended = inventoryRows.filter((r) => r.recommendation === "stop_ordering");
+    const deadProducts = productRows.filter((r) => r.tier === "dead");
+
+    return {
+      days: period,
+      summary: {
+        deadInventoryCount: deadInventory.length,
+        slowInventoryCount: slowInventory.length,
+        deadProductCount: deadProducts.length,
+        stopOrderingCount: stopRecommended.filter((r) => !r.doNotReorder).length,
+        stockValueDead:
+          Math.round([...deadInventory, ...deadProducts].reduce((s, r) => s + r.stockValue, 0) * 100) /
+          100,
+        autoReorderOnDead: deadInventory.filter((r) => r.autoReorderEnabled && !r.doNotReorder).length,
+      },
+      inventoryItems: inventoryRows
+        .filter((r) => r.tier !== "healthy" || r.onHand > 0)
+        .sort((a, b) => {
+          const order = { stop_ordering: 0, review: 1, ok: 2 };
+          return order[a.recommendation] - order[b.recommendation] || b.stockValue - a.stockValue;
+        }),
+      products: productRows.sort((a, b) => b.stockValue - a.stockValue),
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------
@@ -1660,6 +1897,7 @@ export class InventoryService {
         continue;
       }
       if (!item.autoReorderEnabled) continue;
+      if (item.doNotReorder) continue;
       if (!item.supplier?.email || item.supplier.archivedAt) continue;
       if (num(item.reorderQty) <= 0 && minStock - onHand <= 0) continue;
       const last = item.lastAutoReorderAt ? new Date(item.lastAutoReorderAt).getTime() : 0;

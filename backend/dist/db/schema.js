@@ -248,6 +248,8 @@ exports.merchants = (0, pg_core_1.pgTable)("merchants", {
     justEatAddonEnabled: (0, pg_core_1.boolean)("just_eat_addon_enabled").default(false).notNull(),
     /** Paid Uber Eats order integration addon. */
     uberEatsAddonEnabled: (0, pg_core_1.boolean)("uber_eats_addon_enabled").default(false).notNull(),
+    /** Paid mobile storekeeper intake app (barcode scan, receive stock). */
+    storekeeperAddonEnabled: (0, pg_core_1.boolean)("storekeeper_addon_enabled").default(false).notNull(),
     /**
      * Extra yield / waste factor applied to recipe usage on sale (0–0.50). Default 20%.
      */
@@ -400,6 +402,8 @@ exports.merchantStaff = (0, pg_core_1.pgTable)("merchant_staff", {
     passwordHash: (0, pg_core_1.varchar)("password_hash", { length: 255 }),
     /** Can sign in to merchant backend panel (email + password) */
     canAccessPanel: (0, pg_core_1.boolean)("can_access_panel").default(false).notNull(),
+    /** After email login: panel (backend), pos (register), or auto (from permissions). */
+    loginHome: (0, pg_core_1.varchar)("login_home", { length: 20 }).default("auto").notNull(),
     /** Adyen POI terminal id preferred by this staff member on WebPOS/waiter. */
     preferredTerminalId: (0, pg_core_1.varchar)("preferred_terminal_id", { length: 255 }),
     /** Optional override for delivery driver hourly wage (CHF/h). */
@@ -2214,6 +2218,8 @@ exports.inventoryItems = (0, pg_core_1.pgTable)("inventory_items", {
     categoryId: (0, pg_core_1.uuid)("category_id"),
     perishable: (0, pg_core_1.boolean)("perishable").default(false).notNull(),
     autoReorderEnabled: (0, pg_core_1.boolean)("auto_reorder_enabled").default(false).notNull(),
+    /** Merchant flagged: do not include in supplier reorder emails / auto-reorder. */
+    doNotReorder: (0, pg_core_1.boolean)("do_not_reorder").default(false).notNull(),
     lastAutoReorderAt: (0, pg_core_1.timestamp)("last_auto_reorder_at"),
     isDemo: (0, pg_core_1.boolean)("is_demo").default(false).notNull(),
     createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),

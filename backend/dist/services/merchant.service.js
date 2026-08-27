@@ -51,6 +51,7 @@ const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
 const delivery_platform_addon_1 = require("@/lib/delivery-platform-addon");
+const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
 function pickLastAppVersion(rows) {
     let best = null;
     for (const row of rows) {
@@ -161,6 +162,7 @@ class MerchantService {
                     kdsEnabled: kdsOn,
                     odsAddonEnabled: odsOn,
                     odsEnabled: odsOn,
+                    storekeeperAddonEnabled: (0, storekeeper_addon_1.isStorekeeperAddonEnabled)(m.storekeeperAddonEnabled) || inventoryOn,
                     createdAt: m.createdAt,
                     devices: m.devices?.length ?? 0,
                     licenses: m.licenses?.length ?? 0,
@@ -208,6 +210,7 @@ class MerchantService {
             }));
             const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchantId).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
             const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
+            const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(merchantId).catch(() => false);
             return {
                 ...merchant,
                 inventoryAddonEnabled: inventoryOn,
@@ -219,6 +222,7 @@ class MerchantService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
+                storekeeperAddonEnabled: storekeeperOn,
                 editionName: merchant.edition?.name ?? null,
                 planBillingPaid: merchant.planBillingPaid !== false,
                 lastAppVersion: lastSeen.lastAppVersion,
@@ -294,6 +298,7 @@ class MerchantService {
                 signageScreenLimit: (0, signage_addon_1.normalizeSignageScreenLimit)(options?.signageScreenLimit ?? 2),
                 kdsAddonEnabled: options?.kdsAddonEnabled === true,
                 odsAddonEnabled: options?.odsAddonEnabled === true,
+                storekeeperAddonEnabled: options?.storekeeperAddonEnabled === true,
             })
                 .returning();
             const created = merchant[0];
@@ -357,6 +362,9 @@ class MerchantService {
             }
             if (options?.odsAddonEnabled === true) {
                 await (0, ods_addon_1.writeOdsAddonEnabled)(created.id, true);
+            }
+            if (options?.storekeeperAddonEnabled === true) {
+                await (0, storekeeper_addon_1.writeStorekeeperAddonEnabled)(created.id, true);
             }
             const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(created.id).catch(() => false);
             const signage = await (0, signage_addon_1.readSignageAddon)(created.id).catch(() => ({
@@ -475,8 +483,12 @@ class MerchantService {
             await (0, ods_addon_1.writeOdsAddonEnabled)(merchantId, limits.odsAddonEnabled);
             wroteAddon = true;
         }
+        if (limits.storekeeperAddonEnabled !== undefined) {
+            await (0, storekeeper_addon_1.writeStorekeeperAddonEnabled)(merchantId, limits.storekeeperAddonEnabled);
+            wroteAddon = true;
+        }
         if (!wroteAddon && Object.keys(patch).length === 0) {
-            throw new Error("At least one of maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, or odsAddonEnabled is required");
+            throw new Error("At least one of maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, or storekeeperAddonEnabled is required");
         }
         return this.getMerchantById(merchantId);
     }
@@ -549,7 +561,8 @@ class MerchantService {
             addons.kdsAddonEnabled === undefined &&
             addons.odsAddonEnabled === undefined &&
             addons.justEatAddonEnabled === undefined &&
-            addons.uberEatsAddonEnabled === undefined) {
+            addons.uberEatsAddonEnabled === undefined &&
+            addons.storekeeperAddonEnabled === undefined) {
             throw new Error("No addon updates provided");
         }
         if (addons.inventoryAddonEnabled !== undefined) {
@@ -572,6 +585,9 @@ class MerchantService {
         }
         if (addons.uberEatsAddonEnabled !== undefined) {
             await (0, delivery_platform_addon_1.writeUberEatsAddonEnabled)(merchantId, addons.uberEatsAddonEnabled);
+        }
+        if (addons.storekeeperAddonEnabled !== undefined) {
+            await (0, storekeeper_addon_1.writeStorekeeperAddonEnabled)(merchantId, addons.storekeeperAddonEnabled);
         }
         return this.getMerchantById(merchantId);
     }

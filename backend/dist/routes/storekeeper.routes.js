@@ -3,8 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
 const inventory_service_1 = require("@/services/inventory.service");
+const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
 const barcode_product_lookup_service_1 = require("@/services/barcode-product-lookup.service");
 const product_service_1 = require("@/services/product.service");
+const barcode_service_1 = require("@/services/barcode.service");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken);
 router.use(auth_middleware_1.requireMerchant);
@@ -14,10 +16,27 @@ function handleError(res, error, fallback) {
     if (error instanceof inventory_service_1.InventoryLicenseError) {
         return res.status(403).json({ error: error.message, code: "INVENTORY_ADDON_REQUIRED" });
     }
+    if (error instanceof storekeeper_addon_1.StorekeeperLicenseError) {
+        return res.status(403).json({ error: error.message, code: "STOREKEEPER_ADDON_REQUIRED" });
+    }
     const message = error instanceof Error ? error.message : fallback;
     const status = /not found/i.test(message) ? 404 : 400;
     return res.status(status).json({ error: message });
 }
+/** POST /api/merchant/storekeeper/barcode/generate — allocate internal barcode for new item. */
+router.post("/barcode/generate", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        await inventory_service_1.InventoryService.getStorekeeperBootstrap(merchantId);
+        const barcode = await barcode_service_1.BarcodeService.allocateForStorekeeper(merchantId);
+        res.json({ success: true, barcode });
+    }
+    catch (error) {
+        handleError(res, error, "Failed to generate barcode");
+    }
+});
 /** GET /api/merchant/storekeeper/bootstrap — categories, units, license. */
 router.get("/bootstrap", async (req, res) => {
     try {
@@ -39,7 +58,7 @@ router.get("/lookup/:barcode", async (req, res) => {
             return res.status(400).json({ error: "Merchant ID is required" });
         const barcode = String(req.params.barcode || "").trim();
         const [item, menuProduct] = await Promise.all([
-            inventory_service_1.InventoryService.getItemByBarcode(merchantId, barcode),
+            inventory_service_1.InventoryService.getItemByBarcode(merchantId, barcode, { storekeeper: true }),
             product_service_1.ProductService.getProductByBarcode(merchantId, barcode),
         ]);
         const menuProductSummary = menuProduct
@@ -48,6 +67,7 @@ router.get("/lookup/:barcode", async (req, res) => {
                 name: menuProduct.name,
                 price: Number(menuProduct.price) || 0,
                 imageUrl: menuProduct.imageUrl || null,
+                stock: Number(menuProduct.stock) || 0,
             }
             : null;
         if (item) {

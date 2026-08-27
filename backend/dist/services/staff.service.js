@@ -39,6 +39,7 @@ const drizzle_orm_1 = require("drizzle-orm");
 const auth_service_1 = require("@/services/auth.service");
 const permissions_1 = require("@/lib/permissions");
 Object.defineProperty(exports, "ALL_PERMISSIONS", { enumerable: true, get: function () { return permissions_1.ALL_PERMISSIONS; } });
+const staff_login_home_1 = require("@/lib/staff-login-home");
 class StaffService {
     static isLoginGuidanceError(message) {
         return (message === this.PIN_ONLY_LOGIN_MESSAGE ||
@@ -72,6 +73,7 @@ class StaffService {
                 })));
             }
         }
+        await this.ensureStorekeeperSystemRole(merchantId);
         // Existing Manager roles that already see company reports keep VIEW_ALL_SALES.
         await this.ensureManagerViewAllSales(merchantId);
         // Waiters: never panel / drawer / company sales. Menu + orders stay role-assigned.
@@ -79,6 +81,43 @@ class StaffService {
         return db.query.merchantRoles.findMany({
             where: (0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.merchantId, merchantId),
         });
+    }
+    /** Re-seed the Storekeeper system role if it was deleted or stripped. */
+    static async ensureStorekeeperSystemRole(merchantId) {
+        const db = (0, db_1.getDb)();
+        const template = permissions_1.DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "storekeeper");
+        if (!template)
+            return;
+        const roles = await db.query.merchantRoles.findMany({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.merchantId, merchantId),
+        });
+        const existing = roles.find((r) => r.name.trim().toLowerCase() === "storekeeper");
+        if (!existing) {
+            await db.insert(db_1.schema.merchantRoles).values({
+                merchantId,
+                name: template.name,
+                permissions: (0, permissions_1.encodePermissions)(template.permissions),
+                isSystem: template.isSystem,
+                sortOrder: template.sortOrder,
+            });
+            return;
+        }
+        const perms = (0, permissions_1.parsePermissions)(existing.permissions);
+        const expected = (0, permissions_1.encodePermissions)(template.permissions);
+        if (!existing.isSystem ||
+            existing.sortOrder !== template.sortOrder ||
+            existing.permissions !== expected) {
+            await db
+                .update(db_1.schema.merchantRoles)
+                .set({
+                name: template.name,
+                permissions: expected,
+                isSystem: true,
+                sortOrder: template.sortOrder,
+                updatedAt: new Date(),
+            })
+                .where((0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.id, existing.id));
+        }
     }
     /** Grant VIEW_ALL_SALES to system Manager roles that already have company report access. */
     static async ensureManagerViewAllSales(merchantId) {
@@ -223,6 +262,7 @@ class StaffService {
                 passwordSet: !!s.passwordHash,
                 deliveryHourlyRateOverride: s.deliveryHourlyRateOverride ?? null,
                 deliveryPerOrderFeeOverride: s.deliveryPerOrderFeeOverride ?? null,
+                loginHome: (0, staff_login_home_1.normalizeStaffLoginHome)(s.loginHome),
                 createdAt: s.createdAt,
             };
         });
@@ -262,6 +302,11 @@ class StaffService {
         }
         const { MerchantEntitlementsService } = await Promise.resolve().then(() => __importStar(require("@/services/merchant-entitlements.service")));
         await MerchantEntitlementsService.assertCanAddStaff(merchantId, 1);
+        const permissions = (0, permissions_1.parsePermissions)(role.permissions);
+        const loginHome = input.loginHome !== undefined
+            ? (0, staff_login_home_1.normalizeStaffLoginHome)(input.loginHome)
+            : (0, staff_login_home_1.loginHomeFromPermissions)(permissions, canAccessPanel);
+        (0, staff_login_home_1.assertLoginHomeAllowed)(loginHome, permissions, canAccessPanel);
         const [row] = await db
             .insert(db_1.schema.merchantStaff)
             .values({
@@ -272,6 +317,7 @@ class StaffService {
             pinHash: pin ? await auth_service_1.AuthService.hashPassword(pin) : null,
             passwordHash: password ? await auth_service_1.AuthService.hashPassword(password) : null,
             canAccessPanel,
+            loginHome,
             isActive: true,
         })
             .returning();
@@ -369,6 +415,21 @@ class StaffService {
             if (!nextPasswordHash) {
                 throw new Error("Password is required for panel access (set a new password)");
             }
+        }
+        const roleForHome = await db.query.merchantRoles.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.id, patch.roleId || staff.roleId),
+        });
+        const rolePermissions = (0, permissions_1.parsePermissions)(roleForHome?.permissions);
+        const nextCanAccessFinal = patch.canAccessPanel !== undefined ? !!patch.canAccessPanel : !!staff.canAccessPanel;
+        if (input.loginHome !== undefined) {
+            const loginHome = (0, staff_login_home_1.normalizeStaffLoginHome)(input.loginHome);
+            (0, staff_login_home_1.assertLoginHomeAllowed)(loginHome, rolePermissions, nextCanAccessFinal);
+            patch.loginHome = loginHome;
+        }
+        else if (patch.roleId !== undefined) {
+            const loginHome = (0, staff_login_home_1.loginHomeFromPermissions)(rolePermissions, nextCanAccessFinal);
+            (0, staff_login_home_1.assertLoginHomeAllowed)(loginHome, rolePermissions, nextCanAccessFinal);
+            patch.loginHome = loginHome;
         }
         const [row] = await db
             .update(db_1.schema.merchantStaff)
@@ -474,6 +535,7 @@ class StaffService {
             roleName: role?.name || "Staff",
             permissions,
             canAccessPanel: staff.canAccessPanel,
+            loginHome: (0, staff_login_home_1.normalizeStaffLoginHome)(staff.loginHome),
             preferredTerminalId: staff.preferredTerminalId || null,
         };
     }
@@ -563,6 +625,7 @@ class StaffService {
             isActive: staff.isActive,
             pinSet: !!staff.pinHash,
             passwordSet: !!staff.passwordHash,
+            loginHome: (0, staff_login_home_1.normalizeStaffLoginHome)(staff.loginHome),
         };
     }
 }

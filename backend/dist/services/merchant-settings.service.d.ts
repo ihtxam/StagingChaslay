@@ -57,6 +57,7 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -287,6 +288,7 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -479,6 +481,7 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -637,6 +640,7 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -830,6 +834,7 @@ export declare class MerchantSettingsService {
         odsAddonEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;

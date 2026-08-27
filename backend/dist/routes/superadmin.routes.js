@@ -54,6 +54,7 @@ const inventory_addon_1 = require("@/lib/inventory-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
+const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
 const router = (0, express_1.Router)();
 const imageUpload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
@@ -367,7 +368,7 @@ router.post("/merchants/:merchantId/impersonate", async (req, res) => {
  */
 router.post("/merchants", async (req, res) => {
     try {
-        const { email, password, businessName, contactName, phone, address, city, country, slug, shopEnabled, subscriptionPlan, status, deviceSeats, licenseType, customDays, editionId, resellerId, businessCategory, maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, } = req.body;
+        const { email, password, businessName, contactName, phone, address, city, country, slug, shopEnabled, subscriptionPlan, status, deviceSeats, licenseType, customDays, editionId, resellerId, businessCategory, maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, storekeeperAddonEnabled, } = req.body;
         if (!email || !password || !businessName) {
             return res.status(400).json({ error: "Email, password, and business name are required" });
         }
@@ -389,6 +390,7 @@ router.post("/merchants", async (req, res) => {
             signageScreenLimit: signageScreenLimit != null ? (0, signage_addon_1.normalizeSignageScreenLimit)(signageScreenLimit) : undefined,
             kdsAddonEnabled: (0, kds_addon_1.isKdsAddonEnabled)(kdsAddonEnabled),
             odsAddonEnabled: (0, ods_addon_1.isOdsAddonEnabled)(odsAddonEnabled),
+            storekeeperAddonEnabled: (0, storekeeper_addon_1.isStorekeeperAddonEnabled)(storekeeperAddonEnabled),
         });
         res.status(201).json({
             success: true,
@@ -448,7 +450,8 @@ router.put("/merchants/:merchantId", async (req, res) => {
             updates.kdsAddonEnabled != null ||
             updates.kdsEnabled != null ||
             updates.odsAddonEnabled != null ||
-            updates.odsEnabled != null) {
+            updates.odsEnabled != null ||
+            updates.storekeeperAddonEnabled != null) {
             await merchant_service_1.MerchantService.updatePosPostLimits(merchantId, {
                 maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
                 maxWaiterPosts: updates.maxWaiterPosts != null ? Number(updates.maxWaiterPosts) : undefined,
@@ -475,6 +478,9 @@ router.put("/merchants/:merchantId", async (req, res) => {
                     : updates.odsEnabled != null
                         ? (0, ods_addon_1.isOdsAddonEnabled)(updates.odsEnabled)
                         : undefined,
+                storekeeperAddonEnabled: updates.storekeeperAddonEnabled != null
+                    ? (0, storekeeper_addon_1.isStorekeeperAddonEnabled)(updates.storekeeperAddonEnabled)
+                    : undefined,
             });
             delete updates.maxPosPosts;
             delete updates.maxWaiterPosts;
@@ -487,6 +493,7 @@ router.put("/merchants/:merchantId", async (req, res) => {
             delete updates.kdsEnabled;
             delete updates.odsAddonEnabled;
             delete updates.odsEnabled;
+            delete updates.storekeeperAddonEnabled;
         }
         const merchant = Object.keys(updates).length > 0
             ? await merchant_service_1.MerchantService.updateMerchant(merchantId, updates)

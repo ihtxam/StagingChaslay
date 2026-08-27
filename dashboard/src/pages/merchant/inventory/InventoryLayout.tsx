@@ -34,6 +34,7 @@ const GROUPS: Array<{ titleKey: string; items: LinkItem[] }> = [
     titleKey: 'invNavGroupReports',
     items: [
       { to: '/merchant/inventory/report', labelKey: 'invNavReport' },
+      { to: '/merchant/inventory/dead-stock', labelKey: 'invNavDeadStock' },
       { to: '/merchant/inventory/consumption', labelKey: 'invNavConsumption' },
     ],
   },

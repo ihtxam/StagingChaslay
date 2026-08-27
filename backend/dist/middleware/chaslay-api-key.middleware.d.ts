@@ -105,6 +105,7 @@ export declare function resolveChaslayMerchantBySlug(slug?: string | null): Prom
     odsAddonEnabled: boolean;
     justEatAddonEnabled: boolean;
     uberEatsAddonEnabled: boolean;
+    storekeeperAddonEnabled: boolean;
     inventoryWasteFactor: string;
     inventoryAutoReorderEmailEnabled: boolean;
     inventoryExpiryAlertDays: number;

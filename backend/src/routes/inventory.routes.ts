@@ -392,6 +392,28 @@ router.get("/purchase-report", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/dead-stock", async (req: Request, res: Response) => {
+  try {
+    const report = await InventoryService.deadStockReport(
+      req.merchantId!,
+      Number(req.query.days) || 90
+    );
+    res.json({ success: true, report });
+  } catch (error) {
+    handleError(res, error, "Failed to load dead stock report");
+  }
+});
+
+router.post("/stop-ordering", async (req: Request, res: Response) => {
+  try {
+    const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
+    const result = await InventoryService.stopOrderingItems(req.merchantId!, itemIds);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    handleError(res, error, "Failed to update items");
+  }
+});
+
 router.get("/cookbook", requireRestaurantModule, async (req: Request, res: Response) => {
   try {
     const entries = await InventoryService.listCookbook(req.merchantId!);

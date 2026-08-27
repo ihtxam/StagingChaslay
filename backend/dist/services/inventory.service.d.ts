@@ -87,6 +87,7 @@ export declare class InventoryService {
             supplierId: string | null;
             perishable: boolean;
             autoReorderEnabled: boolean;
+            doNotReorder: boolean;
             lastAutoReorderAt: Date | null;
         }[];
     }>;
@@ -170,6 +171,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -204,6 +206,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -228,6 +231,7 @@ export declare class InventoryService {
         supplierId?: string | null;
         perishable?: boolean;
         autoReorderEnabled?: boolean;
+        doNotReorder?: boolean;
         categoryId?: string | null;
     }): Promise<{
         onHand: number;
@@ -247,6 +251,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -270,6 +275,7 @@ export declare class InventoryService {
         supplierId?: string | null;
         perishable?: boolean;
         autoReorderEnabled?: boolean;
+        doNotReorder?: boolean;
         categoryId?: string | null;
     }): Promise<{
         onHand: number;
@@ -289,6 +295,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -331,6 +338,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -366,6 +374,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -400,6 +409,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -434,6 +444,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -475,6 +486,7 @@ export declare class InventoryService {
             supplierId: string | null;
             perishable: boolean;
             autoReorderEnabled: boolean;
+            doNotReorder: boolean;
             lastAutoReorderAt: Date | null;
         };
     }[]>;
@@ -496,6 +508,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -509,7 +522,9 @@ export declare class InventoryService {
         autoReorderEnabled: boolean;
         lastAutoReorderAt: Date | null;
     }[]>;
-    static getItemByBarcode(merchantId: string, barcode: string): Promise<{
+    static getItemByBarcode(merchantId: string, barcode: string, opts?: {
+        storekeeper?: boolean;
+    }): Promise<{
         onHand: number;
         minStock: number;
         reorderQty: number;
@@ -527,6 +542,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -557,6 +573,19 @@ export declare class InventoryService {
         }[];
     }>;
     static getStorekeeperBootstrap(merchantId: string): Promise<{
+        enabled: boolean;
+        storekeeperAddonEnabled: boolean;
+        storeName: string;
+        labelPrint: {
+            widthMm: 58 | 40 | undefined;
+            heightMm: 40 | 20 | 25 | 30 | undefined;
+            showStoreName: boolean | undefined;
+            showProductName: boolean | undefined;
+            showBarcodeNumber: boolean | undefined;
+            showPrice: boolean | undefined;
+            showSku: boolean | undefined;
+        };
+        posPrintSettings: import("@/lib/pos-print-settings").PosPrintSettings;
         categories: {
             id: string;
             name: string;
@@ -565,7 +594,6 @@ export declare class InventoryService {
             code: string;
             name: string;
         }[];
-        enabled: boolean;
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
         wasteFactor: number;
@@ -605,6 +633,7 @@ export declare class InventoryService {
                 email: string | null;
                 archivedAt: Date | null;
             } | null;
+            doNotReorder: boolean;
             id: string;
             name: string;
             createdAt: Date;
@@ -646,6 +675,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -816,6 +846,62 @@ export declare class InventoryService {
             qty: number;
             cost: number;
             date: string;
+        }[];
+    }>;
+    static stopOrderingItems(merchantId: string, itemIds: string[]): Promise<{
+        updated: number;
+    }>;
+    /** Dead / slow movers — recommend stopping supplier orders for items that do not sell. */
+    static deadStockReport(merchantId: string, days?: number): Promise<{
+        days: number;
+        summary: {
+            deadInventoryCount: number;
+            slowInventoryCount: number;
+            deadProductCount: number;
+            stopOrderingCount: number;
+            stockValueDead: number;
+            autoReorderOnDead: number;
+        };
+        inventoryItems: {
+            id: string;
+            kind: "inventory";
+            name: string;
+            unit: string;
+            onHand: number;
+            soldQty: number;
+            purchasedQty: number;
+            wasteQty: number;
+            stockValue: number;
+            lastSoldAt: string | null;
+            daysSinceSale: number | null;
+            daysOfStock: number | null;
+            velocityPerDay: number;
+            tier: "dead" | "slow" | "healthy";
+            recommendation: "stop_ordering" | "review" | "ok";
+            doNotReorder: boolean;
+            autoReorderEnabled: boolean;
+            supplierName: string | null;
+        }[];
+        products: {
+            id: string;
+            kind: "product";
+            name: string;
+            sku: string | null;
+            onHand: number;
+            soldQty: number;
+            purchasedQty: number;
+            wasteQty: number;
+            revenue: number;
+            stockValue: number;
+            lastSoldAt: string | null;
+            daysSinceSale: number | null;
+            daysOfStock: number | null;
+            velocityPerDay: number;
+            tier: "dead" | "slow" | "healthy";
+            recommendation: "stop_ordering" | "review" | "ok";
+            doNotReorder: boolean;
+            autoReorderEnabled: boolean;
+            supplierName: null;
         }[];
     }>;
     private static getOwnedItem;

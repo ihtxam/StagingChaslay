@@ -208,6 +208,7 @@ export declare class ResellerService {
         signageScreenLimit?: number;
         kdsAddonEnabled?: boolean;
         odsAddonEnabled?: boolean;
+        storekeeperAddonEnabled?: boolean;
     }): Promise<{
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
@@ -318,6 +319,7 @@ export declare class ResellerService {
         maxStaff: number;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -354,6 +356,7 @@ export declare class ResellerService {
         signageScreenLimit?: number;
         kdsAddonEnabled?: boolean;
         odsAddonEnabled?: boolean;
+        storekeeperAddonEnabled?: boolean;
     }): Promise<{
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
@@ -364,6 +367,7 @@ export declare class ResellerService {
         kdsEnabled: boolean;
         odsAddonEnabled: boolean;
         odsEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         editionName: string | null;
         planBillingPaid: boolean;
         lastAppVersion: string | null;
@@ -613,6 +617,7 @@ export declare class ResellerService {
         kdsEnabled: boolean;
         odsAddonEnabled: boolean;
         odsEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         editionName: string | null;
         planBillingPaid: boolean;
         lastAppVersion: string | null;
@@ -941,6 +946,7 @@ export declare class ResellerService {
         odsAddonEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        storekeeperAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1094,6 +1100,7 @@ export declare class ResellerService {
             odsAddonEnabled: boolean;
             justEatAddonEnabled: boolean;
             uberEatsAddonEnabled: boolean;
+            storekeeperAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             inventoryExpiryAlertDays: number;

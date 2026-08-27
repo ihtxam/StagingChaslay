@@ -2034,6 +2034,23 @@ export declare const merchants: import("drizzle-orm/pg-core").PgTableWithColumns
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        storekeeperAddonEnabled: import("drizzle-orm/pg-core").PgColumn<{
+            name: "storekeeper_addon_enabled";
+            tableName: "merchants";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         inventoryWasteFactor: import("drizzle-orm/pg-core").PgColumn<{
             name: "inventory_waste_factor";
             tableName: "merchants";
@@ -2929,6 +2946,25 @@ export declare const merchantStaff: import("drizzle-orm/pg-core").PgTableWithCol
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        loginHome: import("drizzle-orm/pg-core").PgColumn<{
+            name: "login_home";
+            tableName: "merchant_staff";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 20;
+        }>;
         preferredTerminalId: import("drizzle-orm/pg-core").PgColumn<{
             name: "preferred_terminal_id";
             tableName: "merchant_staff";
@@ -18693,6 +18729,23 @@ export declare const inventoryItems: import("drizzle-orm/pg-core").PgTableWithCo
         }, {}, {}>;
         autoReorderEnabled: import("drizzle-orm/pg-core").PgColumn<{
             name: "auto_reorder_enabled";
+            tableName: "inventory_items";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        doNotReorder: import("drizzle-orm/pg-core").PgColumn<{
+            name: "do_not_reorder";
             tableName: "inventory_items";
             dataType: "boolean";
             columnType: "PgBoolean";

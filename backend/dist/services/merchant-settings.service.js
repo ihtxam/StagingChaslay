@@ -47,6 +47,7 @@ const delivery_platform_settings_1 = require("@/lib/delivery-platform-settings")
 const delivery_platform_addon_1 = require("@/lib/delivery-platform-addon");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const inventory_addon_1 = require("@/lib/inventory-addon");
+const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
@@ -125,6 +126,7 @@ class MerchantSettingsService {
         const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
         const justEatOn = await (0, delivery_platform_addon_1.readJustEatAddonEnabled)(merchantId).catch(() => merchant.justEatAddonEnabled === true);
         const uberEatsOn = await (0, delivery_platform_addon_1.readUberEatsAddonEnabled)(merchantId).catch(() => merchant.uberEatsAddonEnabled === true);
+        const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(merchantId).catch(() => false);
         const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
         const shopHost = process.env.SHOP_PUBLIC_HOST ||
             (domain.includes("rebornsense.com") ? "shop.rebornsense.com" : domain.startsWith("shop.") ? domain : `shop.${domain}`);
@@ -178,6 +180,7 @@ class MerchantSettingsService {
             odsEnabled: odsOn,
             justEatAddonEnabled: justEatOn,
             uberEatsAddonEnabled: uberEatsOn,
+            storekeeperAddonEnabled: storekeeperOn,
             inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
             inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
             inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),
