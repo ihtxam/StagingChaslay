@@ -269,6 +269,11 @@ export class StaffService {
       throw new Error("Password is required for panel access");
     }
 
+    const { MerchantEntitlementsService } = await import(
+      "@/services/merchant-entitlements.service"
+    );
+    await MerchantEntitlementsService.assertCanAddStaff(merchantId, 1);
+
     const [row] = await db
       .insert(schema.merchantStaff)
       .values({

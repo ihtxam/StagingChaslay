@@ -16,14 +16,13 @@ export class PosSessionsService {
   }
 
   static async getLimits(merchantId: string) {
-    const db = getDb();
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-      columns: { maxPosPosts: true, maxWaiterPosts: true },
-    });
+    const { MerchantEntitlementsService } = await import(
+      "@/services/merchant-entitlements.service"
+    );
+    const limits = await MerchantEntitlementsService.getLimits(merchantId);
     return {
-      maxPosPosts: Math.max(0, Number(merchant?.maxPosPosts ?? 0)),
-      maxWaiterPosts: Math.max(0, Number(merchant?.maxWaiterPosts ?? 0)),
+      maxPosPosts: limits.maxPosPosts,
+      maxWaiterPosts: limits.maxWaiterPosts,
     };
   }
 
@@ -102,14 +101,14 @@ export class PosSessionsService {
     }
     active = active.filter((s) => s.deviceId !== keepDeviceId);
 
-    while (active.length >= max) {
-      const oldest = active.shift();
-      if (!oldest) break;
-      await db
-        .update(schema.posSessions)
-        .set({ revokedAt: new Date() })
-        .where(eq(schema.posSessions.id, oldest.id));
-      kicked.push(oldest.id);
+    if (max > 0 && active.length >= max) {
+      const kind = sessionKind === "waiter" ? "waiter" : "POS";
+      const err = new Error(
+        `${kind} station limit reached (${max}). Close another session or upgrade your package.`
+      ) as Error & { statusCode?: number; code?: string };
+      err.statusCode = 403;
+      err.code = sessionKind === "waiter" ? "WAITER_LIMIT_REACHED" : "POS_LIMIT_REACHED";
+      throw err;
     }
 
     return kicked;

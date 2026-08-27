@@ -1,6 +1,6 @@
-import { and, count, eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { SubscriptionPlansService } from "@/services/subscription-plans.service";
+import { MerchantEntitlementsService } from "@/services/merchant-entitlements.service";
 
 export type ProductLimitInfo = {
   /** null = unlimited */
@@ -21,23 +21,13 @@ export class ProductEntitlementsService {
   }
 
   static async getLimitInfo(merchantId: string): Promise<ProductLimitInfo> {
-    const db = getDb();
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-      columns: { subscriptionPlan: true },
-    });
-    const planSlug = merchant?.subscriptionPlan || "free";
-    const plan = (await SubscriptionPlansService.getBySlug(planSlug)) || null;
+    const limits = await MerchantEntitlementsService.getLimits(merchantId);
     const currentCount = await this.countProducts(merchantId);
-    const maxRaw = plan?.maxProducts;
-    const maxProducts =
-      maxRaw === null || maxRaw === undefined ? null : Math.max(0, Number(maxRaw) || 0);
-
     return {
-      maxProducts,
+      maxProducts: limits.maxProducts,
       currentCount,
-      planSlug: plan?.slug || planSlug,
-      planName: plan?.name || null,
+      planSlug: limits.planSlug,
+      planName: limits.planName,
     };
   }
 

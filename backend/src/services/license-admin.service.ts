@@ -96,6 +96,14 @@ export class LicenseAdminService {
       };
     }
 
+    const { MerchantEntitlementsService } = await import(
+      "@/services/merchant-entitlements.service"
+    );
+    await MerchantEntitlementsService.assertCanIssueDeviceLicense(merchantId, 1, {
+      skipIfDeviceAlreadyLicensed: true,
+      deviceId: device.id,
+    });
+
     const now = new Date();
     let expiresAt: Date;
     if (licenseType === "trial") {
@@ -174,6 +182,11 @@ export class LicenseAdminService {
     if (!merchant) {
       throw new Error("Merchant not found");
     }
+
+    const { MerchantEntitlementsService } = await import(
+      "@/services/merchant-entitlements.service"
+    );
+    await MerchantEntitlementsService.assertCanIssueDeviceLicense(merchantId, count);
 
     for (let i = 0; i < count; i++) {
       const externalDeviceId = LicensingService.generateDeviceId(merchantId);

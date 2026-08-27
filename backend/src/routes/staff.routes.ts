@@ -90,7 +90,13 @@ router.post("/staff", requireStaffManage, async (req: Request, res: Response) =>
     const staff = await StaffService.createStaff(merchantId, req.body);
     res.json({ success: true, staff });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create staff" });
+    const err = error as Error & { statusCode?: number; code?: string; limit?: unknown };
+    const status = err.statusCode === 403 ? 403 : 400;
+    res.status(status).json({
+      error: err instanceof Error ? err.message : "Failed to create staff",
+      code: err.code,
+      staffLimit: err.limit,
+    });
   }
 });
 

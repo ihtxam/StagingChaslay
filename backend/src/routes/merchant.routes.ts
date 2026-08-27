@@ -2810,6 +2810,30 @@ router.get("/plans", async (_req: Request, res: Response) => {
   }
 });
 
+router.get("/entitlements", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { MerchantEntitlementsService } = await import(
+      "@/services/merchant-entitlements.service"
+    );
+    const { ProductEntitlementsService } = await import(
+      "@/services/product-entitlements.service"
+    );
+    const [limits, staff, devices, products] = await Promise.all([
+      MerchantEntitlementsService.getLimits(merchantId),
+      MerchantEntitlementsService.getStaffLimitInfo(merchantId),
+      MerchantEntitlementsService.getDeviceLicenseLimitInfo(merchantId),
+      ProductEntitlementsService.getLimitInfo(merchantId),
+    ]);
+    res.json({ success: true, limits, staff, devices, products });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load entitlements",
+    });
+  }
+});
+
 router.get("/billing", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;

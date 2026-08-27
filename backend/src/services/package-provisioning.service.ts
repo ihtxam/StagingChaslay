@@ -37,12 +37,13 @@ export class PackageProvisioningService {
       updatedAt: new Date(),
     };
 
-    const maxPos = Number(plan.maxPosPosts ?? 0);
-    const maxWaiter = Number(plan.maxWaiterPosts ?? 0);
-    const maxStaff = Number(plan.maxStaff ?? 0);
-    if (maxPos > 0) patch.maxPosPosts = maxPos;
-    if (maxWaiter > 0) patch.maxWaiterPosts = maxWaiter;
-    if (maxStaff > 0) patch.maxStaff = maxStaff;
+    let maxPos = Number(plan.maxPosPosts ?? 0);
+    if (maxPos <= 0) {
+      maxPos = Number(plan.maxDevices ?? 0);
+    }
+    patch.maxPosPosts = Math.max(0, maxPos);
+    patch.maxWaiterPosts = Math.max(0, Number(plan.maxWaiterPosts ?? 0));
+    patch.maxStaff = Math.max(0, Number(plan.maxStaff ?? 0));
 
     applyIncludedAddons(patch, plan.includedAddons);
 
