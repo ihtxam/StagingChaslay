@@ -78,7 +78,8 @@ export default function StorekeeperApp() {
 
   const staffAccessToken = pinStaff?.accessToken;
   const displayName = pinStaff?.name || user?.name;
-  const clockedIn = !!pinStaff;
+  const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const clockedIn = !!pinStaff || jwtIsOwner;
 
   const apiHeaders = staffAccessToken ? { 'X-WebPos-Staff-Access': staffAccessToken } : undefined;
 

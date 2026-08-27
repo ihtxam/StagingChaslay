@@ -11,14 +11,32 @@ type Props = {
   onScan: (orderId: string, token: string) => void;
 };
 
+async function acquireCameraStream(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false,
+    });
+  } catch {
+    return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  }
+}
+
 export default function DeliveryQrScanModal({ open, onClose, onScan }: Props) {
   const { t } = useI18n();
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanRef = useRef<{ stop: () => void } | null>(null);
+  const onScanRef = useRef(onScan);
+  const onCloseRef = useRef(onClose);
   const [pasteValue, setPasteValue] = useState('');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+
+  useEffect(() => {
+    onScanRef.current = onScan;
+    onCloseRef.current = onClose;
+  });
 
   const stopCamera = useCallback(() => {
     scanRef.current?.stop();
@@ -31,15 +49,28 @@ export default function DeliveryQrScanModal({ open, onClose, onScan }: Props) {
     setScanning(false);
   }, []);
 
-  const handleParsed = useCallback(
-    (raw: string) => {
-      const parsed = parseDriverClaimUrl(raw);
-      if (!parsed) return false;
-      onScan(parsed.orderId, parsed.token);
-      onClose();
-      return true;
+  const handleParsed = useCallback((raw: string) => {
+    const parsed = parseDriverClaimUrl(raw);
+    if (!parsed) return false;
+    onScanRef.current(parsed.orderId, parsed.token);
+    onCloseRef.current();
+    return true;
+  }, []);
+
+  const videoCallbackRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      videoRef.current = node;
+      if (!node || !streamRef.current) return;
+      if (node.srcObject !== streamRef.current) {
+        node.setAttribute('playsinline', 'true');
+        node.srcObject = streamRef.current;
+        void node.play().catch(() => undefined);
+        setScanning(true);
+        scanRef.current?.stop();
+        scanRef.current = startQrCameraScan(node, handleParsed);
+      }
     },
-    [onClose, onScan]
+    [handleParsed]
   );
 
   useEffect(() => {
@@ -58,22 +89,20 @@ export default function DeliveryQrScanModal({ open, onClose, onScan }: Props) {
     let cancelled = false;
     void (async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
-          audio: false,
-        });
+        const stream = await acquireCameraStream();
         if (cancelled) {
           for (const track of stream.getTracks()) track.stop();
           return;
         }
         streamRef.current = stream;
         const video = videoRef.current;
-        if (!video) return;
-        video.setAttribute('playsinline', 'true');
-        video.srcObject = stream;
-        await video.play();
-        setScanning(true);
-        scanRef.current = startQrCameraScan(video, handleParsed);
+        if (video) {
+          video.setAttribute('playsinline', 'true');
+          video.srcObject = stream;
+          await video.play();
+          setScanning(true);
+          scanRef.current = startQrCameraScan(video, handleParsed);
+        }
       } catch {
         if (!cancelled) setCameraError(t('deliveryScanCameraDenied'));
       }
@@ -83,7 +112,7 @@ export default function DeliveryQrScanModal({ open, onClose, onScan }: Props) {
       cancelled = true;
       stopCamera();
     };
-  }, [open, handleParsed, stopCamera, t]);
+  }, [open, stopCamera, t]);
 
   if (!open) return null;
 
@@ -109,7 +138,7 @@ export default function DeliveryQrScanModal({ open, onClose, onScan }: Props) {
             </p>
           ) : (
             <div className="overflow-hidden rounded-xl border border-stone-200 bg-black">
-              <video ref={videoRef} className="aspect-[4/3] w-full object-cover" playsInline muted />
+              <video ref={videoCallbackRef} className="aspect-[4/3] w-full object-cover" playsInline muted autoPlay />
               {scanning ? (
                 <p className="bg-stone-900 px-3 py-2 text-center text-xs font-medium text-white">
                   {t('deliveryScanQrAiming')}

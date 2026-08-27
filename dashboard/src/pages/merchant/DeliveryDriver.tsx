@@ -77,6 +77,7 @@ export default function DeliveryDriverPage() {
 
   const staffAccessToken = pinStaff?.accessToken;
   const displayName = pinStaff?.name || user?.name;
+  const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
 
   const apiHeaders = useMemo(
     () =>
@@ -85,6 +86,10 @@ export default function DeliveryDriverPage() {
   );
 
   const clockedIn = !!pinStaff || user?.role === 'staff';
+
+  useEffect(() => {
+    if (!clockedIn && !jwtIsOwner) setPinOpen(true);
+  }, [clockedIn, jwtIsOwner]);
 
   const loadOrders = useCallback(async () => {
     if (!clockedIn) return;
