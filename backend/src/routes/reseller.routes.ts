@@ -290,7 +290,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
  */
 router.get("/plans", async (req: Request, res: Response) => {
   try {
-    const plans = await SubscriptionPlansService.listAll(false, {
+    const plans = await SubscriptionPlansService.listAll(true, {
       forResellerId: resellerId(req),
     });
     res.json({ success: true, plans });
@@ -360,6 +360,32 @@ router.put("/addons/:addonId", async (req: Request, res: Response) => {
     res.json({ success: true, addon });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update add-on" });
+  }
+});
+
+router.delete("/plans/:planId", async (req: Request, res: Response) => {
+  try {
+    const existing = await SubscriptionPlansService.getById(req.params.planId);
+    if (existing.ownerType !== "reseller" || existing.ownerId !== resellerId(req)) {
+      return res.status(404).json({ error: "Package not found" });
+    }
+    const plan = await SubscriptionPlansService.remove(req.params.planId);
+    res.json({ success: true, plan });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate package" });
+  }
+});
+
+router.delete("/addons/:addonId", async (req: Request, res: Response) => {
+  try {
+    const existing = await SubscriptionAddonsService.getById(req.params.addonId);
+    if (existing.ownerType !== "reseller" || existing.ownerId !== resellerId(req)) {
+      return res.status(404).json({ error: "Add-on not found" });
+    }
+    const addon = await SubscriptionAddonsService.remove(req.params.addonId);
+    res.json({ success: true, addon });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate add-on" });
   }
 });
 

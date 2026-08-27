@@ -1,6 +1,7 @@
-import { and, asc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { PackageIncludedAddons } from "@/db/schema";
+import { PlatformResellerService } from "@/services/platform-reseller.service";
 
 export type PlanInput = {
   name: string;
@@ -35,36 +36,14 @@ function normalizeSlug(slug: string) {
 }
 
 export class SubscriptionPlansService {
-  static async listAll(
-    includeInactive = true,
-    opts?: {
-      ownerType?: "platform" | "reseller";
-      ownerId?: string | null;
-      forResellerId?: string;
-    }
-  ) {
+  /** Packages owned by one reseller (including Reborn Direct). */
+  static async listForReseller(resellerId: string, includeInactive = true) {
     const db = getDb();
-    const clauses = [];
-    if (opts?.forResellerId) {
-      clauses.push(
-        or(
-          and(eq(schema.subscriptionPlans.ownerType, "platform"), isNull(schema.subscriptionPlans.ownerId)),
-          and(
-            eq(schema.subscriptionPlans.ownerType, "reseller"),
-            eq(schema.subscriptionPlans.ownerId, opts.forResellerId)
-          )
-        )!
-      );
-    } else if (opts?.ownerType) {
-      clauses.push(eq(schema.subscriptionPlans.ownerType, opts.ownerType));
-      if (opts.ownerType === "platform") {
-        clauses.push(isNull(schema.subscriptionPlans.ownerId));
-      } else if (opts.ownerId) {
-        clauses.push(eq(schema.subscriptionPlans.ownerId, opts.ownerId));
-      }
-    }
     const plans = await db.query.subscriptionPlans.findMany({
-      where: clauses.length ? and(...clauses) : undefined,
+      where: and(
+        eq(schema.subscriptionPlans.ownerType, "reseller"),
+        eq(schema.subscriptionPlans.ownerId, resellerId)
+      ),
       orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
       with: { edition: true },
     });
@@ -72,50 +51,37 @@ export class SubscriptionPlansService {
     return plans.filter((p) => p.isActive);
   }
 
+  static async listAll(
+    includeInactive = true,
+    opts?: {
+      forResellerId?: string;
+    }
+  ) {
+    if (!opts?.forResellerId) {
+      const platformId = await PlatformResellerService.getId();
+      return this.listForReseller(platformId, includeInactive);
+    }
+    return this.listForReseller(opts.forResellerId, includeInactive);
+  }
+
+  /** @deprecated Use listForReseller(platformResellerId) */
   static async listPublic() {
+    const platformId = await PlatformResellerService.getId();
+    return this.listForReseller(platformId, false).then((plans) =>
+      plans.filter((p) => p.isPublic)
+    );
+  }
+
+  static async listPublicForMerchant(merchantId: string) {
+    const sellerId = await PlatformResellerService.resolveForMerchant(merchantId);
     const db = getDb();
     return db.query.subscriptionPlans.findMany({
       where: and(
         eq(schema.subscriptionPlans.isActive, true),
         eq(schema.subscriptionPlans.isPublic, true),
-        eq(schema.subscriptionPlans.ownerType, "platform"),
-        isNull(schema.subscriptionPlans.ownerId)
+        eq(schema.subscriptionPlans.ownerType, "reseller"),
+        eq(schema.subscriptionPlans.ownerId, sellerId)
       ),
-      orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
-      with: { edition: true },
-    });
-  }
-
-  static async listPublicForMerchant(merchantId: string) {
-    const db = getDb();
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-      columns: { resellerId: true },
-    });
-    if (!merchant) throw new Error("Merchant not found");
-
-    const publicClauses = [
-      eq(schema.subscriptionPlans.isActive, true),
-      eq(schema.subscriptionPlans.isPublic, true),
-    ];
-    if (merchant.resellerId) {
-      publicClauses.push(
-        or(
-          and(eq(schema.subscriptionPlans.ownerType, "platform"), isNull(schema.subscriptionPlans.ownerId)),
-          and(
-            eq(schema.subscriptionPlans.ownerType, "reseller"),
-            eq(schema.subscriptionPlans.ownerId, merchant.resellerId)
-          )
-        )!
-      );
-    } else {
-      publicClauses.push(
-        and(eq(schema.subscriptionPlans.ownerType, "platform"), isNull(schema.subscriptionPlans.ownerId))!
-      );
-    }
-
-    return db.query.subscriptionPlans.findMany({
-      where: and(...publicClauses),
       orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
       with: { edition: true },
     });
@@ -148,8 +114,9 @@ export class SubscriptionPlansService {
     const existing = await this.getBySlug(slug);
     if (existing) throw new Error(`Plan slug "${slug}" already exists`);
 
-    const ownerType = input.ownerType || "platform";
-    const ownerId = ownerType === "reseller" ? input.ownerId || null : null;
+    const ownerType = "reseller" as const;
+    const ownerId = input.ownerId;
+    if (!ownerId) throw new Error("Reseller id is required for packages");
 
     const [plan] = await db
       .insert(schema.subscriptionPlans)
@@ -240,7 +207,14 @@ export class SubscriptionPlansService {
 
   static async ensureDefaults() {
     const db = getDb();
-    const existing = await db.query.subscriptionPlans.findMany({ limit: 1 });
+    const { PlatformResellerService } = await import("@/services/platform-reseller.service");
+    const platformResellerId = await PlatformResellerService.ensure();
+    await PlatformResellerService.migrateCatalogOwnership();
+
+    const existing = await db.query.subscriptionPlans.findMany({
+      where: eq(schema.subscriptionPlans.ownerId, platformResellerId),
+      limit: 1,
+    });
     if (existing.length > 0) return;
 
     const { EditionService } = await import("@/services/edition.service");
@@ -318,7 +292,7 @@ export class SubscriptionPlansService {
     ];
 
     for (const plan of defaults) {
-      await this.create(plan);
+      await this.create({ ...plan, ownerId: platformResellerId });
     }
     console.log("Seeded default subscription plans");
   }

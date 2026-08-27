@@ -331,6 +331,12 @@ export class MerchantService {
 
       const lockedModule = normalizeBusinessModule(options?.businessCategory);
 
+      let assignedResellerId = options?.resellerId || null;
+      if (!assignedResellerId) {
+        const { PlatformResellerService } = await import("./platform-reseller.service");
+        assignedResellerId = await PlatformResellerService.getId();
+      }
+
       const merchant = await db
         .insert(schema.merchants)
         .values({
@@ -349,7 +355,7 @@ export class MerchantService {
           trialEndsAt,
           syncApiKey: generateSyncApiKey(),
           editionId: options?.editionId || null,
-          resellerId: options?.resellerId || null,
+          resellerId: assignedResellerId,
           businessCategory: lockedModule,
           maxPosPosts: normalizePosPostLimit(options?.maxPosPosts ?? 0),
           maxWaiterPosts: normalizePosPostLimit(options?.maxWaiterPosts ?? 0),

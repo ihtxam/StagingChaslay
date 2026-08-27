@@ -1,5 +1,6 @@
-import { and, asc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { PlatformResellerService } from "@/services/platform-reseller.service";
 
 export type AddonInput = {
   name: string;
@@ -37,70 +38,38 @@ const VALID_ADDON_KEYS = new Set([
 ]);
 
 export class SubscriptionAddonsService {
+  static async listForReseller(resellerId: string, includeInactive = true) {
+    const db = getDb();
+    const rows = await db.query.subscriptionAddons.findMany({
+      where: and(
+        eq(schema.subscriptionAddons.ownerType, "reseller"),
+        eq(schema.subscriptionAddons.ownerId, resellerId)
+      ),
+      orderBy: [asc(schema.subscriptionAddons.sortOrder), asc(schema.subscriptionAddons.name)],
+    });
+    if (includeInactive) return rows;
+    return rows.filter((r) => r.isActive);
+  }
+
   static async listAll(opts?: {
-    ownerType?: "platform" | "reseller";
-    ownerId?: string | null;
     includeInactive?: boolean;
     forResellerId?: string;
   }) {
-    const db = getDb();
-    const clauses = [];
-    if (opts?.forResellerId) {
-      clauses.push(
-        or(
-          and(eq(schema.subscriptionAddons.ownerType, "platform"), isNull(schema.subscriptionAddons.ownerId)),
-          and(
-            eq(schema.subscriptionAddons.ownerType, "reseller"),
-            eq(schema.subscriptionAddons.ownerId, opts.forResellerId)
-          )
-        )!
-      );
-    } else if (opts?.ownerType) {
-      clauses.push(eq(schema.subscriptionAddons.ownerType, opts.ownerType));
-      if (opts.ownerType === "platform") {
-        clauses.push(isNull(schema.subscriptionAddons.ownerId));
-      } else if (opts.ownerId) {
-        clauses.push(eq(schema.subscriptionAddons.ownerId, opts.ownerId));
-      }
-    }
-    if (!opts?.includeInactive) {
-      clauses.push(eq(schema.subscriptionAddons.isActive, true));
-    }
-    return db.query.subscriptionAddons.findMany({
-      where: clauses.length ? and(...clauses) : undefined,
-      orderBy: [asc(schema.subscriptionAddons.sortOrder), asc(schema.subscriptionAddons.name)],
-    });
+    const resellerId =
+      opts?.forResellerId || (await PlatformResellerService.getId());
+    return this.listForReseller(resellerId, opts?.includeInactive !== false);
   }
 
   static async listPublicForMerchant(merchantId: string) {
+    const sellerId = await PlatformResellerService.resolveForMerchant(merchantId);
     const db = getDb();
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-      columns: { resellerId: true },
-    });
-    if (!merchant) throw new Error("Merchant not found");
-
-    const publicClauses = [
-      eq(schema.subscriptionAddons.isActive, true),
-      eq(schema.subscriptionAddons.isPublic, true),
-    ];
-    if (merchant.resellerId) {
-      publicClauses.push(
-        or(
-          and(eq(schema.subscriptionAddons.ownerType, "platform"), isNull(schema.subscriptionAddons.ownerId)),
-          and(
-            eq(schema.subscriptionAddons.ownerType, "reseller"),
-            eq(schema.subscriptionAddons.ownerId, merchant.resellerId)
-          )
-        )!
-      );
-    } else {
-      publicClauses.push(
-        and(eq(schema.subscriptionAddons.ownerType, "platform"), isNull(schema.subscriptionAddons.ownerId))!
-      );
-    }
     return db.query.subscriptionAddons.findMany({
-      where: and(...publicClauses),
+      where: and(
+        eq(schema.subscriptionAddons.isActive, true),
+        eq(schema.subscriptionAddons.isPublic, true),
+        eq(schema.subscriptionAddons.ownerType, "reseller"),
+        eq(schema.subscriptionAddons.ownerId, sellerId)
+      ),
       orderBy: [asc(schema.subscriptionAddons.sortOrder), asc(schema.subscriptionAddons.name)],
     });
   }
@@ -122,8 +91,9 @@ export class SubscriptionAddonsService {
     if (!VALID_ADDON_KEYS.has(addonKey)) {
       throw new Error(`Invalid add-on key. Use: ${[...VALID_ADDON_KEYS].join(", ")}`);
     }
-    const ownerType = input.ownerType || "platform";
-    const ownerId = ownerType === "reseller" ? input.ownerId || null : null;
+    const ownerType = "reseller" as const;
+    const ownerId = input.ownerId;
+    if (!ownerId) throw new Error("Reseller id is required for add-ons");
 
     const [row] = await db
       .insert(schema.subscriptionAddons)
@@ -204,7 +174,14 @@ export class SubscriptionAddonsService {
 
   static async ensureDefaults() {
     const db = getDb();
-    const existing = await db.query.subscriptionAddons.findMany({ limit: 1 });
+    const { PlatformResellerService } = await import("@/services/platform-reseller.service");
+    const platformResellerId = await PlatformResellerService.ensure();
+    await PlatformResellerService.migrateCatalogOwnership();
+
+    const existing = await db.query.subscriptionAddons.findMany({
+      where: eq(schema.subscriptionAddons.ownerId, platformResellerId),
+      limit: 1,
+    });
     if (existing.length > 0) return;
 
     const defaults: AddonInput[] = [
@@ -268,7 +245,7 @@ export class SubscriptionAddonsService {
     ];
 
     for (const addon of defaults) {
-      await this.create(addon);
+      await this.create({ ...addon, ownerId: platformResellerId });
     }
     console.log("Seeded default subscription add-ons");
   }

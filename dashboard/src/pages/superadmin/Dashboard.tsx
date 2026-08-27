@@ -9,6 +9,7 @@ import Editions from './Editions';
 import Resellers from './Resellers';
 import Analytics from './Analytics';
 import Settings from './Settings';
+import DirectSalesPackages from './DirectSalesPackages';
 import PlatformShop from './PlatformShop';
 import SystemLogs from './SystemLogs';
 import PlatformMessagesAdmin from './PlatformMessagesAdmin';
@@ -45,6 +46,7 @@ function SuperadminShell() {
         { label: t('licenses'), path: '/superadmin/licenses', icon: '🔑' },
         { label: t('posVersions'), path: '/superadmin/editions', icon: '📦' },
         { label: t('resellerManage'), path: '/superadmin/resellers', icon: '🤝' },
+        { label: 'Direct sales catalog', path: '/superadmin/direct-sales/packages', icon: '💳' },
       ],
     },
     { label: t('analytics'), path: '/superadmin/analytics', icon: '📈' },
@@ -93,6 +95,7 @@ function SuperadminShell() {
             <Route path="logs" element={<SystemLogs />} />
             <Route path="support" element={<SupportInbox mode="superadmin" />} />
             <Route path="support-agents" element={<SupportAgents />} />
+            <Route path="direct-sales/packages" element={<DirectSalesPackages />} />
             <Route path="settings" element={<Settings />} />
           </Routes>
         </main>

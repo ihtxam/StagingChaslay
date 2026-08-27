@@ -250,6 +250,17 @@ app.listen(PORT, () => {
   ensureMerchantSchemaAtStartup();
   ensureLicensesSchemaAtStartup();
   ensureSubscriptionSchemaAtStartup();
+  void import("@/services/platform-reseller.service").then(async ({ PlatformResellerService }) => {
+    try {
+      await PlatformResellerService.ensure();
+      await PlatformResellerService.migrateCatalogOwnership();
+    } catch {
+      /* non-fatal at boot */
+    }
+  });
+  void import("@/services/subscription-plans.service").then(({ SubscriptionPlansService }) =>
+    SubscriptionPlansService.ensureDefaults().catch(() => {})
+  );
   void import("@/services/subscription-addons.service").then(({ SubscriptionAddonsService }) =>
     SubscriptionAddonsService.ensureDefaults().catch(() => {})
   );

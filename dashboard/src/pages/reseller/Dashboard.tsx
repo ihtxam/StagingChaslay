@@ -29,6 +29,7 @@ import {
 } from '@/lib/edition-features';
 import EditionFeatureChecklist from '@/components/EditionFeatureChecklist';
 import SupportInbox from '../shared/SupportInbox';
+import ResellerPackages from './Packages';
 
 function Overview() {
   const { t } = useI18n();
@@ -1668,7 +1669,10 @@ function ResellerShell() {
       id: 'editions',
       label: t('posVersions'),
       icon: <Package />,
-      children: [{ label: t('posVersionManagement'), path: '/reseller/editions', icon: <Package /> }],
+      children: [
+        { label: t('posVersionManagement'), path: '/reseller/editions', icon: <Package /> },
+        { label: 'Packages & add-ons', path: '/reseller/packages', icon: <Package /> },
+      ],
     },
     { label: t('supportInboxTitle'), path: '/reseller/support', icon: <LifeBuoy /> },
   ];
@@ -1695,6 +1699,7 @@ function ResellerShell() {
             <Route path="merchants" element={<MerchantsPage />} />
             <Route path="licenses" element={<LicensesPage />} />
             <Route path="editions" element={<EditionsPage />} />
+            <Route path="packages" element={<ResellerPackages />} />
             <Route path="support" element={<SupportInbox mode="reseller" />} />
           </Routes>
         </main>
