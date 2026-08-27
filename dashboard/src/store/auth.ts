@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Permission } from '@/lib/permissions';
 import { clearWebPosStaffSession } from '@/lib/permissions';
+import type { StaffLoginHome } from '@/lib/staff-login-home';
 import api from '@/lib/api';
 
 export interface User {
@@ -14,6 +15,8 @@ export interface User {
   roleName?: string;
   permissions?: Permission[];
   isOwner?: boolean;
+  /** Staff email login landing: panel or POS (auto = from permissions). */
+  loginHome?: StaffLoginHome;
   impersonatedBy?: string;
   inventoryAddonEnabled?: boolean;
   signageAddonEnabled?: boolean;
@@ -126,6 +129,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         roleName: user.roleName,
         permissions: user.permissions as Permission[] | undefined,
         isOwner: role === 'merchant' && user.isOwner !== false,
+        loginHome: user.loginHome,
         impersonatedBy: get().user?.impersonatedBy,
         inventoryAddonEnabled: !!(user.inventoryAddonEnabled || user.inventoryEnabled),
         signageAddonEnabled: !!(user.signageAddonEnabled || user.signageEnabled),

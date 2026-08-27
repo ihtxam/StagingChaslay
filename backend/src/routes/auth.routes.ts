@@ -335,6 +335,7 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           staffId: profile.id,
           roleName: profile.roleName,
           permissions: profile.permissions,
+          loginHome: profile.loginHome,
           isOwner: false,
           inventoryAddonEnabled: inventoryOn,
           inventoryEnabled: inventoryOn,

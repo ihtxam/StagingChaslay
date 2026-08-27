@@ -5,6 +5,7 @@ import { notifyStaffRosterChanged } from '@/lib/permissions';
 import { isValidStaffPin, sanitizeStaffPinInput } from '@/lib/staff-pin';
 import { useI18n } from '@/lib/i18n';
 import { ALL_PERMISSIONS, staffRoleDisplayName, type Permission } from '@/lib/permissions';
+import { loginHomeFromPermissions, type StaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore } from '@/store/auth';
 
 type RoleRow = {
@@ -26,6 +27,7 @@ type StaffRow = {
   passwordSet?: boolean;
   deliveryHourlyRateOverride?: string | null;
   deliveryPerOrderFeeOverride?: string | null;
+  loginHome?: StaffLoginHome;
 };
 
 type StaffEditForm = {
@@ -38,6 +40,7 @@ type StaffEditForm = {
   canAccessPanel: boolean;
   deliveryHourlyRateOverride: string;
   deliveryPerOrderFeeOverride: string;
+  loginHome: 'panel' | 'pos';
 };
 
 const emptyCreateForm = {
@@ -47,6 +50,7 @@ const emptyCreateForm = {
   email: '',
   password: '',
   canAccessPanel: false,
+  loginHome: 'panel' as 'panel' | 'pos',
 };
 
 export default function StaffPage() {
@@ -130,7 +134,13 @@ export default function StaffPage() {
       return;
     }
     try {
-      await api.post('/merchant/staff', { ...staffForm, email, password, canAccessPanel });
+      await api.post('/merchant/staff', {
+        ...staffForm,
+        email,
+        password,
+        canAccessPanel,
+        loginHome: canAccessPanel ? staffForm.loginHome : undefined,
+      });
       toast.success(t('staffUserCreated'));
       setStaffForm({ ...emptyCreateForm, roleId: roles[0]?.id || '' });
       notifyStaffRosterChanged();
@@ -152,6 +162,15 @@ export default function StaffPage() {
       canAccessPanel: row.canAccessPanel,
       deliveryHourlyRateOverride: row.deliveryHourlyRateOverride ?? '',
       deliveryPerOrderFeeOverride: row.deliveryPerOrderFeeOverride ?? '',
+      loginHome:
+        row.loginHome === 'pos' || row.loginHome === 'panel'
+          ? row.loginHome
+          : loginHomeFromPermissions(
+              roles.find((r) => r.id === row.roleId)?.permissions || [],
+              row.canAccessPanel
+            ) === 'pos'
+            ? 'pos'
+            : 'panel',
     });
   };
 
@@ -201,6 +220,9 @@ export default function StaffPage() {
       body.deliveryPerOrderFeeOverride = editForm.deliveryPerOrderFeeOverride.trim()
         ? Number(editForm.deliveryPerOrderFeeOverride)
         : null;
+      if (nextOfficial) {
+        body.loginHome = editForm.loginHome;
+      }
       await api.put(`/merchant/staff/${editingStaff.id}`, body);
       toast.success(t('staffUserUpdated'));
       closeStaffEdit();
@@ -224,6 +246,17 @@ export default function StaffPage() {
       toast.error(e.response?.data?.error || t('staffUserRemoveFailed'));
     }
   };
+
+  const suggestLoginHome = (roleId: string, canAccessPanel: boolean): 'panel' | 'pos' => {
+    const role = roles.find((r) => r.id === roleId);
+    const suggested = loginHomeFromPermissions(role?.permissions || [], canAccessPanel);
+    return suggested === 'pos' ? 'pos' : 'panel';
+  };
+
+  const showCreateLoginHome =
+    staffForm.canAccessPanel || !!(staffForm.email.trim() && staffForm.password.trim());
+  const showEditLoginHome =
+    editForm?.canAccessPanel || !!(editForm?.email.trim() && editForm?.password.trim());
 
   if (loading) {
     return <div className="p-4 text-sm text-[var(--text-muted)]">{t('staffLoading')}</div>;
@@ -271,7 +304,17 @@ export default function StaffPage() {
                 <select
                   className="input mt-1"
                   value={staffForm.roleId}
-                  onChange={(e) => setStaffForm({ ...staffForm, roleId: e.target.value })}
+                  onChange={(e) => {
+                    const roleId = e.target.value;
+                    const canAccessPanel =
+                      staffForm.canAccessPanel ||
+                      !!(staffForm.email.trim() && staffForm.password.trim());
+                    setStaffForm({
+                      ...staffForm,
+                      roleId,
+                      loginHome: suggestLoginHome(roleId, canAccessPanel),
+                    });
+                  }}
                 >
                   {roles.map((r) => (
                     <option key={r.id} value={r.id}>
@@ -344,6 +387,46 @@ export default function StaffPage() {
                   </span>
                 </span>
               </label>
+              {showCreateLoginHome ? (
+                <fieldset className="block text-sm sm:col-span-2">
+                  <legend className="font-medium">{t('staffLoginHome')}</legend>
+                  <p className="text-xs text-[var(--text-muted)] font-normal mt-0.5 mb-2">
+                    {t('staffLoginHomeHint')}
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(
+                      [
+                        ['panel', t('staffLoginHomePanel'), t('staffLoginHomePanelHint')],
+                        ['pos', t('staffLoginHomePos'), t('staffLoginHomePosHint')],
+                      ] as const
+                    ).map(([value, title, hint]) => {
+                      const active = staffForm.loginHome === value;
+                      return (
+                        <label
+                          key={value}
+                          className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2.5 ${
+                            active ? 'border-stone-900 bg-stone-50' : 'border-[var(--border)]'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="createLoginHome"
+                            className="mt-1"
+                            checked={active}
+                            onChange={() =>
+                              setStaffForm({ ...staffForm, loginHome: value })
+                            }
+                          />
+                          <span>
+                            <span className="font-medium block">{title}</span>
+                            <span className="text-xs text-[var(--text-muted)]">{hint}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              ) : null}
             </div>
             <button type="submit" className="btn-primary">
               {t('staffAddUser')}
@@ -369,6 +452,7 @@ export default function StaffPage() {
                   <th className="px-3 py-2">{t('staffRole')}</th>
                   <th className="px-3 py-2">{t('staffPinCol')}</th>
                   <th className="px-3 py-2">{t('staffPanelCol')}</th>
+                  <th className="px-3 py-2">{t('staffLoginHomeCol')}</th>
                   <th className="px-3 py-2" />
                 </tr>
               </thead>
@@ -390,6 +474,13 @@ export default function StaffPage() {
                       ) : (
                         t('no')
                       )}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      {s.canAccessPanel || s.email
+                        ? s.loginHome === 'pos'
+                          ? t('staffLoginHomePos')
+                          : t('staffLoginHomePanel')
+                        : '—'}
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <button
@@ -464,7 +555,17 @@ export default function StaffPage() {
                 <select
                   className="input mt-1"
                   value={editForm.roleId}
-                  onChange={(e) => setEditForm({ ...editForm, roleId: e.target.value })}
+                  onChange={(e) => {
+                    const roleId = e.target.value;
+                    const canAccessPanel =
+                      editForm.canAccessPanel ||
+                      !!(editForm.email.trim() && editForm.password.trim());
+                    setEditForm({
+                      ...editForm,
+                      roleId,
+                      loginHome: suggestLoginHome(roleId, canAccessPanel),
+                    });
+                  }}
                 >
                   {roles.map((r) => (
                     <option key={r.id} value={r.id}>
@@ -557,6 +658,44 @@ export default function StaffPage() {
                   </span>
                 </span>
               </label>
+              {showEditLoginHome ? (
+                <fieldset className="block text-sm sm:col-span-2">
+                  <legend className="font-medium">{t('staffLoginHome')}</legend>
+                  <p className="text-xs text-[var(--text-muted)] font-normal mt-0.5 mb-2">
+                    {t('staffLoginHomeHint')}
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(
+                      [
+                        ['panel', t('staffLoginHomePanel'), t('staffLoginHomePanelHint')],
+                        ['pos', t('staffLoginHomePos'), t('staffLoginHomePosHint')],
+                      ] as const
+                    ).map(([value, title, hint]) => {
+                      const active = editForm.loginHome === value;
+                      return (
+                        <label
+                          key={value}
+                          className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2.5 ${
+                            active ? 'border-stone-900 bg-stone-50' : 'border-[var(--border)]'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="editLoginHome"
+                            className="mt-1"
+                            checked={active}
+                            onChange={() => setEditForm({ ...editForm, loginHome: value })}
+                          />
+                          <span>
+                            <span className="font-medium block">{title}</span>
+                            <span className="text-xs text-[var(--text-muted)]">{hint}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              ) : null}
               <label className="block text-sm">
                 {t('deliveryStaffHourlyOverride')}
                 <input

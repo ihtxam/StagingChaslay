@@ -441,6 +441,8 @@ export const merchantStaff = pgTable(
     passwordHash: varchar("password_hash", { length: 255 }),
     /** Can sign in to merchant backend panel (email + password) */
     canAccessPanel: boolean("can_access_panel").default(false).notNull(),
+    /** After email login: panel (backend), pos (register), or auto (from permissions). */
+    loginHome: varchar("login_home", { length: 20 }).default("auto").notNull(),
     /** Adyen POI terminal id preferred by this staff member on WebPOS/waiter. */
     preferredTerminalId: varchar("preferred_terminal_id", { length: 255 }),
     /** Optional override for delivery driver hourly wage (CHF/h). */

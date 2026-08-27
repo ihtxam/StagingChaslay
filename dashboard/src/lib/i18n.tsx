@@ -2712,7 +2712,14 @@ const en: Dict = {
   staffCanAccessPanel: 'Can access backend panel',
   staffEmailLogin: 'Official login (email + password)',
   staffEmailLoginHint:
-    'Filling email and password enables official login automatically. They sign in at the main login page. Waiters go to POS. PIN-only users sign in on POS, not this page.',
+    'Filling email and password enables official login automatically. They sign in at the main login page. Choose where they land below. PIN-only users sign in on POS, not this page.',
+  staffLoginHome: 'After sign-in, open',
+  staffLoginHomeHint: 'Where this user lands after email and password login.',
+  staffLoginHomeCol: 'After login',
+  staffLoginHomePanel: 'Backend panel',
+  staffLoginHomePanelHint: 'Dashboard, orders, settings, inventory…',
+  staffLoginHomePos: 'POS screen',
+  staffLoginHomePosHint: 'Register / sales screen',
   staffPasswordCreateHint:
     'Set this with an email so they can sign in at app.rebornsense.com/login. Leave blank for PIN-only POS access.',
   staffWaiterTemplateHint:
@@ -5911,7 +5918,14 @@ const fr: Dict = {
   staffCanAccessPanel: 'Accès au panneau backend',
   staffEmailLogin: 'Connexion officielle (e-mail + mot de passe)',
   staffEmailLoginHint:
-    'Saisir e-mail et mot de passe active automatiquement la connexion officielle. Ils se connectent sur la page principale. Les serveurs arrivent en caisse. Un PIN seul sert uniquement à la caisse.',
+    'Saisir e-mail et mot de passe active automatiquement la connexion officielle. Choisissez la destination ci-dessous. Un PIN seul sert uniquement à la caisse.',
+  staffLoginHome: 'Après connexion, ouvrir',
+  staffLoginHomeHint: 'Où cet utilisateur arrive après connexion e-mail / mot de passe.',
+  staffLoginHomeCol: 'Après connexion',
+  staffLoginHomePanel: 'Panneau backend',
+  staffLoginHomePanelHint: 'Tableau de bord, commandes, paramètres, inventaire…',
+  staffLoginHomePos: 'Écran caisse (POS)',
+  staffLoginHomePosHint: 'Caisse / ventes',
   staffPasswordCreateHint:
     'À renseigner avec un e-mail pour se connecter sur app.rebornsense.com/login. Laisser vide pour un accès caisse par PIN uniquement.',
   staffWaiterTemplateHint:
@@ -9114,7 +9128,14 @@ const de: Dict = {
   staffCanAccessPanel: 'Zugang zum Backend-Panel',
   staffEmailLogin: 'Offizielles Login (E-Mail + Passwort)',
   staffEmailLoginHint:
-    'E-Mail und Passwort aktivieren das offizielle Login automatisch. Anmeldung über die Haupt-Login-Seite. Kellner kommen in die Kasse. Nur-PIN gilt nur für die Kasse.',
+    'E-Mail und Passwort aktivieren das offizielle Login automatisch. Ziel unten wählen. Nur-PIN gilt nur für die Kasse.',
+  staffLoginHome: 'Nach Anmeldung öffnen',
+  staffLoginHomeHint: 'Wohin dieser Benutzer nach E-Mail-/Passwort-Login gelangt.',
+  staffLoginHomeCol: 'Nach Login',
+  staffLoginHomePanel: 'Backend-Panel',
+  staffLoginHomePanelHint: 'Dashboard, Bestellungen, Einstellungen, Inventar…',
+  staffLoginHomePos: 'POS-Kasse',
+  staffLoginHomePosHint: 'Kasse / Verkauf',
   staffPasswordCreateHint:
     'Zusammen mit einer E-Mail für app.rebornsense.com/login setzen. Leer lassen für nur-PIN-Kassenzugang.',
   staffWaiterTemplateHint:

@@ -7,6 +7,7 @@ import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/invent
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
+import { normalizeStaffLoginHome } from "@/lib/staff-login-home";
 import {
   businessModuleMerchantPatch,
   normalizeBusinessModule,
@@ -259,6 +260,7 @@ export class AuthService {
         staffId: staff.id,
         roleName: role?.name,
         permissions,
+        loginHome: normalizeStaffLoginHome(staff.loginHome),
         inventoryAddonEnabled: inventoryOn,
         inventoryEnabled: inventoryOn,
         signageAddonEnabled: signage.enabled,

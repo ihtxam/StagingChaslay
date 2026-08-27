@@ -13,6 +13,12 @@ import {
   waiterSystemKind,
   type Permission,
 } from "@/lib/permissions";
+import {
+  assertLoginHomeAllowed,
+  loginHomeFromPermissions,
+  normalizeStaffLoginHome,
+  type StaffLoginHome,
+} from "@/lib/staff-login-home";
 
 export class StaffService {
   /** Staff row exists with a POS PIN but no email/password hash for /login. */
@@ -221,6 +227,7 @@ export class StaffService {
         passwordSet: !!s.passwordHash,
         deliveryHourlyRateOverride: s.deliveryHourlyRateOverride ?? null,
         deliveryPerOrderFeeOverride: s.deliveryPerOrderFeeOverride ?? null,
+        loginHome: normalizeStaffLoginHome(s.loginHome),
         createdAt: s.createdAt,
       };
     });
@@ -235,6 +242,7 @@ export class StaffService {
       email?: string;
       password?: string;
       canAccessPanel?: boolean;
+      loginHome?: StaffLoginHome;
     }
   ) {
     const db = getDb();
@@ -275,6 +283,13 @@ export class StaffService {
     );
     await MerchantEntitlementsService.assertCanAddStaff(merchantId, 1);
 
+    const permissions = parsePermissions(role.permissions);
+    const loginHome =
+      input.loginHome !== undefined
+        ? normalizeStaffLoginHome(input.loginHome)
+        : loginHomeFromPermissions(permissions, canAccessPanel);
+    assertLoginHomeAllowed(loginHome, permissions, canAccessPanel);
+
     const [row] = await db
       .insert(schema.merchantStaff)
       .values({
@@ -285,6 +300,7 @@ export class StaffService {
         pinHash: pin ? await AuthService.hashPassword(pin) : null,
         passwordHash: password ? await AuthService.hashPassword(password) : null,
         canAccessPanel,
+        loginHome,
         isActive: true,
       })
       .returning();
@@ -305,6 +321,7 @@ export class StaffService {
       isActive?: boolean;
       deliveryHourlyRateOverride?: number | null;
       deliveryPerOrderFeeOverride?: number | null;
+      loginHome?: StaffLoginHome;
     }
   ) {
     const db = getDb();
@@ -396,6 +413,23 @@ export class StaffService {
       if (!nextPasswordHash) {
         throw new Error("Password is required for panel access (set a new password)");
       }
+    }
+
+    const roleForHome = await db.query.merchantRoles.findFirst({
+      where: eq(schema.merchantRoles.id, (patch.roleId as string) || staff.roleId),
+    });
+    const rolePermissions = parsePermissions(roleForHome?.permissions);
+    const nextCanAccessFinal =
+      patch.canAccessPanel !== undefined ? !!patch.canAccessPanel : !!staff.canAccessPanel;
+
+    if (input.loginHome !== undefined) {
+      const loginHome = normalizeStaffLoginHome(input.loginHome);
+      assertLoginHomeAllowed(loginHome, rolePermissions, nextCanAccessFinal);
+      patch.loginHome = loginHome;
+    } else if (patch.roleId !== undefined) {
+      const loginHome = loginHomeFromPermissions(rolePermissions, nextCanAccessFinal);
+      assertLoginHomeAllowed(loginHome, rolePermissions, nextCanAccessFinal);
+      patch.loginHome = loginHome;
     }
 
     const [row] = await db
@@ -510,6 +544,7 @@ export class StaffService {
       roleName: role?.name || "Staff",
       permissions,
       canAccessPanel: staff.canAccessPanel,
+      loginHome: normalizeStaffLoginHome(staff.loginHome),
       preferredTerminalId: staff.preferredTerminalId || null,
     };
   }
@@ -630,6 +665,7 @@ export class StaffService {
       isActive: staff.isActive,
       pinSet: !!staff.pinHash,
       passwordSet: !!staff.passwordHash,
+      loginHome: normalizeStaffLoginHome(staff.loginHome),
     };
   }
 }
