@@ -45,6 +45,7 @@ const analytics_service_1 = require("@/services/analytics.service");
 const auth_service_1 = require("@/services/auth.service");
 const subscription_plans_service_1 = require("@/services/subscription-plans.service");
 const subscription_addons_service_1 = require("@/services/subscription-addons.service");
+const platform_reseller_service_1 = require("@/services/platform-reseller.service");
 const platform_settings_service_1 = require("@/services/platform-settings.service");
 const edition_service_1 = require("@/services/edition.service");
 const reseller_service_1 = require("@/services/reseller.service");
@@ -84,7 +85,11 @@ router.get("/plans", async (_req, res) => {
  */
 router.post("/plans", async (req, res) => {
     try {
-        const plan = await subscription_plans_service_1.SubscriptionPlansService.create(req.body || {});
+        const ownerId = await platform_reseller_service_1.PlatformResellerService.getId();
+        const plan = await subscription_plans_service_1.SubscriptionPlansService.create({
+            ...(req.body || {}),
+            ownerId,
+        });
         res.status(201).json({ success: true, plan });
     }
     catch (error) {
@@ -98,6 +103,11 @@ router.post("/plans", async (req, res) => {
  */
 router.put("/plans/:planId", async (req, res) => {
     try {
+        const ownerId = await platform_reseller_service_1.PlatformResellerService.getId();
+        const existing = await subscription_plans_service_1.SubscriptionPlansService.getById(req.params.planId);
+        if (existing.ownerType !== "reseller" || existing.ownerId !== ownerId) {
+            return res.status(404).json({ error: "Package not found" });
+        }
         const plan = await subscription_plans_service_1.SubscriptionPlansService.update(req.params.planId, req.body || {});
         res.json({ success: true, plan });
     }
@@ -112,6 +122,11 @@ router.put("/plans/:planId", async (req, res) => {
  */
 router.delete("/plans/:planId", async (req, res) => {
     try {
+        const ownerId = await platform_reseller_service_1.PlatformResellerService.getId();
+        const existing = await subscription_plans_service_1.SubscriptionPlansService.getById(req.params.planId);
+        if (existing.ownerType !== "reseller" || existing.ownerId !== ownerId) {
+            return res.status(404).json({ error: "Package not found" });
+        }
         const plan = await subscription_plans_service_1.SubscriptionPlansService.remove(req.params.planId);
         res.json({ success: true, plan });
     }
@@ -134,10 +149,10 @@ router.get("/addons", async (_req, res) => {
 });
 router.post("/addons", async (req, res) => {
     try {
+        const ownerId = await platform_reseller_service_1.PlatformResellerService.getId();
         const addon = await subscription_addons_service_1.SubscriptionAddonsService.create({
             ...(req.body || {}),
-            ownerType: "platform",
-            ownerId: null,
+            ownerId,
         });
         res.status(201).json({ success: true, addon });
     }
@@ -147,6 +162,11 @@ router.post("/addons", async (req, res) => {
 });
 router.put("/addons/:addonId", async (req, res) => {
     try {
+        const ownerId = await platform_reseller_service_1.PlatformResellerService.getId();
+        const existing = await subscription_addons_service_1.SubscriptionAddonsService.getById(req.params.addonId);
+        if (existing.ownerType !== "reseller" || existing.ownerId !== ownerId) {
+            return res.status(404).json({ error: "Add-on not found" });
+        }
         const addon = await subscription_addons_service_1.SubscriptionAddonsService.update(req.params.addonId, req.body || {});
         res.json({ success: true, addon });
     }
@@ -156,6 +176,11 @@ router.put("/addons/:addonId", async (req, res) => {
 });
 router.delete("/addons/:addonId", async (req, res) => {
     try {
+        const ownerId = await platform_reseller_service_1.PlatformResellerService.getId();
+        const existing = await subscription_addons_service_1.SubscriptionAddonsService.getById(req.params.addonId);
+        if (existing.ownerType !== "reseller" || existing.ownerId !== ownerId) {
+            return res.status(404).json({ error: "Add-on not found" });
+        }
         const addon = await subscription_addons_service_1.SubscriptionAddonsService.remove(req.params.addonId);
         res.json({ success: true, addon });
     }

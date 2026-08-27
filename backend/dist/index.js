@@ -39,7 +39,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
-const path_1 = __importDefault(require("path"));
 const auth_routes_1 = __importDefault(require("@/routes/auth.routes"));
 const licensing_routes_1 = __importDefault(require("@/routes/licensing.routes"));
 const superadmin_routes_1 = __importDefault(require("@/routes/superadmin.routes"));
@@ -81,9 +80,11 @@ const reservation_service_1 = require("@/services/reservation.service");
 const subscription_billing_service_1 = require("@/services/subscription-billing.service");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const ensure_licenses_schema_1 = require("@/lib/ensure-licenses-schema");
+const ensure_subscription_schema_1 = require("@/lib/ensure-subscription-schema");
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const brand_1 = require("@/lib/brand");
+const downloads_routes_1 = __importDefault(require("@/routes/downloads.routes"));
 // Load environment variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -144,26 +145,8 @@ app.use("/api/uploads", express_1.default.static(uploadsRoot, {
         res.setHeader("Cache-Control", "public, max-age=604800");
     },
 }));
-// Public installers / static downloads (print agent EXE, etc.)
-const downloadsRoot = path_1.default.join(__dirname, "..", "public", "downloads");
-app.use("/downloads", express_1.default.static(downloadsRoot, {
-    // Missing file → 404 from static (do not fall through to SPA-style handlers)
-    fallthrough: false,
-    maxAge: "1h",
-    setHeaders(res, filePath) {
-        if (filePath.endsWith(".exe")) {
-            res.setHeader("Content-Type", "application/octet-stream");
-            res.setHeader("Content-Disposition", `attachment; filename="${path_1.default.basename(filePath)}"`);
-            // Prevent proxies from gzip/brotli-transforming the binary
-            res.setHeader("Content-Encoding", "identity");
-            res.setHeader("X-Content-Type-Options", "nosniff");
-            res.setHeader("Cache-Control", "public, max-age=3600");
-        }
-        else {
-            res.setHeader("Cache-Control", "public, max-age=3600");
-        }
-    },
-}));
+// Public installers (print agent EXE, print bridge APK) — explicit routes avoid 500 JSON on missing files
+app.use("/downloads", downloads_routes_1.default);
 // ============================================================================
 // ROUTES
 // ============================================================================
@@ -257,6 +240,18 @@ app.listen(PORT, () => {
     console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
     (0, ensure_merchant_schema_1.ensureMerchantSchemaAtStartup)();
     (0, ensure_licenses_schema_1.ensureLicensesSchemaAtStartup)();
+    (0, ensure_subscription_schema_1.ensureSubscriptionSchemaAtStartup)();
+    void Promise.resolve().then(() => __importStar(require("@/services/platform-reseller.service"))).then(async ({ PlatformResellerService }) => {
+        try {
+            await PlatformResellerService.ensure();
+            await PlatformResellerService.migrateCatalogOwnership();
+        }
+        catch {
+            /* non-fatal at boot */
+        }
+    });
+    void Promise.resolve().then(() => __importStar(require("@/services/subscription-plans.service"))).then(({ SubscriptionPlansService }) => SubscriptionPlansService.ensureDefaults().catch(() => { }));
+    void Promise.resolve().then(() => __importStar(require("@/services/subscription-addons.service"))).then(({ SubscriptionAddonsService }) => SubscriptionAddonsService.ensureDefaults().catch(() => { }));
     // Reminder sweeps (~hourly). Lightweight; skips merchants without email.
     const tick = async () => {
         try {

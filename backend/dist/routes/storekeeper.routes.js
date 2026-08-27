@@ -4,6 +4,7 @@ const express_1 = require("express");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
 const inventory_service_1 = require("@/services/inventory.service");
 const barcode_product_lookup_service_1 = require("@/services/barcode-product-lookup.service");
+const product_service_1 = require("@/services/product.service");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken);
 router.use(auth_middleware_1.requireMerchant);
@@ -37,19 +38,43 @@ router.get("/lookup/:barcode", async (req, res) => {
         if (!merchantId)
             return res.status(400).json({ error: "Merchant ID is required" });
         const barcode = String(req.params.barcode || "").trim();
-        const item = await inventory_service_1.InventoryService.getItemByBarcode(merchantId, barcode);
+        const [item, menuProduct] = await Promise.all([
+            inventory_service_1.InventoryService.getItemByBarcode(merchantId, barcode),
+            product_service_1.ProductService.getProductByBarcode(merchantId, barcode),
+        ]);
+        const menuProductSummary = menuProduct
+            ? {
+                id: menuProduct.id,
+                name: menuProduct.name,
+                price: Number(menuProduct.price) || 0,
+                imageUrl: menuProduct.imageUrl || null,
+            }
+            : null;
         if (item) {
-            return res.json({ success: true, item, suggestion: null, source: "local" });
+            return res.json({
+                success: true,
+                item,
+                menuProduct: menuProductSummary,
+                suggestion: null,
+                source: "local",
+            });
         }
         const bootstrap = await inventory_service_1.InventoryService.getStorekeeperBootstrap(merchantId);
         const suggestion = await barcode_product_lookup_service_1.BarcodeProductLookupService.lookupExternal(barcode);
         if (!suggestion) {
-            return res.json({ success: true, item: null, suggestion: null, source: null });
+            return res.json({
+                success: true,
+                item: null,
+                menuProduct: menuProductSummary,
+                suggestion: null,
+                source: menuProductSummary ? "menu" : null,
+            });
         }
         const categoryId = (0, barcode_product_lookup_service_1.matchInventoryCategoryId)(bootstrap.categories, suggestion.categoryHint);
         res.json({
             success: true,
             item: null,
+            menuProduct: menuProductSummary,
             suggestion: { ...suggestion, categoryId },
             source: suggestion.source,
         });

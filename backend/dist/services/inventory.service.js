@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.InventoryService = exports.InventoryLicenseError = exports.INVENTORY_UNITS = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
@@ -6,6 +39,7 @@ const db_1 = require("@/db");
 const email_service_1 = require("@/services/email.service");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const inventory_addon_1 = require("@/lib/inventory-addon");
+const business_module_1 = require("@/lib/business-module");
 exports.INVENTORY_UNITS = ["kg", "g", "L", "ml", "piece", "pack"];
 const DEFAULT_UNITS = [
     { code: "kg", name: "Kilogram" },
@@ -318,6 +352,7 @@ class InventoryService {
                     archivedAt: row.supplier.archivedAt,
                 }
                 : null,
+            doNotReorder: !!row.doNotReorder,
         };
     }
     static async createItem(merchantId, input) {
@@ -393,6 +428,8 @@ class InventoryService {
             patch.perishable = !!input.perishable;
         if (input.autoReorderEnabled !== undefined)
             patch.autoReorderEnabled = !!input.autoReorderEnabled;
+        if (input.doNotReorder !== undefined)
+            patch.doNotReorder = !!input.doNotReorder;
         if (input.categoryId !== undefined) {
             patch.categoryId = await this.assertCategory(merchantId, input.categoryId);
         }
@@ -589,6 +626,8 @@ class InventoryService {
                 patch.categoryId = input.categoryId;
             if (parseExpiryDate(input.expiryDate))
                 patch.perishable = true;
+            if (input.cost != null && Number.isFinite(input.cost))
+                patch.cost = input.cost;
             if (Object.keys(patch).length) {
                 item = await this.updateItem(merchantId, item.id, patch);
             }
@@ -600,7 +639,60 @@ class InventoryService {
             note: input.note || "Storekeeper intake",
             expiryDate: input.expiryDate,
         });
-        return { item: updated, created };
+        let menuProduct = null;
+        const db = (0, db_1.getDb)();
+        const merchant = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { businessCategory: true },
+        });
+        const businessModule = (0, business_module_1.normalizeBusinessModule)(merchant?.businessCategory);
+        const publishToPos = input.publishToPos !== false && (businessModule === "retail" || businessModule === null);
+        if (publishToPos) {
+            menuProduct = await this.publishStorekeeperToPos(merchantId, {
+                barcode,
+                name: String(input.name || item.name).trim(),
+                salePrice: input.salePrice,
+                qty,
+                imageUrl: input.imageUrl,
+            });
+        }
+        return { item: updated, created, menuProduct };
+    }
+    /** Create or update a sellable menu product after storekeeper intake (retail). */
+    static async publishStorekeeperToPos(merchantId, input) {
+        const { ProductService } = await Promise.resolve().then(() => __importStar(require("@/services/product.service")));
+        const db = (0, db_1.getDb)();
+        const existing = await ProductService.getProductByBarcode(merchantId, input.barcode);
+        const price = input.salePrice != null && Number.isFinite(input.salePrice) ? input.salePrice : 0;
+        const stockAdd = Math.max(0, Math.floor(input.qty));
+        if (existing) {
+            const nextStock = Math.max(0, Math.floor(Number(existing.stock) || 0) + stockAdd);
+            const patch = {
+                name: input.name,
+                stock: nextStock,
+            };
+            if (input.salePrice != null && Number.isFinite(input.salePrice)) {
+                patch.price = price.toString();
+            }
+            if (input.imageUrl && !existing.imageUrl) {
+                patch.imageUrl = input.imageUrl;
+            }
+            const updated = await ProductService.updateProduct(merchantId, existing.id, patch);
+            return { id: updated.id, name: updated.name, price: Number(updated.price), stock: nextStock, created: false };
+        }
+        const defaultCategory = await db.query.categories.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchantId),
+            orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.categories.sortOrder)],
+            columns: { id: true },
+        });
+        const created = await ProductService.createProduct(merchantId, input.name, price, defaultCategory?.id, undefined, input.barcode, undefined, stockAdd, true, undefined, input.imageUrl || undefined);
+        return {
+            id: created.id,
+            name: created.name,
+            price: Number(created.price),
+            stock: stockAdd,
+            created: true,
+        };
     }
     static async assertBarcodeAvailable(merchantId, barcode, excludeItemId) {
         const db = (0, db_1.getDb)();
@@ -955,6 +1047,8 @@ class InventoryService {
             items = items.filter((i) => set.has(i.id));
         }
         const targets = items.filter((i) => {
+            if (i.doNotReorder)
+                return false;
             if (!i.supplier?.email || i.supplier.archivedAt)
                 return false;
             if (opts.force)
@@ -1175,6 +1269,209 @@ class InventoryService {
                 .sort((a, b) => b.date.localeCompare(a.date)),
         };
     }
+    static async stopOrderingItems(merchantId, itemIds) {
+        await this.assertLicensed(merchantId);
+        const ids = [...new Set(itemIds.map(String).filter(Boolean))].slice(0, 200);
+        if (!ids.length)
+            throw new Error("No items selected");
+        const db = (0, db_1.getDb)();
+        const updated = await db
+            .update(db_1.schema.inventoryItems)
+            .set({ doNotReorder: true, autoReorderEnabled: false, updatedAt: new Date() })
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.inventoryItems.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.inventoryItems.id, ids)))
+            .returning({ id: db_1.schema.inventoryItems.id });
+        return { updated: updated.length };
+    }
+    /** Dead / slow movers — recommend stopping supplier orders for items that do not sell. */
+    static async deadStockReport(merchantId, days = 90) {
+        await this.assertLicensed(merchantId);
+        const period = Math.max(7, Math.min(365, Math.floor(num(days, 90))));
+        const since = new Date(Date.now() - period * 24 * 60 * 60 * 1000);
+        const db = (0, db_1.getDb)();
+        const items = await this.listItems(merchantId);
+        const movementRows = await db
+            .select({
+            itemId: db_1.schema.inventoryMovements.itemId,
+            type: db_1.schema.inventoryMovements.type,
+            qty: (0, drizzle_orm_1.sql) `sum(${db_1.schema.inventoryMovements.qty})`,
+        })
+            .from(db_1.schema.inventoryMovements)
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.inventoryMovements.merchantId, merchantId), (0, drizzle_orm_1.gte)(db_1.schema.inventoryMovements.createdAt, since)))
+            .groupBy(db_1.schema.inventoryMovements.itemId, db_1.schema.inventoryMovements.type);
+        const lastSaleRows = await db
+            .select({
+            itemId: db_1.schema.inventoryMovements.itemId,
+            lastAt: (0, drizzle_orm_1.sql) `max(${db_1.schema.inventoryMovements.createdAt})`,
+        })
+            .from(db_1.schema.inventoryMovements)
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.inventoryMovements.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.inventoryMovements.type, "sale")))
+            .groupBy(db_1.schema.inventoryMovements.itemId);
+        const byItem = new Map();
+        for (const r of movementRows) {
+            const cur = byItem.get(r.itemId) || { sale: 0, waste: 0, inn: 0 };
+            const q = num(r.qty);
+            if (r.type === "sale")
+                cur.sale += q;
+            else if (r.type === "waste")
+                cur.waste += q;
+            else if (r.type === "in")
+                cur.inn += q;
+            byItem.set(r.itemId, cur);
+        }
+        const lastSaleByItem = new Map(lastSaleRows.map((r) => [r.itemId, r.lastAt ? new Date(r.lastAt) : null]));
+        const classify = (soldQty, onHand, purchasedQty) => {
+            const velocity = soldQty / period;
+            const daysOfStock = soldQty > 0 && onHand > 0 ? Math.round((onHand / soldQty) * period) : onHand > 0 ? null : 0;
+            let tier = "healthy";
+            if (soldQty <= 0 && onHand > 0)
+                tier = "dead";
+            else if (velocity < 1 / 30 || (daysOfStock != null && daysOfStock > 60))
+                tier = "slow";
+            let recommendation = "ok";
+            if (tier === "dead")
+                recommendation = "stop_ordering";
+            else if (tier === "slow" && (onHand > 0 || purchasedQty > 0))
+                recommendation = "review";
+            if (tier === "slow" && daysOfStock != null && daysOfStock > 90)
+                recommendation = "stop_ordering";
+            if (soldQty <= 0 && purchasedQty > 0 && onHand > 0)
+                recommendation = "stop_ordering";
+            return { tier, recommendation, velocity, daysOfStock };
+        };
+        const inventoryRows = items.map((item) => {
+            const u = byItem.get(item.id) || { sale: 0, waste: 0, inn: 0 };
+            const onHand = num(item.onHand);
+            const cost = num(item.cost);
+            const lastSoldAt = lastSaleByItem.get(item.id) || null;
+            const daysSinceSale = lastSoldAt
+                ? Math.floor((Date.now() - lastSoldAt.getTime()) / (24 * 60 * 60 * 1000))
+                : null;
+            const { tier, recommendation, velocity, daysOfStock } = classify(u.sale, onHand, u.inn);
+            return {
+                id: item.id,
+                kind: "inventory",
+                name: item.name,
+                unit: item.unit,
+                onHand,
+                soldQty: u.sale,
+                purchasedQty: u.inn,
+                wasteQty: u.waste,
+                stockValue: Math.round(onHand * cost * 100) / 100,
+                lastSoldAt: lastSoldAt ? lastSoldAt.toISOString() : null,
+                daysSinceSale,
+                daysOfStock,
+                velocityPerDay: Math.round(velocity * 1000) / 1000,
+                tier,
+                recommendation,
+                doNotReorder: !!item.doNotReorder,
+                autoReorderEnabled: !!item.autoReorderEnabled,
+                supplierName: item.supplier?.name || null,
+            };
+        });
+        const products = await db.query.products.findMany({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId),
+            columns: {
+                id: true,
+                name: true,
+                sku: true,
+                stock: true,
+                cost: true,
+                price: true,
+                isActive: true,
+            },
+        });
+        const orders = await db.query.orders.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), (0, drizzle_orm_1.gte)(db_1.schema.orders.createdAt, since), (0, drizzle_orm_1.or)((0, drizzle_orm_1.eq)(db_1.schema.orders.status, "completed"), (0, drizzle_orm_1.eq)(db_1.schema.orders.status, "partially_refunded"), (0, drizzle_orm_1.eq)(db_1.schema.orders.paymentStatus, "completed"), (0, drizzle_orm_1.eq)(db_1.schema.orders.paymentStatus, "paid"), (0, drizzle_orm_1.eq)(db_1.schema.orders.paymentStatus, "partially_refunded"))),
+            columns: { id: true, createdAt: true },
+            with: {
+                items: {
+                    columns: {
+                        productId: true,
+                        quantity: true,
+                        totalPrice: true,
+                        refundedQuantity: true,
+                    },
+                },
+            },
+        });
+        const productStats = new Map();
+        for (const order of orders) {
+            const orderAt = order.createdAt ? new Date(order.createdAt) : null;
+            for (const line of order.items || []) {
+                const pid = line.productId ? String(line.productId) : "";
+                if (!pid)
+                    continue;
+                const qty = Number(line.quantity) || 0;
+                const refunded = Number(line.refundedQuantity) || 0;
+                const kept = Math.max(0, qty - refunded);
+                if (kept <= 0)
+                    continue;
+                const cur = productStats.get(pid) || { soldQty: 0, revenue: 0, lastSoldAt: null };
+                cur.soldQty += kept;
+                cur.revenue += Number(line.totalPrice) || 0;
+                if (orderAt && (!cur.lastSoldAt || orderAt > cur.lastSoldAt))
+                    cur.lastSoldAt = orderAt;
+                productStats.set(pid, cur);
+            }
+        }
+        const productRows = products
+            .filter((p) => p.isActive !== false)
+            .map((p) => {
+            const stats = productStats.get(p.id) || { soldQty: 0, revenue: 0, lastSoldAt: null };
+            const onHand = Math.max(0, Math.floor(Number(p.stock) || 0));
+            const cost = num(p.cost);
+            const lastSoldAt = stats.lastSoldAt;
+            const daysSinceSale = lastSoldAt
+                ? Math.floor((Date.now() - lastSoldAt.getTime()) / (24 * 60 * 60 * 1000))
+                : null;
+            const { tier, recommendation, velocity, daysOfStock } = classify(stats.soldQty, onHand, 0);
+            return {
+                id: p.id,
+                kind: "product",
+                name: p.name,
+                sku: p.sku,
+                onHand,
+                soldQty: stats.soldQty,
+                purchasedQty: 0,
+                wasteQty: 0,
+                revenue: Math.round(stats.revenue * 100) / 100,
+                stockValue: Math.round(onHand * cost * 100) / 100,
+                lastSoldAt: lastSoldAt ? lastSoldAt.toISOString() : null,
+                daysSinceSale,
+                daysOfStock,
+                velocityPerDay: Math.round(velocity * 1000) / 1000,
+                tier,
+                recommendation,
+                doNotReorder: false,
+                autoReorderEnabled: false,
+                supplierName: null,
+            };
+        })
+            .filter((p) => p.tier !== "healthy" || p.onHand > 0);
+        const deadInventory = inventoryRows.filter((r) => r.tier === "dead");
+        const slowInventory = inventoryRows.filter((r) => r.tier === "slow");
+        const stopRecommended = inventoryRows.filter((r) => r.recommendation === "stop_ordering");
+        const deadProducts = productRows.filter((r) => r.tier === "dead");
+        return {
+            days: period,
+            summary: {
+                deadInventoryCount: deadInventory.length,
+                slowInventoryCount: slowInventory.length,
+                deadProductCount: deadProducts.length,
+                stopOrderingCount: stopRecommended.filter((r) => !r.doNotReorder).length,
+                stockValueDead: Math.round([...deadInventory, ...deadProducts].reduce((s, r) => s + r.stockValue, 0) * 100) /
+                    100,
+                autoReorderOnDead: deadInventory.filter((r) => r.autoReorderEnabled && !r.doNotReorder).length,
+            },
+            inventoryItems: inventoryRows
+                .filter((r) => r.tier !== "healthy" || r.onHand > 0)
+                .sort((a, b) => {
+                const order = { stop_ordering: 0, review: 1, ok: 2 };
+                return order[a.recommendation] - order[b.recommendation] || b.stockValue - a.stockValue;
+            }),
+            products: productRows.sort((a, b) => b.stockValue - a.stockValue),
+        };
+    }
     // ---------------------------------------------------------------------------
     // Internals
     // ---------------------------------------------------------------------------
@@ -1289,6 +1586,8 @@ class InventoryService {
                 continue;
             }
             if (!item.autoReorderEnabled)
+                continue;
+            if (item.doNotReorder)
                 continue;
             if (!item.supplier?.email || item.supplier.archivedAt)
                 continue;

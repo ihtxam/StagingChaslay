@@ -18674,6 +18674,23 @@ export declare const inventoryItems: import("drizzle-orm/pg-core").PgTableWithCo
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        doNotReorder: import("drizzle-orm/pg-core").PgColumn<{
+            name: "do_not_reorder";
+            tableName: "inventory_items";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         lastAutoReorderAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "last_auto_reorder_at";
             tableName: "inventory_items";

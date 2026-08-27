@@ -10,6 +10,15 @@ export declare class SubscriptionBillingService {
             status: string;
             subscriptionEndsAt: Date | null;
             trialEndsAt: Date | null;
+            editionId: string | null;
+            editionName: string | null;
+            maxPosPosts: number;
+            maxWaiterPosts: number;
+            maxStaff: number;
+            inventoryAddonEnabled: boolean;
+            signageAddonEnabled: boolean;
+            kdsAddonEnabled: boolean;
+            odsAddonEnabled: boolean;
         };
         currentPlan: {
             id: string;
@@ -35,6 +44,18 @@ export declare class SubscriptionBillingService {
             includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
+            edition: {
+                id: string;
+                name: string;
+                isActive: boolean;
+                createdAt: Date;
+                updatedAt: Date;
+                ownerType: string;
+                ownerId: string | null;
+                note: string | null;
+                businessCategory: string;
+                features: string[];
+            } | null;
         } | null;
         plans: {
             id: string;
@@ -60,6 +81,65 @@ export declare class SubscriptionBillingService {
             includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
+            edition: {
+                id: string;
+                name: string;
+                isActive: boolean;
+                createdAt: Date;
+                updatedAt: Date;
+                ownerType: string;
+                ownerId: string | null;
+                note: string | null;
+                businessCategory: string;
+                features: string[];
+            } | null;
+        }[];
+        addons: {
+            id: string;
+            name: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
+            slug: string;
+            sortOrder: number;
+            description: string | null;
+            priceMonthly: string;
+            priceYearly: string | null;
+            currency: string;
+            isPublic: boolean;
+            addonKey: string;
+            quantity: number;
+        }[];
+        activeAddons: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            merchantId: string;
+            addonId: string;
+            billingCycle: string;
+            periodStart: Date | null;
+            periodEnd: Date | null;
+            addon: {
+                id: string;
+                name: string;
+                isActive: boolean;
+                createdAt: Date;
+                updatedAt: Date;
+                ownerType: string;
+                ownerId: string | null;
+                slug: string;
+                sortOrder: number;
+                description: string | null;
+                priceMonthly: string;
+                priceYearly: string | null;
+                currency: string;
+                isPublic: boolean;
+                addonKey: string;
+                quantity: number;
+            };
         }[];
         payments: {
             id: string;
@@ -153,6 +233,18 @@ export declare class SubscriptionBillingService {
             includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
+            edition: {
+                id: string;
+                name: string;
+                isActive: boolean;
+                createdAt: Date;
+                updatedAt: Date;
+                ownerType: string;
+                ownerId: string | null;
+                note: string | null;
+                businessCategory: string;
+                features: string[];
+            } | null;
         };
         billingCycle: BillingCycle;
         paymentSession?: undefined;
@@ -201,6 +293,18 @@ export declare class SubscriptionBillingService {
             includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
+            edition: {
+                id: string;
+                name: string;
+                isActive: boolean;
+                createdAt: Date;
+                updatedAt: Date;
+                ownerType: string;
+                ownerId: string | null;
+                note: string | null;
+                businessCategory: string;
+                features: string[];
+            } | null;
         };
         billingCycle: BillingCycle;
         paymentSession: {
@@ -236,7 +340,6 @@ export declare class SubscriptionBillingService {
             updatedAt: Date;
         };
     }>;
-    /** Mark paid from Adyen webhook (by session id or merchant reference metadata) */
     static markPaidFromWebhook(opts: {
         sessionId?: string;
         paymentId?: string;
@@ -262,15 +365,107 @@ export declare class SubscriptionBillingService {
         paidAt: Date | null;
         planId: string;
     } | null>;
-    /**
-     * Charge merchants whose subscription period has ended using stored Adyen token.
-     * Called hourly from backend scheduler.
-     */
     static processRecurringRenewals(): Promise<{
         charged: number;
         failed: number;
         checked: number;
     }>;
     private static chargeStoredSubscription;
+    static startAddonCheckout(merchantId: string, addonId: string, billingCycle: BillingCycle, returnUrl?: string): Promise<{
+        free: boolean;
+        addon: {
+            id: string;
+            name: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
+            slug: string;
+            sortOrder: number;
+            description: string | null;
+            priceMonthly: string;
+            priceYearly: string | null;
+            currency: string;
+            isPublic: boolean;
+            addonKey: string;
+            quantity: number;
+        };
+        billingCycle: BillingCycle;
+        payment?: undefined;
+        paymentSession?: undefined;
+    } | {
+        free: boolean;
+        payment: {
+            adyenSessionId: any;
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            adyenRecurringDetailReference: string | null;
+            merchantId: string;
+            currency: string;
+            addonId: string;
+            billingCycle: string;
+            periodStart: Date | null;
+            periodEnd: Date | null;
+            amount: string;
+            adyenPspReference: string | null;
+            isRecurring: boolean;
+            adyenResultCode: string | null;
+            paidAt: Date | null;
+        };
+        addon: {
+            id: string;
+            name: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
+            slug: string;
+            sortOrder: number;
+            description: string | null;
+            priceMonthly: string;
+            priceYearly: string | null;
+            currency: string;
+            isPublic: boolean;
+            addonKey: string;
+            quantity: number;
+        };
+        billingCycle: BillingCycle;
+        paymentSession: {
+            id: any;
+            sessionData: any;
+            clientKey: string;
+            environment: "live" | "test";
+        };
+    }>;
+    static confirmAddonPayment(merchantId: string, paymentId: string, opts?: {
+        resultCode?: string;
+        pspReference?: string;
+        recurringDetailReference?: string;
+    }): Promise<{
+        alreadyPaid: boolean;
+        payment: {
+            id: string;
+            merchantId: string;
+            addonId: string;
+            billingCycle: string;
+            amount: string;
+            currency: string;
+            status: string;
+            adyenSessionId: string | null;
+            adyenPspReference: string | null;
+            adyenRecurringDetailReference: string | null;
+            isRecurring: boolean;
+            adyenResultCode: string | null;
+            paidAt: Date | null;
+            periodStart: Date | null;
+            periodEnd: Date | null;
+            createdAt: Date;
+            updatedAt: Date;
+        };
+    }>;
 }
 //# sourceMappingURL=subscription-billing.service.d.ts.map

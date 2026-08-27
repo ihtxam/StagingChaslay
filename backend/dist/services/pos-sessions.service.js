@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PosSessionsService = exports.POS_SESSION_HEARTBEAT_SEC = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
@@ -12,14 +45,11 @@ class PosSessionsService {
         return Date.now() - lastHeartbeat.getTime() < HEARTBEAT_TTL_MS;
     }
     static async getLimits(merchantId) {
-        const db = (0, db_1.getDb)();
-        const merchant = await db.query.merchants.findFirst({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
-            columns: { maxPosPosts: true, maxWaiterPosts: true },
-        });
+        const { MerchantEntitlementsService } = await Promise.resolve().then(() => __importStar(require("@/services/merchant-entitlements.service")));
+        const limits = await MerchantEntitlementsService.getLimits(merchantId);
         return {
-            maxPosPosts: Math.max(0, Number(merchant?.maxPosPosts ?? 0)),
-            maxWaiterPosts: Math.max(0, Number(merchant?.maxWaiterPosts ?? 0)),
+            maxPosPosts: limits.maxPosPosts,
+            maxWaiterPosts: limits.maxWaiterPosts,
         };
     }
     static async listActive(merchantId, sessionKind) {
@@ -68,15 +98,12 @@ class PosSessionsService {
                 .where((0, drizzle_orm_1.eq)(db_1.schema.posSessions.id, row.id));
         }
         active = active.filter((s) => s.deviceId !== keepDeviceId);
-        while (active.length >= max) {
-            const oldest = active.shift();
-            if (!oldest)
-                break;
-            await db
-                .update(db_1.schema.posSessions)
-                .set({ revokedAt: new Date() })
-                .where((0, drizzle_orm_1.eq)(db_1.schema.posSessions.id, oldest.id));
-            kicked.push(oldest.id);
+        if (max > 0 && active.length >= max) {
+            const kind = sessionKind === "waiter" ? "waiter" : "POS";
+            const err = new Error(`${kind} station limit reached (${max}). Close another session or upgrade your package.`);
+            err.statusCode = 403;
+            err.code = sessionKind === "waiter" ? "WAITER_LIMIT_REACHED" : "POS_LIMIT_REACHED";
+            throw err;
         }
         return kicked;
     }

@@ -23,8 +23,10 @@ router.post("/register", async (req, res) => {
         res.json({ ok: true, ...result });
     }
     catch (error) {
-        res.status(400).json({
+        const err = error;
+        res.status(err.statusCode === 403 ? 403 : 400).json({
             error: error instanceof Error ? error.message : "Failed to register POS session",
+            code: err.code,
         });
     }
 });

@@ -87,6 +87,7 @@ export declare class InventoryService {
             supplierId: string | null;
             perishable: boolean;
             autoReorderEnabled: boolean;
+            doNotReorder: boolean;
             lastAutoReorderAt: Date | null;
         }[];
     }>;
@@ -170,6 +171,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -204,6 +206,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -228,6 +231,7 @@ export declare class InventoryService {
         supplierId?: string | null;
         perishable?: boolean;
         autoReorderEnabled?: boolean;
+        doNotReorder?: boolean;
         categoryId?: string | null;
     }): Promise<{
         onHand: number;
@@ -247,6 +251,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -270,6 +275,7 @@ export declare class InventoryService {
         supplierId?: string | null;
         perishable?: boolean;
         autoReorderEnabled?: boolean;
+        doNotReorder?: boolean;
         categoryId?: string | null;
     }): Promise<{
         onHand: number;
@@ -289,6 +295,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -331,6 +338,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -366,6 +374,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -400,6 +409,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -434,6 +444,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -475,6 +486,7 @@ export declare class InventoryService {
             supplierId: string | null;
             perishable: boolean;
             autoReorderEnabled: boolean;
+            doNotReorder: boolean;
             lastAutoReorderAt: Date | null;
         };
     }[]>;
@@ -496,6 +508,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -527,6 +540,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -581,6 +595,10 @@ export declare class InventoryService {
         qty: number;
         expiryDate?: string | null;
         cost?: number;
+        salePrice?: number;
+        imageUrl?: string | null;
+        /** Retail: create/update menu product for POS sale. Default true for retail merchants. */
+        publishToPos?: boolean;
         note?: string;
     }): Promise<{
         item: {
@@ -601,6 +619,7 @@ export declare class InventoryService {
                 email: string | null;
                 archivedAt: Date | null;
             } | null;
+            doNotReorder: boolean;
             id: string;
             name: string;
             createdAt: Date;
@@ -615,7 +634,10 @@ export declare class InventoryService {
             lastAutoReorderAt: Date | null;
         };
         created: boolean;
+        menuProduct: Record<string, unknown> | null;
     }>;
+    /** Create or update a sellable menu product after storekeeper intake (retail). */
+    private static publishStorekeeperToPos;
     private static assertBarcodeAvailable;
     private static createStockLot;
     static usageReport(merchantId: string, days?: number): Promise<{
@@ -639,6 +661,7 @@ export declare class InventoryService {
             email: string | null;
             archivedAt: Date | null;
         } | null;
+        doNotReorder: boolean;
         id: string;
         name: string;
         createdAt: Date;
@@ -809,6 +832,62 @@ export declare class InventoryService {
             qty: number;
             cost: number;
             date: string;
+        }[];
+    }>;
+    static stopOrderingItems(merchantId: string, itemIds: string[]): Promise<{
+        updated: number;
+    }>;
+    /** Dead / slow movers — recommend stopping supplier orders for items that do not sell. */
+    static deadStockReport(merchantId: string, days?: number): Promise<{
+        days: number;
+        summary: {
+            deadInventoryCount: number;
+            slowInventoryCount: number;
+            deadProductCount: number;
+            stopOrderingCount: number;
+            stockValueDead: number;
+            autoReorderOnDead: number;
+        };
+        inventoryItems: {
+            id: string;
+            kind: "inventory";
+            name: string;
+            unit: string;
+            onHand: number;
+            soldQty: number;
+            purchasedQty: number;
+            wasteQty: number;
+            stockValue: number;
+            lastSoldAt: string | null;
+            daysSinceSale: number | null;
+            daysOfStock: number | null;
+            velocityPerDay: number;
+            tier: "dead" | "slow" | "healthy";
+            recommendation: "stop_ordering" | "review" | "ok";
+            doNotReorder: boolean;
+            autoReorderEnabled: boolean;
+            supplierName: string | null;
+        }[];
+        products: {
+            id: string;
+            kind: "product";
+            name: string;
+            sku: string | null;
+            onHand: number;
+            soldQty: number;
+            purchasedQty: number;
+            wasteQty: number;
+            revenue: number;
+            stockValue: number;
+            lastSoldAt: string | null;
+            daysSinceSale: number | null;
+            daysOfStock: number | null;
+            velocityPerDay: number;
+            tier: "dead" | "slow" | "healthy";
+            recommendation: "stop_ordering" | "review" | "ok";
+            doNotReorder: boolean;
+            autoReorderEnabled: boolean;
+            supplierName: null;
         }[];
     }>;
     private static getOwnedItem;

@@ -22,7 +22,7 @@ import {
   SuppliersPage,
   UnitsPage,
 } from './inventory/settings-pages';
-import { InventoryReportPage, ConsumptionReportPage } from './inventory/report-pages';
+import { InventoryReportPage, ConsumptionReportPage, DeadStockReportPage } from './inventory/report-pages';
 import { InventoryHomePage } from './inventory/home-page';
 import Categories from './Categories';
 import Modifiers from './Modifiers';
@@ -470,6 +470,7 @@ function MerchantShell() {
             { label: t('invNavUnits'), path: '/merchant/inventory/units', icon: '⚖️' },
             { heading: true, label: t('invNavGroupReports') },
             { label: t('invNavReport'), path: '/merchant/inventory/report', icon: '📑' },
+            { label: t('invNavDeadStock'), path: '/merchant/inventory/dead-stock', icon: '💀' },
             { label: t('invNavConsumption'), path: '/merchant/inventory/consumption', icon: '🍽️' },
           ]
             .filter((item) => {
@@ -671,6 +672,7 @@ function MerchantShell() {
               <Route path="suppliers" element={<SuppliersPage />} />
               <Route path="units" element={<UnitsPage />} />
               <Route path="report" element={<InventoryReportPage />} />
+              <Route path="dead-stock" element={<DeadStockReportPage />} />
               <Route path="consumption" element={<ConsumptionReportPage />} />
             </Route>
             <Route

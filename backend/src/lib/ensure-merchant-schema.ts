@@ -111,6 +111,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   inventory_items_barcode: "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS barcode varchar(255)",
   inventory_items_is_demo:
     "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
+  inventory_items_do_not_reorder:
+    "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS do_not_reorder boolean NOT NULL DEFAULT false",
   inventory_categories_is_demo:
     "ALTER TABLE inventory_categories ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false",
   inventory_suppliers_is_demo:
@@ -757,6 +759,7 @@ export async function ensureInventoryAddonColumn(): Promise<void> {
   await runPatch("category_id");
   await runPatch("inventory_suppliers_is_demo");
   await runPatch("inventory_items_is_demo");
+  await runPatch("inventory_items_do_not_reorder");
   await runPatch("inventory_categories_is_demo");
   await runPatch("inventory_units_is_demo");
   await runPatch("inventory_unit_ratios_is_demo");

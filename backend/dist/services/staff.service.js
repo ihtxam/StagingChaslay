@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ALL_PERMISSIONS = exports.StaffService = void 0;
 const db_1 = require("@/db");
@@ -216,6 +249,8 @@ class StaffService {
         if (pin && (pin.length < 4 || pin.length > 8)) {
             throw new Error("PIN must be 4-8 digits");
         }
+        if (pin)
+            await this.assertPinUnique(merchantId, pin);
         const password = input.password?.trim() || "";
         // Email + password on create always enables official /login (do not require a checkbox).
         const canAccessPanel = !!input.canAccessPanel || !!(email && password);
@@ -225,6 +260,8 @@ class StaffService {
         if (canAccessPanel && !password) {
             throw new Error("Password is required for panel access");
         }
+        const { MerchantEntitlementsService } = await Promise.resolve().then(() => __importStar(require("@/services/merchant-entitlements.service")));
+        await MerchantEntitlementsService.assertCanAddStaff(merchantId, 1);
         const [row] = await db
             .insert(db_1.schema.merchantStaff)
             .values({
@@ -281,6 +318,7 @@ class StaffService {
                 const pin = String(input.pin).trim();
                 if (pin.length < 4 || pin.length > 8)
                     throw new Error("PIN must be 4-8 digits");
+                await this.assertPinUnique(merchantId, pin, staffId);
                 patch.pinHash = await auth_service_1.AuthService.hashPassword(pin);
             }
         }
@@ -342,6 +380,21 @@ class StaffService {
         });
         return this.formatStaff(row, role);
     }
+    static async assertPinUnique(merchantId, pin, excludeStaffId) {
+        const db = (0, db_1.getDb)();
+        const staffList = await db.query.merchantStaff.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.isActive, true)),
+        });
+        for (const staff of staffList) {
+            if (excludeStaffId && staff.id === excludeStaffId)
+                continue;
+            if (!staff.pinHash)
+                continue;
+            const taken = await auth_service_1.AuthService.comparePassword(pin, staff.pinHash);
+            if (taken)
+                throw new Error("PIN already used by another staff member");
+        }
+    }
     static async deleteStaff(merchantId, staffId) {
         const db = (0, db_1.getDb)();
         await db
@@ -361,39 +414,45 @@ class StaffService {
         const staffList = await db.query.merchantStaff.findMany({
             where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.isActive, true)),
         });
+        const matches = [];
         for (const staff of staffList) {
             if (!staff.pinHash)
                 continue;
             const ok = await auth_service_1.AuthService.comparePassword(normalized, staff.pinHash);
-            if (!ok)
-                continue;
-            const role = await db.query.merchantRoles.findFirst({
-                where: (0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.id, staff.roleId),
-            });
-            const permissions = (0, permissions_1.parsePermissions)(role?.permissions);
-            const accessToken = auth_service_1.AuthService.generateToken({
-                id: staff.id,
-                email: staff.email || `${staff.id}@pin.local`,
-                role: "staff",
-                merchantId,
-                staffId: staff.id,
-                name: staff.name,
-                roleName: role?.name || "Staff",
-                permissions,
-            });
-            return {
-                id: staff.id,
-                name: staff.name,
-                roleId: staff.roleId,
-                roleName: role?.name || "Staff",
-                permissions,
-                preferredTerminalId: staff.preferredTerminalId || null,
-                accessToken,
-                /** Android PosPermission-compatible keys for clients that consume this payload. */
-                androidPermissions: (0, permissions_1.toAndroidPermissions)(permissions),
-            };
+            if (ok)
+                matches.push(staff);
         }
-        throw new Error("Invalid PIN");
+        if (matches.length > 1) {
+            throw new Error("PIN is assigned to multiple users — ask your manager to give each person a unique PIN");
+        }
+        if (!matches.length)
+            throw new Error("Invalid PIN");
+        const staff = matches[0];
+        const role = await db.query.merchantRoles.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.id, staff.roleId),
+        });
+        const permissions = (0, permissions_1.parsePermissions)(role?.permissions);
+        const accessToken = auth_service_1.AuthService.generateToken({
+            id: staff.id,
+            email: staff.email || `${staff.id}@pin.local`,
+            role: "staff",
+            merchantId,
+            staffId: staff.id,
+            name: staff.name,
+            roleName: role?.name || "Staff",
+            permissions,
+        });
+        return {
+            id: staff.id,
+            name: staff.name,
+            roleId: staff.roleId,
+            roleName: role?.name || "Staff",
+            permissions,
+            preferredTerminalId: staff.preferredTerminalId || null,
+            accessToken,
+            /** Android PosPermission-compatible keys for clients that consume this payload. */
+            androidPermissions: (0, permissions_1.toAndroidPermissions)(permissions),
+        };
     }
     /** Fresh staff profile for session refresh (panel / WebPOS after role change). */
     static async getStaffProfile(merchantId, staffId) {

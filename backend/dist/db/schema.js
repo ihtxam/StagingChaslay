@@ -2210,6 +2210,8 @@ exports.inventoryItems = (0, pg_core_1.pgTable)("inventory_items", {
     categoryId: (0, pg_core_1.uuid)("category_id"),
     perishable: (0, pg_core_1.boolean)("perishable").default(false).notNull(),
     autoReorderEnabled: (0, pg_core_1.boolean)("auto_reorder_enabled").default(false).notNull(),
+    /** Merchant flagged: do not include in supplier reorder emails / auto-reorder. */
+    doNotReorder: (0, pg_core_1.boolean)("do_not_reorder").default(false).notNull(),
     lastAutoReorderAt: (0, pg_core_1.timestamp)("last_auto_reorder_at"),
     isDemo: (0, pg_core_1.boolean)("is_demo").default(false).notNull(),
     createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),

@@ -3072,6 +3072,8 @@ export const inventoryItems = pgTable(
     categoryId: uuid("category_id"),
     perishable: boolean("perishable").default(false).notNull(),
     autoReorderEnabled: boolean("auto_reorder_enabled").default(false).notNull(),
+    /** Merchant flagged: do not include in supplier reorder emails / auto-reorder. */
+    doNotReorder: boolean("do_not_reorder").default(false).notNull(),
     lastAutoReorderAt: timestamp("last_auto_reorder_at"),
     isDemo: boolean("is_demo").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
