@@ -11,6 +11,7 @@ import { APP_NAME, APP_PANEL_TITLE, APP_TAGLINE } from '@/lib/brand';
 import { BRAND_BLUE_CHARCOAL, BRAND_BURGUNDY, BRAND_WARM_WHITE } from '@/lib/brand-colors';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { clearWebPosStaffSession } from '@/lib/permissions';
+import type { StaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore, type User } from '@/store/auth';
 
 const loginSchema = z.object({
@@ -32,6 +33,7 @@ type UnifiedLoginResponse = {
     staffId?: string;
     roleName?: string;
     permissions?: User['permissions'];
+    loginHome?: StaffLoginHome;
   };
   isOwner?: boolean;
 };
@@ -91,6 +93,7 @@ function userFromLogin(data: UnifiedLoginResponse): { user: User; token: string 
       staffId: isStaff ? merchant.staffId : undefined,
       roleName: isStaff ? merchant.roleName : merchant.roleName || 'Owner',
       permissions: merchant.permissions,
+      loginHome: isStaff ? merchant.loginHome : undefined,
       isOwner: !isStaff && data.isOwner !== false,
       inventoryAddonEnabled: !!(merchant.inventoryAddonEnabled || merchant.inventoryEnabled),
       signageAddonEnabled: !!(merchant.signageAddonEnabled || merchant.signageEnabled),
