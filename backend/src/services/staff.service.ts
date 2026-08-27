@@ -258,6 +258,7 @@ export class StaffService {
     if (pin && (pin.length < 4 || pin.length > 8)) {
       throw new Error("PIN must be 4-8 digits");
     }
+    if (pin) await this.assertPinUnique(merchantId, pin);
 
     const password = input.password?.trim() || "";
     // Email + password on create always enables official /login (do not require a checkbox).
@@ -342,6 +343,7 @@ export class StaffService {
       } else {
         const pin = String(input.pin).trim();
         if (pin.length < 4 || pin.length > 8) throw new Error("PIN must be 4-8 digits");
+        await this.assertPinUnique(merchantId, pin, staffId);
         patch.pinHash = await AuthService.hashPassword(pin);
       }
     }
@@ -408,6 +410,19 @@ export class StaffService {
     return this.formatStaff(row, role!);
   }
 
+  private static async assertPinUnique(merchantId: string, pin: string, excludeStaffId?: string) {
+    const db = getDb();
+    const staffList = await db.query.merchantStaff.findMany({
+      where: and(eq(schema.merchantStaff.merchantId, merchantId), eq(schema.merchantStaff.isActive, true)),
+    });
+    for (const staff of staffList) {
+      if (excludeStaffId && staff.id === excludeStaffId) continue;
+      if (!staff.pinHash) continue;
+      const taken = await AuthService.comparePassword(pin, staff.pinHash);
+      if (taken) throw new Error("PIN already used by another staff member");
+    }
+  }
+
   static async deleteStaff(merchantId: string, staffId: string) {
     const db = getDb();
     await db
@@ -430,39 +445,44 @@ export class StaffService {
       where: and(eq(schema.merchantStaff.merchantId, merchantId), eq(schema.merchantStaff.isActive, true)),
     });
 
+    const matches: typeof staffList = [];
     for (const staff of staffList) {
       if (!staff.pinHash) continue;
       const ok = await AuthService.comparePassword(normalized, staff.pinHash);
-      if (!ok) continue;
-
-      const role = await db.query.merchantRoles.findFirst({
-        where: eq(schema.merchantRoles.id, staff.roleId),
-      });
-      const permissions = parsePermissions(role?.permissions);
-      const accessToken = AuthService.generateToken({
-        id: staff.id,
-        email: staff.email || `${staff.id}@pin.local`,
-        role: "staff",
-        merchantId,
-        staffId: staff.id,
-        name: staff.name,
-        roleName: role?.name || "Staff",
-        permissions,
-      });
-      return {
-        id: staff.id,
-        name: staff.name,
-        roleId: staff.roleId,
-        roleName: role?.name || "Staff",
-        permissions,
-        preferredTerminalId: staff.preferredTerminalId || null,
-        accessToken,
-        /** Android PosPermission-compatible keys for clients that consume this payload. */
-        androidPermissions: toAndroidPermissions(permissions),
-      };
+      if (ok) matches.push(staff);
     }
 
-    throw new Error("Invalid PIN");
+    if (matches.length > 1) {
+      throw new Error("PIN is assigned to multiple users — ask your manager to give each person a unique PIN");
+    }
+    if (!matches.length) throw new Error("Invalid PIN");
+
+    const staff = matches[0];
+    const role = await db.query.merchantRoles.findFirst({
+      where: eq(schema.merchantRoles.id, staff.roleId),
+    });
+    const permissions = parsePermissions(role?.permissions);
+    const accessToken = AuthService.generateToken({
+      id: staff.id,
+      email: staff.email || `${staff.id}@pin.local`,
+      role: "staff",
+      merchantId,
+      staffId: staff.id,
+      name: staff.name,
+      roleName: role?.name || "Staff",
+      permissions,
+    });
+    return {
+      id: staff.id,
+      name: staff.name,
+      roleId: staff.roleId,
+      roleName: role?.name || "Staff",
+      permissions,
+      preferredTerminalId: staff.preferredTerminalId || null,
+      accessToken,
+      /** Android PosPermission-compatible keys for clients that consume this payload. */
+      androidPermissions: toAndroidPermissions(permissions),
+    };
   }
 
   /** Fresh staff profile for session refresh (panel / WebPOS after role change). */

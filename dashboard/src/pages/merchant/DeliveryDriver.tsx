@@ -91,8 +91,9 @@ export default function DeliveryDriverPage() {
     try {
       const res = await api.get('/merchant/delivery/my-orders', { headers: apiHeaders });
       setOrders(res.data.orders || []);
-    } catch {
-      /* staff session required */
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      if (msg) toast.error(msg);
     }
   }, [clockedIn, apiHeaders]);
 

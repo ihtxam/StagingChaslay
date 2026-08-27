@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { displaySidebarAccountName, displaySidebarShopName } from '@/lib/brand';
 import { useI18n, type Locale } from '@/lib/i18n';
+import StaffSwitchButton from '@/components/StaffSwitchButton';
 
 export interface SidebarLeaf {
   label: string;
@@ -29,6 +30,7 @@ interface SidebarProps {
   menuItems: SidebarNavEntry[];
   /** Distinguishes open-state persistence per panel (e.g. merchant / superadmin). */
   panelKey?: string;
+  showStaffSwitch?: boolean;
   /** Active register user (PIN session when clocked in, else JWT account). */
   registerDisplay?: { name: string; roleLabel: string };
   /** Optional prominent action shown under panel branding (e.g. POS). */
@@ -84,6 +86,7 @@ export default function Sidebar({
   menuItems,
   panelKey = 'default',
   registerDisplay,
+  showStaffSwitch = false,
   quickAction = null,
   language,
   onLanguageChange,
@@ -424,6 +427,12 @@ export default function Sidebar({
               {t('backToSuperadmin')}
             </button>
           )}
+
+          {showStaffSwitch ? (
+            <div className="px-1">
+              <StaffSwitchButton className="w-full justify-center border-white/20 bg-white/10 text-white hover:bg-white/20" />
+            </div>
+          ) : null}
 
           {profileMenu ? (
             <div className="relative" ref={profileRef}>

@@ -6,6 +6,7 @@ import {
   withMerchantSchemaRetry,
 } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { normalizeBusinessModule } from "@/lib/business-module";
 
 export const INVENTORY_UNITS = ["kg", "g", "L", "ml", "piece", "pack"] as const;
 export type InventoryUnit = string;
@@ -688,6 +689,10 @@ export class InventoryService {
       qty: number;
       expiryDate?: string | null;
       cost?: number;
+      salePrice?: number;
+      imageUrl?: string | null;
+      /** Retail: create/update menu product for POS sale. Default true for retail merchants. */
+      publishToPos?: boolean;
       note?: string;
     }
   ) {
@@ -732,7 +737,88 @@ export class InventoryService {
       note: input.note || "Storekeeper intake",
       expiryDate: input.expiryDate,
     });
-    return { item: updated, created };
+
+    let menuProduct: Record<string, unknown> | null = null;
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { businessCategory: true },
+    });
+    const businessModule = normalizeBusinessModule(merchant?.businessCategory);
+    const publishToPos =
+      input.publishToPos !== false && (businessModule === "retail" || businessModule === null);
+    if (publishToPos) {
+      menuProduct = await this.publishStorekeeperToPos(merchantId, {
+        barcode,
+        name: String(input.name || item.name).trim(),
+        salePrice: input.salePrice,
+        qty,
+        imageUrl: input.imageUrl,
+      });
+    }
+
+    return { item: updated, created, menuProduct };
+  }
+
+  /** Create or update a sellable menu product after storekeeper intake (retail). */
+  private static async publishStorekeeperToPos(
+    merchantId: string,
+    input: {
+      barcode: string;
+      name: string;
+      salePrice?: number;
+      qty: number;
+      imageUrl?: string | null;
+    }
+  ) {
+    const { ProductService } = await import("@/services/product.service");
+    const db = getDb();
+    const existing = await ProductService.getProductByBarcode(merchantId, input.barcode);
+    const price = input.salePrice != null && Number.isFinite(input.salePrice) ? input.salePrice : 0;
+    const stockAdd = Math.max(0, Math.floor(input.qty));
+
+    if (existing) {
+      const nextStock = Math.max(0, Math.floor(Number(existing.stock) || 0) + stockAdd);
+      const patch: Record<string, unknown> = {
+        name: input.name,
+        stock: nextStock,
+      };
+      if (input.salePrice != null && Number.isFinite(input.salePrice)) {
+        patch.price = price.toString();
+      }
+      if (input.imageUrl && !existing.imageUrl) {
+        patch.imageUrl = input.imageUrl;
+      }
+      const updated = await ProductService.updateProduct(merchantId, existing.id, patch);
+      return { id: updated.id, name: updated.name, price: Number(updated.price), stock: nextStock, created: false };
+    }
+
+    const defaultCategory = await db.query.categories.findFirst({
+      where: eq(schema.categories.merchantId, merchantId),
+      orderBy: [asc(schema.categories.sortOrder)],
+      columns: { id: true },
+    });
+
+    const created = await ProductService.createProduct(
+      merchantId,
+      input.name,
+      price,
+      defaultCategory?.id,
+      undefined,
+      input.barcode,
+      undefined,
+      stockAdd,
+      true,
+      undefined,
+      input.imageUrl || undefined
+    );
+    return {
+      id: created.id,
+      name: created.name,
+      price: Number(created.price),
+      stock: stockAdd,
+      created: true,
+    };
   }
 
   private static async assertBarcodeAvailable(

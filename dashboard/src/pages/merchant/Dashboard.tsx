@@ -387,12 +387,35 @@ function MerchantShell() {
 
   // Storekeeper-only staff use the mobile intake app, not the full panel.
   useEffect(() => {
-    if (effective.isOwner) return;
     if (!isStorekeeperOnlyStaff(effective.permissions, false)) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     if (path === storekeeperHomePath()) return;
     navigate(storekeeperHomePath(), { replace: true });
-  }, [effective.isOwner, effective.permissions, location.pathname, navigate]);
+  }, [effective.permissions, location.pathname, navigate]);
+
+  // PIN-scoped staff without back-office access cannot browse the manager panel.
+  useEffect(() => {
+    if (!effective.pinActive || effective.canOpenBackOffice) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (isStorekeeperOnlyStaff(effective.permissions, false)) {
+      if (path !== storekeeperHomePath()) navigate(storekeeperHomePath(), { replace: true });
+      return;
+    }
+    if (isDeliveryDriverOnlyStaff(effective.permissions, false)) {
+      if (path !== deliveryDriverHomePath()) navigate(deliveryDriverHomePath(), { replace: true });
+      return;
+    }
+    if (!isPosLikeRoute && path !== '/merchant/pos') {
+      navigate('/merchant/pos', { replace: true });
+    }
+  }, [
+    effective.pinActive,
+    effective.canOpenBackOffice,
+    effective.permissions,
+    isPosLikeRoute,
+    location.pathname,
+    navigate,
+  ]);
 
   const showWebPosQuickAction = useMemo(
     () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
@@ -511,6 +534,7 @@ function MerchantShell() {
           menuItems={menuItems}
           panelKey="merchant"
           registerDisplay={registerDisplay}
+          showStaffSwitch={hasStaffPins}
           quickAction={
             showWebPosQuickAction
               ? { label: t('sidebarPos'), path: '/merchant/pos' }
@@ -535,6 +559,7 @@ function MerchantShell() {
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
             compact
             registerDisplay={registerDisplay}
+            showStaffSwitch={hasStaffPins}
           />
         )}
 

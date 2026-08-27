@@ -71,24 +71,18 @@ export default function StorekeeperApp() {
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [recent, setRecent] = useState<RecentIntake[]>([]);
-  const [cost, setCost] = useState('');
+  const [salePrice, setSalePrice] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [photoUploading, setPhotoUploading] = useState(false);
   const scanBufferRef = useRef('');
   const scanTimerRef = useRef<number | null>(null);
-  const photoFileRef = useRef<HTMLInputElement>(null);
 
   const staffAccessToken = pinStaff?.accessToken;
   const displayName = pinStaff?.name || user?.name;
-  const clockedIn = !!pinStaff || user?.role === 'staff' || user?.role === 'merchant';
+  const clockedIn = !!pinStaff;
 
   const apiHeaders = staffAccessToken ? { 'X-WebPos-Staff-Access': staffAccessToken } : undefined;
 
-  const formatMoney = (value: number) =>
-    new Intl.NumberFormat(undefined, { style: 'currency', currency: 'CHF' }).format(value);
-
   const displayPhoto = photoUrl || menuProduct?.imageUrl || suggestion?.imageUrl || null;
-  const retailPrice = menuProduct?.price;
 
   const loadBootstrap = useCallback(async () => {
     if (!clockedIn) return;
@@ -130,8 +124,8 @@ export default function StorekeeperApp() {
           setName(item.name);
           setUnit(item.unit || 'piece');
           setCategoryId(item.categoryId || '');
-          if (item.cost != null && item.cost > 0) setCost(String(item.cost));
           if (menu?.imageUrl) setPhotoUrl(menu.imageUrl);
+          if (menu?.price != null && menu.price > 0) setSalePrice(String(menu.price));
           return;
         }
 
@@ -150,11 +144,12 @@ export default function StorekeeperApp() {
         } else if (menu) {
           setName(menu.name);
           if (menu.imageUrl) setPhotoUrl(menu.imageUrl);
+          if (menu.price > 0) setSalePrice(String(menu.price));
           toast.success(t('storekeeperMenuProductFound'));
         } else {
           setName('');
           setCategoryId('');
-          setCost('');
+          setSalePrice('');
           toast(t('storekeeperOnlineNotFound'), { icon: 'ℹ️' });
         }
       } catch {
@@ -199,43 +194,11 @@ export default function StorekeeperApp() {
     setName('');
     setQty('1');
     setExpiryDate('');
-    setCost('');
+    setSalePrice('');
     setPhotoUrl(null);
     setExistingItem(null);
     setMenuProduct(null);
     setSuggestion(null);
-  };
-
-  const onUploadPhoto = async (file: File | null) => {
-    if (!file) return;
-    setPhotoUploading(true);
-    try {
-      const { compressImageIfNeeded } = await import('@/lib/compress-image');
-      const compressed = await compressImageIfNeeded(file, {
-        maxBytes: 350 * 1024,
-        targetBytes: 350 * 1024,
-        maxWidth: 1200,
-      });
-      const fd = new FormData();
-      fd.append('file', compressed);
-      const res = await api.post('/merchant/media', fd, { headers: apiHeaders });
-      setPhotoUrl(res.data.url || null);
-      toast.success(t('imageUploaded'));
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg || t('uploadFailed'));
-    } finally {
-      setPhotoUploading(false);
-      if (photoFileRef.current) photoFileRef.current.value = '';
-    }
-  };
-
-  const useOnlinePhoto = () => {
-    const url = suggestion?.imageUrl;
-    if (url) {
-      setPhotoUrl(url);
-      toast.success(t('storekeeperPhotoFromWeb'));
-    }
   };
 
   const submit = async (e: FormEvent) => {
@@ -255,7 +218,7 @@ export default function StorekeeperApp() {
     }
     setBusy(true);
     try {
-      const costNum = cost.trim() ? Number(cost) : undefined;
+      const priceNum = salePrice.trim() ? Number(salePrice) : undefined;
       const res = await api.post(
         '/merchant/storekeeper/intake',
         {
@@ -265,22 +228,11 @@ export default function StorekeeperApp() {
           categoryId: categoryId || null,
           qty: q,
           expiryDate: expiryDate || null,
-          cost: costNum != null && Number.isFinite(costNum) ? costNum : undefined,
+          salePrice: priceNum != null && Number.isFinite(priceNum) ? priceNum : undefined,
+          imageUrl: photoUrl || suggestion?.imageUrl || menuProduct?.imageUrl || null,
         },
         { headers: apiHeaders }
       );
-
-      if (menuProduct && photoUrl && photoUrl !== menuProduct.imageUrl) {
-        try {
-          await api.put(
-            `/merchant/products/${menuProduct.id}`,
-            { imageUrl: photoUrl },
-            { headers: apiHeaders }
-          );
-        } catch {
-          /* photo update is best-effort */
-        }
-      }
 
       const item = res.data.item as InvItem;
       setRecent((prev) => [
@@ -293,7 +245,15 @@ export default function StorekeeperApp() {
         },
         ...prev.slice(0, 9),
       ]);
-      toast.success(res.data.created ? t('storekeeperItemCreated') : t('storekeeperStockAdded'));
+      toast.success(
+        res.data.menuProduct
+          ? res.data.menuProduct.created
+            ? t('storekeeperPosProductCreated')
+            : t('storekeeperPosProductUpdated')
+          : res.data.created
+            ? t('storekeeperItemCreated')
+            : t('storekeeperStockAdded')
+      );
       resetForm();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -319,7 +279,7 @@ export default function StorekeeperApp() {
         <WebPosPinModal
           open={pinOpen}
           onClose={() => setPinOpen(false)}
-          onVerified={(session) => {
+          onSuccess={(session) => {
             saveWebPosStaffSession(session);
             setPinStaff(session);
             setPinOpen(false);
@@ -393,7 +353,7 @@ export default function StorekeeperApp() {
           ) : null}
         </div>
 
-        {(barcode || displayPhoto || suggestion?.imageUrl || menuProduct) && (
+        {(displayPhoto || suggestion?.imageUrl || menuProduct?.imageUrl) && (
           <div className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3">
             <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-white">
               {displayPhoto ? (
@@ -404,40 +364,7 @@ export default function StorekeeperApp() {
                 </div>
               )}
             </div>
-            <div className="min-w-0 flex-1 space-y-2">
-              {retailPrice != null && retailPrice > 0 ? (
-                <p className="text-sm font-semibold text-stone-900">
-                  {t('storekeeperRetailPrice')}: {formatMoney(retailPrice)}
-                </p>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium"
-                  onClick={() => photoFileRef.current?.click()}
-                  disabled={photoUploading}
-                >
-                  {photoUploading ? t('uploading') : t('storekeeperTakePhoto')}
-                </button>
-                {suggestion?.imageUrl && suggestion.imageUrl !== photoUrl ? (
-                  <button
-                    type="button"
-                    className="rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-900"
-                    onClick={useOnlinePhoto}
-                  >
-                    {t('storekeeperUseOnlinePhoto')}
-                  </button>
-                ) : null}
-              </div>
-              <input
-                ref={photoFileRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => void onUploadPhoto(e.target.files?.[0] || null)}
-              />
-            </div>
+            <p className="text-xs text-stone-600">{t('storekeeperPhotoOnlineHint')}</p>
           </div>
         )}
 
@@ -493,16 +420,17 @@ export default function StorekeeperApp() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
-              {t('storekeeperCost')}
+              {t('storekeeperSalePrice')}
             </label>
             <input
               type="number"
               min="0"
-              step="0.01"
+              step="0.05"
               className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base"
-              value={cost}
-              onChange={(e) => setCost(e.target.value)}
+              value={salePrice}
+              onChange={(e) => setSalePrice(e.target.value)}
               placeholder="0.00"
+              required
             />
           </div>
           <div>
@@ -568,7 +496,7 @@ export default function StorekeeperApp() {
       <WebPosPinModal
         open={pinOpen}
         onClose={() => setPinOpen(false)}
-        onVerified={(session) => {
+        onSuccess={(session) => {
           saveWebPosStaffSession(session);
           setPinStaff(session);
           setPinOpen(false);
