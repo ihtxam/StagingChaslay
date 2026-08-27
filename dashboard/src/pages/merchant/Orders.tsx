@@ -34,11 +34,12 @@ import {
 import { collectPaymentAction } from '@/lib/order-to-cart';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { parseHeldCartJson, resolveHeldChannel } from '@/lib/webpos-held';
-import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
+import { printMerchantOrderReceipt, printRefundReceipt } from '@/lib/print-order-receipt';
 import { toastPrintError } from '@/lib/webpos-print-toast';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import { parsePaymentBreakdown, hasTerminalPortion } from '@/lib/payment-breakdown';
 import WebPosRefundModal, { type RefundReasonOption } from '@/components/webpos/WebPosRefundModal';
+import WebPosRefundPrintPromptModal from '@/components/webpos/WebPosRefundPrintPromptModal';
 import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import {
   settingsDash,
@@ -395,6 +396,14 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const [refundFor, setRefundFor] = useState<MerchantOrder | null>(null);
   const [refundReasons, setRefundReasons] = useState<RefundReasonOption[]>([]);
   const [refundBusy, setRefundBusy] = useState(false);
+  const [refundPrintPrompt, setRefundPrintPrompt] = useState<{
+    order: MerchantOrder;
+    refunded: number;
+    refundTotal: number;
+    reason: string;
+    allocation?: { giftCard?: number; cash?: number; terminal?: number; other?: number };
+  } | null>(null);
+  const [refundPrintBusy, setRefundPrintBusy] = useState(false);
   const [deliveryStaff, setDeliveryStaff] = useState<Array<{ id: string; name: string }>>([]);
   const [shopSlug, setShopSlug] = useState<string | null>(null);
 
@@ -639,22 +648,32 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     goodwillMethod?: 'cash' | 'terminal';
   }) => {
     if (!refundFor) return;
+    const orderSnapshot = refundFor;
     setRefundBusy(true);
     try {
       if (payload.refundKind === 'goodwill') {
-        await api.post(`/merchant/pos/orders/${refundFor.id}/goodwill`, {
+        await api.post(`/merchant/pos/orders/${orderSnapshot.id}/goodwill`, {
           amount: payload.goodwillAmount,
           reason: payload.reason,
           method: payload.goodwillMethod || 'cash',
         });
         toast.success(t('webPosGoodwillSubmitted'));
       } else {
-        await api.post(`/merchant/pos/orders/${refundFor.id}/refund`, {
+        const res = await api.post(`/merchant/pos/orders/${orderSnapshot.id}/refund`, {
           reason: payload.reason,
           fullTicket: payload.mode === 'full',
           items: payload.items,
         });
         toast.success(t('webPosOrderRefunded'));
+        if (res.data) {
+          setRefundPrintPrompt({
+            order: orderSnapshot,
+            refunded: Number(res.data.refunded || 0),
+            refundTotal: Number(res.data.refundTotal || 0),
+            reason: payload.reason,
+            allocation: res.data.allocation,
+          });
+        }
       }
       setRefundFor(null);
       setSelected(null);
@@ -667,6 +686,37 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     } finally {
       setRefundBusy(false);
     }
+  };
+
+  const printRefundConfirmation = async (payload: {
+    order: MerchantOrder;
+    refunded: number;
+    refundTotal: number;
+    reason: string;
+    allocation?: { giftCard?: number; cash?: number; terminal?: number; other?: number };
+  }) => {
+    if (!merchant) {
+      toast.error(t('webPosPrintFailed'));
+      return;
+    }
+    await printRefundReceipt(
+      {
+        orderNumber: payload.order.orderNumber,
+        orderDisplay: payload.order.ticketDisplay,
+        refundedAt: Date.now(),
+        refundAmount: payload.refunded,
+        refundTotal: payload.refundTotal,
+        reason: payload.reason,
+        allocation: payload.allocation,
+        staffName: payload.order.staffName,
+      },
+      {
+        merchant,
+        printSettings,
+        locale,
+      }
+    );
+    toast.success(t('webPosSentDefaultPrinter'));
   };
 
   const doPrint = async (order: MerchantOrder) => {
@@ -1371,6 +1421,25 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         terminalEnabled={false}
         onClose={() => setRefundFor(null)}
         onConfirm={(payload) => void doRefund(payload)}
+      />
+      <WebPosRefundPrintPromptModal
+        open={!!refundPrintPrompt}
+        amount={refundPrintPrompt?.refunded}
+        busy={refundPrintBusy}
+        onSkip={() => setRefundPrintPrompt(null)}
+        onPrint={() => {
+          if (!refundPrintPrompt) {
+            setRefundPrintPrompt(null);
+            return;
+          }
+          setRefundPrintBusy(true);
+          void printRefundConfirmation(refundPrintPrompt)
+            .catch((e) => toastPrintError(e, t, 'webPosPrintFailed'))
+            .finally(() => {
+              setRefundPrintBusy(false);
+              setRefundPrintPrompt(null);
+            });
+        }}
       />
     </div>
   );
