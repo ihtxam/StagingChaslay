@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Match common USB thermal printer vendors (Epson, Star, Prolific, CH340, etc.) -->
+    <usb-device class="7" />
+</resources>

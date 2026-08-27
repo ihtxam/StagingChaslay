@@ -2,7 +2,8 @@
  * Platform detection and download URLs for Print Agent (Windows) vs Print Bridge (Android).
  */
 
-const PRINT_AGENT_SETUP_FILE = 'chaslayreborn-print-agent-setup.exe';
+const PRINT_AGENT_SETUP_FILE = 'reborn-print-agent-setup.exe';
+const LEGACY_PRINT_AGENT_SETUP_FILE = 'chaslayreborn-print-agent-setup.exe';
 const PRINT_BRIDGE_MANIFEST = 'reborn-print-bridge.json';
 
 export type DownloadManifest = {
@@ -42,6 +43,14 @@ export function printAgentDownloadUrl(): string {
     return `/downloads/${PRINT_AGENT_SETUP_FILE}`;
   }
   return `${api}/downloads/${PRINT_AGENT_SETUP_FILE}`;
+}
+
+export function legacyPrintAgentDownloadUrl(): string {
+  const api = apiOrigin();
+  if (!api || api.startsWith('/')) {
+    return `/downloads/${LEGACY_PRINT_AGENT_SETUP_FILE}`;
+  }
+  return `${api}/downloads/${LEGACY_PRINT_AGENT_SETUP_FILE}`;
 }
 
 export function printBridgeManifestUrl(): string {

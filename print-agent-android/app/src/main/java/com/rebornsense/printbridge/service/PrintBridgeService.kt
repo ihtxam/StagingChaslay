@@ -12,30 +12,40 @@ import androidx.core.app.NotificationCompat
 import com.rebornsense.printbridge.MainActivity
 import com.rebornsense.printbridge.R
 import com.rebornsense.printbridge.http.BridgeHttpServer
+import com.rebornsense.printbridge.print.DriverRegistry
+import com.rebornsense.printbridge.print.PrintJobQueue
 
 class PrintBridgeService : Service() {
     private var server: BridgeHttpServer? = null
+    private val registry = DriverRegistry()
+    private val queue = PrintJobQueue(registry)
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
-        server = BridgeHttpServer(PORT).also {
+        registry.refresh(applicationContext)
+        queue.start(applicationContext)
+        server = BridgeHttpServer(PORT, applicationContext, registry, queue).also {
             it.start(NanoTimeout, false)
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        registry.refresh(applicationContext)
         return START_STICKY
     }
 
     override fun onDestroy() {
         server?.stop()
         server = null
+        queue.stop()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    fun registry(): DriverRegistry = registry
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -44,8 +54,7 @@ class PrintBridgeService : Service() {
             getString(R.string.notification_channel),
             NotificationManager.IMPORTANCE_LOW
         )
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {

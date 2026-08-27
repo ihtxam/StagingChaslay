@@ -3676,7 +3676,7 @@ export default function Settings() {
                     <a
                       className="btn-primary inline-flex"
                       href={printAgentDownloadUrl()}
-                      download
+                      download="reborn-print-agent-setup.exe"
                     >
                       {t('downloadPrintAgent')}
                     </a>

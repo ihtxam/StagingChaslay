@@ -1409,7 +1409,7 @@ const en: Dict = {
   printBridgeInstallSteps:
     'Install the APK, allow notifications, USB, and Bluetooth, then pick your printer(s) in the setup wizard. Works with built-in printers (D3 Mini, D2s Plus), USB thermals, Bluetooth, and LAN. Returns to WebPOS when the bridge shows ready (port 9101).',
   printAgentInstallSteps:
-    'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Files stay in %LOCALAPPDATA%\\ChaslayPrintAgent so existing installs keep working.',
+    'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Files install to %LOCALAPPDATA%\\RebornPrintAgent and start with Windows.',
   printerProfiles: 'Printer profiles',
   printerProfilesHint:
     'Pick the printer by its Windows / manufacturer name. Bluetooth COM numbers can change; the agent matches the printer name again on the next start.',
@@ -1593,7 +1593,7 @@ const en: Dict = {
   webPosPrinterAutoHealed: 'Printer updated to {name}',
   webPosPrintAgentUpdateShort: 'Update Print Agent',
   webPosPrintAgentOutdatedHint:
-    'Reborn Print Agent is outdated. Download and reinstall from Settings (same folder %LOCALAPPDATA%\\ChaslayPrintAgent).',
+    'Reborn Print Agent is outdated. Download and reinstall from Settings (%LOCALAPPDATA%\\RebornPrintAgent).',
   webPosKitchenPrintIssuesTitle: 'Not printed',
   webPosKitchenPrintIssuesHint:
     'Select tickets and tap Reprint. Failed kitchen tickets retry automatically (see Settings → Receipts & printers) before appearing here.',
@@ -4637,7 +4637,7 @@ const fr: Dict = {
   printBridgeInstallSteps:
     'Installez l’APK, autorisez USB et Bluetooth, choisissez l’imprimante dans l’assistant (intégrée, USB, BT ou LAN), puis revenez au WebPOS (port 9101).',
   printAgentInstallSteps:
-    'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Les fichiers restent dans %LOCALAPPDATA%\\ChaslayPrintAgent.',
+    'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Fichiers dans %LOCALAPPDATA%\\RebornPrintAgent.',
   printerProfiles: 'Profils imprimantes',
   printerProfilesHint:
     'Associez les noms Windows (print-agent) aux rôles reçu, cuisine ou fin de journée. Pour la cuisine, choisissez les catégories par imprimante.',
@@ -4822,7 +4822,7 @@ const fr: Dict = {
   webPosPrinterAutoHealed: 'Imprimante mise à jour : {name}',
   webPosPrintAgentUpdateShort: 'Mettre à jour l’agent',
   webPosPrintAgentOutdatedHint:
-    'Reborn Print Agent est obsolète. Téléchargez et réinstallez depuis Paramètres (dossier %LOCALAPPDATA%\\ChaslayPrintAgent).',
+    'Reborn Print Agent est obsolète. Téléchargez et réinstallez depuis Paramètres (%LOCALAPPDATA%\\RebornPrintAgent).',
   webPosKitchenPrintIssuesTitle: 'Non imprimé',
   webPosKitchenPrintIssuesHint:
     'Sélectionnez les tickets puis Réimprimer. Les échecs cuisine sont réessayés automatiquement (Réglages → Reçus et imprimantes) avant d’apparaître ici.',
@@ -7830,7 +7830,7 @@ const de: Dict = {
   printBridgeInstallSteps:
     'APK installieren, USB und Bluetooth erlauben, Drucker im Assistenten wählen (integriert, USB, BT oder LAN), dann zurück zum WebPOS (Port 9101).',
   printAgentInstallSteps:
-    'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Dateien bleiben in %LOCALAPPDATA%\\ChaslayPrintAgent.',
+    'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Dateien in %LOCALAPPDATA%\\RebornPrintAgent.',
   printerProfiles: 'Druckerprofile',
   printerProfilesHint:
     'Windows-Druckernamen (Print-Agent) Rollen zuweisen: Beleg, Küche, Tagesabschluss. Für Küche Kategorien pro Drucker wählen.',
@@ -8015,7 +8015,7 @@ const de: Dict = {
   webPosPrinterAutoHealed: 'Drucker aktualisiert: {name}',
   webPosPrintAgentUpdateShort: 'Druckagent aktualisieren',
   webPosPrintAgentOutdatedHint:
-    'Reborn Print Agent ist veraltet. Unter Einstellungen neu herunterladen und installieren (%LOCALAPPDATA%\\ChaslayPrintAgent).',
+    'Reborn Print Agent ist veraltet. Unter Einstellungen neu herunterladen und installieren (%LOCALAPPDATA%\\RebornPrintAgent).',
   webPosKitchenPrintIssuesTitle: 'Nicht gedruckt',
   webPosKitchenPrintIssuesHint:
     'Tickets wählen und erneut drucken. Fehlgeschlagene Küchentickets werden automatisch wiederholt (Einstellungen → Belege & Drucker), bevor sie hier erscheinen.',

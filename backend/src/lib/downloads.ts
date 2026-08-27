@@ -2,7 +2,8 @@ import fs from "fs";
 import path from "path";
 
 export const DOWNLOADS_ROOT = path.join(__dirname, "..", "public", "downloads");
-export const PRINT_AGENT_SETUP_FILE = "chaslayreborn-print-agent-setup.exe";
+export const PRINT_AGENT_SETUP_FILE = "reborn-print-agent-setup.exe";
+export const LEGACY_PRINT_AGENT_SETUP_FILE = "chaslayreborn-print-agent-setup.exe";
 export const PRINT_BRIDGE_APK_FILE = "reborn-print-bridge.apk";
 
 export function downloadsFilePath(filename: string): string {
@@ -62,7 +63,7 @@ export function describePrintBridgeApk(): DownloadDescriptor {
 
 export function describePrintAgentExe(): DownloadDescriptor {
   const filePath = downloadsFilePath(PRINT_AGENT_SETUP_FILE);
-  const manifest = readDownloadManifest("chaslayreborn-print-agent");
+  const manifest = readDownloadManifest("reborn-print-agent");
   const valid = fileMagicOk(filePath, "exe");
   const stat = valid ? fs.statSync(filePath) : null;
   return {

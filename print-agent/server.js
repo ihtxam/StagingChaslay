@@ -3,9 +3,9 @@
  * Exposes localhost HTTP API for WebPOS silent thermal printing (ESC/POS RAW).
  *
  * CLI:
- *   chaslay-print-agent.exe              Run the agent (foreground)
- *   chaslay-print-agent.exe --install    Install to LocalAppData + Windows Startup
- *   chaslay-print-agent.exe --uninstall  Remove Startup entry (keeps files)
+ *   reborn-print-agent.exe              Run the agent (foreground)
+ *   reborn-print-agent.exe --install    Install to LocalAppData + Windows Startup
+ *   reborn-print-agent.exe --uninstall  Remove Startup entry (keeps files)
  *   chaslay-print-agent.exe --help
  */
 const cors = require("cors");
@@ -20,10 +20,13 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.7.0";
-const APP_NAME = "ChaslayPrintAgent";
-const EXE_NAME = "chaslay-print-agent.exe";
-const RUN_VALUE_NAME = "ChaslayPrintAgent";
+const VERSION = "1.8.0";
+const APP_NAME = "RebornPrintAgent";
+const LEGACY_APP_NAME = "ChaslayPrintAgent";
+const EXE_NAME = "reborn-print-agent.exe";
+const LEGACY_EXE_NAME = "chaslay-print-agent.exe";
+const RUN_VALUE_NAME = "RebornPrintAgent";
+const LEGACY_RUN_VALUE_NAME = "ChaslayPrintAgent";
 const DISPLAY_NAME = "Reborn Print Agent";
 
 const isPkg = typeof process.pkg !== "undefined";
@@ -67,8 +70,12 @@ async function stopInstalledAgent() {
     await execFileAsync("taskkill", ["/F", "/IM", EXE_NAME, "/T"], {
       windowsHide: true,
       timeout: 15000,
-    });
-    appendInstallLog("taskkill: stopped running chaslay-print-agent.exe");
+    }).catch(() => {});
+    await execFileAsync("taskkill", ["/F", "/IM", LEGACY_EXE_NAME, "/T"], {
+      windowsHide: true,
+      timeout: 15000,
+    }).catch(() => {});
+    appendInstallLog("taskkill: stopped running print agent (if any)");
   } catch (e) {
     // Exit code 128 = process not found — fine.
     appendInstallLog(`taskkill: ${e.message || e}`);
@@ -99,7 +106,7 @@ function copyFileRetry(src, dest, attempts = 6) {
   const hint =
     `Could not update ${dest}.\n\n` +
     `The Print Agent is still running or locked.\n` +
-    `Open Task Manager → end "chaslay-print-agent.exe", then run setup again.\n\n` +
+    `Open Task Manager → end "${EXE_NAME}" or "${LEGACY_EXE_NAME}", then run setup again.\n\n` +
     `(${lastErr && lastErr.message ? lastErr.message : lastErr})`;
   const err = new Error(hint);
   err.code = lastErr && lastErr.code;
@@ -158,9 +165,31 @@ function runtimeDir() {
 }
 
 function installDir() {
-  // Keep %LOCALAPPDATA%\ChaslayPrintAgent so existing installs keep working.
   const base = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
   return path.join(base, APP_NAME);
+}
+
+function legacyInstallDir() {
+  const base = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+  return path.join(base, LEGACY_APP_NAME);
+}
+
+function migrateLegacyInstallIfNeeded(targetDir) {
+  const legacy = legacyInstallDir();
+  if (path.resolve(legacy) === path.resolve(targetDir)) return;
+  if (!fs.existsSync(legacy)) return;
+  fs.mkdirSync(targetDir, { recursive: true });
+  for (const name of fs.readdirSync(legacy)) {
+    const from = path.join(legacy, name);
+    const to = path.join(targetDir, name);
+    if (fs.existsSync(to)) continue;
+    try {
+      fs.copyFileSync(from, to);
+      appendInstallLog(`Migrated ${name} from legacy ${legacy}`);
+    } catch (e) {
+      appendInstallLog(`Legacy migrate skip ${name}: ${e.message || e}`);
+    }
+  }
 }
 
 function installLogPath() {
@@ -246,7 +275,7 @@ async function showMessage(title, body) {
     console.log(`${title}: ${body}`);
     return;
   }
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "chaslay-msg-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-msg-"));
   const titleFile = path.join(tmpDir, "title.txt");
   const bodyFile = path.join(tmpDir, "body.txt");
   try {
@@ -290,6 +319,9 @@ async function setStartup(enabled, exePath) {
     await execFileAsync("reg", ["delete", runKey, "/v", RUN_VALUE_NAME, "/f"], {
       windowsHide: true,
     }).catch(() => {});
+    await execFileAsync("reg", ["delete", runKey, "/v", LEGACY_RUN_VALUE_NAME, "/f"], {
+      windowsHide: true,
+    }).catch(() => {});
   }
 }
 
@@ -301,6 +333,7 @@ async function doInstall() {
   appendInstallLog(`Install start (v${VERSION}, pkg=${isPkg})`);
   const dir = installDir();
   fs.mkdirSync(dir, { recursive: true });
+  migrateLegacyInstallIfNeeded(dir);
 
   const targetExe = path.join(dir, EXE_NAME);
   const sourceExe = isPkg ? process.execPath : path.join(__dirname, "dist", EXE_NAME);
