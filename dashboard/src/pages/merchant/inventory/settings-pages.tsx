@@ -37,6 +37,7 @@ function Field({
 
 const emptyItem = () => ({
   name: '',
+  barcode: '',
   unit: 'kg',
   cost: '',
   onHand: '',
@@ -147,6 +148,7 @@ export function StockItemsPage() {
                       setEditingId(item.id);
                       setForm({
                         name: item.name,
+                        barcode: item.barcode || '',
                         unit: item.unit,
                         cost: String(item.cost ?? 0),
                         onHand: String(item.onHand ?? 0),

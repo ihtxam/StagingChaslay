@@ -46,7 +46,12 @@ import {
   listScalePorts,
   type AgentPrinter,
 } from '@/lib/print-agent';
-import { printAgentDownloadUrl } from '@/lib/print-agent-platform';
+import {
+  isAndroidDevice,
+  printAgentDownloadUrl,
+  printBridgeDownloadUrl,
+  preferredPrintCompanion,
+} from '@/lib/print-agent-platform';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { compressImageIfNeeded } from '@/lib/compress-image';
 import {
@@ -97,6 +102,7 @@ interface SettingsData {
   inventoryWasteFactor?: number;
   inventoryAutoReorderEmailEnabled?: boolean;
   businessCategory?: 'retail' | 'restaurant' | null;
+  inventoryExpiryAlertDays?: number;
   posColorTheme?: string;
   posCheckoutSettings?: {
     tipsEnabled?: boolean;
@@ -2058,6 +2064,28 @@ export default function Settings() {
                     <span className="text-xs muted">{t('invAutoReorderMasterHint')}</span>
                   </span>
                 </label>
+                <SettingsField label={t('invExpiryAlertDays')} hint={t('invExpiryAlertDaysHint')}>
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    max={365}
+                    step={1}
+                    disabled={!isInventoryLicensed(settings)}
+                    value={Number(settings.inventoryExpiryAlertDays) || 30}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        inventoryExpiryAlertDays: Math.min(365, Math.max(1, Number(e.target.value) || 30)),
+                      })
+                    }
+                  />
+                </SettingsField>
+                <p className="mt-2 text-xs muted">
+                  <Link to="/merchant/storekeeper" className="font-medium text-teal-700 hover:underline">
+                    {t('storekeeperOpenApp')}
+                  </Link>
+                </p>
                 {isInventoryLicensed(settings) && (
                   <Link to="/merchant/inventory/cookbook" className="btn-secondary mt-3 inline-flex">
                     {t('invNavCookbook')}
@@ -2072,6 +2100,7 @@ export default function Settings() {
                       await api.put('/merchant/settings', {
                         inventoryWasteFactor: Number(settings.inventoryWasteFactor) || 0.2,
                         inventoryAutoReorderEmailEnabled: !!settings.inventoryAutoReorderEmailEnabled,
+                        inventoryExpiryAlertDays: Number(settings.inventoryExpiryAlertDays) || 30,
                       });
                       toast.success(t('saved'));
                     } catch (error: any) {
@@ -3591,17 +3620,33 @@ export default function Settings() {
                 </label>
               </Section>
 
-              <Section icon={Printer} accent={settingsDash.info} title={t('printAgentDownload')} description={t('printAgentDownloadHint')}>
+              <Section
+                icon={Printer}
+                accent={settingsDash.info}
+                title={isAndroidDevice() ? t('downloadPrintBridge') : t('printAgentDownload')}
+                description={isAndroidDevice() ? t('printBridgeDownloadHint') : t('printAgentDownloadHint')}
+              >
                 <div className="flex flex-wrap items-center gap-3">
-                  <a
-                    className="btn-primary inline-flex"
-                    href={printAgentDownloadUrl()}
-                    download
-                  >
-                    {t('downloadPrintAgent')}
-                  </a>
+                  {preferredPrintCompanion() !== 'android-bridge' ? (
+                    <a
+                      className="btn-primary inline-flex"
+                      href={printAgentDownloadUrl()}
+                      download
+                    >
+                      {t('downloadPrintAgent')}
+                    </a>
+                  ) : null}
+                  {preferredPrintCompanion() !== 'windows-agent' ? (
+                    <a
+                      className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
+                      href={printBridgeDownloadUrl()}
+                      download
+                    >
+                      {t('downloadPrintBridge')}
+                    </a>
+                  ) : null}
                   <p className="text-sm text-[var(--muted)] max-w-xl m-0">
-                    {t('printAgentInstallSteps')}
+                    {isAndroidDevice() ? t('printBridgeInstallSteps') : t('printAgentInstallSteps')}
                   </p>
                 </div>
               </Section>

@@ -8,6 +8,14 @@ Served by the API at `GET /downloads/<filename>` and proxied on `app.chaslay.com
 
 `backend/public/downloads/chaslayreborn-print-agent-setup.exe`
 
+## Print Bridge (Android APK)
+
+`reborn-print-bridge.apk` is **gitignored**. Built from `print-agent-android/` (see README there).
+
+Served at `GET /downloads/reborn-print-bridge.apk` — merchants on Android POS hardware install this instead of the Windows EXE.
+
+**Supported hardware (one APK):** Sunmi D3 Mini, D2s Plus (in stock), Feitian F310A (roadmap), and generic local Android tablets. Prints via built-in thermal, **USB**, Bluetooth, or LAN — see `print-agent-android/DEVICES.md`.
+
 ### Build on Windows (local)
 
 ```powershell

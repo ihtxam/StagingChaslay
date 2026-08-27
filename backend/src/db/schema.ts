@@ -286,6 +286,8 @@ export const merchants = pgTable(
     inventoryAutoReorderEmailEnabled: boolean("inventory_auto_reorder_email_enabled")
       .default(false)
       .notNull(),
+    /** Days before expiry to alert store admin (default 30 ≈ one month). */
+    inventoryExpiryAlertDays: integer("inventory_expiry_alert_days").default(30).notNull(),
     /** WebPOS / counter accent theme: teal | green | blue | violet */
     posColorTheme: varchar("pos_color_theme", { length: 20 }).default("teal").notNull(),
     /** Online / phone restaurant table reservations */
@@ -2938,6 +2940,8 @@ export const inventoryItems = pgTable(
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 255 }).notNull(),
+    /** Supplier / shelf barcode for storekeeper mobile scan */
+    barcode: varchar("barcode", { length: 255 }),
     /** kg | L | piece */
     unit: varchar("unit", { length: 20 }).default("kg").notNull(),
     cost: decimal("cost", { precision: 12, scale: 4 }).default("0").notNull(),
@@ -2960,6 +2964,7 @@ export const inventoryItems = pgTable(
     supplierIdx: index("inventory_items_supplier_idx").on(table.supplierId),
     categoryIdx: index("inventory_items_category_idx").on(table.categoryId),
     merchantNameIdx: index("inventory_items_merchant_name_idx").on(table.merchantId, table.name),
+    merchantBarcodeIdx: index("inventory_items_merchant_barcode_idx").on(table.merchantId, table.barcode),
     demoIdx: index("inventory_items_demo_idx").on(table.merchantId, table.isDemo),
   })
 );
@@ -3056,6 +3061,31 @@ export const inventoryMovements = pgTable(
   })
 );
 
+/** FEFO stock lots — expiry tracked per inbound delivery. */
+export const inventoryStockLots = pgTable(
+  "inventory_stock_lots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
+    movementId: uuid("movement_id").references(() => inventoryMovements.id, { onDelete: "set null" }),
+    qty: decimal("qty", { precision: 14, scale: 4 }).notNull(),
+    remainingQty: decimal("remaining_qty", { precision: 14, scale: 4 }).notNull(),
+    expiryDate: timestamp("expiry_date"),
+    note: text("note"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_stock_lots_merchant_idx").on(table.merchantId),
+    itemIdx: index("inventory_stock_lots_item_idx").on(table.itemId, table.expiryDate),
+    expiryIdx: index("inventory_stock_lots_expiry_idx").on(table.merchantId, table.expiryDate),
+  })
+);
+
 export const productRecipes = pgTable(
   "product_recipes",
   {
@@ -3097,10 +3127,20 @@ export const inventoryItemsRelations = relations(inventoryItems, ({ one, many })
     references: [inventorySuppliers.id],
   }),
   movements: many(inventoryMovements),
+  stockLots: many(inventoryStockLots),
   recipes: many(productRecipes),
   category: one(inventoryCategories, {
     fields: [inventoryItems.categoryId],
     references: [inventoryCategories.id],
+  }),
+}));
+
+export const inventoryStockLotsRelations = relations(inventoryStockLots, ({ one }) => ({
+  merchant: one(merchants, { fields: [inventoryStockLots.merchantId], references: [merchants.id] }),
+  item: one(inventoryItems, { fields: [inventoryStockLots.itemId], references: [inventoryItems.id] }),
+  movement: one(inventoryMovements, {
+    fields: [inventoryStockLots.movementId],
+    references: [inventoryMovements.id],
   }),
 }));
 
