@@ -24,6 +24,7 @@ type StaffRow = {
   canAccessPanel: boolean;
   isActive: boolean;
   pinSet: boolean;
+  pin?: string | null;
   passwordSet?: boolean;
   deliveryHourlyRateOverride?: string | null;
   deliveryPerOrderFeeOverride?: string | null;
@@ -465,7 +466,17 @@ export default function StaffPage() {
                       </span>
                     </td>
                     <td className="px-3 py-2">{staffRoleDisplayName(s.roleName, t)}</td>
-                    <td className="px-3 py-2">{s.pinSet ? t('staffPinSet') : '-'}</td>
+                    <td className="px-3 py-2 font-mono tabular-nums tracking-wider">
+                      {s.pin ? (
+                        s.pin
+                      ) : s.pinSet ? (
+                        <span className="text-xs text-[var(--text-muted)]" title={t('staffPinHiddenHint')}>
+                          {t('staffPinHidden')}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       {s.canAccessPanel || s.email ? (
                         <span className="cell-truncate block" title={s.email || t('yes')}>

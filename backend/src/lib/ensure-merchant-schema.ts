@@ -149,6 +149,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS delivery_per_order_fee_override numeric(10,2)",
   login_home:
     "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS login_home varchar(20) NOT NULL DEFAULT 'auto'",
+  merchant_staff_pin_display:
+    "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS pin_display varchar(8)",
 };
 
 /** Idempotent CREATE TABLE for features added after initial deploy. */

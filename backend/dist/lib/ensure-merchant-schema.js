@@ -100,6 +100,7 @@ const EXTRA_COLUMN_PATCHES = {
     delivery_hourly_rate_override: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS delivery_hourly_rate_override numeric(10,2)",
     delivery_per_order_fee_override: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS delivery_per_order_fee_override numeric(10,2)",
     login_home: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS login_home varchar(20) NOT NULL DEFAULT 'auto'",
+    merchant_staff_pin_display: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS pin_display varchar(8)",
 };
 /** Idempotent CREATE TABLE for features added after initial deploy. */
 const TABLE_PATCHES = [

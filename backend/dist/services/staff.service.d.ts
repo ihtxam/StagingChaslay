@@ -72,6 +72,7 @@ export declare class StaffService {
         canAccessPanel: boolean;
         isActive: boolean;
         pinSet: boolean;
+        pin: string | null;
         passwordSet: boolean;
         deliveryHourlyRateOverride: string | null;
         deliveryPerOrderFeeOverride: string | null;
@@ -96,6 +97,7 @@ export declare class StaffService {
         canAccessPanel: boolean;
         isActive: boolean;
         pinSet: boolean;
+        pin: string | null;
         passwordSet: boolean;
         loginHome: StaffLoginHome;
     }>;
@@ -120,6 +122,7 @@ export declare class StaffService {
         canAccessPanel: boolean;
         isActive: boolean;
         pinSet: boolean;
+        pin: string | null;
         passwordSet: boolean;
         loginHome: StaffLoginHome;
     }>;
@@ -162,6 +165,7 @@ export declare class StaffService {
             name: string;
             email: string | null;
             pinHash: string | null;
+            pinDisplay: string | null;
             passwordHash: string | null;
             canAccessPanel: boolean;
             loginHome: string;

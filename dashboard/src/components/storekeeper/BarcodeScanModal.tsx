@@ -12,16 +12,33 @@ type Props = {
   onScan: (code: string) => void;
 };
 
+async function acquireCameraStream(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false,
+    });
+  } catch {
+    return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  }
+}
+
 export default function BarcodeScanModal({ open, onClose, onScan }: Props) {
   const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const pendingStreamRef = useRef<MediaStream | null>(null);
   const scanRef = useRef<{ stop: () => void } | null>(null);
+  const onScanRef = useRef(onScan);
+  const onCloseRef = useRef(onClose);
   const [manualCode, setManualCode] = useState('');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
+
+  useEffect(() => {
+    onScanRef.current = onScan;
+    onCloseRef.current = onClose;
+  });
 
   const stopCamera = useCallback(() => {
     scanRef.current?.stop();
@@ -33,43 +50,35 @@ export default function BarcodeScanModal({ open, onClose, onScan }: Props) {
     pendingStreamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setScanning(false);
-    setVideoReady(false);
   }, []);
 
-  const submitCode = useCallback(
-    (raw: string) => {
-      const code = raw.trim();
-      if (code.length < 3) return false;
-      onScan(code);
-      onClose();
-      return true;
-    },
-    [onClose, onScan]
-  );
+  const submitCode = useCallback((raw: string) => {
+    const code = raw.trim();
+    if (code.length < 3) return false;
+    onScanRef.current(code);
+    onCloseRef.current();
+    return true;
+  }, []);
 
-  const attachStream = useCallback(
-    async (video: HTMLVideoElement, stream: MediaStream) => {
-      video.setAttribute('playsinline', 'true');
-      video.setAttribute('webkit-playsinline', 'true');
-      video.muted = true;
-      video.playsInline = true;
-      video.srcObject = stream;
-      try {
-        await video.play();
-      } catch {
-        /* iOS may reject play() until the element is visible */
-      }
-      setScanning(true);
-      scanRef.current?.stop();
-      scanRef.current = startQrCameraScan(video, submitCode, BARCODE_FORMATS);
-    },
-    [submitCode]
-  );
+  const attachStream = useCallback(async (video: HTMLVideoElement, stream: MediaStream) => {
+    video.setAttribute('playsinline', 'true');
+    video.setAttribute('webkit-playsinline', 'true');
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+    try {
+      await video.play();
+    } catch {
+      /* iOS may reject play() until the element is visible */
+    }
+    setScanning(true);
+    scanRef.current?.stop();
+    scanRef.current = startQrCameraScan(video, submitCode, BARCODE_FORMATS);
+  }, [submitCode]);
 
   const videoCallbackRef = useCallback(
     (node: HTMLVideoElement | null) => {
       videoRef.current = node;
-      setVideoReady(!!node);
       if (!node) return;
       const stream = pendingStreamRef.current || streamRef.current;
       if (stream && node.srcObject !== stream) {
@@ -95,10 +104,7 @@ export default function BarcodeScanModal({ open, onClose, onScan }: Props) {
     let cancelled = false;
     void (async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
-          audio: false,
-        });
+        const stream = await acquireCameraStream();
         if (cancelled) {
           for (const track of stream.getTracks()) track.stop();
           return;
@@ -118,17 +124,7 @@ export default function BarcodeScanModal({ open, onClose, onScan }: Props) {
       cancelled = true;
       stopCamera();
     };
-  }, [open, attachStream, stopCamera, t]);
-
-  // Retry attaching when the video element mounts after getUserMedia resolves.
-  useEffect(() => {
-    if (!open || !videoReady) return;
-    const stream = pendingStreamRef.current || streamRef.current;
-    const video = videoRef.current;
-    if (stream && video && video.srcObject !== stream) {
-      void attachStream(video, stream);
-    }
-  }, [open, videoReady, attachStream]);
+  }, [open, stopCamera, t]);
 
   if (!open) return null;
 

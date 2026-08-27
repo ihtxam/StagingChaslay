@@ -210,6 +210,19 @@ function MerchantShell() {
     [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, pinSession]
   );
 
+  /** PIN-restricted staff home route — delivery drivers use driver app, not register POS. */
+  const isAllowedPinAppRoute = useMemo(() => {
+    if (isDeliveryDriverOnlyStaff(effective.permissions, false)) return isDriverRoute;
+    if (isStorekeeperOnlyStaff(effective.permissions, false)) return isStorekeeperRoute;
+    return isPosLikeRoute;
+  }, [effective.permissions, isDriverRoute, isStorekeeperRoute, isPosLikeRoute]);
+
+  const pinRestrictedHomePath = useMemo(() => {
+    if (isDeliveryDriverOnlyStaff(effective.permissions, false)) return deliveryDriverHomePath();
+    if (isStorekeeperOnlyStaff(effective.permissions, false)) return storekeeperHomePath();
+    return '/merchant/pos';
+  }, [effective.permissions]);
+
   const registerDisplay = useMemo(
     () =>
       getEffectiveRegisterDisplay({
@@ -308,15 +321,17 @@ function MerchantShell() {
     };
   }, [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, t, navigate]);
 
-  // Restricted PIN: stay in POS unless they may open menu / orders / reports pages.
+  // Restricted PIN: stay on role app (POS, driver, storekeeper) unless they may open panel pages.
   useEffect(() => {
     if (!effective.pinActive || effective.canOpenPanel) return;
     if (effective.canOpenCatalog && isCatalogPanelPath(location.pathname)) return;
     if (effective.canOpenOrders && isOrdersPanelPath(location.pathname)) return;
     if (effective.canOpenReports && isReportsPanelPath(location.pathname)) return;
     if (!posAppMode) setPosAppMode(true);
-    if (!isPosLikeRoute) {
-      navigate('/merchant/pos', { replace: true });
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    const home = pinRestrictedHomePath.replace(/\/$/, '');
+    if (path !== home && !isAllowedPinAppRoute) {
+      navigate(pinRestrictedHomePath, { replace: true });
     }
   }, [
     effective.pinActive,
@@ -325,7 +340,8 @@ function MerchantShell() {
     effective.canOpenOrders,
     effective.canOpenReports,
     posAppMode,
-    isPosLikeRoute,
+    isAllowedPinAppRoute,
+    pinRestrictedHomePath,
     location.pathname,
     navigate,
   ]);

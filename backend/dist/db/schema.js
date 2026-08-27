@@ -399,6 +399,8 @@ exports.merchantStaff = (0, pg_core_1.pgTable)("merchant_staff", {
     name: (0, pg_core_1.varchar)("name", { length: 255 }).notNull(),
     email: (0, pg_core_1.varchar)("email", { length: 255 }),
     pinHash: (0, pg_core_1.varchar)("pin_hash", { length: 255 }),
+    /** Plain PIN digits for merchant admin display (POS quick-login codes). */
+    pinDisplay: (0, pg_core_1.varchar)("pin_display", { length: 8 }),
     passwordHash: (0, pg_core_1.varchar)("password_hash", { length: 255 }),
     /** Can sign in to merchant backend panel (email + password) */
     canAccessPanel: (0, pg_core_1.boolean)("can_access_panel").default(false).notNull(),

@@ -264,6 +264,7 @@ export class StaffService {
         canAccessPanel: s.canAccessPanel,
         isActive: s.isActive,
         pinSet: !!s.pinHash,
+        pin: s.pinDisplay || null,
         passwordSet: !!s.passwordHash,
         deliveryHourlyRateOverride: s.deliveryHourlyRateOverride ?? null,
         deliveryPerOrderFeeOverride: s.deliveryPerOrderFeeOverride ?? null,
@@ -338,6 +339,7 @@ export class StaffService {
         name,
         email,
         pinHash: pin ? await AuthService.hashPassword(pin) : null,
+        pinDisplay: pin || null,
         passwordHash: password ? await AuthService.hashPassword(password) : null,
         canAccessPanel,
         loginHome,
@@ -397,11 +399,13 @@ export class StaffService {
     if (input.pin !== undefined) {
       if (input.pin === null || input.pin === "") {
         patch.pinHash = null;
+        patch.pinDisplay = null;
       } else {
         const pin = String(input.pin).trim();
         if (pin.length < 4 || pin.length > 8) throw new Error("PIN must be 4-8 digits");
         await this.assertPinUnique(merchantId, pin, staffId);
         patch.pinHash = await AuthService.hashPassword(pin);
+        patch.pinDisplay = pin;
       }
     }
     if (input.password !== undefined) {
@@ -704,6 +708,7 @@ export class StaffService {
       canAccessPanel: staff.canAccessPanel,
       isActive: staff.isActive,
       pinSet: !!staff.pinHash,
+      pin: staff.pinDisplay || null,
       passwordSet: !!staff.passwordHash,
       loginHome: normalizeStaffLoginHome(staff.loginHome),
     };
