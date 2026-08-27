@@ -5,6 +5,7 @@ import {
   BarcodeProductLookupService,
   matchInventoryCategoryId,
 } from "@/services/barcode-product-lookup.service";
+import { ProductService } from "@/services/product.service";
 
 const router = Router();
 
@@ -40,21 +41,46 @@ router.get("/lookup/:barcode", async (req: Request, res: Response) => {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
     const barcode = String(req.params.barcode || "").trim();
-    const item = await InventoryService.getItemByBarcode(merchantId, barcode);
+    const [item, menuProduct] = await Promise.all([
+      InventoryService.getItemByBarcode(merchantId, barcode),
+      ProductService.getProductByBarcode(merchantId, barcode),
+    ]);
+    const menuProductSummary = menuProduct
+      ? {
+          id: menuProduct.id,
+          name: menuProduct.name,
+          price: Number(menuProduct.price) || 0,
+          imageUrl: menuProduct.imageUrl || null,
+        }
+      : null;
+
     if (item) {
-      return res.json({ success: true, item, suggestion: null, source: "local" });
+      return res.json({
+        success: true,
+        item,
+        menuProduct: menuProductSummary,
+        suggestion: null,
+        source: "local",
+      });
     }
 
     const bootstrap = await InventoryService.getStorekeeperBootstrap(merchantId);
     const suggestion = await BarcodeProductLookupService.lookupExternal(barcode);
     if (!suggestion) {
-      return res.json({ success: true, item: null, suggestion: null, source: null });
+      return res.json({
+        success: true,
+        item: null,
+        menuProduct: menuProductSummary,
+        suggestion: null,
+        source: menuProductSummary ? "menu" : null,
+      });
     }
 
     const categoryId = matchInventoryCategoryId(bootstrap.categories, suggestion.categoryHint);
     res.json({
       success: true,
       item: null,
+      menuProduct: menuProductSummary,
       suggestion: { ...suggestion, categoryId },
       source: suggestion.source,
     });

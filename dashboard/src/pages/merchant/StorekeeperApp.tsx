@@ -21,6 +21,14 @@ type InvItem = {
   unit: string;
   categoryId?: string | null;
   onHand: number;
+  cost?: number;
+};
+
+type MenuProduct = {
+  id: string;
+  name: string;
+  price: number;
+  imageUrl?: string | null;
 };
 
 type RecentIntake = {
@@ -57,19 +65,30 @@ export default function StorekeeperApp() {
   const [qty, setQty] = useState('1');
   const [expiryDate, setExpiryDate] = useState('');
   const [existingItem, setExistingItem] = useState<InvItem | null>(null);
+  const [menuProduct, setMenuProduct] = useState<MenuProduct | null>(null);
   const [suggestion, setSuggestion] = useState<LookupSuggestion | null>(null);
   const [lookupBusy, setLookupBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [recent, setRecent] = useState<RecentIntake[]>([]);
+  const [cost, setCost] = useState('');
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const scanBufferRef = useRef('');
   const scanTimerRef = useRef<number | null>(null);
+  const photoFileRef = useRef<HTMLInputElement>(null);
 
   const staffAccessToken = pinStaff?.accessToken;
   const displayName = pinStaff?.name || user?.name;
   const clockedIn = !!pinStaff || user?.role === 'staff' || user?.role === 'merchant';
 
   const apiHeaders = staffAccessToken ? { 'X-WebPos-Staff-Access': staffAccessToken } : undefined;
+
+  const formatMoney = (value: number) =>
+    new Intl.NumberFormat(undefined, { style: 'currency', currency: 'CHF' }).format(value);
+
+  const displayPhoto = photoUrl || menuProduct?.imageUrl || suggestion?.imageUrl || null;
+  const retailPrice = menuProduct?.price;
 
   const loadBootstrap = useCallback(async () => {
     if (!clockedIn) return;
@@ -95,17 +114,24 @@ export default function StorekeeperApp() {
       if (!trimmed) return;
       setBarcode(trimmed);
       setSuggestion(null);
+      setMenuProduct(null);
+      setPhotoUrl(null);
       setLookupBusy(true);
       try {
         const res = await api.get(`/merchant/storekeeper/lookup/${encodeURIComponent(trimmed)}`, {
           headers: apiHeaders,
         });
+        const menu = res.data.menuProduct as MenuProduct | null;
+        if (menu) setMenuProduct(menu);
+
         const item = res.data.item as InvItem | null;
         if (item) {
           setExistingItem(item);
           setName(item.name);
           setUnit(item.unit || 'piece');
           setCategoryId(item.categoryId || '');
+          if (item.cost != null && item.cost > 0) setCost(String(item.cost));
+          if (menu?.imageUrl) setPhotoUrl(menu.imageUrl);
           return;
         }
 
@@ -119,10 +145,16 @@ export default function StorekeeperApp() {
             if (hasUnit) setUnit(ext.unit);
           }
           if (ext.categoryId) setCategoryId(ext.categoryId);
+          if (ext.imageUrl && !menu?.imageUrl) setPhotoUrl(ext.imageUrl);
           toast.success(t('storekeeperOnlineFound'));
+        } else if (menu) {
+          setName(menu.name);
+          if (menu.imageUrl) setPhotoUrl(menu.imageUrl);
+          toast.success(t('storekeeperMenuProductFound'));
         } else {
           setName('');
           setCategoryId('');
+          setCost('');
           toast(t('storekeeperOnlineNotFound'), { icon: 'ℹ️' });
         }
       } catch {
@@ -167,8 +199,43 @@ export default function StorekeeperApp() {
     setName('');
     setQty('1');
     setExpiryDate('');
+    setCost('');
+    setPhotoUrl(null);
     setExistingItem(null);
+    setMenuProduct(null);
     setSuggestion(null);
+  };
+
+  const onUploadPhoto = async (file: File | null) => {
+    if (!file) return;
+    setPhotoUploading(true);
+    try {
+      const { compressImageIfNeeded } = await import('@/lib/compress-image');
+      const compressed = await compressImageIfNeeded(file, {
+        maxBytes: 350 * 1024,
+        targetBytes: 350 * 1024,
+        maxWidth: 1200,
+      });
+      const fd = new FormData();
+      fd.append('file', compressed);
+      const res = await api.post('/merchant/media', fd, { headers: apiHeaders });
+      setPhotoUrl(res.data.url || null);
+      toast.success(t('imageUploaded'));
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg || t('uploadFailed'));
+    } finally {
+      setPhotoUploading(false);
+      if (photoFileRef.current) photoFileRef.current.value = '';
+    }
+  };
+
+  const useOnlinePhoto = () => {
+    const url = suggestion?.imageUrl;
+    if (url) {
+      setPhotoUrl(url);
+      toast.success(t('storekeeperPhotoFromWeb'));
+    }
   };
 
   const submit = async (e: FormEvent) => {
@@ -188,6 +255,7 @@ export default function StorekeeperApp() {
     }
     setBusy(true);
     try {
+      const costNum = cost.trim() ? Number(cost) : undefined;
       const res = await api.post(
         '/merchant/storekeeper/intake',
         {
@@ -197,9 +265,23 @@ export default function StorekeeperApp() {
           categoryId: categoryId || null,
           qty: q,
           expiryDate: expiryDate || null,
+          cost: costNum != null && Number.isFinite(costNum) ? costNum : undefined,
         },
         { headers: apiHeaders }
       );
+
+      if (menuProduct && photoUrl && photoUrl !== menuProduct.imageUrl) {
+        try {
+          await api.put(
+            `/merchant/products/${menuProduct.id}`,
+            { imageUrl: photoUrl },
+            { headers: apiHeaders }
+          );
+        } catch {
+          /* photo update is best-effort */
+        }
+      }
+
       const item = res.data.item as InvItem;
       setRecent((prev) => [
         {
@@ -311,6 +393,54 @@ export default function StorekeeperApp() {
           ) : null}
         </div>
 
+        {(barcode || displayPhoto || suggestion?.imageUrl || menuProduct) && (
+          <div className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3">
+            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-white">
+              {displayPhoto ? (
+                <img src={displayPhoto} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-stone-400">
+                  <Package size={28} />
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              {retailPrice != null && retailPrice > 0 ? (
+                <p className="text-sm font-semibold text-stone-900">
+                  {t('storekeeperRetailPrice')}: {formatMoney(retailPrice)}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium"
+                  onClick={() => photoFileRef.current?.click()}
+                  disabled={photoUploading}
+                >
+                  {photoUploading ? t('uploading') : t('storekeeperTakePhoto')}
+                </button>
+                {suggestion?.imageUrl && suggestion.imageUrl !== photoUrl ? (
+                  <button
+                    type="button"
+                    className="rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-900"
+                    onClick={useOnlinePhoto}
+                  >
+                    {t('storekeeperUseOnlinePhoto')}
+                  </button>
+                ) : null}
+              </div>
+              <input
+                ref={photoFileRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => void onUploadPhoto(e.target.files?.[0] || null)}
+              />
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
             {t('storekeeperProductName')}
@@ -363,6 +493,20 @@ export default function StorekeeperApp() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
+              {t('storekeeperCost')}
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base"
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
               {t('storekeeperQty')}
             </label>
             <input
@@ -375,17 +519,18 @@ export default function StorekeeperApp() {
               required
             />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
-              {t('storekeeperExpiry')}
-            </label>
-            <input
-              type="date"
-              className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base"
-              value={expiryDate}
-              onChange={(e) => setExpiryDate(e.target.value)}
-            />
-          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
+            {t('storekeeperExpiry')}
+          </label>
+          <input
+            type="date"
+            className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base"
+            value={expiryDate}
+            onChange={(e) => setExpiryDate(e.target.value)}
+          />
         </div>
 
         <button

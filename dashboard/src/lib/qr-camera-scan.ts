@@ -1,3 +1,5 @@
+import { BrowserMultiFormatReader } from '@zxing/browser';
+
 type BarcodeDetectorLike = {
   detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
 };
@@ -23,6 +25,8 @@ export function startQrCameraScan(
 
   let jsQrDecode: ((data: Uint8ClampedArray, width: number, height: number) => { data: string } | null) | null =
     null;
+  let zxingReader: BrowserMultiFormatReader | null = null;
+  let zxingControls: { stop: () => void } | null = null;
 
   const stop = () => {
     stopped = true;
@@ -30,6 +34,13 @@ export function startQrCameraScan(
       window.cancelAnimationFrame(loopId);
       loopId = null;
     }
+    try {
+      zxingControls?.stop();
+    } catch {
+      /* ignore */
+    }
+    zxingControls = null;
+    zxingReader = null;
   };
 
   const tickBarcodeDetector = async () => {
@@ -68,15 +79,36 @@ export function startQrCameraScan(
     loopId = window.requestAnimationFrame(tickJsQr);
   };
 
+  const startZxing = () => {
+    if (stopped) return;
+    zxingReader = new BrowserMultiFormatReader();
+    void zxingReader.decodeFromVideoElement(video, (result) => {
+      if (stopped || !result) return;
+      const text = result.getText();
+      if (text && onCode(text)) stop();
+    }).then((controls) => {
+      if (stopped) {
+        controls.stop();
+        return;
+      }
+      zxingControls = controls;
+    });
+  };
+
   if (detector) {
     loopId = window.requestAnimationFrame(() => void tickBarcodeDetector());
   } else {
-    void import('jsqr').then(({ default: jsQR }) => {
-      if (stopped) return;
-      jsQrDecode = (data, width, height) =>
-        jsQR(data, width, height, { inversionAttempts: 'dontInvert' });
-      loopId = window.requestAnimationFrame(tickJsQr);
-    });
+    // Prefer ZXing on mobile Safari — decodes EAN/UPC barcodes, not just QR.
+    try {
+      startZxing();
+    } catch {
+      void import('jsqr').then(({ default: jsQR }) => {
+        if (stopped) return;
+        jsQrDecode = (data, width, height) =>
+          jsQR(data, width, height, { inversionAttempts: 'dontInvert' });
+        loopId = window.requestAnimationFrame(tickJsQr);
+      });
+    }
   }
 
   return { stop };

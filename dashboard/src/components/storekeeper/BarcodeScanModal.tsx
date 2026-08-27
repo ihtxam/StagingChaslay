@@ -14,12 +14,14 @@ type Props = {
 
 export default function BarcodeScanModal({ open, onClose, onScan }: Props) {
   const { t } = useI18n();
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const pendingStreamRef = useRef<MediaStream | null>(null);
   const scanRef = useRef<{ stop: () => void } | null>(null);
   const [manualCode, setManualCode] = useState('');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
 
   const stopCamera = useCallback(() => {
     scanRef.current?.stop();
@@ -28,8 +30,10 @@ export default function BarcodeScanModal({ open, onClose, onScan }: Props) {
       for (const track of streamRef.current.getTracks()) track.stop();
       streamRef.current = null;
     }
+    pendingStreamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setScanning(false);
+    setVideoReady(false);
   }, []);
 
   const submitCode = useCallback(
@@ -41,6 +45,38 @@ export default function BarcodeScanModal({ open, onClose, onScan }: Props) {
       return true;
     },
     [onClose, onScan]
+  );
+
+  const attachStream = useCallback(
+    async (video: HTMLVideoElement, stream: MediaStream) => {
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = stream;
+      try {
+        await video.play();
+      } catch {
+        /* iOS may reject play() until the element is visible */
+      }
+      setScanning(true);
+      scanRef.current?.stop();
+      scanRef.current = startQrCameraScan(video, submitCode, BARCODE_FORMATS);
+    },
+    [submitCode]
+  );
+
+  const videoCallbackRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      videoRef.current = node;
+      setVideoReady(!!node);
+      if (!node) return;
+      const stream = pendingStreamRef.current || streamRef.current;
+      if (stream && node.srcObject !== stream) {
+        void attachStream(node, stream);
+      }
+    },
+    [attachStream]
   );
 
   useEffect(() => {
@@ -68,13 +104,11 @@ export default function BarcodeScanModal({ open, onClose, onScan }: Props) {
           return;
         }
         streamRef.current = stream;
+        pendingStreamRef.current = stream;
         const video = videoRef.current;
-        if (!video) return;
-        video.setAttribute('playsinline', 'true');
-        video.srcObject = stream;
-        await video.play();
-        setScanning(true);
-        scanRef.current = startQrCameraScan(video, submitCode, BARCODE_FORMATS);
+        if (video) {
+          await attachStream(video, stream);
+        }
       } catch {
         if (!cancelled) setCameraError(t('storekeeperScanCameraDenied'));
       }
@@ -84,7 +118,17 @@ export default function BarcodeScanModal({ open, onClose, onScan }: Props) {
       cancelled = true;
       stopCamera();
     };
-  }, [open, submitCode, stopCamera, t]);
+  }, [open, attachStream, stopCamera, t]);
+
+  // Retry attaching when the video element mounts after getUserMedia resolves.
+  useEffect(() => {
+    if (!open || !videoReady) return;
+    const stream = pendingStreamRef.current || streamRef.current;
+    const video = videoRef.current;
+    if (stream && video && video.srcObject !== stream) {
+      void attachStream(video, stream);
+    }
+  }, [open, videoReady, attachStream]);
 
   if (!open) return null;
 
@@ -110,7 +154,7 @@ export default function BarcodeScanModal({ open, onClose, onScan }: Props) {
             </p>
           ) : (
             <div className="overflow-hidden rounded-xl border border-stone-200 bg-black">
-              <video ref={videoRef} className="aspect-[4/3] w-full object-cover" playsInline muted />
+              <video ref={videoCallbackRef} className="aspect-[4/3] w-full object-cover" playsInline muted autoPlay />
               {scanning ? (
                 <p className="bg-stone-900 px-3 py-2 text-center text-xs font-medium text-white">
                   {t('storekeeperScanAiming')}

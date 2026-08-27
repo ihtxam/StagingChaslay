@@ -719,6 +719,7 @@ export class InventoryService {
       if (input.unit) patch.unit = input.unit;
       if (input.categoryId !== undefined) patch.categoryId = input.categoryId;
       if (parseExpiryDate(input.expiryDate)) patch.perishable = true;
+      if (input.cost != null && Number.isFinite(input.cost)) patch.cost = input.cost;
       if (Object.keys(patch).length) {
         item = await this.updateItem(merchantId, item.id, patch);
       }
