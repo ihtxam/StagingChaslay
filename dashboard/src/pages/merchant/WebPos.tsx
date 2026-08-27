@@ -1348,6 +1348,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       authRole: authUser?.role,
       hasStaffPins: staffConfigured,
       pinSession: webposStaff,
+      pathname: '/merchant/pos',
     });
     if (!access.canOpenBackOffice) {
       toast.error(t('webPosPanelDenied'));

@@ -16,8 +16,10 @@ import {
 } from '@/lib/barcode-labels';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import {
-  hasPermission,
+  clearWebPosStaffSession,
+  jwtHasPanelAccess,
   loadWebPosStaffSession,
+  notifyWebPosStaffSessionChanged,
   saveWebPosStaffSession,
   type Permission,
   type WebPosStaffSession,
@@ -128,12 +130,22 @@ export default function StorekeeperApp() {
   const staffAccessToken = pinStaff?.accessToken;
   const displayName = pinStaff?.name || user?.name;
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
-  const clockedIn = !!pinStaff || jwtIsOwner;
-  const panelPermissions = pinStaff?.permissions || (user?.permissions as Permission[] | undefined);
-  const showBackToPanel =
-    user?.isOwner === true ||
-    hasPermission(panelPermissions, 'ACCESS_PANEL', false) ||
-    hasPermission(panelPermissions, 'MANAGE_INVENTORY', false);
+  const managerPanelAccess = jwtHasPanelAccess(
+    user?.permissions as Permission[] | undefined,
+    jwtIsOwner,
+    user?.role
+  );
+  const clockedIn = !!pinStaff || managerPanelAccess;
+  const showBackToPanel = managerPanelAccess;
+
+  const returnToPanel = useCallback(() => {
+    if (pinStaff) {
+      clearWebPosStaffSession();
+      notifyWebPosStaffSessionChanged();
+      setPinStaff(null);
+    }
+    navigate('/merchant/inventory');
+  }, [pinStaff, navigate]);
 
   const apiHeaders = staffAccessToken ? { 'X-WebPos-Staff-Access': staffAccessToken } : undefined;
 
@@ -473,10 +485,10 @@ export default function StorekeeperApp() {
           {showBackToPanel ? (
             <button
               type="button"
-              onClick={() => navigate('/merchant/inventory')}
+              onClick={() => returnToPanel()}
               className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
-              aria-label={t('back')}
-              title={t('back')}
+              aria-label={t('storekeeperBackToPanel')}
+              title={t('storekeeperBackToPanel')}
             >
               <ArrowLeft size={18} />
             </button>

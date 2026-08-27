@@ -63,6 +63,7 @@ import {
   backOfficeHomePath,
   deliveryDriverHomePath,
   getEffectivePanelAccess,
+  jwtHasPanelAccess,
   getEffectiveRegisterDisplay,
   isCatalogPanelPath,
   isDeliveryDriverOnlyStaff,
@@ -154,7 +155,14 @@ function MerchantShell() {
     loadWebPosStaffSession()
   );
   const [hasStaffPins, setHasStaffPins] = useState(false);
-  const hideChrome = (isPosLikeRoute && posAppMode) || isPosEmbed;
+  const managerPanelAccess = useMemo(
+    () => jwtHasPanelAccess(user?.permissions as Permission[] | undefined, jwtIsOwner, user?.role),
+    [user?.permissions, user?.role, jwtIsOwner]
+  );
+  const hideChrome =
+    (((isPosRoute || isWaiterRoute) && posAppMode) ||
+      (isStorekeeperRoute && posAppMode && !managerPanelAccess)) ||
+    isPosEmbed;
 
   // Reconcile PIN session with JWT + staff roster on load (drop stale localStorage persist).
   useEffect(() => {
@@ -206,8 +214,9 @@ function MerchantShell() {
         authRole: user?.role,
         hasStaffPins,
         pinSession,
+        pathname: location.pathname,
       }),
-    [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, pinSession]
+    [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, pinSession, location.pathname]
   );
 
   /** PIN-restricted staff home route — delivery drivers use driver app, not register POS. */
@@ -299,6 +308,7 @@ function MerchantShell() {
         authRole: user?.role,
         hasStaffPins,
         pinSession: loadWebPosStaffSession(),
+        pathname: location.pathname,
       });
       if (!access.canOpenBackOffice) {
         toast.error(t('webPosPanelDenied'));
@@ -408,11 +418,12 @@ function MerchantShell() {
 
   // Storekeeper-only staff use the mobile intake app, not the full panel.
   useEffect(() => {
+    if (managerPanelAccess) return;
     if (!isStorekeeperOnlyStaff(effective.permissions, false)) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     if (path === storekeeperHomePath()) return;
     navigate(storekeeperHomePath(), { replace: true });
-  }, [effective.permissions, location.pathname, navigate]);
+  }, [managerPanelAccess, effective.permissions, location.pathname, navigate]);
 
   // PIN-scoped staff without back-office access cannot browse the manager panel.
   useEffect(() => {

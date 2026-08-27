@@ -277,6 +277,29 @@ export function storekeeperHomePath(): string {
   return '/merchant/storekeeper';
 }
 
+/** Register POS / waiter — PIN session restricts panel access on these routes only. */
+export function isPosFloorPath(pathname: string): boolean {
+  const path = pathname.replace(/\/$/, '') || '/merchant';
+  return path === '/merchant/pos' || path === '/merchant/waiter' || path.startsWith('/merchant/pos/');
+}
+
+/** JWT user may open the merchant back office (owner or panel staff). */
+export function jwtHasPanelAccess(
+  jwtPermissions: Permission[] | undefined,
+  isOwner: boolean,
+  authRole?: string | null
+): boolean {
+  const ownerEffective = isOwner && authRole !== 'staff';
+  if (ownerEffective) return true;
+  return (
+    hasPermission(jwtPermissions, 'ACCESS_PANEL', false) ||
+    hasPermission(jwtPermissions, 'MANAGE_INVENTORY', false) ||
+    hasPermission(jwtPermissions, 'MANAGE_PRODUCTS', false) ||
+    hasPermission(jwtPermissions, 'VIEW_ORDER_HISTORY', false) ||
+    canOpenReportsPanel(jwtPermissions, false)
+  );
+}
+
 /**
  * Prominent sidebar WebPOS shortcut — uses JWT identity, not PIN-scoped panel access.
  * Merchant owners always see it; panel staff need USE_WEBPOS on their login role.
@@ -577,6 +600,8 @@ export function getEffectivePanelAccess(opts: {
   /** @deprecated use hasStaffPins */
   staffConfigured?: boolean;
   pinSession: WebPosStaffSession | null;
+  /** Current route — managers keep panel access off the POS floor when a PIN is active. */
+  pathname?: string;
 }): {
   permissions: Permission[] | undefined;
   /** Treat as owner for route checks (false when a PIN session is active). */
@@ -595,7 +620,36 @@ export function getEffectivePanelAccess(opts: {
   const ownerEffective = opts.isOwner && opts.authRole !== 'staff';
   const hasStaffPins = opts.hasStaffPins ?? !!opts.staffConfigured;
   const pinActive = hasStaffPins && !!opts.pinSession;
+
+  const jwtAccess = () => {
+    const canOpenPanel =
+      ownerEffective || hasPermission(opts.jwtPermissions, 'ACCESS_PANEL', false);
+    const canOpenCatalog =
+      ownerEffective || hasPermission(opts.jwtPermissions, 'MANAGE_PRODUCTS', false);
+    const canOpenOrders =
+      ownerEffective || hasPermission(opts.jwtPermissions, 'VIEW_ORDER_HISTORY', false);
+    const canOpenReports = canOpenReportsPanel(opts.jwtPermissions, ownerEffective);
+    return {
+      permissions: opts.jwtPermissions,
+      isOwner: ownerEffective,
+      canOpenPanel,
+      canOpenCatalog,
+      canOpenOrders,
+      canOpenReports,
+      canOpenBackOffice:
+        canOpenPanel || canOpenCatalog || canOpenOrders || canOpenReports,
+      pinActive: false,
+    };
+  };
+
   if (pinActive && opts.pinSession) {
+    const onPosFloor = opts.pathname ? isPosFloorPath(opts.pathname) : false;
+    const managerJwt = jwtHasPanelAccess(opts.jwtPermissions, opts.isOwner, opts.authRole);
+    // Managers visiting Storekeeper (etc.) keep panel access; PIN only restricts on POS/waiter floor.
+    if (managerJwt && !onPosFloor) {
+      return { ...jwtAccess(), pinActive: true };
+    }
+
     const permissions = opts.pinSession.permissions || [];
     const canOpenPanel = hasPermission(permissions, 'ACCESS_PANEL', false);
     const canOpenCatalog = hasPermission(permissions, 'MANAGE_PRODUCTS', false);
@@ -613,22 +667,6 @@ export function getEffectivePanelAccess(opts: {
       pinActive: true,
     };
   }
-  const canOpenPanel =
-    ownerEffective || hasPermission(opts.jwtPermissions, 'ACCESS_PANEL', false);
-  const canOpenCatalog =
-    ownerEffective || hasPermission(opts.jwtPermissions, 'MANAGE_PRODUCTS', false);
-  const canOpenOrders =
-    ownerEffective || hasPermission(opts.jwtPermissions, 'VIEW_ORDER_HISTORY', false);
-  const canOpenReports = canOpenReportsPanel(opts.jwtPermissions, ownerEffective);
-  return {
-    permissions: opts.jwtPermissions,
-    isOwner: ownerEffective,
-    canOpenPanel,
-    canOpenCatalog,
-    canOpenOrders,
-    canOpenReports,
-    canOpenBackOffice:
-      canOpenPanel || canOpenCatalog || canOpenOrders || canOpenReports,
-    pinActive: false,
-  };
+
+  return jwtAccess();
 }
