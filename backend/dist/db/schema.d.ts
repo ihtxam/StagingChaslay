@@ -2000,6 +2000,40 @@ export declare const merchants: import("drizzle-orm/pg-core").PgTableWithColumns
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        justEatAddonEnabled: import("drizzle-orm/pg-core").PgColumn<{
+            name: "just_eat_addon_enabled";
+            tableName: "merchants";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        uberEatsAddonEnabled: import("drizzle-orm/pg-core").PgColumn<{
+            name: "uber_eats_addon_enabled";
+            tableName: "merchants";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         inventoryWasteFactor: import("drizzle-orm/pg-core").PgColumn<{
             name: "inventory_waste_factor";
             tableName: "merchants";

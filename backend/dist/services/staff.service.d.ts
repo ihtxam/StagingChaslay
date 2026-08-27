@@ -115,6 +115,7 @@ export declare class StaffService {
         pinSet: boolean;
         passwordSet: boolean;
     }>;
+    private static assertPinUnique;
     static deleteStaff(merchantId: string, staffId: string): Promise<void>;
     static verifyPin(merchantId: string, pin: string): Promise<{
         id: string;

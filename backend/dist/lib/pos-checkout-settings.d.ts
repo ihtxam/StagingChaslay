@@ -8,6 +8,7 @@ export type CourseSendMode = "fire_per_course" | "send_all_once";
 export type CartSide = "left" | "right";
 export type PostSuccessTarget = "register" | "tables";
 export type PosMode = "restaurant" | "retail";
+export type ActionButtonSize = "sm" | "md" | "lg";
 export type PosCheckoutSettings = {
     tipsEnabled: boolean;
     tipPresetsPercent: number[];
@@ -50,6 +51,8 @@ export type PosCheckoutSettings = {
      * Default: true for restaurant mode, false for retail.
      */
     requireTableForDineIn: boolean;
+    /** Express checkout + cart action buttons (Send, Payment, Tab). */
+    actionButtonSize: ActionButtonSize;
 };
 export declare const DEFAULT_POS_CHECKOUT: PosCheckoutSettings;
 export declare function isRetailPosMode(raw: unknown): boolean;

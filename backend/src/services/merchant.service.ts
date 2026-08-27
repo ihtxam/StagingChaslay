@@ -38,6 +38,12 @@ import {
   readOdsAddonEnabledMap,
   writeOdsAddonEnabled,
 } from "@/lib/ods-addon";
+import {
+  isJustEatAddonEnabled,
+  isUberEatsAddonEnabled,
+  writeJustEatAddonEnabled,
+  writeUberEatsAddonEnabled,
+} from "@/lib/delivery-platform-addon";
 
 type AppVersionSighting = {
   appVersion?: string | null;
@@ -663,6 +669,8 @@ export class MerchantService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      justEatAddonEnabled?: boolean;
+      uberEatsAddonEnabled?: boolean;
     }
   ) {
     if (
@@ -670,7 +678,9 @@ export class MerchantService {
       addons.signageAddonEnabled === undefined &&
       addons.signageScreenLimit === undefined &&
       addons.kdsAddonEnabled === undefined &&
-      addons.odsAddonEnabled === undefined
+      addons.odsAddonEnabled === undefined &&
+      addons.justEatAddonEnabled === undefined &&
+      addons.uberEatsAddonEnabled === undefined
     ) {
       throw new Error("No addon updates provided");
     }
@@ -688,6 +698,12 @@ export class MerchantService {
     }
     if (addons.odsAddonEnabled !== undefined) {
       await writeOdsAddonEnabled(merchantId, addons.odsAddonEnabled);
+    }
+    if (addons.justEatAddonEnabled !== undefined) {
+      await writeJustEatAddonEnabled(merchantId, addons.justEatAddonEnabled);
+    }
+    if (addons.uberEatsAddonEnabled !== undefined) {
+      await writeUberEatsAddonEnabled(merchantId, addons.uberEatsAddonEnabled);
     }
     return this.getMerchantById(merchantId);
   }

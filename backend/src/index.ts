@@ -242,7 +242,9 @@ app.listen(PORT, () => {
     SubscriptionPlansService.ensureDefaults().catch(() => {})
   );
   void import("@/services/subscription-addons.service").then(({ SubscriptionAddonsService }) =>
-    SubscriptionAddonsService.ensureDefaults().catch(() => {})
+    SubscriptionAddonsService.ensureDefaults()
+      .then(() => SubscriptionAddonsService.ensureMissingDefaultAddons())
+      .catch(() => {})
   );
 
   // Reminder sweeps (~hourly). Lightweight; skips merchants without email.

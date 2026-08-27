@@ -244,6 +244,10 @@ exports.merchants = (0, pg_core_1.pgTable)("merchants", {
     kdsAddonEnabled: (0, pg_core_1.boolean)("kds_addon_enabled").default(false).notNull(),
     /** Paid order display system (ODS) addon. Superadmin/reseller only. */
     odsAddonEnabled: (0, pg_core_1.boolean)("ods_addon_enabled").default(false).notNull(),
+    /** Paid Just Eat / JET Connect order integration addon. */
+    justEatAddonEnabled: (0, pg_core_1.boolean)("just_eat_addon_enabled").default(false).notNull(),
+    /** Paid Uber Eats order integration addon. */
+    uberEatsAddonEnabled: (0, pg_core_1.boolean)("uber_eats_addon_enabled").default(false).notNull(),
     /**
      * Extra yield / waste factor applied to recipe usage on sale (0–0.50). Default 20%.
      */

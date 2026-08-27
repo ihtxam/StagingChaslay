@@ -6,6 +6,8 @@ exports.ensureInventoryDemoColumns = ensureInventoryDemoColumns;
 exports.ensureSignageAddonColumn = ensureSignageAddonColumn;
 exports.ensureKdsAddonColumn = ensureKdsAddonColumn;
 exports.ensureOdsAddonColumn = ensureOdsAddonColumn;
+exports.ensureJustEatAddonColumn = ensureJustEatAddonColumn;
+exports.ensureUberEatsAddonColumn = ensureUberEatsAddonColumn;
 exports.ensureMerchantSchemaAtStartup = ensureMerchantSchemaAtStartup;
 exports.withMerchantSchemaRetry = withMerchantSchemaRetry;
 exports.patchMerchantSchemaFromError = patchMerchantSchemaFromError;
@@ -67,6 +69,8 @@ const MERCHANT_COLUMN_PATCHES = {
     signage_screen_limit: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS signage_screen_limit integer NOT NULL DEFAULT 2",
     kds_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kds_addon_enabled boolean NOT NULL DEFAULT false",
     ods_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ods_addon_enabled boolean NOT NULL DEFAULT false",
+    just_eat_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS just_eat_addon_enabled boolean NOT NULL DEFAULT false",
+    uber_eats_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS uber_eats_addon_enabled boolean NOT NULL DEFAULT false",
 };
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
 const EXTRA_COLUMN_PATCHES = {
@@ -731,6 +735,14 @@ async function ensureKdsAddonColumn() {
 }
 async function ensureOdsAddonColumn() {
     await runPatch("ods_addon_enabled");
+    await ensureMerchantTables();
+}
+async function ensureJustEatAddonColumn() {
+    await runPatch("just_eat_addon_enabled");
+    await ensureMerchantTables();
+}
+async function ensureUberEatsAddonColumn() {
+    await runPatch("uber_eats_addon_enabled");
     await ensureMerchantTables();
 }
 /** Apply all known optional merchant columns once at startup (non-blocking). */

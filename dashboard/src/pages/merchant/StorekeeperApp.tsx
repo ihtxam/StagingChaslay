@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, CheckCircle, Package, ScanLine } from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle, Package, ScanLine, UserCircle2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -7,8 +8,10 @@ import { useAuthStore } from '@/store/auth';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import BarcodeScanModal from '@/components/storekeeper/BarcodeScanModal';
 import {
+  hasPermission,
   loadWebPosStaffSession,
   saveWebPosStaffSession,
+  type Permission,
   type WebPosStaffSession,
 } from '@/lib/permissions';
 
@@ -52,9 +55,11 @@ type LookupSuggestion = {
 
 export default function StorekeeperApp() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const [pinStaff, setPinStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [pinOpen, setPinOpen] = useState(false);
+  const [pinMode, setPinMode] = useState<'gate' | 'switch'>('gate');
   const [licensed, setLicensed] = useState<boolean | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -79,6 +84,11 @@ export default function StorekeeperApp() {
   const staffAccessToken = pinStaff?.accessToken;
   const displayName = pinStaff?.name || user?.name;
   const clockedIn = !!pinStaff;
+  const panelPermissions = pinStaff?.permissions || (user?.permissions as Permission[] | undefined);
+  const showBackToPanel =
+    user?.isOwner === true ||
+    hasPermission(panelPermissions, 'ACCESS_PANEL', false) ||
+    hasPermission(panelPermissions, 'MANAGE_INVENTORY', false);
 
   const apiHeaders = staffAccessToken ? { 'X-WebPos-Staff-Access': staffAccessToken } : undefined;
 
@@ -272,12 +282,16 @@ export default function StorekeeperApp() {
         <button
           type="button"
           className="rounded-xl bg-teal-700 px-6 py-3 font-semibold text-white"
-          onClick={() => setPinOpen(true)}
+          onClick={() => {
+            setPinMode('gate');
+            setPinOpen(true);
+          }}
         >
           {t('webposPinClockIn')}
         </button>
         <WebPosPinModal
           open={pinOpen}
+          mode={pinMode}
           onClose={() => setPinOpen(false)}
           onSuccess={(session) => {
             saveWebPosStaffSession(session);
@@ -301,9 +315,36 @@ export default function StorekeeperApp() {
   return (
     <div className="mx-auto flex min-h-full max-w-lg flex-col gap-4 p-4 pb-8">
       <header className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-bold">{t('storekeeperTitle')}</h1>
-          <p className="text-xs muted">{displayName}</p>
+        <div className="flex min-w-0 items-start gap-2">
+          {showBackToPanel ? (
+            <button
+              type="button"
+              onClick={() => navigate('/merchant/inventory')}
+              className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+              aria-label={t('back')}
+              title={t('back')}
+            >
+              <ArrowLeft size={18} />
+            </button>
+          ) : null}
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold">{t('storekeeperTitle')}</h1>
+            <div className="mt-0.5 flex items-center gap-1.5">
+              <p className="truncate text-xs muted">{displayName}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setPinMode('switch');
+                  setPinOpen(true);
+                }}
+                className="inline-flex shrink-0 items-center justify-center rounded-md p-0.5 text-teal-800 hover:bg-teal-50"
+                aria-label={t('webPosSwitchUser')}
+                title={t('webPosSwitchUser')}
+              >
+                <UserCircle2 size={16} />
+              </button>
+            </div>
+          </div>
         </div>
         <button
           type="button"
@@ -495,6 +536,7 @@ export default function StorekeeperApp() {
 
       <WebPosPinModal
         open={pinOpen}
+        mode={pinMode}
         onClose={() => setPinOpen(false)}
         onSuccess={(session) => {
           saveWebPosStaffSession(session);

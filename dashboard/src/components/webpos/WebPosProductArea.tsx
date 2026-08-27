@@ -12,6 +12,14 @@ import {
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useI18n } from '@/lib/i18n';
+import {
+  actionButtonIconSize,
+  expressCheckoutArrowClass,
+  expressCheckoutArrowIconSize,
+  expressCheckoutButtonClass,
+  normalizeActionButtonSize,
+  type WebPosActionButtonSize,
+} from '@/lib/webpos-action-button-size';
 import { categoryColor, categoryColorMap } from './categoryColors';
 import {
   POS_GIFT_CARDS_CATEGORY,
@@ -57,6 +65,7 @@ type Props = {
   onCustomAmount?: () => void;
   /** Click empty grid area (not a product tile) — e.g. deselect cart line. */
   onBackgroundClick?: () => void;
+  actionButtonSize?: WebPosActionButtonSize;
 };
 
 const TILE_GRID: Record<ProductGridTileSize, string> = {
@@ -96,8 +105,11 @@ export default function WebPosProductArea({
   membershipEnabled = false,
   onCustomAmount,
   onBackgroundClick,
+  actionButtonSize: actionButtonSizeProp,
 }: Props) {
   const { t } = useI18n();
+  const actionButtonSize = normalizeActionButtonSize(actionButtonSizeProp);
+  const expressIcon = actionButtonIconSize(actionButtonSize);
   const colorByCat = useMemo(() => categoryColorMap(categories), [categories]);
   const isGiftCardCategory = categoryId === POS_GIFT_CARDS_CATEGORY;
   const gridClass = TILE_GRID[tileSize] || TILE_GRID.md;
@@ -349,9 +361,9 @@ export default function WebPosProductArea({
                     type="button"
                     disabled={expressDisabled}
                     onClick={() => onExpressPay!('cash')}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
+                    className={`${expressCheckoutButtonClass(actionButtonSize)} bg-emerald-600 hover:bg-emerald-700`}
                   >
-                    <Banknote size={18} />
+                    <Banknote size={expressIcon} />
                     {t('webPosCash')}
                   </button>
                 ) : null}
@@ -360,9 +372,9 @@ export default function WebPosProductArea({
                     type="button"
                     disabled={expressDisabled}
                     onClick={() => onExpressPay!('card')}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 py-3.5 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-40"
+                    className={`${expressCheckoutButtonClass(actionButtonSize)} bg-sky-600 hover:bg-sky-700`}
                   >
-                    <CreditCard size={18} />
+                    <CreditCard size={expressIcon} />
                     {t('webPosCard')}
                   </button>
                 ) : null}
@@ -371,9 +383,9 @@ export default function WebPosProductArea({
                     type="button"
                     disabled={expressDisabled}
                     onClick={() => onExpressPay!('terminal')}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-700 py-3.5 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+                    className={`${expressCheckoutButtonClass(actionButtonSize)} bg-violet-700 hover:bg-violet-800`}
                   >
-                    <MonitorSmartphone size={18} />
+                    <MonitorSmartphone size={expressIcon} />
                     {t('webPosTerminal')}
                   </button>
                 ) : null}
@@ -383,10 +395,10 @@ export default function WebPosProductArea({
                   type="button"
                   disabled={checkoutDisabled}
                   onClick={onOpenCheckout}
-                  className="inline-flex w-16 shrink-0 items-center justify-center rounded-xl border-2 border-stone-300 bg-stone-50 text-stone-800 hover:bg-stone-100 disabled:opacity-40"
+                  className={expressCheckoutArrowClass(actionButtonSize)}
                   title={t('webPosOpenCheckout')}
                 >
-                  <ArrowRight size={28} strokeWidth={2.5} />
+                  <ArrowRight size={expressCheckoutArrowIconSize(actionButtonSize)} strokeWidth={2.5} />
                 </button>
               ) : null}
             </div>

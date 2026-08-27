@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductEntitlementsService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
-const subscription_plans_service_1 = require("@/services/subscription-plans.service");
+const merchant_entitlements_service_1 = require("@/services/merchant-entitlements.service");
 class ProductEntitlementsService {
     static async countProducts(merchantId) {
         const db = (0, db_1.getDb)();
@@ -14,21 +14,13 @@ class ProductEntitlementsService {
         return Number(row?.total) || 0;
     }
     static async getLimitInfo(merchantId) {
-        const db = (0, db_1.getDb)();
-        const merchant = await db.query.merchants.findFirst({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
-            columns: { subscriptionPlan: true },
-        });
-        const planSlug = merchant?.subscriptionPlan || "free";
-        const plan = (await subscription_plans_service_1.SubscriptionPlansService.getBySlug(planSlug)) || null;
+        const limits = await merchant_entitlements_service_1.MerchantEntitlementsService.getLimits(merchantId);
         const currentCount = await this.countProducts(merchantId);
-        const maxRaw = plan?.maxProducts;
-        const maxProducts = maxRaw === null || maxRaw === undefined ? null : Math.max(0, Number(maxRaw) || 0);
         return {
-            maxProducts,
+            maxProducts: limits.maxProducts,
             currentCount,
-            planSlug: plan?.slug || planSlug,
-            planName: plan?.name || null,
+            planSlug: limits.planSlug,
+            planName: limits.planName,
         };
     }
     static async assertCanAddProducts(merchantId, addCount = 1) {

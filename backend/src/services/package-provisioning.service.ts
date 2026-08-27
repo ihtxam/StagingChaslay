@@ -81,6 +81,12 @@ export class PackageProvisioningService {
       case "ods":
         patch.odsAddonEnabled = true;
         break;
+      case "just_eat":
+        patch.justEatAddonEnabled = true;
+        break;
+      case "uber_eats":
+        patch.uberEatsAddonEnabled = true;
+        break;
       case "extra_pos_post": {
         const current = Number(merchant.maxPosPosts || 0);
         patch.maxPosPosts = current === 0 ? qty : current + qty;

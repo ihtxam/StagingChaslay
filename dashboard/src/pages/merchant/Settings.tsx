@@ -128,6 +128,7 @@ interface SettingsData {
     retailDeliveryEnabled?: boolean;
     retailDineInEnabled?: boolean;
     requireTableForDineIn?: boolean;
+    actionButtonSize?: 'sm' | 'md' | 'lg';
   } | null;
   shopPathUrl?: string | null;
   shopSubdomainUrl?: string | null;
@@ -1899,6 +1900,47 @@ export default function Settings() {
                                 posCheckoutSettings: {
                                   ...(settings.posCheckoutSettings || {}),
                                   cartSide: side,
+                                },
+                              })
+                            }
+                          />
+                          <span className="font-medium">{label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </Field>
+                <Field label={t('posActionButtonSize')} hint={t('posActionButtonSizeHint')}>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {(
+                      [
+                        ['sm', t('posActionButtonSmall')],
+                        ['md', t('posActionButtonMedium')],
+                        ['lg', t('posActionButtonBig')],
+                      ] as const
+                    ).map(([size, label]) => {
+                      const active =
+                        (settings.posCheckoutSettings?.actionButtonSize || 'md') === size;
+                      return (
+                        <label
+                          key={size}
+                          className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2.5 text-sm ${
+                            active
+                              ? 'border-[var(--text)] bg-[var(--bg-muted)]'
+                              : 'border-[var(--border)]'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="actionButtonSize"
+                            className="mt-0.5"
+                            checked={active}
+                            onChange={() =>
+                              setSettings({
+                                ...settings,
+                                posCheckoutSettings: {
+                                  ...(settings.posCheckoutSettings || {}),
+                                  actionButtonSize: size,
                                 },
                               })
                             }

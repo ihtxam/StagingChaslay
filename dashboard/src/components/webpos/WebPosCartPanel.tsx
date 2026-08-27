@@ -12,6 +12,12 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '@/lib/i18n';
+import {
+  actionButtonIconSize,
+  cartActionButtonClass,
+  normalizeActionButtonSize,
+  type WebPosActionButtonSize,
+} from '@/lib/webpos-action-button-size';
 import { cartLineKitchenReady } from '@/lib/kds-push';
 import { normalizeDashes, repairCatalogText } from '@/lib/text-encoding';
 import WebPosNumericKeypad from './WebPosNumericKeypad';
@@ -132,6 +138,7 @@ type Props = {
   kdsTicketKeys?: string[];
   /** Kitchen shout / ticket number (#8728) when order has sent lines. */
   kitchenOrderLabel?: string | null;
+  actionButtonSize?: WebPosActionButtonSize;
 };
 
 function lineExtrasLabel(l: CartLine) {
@@ -257,8 +264,12 @@ export default function WebPosCartPanel({
   kdsReadyMap = new Map(),
   kdsTicketKeys = [],
   kitchenOrderLabel = null,
+  actionButtonSize: actionButtonSizeProp,
 }: Props) {
   const { t } = useI18n();
+  const actionButtonSize = normalizeActionButtonSize(actionButtonSizeProp);
+  const actionIcon = actionButtonIconSize(actionButtonSize);
+  const actionBtn = (extra = '') => cartActionButtonClass(actionButtonSize, extra);
   const lineReady = (line: CartLine) =>
     cartLineKitchenReady(line, kdsTicketKeys, kdsReadyMap);
   const hasItems = cart.length > 0;
@@ -1127,7 +1138,7 @@ export default function WebPosCartPanel({
                 type="button"
                 disabled={!hasItems || busy}
                 onClick={() => (onHoldOrder ? onHoldOrder() : onNewOrder())}
-                className="rounded-lg bg-violet-700 py-3 text-sm font-bold uppercase tracking-wide text-white hover:bg-violet-800 disabled:opacity-40"
+                className={`${actionBtn('uppercase tracking-wide')} bg-violet-700 text-white hover:bg-violet-800`}
               >
                 {t('webPosHoldOrder')}
               </button>
@@ -1135,10 +1146,10 @@ export default function WebPosCartPanel({
                 type="button"
                 disabled={!hasItems || busy}
                 onClick={onPayment}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--webpos-accent)] py-3 text-sm font-bold text-white hover:opacity-95 disabled:opacity-40"
+                className={`${actionBtn()} inline-flex items-center justify-center gap-2 bg-[var(--webpos-accent)] text-white hover:opacity-95`}
                 aria-label={t('webPosPayment')}
               >
-                <ArrowRight size={20} aria-hidden />
+                <ArrowRight size={actionIcon} aria-hidden />
               </button>
             </>
           ) : showNewOrder ? (
@@ -1146,7 +1157,7 @@ export default function WebPosCartPanel({
               type="button"
               disabled={busy}
               onClick={onNewOrder}
-              className="col-span-2 rounded-lg bg-violet-700 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+              className={`col-span-2 ${actionBtn()} bg-violet-700 text-white hover:bg-violet-800`}
             >
               {t('webPosNew')}
             </button>
@@ -1158,7 +1169,7 @@ export default function WebPosCartPanel({
                     type="button"
                     disabled={busy}
                     onClick={onSetTable}
-                    className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+                    className={`${actionBtn()} bg-violet-700 text-white hover:bg-violet-800`}
                   >
                     {tableLabel || t('webPosSetTable')}
                   </button>
@@ -1167,7 +1178,7 @@ export default function WebPosCartPanel({
                     type="button"
                     disabled={busy}
                     onClick={onSetTab}
-                    className="rounded-lg bg-indigo-700 py-3 text-xs font-bold text-white hover:bg-indigo-800 disabled:opacity-40"
+                    className={`${actionBtn()} bg-indigo-700 text-white hover:bg-indigo-800`}
                   >
                     {tabNumber ? `#${tabNumber}` : t('webPosSetTab')}
                   </button>
@@ -1177,7 +1188,7 @@ export default function WebPosCartPanel({
                   type="button"
                   disabled={!hasItems || busy}
                   onClick={() => (onHoldOrder ? onHoldOrder() : onNewOrder())}
-                  className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+                  className={`${actionBtn()} bg-violet-700 text-white hover:bg-violet-800`}
                 >
                   {onHoldOrder ? t('webPosHoldOrder') : t('webPosNew')}
                 </button>
@@ -1189,7 +1200,7 @@ export default function WebPosCartPanel({
                   type="button"
                   disabled={!canSendNow || busy}
                   onClick={onSend}
-                  className="rounded-lg bg-violet-700 py-3 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-40"
+                  className={`${actionBtn()} bg-violet-700 text-white hover:bg-violet-800`}
                 >
                   {sendLabel}
                 </button>
@@ -1203,7 +1214,7 @@ export default function WebPosCartPanel({
               type="button"
               disabled={!hasItems || busy}
               onClick={onPayment}
-              className="rounded-lg bg-stone-200 py-3 text-sm font-bold text-stone-800 hover:bg-stone-300 disabled:opacity-40"
+              className={`${actionBtn()} bg-stone-200 text-stone-800 hover:bg-stone-300`}
             >
               {t('webPosPayment')}
             </button>

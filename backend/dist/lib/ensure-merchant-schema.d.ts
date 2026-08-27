@@ -5,6 +5,8 @@ export declare function ensureInventoryDemoColumns(): Promise<void>;
 export declare function ensureSignageAddonColumn(): Promise<void>;
 export declare function ensureKdsAddonColumn(): Promise<void>;
 export declare function ensureOdsAddonColumn(): Promise<void>;
+export declare function ensureJustEatAddonColumn(): Promise<void>;
+export declare function ensureUberEatsAddonColumn(): Promise<void>;
 /** Apply all known optional merchant columns once at startup (non-blocking). */
 export declare function ensureMerchantSchemaAtStartup(): void;
 /** Retry a merchants query after applying missing-column/table patches. */

@@ -10,6 +10,7 @@ export type CourseSendMode = "fire_per_course" | "send_all_once";
 export type CartSide = "left" | "right";
 export type PostSuccessTarget = "register" | "tables";
 export type PosMode = "restaurant" | "retail";
+export type ActionButtonSize = "sm" | "md" | "lg";
 
 export type PosCheckoutSettings = {
   tipsEnabled: boolean;
@@ -53,6 +54,8 @@ export type PosCheckoutSettings = {
    * Default: true for restaurant mode, false for retail.
    */
   requireTableForDineIn: boolean;
+  /** Express checkout + cart action buttons (Send, Payment, Tab). */
+  actionButtonSize: ActionButtonSize;
 };
 
 export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
@@ -80,6 +83,7 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   retailDeliveryEnabled: false,
   retailDineInEnabled: false,
   requireTableForDineIn: true,
+  actionButtonSize: "md",
 };
 
 function asNumberArray(v: unknown, fallback: number[]): number[] {
@@ -158,5 +162,9 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
     retailDeliveryEnabled: src.retailDeliveryEnabled === true,
     retailDineInEnabled: src.retailDineInEnabled === true,
     requireTableForDineIn,
+    actionButtonSize:
+      src.actionButtonSize === "sm" || src.actionButtonSize === "lg"
+        ? src.actionButtonSize
+        : DEFAULT_POS_CHECKOUT.actionButtonSize,
   };
 }

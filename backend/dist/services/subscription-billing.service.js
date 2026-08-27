@@ -42,6 +42,8 @@ const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const platform_settings_service_1 = require("@/services/platform-settings.service");
 const subscription_plans_service_1 = require("@/services/subscription-plans.service");
+const subscription_addons_service_1 = require("@/services/subscription-addons.service");
+const package_provisioning_service_1 = require("@/services/package-provisioning.service");
 function addMonths(date, months) {
     const d = new Date(date);
     d.setMonth(d.getMonth() + months);
@@ -64,8 +66,15 @@ class SubscriptionBillingService {
         });
         if (!merchant)
             throw new Error("Merchant not found");
-        const plans = await subscription_plans_service_1.SubscriptionPlansService.listPublic();
+        const plans = await subscription_plans_service_1.SubscriptionPlansService.listPublicForMerchant(merchantId);
         const currentPlan = (await subscription_plans_service_1.SubscriptionPlansService.getBySlug(merchant.subscriptionPlan || "free")) || null;
+        const addons = await subscription_addons_service_1.SubscriptionAddonsService.listPublicForMerchant(merchantId);
+        const activeAddons = await subscription_addons_service_1.SubscriptionAddonsService.listActiveForMerchant(merchantId);
+        const edition = merchant.editionId
+            ? await db.query.editions.findFirst({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.editions.id, merchant.editionId),
+            })
+            : null;
         const payments = await db.query.subscriptionPayments.findMany({
             where: (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPayments.merchantId, merchantId),
             orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.subscriptionPayments.createdAt)],
@@ -91,9 +100,20 @@ class SubscriptionBillingService {
                 status: merchant.status,
                 subscriptionEndsAt: merchant.subscriptionEndsAt,
                 trialEndsAt: merchant.trialEndsAt,
+                editionId: merchant.editionId,
+                editionName: edition?.name || null,
+                maxPosPosts: merchant.maxPosPosts,
+                maxWaiterPosts: merchant.maxWaiterPosts,
+                maxStaff: merchant.maxStaff,
+                inventoryAddonEnabled: merchant.inventoryAddonEnabled,
+                signageAddonEnabled: merchant.signageAddonEnabled,
+                kdsAddonEnabled: merchant.kdsAddonEnabled,
+                odsAddonEnabled: merchant.odsAddonEnabled,
             },
             currentPlan,
             plans,
+            addons,
+            activeAddons,
             payments,
             platformAdyenConfigured,
             webposEntitlement,
@@ -110,12 +130,11 @@ class SubscriptionBillingService {
         const currency = (plan.currency || "CHF").toUpperCase();
         const periodStart = new Date();
         const periodEnd = addMonths(periodStart, cycle === "yearly" ? 12 : 1);
-        // Free / zero-price plans: assign immediately
         if (!amount || amount <= 0) {
+            await package_provisioning_service_1.PackageProvisioningService.applyPlan(merchantId, plan.id);
             await db
                 .update(db_1.schema.merchants)
                 .set({
-                subscriptionPlan: plan.slug,
                 subscriptionEndsAt: periodEnd,
                 status: "active",
                 updatedAt: new Date(),
@@ -136,12 +155,7 @@ class SubscriptionBillingService {
                 adyenResultCode: "Free",
             })
                 .returning();
-            return {
-                free: true,
-                payment,
-                plan,
-                billingCycle: cycle,
-            };
+            return { free: true, payment, plan, billingCycle: cycle };
         }
         const creds = await platform_settings_service_1.PlatformSettingsService.resolvePlatformAdyenCredentials();
         const [payment] = await db
@@ -162,10 +176,7 @@ class SubscriptionBillingService {
             `${process.env.MERCHANT_DASHBOARD_URL || process.env.PUBLIC_APP_URL || ""}/merchant/billing?paymentId=${payment.id}`;
         try {
             const sessionPayload = {
-                amount: {
-                    value: Math.round(amount * 100),
-                    currency,
-                },
+                amount: { value: Math.round(amount * 100), currency },
                 merchantAccount: creds.merchantAccount,
                 reference,
                 returnUrl: defaultReturn,
@@ -193,15 +204,11 @@ class SubscriptionBillingService {
             const sessionId = response.data?.id;
             const sessionData = response.data?.sessionData;
             if (!sessionId || !sessionData) {
-                console.error("Adyen /sessions response missing id or sessionData:", response.data);
                 throw new Error("Adyen session response was incomplete. Check platform API key and merchant account match the client key account.");
             }
             await db
                 .update(db_1.schema.subscriptionPayments)
-                .set({
-                adyenSessionId: sessionId,
-                updatedAt: new Date(),
-            })
+                .set({ adyenSessionId: sessionId, updatedAt: new Date() })
                 .where((0, drizzle_orm_1.eq)(db_1.schema.subscriptionPayments.id, payment.id));
             return {
                 free: false,
@@ -221,21 +228,11 @@ class SubscriptionBillingService {
                 .update(db_1.schema.subscriptionPayments)
                 .set({ status: "failed", updatedAt: new Date() })
                 .where((0, drizzle_orm_1.eq)(db_1.schema.subscriptionPayments.id, payment.id));
-            const msg = (0, platform_settings_service_1.formatAdyenCheckoutApiError)(error, {
+            throw new Error((0, platform_settings_service_1.formatAdyenCheckoutApiError)(error, {
                 apiBase: creds.apiBase,
                 merchantAccount: creds.merchantAccount,
                 phase: "sessions",
-            });
-            console.error("Subscription Adyen checkout failed:", {
-                status: error?.response?.status,
-                data: error?.response?.data,
-                merchantAccount: creds.merchantAccount,
-                apiBase: creds.apiBase,
-                environment: creds.environment,
-                clientKeyPrefix: creds.clientKey.slice(0, 12),
-                message: msg,
-            });
-            throw new Error(msg);
+            }));
         }
     }
     static async confirmPayment(merchantId, paymentId, opts) {
@@ -280,10 +277,9 @@ class SubscriptionBillingService {
         })
             .where((0, drizzle_orm_1.eq)(db_1.schema.subscriptionPayments.id, paymentId))
             .returning();
-        const planSlug = payment.plan?.slug;
-        if (planSlug) {
+        if (payment.planId) {
+            await package_provisioning_service_1.PackageProvisioningService.applyPlan(merchantId, payment.planId);
             const merchantPatch = {
-                subscriptionPlan: planSlug,
                 subscriptionEndsAt: periodEnd,
                 subscriptionBillingCycle: payment.billingCycle,
                 status: "active",
@@ -300,7 +296,6 @@ class SubscriptionBillingService {
         }
         return { alreadyPaid: false, payment: updated };
     }
-    /** Mark paid from Adyen webhook (by session id or merchant reference metadata) */
     static async markPaidFromWebhook(opts) {
         const db = (0, db_1.getDb)();
         let payment = null;
@@ -326,10 +321,6 @@ class SubscriptionBillingService {
             recurringDetailReference: opts.recurringDetailReference,
         })).payment;
     }
-    /**
-     * Charge merchants whose subscription period has ended using stored Adyen token.
-     * Called hourly from backend scheduler.
-     */
     static async processRecurringRenewals() {
         const db = (0, db_1.getDb)();
         const now = new Date();
@@ -441,6 +432,159 @@ class SubscriptionBillingService {
             pspReference: response.data?.pspReference,
             recurringDetailReference,
         });
+    }
+    static async startAddonCheckout(merchantId, addonId, billingCycle, returnUrl) {
+        const db = (0, db_1.getDb)();
+        const cycle = billingCycle === "yearly" ? "yearly" : "monthly";
+        const addon = await subscription_addons_service_1.SubscriptionAddonsService.getById(addonId);
+        if (!addon.isActive || !addon.isPublic) {
+            throw new Error("This add-on is not available for purchase");
+        }
+        const amount = cycle === "yearly"
+            ? addon.priceYearly != null && addon.priceYearly !== ""
+                ? Number(addon.priceYearly)
+                : Number(addon.priceMonthly) * 12
+            : Number(addon.priceMonthly);
+        const currency = (addon.currency || "CHF").toUpperCase();
+        const periodStart = new Date();
+        const periodEnd = addMonths(periodStart, cycle === "yearly" ? 12 : 1);
+        if (!amount || amount <= 0) {
+            await package_provisioning_service_1.PackageProvisioningService.applyAddon(merchantId, addon);
+            await db.insert(db_1.schema.merchantAddonSubscriptions).values({
+                merchantId,
+                addonId: addon.id,
+                billingCycle: cycle,
+                status: "active",
+                periodStart,
+                periodEnd,
+            });
+            return { free: true, addon, billingCycle: cycle };
+        }
+        const creds = await platform_settings_service_1.PlatformSettingsService.resolvePlatformAdyenCredentials();
+        const [payment] = await db
+            .insert(db_1.schema.subscriptionAddonPayments)
+            .values({
+            merchantId,
+            addonId: addon.id,
+            billingCycle: cycle,
+            amount: amount.toFixed(2),
+            currency,
+            status: "pending",
+            periodStart,
+            periodEnd,
+        })
+            .returning();
+        const reference = `addon-${merchantId.slice(0, 8)}-${payment.id.slice(0, 8)}`;
+        const defaultReturn = returnUrl ||
+            `${process.env.MERCHANT_DASHBOARD_URL || process.env.PUBLIC_APP_URL || ""}/merchant/billing?addonPaymentId=${payment.id}`;
+        try {
+            const response = await axios_1.default.post(`${creds.apiBase}/sessions`, {
+                amount: { value: Math.round(amount * 100), currency },
+                merchantAccount: creds.merchantAccount,
+                reference,
+                returnUrl: defaultReturn,
+                channel: "Web",
+                countryCode: "CH",
+                shopperReference: merchantId,
+                clientKey: creds.clientKey,
+                storePaymentMethod: true,
+                recurringProcessingModel: "Subscription",
+                shopperInteraction: "Ecommerce",
+                metadata: {
+                    type: "subscription_addon",
+                    paymentId: payment.id,
+                    merchantId,
+                    addonId: addon.id,
+                    billingCycle: cycle,
+                },
+            }, {
+                headers: {
+                    "x-api-key": creds.apiKey,
+                    "Content-Type": "application/json",
+                },
+            });
+            const sessionId = response.data?.id;
+            const sessionData = response.data?.sessionData;
+            if (!sessionId || !sessionData) {
+                throw new Error("Adyen session response was incomplete");
+            }
+            await db
+                .update(db_1.schema.subscriptionAddonPayments)
+                .set({ adyenSessionId: sessionId, updatedAt: new Date() })
+                .where((0, drizzle_orm_1.eq)(db_1.schema.subscriptionAddonPayments.id, payment.id));
+            return {
+                free: false,
+                payment: { ...payment, adyenSessionId: sessionId },
+                addon,
+                billingCycle: cycle,
+                paymentSession: {
+                    id: sessionId,
+                    sessionData,
+                    clientKey: creds.clientKey,
+                    environment: creds.dropinEnvironment,
+                },
+            };
+        }
+        catch (error) {
+            await db
+                .update(db_1.schema.subscriptionAddonPayments)
+                .set({ status: "failed", updatedAt: new Date() })
+                .where((0, drizzle_orm_1.eq)(db_1.schema.subscriptionAddonPayments.id, payment.id));
+            throw new Error((0, platform_settings_service_1.formatAdyenCheckoutApiError)(error, {
+                apiBase: creds.apiBase,
+                merchantAccount: creds.merchantAccount,
+                phase: "sessions",
+            }));
+        }
+    }
+    static async confirmAddonPayment(merchantId, paymentId, opts) {
+        const db = (0, db_1.getDb)();
+        const payment = await db.query.subscriptionAddonPayments.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.subscriptionAddonPayments.id, paymentId), (0, drizzle_orm_1.eq)(db_1.schema.subscriptionAddonPayments.merchantId, merchantId)),
+            with: { addon: true },
+        });
+        if (!payment)
+            throw new Error("Payment not found");
+        if (payment.status === "paid") {
+            return { alreadyPaid: true, payment };
+        }
+        const resultCode = opts?.resultCode || "Authorised";
+        const ok = ["Authorised", "Received", "Pending", "PresentToShopper"].includes(resultCode);
+        if (!ok) {
+            await db
+                .update(db_1.schema.subscriptionAddonPayments)
+                .set({ status: "failed", adyenResultCode: resultCode, updatedAt: new Date() })
+                .where((0, drizzle_orm_1.eq)(db_1.schema.subscriptionAddonPayments.id, paymentId));
+            throw new Error(`Payment not successful (${resultCode})`);
+        }
+        const periodStart = payment.periodStart || new Date();
+        const periodEnd = payment.periodEnd ||
+            addMonths(periodStart, payment.billingCycle === "yearly" ? 12 : 1);
+        const [updated] = await db
+            .update(db_1.schema.subscriptionAddonPayments)
+            .set({
+            status: "paid",
+            adyenResultCode: resultCode,
+            adyenPspReference: opts?.pspReference || payment.adyenPspReference,
+            paidAt: new Date(),
+            periodStart,
+            periodEnd,
+            updatedAt: new Date(),
+        })
+            .where((0, drizzle_orm_1.eq)(db_1.schema.subscriptionAddonPayments.id, paymentId))
+            .returning();
+        if (payment.addon) {
+            await package_provisioning_service_1.PackageProvisioningService.applyAddon(merchantId, payment.addon);
+            await db.insert(db_1.schema.merchantAddonSubscriptions).values({
+                merchantId,
+                addonId: payment.addonId,
+                billingCycle: payment.billingCycle,
+                status: "active",
+                periodStart,
+                periodEnd,
+            });
+        }
+        return { alreadyPaid: false, payment: updated };
     }
 }
 exports.SubscriptionBillingService = SubscriptionBillingService;

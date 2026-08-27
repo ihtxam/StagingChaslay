@@ -231,6 +231,7 @@ export declare class ChaslayCompatService {
                 retailDeliveryEnabled: boolean;
                 retailDineInEnabled: boolean;
                 requireTableForDineIn: boolean;
+                actionButtonSize: import("@/lib/pos-checkout-settings").ActionButtonSize;
             };
             receipt_base_url: string;
             scale: {
@@ -312,6 +313,7 @@ export declare class ChaslayCompatService {
             retailDeliveryEnabled: boolean;
             retailDineInEnabled: boolean;
             requireTableForDineIn: boolean;
+            actionButtonSize: import("@/lib/pos-checkout-settings").ActionButtonSize;
         };
         receipt_base_url: string;
         scale: {

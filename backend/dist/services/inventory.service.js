@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.InventoryService = exports.InventoryLicenseError = exports.INVENTORY_UNITS = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
@@ -6,6 +39,7 @@ const db_1 = require("@/db");
 const email_service_1 = require("@/services/email.service");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const inventory_addon_1 = require("@/lib/inventory-addon");
+const business_module_1 = require("@/lib/business-module");
 exports.INVENTORY_UNITS = ["kg", "g", "L", "ml", "piece", "pack"];
 const DEFAULT_UNITS = [
     { code: "kg", name: "Kilogram" },
@@ -589,6 +623,8 @@ class InventoryService {
                 patch.categoryId = input.categoryId;
             if (parseExpiryDate(input.expiryDate))
                 patch.perishable = true;
+            if (input.cost != null && Number.isFinite(input.cost))
+                patch.cost = input.cost;
             if (Object.keys(patch).length) {
                 item = await this.updateItem(merchantId, item.id, patch);
             }
@@ -600,7 +636,60 @@ class InventoryService {
             note: input.note || "Storekeeper intake",
             expiryDate: input.expiryDate,
         });
-        return { item: updated, created };
+        let menuProduct = null;
+        const db = (0, db_1.getDb)();
+        const merchant = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { businessCategory: true },
+        });
+        const businessModule = (0, business_module_1.normalizeBusinessModule)(merchant?.businessCategory);
+        const publishToPos = input.publishToPos !== false && (businessModule === "retail" || businessModule === null);
+        if (publishToPos) {
+            menuProduct = await this.publishStorekeeperToPos(merchantId, {
+                barcode,
+                name: String(input.name || item.name).trim(),
+                salePrice: input.salePrice,
+                qty,
+                imageUrl: input.imageUrl,
+            });
+        }
+        return { item: updated, created, menuProduct };
+    }
+    /** Create or update a sellable menu product after storekeeper intake (retail). */
+    static async publishStorekeeperToPos(merchantId, input) {
+        const { ProductService } = await Promise.resolve().then(() => __importStar(require("@/services/product.service")));
+        const db = (0, db_1.getDb)();
+        const existing = await ProductService.getProductByBarcode(merchantId, input.barcode);
+        const price = input.salePrice != null && Number.isFinite(input.salePrice) ? input.salePrice : 0;
+        const stockAdd = Math.max(0, Math.floor(input.qty));
+        if (existing) {
+            const nextStock = Math.max(0, Math.floor(Number(existing.stock) || 0) + stockAdd);
+            const patch = {
+                name: input.name,
+                stock: nextStock,
+            };
+            if (input.salePrice != null && Number.isFinite(input.salePrice)) {
+                patch.price = price.toString();
+            }
+            if (input.imageUrl && !existing.imageUrl) {
+                patch.imageUrl = input.imageUrl;
+            }
+            const updated = await ProductService.updateProduct(merchantId, existing.id, patch);
+            return { id: updated.id, name: updated.name, price: Number(updated.price), stock: nextStock, created: false };
+        }
+        const defaultCategory = await db.query.categories.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchantId),
+            orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.categories.sortOrder)],
+            columns: { id: true },
+        });
+        const created = await ProductService.createProduct(merchantId, input.name, price, defaultCategory?.id, undefined, input.barcode, undefined, stockAdd, true, undefined, input.imageUrl || undefined);
+        return {
+            id: created.id,
+            name: created.name,
+            price: Number(created.price),
+            stock: stockAdd,
+            created: true,
+        };
     }
     static async assertBarcodeAvailable(merchantId, barcode, excludeItemId) {
         const db = (0, db_1.getDb)();

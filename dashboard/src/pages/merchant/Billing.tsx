@@ -49,6 +49,8 @@ type MerchantBilling = {
   signageAddonEnabled?: boolean;
   kdsAddonEnabled?: boolean;
   odsAddonEnabled?: boolean;
+  justEatAddonEnabled?: boolean;
+  uberEatsAddonEnabled?: boolean;
 };
 
 type PaymentSession = {
@@ -294,6 +296,8 @@ export default function Billing() {
                   merchant.signageAddonEnabled && 'Signage',
                   merchant.kdsAddonEnabled && 'KDS',
                   merchant.odsAddonEnabled && 'ODS',
+                  merchant.justEatAddonEnabled && 'Just Eat',
+                  merchant.uberEatsAddonEnabled && 'Uber Eats',
                 ]
                   .filter(Boolean)
                   .join(', ') || 'None'}

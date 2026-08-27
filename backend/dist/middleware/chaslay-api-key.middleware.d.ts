@@ -103,6 +103,8 @@ export declare function resolveChaslayMerchantBySlug(slug?: string | null): Prom
     signageScreenLimit: number;
     kdsAddonEnabled: boolean;
     odsAddonEnabled: boolean;
+    justEatAddonEnabled: boolean;
+    uberEatsAddonEnabled: boolean;
     inventoryWasteFactor: string;
     inventoryAutoReorderEmailEnabled: boolean;
     inventoryExpiryAlertDays: number;

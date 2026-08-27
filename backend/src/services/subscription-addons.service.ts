@@ -32,6 +32,8 @@ const VALID_ADDON_KEYS = new Set([
   "signage",
   "kds",
   "ods",
+  "just_eat",
+  "uber_eats",
   "extra_pos_post",
   "extra_waiter_post",
   "extra_staff",
@@ -248,5 +250,46 @@ export class SubscriptionAddonsService {
       await this.create({ ...addon, ownerId: platformResellerId });
     }
     console.log("Seeded default subscription add-ons");
+    await this.ensureMissingDefaultAddons(platformResellerId);
+  }
+
+  /** Add new catalog entries on existing installs without re-seeding everything. */
+  static async ensureMissingDefaultAddons(platformResellerId?: string) {
+    const db = getDb();
+    const { PlatformResellerService } = await import("@/services/platform-reseller.service");
+    const ownerId = platformResellerId || (await PlatformResellerService.ensure());
+
+    const missing: AddonInput[] = [
+      {
+        name: "Just Eat integration",
+        slug: "just-eat",
+        addonKey: "just_eat",
+        description: "Receive and manage Just Eat / JET Connect orders in POS",
+        priceMonthly: 19,
+        priceYearly: 190,
+        sortOrder: 45,
+      },
+      {
+        name: "Uber Eats integration",
+        slug: "uber-eats",
+        addonKey: "uber_eats",
+        description: "Receive and manage Uber Eats orders in POS",
+        priceMonthly: 19,
+        priceYearly: 190,
+        sortOrder: 46,
+      },
+    ];
+
+    for (const addon of missing) {
+      const existing = await db.query.subscriptionAddons.findFirst({
+        where: and(
+          eq(schema.subscriptionAddons.ownerId, ownerId),
+          eq(schema.subscriptionAddons.slug, addon.slug)
+        ),
+      });
+      if (!existing) {
+        await this.create({ ...addon, ownerId });
+      }
+    }
   }
 }

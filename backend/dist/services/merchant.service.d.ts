@@ -139,6 +139,8 @@ export declare class MerchantService {
         maxPosPosts: number;
         maxWaiterPosts: number;
         maxStaff: number;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -418,6 +420,8 @@ export declare class MerchantService {
         maxPosPosts: number;
         maxWaiterPosts: number;
         maxStaff: number;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -534,6 +538,8 @@ export declare class MerchantService {
         signageScreenLimit: number;
         kdsAddonEnabled: boolean;
         odsAddonEnabled: boolean;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -675,6 +681,8 @@ export declare class MerchantService {
         maxPosPosts: number;
         maxWaiterPosts: number;
         maxStaff: number;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -925,6 +933,8 @@ export declare class MerchantService {
         maxPosPosts: number;
         maxWaiterPosts: number;
         maxStaff: number;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1076,6 +1086,8 @@ export declare class MerchantService {
         signageScreenLimit?: number;
         kdsAddonEnabled?: boolean;
         odsAddonEnabled?: boolean;
+        justEatAddonEnabled?: boolean;
+        uberEatsAddonEnabled?: boolean;
     }): Promise<{
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
@@ -1174,6 +1186,8 @@ export declare class MerchantService {
         maxPosPosts: number;
         maxWaiterPosts: number;
         maxStaff: number;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1406,6 +1420,8 @@ export declare class MerchantService {
         signageScreenLimit: number;
         kdsAddonEnabled: boolean;
         odsAddonEnabled: boolean;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1528,6 +1544,8 @@ export declare class MerchantService {
         signageScreenLimit: number;
         kdsAddonEnabled: boolean;
         odsAddonEnabled: boolean;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1650,6 +1668,8 @@ export declare class MerchantService {
         signageScreenLimit: number;
         kdsAddonEnabled: boolean;
         odsAddonEnabled: boolean;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1793,6 +1813,8 @@ export declare class MerchantService {
         signageScreenLimit: number;
         kdsAddonEnabled: boolean;
         odsAddonEnabled: boolean;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1920,6 +1942,8 @@ export declare class MerchantService {
         signageScreenLimit: number;
         kdsAddonEnabled: boolean;
         odsAddonEnabled: boolean;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -2043,6 +2067,8 @@ export declare class MerchantService {
             signageScreenLimit: number;
             kdsAddonEnabled: boolean;
             odsAddonEnabled: boolean;
+            justEatAddonEnabled: boolean;
+            uberEatsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             inventoryExpiryAlertDays: number;

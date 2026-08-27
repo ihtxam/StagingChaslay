@@ -9140,6 +9140,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     ? kitchenOrderNumber({ allowNew: false }) || null
                     : null
                 }
+                actionButtonSize={checkoutSettings.actionButtonSize}
               />
             </div>
             ) : null}
@@ -9258,6 +9259,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 }
                 onCustomAmount={openCustomAmountModal}
                 onBackgroundClick={() => handleSelectLine(null)}
+                actionButtonSize={checkoutSettings.actionButtonSize}
               />
               {/* Odoo-style sticky Pay | Cart — only on narrow viewports (JS + CSS). */}
               {isNarrowViewport ? (

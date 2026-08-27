@@ -50,6 +50,7 @@ const inventory_addon_1 = require("@/lib/inventory-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
+const delivery_platform_addon_1 = require("@/lib/delivery-platform-addon");
 function pickLastAppVersion(rows) {
     let best = null;
     for (const row of rows) {
@@ -261,6 +262,11 @@ class MerchantService {
                 }
             }
             const lockedModule = (0, business_module_1.normalizeBusinessModule)(options?.businessCategory);
+            let assignedResellerId = options?.resellerId || null;
+            if (!assignedResellerId) {
+                const { PlatformResellerService } = await Promise.resolve().then(() => __importStar(require("./platform-reseller.service")));
+                assignedResellerId = await PlatformResellerService.getId();
+            }
             const merchant = await db
                 .insert(db_1.schema.merchants)
                 .values({
@@ -279,7 +285,7 @@ class MerchantService {
                 trialEndsAt,
                 syncApiKey: (0, chaslay_compat_service_1.generateSyncApiKey)(),
                 editionId: options?.editionId || null,
-                resellerId: options?.resellerId || null,
+                resellerId: assignedResellerId,
                 businessCategory: lockedModule,
                 maxPosPosts: normalizePosPostLimit(options?.maxPosPosts ?? 0),
                 maxWaiterPosts: normalizePosPostLimit(options?.maxWaiterPosts ?? 0),
@@ -541,7 +547,9 @@ class MerchantService {
             addons.signageAddonEnabled === undefined &&
             addons.signageScreenLimit === undefined &&
             addons.kdsAddonEnabled === undefined &&
-            addons.odsAddonEnabled === undefined) {
+            addons.odsAddonEnabled === undefined &&
+            addons.justEatAddonEnabled === undefined &&
+            addons.uberEatsAddonEnabled === undefined) {
             throw new Error("No addon updates provided");
         }
         if (addons.inventoryAddonEnabled !== undefined) {
@@ -558,6 +566,12 @@ class MerchantService {
         }
         if (addons.odsAddonEnabled !== undefined) {
             await (0, ods_addon_1.writeOdsAddonEnabled)(merchantId, addons.odsAddonEnabled);
+        }
+        if (addons.justEatAddonEnabled !== undefined) {
+            await (0, delivery_platform_addon_1.writeJustEatAddonEnabled)(merchantId, addons.justEatAddonEnabled);
+        }
+        if (addons.uberEatsAddonEnabled !== undefined) {
+            await (0, delivery_platform_addon_1.writeUberEatsAddonEnabled)(merchantId, addons.uberEatsAddonEnabled);
         }
         return this.getMerchantById(merchantId);
     }

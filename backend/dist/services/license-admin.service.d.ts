@@ -183,6 +183,8 @@ export declare class LicenseAdminService {
             signageScreenLimit: number;
             kdsAddonEnabled: boolean;
             odsAddonEnabled: boolean;
+            justEatAddonEnabled: boolean;
+            uberEatsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             inventoryExpiryAlertDays: number;
@@ -332,6 +334,8 @@ export declare class LicenseAdminService {
             signageScreenLimit: number;
             kdsAddonEnabled: boolean;
             odsAddonEnabled: boolean;
+            justEatAddonEnabled: boolean;
+            uberEatsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             inventoryExpiryAlertDays: number;
@@ -544,6 +548,8 @@ export declare class LicenseAdminService {
                 signageScreenLimit: number;
                 kdsAddonEnabled: boolean;
                 odsAddonEnabled: boolean;
+                justEatAddonEnabled: boolean;
+                uberEatsAddonEnabled: boolean;
                 inventoryWasteFactor: string;
                 inventoryAutoReorderEmailEnabled: boolean;
                 inventoryExpiryAlertDays: number;

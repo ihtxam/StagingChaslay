@@ -319,6 +319,12 @@ const en: Dict = {
   posCartSideHint: 'Place the Reborn cart on the left or right. Default is right.',
   posCartSideLeft: 'Left',
   posCartSideRight: 'Right',
+  posActionButtonSize: 'Action button size',
+  posActionButtonSizeHint:
+    'Cash, card, Send, Payment and Tab buttons on POS — choose a size for easier tapping.',
+  posActionButtonSmall: 'Small',
+  posActionButtonMedium: 'Medium',
+  posActionButtonBig: 'Big',
   posPostSuccessHint: 'Where Reborn goes after a successful payment.',
   webposPaymentMethodsMovedHint: 'POS payment toggles (Express, cash, card, terminal) are under Settings →',
   save: 'Save',
@@ -1282,6 +1288,10 @@ const en: Dict = {
   settingsDeliveryPlatformsHint:
     'Connect Just Eat and Uber Eats. Orders appear in POS and the Orders board; kitchen tickets auto-print when enabled.',
   deliveryPlatformsSaved: 'Delivery platform settings saved',
+  deliveryPlatformAddonRequired: 'This integration requires a paid add-on.',
+  deliveryPlatformAddonJustEat: 'Just Eat add-on',
+  deliveryPlatformAddonUberEats: 'Uber Eats add-on',
+  deliveryPlatformAddonBuy: 'View add-ons in Billing',
   deliveryPlatformsDbMigrateHint:
     'Database is missing delivery_platform_settings. Run backend/sql/ensure-delivery-platforms.sql',
   deliveryPlatformEnable: 'Enable integration',
@@ -3557,6 +3567,12 @@ const fr: Dict = {
   posCartSideHint: 'Placez le panier Reborn à gauche ou à droite. Droite par défaut.',
   posCartSideLeft: 'Gauche',
   posCartSideRight: 'Droite',
+  posActionButtonSize: 'Taille des boutons d’action',
+  posActionButtonSizeHint:
+    'Espèces, carte, Envoyer, Paiement et Onglet sur le POS — choisissez une taille pour faciliter le toucher.',
+  posActionButtonSmall: 'Petit',
+  posActionButtonMedium: 'Moyen',
+  posActionButtonBig: 'Grand',
   posPostSuccessHint: 'Où Reborn va après un paiement réussi.',
   webposPaymentMethodsMovedHint:
     'Les modes de paiement POS (Express, espèces, carte, terminal) sont sous Paramètres →',
@@ -4519,6 +4535,10 @@ const fr: Dict = {
   settingsDeliveryPlatformsHint:
     'Connectez Just Eat et Uber Eats. Les commandes arrivent au POS et s’impriment en cuisine si activé.',
   deliveryPlatformsSaved: 'Plateformes de livraison enregistrées',
+  deliveryPlatformAddonRequired: 'Cette intégration nécessite un addon payant.',
+  deliveryPlatformAddonJustEat: 'Addon Just Eat',
+  deliveryPlatformAddonUberEats: 'Addon Uber Eats',
+  deliveryPlatformAddonBuy: 'Voir les addons dans Facturation',
   deliveryPlatformsDbMigrateHint:
     'Colonne delivery_platform_settings manquante. Exécutez backend/sql/ensure-delivery-platforms.sql',
   deliveryPlatformEnable: 'Activer l’intégration',
@@ -6760,6 +6780,12 @@ const de: Dict = {
   posCartSideHint: 'Warenkorb links oder rechts in Reborn. Standard ist rechts.',
   posCartSideLeft: 'Links',
   posCartSideRight: 'Rechts',
+  posActionButtonSize: 'Aktionsbutton-Größe',
+  posActionButtonSizeHint:
+    'Bar, Karte, Senden, Zahlung und Tab am POS — Größe für einfacheres Tippen wählen.',
+  posActionButtonSmall: 'Klein',
+  posActionButtonMedium: 'Mittel',
+  posActionButtonBig: 'Groß',
   posPostSuccessHint: 'Wohin Reborn nach erfolgreicher Zahlung wechselt.',
   webposPaymentMethodsMovedHint:
     'POS-Zahlungsarten (Express, Bar, Karte, Terminal) finden Sie unter Einstellungen →',
@@ -7722,6 +7748,10 @@ const de: Dict = {
   settingsDeliveryPlatformsHint:
     'Just Eat und Uber Eats verbinden. Bestellungen erscheinen im POS und drucken automatisch in der Küche.',
   deliveryPlatformsSaved: 'Lieferplattform-Einstellungen gespeichert',
+  deliveryPlatformAddonRequired: 'Diese Integration erfordert ein bezahltes Addon.',
+  deliveryPlatformAddonJustEat: 'Just-Eat-Addon',
+  deliveryPlatformAddonUberEats: 'Uber-Eats-Addon',
+  deliveryPlatformAddonBuy: 'Addons unter Abrechnung ansehen',
   deliveryPlatformsDbMigrateHint:
     'Spalte delivery_platform_settings fehlt. backend/sql/ensure-delivery-platforms.sql ausführen',
   deliveryPlatformEnable: 'Integration aktivieren',

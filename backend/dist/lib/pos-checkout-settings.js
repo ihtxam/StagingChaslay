@@ -29,6 +29,7 @@ exports.DEFAULT_POS_CHECKOUT = {
     retailDeliveryEnabled: false,
     retailDineInEnabled: false,
     requireTableForDineIn: true,
+    actionButtonSize: "md",
 };
 function asNumberArray(v, fallback) {
     if (!Array.isArray(v))
@@ -92,6 +93,9 @@ function normalizePosCheckoutSettings(raw) {
         retailDeliveryEnabled: src.retailDeliveryEnabled === true,
         retailDineInEnabled: src.retailDineInEnabled === true,
         requireTableForDineIn,
+        actionButtonSize: src.actionButtonSize === "sm" || src.actionButtonSize === "lg"
+            ? src.actionButtonSize
+            : exports.DEFAULT_POS_CHECKOUT.actionButtonSize,
     };
 }
 //# sourceMappingURL=pos-checkout-settings.js.map

@@ -316,6 +316,8 @@ export declare class ResellerService {
         maxPosPosts: number;
         maxWaiterPosts: number;
         maxStaff: number;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -450,6 +452,8 @@ export declare class ResellerService {
         maxPosPosts: number;
         maxWaiterPosts: number;
         maxStaff: number;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -697,6 +701,8 @@ export declare class ResellerService {
         maxPosPosts: number;
         maxWaiterPosts: number;
         maxStaff: number;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -933,6 +939,8 @@ export declare class ResellerService {
         signageScreenLimit: number;
         kdsAddonEnabled: boolean;
         odsAddonEnabled: boolean;
+        justEatAddonEnabled: boolean;
+        uberEatsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -1084,6 +1092,8 @@ export declare class ResellerService {
             signageScreenLimit: number;
             kdsAddonEnabled: boolean;
             odsAddonEnabled: boolean;
+            justEatAddonEnabled: boolean;
+            uberEatsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             inventoryExpiryAlertDays: number;

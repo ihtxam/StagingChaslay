@@ -1,8 +1,10 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Link } from 'react-router-dom';
 import { Bike, Copy, Save, Truck, type LucideIcon } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { isJustEatLicensed, isUberEatsLicensed } from '@/lib/delivery-platform-addon';
 import {
   settingsDash,
   SettingsField,
@@ -65,6 +67,8 @@ export default function SettingsDeliveryPlatformsTab() {
   const [merchantId, setMerchantId] = useState('');
   const [justEat, setJustEat] = useState<PlatformForm>(emptyPlatform());
   const [uberEats, setUberEats] = useState<PlatformForm>(emptyPlatform());
+  const [justEatLicensed, setJustEatLicensed] = useState(false);
+  const [uberEatsLicensed, setUberEatsLicensed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,6 +76,8 @@ export default function SettingsDeliveryPlatformsTab() {
       const res = await api.get('/merchant/settings');
       const s = res.data.settings || {};
       setMerchantId(String(s.id || ''));
+      setJustEatLicensed(isJustEatLicensed(s));
+      setUberEatsLicensed(isUberEatsLicensed(s));
       const dp = (s.deliveryPlatformSettings || {}) as DeliveryPlatformSettings;
       setJustEat({
         ...emptyPlatform(),
@@ -162,9 +168,13 @@ export default function SettingsDeliveryPlatformsTab() {
       const e = err as { response?: { data?: { error?: string } } };
       const msg = e.response?.data?.error || t('saveFailed');
       toast.error(
-        /delivery_platform_settings/i.test(msg)
-          ? t('deliveryPlatformsDbMigrateHint')
-          : msg
+        /Just Eat integration requires/i.test(msg)
+          ? t('deliveryPlatformAddonRequired')
+          : /Uber Eats integration requires/i.test(msg)
+            ? t('deliveryPlatformAddonRequired')
+            : /delivery_platform_settings/i.test(msg)
+              ? t('deliveryPlatformsDbMigrateHint')
+              : msg
       );
     } finally {
       setSaving(false);
@@ -178,15 +188,33 @@ export default function SettingsDeliveryPlatformsTab() {
     form: PlatformForm,
     setForm: (next: PlatformForm) => void,
     webhookUrl: string,
-    variant: 'justeat' | 'ubereats'
+    variant: 'justeat' | 'ubereats',
+    licensed: boolean
   ) => {
     const prodReady =
       variant === 'justeat' ? hasJustEatProductionCreds(form) : hasUberProductionCreds(form);
+    const addonLabel =
+      variant === 'justeat' ? t('deliveryPlatformAddonJustEat') : t('deliveryPlatformAddonUberEats');
     return (
       <SettingsReportCard title={title} icon={icon} accent={accent}>
+        {!licensed && !form.enabled ? (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <p>{t('deliveryPlatformAddonRequired')}</p>
+            <p className="mt-1 text-xs">{addonLabel}</p>
+            <Link to="/merchant/billing" className="mt-2 inline-block text-xs font-semibold underline">
+              {t('deliveryPlatformAddonBuy')}
+            </Link>
+          </div>
+        ) : null}
         <SettingsToggleRow
           checked={form.enabled}
-          onChange={(enabled) => setForm({ ...form, enabled })}
+          onChange={(enabled) => {
+            if (enabled && !licensed) {
+              toast.error(t('deliveryPlatformAddonRequired'));
+              return;
+            }
+            setForm({ ...form, enabled });
+          }}
           title={t('deliveryPlatformEnable')}
           hint={t('deliveryPlatformEnableHint')}
         />
@@ -367,7 +395,8 @@ export default function SettingsDeliveryPlatformsTab() {
         justEat,
         setJustEat,
         webhookUrls.justEat,
-        'justeat'
+        'justeat',
+        justEatLicensed
       )}
       {renderPlatform(
         t('deliveryPlatformUberEats'),
@@ -376,7 +405,8 @@ export default function SettingsDeliveryPlatformsTab() {
         uberEats,
         setUberEats,
         webhookUrls.uberEats,
-        'ubereats'
+        'ubereats',
+        uberEatsLicensed
       )}
 
       <SettingsReportCard

@@ -1,4 +1,5 @@
 import { schema } from "@/db";
+import type { PackageIncludedAddons } from "@/db/schema";
 export type PlanInput = {
     name: string;
     slug: string;
@@ -6,16 +7,24 @@ export type PlanInput = {
     priceMonthly: number | string;
     priceYearly?: number | string | null;
     currency?: string;
+    editionId?: string | null;
     maxDevices?: number;
     maxProducts?: number | null;
+    maxPosPosts?: number;
+    maxWaiterPosts?: number;
+    maxStaff?: number;
+    includedAddons?: PackageIncludedAddons;
     features?: string[];
     isActive?: boolean;
     isPublic?: boolean;
     sortOrder?: number;
     trialDays?: number;
+    ownerType?: "platform" | "reseller";
+    ownerId?: string | null;
 };
 export declare class SubscriptionPlansService {
-    static listAll(includeInactive?: boolean): Promise<{
+    /** Packages owned by one reseller (including Reborn Direct). */
+    static listForReseller(resellerId: string, includeInactive?: boolean): Promise<{
         id: string;
         name: string;
         isActive: boolean;
@@ -39,8 +48,59 @@ export declare class SubscriptionPlansService {
         includedAddons: schema.PackageIncludedAddons | null;
         isPublic: boolean;
         trialDays: number;
+        edition: {
+            id: string;
+            name: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
+            note: string | null;
+            businessCategory: string;
+            features: string[];
+        } | null;
     }[]>;
-    /** Plans merchants can see / buy */
+    static listAll(includeInactive?: boolean, opts?: {
+        forResellerId?: string;
+    }): Promise<{
+        id: string;
+        name: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        ownerType: string;
+        ownerId: string | null;
+        features: string[] | null;
+        slug: string;
+        maxPosPosts: number;
+        maxWaiterPosts: number;
+        maxStaff: number;
+        editionId: string | null;
+        sortOrder: number;
+        description: string | null;
+        priceMonthly: string;
+        priceYearly: string | null;
+        currency: string;
+        maxDevices: number;
+        maxProducts: number | null;
+        includedAddons: schema.PackageIncludedAddons | null;
+        isPublic: boolean;
+        trialDays: number;
+        edition: {
+            id: string;
+            name: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
+            note: string | null;
+            businessCategory: string;
+            features: string[];
+        } | null;
+    }[]>;
+    /** @deprecated Use listForReseller(platformResellerId) */
     static listPublic(): Promise<{
         id: string;
         name: string;
@@ -65,6 +125,55 @@ export declare class SubscriptionPlansService {
         includedAddons: schema.PackageIncludedAddons | null;
         isPublic: boolean;
         trialDays: number;
+        edition: {
+            id: string;
+            name: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
+            note: string | null;
+            businessCategory: string;
+            features: string[];
+        } | null;
+    }[]>;
+    static listPublicForMerchant(merchantId: string): Promise<{
+        id: string;
+        name: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        ownerType: string;
+        ownerId: string | null;
+        features: string[] | null;
+        slug: string;
+        maxPosPosts: number;
+        maxWaiterPosts: number;
+        maxStaff: number;
+        editionId: string | null;
+        sortOrder: number;
+        description: string | null;
+        priceMonthly: string;
+        priceYearly: string | null;
+        currency: string;
+        maxDevices: number;
+        maxProducts: number | null;
+        includedAddons: schema.PackageIncludedAddons | null;
+        isPublic: boolean;
+        trialDays: number;
+        edition: {
+            id: string;
+            name: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
+            note: string | null;
+            businessCategory: string;
+            features: string[];
+        } | null;
     }[]>;
     static getById(id: string): Promise<{
         id: string;
@@ -90,6 +199,18 @@ export declare class SubscriptionPlansService {
         includedAddons: schema.PackageIncludedAddons | null;
         isPublic: boolean;
         trialDays: number;
+        edition: {
+            id: string;
+            name: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
+            note: string | null;
+            businessCategory: string;
+            features: string[];
+        } | null;
     }>;
     static getBySlug(slug: string): Promise<{
         id: string;
@@ -115,6 +236,18 @@ export declare class SubscriptionPlansService {
         includedAddons: schema.PackageIncludedAddons | null;
         isPublic: boolean;
         trialDays: number;
+        edition: {
+            id: string;
+            name: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
+            note: string | null;
+            businessCategory: string;
+            features: string[];
+        } | null;
     } | undefined>;
     static create(input: PlanInput): Promise<{
         id: string;
@@ -191,7 +324,6 @@ export declare class SubscriptionPlansService {
         createdAt: Date;
         updatedAt: Date;
     }>;
-    /** Seed default plans if table is empty */
     static ensureDefaults(): Promise<void>;
 }
 //# sourceMappingURL=subscription-plans.service.d.ts.map

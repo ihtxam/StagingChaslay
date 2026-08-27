@@ -44,6 +44,7 @@ const pos_checkout_settings_1 = require("@/lib/pos-checkout-settings");
 const business_module_1 = require("@/lib/business-module");
 const table_qr_settings_1 = require("@/lib/table-qr-settings");
 const delivery_platform_settings_1 = require("@/lib/delivery-platform-settings");
+const delivery_platform_addon_1 = require("@/lib/delivery-platform-addon");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const inventory_addon_1 = require("@/lib/inventory-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
@@ -122,6 +123,8 @@ class MerchantSettingsService {
         }));
         const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchantId).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
         const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
+        const justEatOn = await (0, delivery_platform_addon_1.readJustEatAddonEnabled)(merchantId).catch(() => merchant.justEatAddonEnabled === true);
+        const uberEatsOn = await (0, delivery_platform_addon_1.readUberEatsAddonEnabled)(merchantId).catch(() => merchant.uberEatsAddonEnabled === true);
         const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
         const shopHost = process.env.SHOP_PUBLIC_HOST ||
             (domain.includes("rebornsense.com") ? "shop.rebornsense.com" : domain.startsWith("shop.") ? domain : `shop.${domain}`);
@@ -173,6 +176,8 @@ class MerchantSettingsService {
             kdsEnabled: kdsOn,
             odsAddonEnabled: odsOn,
             odsEnabled: odsOn,
+            justEatAddonEnabled: justEatOn,
+            uberEatsAddonEnabled: uberEatsOn,
             inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
             inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
             inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),
@@ -560,7 +565,22 @@ class MerchantSettingsService {
                 where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
                 columns: { deliveryPlatformSettings: true },
             });
-            patch.deliveryPlatformSettings = (0, delivery_platform_settings_1.applyProductionCredentialDefaults)((0, delivery_platform_settings_1.mergeDeliveryPlatformSettings)(current?.deliveryPlatformSettings, updates.deliveryPlatformSettings));
+            const merged = (0, delivery_platform_settings_1.mergeDeliveryPlatformSettings)(current?.deliveryPlatformSettings, updates.deliveryPlatformSettings);
+            const before = (0, delivery_platform_settings_1.normalizeDeliveryPlatformSettings)(current?.deliveryPlatformSettings);
+            const after = (0, delivery_platform_settings_1.normalizeDeliveryPlatformSettings)(merged);
+            if (after.justEat?.enabled && !before.justEat?.enabled) {
+                const licensed = await (0, delivery_platform_addon_1.readJustEatAddonEnabled)(merchantId).catch(() => false);
+                if (!licensed) {
+                    throw new Error("Just Eat integration requires the Just Eat add-on");
+                }
+            }
+            if (after.uberEats?.enabled && !before.uberEats?.enabled) {
+                const licensed = await (0, delivery_platform_addon_1.readUberEatsAddonEnabled)(merchantId).catch(() => false);
+                if (!licensed) {
+                    throw new Error("Uber Eats integration requires the Uber Eats add-on");
+                }
+            }
+            patch.deliveryPlatformSettings = (0, delivery_platform_settings_1.applyProductionCredentialDefaults)(merged);
         }
         // Auto-create slug when enabling shop without one
         if (updates.shopEnabled && !updates.slug) {

@@ -26,8 +26,13 @@ import {
   getDeliveryPlatformPublic,
   mergeDeliveryPlatformSettings,
   applyProductionCredentialDefaults,
+  normalizeDeliveryPlatformSettings,
   type DeliveryPlatformSettings,
 } from "@/lib/delivery-platform-settings";
+import {
+  readJustEatAddonEnabled,
+  readUberEatsAddonEnabled,
+} from "@/lib/delivery-platform-addon";
 import { patchMerchantSchemaFromError } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
@@ -121,6 +126,12 @@ export class MerchantSettingsService {
     const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
       isOdsAddonEnabled(merchant.odsAddonEnabled)
     );
+    const justEatOn = await readJustEatAddonEnabled(merchantId).catch(() =>
+      merchant.justEatAddonEnabled === true
+    );
+    const uberEatsOn = await readUberEatsAddonEnabled(merchantId).catch(() =>
+      merchant.uberEatsAddonEnabled === true
+    );
 
     const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
     const shopHost =
@@ -178,6 +189,8 @@ export class MerchantSettingsService {
       kdsEnabled: kdsOn,
       odsAddonEnabled: odsOn,
       odsEnabled: odsOn,
+      justEatAddonEnabled: justEatOn,
+      uberEatsAddonEnabled: uberEatsOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),
@@ -607,11 +620,25 @@ export class MerchantSettingsService {
         where: eq(schema.merchants.id, merchantId),
         columns: { deliveryPlatformSettings: true },
       });
-      patch.deliveryPlatformSettings = applyProductionCredentialDefaults(
-        mergeDeliveryPlatformSettings(
+      const merged = mergeDeliveryPlatformSettings(
         current?.deliveryPlatformSettings,
         updates.deliveryPlatformSettings
-      ));
+      );
+      const before = normalizeDeliveryPlatformSettings(current?.deliveryPlatformSettings);
+      const after = normalizeDeliveryPlatformSettings(merged);
+      if (after.justEat?.enabled && !before.justEat?.enabled) {
+        const licensed = await readJustEatAddonEnabled(merchantId).catch(() => false);
+        if (!licensed) {
+          throw new Error("Just Eat integration requires the Just Eat add-on");
+        }
+      }
+      if (after.uberEats?.enabled && !before.uberEats?.enabled) {
+        const licensed = await readUberEatsAddonEnabled(merchantId).catch(() => false);
+        if (!licensed) {
+          throw new Error("Uber Eats integration requires the Uber Eats add-on");
+        }
+      }
+      patch.deliveryPlatformSettings = applyProductionCredentialDefaults(merged);
     }
 
     // Auto-create slug when enabling shop without one

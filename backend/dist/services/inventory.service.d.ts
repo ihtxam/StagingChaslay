@@ -581,6 +581,10 @@ export declare class InventoryService {
         qty: number;
         expiryDate?: string | null;
         cost?: number;
+        salePrice?: number;
+        imageUrl?: string | null;
+        /** Retail: create/update menu product for POS sale. Default true for retail merchants. */
+        publishToPos?: boolean;
         note?: string;
     }): Promise<{
         item: {
@@ -615,7 +619,10 @@ export declare class InventoryService {
             lastAutoReorderAt: Date | null;
         };
         created: boolean;
+        menuProduct: Record<string, unknown> | null;
     }>;
+    /** Create or update a sellable menu product after storekeeper intake (retail). */
+    private static publishStorekeeperToPos;
     private static assertBarcodeAvailable;
     private static createStockLot;
     static usageReport(merchantId: string, days?: number): Promise<{

@@ -748,6 +748,8 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
                   <option value="signage">Digital signage</option>
                   <option value="kds">Kitchen display (KDS)</option>
                   <option value="ods">Order display (ODS)</option>
+                  <option value="just_eat">Just Eat integration</option>
+                  <option value="uber_eats">Uber Eats integration</option>
                   <option value="extra_pos_post">Extra POS station</option>
                   <option value="extra_waiter_post">Extra waiter device</option>
                   <option value="extra_staff">Extra staff user</option>

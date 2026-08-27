@@ -98,6 +98,8 @@ export declare class MerchantInviteService {
             signageScreenLimit: number;
             kdsAddonEnabled: boolean;
             odsAddonEnabled: boolean;
+            justEatAddonEnabled: boolean;
+            uberEatsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
             inventoryExpiryAlertDays: number;
