@@ -1,11 +1,19 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, CheckCircle, Package, ScanLine } from 'lucide-react';
+import { Camera, CheckCircle, Package, Plus, Printer, ScanLine, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useAuthStore } from '@/store/auth';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import BarcodeScanModal from '@/components/storekeeper/BarcodeScanModal';
+import {
+  normalizeLabelOptions,
+  printLabelsViaAgentOrQueue,
+  type LabelHeightMm,
+  type LabelPrintOptions,
+  type LabelWidthMm,
+} from '@/lib/barcode-labels';
+import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import {
   loadWebPosStaffSession,
   saveWebPosStaffSession,
@@ -50,6 +58,13 @@ type LookupSuggestion = {
   source?: string;
 };
 
+type SavedLabel = {
+  id: string;
+  name: string;
+  barcode: string;
+  price?: string;
+};
+
 export default function StorekeeperApp() {
   const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
@@ -73,6 +88,13 @@ export default function StorekeeperApp() {
   const [recent, setRecent] = useState<RecentIntake[]>([]);
   const [salePrice, setSalePrice] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [newProductMode, setNewProductMode] = useState(false);
+  const [generateBusy, setGenerateBusy] = useState(false);
+  const [printBusy, setPrintBusy] = useState(false);
+  const [storeName, setStoreName] = useState('');
+  const [labelOpts, setLabelOpts] = useState<LabelPrintOptions>({ showPrice: true });
+  const [posPrintSettings, setPosPrintSettings] = useState<PosPrintSettingsClient | null>(null);
+  const [pendingLabel, setPendingLabel] = useState<SavedLabel | null>(null);
   const scanBufferRef = useRef('');
   const scanTimerRef = useRef<number | null>(null);
 
@@ -91,6 +113,21 @@ export default function StorekeeperApp() {
       setLicensed(res.data.enabled !== false);
       setCategories(res.data.categories || []);
       setUnits(res.data.units || []);
+      setStoreName(String(res.data.storeName || '').trim());
+      const label = res.data.labelPrint || {};
+      setLabelOpts({
+        storeName: String(res.data.storeName || '').trim(),
+        widthMm: (Number(label.widthMm) === 58 ? 58 : 40) as LabelWidthMm,
+        heightMm: ([20, 25, 30, 40] as const).includes(label.heightMm)
+          ? (label.heightMm as LabelHeightMm)
+          : 20,
+        showStoreName: label.showStoreName !== false,
+        showProductName: label.showProductName !== false,
+        showBarcodeNumber: label.showBarcodeNumber !== false,
+        showPrice: label.showPrice === true,
+        showSku: label.showSku === true,
+      });
+      setPosPrintSettings(res.data.posPrintSettings || null);
       if (res.data.units?.[0]?.code) setUnit((u) => u || res.data.units[0].code);
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
@@ -201,6 +238,77 @@ export default function StorekeeperApp() {
     setExistingItem(null);
     setMenuProduct(null);
     setSuggestion(null);
+    setNewProductMode(false);
+    setPendingLabel(null);
+  };
+
+  const startNewProduct = () => {
+    setBarcode('');
+    setName('');
+    setQty('1');
+    setExpiryDate('');
+    setSalePrice('');
+    setPhotoUrl(null);
+    setExistingItem(null);
+    setMenuProduct(null);
+    setSuggestion(null);
+    setPendingLabel(null);
+    setNewProductMode(true);
+  };
+
+  const generateBarcode = async () => {
+    setGenerateBusy(true);
+    try {
+      const res = await api.post('/merchant/storekeeper/barcode/generate', {}, { headers: apiHeaders });
+      const code = String(res.data.barcode || '').trim();
+      if (!code) throw new Error('empty');
+      setBarcode(code);
+      setExistingItem(null);
+      setMenuProduct(null);
+      setSuggestion(null);
+      toast.success(t('storekeeperBarcodeGenerated'));
+    } catch {
+      toast.error(t('storekeeperGenerateBarcodeFailed'));
+    } finally {
+      setGenerateBusy(false);
+    }
+  };
+
+  const printLabel = async (target: SavedLabel) => {
+    if (!target.barcode.trim()) {
+      toast.error(t('storekeeperBarcodeRequired'));
+      return;
+    }
+    setPrintBusy(true);
+    try {
+      const opts = normalizeLabelOptions({
+        ...labelOpts,
+        storeName: labelOpts.storeName || storeName,
+        showPrice: target.price ? true : labelOpts.showPrice,
+      });
+      const mode = await printLabelsViaAgentOrQueue(
+        [
+          {
+            id: target.id,
+            name: target.name,
+            barcode: target.barcode,
+            price: target.price,
+          },
+        ],
+        opts,
+        posPrintSettings,
+        { retryLocally: false }
+      );
+      toast.success(
+        mode === 'queued' ? t('storekeeperPrintLabelQueued') : t('barcodePrinted')
+      );
+      setPendingLabel(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('barcodePrintFailed');
+      toast.error(msg);
+    } finally {
+      setPrintBusy(false);
+    }
   };
 
   const submit = async (e: FormEvent) => {
@@ -256,7 +364,24 @@ export default function StorekeeperApp() {
             ? t('storekeeperItemCreated')
             : t('storekeeperStockAdded')
       );
-      resetForm();
+      if (res.data.created && barcode.trim()) {
+        setPendingLabel({
+          id: item.id,
+          name: item.name,
+          barcode: barcode.trim(),
+          price: salePrice.trim() || undefined,
+        });
+      }
+      setNewProductMode(false);
+      setBarcode('');
+      setName('');
+      setQty('1');
+      setExpiryDate('');
+      setSalePrice('');
+      setPhotoUrl(null);
+      setExistingItem(null);
+      setMenuProduct(null);
+      setSuggestion(null);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       toast.error(msg || t('storekeeperIntakeFailed'));
@@ -303,20 +428,64 @@ export default function StorekeeperApp() {
 
   return (
     <div className="mx-auto flex min-h-full max-w-lg flex-col gap-4 p-4 pb-8">
-      <header className="flex items-center justify-between gap-3">
-        <div>
+      <header className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="text-lg font-bold">{t('storekeeperTitle')}</h1>
-          <p className="text-xs muted">{displayName}</p>
+          <p className="text-xs muted truncate">
+            {newProductMode ? t('storekeeperNewProduct') : displayName}
+          </p>
         </div>
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow"
-          onClick={() => setScanOpen(true)}
-        >
-          <Camera size={18} />
-          {t('storekeeperScan')}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            className={`flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm ${
+              newProductMode
+                ? 'border-teal-700 bg-teal-50 text-teal-800'
+                : 'border-stone-300 bg-white text-stone-700'
+            }`}
+            onClick={startNewProduct}
+            aria-label={t('storekeeperNewProduct')}
+            title={t('storekeeperNewProduct')}
+          >
+            <Plus size={22} strokeWidth={2.5} />
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow"
+            onClick={() => setScanOpen(true)}
+          >
+            <Camera size={18} />
+            {t('storekeeperScan')}
+          </button>
+        </div>
       </header>
+
+      {pendingLabel ? (
+        <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 shadow-sm">
+          <p className="text-sm font-semibold text-teal-900">{t('storekeeperPrintLabelPrompt')}</p>
+          <p className="mt-1 text-xs text-teal-800">{t('storekeeperPrintLabelHint')}</p>
+          <p className="mt-2 text-sm font-medium">{pendingLabel.name}</p>
+          <p className="font-mono text-xs text-stone-600">{pendingLabel.barcode}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={printBusy}
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              onClick={() => void printLabel(pendingLabel)}
+            >
+              <Printer size={16} />
+              {printBusy ? t('loading') : t('storekeeperPrintLabel')}
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium"
+              onClick={() => setPendingLabel(null)}
+            >
+              {t('dismiss')}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <form onSubmit={submit} className="space-y-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
         <div>
@@ -328,11 +497,23 @@ export default function StorekeeperApp() {
               className="flex-1 rounded-lg border border-stone-300 px-3 py-2.5 text-base"
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
-              onBlur={() => barcode.trim() && void applyBarcode(barcode)}
+              onBlur={() => barcode.trim() && !newProductMode && void applyBarcode(barcode)}
               placeholder={t('storekeeperBarcodePlaceholder')}
               inputMode="numeric"
               autoComplete="off"
             />
+            {!existingItem ? (
+              <button
+                type="button"
+                className="flex items-center gap-1 rounded-lg border border-teal-600 bg-teal-50 px-3 text-sm font-semibold text-teal-800 disabled:opacity-60"
+                disabled={generateBusy}
+                onClick={() => void generateBarcode()}
+                title={t('storekeeperGenerateBarcode')}
+              >
+                <Sparkles size={16} />
+                <span className="hidden min-[380px]:inline">{t('storekeeperGenerateBarcode')}</span>
+              </button>
+            ) : null}
             <button
               type="button"
               className="rounded-lg border border-stone-300 px-3"
@@ -343,7 +524,9 @@ export default function StorekeeperApp() {
             </button>
           </div>
           {existingItem ? (
-            <p className="mt-1 text-xs text-teal-800">{t('storekeeperExistingItem', { stock: existingItem.onHand })}</p>
+            <p className="mt-1 text-xs text-teal-800">
+              {t('storekeeperExistingItem').replace('{stock}', String(existingItem.onHand))}
+            </p>
           ) : suggestion ? (
             <p className="mt-1 text-xs text-teal-800">
               {t('storekeeperOnlineFound')}
@@ -351,8 +534,10 @@ export default function StorekeeperApp() {
             </p>
           ) : barcode ? (
             <p className="mt-1 text-xs text-amber-800">
-              {lookupBusy ? t('loading') : t('storekeeperNewItem')}
+              {lookupBusy ? t('loading') : newProductMode ? t('storekeeperNewProductHint') : t('storekeeperNewItem')}
             </p>
+          ) : newProductMode ? (
+            <p className="mt-1 text-xs text-amber-800">{t('storekeeperNewProductHint')}</p>
           ) : null}
         </div>
 
@@ -472,6 +657,25 @@ export default function StorekeeperApp() {
           <CheckCircle size={20} />
           {busy ? t('loading') : t('storekeeperSaveStock')}
         </button>
+
+        {!existingItem && barcode.trim() && name.trim() ? (
+          <button
+            type="button"
+            disabled={printBusy || busy}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white py-3 text-sm font-semibold text-stone-800 disabled:opacity-60"
+            onClick={() =>
+              void printLabel({
+                id: 'draft',
+                name: name.trim(),
+                barcode: barcode.trim(),
+                price: salePrice.trim() || undefined,
+              })
+            }
+          >
+            <Printer size={18} />
+            {printBusy ? t('loading') : t('storekeeperPrintLabel')}
+          </button>
+        ) : null}
       </form>
 
       {recent.length > 0 ? (

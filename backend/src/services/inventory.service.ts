@@ -666,6 +666,12 @@ export class InventoryService {
     await assertStorekeeperLicensed(merchantId);
     const license = await this.getLicense(merchantId);
     const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { name: true, posPrintSettings: true },
+    });
+    const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
+    const printSettings = normalizePosPrintSettings(merchant?.posPrintSettings);
     const [categories, units] = await Promise.all([
       db.query.inventoryCategories.findMany({
         where: eq(schema.inventoryCategories.merchantId, merchantId),
@@ -680,6 +686,17 @@ export class InventoryService {
       ...license,
       enabled: true,
       storekeeperAddonEnabled: true,
+      storeName: merchant?.name || "",
+      labelPrint: {
+        widthMm: printSettings.labelWidthMm,
+        heightMm: printSettings.labelHeightMm,
+        showStoreName: printSettings.labelShowStoreName,
+        showProductName: printSettings.labelShowProductName,
+        showBarcodeNumber: printSettings.labelShowBarcodeNumber,
+        showPrice: printSettings.labelShowPrice,
+        showSku: printSettings.labelShowSku,
+      },
+      posPrintSettings: printSettings,
       categories: categories.map((c) => ({ id: c.id, name: c.name })),
       units: units.length
         ? units.map((u) => ({ code: u.code, name: u.name }))
