@@ -32,6 +32,7 @@ type MenuProduct = {
   name: string;
   price: number;
   imageUrl?: string | null;
+  stock?: number;
 };
 
 type RecentIntake = {
@@ -52,6 +53,27 @@ type LookupSuggestion = {
   imageUrl?: string | null;
   source?: string;
 };
+
+function fillI18n(template: string, values: Record<string, string | number>) {
+  let out = template;
+  for (const [key, value] of Object.entries(values)) {
+    out = out.replace(new RegExp(`\\{${key}\\}`, 'g'), String(value));
+  }
+  return out;
+}
+
+function formatStockQty(value: unknown): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0';
+  const rounded = Math.round(n * 1000) / 1000;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(3).replace(/\.?0+$/, '');
+}
+
+function stockLabel(qty: unknown, unitCode: string, units: Unit[]): string {
+  const amount = formatStockQty(qty);
+  const unitName = units.find((u) => u.code === unitCode)?.name || unitCode;
+  return `${amount} ${unitName}`;
+}
 
 export default function StorekeeperApp() {
   const { t } = useI18n();
@@ -130,7 +152,10 @@ export default function StorekeeperApp() {
 
         const item = res.data.item as InvItem | null;
         if (item) {
-          setExistingItem(item);
+          setExistingItem({
+            ...item,
+            onHand: Number(item.onHand) || 0,
+          });
           setName(item.name);
           setUnit(item.unit || 'piece');
           setCategoryId(item.categoryId || '');
@@ -381,11 +406,35 @@ export default function StorekeeperApp() {
             </button>
           </div>
           {existingItem ? (
-            <p className="mt-1 text-xs text-teal-800">{t('storekeeperExistingItem', { stock: existingItem.onHand })}</p>
+            <div className="mt-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
+              <p className="text-xs text-teal-900">
+                {fillI18n(t('storekeeperExistingItem'), {
+                  stock: stockLabel(existingItem.onHand, existingItem.unit || unit, units),
+                })}
+              </p>
+              <p className="mt-1 text-lg font-bold tabular-nums text-teal-950">
+                {formatStockQty(existingItem.onHand)}
+                <span className="ml-1 text-sm font-semibold">
+                  {units.find((u) => u.code === (existingItem.unit || unit))?.name ||
+                    existingItem.unit ||
+                    unit}
+                </span>
+              </p>
+            </div>
+          ) : menuProduct && menuProduct.stock != null && !lookupBusy ? (
+            <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+              <p className="text-xs text-sky-900">{t('storekeeperPosStock')}</p>
+              <p className="mt-1 text-lg font-bold tabular-nums text-sky-950">
+                {formatStockQty(menuProduct.stock)}
+                <span className="ml-1 text-sm font-semibold">{t('storekeeperPosStockUnit')}</span>
+              </p>
+            </div>
           ) : suggestion ? (
             <p className="mt-1 text-xs text-teal-800">
               {t('storekeeperOnlineFound')}
-              {suggestion.packageSize ? ` · ${t('storekeeperPackageSize', { size: suggestion.packageSize })}` : ''}
+              {suggestion.packageSize
+                ? ` · ${fillI18n(t('storekeeperPackageSize'), { size: suggestion.packageSize })}`
+                : ''}
             </p>
           ) : barcode ? (
             <p className="mt-1 text-xs text-amber-800">
@@ -477,6 +526,13 @@ export default function StorekeeperApp() {
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
               {t('storekeeperQty')}
+              {existingItem ? (
+                <span className="ml-1 font-normal normal-case text-teal-800">
+                  ({fillI18n(t('storekeeperStockNowShort'), {
+                    stock: stockLabel(existingItem.onHand, existingItem.unit || unit, units),
+                  })})
+                </span>
+              ) : null}
             </label>
             <input
               type="number"

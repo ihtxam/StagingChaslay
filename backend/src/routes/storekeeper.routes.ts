@@ -51,6 +51,7 @@ router.get("/lookup/:barcode", async (req: Request, res: Response) => {
           name: menuProduct.name,
           price: Number(menuProduct.price) || 0,
           imageUrl: menuProduct.imageUrl || null,
+          stock: Number(menuProduct.stock) || 0,
         }
       : null;
 
