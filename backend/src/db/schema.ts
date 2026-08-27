@@ -282,6 +282,8 @@ export const merchants = pgTable(
     justEatAddonEnabled: boolean("just_eat_addon_enabled").default(false).notNull(),
     /** Paid Uber Eats order integration addon. */
     uberEatsAddonEnabled: boolean("uber_eats_addon_enabled").default(false).notNull(),
+    /** Paid mobile storekeeper intake app (barcode scan, receive stock). */
+    storekeeperAddonEnabled: boolean("storekeeper_addon_enabled").default(false).notNull(),
     /**
      * Extra yield / waste factor applied to recipe usage on sale (0–0.50). Default 20%.
      */

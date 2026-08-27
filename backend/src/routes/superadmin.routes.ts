@@ -16,6 +16,7 @@ import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
+import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 
 const router = Router();
 const imageUpload = multer({
@@ -368,6 +369,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       signageScreenLimit,
       kdsAddonEnabled,
       odsAddonEnabled,
+      storekeeperAddonEnabled,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -402,6 +404,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
           signageScreenLimit != null ? normalizeSignageScreenLimit(signageScreenLimit) : undefined,
         kdsAddonEnabled: isKdsAddonEnabled(kdsAddonEnabled),
         odsAddonEnabled: isOdsAddonEnabled(odsAddonEnabled),
+        storekeeperAddonEnabled: isStorekeeperAddonEnabled(storekeeperAddonEnabled),
       }
     );
 
@@ -465,7 +468,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.kdsAddonEnabled != null ||
       updates.kdsEnabled != null ||
       updates.odsAddonEnabled != null ||
-      updates.odsEnabled != null
+      updates.odsEnabled != null ||
+      updates.storekeeperAddonEnabled != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
@@ -498,6 +502,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
             : updates.odsEnabled != null
               ? isOdsAddonEnabled(updates.odsEnabled)
               : undefined,
+        storekeeperAddonEnabled:
+          updates.storekeeperAddonEnabled != null
+            ? isStorekeeperAddonEnabled(updates.storekeeperAddonEnabled)
+            : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
@@ -510,6 +518,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.kdsEnabled;
       delete updates.odsAddonEnabled;
       delete updates.odsEnabled;
+      delete updates.storekeeperAddonEnabled;
     }
 
     const merchant =

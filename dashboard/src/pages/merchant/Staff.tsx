@@ -521,6 +521,9 @@ export default function StaffPage() {
                 {role.name.trim().toLowerCase().includes('menu editor') ? (
                   <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleWaiterMenuHint')}</p>
                 ) : null}
+                {role.name.trim().toLowerCase() === 'storekeeper' ? (
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleStorekeeperHint')}</p>
+                ) : null}
               </div>
               <button type="button" className="btn-secondary text-sm" onClick={() => openRoleEdit(role)}>
                 {t('staffEditPermissions')}

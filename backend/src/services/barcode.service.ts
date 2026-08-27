@@ -142,4 +142,31 @@ export class BarcodeService {
   static normalizeForSave(raw?: string | null): string | null {
     return normalizeBarcode(raw);
   }
+
+  /** Allocate a merchant-unique internal barcode (products + inventory items). */
+  static async allocateForStorekeeper(merchantId: string): Promise<string> {
+    const db = getDb();
+    const [productRows, inventoryRows] = await Promise.all([
+      db.query.products.findMany({
+        where: and(eq(schema.products.merchantId, merchantId), sql`${schema.products.barcode} IS NOT NULL`),
+        columns: { barcode: true },
+      }),
+      db.query.inventoryItems.findMany({
+        where: and(eq(schema.inventoryItems.merchantId, merchantId), sql`${schema.inventoryItems.barcode} IS NOT NULL`),
+        columns: { barcode: true },
+      }),
+    ]);
+    const taken = new Set<string>();
+    for (const row of productRows) {
+      const code = String(row.barcode || "").trim();
+      if (code) taken.add(code);
+    }
+    for (const row of inventoryRows) {
+      const code = String(row.barcode || "").trim();
+      if (code) taken.add(code);
+    }
+    const code = allocateInternalBarcode(taken);
+    if (!code) throw new Error("Could not allocate barcode — internal series exhausted");
+    return code;
+  }
 }

@@ -126,7 +126,8 @@ function toBase64(bytes: Uint8Array): string {
 export async function printLabelsViaAgentOrQueue(
   products: LabelProduct[],
   opts: LabelPrintOptions,
-  settings?: PosPrintSettingsClient | null
+  settings?: PosPrintSettingsClient | null,
+  relayOpts?: { retryLocally?: boolean }
 ): Promise<'local' | 'queued' | 'browser'> {
   const o = normalizeLabelOptions(opts);
   const printable = products.filter((p) => String(p.barcode || '').trim()).slice(0, 200);
@@ -146,6 +147,9 @@ export async function printLabelsViaAgentOrQueue(
       dataBase64: toBase64(data),
       printerName,
       text: printable.map((p) => p.barcode).join(', '),
+      retryLocally: relayOpts?.retryLocally,
+      jobKind: 'other',
+      jobLabel: 'barcode-label',
     });
   } catch {
     printLabelsHtml(printable, o);

@@ -29,6 +29,7 @@ function normalizeSlug(slug: string) {
 
 const VALID_ADDON_KEYS = new Set([
   "inventory",
+  "storekeeper",
   "signage",
   "kds",
   "ods",
@@ -277,6 +278,15 @@ export class SubscriptionAddonsService {
         priceMonthly: 19,
         priceYearly: 190,
         sortOrder: 46,
+      },
+      {
+        name: "Storekeeper mobile app",
+        slug: "storekeeper",
+        addonKey: "storekeeper",
+        description: "iPhone barcode scanning, stock intake, and POS publish for retail",
+        priceMonthly: 15,
+        priceYearly: 150,
+        sortOrder: 15,
       },
     ];
 

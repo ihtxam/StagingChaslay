@@ -6,6 +6,7 @@ import {
   withMerchantSchemaRetry,
 } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { assertStorekeeperLicensed, StorekeeperLicenseError } from "@/lib/storekeeper-addon";
 import { normalizeBusinessModule } from "@/lib/business-module";
 
 export const INVENTORY_UNITS = ["kg", "g", "L", "ml", "piece", "pack"] as const;
@@ -605,8 +606,13 @@ export class InventoryService {
     return items.filter((i) => i.lowStock);
   }
 
-  static async getItemByBarcode(merchantId: string, barcode: string) {
-    await this.assertLicensed(merchantId);
+  static async getItemByBarcode(
+    merchantId: string,
+    barcode: string,
+    opts?: { storekeeper?: boolean }
+  ) {
+    if (opts?.storekeeper) await assertStorekeeperLicensed(merchantId);
+    else await this.assertLicensed(merchantId);
     const code = String(barcode || "").trim();
     if (!code) return null;
     const db = getDb();
@@ -657,9 +663,15 @@ export class InventoryService {
   }
 
   static async getStorekeeperBootstrap(merchantId: string) {
+    await assertStorekeeperLicensed(merchantId);
     const license = await this.getLicense(merchantId);
-    if (!license.enabled) throw new InventoryLicenseError();
     const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { name: true, posPrintSettings: true },
+    });
+    const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
+    const printSettings = normalizePosPrintSettings(merchant?.posPrintSettings);
     const [categories, units] = await Promise.all([
       db.query.inventoryCategories.findMany({
         where: eq(schema.inventoryCategories.merchantId, merchantId),
@@ -672,6 +684,19 @@ export class InventoryService {
     ]);
     return {
       ...license,
+      enabled: true,
+      storekeeperAddonEnabled: true,
+      storeName: merchant?.name || "",
+      labelPrint: {
+        widthMm: printSettings.labelWidthMm,
+        heightMm: printSettings.labelHeightMm,
+        showStoreName: printSettings.labelShowStoreName,
+        showProductName: printSettings.labelShowProductName,
+        showBarcodeNumber: printSettings.labelShowBarcodeNumber,
+        showPrice: printSettings.labelShowPrice,
+        showSku: printSettings.labelShowSku,
+      },
+      posPrintSettings: printSettings,
       categories: categories.map((c) => ({ id: c.id, name: c.name })),
       units: units.length
         ? units.map((u) => ({ code: u.code, name: u.name }))
@@ -696,7 +721,7 @@ export class InventoryService {
       note?: string;
     }
   ) {
-    await this.assertLicensed(merchantId);
+    await assertStorekeeperLicensed(merchantId);
     const barcode = String(input.barcode || "").trim();
     if (!barcode) throw new Error("Barcode is required");
     const qty = num(input.qty);

@@ -35,6 +35,7 @@ import {
 } from "@/lib/delivery-platform-addon";
 import { patchMerchantSchemaFromError } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { readStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
@@ -132,6 +133,7 @@ export class MerchantSettingsService {
     const uberEatsOn = await readUberEatsAddonEnabled(merchantId).catch(() =>
       merchant.uberEatsAddonEnabled === true
     );
+    const storekeeperOn = await readStorekeeperAddonEnabled(merchantId).catch(() => false);
 
     const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
     const shopHost =
@@ -191,6 +193,7 @@ export class MerchantSettingsService {
       odsEnabled: odsOn,
       justEatAddonEnabled: justEatOn,
       uberEatsAddonEnabled: uberEatsOn,
+      storekeeperAddonEnabled: storekeeperOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),

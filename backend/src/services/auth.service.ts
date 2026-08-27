@@ -8,6 +8,7 @@ import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
 import { normalizeStaffLoginHome } from "@/lib/staff-login-home";
+import { readStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import {
   businessModuleMerchantPatch,
   normalizeBusinessModule,
@@ -197,6 +198,7 @@ export class AuthService {
     const odsOn = await readOdsAddonEnabled(merchant.id).catch(() =>
       isOdsAddonEnabled(merchant.odsAddonEnabled)
     );
+    const storekeeperOn = await readStorekeeperAddonEnabled(merchant.id).catch(() => false);
     return {
       token,
       merchant: {
@@ -214,6 +216,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        storekeeperAddonEnabled: storekeeperOn,
       },
       isOwner: true,
     };
@@ -250,6 +253,7 @@ export class AuthService {
     }));
     const kdsOn = await readKdsAddonEnabled(staff.merchantId).catch(() => false);
     const odsOn = await readOdsAddonEnabled(staff.merchantId).catch(() => false);
+    const storekeeperOn = await readStorekeeperAddonEnabled(staff.merchantId).catch(() => false);
     return {
       token,
       merchant: {
@@ -270,6 +274,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        storekeeperAddonEnabled: storekeeperOn,
       },
       isOwner: false,
     };
@@ -483,6 +488,7 @@ export class AuthService {
     const odsOn = await readOdsAddonEnabled(merchant.id).catch(() =>
       isOdsAddonEnabled(merchant.odsAddonEnabled)
     );
+    const storekeeperOn = await readStorekeeperAddonEnabled(merchant.id).catch(() => false);
     return {
       token,
       merchant: {
@@ -499,6 +505,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        storekeeperAddonEnabled: storekeeperOn,
       },
       impersonatedBy: superadminId,
     };
@@ -534,6 +541,7 @@ export class AuthService {
       const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
         isOdsAddonEnabled(merchant.odsAddonEnabled)
       );
+      const storekeeperOn = await readStorekeeperAddonEnabled(merchantId).catch(() => false);
       return {
         id: merchant.id,
         email: merchant.email,
@@ -548,6 +556,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        storekeeperAddonEnabled: storekeeperOn,
       };
     } catch (error) {
       console.error("Error getting merchant:", error);

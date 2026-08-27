@@ -300,6 +300,7 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           signageAddonEnabled: merchant.signageAddonEnabled === true,
           signageEnabled: merchant.signageEnabled === true,
           signageScreenLimit: merchant.signageScreenLimit ?? 2,
+          storekeeperAddonEnabled: merchant.storekeeperAddonEnabled === true,
         },
         role: "merchant",
       });
@@ -326,6 +327,8 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
         enabled: false,
         screenLimit: 2,
       }));
+      const { readStorekeeperAddonEnabled } = await import("@/lib/storekeeper-addon");
+      const storekeeperOn = await readStorekeeperAddonEnabled(req.user.merchantId).catch(() => false);
       res.json({
         user: {
           id: profile.id,
@@ -342,6 +345,7 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           signageAddonEnabled: signage.enabled,
           signageEnabled: signage.enabled,
           signageScreenLimit: signage.screenLimit,
+          storekeeperAddonEnabled: storekeeperOn,
         },
         role: "staff",
         token,

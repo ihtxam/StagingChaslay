@@ -71,6 +71,9 @@ export class PackageProvisioningService {
       case "inventory":
         patch.inventoryAddonEnabled = true;
         break;
+      case "storekeeper":
+        patch.storekeeperAddonEnabled = true;
+        break;
       case "signage":
         patch.signageAddonEnabled = true;
         patch.signageScreenLimit = Math.max(Number(merchant.signageScreenLimit || 2), qty);

@@ -33,6 +33,7 @@ import {
 } from '@/lib/webpos-receipt';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
+import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
   findPrinterHealCandidates,
@@ -100,6 +101,7 @@ interface SettingsData {
   maxWaiterPosts?: number;
   inventoryAddonEnabled?: boolean;
   inventoryEnabled?: boolean;
+  storekeeperAddonEnabled?: boolean;
   signageAddonEnabled?: boolean;
   signageEnabled?: boolean;
   signageScreenLimit?: number;
@@ -715,6 +717,11 @@ export default function Settings() {
         id: 'inventory-addon',
         tab: 'pos',
         keywords: ['inventory', 'stock', 'recipe', 'supplier', t('invTitle')],
+      },
+      {
+        id: 'storekeeper-addon',
+        tab: 'pos',
+        keywords: ['storekeeper', 'barcode', 'scan', 'intake', t('storekeeperTitle')],
       },
       {
         id: 'signage-addon',
@@ -2154,11 +2161,6 @@ export default function Settings() {
                     }
                   />
                 </SettingsField>
-                <p className="mt-2 text-xs muted">
-                  <Link to="/merchant/storekeeper" className="font-medium text-teal-700 hover:underline">
-                    {t('storekeeperOpenApp')}
-                  </Link>
-                </p>
                 {isInventoryLicensed(settings) && (
                   <Link to="/merchant/inventory/cookbook" className="btn-secondary mt-3 inline-flex">
                     {t('invNavCookbook')}
@@ -2183,6 +2185,26 @@ export default function Settings() {
                 >
                   {t('save')}
                 </button>
+              </Section>
+
+              <Section
+                id="storekeeper-addon"
+                icon={Package}
+                accent={settingsDash.accent}
+                title={t('storekeeperTitle')}
+                description={t('storekeeperAddonReadOnly')}
+                highlight={isSectionHighlight('storekeeper-addon')}
+                dimmed={normalizedQuery ? !isSectionVisible('storekeeper-addon') : false}
+              >
+                <p className="text-sm">
+                  {isStorekeeperLicensed(settings) ? t('storekeeperAddonOn') : t('storekeeperAddonOff')}
+                </p>
+                <p className="text-xs muted mt-1">{t('storekeeperAddonReadOnly')}</p>
+                {isStorekeeperLicensed(settings) ? (
+                  <Link to="/merchant/storekeeper" className="btn-secondary mt-3 inline-flex">
+                    {t('storekeeperOpenApp')}
+                  </Link>
+                ) : null}
               </Section>
 
               <Section

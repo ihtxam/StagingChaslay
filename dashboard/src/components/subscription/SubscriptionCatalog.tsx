@@ -745,6 +745,7 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
                   onChange={(e) => setAddonForm({ ...addonForm, addonKey: e.target.value })}
                 >
                   <option value="inventory">Inventory & recipes</option>
+                  <option value="storekeeper">Storekeeper mobile app</option>
                   <option value="signage">Digital signage</option>
                   <option value="kds">Kitchen display (KDS)</option>
                   <option value="ods">Order display (ODS)</option>

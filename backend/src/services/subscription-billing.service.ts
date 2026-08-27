@@ -8,6 +8,7 @@ import {
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import { SubscriptionAddonsService } from "@/services/subscription-addons.service";
 import { PackageProvisioningService } from "@/services/package-provisioning.service";
+import { readStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 
 export type BillingCycle = "monthly" | "yearly";
 
@@ -67,6 +68,8 @@ export class SubscriptionBillingService {
     );
     const webposEntitlement = await WebPosEntitlementService.getEntitlement(merchantId);
 
+    const storekeeperOn = await readStorekeeperAddonEnabled(merchantId).catch(() => false);
+
     return {
       merchant: {
         id: merchant.id,
@@ -85,6 +88,7 @@ export class SubscriptionBillingService {
         signageAddonEnabled: merchant.signageAddonEnabled,
         kdsAddonEnabled: merchant.kdsAddonEnabled,
         odsAddonEnabled: merchant.odsAddonEnabled,
+        storekeeperAddonEnabled: storekeeperOn,
       },
       currentPlan,
       plans,
