@@ -84,6 +84,7 @@ import type { BusinessModule } from '@/lib/business-module';
 import { isRestaurantModule, normalizeBusinessModule } from '@/lib/business-module';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
+import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import SignagePage from './SignagePage';
 
 const WebsiteCms = lazy(() => import('./WebsiteCms'));
@@ -146,6 +147,7 @@ function MerchantShell() {
   const [merchantShopName, setMerchantShopName] = useState<string | null>(null);
   const [editionFeatures, setEditionFeatures] = useState<EditionFeatureKey[] | null>(null);
   const [inventoryLicensed, setInventoryLicensed] = useState(() => isInventoryLicensed(user));
+  const [storekeeperLicensed, setStorekeeperLicensed] = useState(() => isStorekeeperLicensed(user));
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
   const [businessModule, setBusinessModule] = useState<BusinessModule | null>(null);
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
@@ -227,6 +229,7 @@ function MerchantShell() {
       businessCategory?: string | null;
       inventoryAddonEnabled?: boolean;
       inventoryEnabled?: boolean;
+      storekeeperAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageEnabled?: boolean;
     } | null) => {
@@ -234,6 +237,7 @@ function MerchantShell() {
       setEditionFeatures(Array.isArray(feats) ? feats : null);
       setBusinessModule(normalizeBusinessModule(settings?.businessCategory));
       setInventoryLicensed(isInventoryLicensed(settings) || isInventoryLicensed(user));
+      setStorekeeperLicensed(isStorekeeperLicensed(settings) || isStorekeeperLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
     };
@@ -248,6 +252,7 @@ function MerchantShell() {
           if (cancelled) return;
           setEditionFeatures(null);
           setInventoryLicensed(isInventoryLicensed(user));
+          setStorekeeperLicensed(isStorekeeperLicensed(user));
           setSignageLicensed(isSignageLicensed(user));
         });
     };
@@ -353,9 +358,9 @@ function MerchantShell() {
 
   const allowStorekeeper = useCallback(
     (path: string) =>
-      inventoryLicensed &&
+      storekeeperLicensed &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null),
-    [inventoryLicensed, effective.permissions, effective.isOwner]
+    [storekeeperLicensed, effective.permissions, effective.isOwner]
   );
 
   const allowSignage = useCallback(
@@ -458,7 +463,9 @@ function MerchantShell() {
             { label: t('invNavList'), path: '/merchant/inventory', icon: '📋' },
             { label: t('invNavStockTable'), path: '/merchant/inventory/list', icon: '📊' },
             { label: t('invNavInbound'), path: '/merchant/inventory/inbound', icon: '⬇️' },
-            { label: t('storekeeperTitle'), path: '/merchant/storekeeper', icon: '📱' },
+            ...(allowStorekeeper('/merchant/storekeeper')
+              ? [{ label: t('storekeeperTitle'), path: '/merchant/storekeeper', icon: '📱' }]
+              : []),
             { label: t('invNavOutbound'), path: '/merchant/inventory/outbound', icon: '⬆️' },
             { label: t('invNavCounting'), path: '/merchant/inventory/counting', icon: '🧮' },
             { label: t('invNavHistory'), path: '/merchant/inventory/history', icon: '🕓' },
@@ -485,6 +492,9 @@ function MerchantShell() {
             })
         : [],
     },
+    ...(allowStorekeeper('/merchant/storekeeper') && !allowInventory('/merchant/inventory')
+      ? [{ label: t('storekeeperTitle'), path: '/merchant/storekeeper', icon: '📱' }]
+      : []),
     {
       id: 'customers',
       label: t('navCustomers'),

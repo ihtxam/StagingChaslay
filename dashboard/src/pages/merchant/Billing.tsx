@@ -49,6 +49,7 @@ type MerchantBilling = {
   signageAddonEnabled?: boolean;
   kdsAddonEnabled?: boolean;
   odsAddonEnabled?: boolean;
+  storekeeperAddonEnabled?: boolean;
 };
 
 type PaymentSession = {
@@ -294,6 +295,7 @@ export default function Billing() {
                   merchant.signageAddonEnabled && 'Signage',
                   merchant.kdsAddonEnabled && 'KDS',
                   merchant.odsAddonEnabled && 'ODS',
+                  merchant.storekeeperAddonEnabled && 'Storekeeper',
                 ]
                   .filter(Boolean)
                   .join(', ') || 'None'}

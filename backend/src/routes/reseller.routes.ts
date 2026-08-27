@@ -8,6 +8,7 @@ import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
+import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import { SubscriptionAddonsService } from "@/services/subscription-addons.service";
 
@@ -190,6 +191,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       signageScreenLimit,
       kdsAddonEnabled,
       odsAddonEnabled,
+      storekeeperAddonEnabled,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
     if (!email || !trimmedBusinessName || !editionId) {
@@ -218,6 +220,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
         signageScreenLimit != null ? Number(signageScreenLimit) : undefined,
       kdsAddonEnabled: kdsAddonEnabled === true,
       odsAddonEnabled: odsAddonEnabled === true,
+      storekeeperAddonEnabled: storekeeperAddonEnabled === true,
     });
     res.status(201).json({ success: true, merchant });
   } catch (error) {
@@ -243,6 +246,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
       kdsEnabled,
       odsAddonEnabled,
       odsEnabled,
+      storekeeperAddonEnabled,
     } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
       resellerId(req),
@@ -276,6 +280,10 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
             : odsEnabled != null
               ? isOdsAddonEnabled(odsEnabled)
               : undefined,
+        storekeeperAddonEnabled:
+          storekeeperAddonEnabled != null
+            ? isStorekeeperAddonEnabled(storekeeperAddonEnabled)
+            : undefined,
       }
     );
     res.json({ success: true, merchant });

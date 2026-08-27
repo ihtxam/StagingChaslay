@@ -213,6 +213,7 @@ export function staffRoleDisplayName(name: string, t: (key: string) => string): 
   const n = name.trim().toLowerCase();
   if (n === 'waiter' || n === 'waiter (pos only)') return t('staffRoleWaiter');
   if (n.includes('menu editor') || n.includes('menu-editor')) return t('staffRoleWaiterMenu');
+  if (n === 'storekeeper') return t('staffRoleStorekeeper');
   return name;
 }
 

@@ -113,6 +113,7 @@ function MerchantsPage() {
     signageScreenLimit: 2,
     kdsAddonEnabled: false,
     odsAddonEnabled: false,
+    storekeeperAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
     id: string;
@@ -124,6 +125,7 @@ function MerchantsPage() {
     signageScreenLimit: number;
     kdsAddonEnabled: boolean;
     odsAddonEnabled: boolean;
+    storekeeperAddonEnabled: boolean;
   } | null>(null);
   const [planFor, setPlanFor] = useState<{
     id: string;
@@ -248,6 +250,7 @@ function MerchantsPage() {
         signageAddonEnabled: !!(merchant.signageAddonEnabled || merchant.signageEnabled),
         kdsAddonEnabled: !!(merchant.kdsAddonEnabled || merchant.kdsEnabled),
         odsAddonEnabled: !!(merchant.odsAddonEnabled || merchant.odsEnabled),
+        storekeeperAddonEnabled: !!merchant.storekeeperAddonEnabled,
       });
       toast.success(t('resellerOpenMerchant'));
       navigate('/merchant');
@@ -268,6 +271,7 @@ function MerchantsPage() {
         signageScreenLimit: Number(limitsFor.signageScreenLimit) || 2,
         kdsAddonEnabled: !!limitsFor.kdsAddonEnabled,
         odsAddonEnabled: !!limitsFor.odsAddonEnabled,
+        storekeeperAddonEnabled: !!limitsFor.storekeeperAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
       setLimitsFor(null);
@@ -543,6 +547,20 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
+                checked={!!form.storekeeperAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, storekeeperAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('storekeeperTitle')}</span>
+                <span className="text-xs text-stone-500">{t('storekeeperAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
                 checked={!!form.signageAddonEnabled}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, signageAddonEnabled: e.target.checked }))
@@ -699,6 +717,7 @@ function MerchantsPage() {
                         signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
                         kdsAddonEnabled: m.kdsAddonEnabled === true,
                         odsAddonEnabled: m.odsAddonEnabled === true,
+                        storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
                       })
                     }
                   >
@@ -797,6 +816,20 @@ function MerchantsPage() {
               <span>
                 <span className="font-medium block">{t('invTitle')}</span>
                 <span className="text-xs text-stone-500">{t('invSettingsHint')}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.storekeeperAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, storekeeperAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('storekeeperTitle')}</span>
+                <span className="text-xs text-stone-500">{t('storekeeperAddonReadOnly')}</span>
               </span>
             </label>
             <label className="flex items-start gap-2 text-sm">

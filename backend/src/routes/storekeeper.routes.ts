@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchant, requirePermission, setMerchantContext } from "@/middleware/auth.middleware";
 import { InventoryLicenseError, InventoryService } from "@/services/inventory.service";
+import { StorekeeperLicenseError } from "@/lib/storekeeper-addon";
 import {
   BarcodeProductLookupService,
   matchInventoryCategoryId,
@@ -17,6 +18,9 @@ router.use(requirePermission("STOREKEEPER_INTAKE", "MANAGE_INVENTORY"));
 function handleError(res: Response, error: unknown, fallback: string) {
   if (error instanceof InventoryLicenseError) {
     return res.status(403).json({ error: error.message, code: "INVENTORY_ADDON_REQUIRED" });
+  }
+  if (error instanceof StorekeeperLicenseError) {
+    return res.status(403).json({ error: error.message, code: "STOREKEEPER_ADDON_REQUIRED" });
   }
   const message = error instanceof Error ? error.message : fallback;
   const status = /not found/i.test(message) ? 404 : 400;
@@ -42,7 +46,7 @@ router.get("/lookup/:barcode", async (req: Request, res: Response) => {
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
     const barcode = String(req.params.barcode || "").trim();
     const [item, menuProduct] = await Promise.all([
-      InventoryService.getItemByBarcode(merchantId, barcode),
+      InventoryService.getItemByBarcode(merchantId, barcode, { storekeeper: true }),
       ProductService.getProductByBarcode(merchantId, barcode),
     ]);
     const menuProductSummary = menuProduct

@@ -38,6 +38,11 @@ import {
   readOdsAddonEnabledMap,
   writeOdsAddonEnabled,
 } from "@/lib/ods-addon";
+import {
+  isStorekeeperAddonEnabled,
+  readStorekeeperAddonEnabled,
+  writeStorekeeperAddonEnabled,
+} from "@/lib/storekeeper-addon";
 
 type AppVersionSighting = {
   appVersion?: string | null;
@@ -180,6 +185,8 @@ export class MerchantService {
           kdsEnabled: kdsOn,
           odsAddonEnabled: odsOn,
           odsEnabled: odsOn,
+          storekeeperAddonEnabled:
+            isStorekeeperAddonEnabled(m.storekeeperAddonEnabled) || inventoryOn,
           createdAt: m.createdAt,
           devices: m.devices?.length ?? 0,
           licenses: m.licenses?.length ?? 0,
@@ -237,6 +244,7 @@ export class MerchantService {
       const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
         isOdsAddonEnabled(merchant.odsAddonEnabled)
       );
+      const storekeeperOn = await readStorekeeperAddonEnabled(merchantId).catch(() => false);
       return {
         ...merchant,
         inventoryAddonEnabled: inventoryOn,
@@ -248,6 +256,7 @@ export class MerchantService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        storekeeperAddonEnabled: storekeeperOn,
         editionName: merchant.edition?.name ?? null,
         planBillingPaid: merchant.planBillingPaid !== false,
         lastAppVersion: lastSeen.lastAppVersion,
@@ -295,6 +304,7 @@ export class MerchantService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      storekeeperAddonEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -364,6 +374,7 @@ export class MerchantService {
           signageScreenLimit: normalizeSignageScreenLimit(options?.signageScreenLimit ?? 2),
           kdsAddonEnabled: options?.kdsAddonEnabled === true,
           odsAddonEnabled: options?.odsAddonEnabled === true,
+          storekeeperAddonEnabled: options?.storekeeperAddonEnabled === true,
         })
         .returning();
 
@@ -442,6 +453,9 @@ export class MerchantService {
       }
       if (options?.odsAddonEnabled === true) {
         await writeOdsAddonEnabled(created.id, true);
+      }
+      if (options?.storekeeperAddonEnabled === true) {
+        await writeStorekeeperAddonEnabled(created.id, true);
       }
       const inventoryOn = await readInventoryAddonEnabled(created.id).catch(() => false);
       const signage = await readSignageAddon(created.id).catch(() => ({
@@ -547,6 +561,7 @@ export class MerchantService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      storekeeperAddonEnabled?: boolean;
     }
   ) {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
@@ -580,9 +595,13 @@ export class MerchantService {
       await writeOdsAddonEnabled(merchantId, limits.odsAddonEnabled);
       wroteAddon = true;
     }
+    if (limits.storekeeperAddonEnabled !== undefined) {
+      await writeStorekeeperAddonEnabled(merchantId, limits.storekeeperAddonEnabled);
+      wroteAddon = true;
+    }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, or odsAddonEnabled is required"
+        "At least one of maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, or storekeeperAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);
@@ -663,6 +682,7 @@ export class MerchantService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      storekeeperAddonEnabled?: boolean;
     }
   ) {
     if (
@@ -670,7 +690,8 @@ export class MerchantService {
       addons.signageAddonEnabled === undefined &&
       addons.signageScreenLimit === undefined &&
       addons.kdsAddonEnabled === undefined &&
-      addons.odsAddonEnabled === undefined
+      addons.odsAddonEnabled === undefined &&
+      addons.storekeeperAddonEnabled === undefined
     ) {
       throw new Error("No addon updates provided");
     }
@@ -688,6 +709,9 @@ export class MerchantService {
     }
     if (addons.odsAddonEnabled !== undefined) {
       await writeOdsAddonEnabled(merchantId, addons.odsAddonEnabled);
+    }
+    if (addons.storekeeperAddonEnabled !== undefined) {
+      await writeStorekeeperAddonEnabled(merchantId, addons.storekeeperAddonEnabled);
     }
     return this.getMerchantById(merchantId);
   }

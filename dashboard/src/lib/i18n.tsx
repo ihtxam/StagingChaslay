@@ -2723,6 +2723,9 @@ const en: Dict = {
     'Floor POS by default. Tick Access menu and Access orders for limited back office. End of day prints their own sales unless View all sales is also granted.',
   staffRoleWaiterMenuHint:
     'Includes catalog access. End of day can be enabled for own-sales EOD from POS. Company reports stay blocked unless you grant View reports / View all sales.',
+  staffRoleStorekeeper: 'Storekeeper (mobile intake)',
+  staffRoleStorekeeperHint:
+    'Opens the mobile storekeeper app after PIN login — scan barcodes and receive stock. No full panel access.',
   staffRoleBackOfficeHint:
     'Access menu (catalogue) and Access orders open a limited back office. End of day is allowed for own sales. Full Sales / invoices / settings stay off unless granted.',
   staffEmailPanel: 'Email (official login)',
@@ -2785,6 +2788,8 @@ const en: Dict = {
   perm_MANAGE_BILLING: 'Manage billing',
   perm_END_OF_DAY:
     'End of day — print/view EOD (own sales unless “View all sales” is also granted)',
+  perm_MANAGE_INVENTORY: 'Manage inventory (full stock panel)',
+  perm_STOREKEEPER_INTAKE: 'Storekeeper mobile intake (barcode scan & receive stock)',
   adyenSettingsHint:
     'One Swisspayout merchant account and API key for the online shop and all payment terminals.',
   swisspayoutNoAccount: "Don't have a Swisspayout account?",
@@ -3026,6 +3031,11 @@ const en: Dict = {
   storekeeperMenuProductFound: 'Menu product found — review and save',
   storekeeperPosProductCreated: 'Stock received — product is now available in POS',
   storekeeperPosProductUpdated: 'Stock received — POS product updated',
+  storekeeperAddonOn: 'Storekeeper mobile app addon is enabled.',
+  storekeeperAddonOff: 'Storekeeper is a paid addon. Ask your agency to enable it, or subscribe in Billing.',
+  storekeeperAddonReadOnly: 'Only superadmin or your reseller can enable this addon (included with full inventory).',
+  storekeeperUpsellBody: 'The storekeeper mobile app is a paid addon — barcode scanning, stock intake, and POS publish.',
+  storekeeperUpsellHint: 'Your agency can enable it on your license, or buy it under Billing → Add-ons.',
   invUpsellBody: 'Inventory, recipes and supplier reorders are a paid extra addon.',
   invUpsellHint: 'Your agency can enable it on your merchant license — like POS station seats.',
   invOpenSettings: 'Open settings',
@@ -5922,6 +5932,9 @@ const fr: Dict = {
     'Caisse par défaut. Accès menu / commandes pour un back-office limité. Fin de journée imprime leurs ventes sauf si « Voir toutes les ventes » est aussi coché.',
   staffRoleWaiterMenuHint:
     'Inclut l’accès catalogue. Fin de journée possible pour l’EOD personnel depuis la caisse. Rapports entreprise bloqués sans Voir les rapports / toutes les ventes.',
+  staffRoleStorekeeper: 'Magasinier (réception mobile)',
+  staffRoleStorekeeperHint:
+    'Ouvre l’app magasinier après le PIN — scan des codes-barres et réception stock. Pas d’accès au panneau.',
   staffRoleBackOfficeHint:
     'Accès menu et commandes = back-office limité. Fin de journée autorisée pour leurs ventes. Ventes complètes / factures / paramètres restent désactivés sauf droit explicite.',
   staffEmailPanel: 'E-mail (connexion officielle)',
@@ -5984,6 +5997,8 @@ const fr: Dict = {
   perm_MANAGE_BILLING: 'Gérer la facturation',
   perm_END_OF_DAY:
     'Fin de journée — imprimer/voir l’EOD (ses ventes sauf si « Voir toutes les ventes »)',
+  perm_MANAGE_INVENTORY: 'Gérer l’inventaire (panneau stock complet)',
+  perm_STOREKEEPER_INTAKE: 'Réception magasinier mobile (scan code-barres et stock)',
   notes: 'Notes',
   adyenSettingsHint:
     'Un seul compte marchand et clé API Swisspayout pour la boutique en ligne et tous les terminaux.',
@@ -6231,6 +6246,11 @@ const fr: Dict = {
   storekeeperMenuProductFound: 'Produit menu trouvé — vérifiez et enregistrez',
   storekeeperPosProductCreated: 'Stock reçu — produit disponible au POS',
   storekeeperPosProductUpdated: 'Stock reçu — produit POS mis à jour',
+  storekeeperAddonOn: 'L’addon app magasinier mobile est activé.',
+  storekeeperAddonOff: 'Le magasinier est un addon payant. Demandez à votre agence ou souscrivez dans Facturation.',
+  storekeeperAddonReadOnly: 'Seul le superadmin ou votre revendeur peut activer cet addon (inclus avec l’inventaire complet).',
+  storekeeperUpsellBody: 'L’app magasinier mobile est un addon payant — scan code-barres, réception stock et publication POS.',
+  storekeeperUpsellHint: 'Votre agence peut l’activer sur la licence, ou achetez-le sous Facturation → Add-ons.',
   invUpsellBody: 'Inventaire, recettes et commandes fournisseur sont un addon payant.',
   invUpsellHint: 'Votre agence peut l’activer sur la licence — comme les postes POS.',
   invOpenSettings: 'Ouvrir les réglages',
@@ -9125,6 +9145,9 @@ const de: Dict = {
     'Standard: nur Kasse. Menü-/Bestellzugang für begrenztes Backoffice. Tagesabschluss druckt eigene Verkäufe, außer „Alle Verkäufe ansehen“ ist auch gesetzt.',
   staffRoleWaiterMenuHint:
     'Enthält Katalogzugang. Tagesabschluss für eigenen EOD an der Kasse möglich. Unternehmensberichte ohne Berichte-/Alle-Verkäufe-Recht gesperrt.',
+  staffRoleStorekeeper: 'Lagerist (mobile Buchung)',
+  staffRoleStorekeeperHint:
+    'Öffnet die mobile Lageristen-App nach PIN-Login — Barcodes scannen und Bestand buchen. Kein volles Panel.',
   staffRoleBackOfficeHint:
     'Menü- und Bestellzugang = begrenztes Backoffice. Tagesabschluss für eigene Verkäufe erlaubt. Voller Verkauf / Rechnungen / Einstellungen nur mit explizitem Recht.',
   staffEmailPanel: 'E-Mail (offizielles Login)',
@@ -9187,6 +9210,8 @@ const de: Dict = {
   perm_MANAGE_BILLING: 'Abrechnung verwalten',
   perm_END_OF_DAY:
     'Tagesabschluss — EOD drucken/ansehen (eigene Verkäufe außer mit „Alle Verkäufe ansehen“)',
+  perm_MANAGE_INVENTORY: 'Inventar verwalten (volles Bestandspanel)',
+  perm_STOREKEEPER_INTAKE: 'Mobile Lageristen-Buchung (Barcode-Scan & Wareneingang)',
   notes: 'Notizen',
   adyenSettingsHint:
     'Ein Swisspayout-Händlerkonto und API-Schlüssel für Online-Shop und alle Zahlungsterminals.',
@@ -9434,6 +9459,11 @@ const de: Dict = {
   storekeeperMenuProductFound: 'Menüprodukt gefunden — prüfen und speichern',
   storekeeperPosProductCreated: 'Bestand gebucht — Produkt ist jetzt im POS verfügbar',
   storekeeperPosProductUpdated: 'Bestand gebucht — POS-Produkt aktualisiert',
+  storekeeperAddonOn: 'Lageristen-Mobile-App-Addon ist aktiv.',
+  storekeeperAddonOff: 'Lagerist ist ein kostenpflichtiges Addon. Agentur aktivieren oder unter Abrechnung kaufen.',
+  storekeeperAddonReadOnly: 'Nur Superadmin oder Reseller können dieses Addon aktivieren (inkl. bei vollem Inventar).',
+  storekeeperUpsellBody: 'Die mobile Lageristen-App ist ein bezahltes Addon — Barcode-Scan, Wareneingang und POS-Veröffentlichung.',
+  storekeeperUpsellHint: 'Ihre Agentur kann es auf der Lizenz aktivieren oder unter Abrechnung → Add-ons kaufen.',
   invUpsellBody: 'Inventar, Rezepte und Lieferantenbestellungen sind ein bezahltes Addon.',
   invUpsellHint: 'Ihre Agentur kann es auf der Lizenz aktivieren — wie POS-Stationen.',
   invOpenSettings: 'Einstellungen öffnen',

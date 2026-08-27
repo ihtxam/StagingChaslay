@@ -30,6 +30,7 @@ import {
 } from "@/lib/delivery-platform-settings";
 import { patchMerchantSchemaFromError } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { readStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
@@ -121,6 +122,7 @@ export class MerchantSettingsService {
     const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
       isOdsAddonEnabled(merchant.odsAddonEnabled)
     );
+    const storekeeperOn = await readStorekeeperAddonEnabled(merchantId).catch(() => false);
 
     const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
     const shopHost =
@@ -178,6 +180,7 @@ export class MerchantSettingsService {
       kdsEnabled: kdsOn,
       odsAddonEnabled: odsOn,
       odsEnabled: odsOn,
+      storekeeperAddonEnabled: storekeeperOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),

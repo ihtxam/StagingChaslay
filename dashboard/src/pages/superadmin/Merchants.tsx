@@ -46,6 +46,7 @@ interface Merchant {
   kdsEnabled?: boolean;
   odsAddonEnabled?: boolean;
   odsEnabled?: boolean;
+  storekeeperAddonEnabled?: boolean;
   createdAt: string;
   devices: number;
   licenses: number;
@@ -104,6 +105,7 @@ const emptyForm = {
   signageScreenLimit: 2,
   kdsAddonEnabled: false,
   odsAddonEnabled: false,
+  storekeeperAddonEnabled: false,
 };
 
 export default function Merchants() {
@@ -134,6 +136,7 @@ export default function Merchants() {
     signageScreenLimit: 2,
     kdsAddonEnabled: false,
     odsAddonEnabled: false,
+    storekeeperAddonEnabled: false,
   });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
   const [planForm, setPlanForm] = useState({
@@ -210,6 +213,7 @@ export default function Merchants() {
         signageScreenLimit: Math.max(1, Number(res.data.merchant?.signageScreenLimit) || 2),
         kdsAddonEnabled: res.data.merchant?.kdsAddonEnabled === true,
         odsAddonEnabled: res.data.merchant?.odsAddonEnabled === true,
+        storekeeperAddonEnabled: res.data.merchant?.storekeeperAddonEnabled === true,
       });
     } catch {
       toast.error('Failed to load merchant details');
@@ -228,12 +232,14 @@ export default function Merchants() {
         signageScreenLimit: Number(posLimits.signageScreenLimit) || 2,
         kdsAddonEnabled: !!posLimits.kdsAddonEnabled,
         odsAddonEnabled: !!posLimits.odsAddonEnabled,
+        storekeeperAddonEnabled: !!posLimits.storekeeperAddonEnabled,
       });
       const saved = res.data?.merchant;
       const inventoryOn = saved?.inventoryAddonEnabled === true || saved?.inventoryEnabled === true;
       const signageOn = saved?.signageAddonEnabled === true || saved?.signageEnabled === true;
       const kdsOn = saved?.kdsAddonEnabled === true || saved?.kdsEnabled === true;
       const odsOn = saved?.odsAddonEnabled === true || saved?.odsEnabled === true;
+      const storekeeperOn = saved?.storekeeperAddonEnabled === true;
       setPosLimits({
         maxPosPosts: Math.max(0, Number(saved?.maxPosPosts ?? posLimits.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(saved?.maxWaiterPosts ?? posLimits.maxWaiterPosts) || 0),
@@ -242,6 +248,7 @@ export default function Merchants() {
         signageScreenLimit: Math.max(1, Number(saved?.signageScreenLimit ?? posLimits.signageScreenLimit) || 2),
         kdsAddonEnabled: kdsOn,
         odsAddonEnabled: odsOn,
+        storekeeperAddonEnabled: storekeeperOn,
       });
       setShowDetail((prev) =>
         prev
@@ -256,6 +263,7 @@ export default function Merchants() {
               kdsEnabled: kdsOn,
               odsAddonEnabled: odsOn,
               odsEnabled: odsOn,
+              storekeeperAddonEnabled: storekeeperOn,
             }
           : prev
       );
@@ -402,6 +410,7 @@ export default function Merchants() {
         signageScreenLimit: Number(form.signageScreenLimit) || 2,
         kdsAddonEnabled: !!form.kdsAddonEnabled,
         odsAddonEnabled: !!form.odsAddonEnabled,
+        storekeeperAddonEnabled: !!form.storekeeperAddonEnabled,
       });
       const issued = res.data.merchant?.issuedLicenses || [];
       setIssuedKeys(issued);
@@ -968,6 +977,20 @@ export default function Merchants() {
                   <input
                     type="checkbox"
                     className="mt-0.5"
+                    checked={!!form.storekeeperAddonEnabled}
+                    onChange={(e) => setForm({ ...form, storekeeperAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">Storekeeper mobile app</span>
+                    <span className="text-xs text-gray-500">
+                      Barcode scanning, stock intake, and POS publish (standalone or with inventory).
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
                     checked={!!form.signageAddonEnabled}
                     onChange={(e) => setForm({ ...form, signageAddonEnabled: e.target.checked })}
                   />
@@ -1253,6 +1276,31 @@ export default function Merchants() {
                         }`}
                       >
                         {posLimits.inventoryAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.storekeeperAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, storekeeperAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Storekeeper mobile app</span>
+                      <span className="text-xs text-gray-500">
+                        Barcode scanning, stock intake, and POS publish.
+                      </span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.storekeeperAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.storekeeperAddonEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
                   </label>

@@ -19,6 +19,7 @@ export interface User {
   signageAddonEnabled?: boolean;
   kdsAddonEnabled?: boolean;
   odsAddonEnabled?: boolean;
+  storekeeperAddonEnabled?: boolean;
 }
 
 interface AuthStore {
@@ -129,6 +130,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         impersonatedBy: get().user?.impersonatedBy,
         inventoryAddonEnabled: !!(user.inventoryAddonEnabled || user.inventoryEnabled),
         signageAddonEnabled: !!(user.signageAddonEnabled || user.signageEnabled),
+        storekeeperAddonEnabled: !!user.storekeeperAddonEnabled,
       };
 
       if (refreshedToken) {

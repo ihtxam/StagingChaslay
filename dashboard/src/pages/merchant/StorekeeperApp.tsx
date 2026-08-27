@@ -94,7 +94,9 @@ export default function StorekeeperApp() {
       if (res.data.units?.[0]?.code) setUnit((u) => u || res.data.units[0].code);
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
-      setLicensed(code === 'INVENTORY_ADDON_REQUIRED' ? false : null);
+      setLicensed(
+        code === 'STOREKEEPER_ADDON_REQUIRED' || code === 'INVENTORY_ADDON_REQUIRED' ? false : null
+      );
     }
   }, [clockedIn, apiHeaders]);
 
@@ -293,7 +295,8 @@ export default function StorekeeperApp() {
     return (
       <div className="mx-auto max-w-lg p-6 text-center">
         <h1 className="text-lg font-bold">{t('storekeeperTitle')}</h1>
-        <p className="mt-2 text-sm muted">{t('invUpsellBody')}</p>
+        <p className="mt-2 text-sm muted">{t('storekeeperUpsellBody')}</p>
+        <p className="mt-2 text-xs muted">{t('storekeeperUpsellHint')}</p>
       </div>
     );
   }

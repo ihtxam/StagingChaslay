@@ -61,6 +61,7 @@ export class StaffService {
         );
       }
     }
+    await this.ensureStorekeeperSystemRole(merchantId);
     // Existing Manager roles that already see company reports keep VIEW_ALL_SALES.
     await this.ensureManagerViewAllSales(merchantId);
     // Waiters: never panel / drawer / company sales. Menu + orders stay role-assigned.
@@ -68,6 +69,45 @@ export class StaffService {
     return db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
     });
+  }
+
+  /** Re-seed the Storekeeper system role if it was deleted or stripped. */
+  static async ensureStorekeeperSystemRole(merchantId: string) {
+    const db = getDb();
+    const template = DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "storekeeper");
+    if (!template) return;
+    const roles = await db.query.merchantRoles.findMany({
+      where: eq(schema.merchantRoles.merchantId, merchantId),
+    });
+    const existing = roles.find((r) => r.name.trim().toLowerCase() === "storekeeper");
+    if (!existing) {
+      await db.insert(schema.merchantRoles).values({
+        merchantId,
+        name: template.name,
+        permissions: encodePermissions(template.permissions),
+        isSystem: template.isSystem,
+        sortOrder: template.sortOrder,
+      });
+      return;
+    }
+    const perms = parsePermissions(existing.permissions);
+    const expected = encodePermissions(template.permissions);
+    if (
+      !existing.isSystem ||
+      existing.sortOrder !== template.sortOrder ||
+      existing.permissions !== expected
+    ) {
+      await db
+        .update(schema.merchantRoles)
+        .set({
+          name: template.name,
+          permissions: expected,
+          isSystem: true,
+          sortOrder: template.sortOrder,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.merchantRoles.id, existing.id));
+    }
   }
 
   /** Grant VIEW_ALL_SALES to system Manager roles that already have company report access. */

@@ -29,6 +29,7 @@ function normalizeSlug(slug: string) {
 
 const VALID_ADDON_KEYS = new Set([
   "inventory",
+  "storekeeper",
   "signage",
   "kds",
   "ods",
@@ -248,5 +249,37 @@ export class SubscriptionAddonsService {
       await this.create({ ...addon, ownerId: platformResellerId });
     }
     console.log("Seeded default subscription add-ons");
+    await this.ensureMissingDefaultAddons(platformResellerId);
+  }
+
+  /** Add new catalog entries on existing installs without re-seeding everything. */
+  static async ensureMissingDefaultAddons(platformResellerId?: string) {
+    const db = getDb();
+    const { PlatformResellerService } = await import("@/services/platform-reseller.service");
+    const ownerId = platformResellerId || (await PlatformResellerService.ensure());
+
+    const missing: AddonInput[] = [
+      {
+        name: "Storekeeper mobile app",
+        slug: "storekeeper",
+        addonKey: "storekeeper",
+        description: "iPhone barcode scanning, stock intake, and POS publish for retail",
+        priceMonthly: 15,
+        priceYearly: 150,
+        sortOrder: 15,
+      },
+    ];
+
+    for (const addon of missing) {
+      const existing = await db.query.subscriptionAddons.findFirst({
+        where: and(
+          eq(schema.subscriptionAddons.ownerId, ownerId),
+          eq(schema.subscriptionAddons.slug, addon.slug)
+        ),
+      });
+      if (!existing) {
+        await this.create({ ...addon, ownerId });
+      }
+    }
   }
 }

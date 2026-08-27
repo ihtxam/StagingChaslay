@@ -278,6 +278,8 @@ export const merchants = pgTable(
     kdsAddonEnabled: boolean("kds_addon_enabled").default(false).notNull(),
     /** Paid order display system (ODS) addon. Superadmin/reseller only. */
     odsAddonEnabled: boolean("ods_addon_enabled").default(false).notNull(),
+    /** Paid mobile storekeeper intake app (barcode scan, receive stock). */
+    storekeeperAddonEnabled: boolean("storekeeper_addon_enabled").default(false).notNull(),
     /**
      * Extra yield / waste factor applied to recipe usage on sale (0–0.50). Default 20%.
      */

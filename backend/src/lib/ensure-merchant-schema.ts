@@ -99,6 +99,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kds_addon_enabled boolean NOT NULL DEFAULT false",
   ods_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ods_addon_enabled boolean NOT NULL DEFAULT false",
+  storekeeper_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS storekeeper_addon_enabled boolean NOT NULL DEFAULT false",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
@@ -781,6 +783,11 @@ export async function ensureKdsAddonColumn(): Promise<void> {
 
 export async function ensureOdsAddonColumn(): Promise<void> {
   await runPatch("ods_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensureStorekeeperAddonColumn(): Promise<void> {
+  await runPatch("storekeeper_addon_enabled");
   await ensureMerchantTables();
 }
 

@@ -394,6 +394,7 @@ export class ResellerService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      storekeeperAddonEnabled?: boolean;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -437,6 +438,7 @@ export class ResellerService {
         signageScreenLimit: input.signageScreenLimit,
         kdsAddonEnabled: input.kdsAddonEnabled,
         odsAddonEnabled: input.odsAddonEnabled,
+        storekeeperAddonEnabled: input.storekeeperAddonEnabled,
       }
     );
     return created;
@@ -453,6 +455,7 @@ export class ResellerService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      storekeeperAddonEnabled?: boolean;
     }
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
@@ -465,6 +468,7 @@ export class ResellerService {
       signageScreenLimit: limits.signageScreenLimit,
       kdsAddonEnabled: limits.kdsAddonEnabled,
       odsAddonEnabled: limits.odsAddonEnabled,
+      storekeeperAddonEnabled: limits.storekeeperAddonEnabled,
     });
     return MerchantService.getMerchantById(merchantId);
   }
