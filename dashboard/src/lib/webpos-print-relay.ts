@@ -195,7 +195,7 @@ export async function printViaAgentOrQueue(opts: {
 
   const offlineErr = new Error(
     retryLocally
-      ? 'Print agent offline — start Chaslay Print Agent on this PC to print.'
+      ? 'Print agent offline — start Reborn Print Agent on this PC to print.'
       : 'Network required — connect to send prints to the main till.'
   );
   if (retryLocally || !isBrowserOnline()) {

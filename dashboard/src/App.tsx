@@ -330,7 +330,7 @@ function App() {
             }
           />
 
-          {/* shop.domain/{slug} - Chaslay-style path shops */}
+          {/* shop.domain/{slug} - Reborn-style path shops */}
           {shopHub && (
             <>
               <Route

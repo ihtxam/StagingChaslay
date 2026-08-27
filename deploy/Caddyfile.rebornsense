@@ -5,6 +5,11 @@
 	}
 }
 
+# Marketing apex + www. Point Emergent/landing HTML here later; until then send visitors to the app.
+rebornsense.com, www.rebornsense.com {
+	redir https://app.rebornsense.com{uri} permanent
+}
+
 # Reborn production — ManuPOS stack + Android /v1 API
 api.rebornsense.com {
 	handle /downloads/* {
@@ -53,20 +58,16 @@ app.rebornsense.com {
 
 	encode gzip zstd
 
+	handle /health {
+		reverse_proxy api:3000
+	}
+
 	handle /api/* {
 		reverse_proxy api:3000
 	}
 
 	handle /v1/* {
 		reverse_proxy api:3000
-	}
-
-	handle /receipt/* {
-		reverse_proxy dashboard:80
-	}
-
-	handle /receipts/* {
-		reverse_proxy dashboard:80
 	}
 
 	handle {
@@ -126,6 +127,7 @@ status.rebornsense.com {
 	}
 }
 
+# Merchant shops: https://{subdomain}.rebornsense.com
 *.rebornsense.com {
 	tls {
 		on_demand
@@ -142,6 +144,7 @@ status.rebornsense.com {
 	}
 }
 
+# Custom merchant domains (CNAME → shop.rebornsense.com)
 https:// {
 	tls {
 		on_demand

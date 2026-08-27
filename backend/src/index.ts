@@ -43,8 +43,10 @@ import { ReservationService } from "@/services/reservation.service";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
 import { ensureMerchantSchemaAtStartup } from "@/lib/ensure-merchant-schema";
 import { ensureLicensesSchemaAtStartup } from "@/lib/ensure-licenses-schema";
+import { ensureSubscriptionSchemaAtStartup } from "@/lib/ensure-subscription-schema";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
+import { APP_NAME, CURRENT_HOST_ALIASES, LEGACY_HOST_ALIASES } from "@/lib/brand";
 
 // Load environment variables
 dotenv.config();
@@ -62,11 +64,8 @@ function buildCorsOrigins(): string[] {
     "http://localhost:3001",
     "http://localhost:3002",
     "http://localhost:3003",
-    "https://pay.chaslay.com",
-    "https://app.chaslay.com",
-    "https://shop.chaslay.com",
-    "https://api.chaslay.com",
-    "https://status.chaslay.com",
+    ...CURRENT_HOST_ALIASES,
+    ...LEGACY_HOST_ALIASES,
   ].filter(Boolean) as string[];
 
   const extra = (process.env.CORS_ORIGINS || "")
@@ -156,7 +155,7 @@ app.use(
 app.get("/health", (_req: Request, res: Response) => {
   res.json({
     status: "ok",
-    service: "chaslayreborn-backend",
+    service: "reborn-backend",
     timestamp: new Date().toISOString(),
   });
 });
@@ -224,7 +223,7 @@ app.use("/api/tv", signageRoutes);
 app.use("/api/merchant/signage", signageMerchantRoutes);
 app.use("/api/webhooks", webhooksRoutes);
 app.use("/api/webhooks", deliveryPlatformRoutes);
-/** Chaslay / FoodTruck Android POS (Retrofit /v1/* contract) */
+/** Reborn / FoodTruck Android POS (Retrofit /v1/* contract) */
 app.use("/v1", chaslayRoutes);
 
 // ============================================================================
@@ -245,7 +244,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ ChaslayReborn API running on port ${PORT}`);
+  console.log(`✅ ${APP_NAME} API running on port ${PORT}`);
   console.log(`🏥 Health check: /health`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
   ensureMerchantSchemaAtStartup();

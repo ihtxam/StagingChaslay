@@ -14,7 +14,7 @@ if not exist "node_modules\" (
   if errorlevel 1 exit /b 1
 )
 
-echo Starting ChaslayReborn Print Agent on http://127.0.0.1:9101
+echo Starting Reborn Print Agent on http://127.0.0.1:9101
 echo Tip: run build-installer.ps1 then the setup EXE to install permanently.
 echo.
 node server.js --run

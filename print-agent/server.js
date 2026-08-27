@@ -1,5 +1,5 @@
 /**
- * ChaslayReborn Windows Print Agent
+ * Reborn Windows Print Agent
  * Exposes localhost HTTP API for WebPOS silent thermal printing (ESC/POS RAW).
  *
  * CLI:
@@ -20,10 +20,11 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.6.0";
+const VERSION = "1.7.0";
 const APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "chaslay-print-agent.exe";
 const RUN_VALUE_NAME = "ChaslayPrintAgent";
+const DISPLAY_NAME = "Reborn Print Agent";
 
 const isPkg = typeof process.pkg !== "undefined";
 
@@ -389,24 +390,24 @@ async function doInstall() {
 
   if (running) {
     const msg =
-      `Chaslay Print Agent installed and running on port ${PORT}.\n\n` +
+      `Reborn Print Agent installed and running on port ${PORT}.\n\n` +
       `Installed to:\n${dir}\n\n` +
       `It will also start automatically when you log in to Windows.\n\n` +
       `Log: ${installLogPath()}`;
     console.log(msg);
     appendInstallLog("Install success (running)");
-    await showMessage("Chaslay Print Agent", msg);
+    await showMessage("Reborn Print Agent", msg);
     return;
   }
 
   const warn =
-    `Chaslay Print Agent files were installed to:\n${dir}\n\n` +
+    `Reborn Print Agent files were installed to:\n${dir}\n\n` +
     `Startup registration succeeded, but the agent is not responding on port ${PORT} yet.\n` +
     `Try running:\n${launchPath}\n\n` +
     `Log: ${installLogPath()}`;
   console.warn(warn);
   appendInstallLog("Install finished (not healthy yet)");
-  await showMessage("Chaslay Print Agent — Warning", warn);
+  await showMessage("Reborn Print Agent — Warning", warn);
   // Files + Startup are in place; do not throw a second dialog. Exit non-zero from CLI.
   const err = new Error(`Installed but agent is not running on port ${PORT}. See ${installLogPath()}`);
   err.alreadyShown = true;
@@ -420,11 +421,11 @@ async function doUninstall() {
     "Removed Windows Startup entry.\n" +
     `Files remain in ${installDir()} — delete that folder manually if desired.`;
   console.log(msg);
-  await showMessage("Chaslay Print Agent", msg);
+  await showMessage("Reborn Print Agent", msg);
 }
 
 function printHelp() {
-  console.log(`ChaslayReborn Print Agent v${VERSION}
+  console.log(`Reborn Print Agent v${VERSION}
 Usage:
   --install      Install permanently and register Windows Startup
   --uninstall    Remove Startup registration
@@ -448,7 +449,7 @@ async function runCli() {
       console.error(e);
       appendInstallLog(`Install error: ${e.message || e}`);
       if (!e.alreadyShown) {
-        await showMessage("Chaslay Print Agent — Error", e.message || String(e));
+        await showMessage("Reborn Print Agent — Error", e.message || String(e));
       }
       process.exit(1);
     }
@@ -461,7 +462,7 @@ async function runCli() {
     } catch (e) {
       console.error(e);
       appendInstallLog(`Uninstall error: ${e.message || e}`);
-      await showMessage("Chaslay Print Agent — Error", e.message || String(e));
+      await showMessage("Reborn Print Agent — Error", e.message || String(e));
       process.exit(1);
     }
   }
@@ -477,7 +478,7 @@ async function runCli() {
       console.error(e);
       appendInstallLog(`Setup error: ${e.message || e}`);
       if (!e.alreadyShown) {
-        await showMessage("Chaslay Print Agent — Error", e.message || String(e));
+        await showMessage("Reborn Print Agent — Error", e.message || String(e));
       }
       process.exit(1);
     }
@@ -485,7 +486,7 @@ async function runCli() {
 }
 
 function isShellDump(text) {
-  return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|chaslayreborn-print-|manupos-print-|chaslayprintagent|at c:\\|\.ps1\b/i.test(
+  return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|reborn-print-|manupos-print-|chaslayprintagent|at c:\\|\.ps1\b/i.test(
     String(text || "")
   );
 }
@@ -570,8 +571,13 @@ async function listPrinters() {
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
 $items = Get-CimInstance -ClassName Win32_Printer | ForEach-Object {
+  $hint = [regex]::Replace([string]$_.Name, '\s*\(COM\d+\)\s*', ' ')
+  $hint = $hint.Trim()
   [PSCustomObject]@{
     name = $_.Name
+    portName = [string]$_.PortName
+    driverName = [string]$_.DriverName
+    matchHint = $hint
     isDefault = [bool]$_.Default
     status = [string]$_.PrinterStatus
     unsuitableForRaw = $false
@@ -594,19 +600,68 @@ $json = ($items | ConvertTo-Json -Compress -Depth 4)
   const list = Array.isArray(parsed) ? parsed : [parsed];
   return list.map((p) => ({
     ...p,
+    name: String(p.name || ""),
+    portName: p.portName ? String(p.portName) : "",
+    driverName: p.driverName ? String(p.driverName) : "",
+    matchHint: p.matchHint ? String(p.matchHint) : String(p.name || "").replace(/\s*\(COM\d+\)\s*/gi, " ").trim(),
     unsuitableForRaw: isUnsuitableRawPrinter(p.name),
   }));
 }
 
+function stableDeviceKey(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/\(com\d+\)/gi, "")
+    .replace(/com\d+/gi, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function scoreDeviceMatch(configured, candidate) {
+  const cfg = stableDeviceKey(configured);
+  const cand = stableDeviceKey(candidate);
+  if (!cfg || !cand) return 0;
+  if (cfg === cand) return 20;
+  if (cand.includes(cfg) || cfg.includes(cand)) return 12;
+  return 0;
+}
+
+async function resolvePrinterName(requested) {
+  const want = String(requested || "").trim();
+  if (!want) return "";
+  const printers = await listPrinters();
+  const exact = printers.find((p) => p.name === want);
+  if (exact) return exact.name;
+  const ci = printers.find((p) => p.name.toLowerCase() === want.toLowerCase());
+  if (ci) return ci.name;
+  const wantPort = want.toUpperCase().match(/^COM\d+$/) ? want.toUpperCase() : "";
+  if (wantPort) {
+    const byPort = printers.find((p) => String(p.portName || "").toUpperCase() === wantPort);
+    if (byPort) return byPort.name;
+  }
+  const scored = printers
+    .map((p) => ({
+      p,
+      score: Math.max(
+        scoreDeviceMatch(want, p.name),
+        scoreDeviceMatch(want, p.matchHint),
+        scoreDeviceMatch(want, p.driverName)
+      ),
+    }))
+    .filter((x) => x.score >= 12)
+    .sort((a, b) => b.score - a.score);
+  return scored[0] ? scored[0].p.name : want;
+}
+
 async function printRaw({ printerName, dataBase64 }) {
   if (!isWindows()) {
-    throw new Error("ChaslayReborn Print Agent supports Windows only.");
+    throw new Error("Reborn Print Agent supports Windows only.");
   }
   if (!dataBase64) {
     throw new Error("dataBase64 is required.");
   }
 
-  const name = printerName && String(printerName).trim() ? String(printerName).trim() : "";
+  const requested = printerName && String(printerName).trim() ? String(printerName).trim() : "";
+  const name = requested ? await resolvePrinterName(requested) : "";
   if (name && isUnsuitableRawPrinter(name)) {
     throw new Error(unsuitablePrinterError(name));
   }
@@ -617,8 +672,8 @@ async function printRaw({ printerName, dataBase64 }) {
   }
 
   const bytes = Buffer.from(dataBase64, "base64");
-  // 1.6.0+: chaslayreborn-print-* (older installed EXEs still used manupos-print-*).
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "chaslayreborn-print-"));
+  // 1.6.0+: reborn-print-* (older installed EXEs still used manupos-print-*).
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-print-"));
   const tmpFile = path.join(tmpDir, "receipt.bin");
   const nameFile = path.join(tmpDir, "printer-name.txt");
   fs.writeFileSync(tmpFile, bytes);
@@ -673,7 +728,16 @@ function startServer() {
       platform: process.platform,
       windows: isWindows(),
       installDir: installDir(),
-      features: ["print", "printers", "drawer", "scale", "install", "unicode-printer-names", "virtual-printer-guard"],
+      features: [
+        "print",
+        "printers",
+        "drawer",
+        "scale",
+        "install",
+        "unicode-printer-names",
+        "virtual-printer-guard",
+        "device-name-match",
+      ],
     });
   });
 
@@ -732,12 +796,16 @@ function startServer() {
       const scriptPath = ensureScaleScriptOnDisk();
       if (!fs.existsSync(scriptPath)) {
         return res.status(500).json({
-          error: `win-scale-read.ps1 not found at ${scriptPath}. Reinstall Chaslay Print Agent.`,
+          error: `win-scale-read.ps1 not found at ${scriptPath}. Reinstall Reborn Print Agent.`,
         });
       }
       const stdout = await runPowerShell(scriptPath, ["-ListPorts"]);
       const parsed = JSON.parse(stdout || "{}");
-      res.json({ ok: true, ports: Array.isArray(parsed.ports) ? parsed.ports : [] });
+      const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
+      const ports = Array.isArray(parsed.ports)
+        ? parsed.ports
+        : devices.map((d) => d.port).filter(Boolean);
+      res.json({ ok: true, ports, devices });
     } catch (error) {
       const safe = sanitizePrintAgentError(error, undefined, "Failed to list scale ports");
       console.error("[print-agent] scale ports failed:", safe);
@@ -752,8 +820,10 @@ function startServer() {
         return res.json({ ok: true, reading: null, message: "Scale supported on Windows only" });
       }
       const port = normalizeComPort(String(req.query.port || "").trim());
-      if (!port) {
-        return res.status(400).json({ error: "port query param required (e.g. COM3)" });
+      const hint = String(req.query.hint || req.query.deviceName || "").trim();
+      const pnp = String(req.query.pnp || req.query.deviceId || "").trim();
+      if (!port && !hint && !pnp) {
+        return res.status(400).json({ error: "port, hint, or deviceId query param required" });
       }
       const timeoutMs = Math.min(
         5000,
@@ -762,15 +832,14 @@ function startServer() {
       const scriptPath = ensureScaleScriptOnDisk();
       if (!fs.existsSync(scriptPath)) {
         return res.status(500).json({
-          error: `win-scale-read.ps1 not found at ${scriptPath}. Reinstall Chaslay Print Agent.`,
+          error: `win-scale-read.ps1 not found at ${scriptPath}. Reinstall Reborn Print Agent.`,
         });
       }
-      const stdout = await runPowerShell(scriptPath, [
-        "-PortName",
-        port,
-        "-TimeoutMs",
-        String(timeoutMs),
-      ]);
+      const args = ["-TimeoutMs", String(timeoutMs)];
+      if (port) args.push("-PortName", port);
+      if (hint) args.push("-Hint", hint);
+      if (pnp) args.push("-PnpDeviceId", pnp);
+      const stdout = await runPowerShell(scriptPath, args);
       const parsed = JSON.parse(stdout || "{}");
       if (!parsed.ok) {
         return res.status(500).json({ error: parsed.error || "Scale read failed" });
@@ -791,7 +860,7 @@ function startServer() {
   });
 
   app.listen(PORT, "127.0.0.1", () => {
-    console.log(`ChaslayReborn Print Agent v${VERSION} listening on http://127.0.0.1:${PORT}`);
+    console.log(`Reborn Print Agent v${VERSION} listening on http://127.0.0.1:${PORT}`);
     if (!isWindows()) {
       console.warn("Warning: RAW thermal printing is only supported on Windows.");
     }
@@ -806,7 +875,7 @@ function startServer() {
   console.error(err);
   appendInstallLog(`Fatal: ${err.message || err}`);
   try {
-    await showMessage("Chaslay Print Agent — Error", err.message || String(err));
+    await showMessage("Reborn Print Agent — Error", err.message || String(err));
   } catch {
     /* ignore */
   }

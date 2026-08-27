@@ -1083,8 +1083,8 @@ class PosViewModel @Inject constructor(
         if (code.isEmpty()) return
         Log.i("BARCODE_SCAN", "scanned=$code preferMembership=$preferMembership")
         val checkoutOpen = _uiExtras.value.showCheckoutScreen
-        // Table QR: CHASLAY:T:{slug}:{tableUuid}
-        val tableMatch = Regex("^CHASLAY:T:[^:]+:([a-f0-9-]+)$", RegexOption.IGNORE_CASE).find(code)
+        // Table QR: REBORN:T:{slug}:{tableUuid} (legacy CHASLAY:T: still accepted)
+        val tableMatch = Regex("^(?:REBORN|CHASLAY):T:[^:]+:([a-f0-9-]+)$", RegexOption.IGNORE_CASE).find(code)
         if (tableMatch != null) {
             if (checkoutOpen) return
             val tableUuid = tableMatch.groupValues[1]

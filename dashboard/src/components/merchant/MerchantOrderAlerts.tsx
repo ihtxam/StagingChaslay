@@ -134,7 +134,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
           playOrderAlertOnce();
           startOrderAlertLoop(5000);
           if (document.hidden) {
-            document.title = `🔔 ${t('webPosNewOrderAlert')} — ChaslayReborn`;
+            document.title = `🔔 ${t('webPosNewOrderAlert')} — Reborn`;
           }
         }
       }
@@ -163,7 +163,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
 
   useEffect(() => {
     if (!document.hidden && queue.length === 0) {
-      document.title = 'ChaslayReborn';
+      document.title = 'Reborn';
     }
   }, [queue.length]);
 

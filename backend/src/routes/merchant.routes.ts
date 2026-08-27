@@ -96,7 +96,7 @@ router.get("/products/import/template", async (_req: Request, res: Response) => 
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
-    res.setHeader("Content-Disposition", 'attachment; filename="chaslayreborn-catalog-template.xlsx"');
+    res.setHeader("Content-Disposition", 'attachment; filename="reborn-catalog-template.xlsx"');
     res.send(buffer);
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to build template" });
@@ -2865,7 +2865,7 @@ router.post("/billing/confirm", async (req: Request, res: Response) => {
 });
 
 // ============================================================================
-// PLATFORM SHOP (buy supplies from Chaslay)
+// PLATFORM SHOP (buy supplies from Reborn)
 // ============================================================================
 
 router.get("/platform-shop/products", async (_req: Request, res: Response) => {

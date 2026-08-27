@@ -1,5 +1,5 @@
 /**
- * ChaslayReborn Windows Print Agent (localhost).
+ * Reborn Windows Print Agent (localhost).
  * Electron desktop also exposes window.manuposDesktop (legacy API name).
  */
 
@@ -9,9 +9,20 @@ export const PRINT_AGENT_URL =
 
 export type AgentPrinter = {
   name: string;
+  portName?: string;
+  driverName?: string;
+  matchHint?: string;
   isDefault?: boolean;
   status?: string;
   unsuitableForRaw?: boolean;
+};
+
+export type ScaleDevice = {
+  port: string;
+  caption?: string;
+  manufacturer?: string;
+  pnpDeviceId?: string;
+  name?: string;
 };
 
 declare global {
@@ -44,13 +55,28 @@ export function normalizePrinterName(name?: string | null): string {
     .replace(/[\s_\-]+/g, '');
 }
 
+/** Strip COM numbers so "RPP02 (COM7)" still matches "RPP02 (COM12)". */
+export function stableDeviceKey(name?: string | null): string {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/\(com\d+\)/gi, '')
+    .replace(/com\d+/gi, '')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
 export function printerNameInList(
   name: string,
-  printers: Array<{ name: string }>
+  printers: Array<{ name: string; matchHint?: string; portName?: string; driverName?: string }>
 ): boolean {
   const n = normalizePrinterName(name);
   if (!n) return false;
-  return printers.some((p) => normalizePrinterName(p.name) === n);
+  if (printers.some((p) => normalizePrinterName(p.name) === n)) return true;
+  const want = stableDeviceKey(name);
+  if (!want) return false;
+  return printers.some((p) => {
+    const keys = [p.name, p.matchHint, p.driverName, p.portName].map(stableDeviceKey).filter(Boolean);
+    return keys.some((k) => k === want || k.includes(want) || want.includes(k));
+  });
 }
 
 function paperWidthHint(name: string): '58' | '80' | null {
@@ -90,6 +116,11 @@ function levenshtein(a: string, b: string): number {
 }
 
 function scorePrinterSimilarity(configured: string, candidate: string): number {
+  const stableCfg = stableDeviceKey(configured);
+  const stableCand = stableDeviceKey(candidate);
+  if (stableCfg && stableCand && (stableCfg === stableCand || stableCand.includes(stableCfg) || stableCfg.includes(stableCand))) {
+    return 12;
+  }
   const cfg = normalizePrinterName(configured);
   const cand = normalizePrinterName(candidate);
   if (!cfg || !cand || cfg === cand) return 0;
@@ -169,8 +200,8 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-/** Reinstall prompt: 1.6.0+ uses chaslayreborn-print-* temps and sanitizes Win32 1801. */
-export const MIN_PRINT_AGENT_VERSION = '1.6.0';
+/** 1.7.0+ lists USB/Bluetooth devices by name so COM ports can change. */
+export const MIN_PRINT_AGENT_VERSION = '1.7.0';
 
 function asPrintText(value: unknown): string {
   if (value == null) return '';
@@ -222,7 +253,7 @@ export function isPrinterDisconnectedError(raw: unknown): boolean {
 
 export function isNoisyPrintAgentDump(raw: unknown): boolean {
   const msg = collectPrintErrorText(raw);
-  return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|chaslayreborn-print-|manupos-print-|chaslayprintagent|at c:\\|\\temp\\|-\s*file\s+c:\\|\.ps1\b/i.test(
+  return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|reborn-print-|manupos-print-|chaslayprintagent|at c:\\|\\temp\\|-\s*file\s+c:\\|\.ps1\b/i.test(
     msg
   );
 }
@@ -249,7 +280,7 @@ export function isPrintAgentVersionOutdated(version?: string | null): boolean {
   return compareAgentVersion(String(version).trim(), MIN_PRINT_AGENT_VERSION) < 0;
 }
 
-/** Collapse PowerShell / Win32 dumps into a one-line ChaslayReborn message. */
+/** Collapse PowerShell / Win32 dumps into a one-line Reborn message. */
 export function friendlyPrintAgentError(raw: unknown, printerName?: string): string {
   const msg = collectPrintErrorText(raw);
   if (!msg) return 'Print failed';
@@ -346,7 +377,7 @@ export async function printViaAgent(opts: {
   }
   if (looksCorruptedPrinterName(name)) {
     throw new Error(
-      `Printer name looks corrupted ('${name}'). Re-select the printer in ChaslayReborn after updating the Print Agent.`
+      `Printer name looks corrupted ('${name}'). Re-select the printer in Reborn after updating the Print Agent.`
     );
   }
 
@@ -443,16 +474,85 @@ export function formatScalePortLabel(port: string): string {
   return m ? `COM${parseInt(m[1], 10)}` : raw;
 }
 
+export function formatScaleDeviceLabel(device: ScaleDevice | string): string {
+  if (typeof device === 'string') return formatScalePortLabel(device);
+  const port = formatScalePortLabel(device.port || '');
+  const name = String(device.name || device.caption || '')
+    .replace(/\s*\(COM\d+\)\s*$/i, '')
+    .trim();
+  if (name && port && !stableDeviceKey(name).includes(stableDeviceKey(port))) {
+    return `${name} · ${port}`;
+  }
+  return name || port;
+}
+
+export function resolveScaleDevice(
+  configured: { port?: string | null; name?: string | null; deviceId?: string | null },
+  devices: ScaleDevice[]
+): ScaleDevice | null {
+  if (!devices.length) return null;
+  const wantPort = formatScalePortLabel(configured.port || '');
+  const wantId = String(configured.deviceId || '').trim().toLowerCase();
+  const wantName = stableDeviceKey(configured.name || '');
+  if (wantId) {
+    const byId = devices.find((d) => String(d.pnpDeviceId || '').toLowerCase() === wantId);
+    if (byId) return byId;
+  }
+  if (wantName) {
+    const scored = devices
+      .map((d) => ({
+        d,
+        score: Math.max(
+          scoreDeviceName(wantName, stableDeviceKey(d.name)),
+          scoreDeviceName(wantName, stableDeviceKey(d.caption)),
+          scoreDeviceName(wantName, stableDeviceKey(d.manufacturer))
+        ),
+      }))
+      .filter((x) => x.score >= 8)
+      .sort((a, b) => b.score - a.score);
+    if (scored[0]) return scored[0].d;
+  }
+  if (wantPort) {
+    const byPort = devices.find((d) => formatScalePortLabel(d.port) === wantPort);
+    if (byPort) return byPort;
+  }
+  return null;
+}
+
+function scoreDeviceName(want: string, have: string): number {
+  if (!want || !have) return 0;
+  if (want === have) return 16;
+  if (have.includes(want) || want.includes(have)) return 10;
+  return 0;
+}
+
 /** Windows COM ports from Print Agent (Aclas USB-serial → COMx). */
 export async function listScalePorts(): Promise<string[]> {
+  const { ports } = await listScaleDevices();
+  return ports;
+}
+
+export async function listScaleDevices(): Promise<{ ports: string[]; devices: ScaleDevice[] }> {
   try {
     const data = await agentFetch('/scale/ports');
-    return Array.isArray(data?.ports) ? data.ports.map(String) : [];
+    const devices: ScaleDevice[] = Array.isArray(data?.devices)
+      ? data.devices.map((d: any) => ({
+          port: formatScalePortLabel(String(d.port || d.name || '')),
+          caption: d.caption ? String(d.caption) : undefined,
+          manufacturer: d.manufacturer ? String(d.manufacturer) : undefined,
+          pnpDeviceId: d.pnpDeviceId ? String(d.pnpDeviceId) : undefined,
+          name: d.name ? String(d.name) : undefined,
+        }))
+      : [];
+    const ports = Array.isArray(data?.ports)
+      ? data.ports.map((p: unknown) => formatScalePortLabel(String(p)))
+      : devices.map((d) => d.port).filter(Boolean);
+    return { ports, devices };
   } catch (e: any) {
     const msg = String(e?.message || '');
     if (/HTTP 404|Cannot GET \/scale\/ports/i.test(msg)) {
       throw new Error(
-        'Print Agent is outdated — reinstall Chaslay Print Agent to enable scale support.'
+        'Print Agent is outdated — reinstall Reborn Print Agent to enable scale support.'
       );
     }
     throw e;
@@ -462,16 +562,19 @@ export async function listScalePorts(): Promise<string[]> {
 /** One Aclas reading from Print Agent (null if no frame yet). */
 export async function readScaleWeight(
   port: string,
-  timeoutMs = 2500
+  timeoutMs = 2500,
+  opts?: { hint?: string | null; deviceId?: string | null }
 ): Promise<{ reading: ScaleReading | null; message?: string }> {
   const normalized = normalizeScalePort(port);
-  if (!normalized) {
+  if (!normalized && !opts?.hint && !opts?.deviceId) {
     throw new Error('COM port required (e.g. COM3)');
   }
   const q = new URLSearchParams({
-    port: normalized,
     timeoutMs: String(timeoutMs),
   });
+  if (normalized) q.set('port', normalized);
+  if (opts?.hint) q.set('hint', String(opts.hint));
+  if (opts?.deviceId) q.set('deviceId', String(opts.deviceId));
   const data = await agentFetch(`/scale/reading?${q.toString()}`);
   return {
     reading: (data?.reading as ScaleReading | null) || null,

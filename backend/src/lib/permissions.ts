@@ -175,7 +175,7 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
 ];
 
 /**
- * Map panel/web permission keys → Android PosPermission names used by Chaslay POS.
+ * Map panel/web permission keys → Android PosPermission names used by Reborn POS.
  * Unknown keys are dropped so Room sync only stores enums the app understands.
  */
 export const ANDROID_PERMISSION_ALIASES: Record<string, string> = {

@@ -36,6 +36,7 @@ import { isSignageLicensed } from '@/lib/signage-addon';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
   findPrinterHealCandidates,
+  formatScaleDeviceLabel,
   formatScalePortLabel,
   getPrintAgentHealth,
   isConfiguredPrinterMissing,
@@ -43,8 +44,9 @@ import {
   isPrintAgentVersionOutdated,
   isUnsuitableRawPrinter,
   listAgentPrinters,
-  listScalePorts,
+  listScaleDevices,
   type AgentPrinter,
+  type ScaleDevice,
 } from '@/lib/print-agent';
 import {
   isAndroidDevice,
@@ -216,6 +218,8 @@ interface SettingsData {
     kitchenPrintRetryAttempts?: number;
     kitchenPrintRetryIntervalSec?: number;
     scaleComPort?: string | null;
+    scaleDeviceName?: string | null;
+    scaleDeviceId?: string | null;
     scaleUsbAddress?: string | null;
     scaleEnabled?: boolean;
     labelWidthMm?: 40 | 58;
@@ -228,6 +232,8 @@ interface SettingsData {
     printers?: Array<{
       id: string;
       name: string;
+      portName?: string | null;
+      matchHint?: string | null;
       enabled?: boolean;
       paperWidthMm?: 58 | 80;
       printReceipts?: boolean;
@@ -442,7 +448,7 @@ export default function Settings() {
   const [printAgentOutdated, setPrintAgentOutdated] = useState(false);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
-  const [scalePorts, setScalePorts] = useState<string[]>([]);
+  const [scalePorts, setScalePorts] = useState<ScaleDevice[]>([]);
   const [scanningScalePorts, setScanningScalePorts] = useState(false);
   const [scalePortsScanned, setScalePortsScanned] = useState(false);
   const [scaleScanError, setScaleScanError] = useState('');
@@ -805,7 +811,11 @@ export default function Settings() {
         if (!s) {
           throw new Error('Settings response missing data');
         }
-        setSettings(s);
+        setSettings({
+          ...s,
+          name: s.name || '',
+          email: s.email || '',
+        });
         setProductCategories(
           (categoriesRes.data?.categories || []).map((c: { id: string; name: string }) => ({
             id: c.id,
@@ -909,8 +919,11 @@ export default function Settings() {
         setScaleScanError('');
         return;
       }
-      const ports = await listScalePorts();
-      setScalePorts(ports.map((p) => formatScalePortLabel(p)));
+      const { devices, ports } = await listScaleDevices();
+      const listed = devices.length
+        ? devices
+        : ports.map((port) => ({ port, name: port, caption: port }));
+      setScalePorts(listed);
       setScalePortsScanned(true);
     } catch (e: any) {
       setScalePorts([]);
@@ -1145,9 +1158,14 @@ export default function Settings() {
           Math.max(2, Number(ps.kitchenPrintRetryIntervalSec) || 5)
         ),
         scaleComPort: ps.scaleComPort?.trim() || null,
+        scaleDeviceName: ps.scaleDeviceName?.trim() || null,
+        scaleDeviceId: ps.scaleDeviceId?.trim() || null,
         scaleUsbAddress: ps.scaleUsbAddress?.trim() || null,
         scaleEnabled:
-          !!ps.scaleComPort?.trim() || !!ps.scaleUsbAddress?.trim() || ps.scaleEnabled === true,
+          !!ps.scaleComPort?.trim() ||
+          !!ps.scaleDeviceName?.trim() ||
+          !!ps.scaleUsbAddress?.trim() ||
+          ps.scaleEnabled === true,
         printers,
         labelWidthMm: ps.labelWidthMm === 58 ? 58 : 40,
         labelHeightMm:
@@ -1177,15 +1195,21 @@ export default function Settings() {
     [buildPosPrintSettingsPayload, t]
   );
 
-  const selectScalePortAndSave = async (port: string) => {
+  const selectScalePortAndSave = async (device: ScaleDevice | string) => {
     if (!settings) return;
-    const label = formatScalePortLabel(port);
+    const row: ScaleDevice = typeof device === 'string' ? { port: device, name: device } : device;
+    const label = formatScalePortLabel(row.port);
     if (!label) return;
+    const deviceName = String(row.name || row.caption || '')
+      .replace(/\s*\(COM\d+\)\s*$/i, '')
+      .trim();
     const nextSettings: SettingsData = {
       ...settings,
       posPrintSettings: {
         ...(settings.posPrintSettings || {}),
         scaleComPort: label,
+        scaleDeviceName: deviceName || null,
+        scaleDeviceId: row.pnpDeviceId?.trim() || null,
         scaleEnabled: true,
       },
     };
@@ -1592,7 +1616,7 @@ export default function Settings() {
                           <th className="bg-[var(--bg-muted)] px-2 py-1.5 text-left font-medium">
                             {t('cmsDnsPointsTo')}
                           </th>
-                          <td className="px-2 py-1.5 font-mono">shop.chaslay.com</td>
+                          <td className="px-2 py-1.5 font-mono">shop.rebornsense.com</td>
                         </tr>
                       </tbody>
                     </table>
@@ -2321,7 +2345,7 @@ export default function Settings() {
                         className="input"
                         value={merchantAccount}
                         onChange={(e) => setMerchantAccount(e.target.value)}
-                        placeholder="ChaslayReborn_COM"
+                        placeholder="Reborn_COM"
                       />
                     </Field>
                     <Field label={t('clientId')}>
@@ -3179,11 +3203,17 @@ export default function Settings() {
                 </Field>
                 <Field label={t('settingsScaleTitle')} hint={t('settingsScaleHint')}>
                   <div className="space-y-3">
-                    {settings.posPrintSettings?.scaleComPort ? (
+                    {settings.posPrintSettings?.scaleComPort || settings.posPrintSettings?.scaleDeviceName ? (
                       <p className="text-sm m-0 text-emerald-700">
                         {t('settingsScaleSelected')}:{' '}
-                        <span className="font-mono">
-                          {formatScalePortLabel(settings.posPrintSettings.scaleComPort)}
+                        <span className="font-medium">
+                          {settings.posPrintSettings.scaleDeviceName
+                            ? `${settings.posPrintSettings.scaleDeviceName}${
+                                settings.posPrintSettings.scaleComPort
+                                  ? ` · ${formatScalePortLabel(settings.posPrintSettings.scaleComPort)}`
+                                  : ''
+                              }`
+                            : formatScalePortLabel(settings.posPrintSettings.scaleComPort || '')}
                         </span>
                       </p>
                     ) : null}
@@ -3206,22 +3236,30 @@ export default function Settings() {
                     ) : null}
                     {scalePorts.length > 0 ? (
                       <ul className="m-0 list-none space-y-1.5 p-0">
-                        {scalePorts.map((port) => {
+                        {scalePorts.map((device) => {
                           const selected =
-                            formatScalePortLabel(settings.posPrintSettings?.scaleComPort || '') === port;
+                            formatScalePortLabel(settings.posPrintSettings?.scaleComPort || '') ===
+                              formatScalePortLabel(device.port) ||
+                            (!!settings.posPrintSettings?.scaleDeviceId &&
+                              settings.posPrintSettings.scaleDeviceId === device.pnpDeviceId);
                           return (
-                            <li key={port}>
+                            <li key={`${device.port}-${device.pnpDeviceId || device.name || ''}`}>
                               <button
                                 type="button"
-                                className={`w-full rounded-lg border px-3 py-2.5 text-left font-mono text-sm transition-colors ${
+                                className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
                                   selected
                                     ? 'border-emerald-500 bg-emerald-50 text-emerald-900'
                                     : 'border-[var(--border)] bg-[var(--bg-elevated)] hover:border-emerald-300 hover:bg-emerald-50/50'
                                 }`}
-                                onClick={() => void selectScalePortAndSave(port)}
+                                onClick={() => void selectScalePortAndSave(device)}
                                 disabled={savingReceipt}
                               >
-                                {port}
+                                <span className="font-medium">{formatScaleDeviceLabel(device)}</span>
+                                {device.manufacturer ? (
+                                  <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                                    {device.manufacturer}
+                                  </span>
+                                ) : null}
                                 {selected ? ` · ${t('settingsScaleSelected')}` : ''}
                               </button>
                             </li>
@@ -3716,7 +3754,13 @@ export default function Settings() {
                           value={p.name}
                           onChange={(e) => {
                             const printers = [...(settings.posPrintSettings?.printers || [])];
-                            printers[idx] = { ...p, name: e.target.value };
+                            const picked = agentPrinters.find((ap) => ap.name === e.target.value);
+                            printers[idx] = {
+                              ...p,
+                              name: e.target.value,
+                              portName: picked?.portName || null,
+                              matchHint: picked?.matchHint || picked?.driverName || null,
+                            };
                             setSettings({
                               ...settings,
                               posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
@@ -3732,6 +3776,7 @@ export default function Settings() {
                             return (
                               <option key={ap.name} value={ap.name}>
                                 {ap.name}
+                                {ap.portName ? ` · ${ap.portName}` : ''}
                                 {ap.isDefault ? t('webPosDefaultSuffix') : ''}
                                 {bad ? t('webPosPrinterNotThermal') : ''}
                               </option>
@@ -3772,7 +3817,12 @@ export default function Settings() {
                             className="inline-flex items-center rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
                             onClick={() => {
                               const printers = [...(settings.posPrintSettings?.printers || [])];
-                              printers[idx] = { ...p, name: ap.name };
+                              printers[idx] = {
+                                ...p,
+                                name: ap.name,
+                                portName: ap.portName || null,
+                                matchHint: ap.matchHint || ap.driverName || null,
+                              };
                               setSettings({
                                 ...settings,
                                 posPrintSettings: { ...(settings.posPrintSettings || {}), printers },

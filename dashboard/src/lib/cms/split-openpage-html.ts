@@ -103,7 +103,7 @@ export function splitOpenPageHtml(
 }
 
 /** True when exported HTML is missing CHASLAY_BLOCK markers for any configured block. */
-export function needsChaslayBlockMigration(html: string, config: OpenPageSiteConfig): boolean {
+export function needsRebornBlockMigration(html: string, config: OpenPageSiteConfig): boolean {
   const blocks = config.blocks || [];
   if (!blocks.length || !html.trim()) return false;
   return blocks.some((block) => {

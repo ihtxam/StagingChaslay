@@ -121,14 +121,14 @@ export class ResellerService {
 
   static async ensureChaslayAgency(createdBySuperadminId?: string | null) {
     const db = getDb();
-    const email = (process.env.SEED_RESELLER_EMAIL || "agency@chaslay.com").toLowerCase();
+    const email = (process.env.SEED_RESELLER_EMAIL || "agency@rebornsense.com").toLowerCase();
     const existing = await db.query.resellers.findFirst({
       where: eq(schema.resellers.email, email),
     });
     if (existing) return serializeReseller(existing);
 
     const password = process.env.SEED_RESELLER_PASSWORD || "ChaslayAgency123!";
-    const name = process.env.SEED_RESELLER_NAME || "Chaslay";
+    const name = process.env.SEED_RESELLER_NAME || "Reborn";
     const passwordHash = await AuthService.hashPassword(password);
     const [row] = await db
       .insert(schema.resellers)

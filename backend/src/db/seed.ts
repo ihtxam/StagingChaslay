@@ -38,11 +38,11 @@ const ALWAYS_OPEN = {
   },
 };
 
-const DEFAULT_SUPERADMIN_NAME = "Chaslay Admin";
+const DEFAULT_SUPERADMIN_NAME = "Reborn Admin";
 
 function resolveSuperadminName(raw?: string): string {
   const name = (raw || "").trim();
-  if (!name || /manupos|chaslayreborn\s+admin/i.test(name)) return DEFAULT_SUPERADMIN_NAME;
+  if (!name || /manupos|reborn\s+admin/i.test(name)) return DEFAULT_SUPERADMIN_NAME;
   return name;
 }
 
@@ -51,7 +51,7 @@ async function renameLeftoverSuperadminLabels(db: ReturnType<typeof getDb>) {
     .select({ id: schema.superadmins.id, name: schema.superadmins.name })
     .from(schema.superadmins);
   for (const row of rows) {
-    if (!row.name || !/manupos|chaslayreborn\s+admin/i.test(row.name)) continue;
+    if (!row.name || !/manupos|reborn\s+admin/i.test(row.name)) continue;
     await db
       .update(schema.superadmins)
       .set({ name: DEFAULT_SUPERADMIN_NAME, updatedAt: new Date() })
@@ -61,7 +61,7 @@ async function renameLeftoverSuperadminLabels(db: ReturnType<typeof getDb>) {
 }
 
 async function seedSuperadmin() {
-  const email = process.env.SEED_SUPERADMIN_EMAIL || "admin@chaslay.com";
+  const email = process.env.SEED_SUPERADMIN_EMAIL || "admin@rebornsense.com";
   const password = process.env.SEED_SUPERADMIN_PASSWORD || "ChangeMeNow!123";
   const name = resolveSuperadminName(process.env.SEED_SUPERADMIN_NAME);
   const db = getDb();
@@ -100,7 +100,7 @@ async function seedDemoShop() {
   }
 
   const db = getDb();
-  const email = process.env.SEED_DEMO_MERCHANT_EMAIL || "demo@chaslay.com";
+  const email = process.env.SEED_DEMO_MERCHANT_EMAIL || "demo@rebornsense.com";
   const password = process.env.SEED_DEMO_MERCHANT_PASSWORD || "DemoShop123!";
   const slug = process.env.SEED_DEMO_SLUG || "demo";
   // Keep Android BuildConfig SYNC_API_KEY working when present
@@ -151,7 +151,7 @@ async function seedDemoShop() {
       .returning();
     merchant = inserted[0]!;
     console.log(`Seeded demo merchant: ${merchant.email} (slug=${slug})`);
-    console.log(`  Shop: https://shop.chaslay.com/${slug} or /shop/${slug}`);
+    console.log(`  Shop: https://shop.rebornsense.com/${slug} or /shop/${slug}`);
     console.log(`  Sync API key: ${merchant.syncApiKey}`);
   } else {
     await db

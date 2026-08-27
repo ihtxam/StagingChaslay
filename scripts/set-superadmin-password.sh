@@ -8,7 +8,7 @@
 #
 # Set a new password (on the server, from the app repo):
 #   bash scripts/set-superadmin-password.sh 'YourNewPassword123'
-#   bash scripts/set-superadmin-password.sh 'YourNewPassword123' admin@chaslay.com
+#   bash scripts/set-superadmin-password.sh 'YourNewPassword123' admin@rebornsense.com
 #
 # Superadmin can also use Forgot password on /login (Brevo must be configured).
 set -euo pipefail

@@ -28,11 +28,7 @@ import {
   applyProductionCredentialDefaults,
   type DeliveryPlatformSettings,
 } from "@/lib/delivery-platform-settings";
-import {
-  ensureInventoryAddonColumn,
-  ensureSignageAddonColumn,
-  patchMerchantSchemaFromError,
-} from "@/lib/ensure-merchant-schema";
+import { patchMerchantSchemaFromError } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
@@ -100,13 +96,8 @@ export class MerchantSettingsService {
   }
 
   private static async buildMerchantSettings(merchantId: string) {
-    await ensureInventoryAddonColumn();
-    await ensureSignageAddonColumn();
-    const { ensureKdsAddonColumn, ensureOdsAddonColumn } = await import(
-      "@/lib/ensure-merchant-schema"
-    );
-    await ensureKdsAddonColumn();
-    await ensureOdsAddonColumn();
+    // Schema patches run at API startup. Do not re-run CREATE/ALTER here —
+    // concurrent Settings loads were locking Postgres and leaving the panel spinning.
     const db = getDb();
 
     const merchant = await db.query.merchants.findFirst({
@@ -134,7 +125,7 @@ export class MerchantSettingsService {
     const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
     const shopHost =
       process.env.SHOP_PUBLIC_HOST ||
-      (domain.includes("chaslay.com") ? "shop.chaslay.com" : domain.startsWith("shop.") ? domain : `shop.${domain}`);
+      (domain.includes("rebornsense.com") ? "shop.rebornsense.com" : domain.startsWith("shop.") ? domain : `shop.${domain}`);
     const apex = domain.replace(/^shop\./, "");
 
     return {

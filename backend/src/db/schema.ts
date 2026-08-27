@@ -238,7 +238,7 @@ export const merchants = pgTable(
     panelLanguage: varchar("panel_language", { length: 10 }).default("en").notNull(), // en | fr | de
     /** Default language for online shop + CMS homepage (null = fall back to panelLanguage) */
     shopLanguage: varchar("shop_language", { length: 10 }), // en | fr | de
-    /** Chaslay/FoodTruck Android POS sync key (X-Api-Key header) */
+    /** Reborn/FoodTruck Android POS sync key (X-Api-Key header) */
     syncApiKey: varchar("sync_api_key", { length: 64 }),
     // Restaurant floor / PAX
     floorPlanEnabled: boolean("floor_plan_enabled").default(false).notNull(),
@@ -262,12 +262,14 @@ export const merchants = pgTable(
      * Max concurrent waiter stations (waiter web + Android waiter). 0 = unlimited.
      */
     maxWaiterPosts: integer("max_waiter_posts").default(0).notNull(),
+    /** Max staff accounts (merchant panel users). 0 = unlimited. */
+    maxStaff: integer("max_staff").default(0).notNull(),
     /**
      * Paid restaurant inventory + recipes addon. Superadmin/reseller only (like POS seats).
      */
     inventoryAddonEnabled: boolean("inventory_addon_enabled").default(false).notNull(),
     /**
-     * Paid Chaslay Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
+     * Paid Reborn Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
      */
     signageAddonEnabled: boolean("signage_addon_enabled").default(false).notNull(),
     /** Max TV screens when the signage addon is on. Default 2. */
@@ -459,18 +461,39 @@ export const merchantStaff = pgTable(
 // SUBSCRIPTION PLANS (platform SaaS tiers)
 // ============================================================================
 
+export type PackageIncludedAddons = {
+  inventory?: boolean;
+  signage?: boolean;
+  kds?: boolean;
+  ods?: boolean;
+  signageScreenLimit?: number;
+};
+
 export const subscriptionPlans = pgTable(
   "subscription_plans",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    /** platform = superadmin; reseller = agency-owned package */
+    ownerType: varchar("owner_type", { length: 20 }).default("platform").notNull(),
+    ownerId: uuid("owner_id"),
     name: varchar("name", { length: 100 }).notNull(),
     slug: varchar("slug", { length: 50 }).notNull().unique(),
     description: text("description"),
     priceMonthly: decimal("price_monthly", { precision: 10, scale: 2 }).notNull().default("0"),
     priceYearly: decimal("price_yearly", { precision: 10, scale: 2 }),
     currency: varchar("currency", { length: 3 }).notNull().default("CHF"),
+    /** Linked POS version — features applied on subscribe */
+    editionId: uuid("edition_id").references(() => editions.id, { onDelete: "set null" }),
     maxDevices: integer("max_devices").notNull().default(1),
     maxProducts: integer("max_products"),
+    /** Max concurrent main POS stations. 0 = unlimited. */
+    maxPosPosts: integer("max_pos_posts").default(0).notNull(),
+    /** Max concurrent waiter stations. 0 = unlimited. */
+    maxWaiterPosts: integer("max_waiter_posts").default(0).notNull(),
+    /** Max staff accounts. 0 = unlimited. */
+    maxStaff: integer("max_staff").default(0).notNull(),
+    /** Addons bundled in this package */
+    includedAddons: json("included_addons").$type<PackageIncludedAddons>().default({}),
     features: json("features").$type<string[]>().default([]),
     isActive: boolean("is_active").notNull().default(true),
     /** Visible for merchants to purchase in their panel */
@@ -483,6 +506,101 @@ export const subscriptionPlans = pgTable(
   (table) => ({
     slugIdx: uniqueIndex("subscription_plans_slug_idx").on(table.slug),
     activeIdx: index("subscription_plans_active_idx").on(table.isActive),
+    ownerIdx: index("subscription_plans_owner_idx").on(table.ownerType, table.ownerId),
+    editionIdx: index("subscription_plans_edition_idx").on(table.editionId),
+  })
+);
+
+/** Purchasable add-ons (inventory, signage, extra POS posts, etc.) */
+export const subscriptionAddons = pgTable(
+  "subscription_addons",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerType: varchar("owner_type", { length: 20 }).default("platform").notNull(),
+    ownerId: uuid("owner_id"),
+    slug: varchar("slug", { length: 50 }).notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: text("description"),
+    /** inventory | signage | kds | ods | extra_pos_post | extra_waiter_post | extra_staff */
+    addonKey: varchar("addon_key", { length: 40 }).notNull(),
+    priceMonthly: decimal("price_monthly", { precision: 10, scale: 2 }).notNull().default("0"),
+    priceYearly: decimal("price_yearly", { precision: 10, scale: 2 }),
+    currency: varchar("currency", { length: 3 }).notNull().default("CHF"),
+    /** Quantity bump for limit-style addons (e.g. +1 POS post, +2 signage screens) */
+    quantity: integer("quantity").default(1).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    isPublic: boolean("is_public").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    slugOwnerIdx: uniqueIndex("subscription_addons_slug_owner_idx").on(
+      table.slug,
+      table.ownerType,
+      table.ownerId
+    ),
+    activeIdx: index("subscription_addons_active_idx").on(table.isActive),
+    ownerIdx: index("subscription_addons_owner_idx").on(table.ownerType, table.ownerId),
+  })
+);
+
+/** Active merchant add-on subscriptions */
+export const merchantAddonSubscriptions = pgTable(
+  "merchant_addon_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    addonId: uuid("addon_id")
+      .notNull()
+      .references(() => subscriptionAddons.id, { onDelete: "restrict" }),
+    billingCycle: varchar("billing_cycle", { length: 20 }).notNull(),
+    status: varchar("status", { length: 30 }).notNull().default("active"),
+    periodStart: timestamp("period_start"),
+    periodEnd: timestamp("period_end"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("merchant_addon_subscriptions_merchant_idx").on(table.merchantId),
+    addonIdx: index("merchant_addon_subscriptions_addon_idx").on(table.addonId),
+    statusIdx: index("merchant_addon_subscriptions_status_idx").on(table.status),
+  })
+);
+
+/** Add-on payment records (Adyen checkout) */
+export const subscriptionAddonPayments = pgTable(
+  "subscription_addon_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    addonId: uuid("addon_id")
+      .notNull()
+      .references(() => subscriptionAddons.id, { onDelete: "restrict" }),
+    billingCycle: varchar("billing_cycle", { length: 20 }).notNull(),
+    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    currency: varchar("currency", { length: 3 }).notNull().default("CHF"),
+    status: varchar("status", { length: 30 }).notNull().default("pending"),
+    adyenSessionId: varchar("adyen_session_id", { length: 255 }),
+    adyenPspReference: varchar("adyen_psp_reference", { length: 255 }),
+    adyenRecurringDetailReference: varchar("adyen_recurring_detail_reference", { length: 255 }),
+    isRecurring: boolean("is_recurring").default(false).notNull(),
+    adyenResultCode: varchar("adyen_result_code", { length: 50 }),
+    paidAt: timestamp("paid_at"),
+    periodStart: timestamp("period_start"),
+    periodEnd: timestamp("period_end"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdIdx: index("subscription_addon_payments_merchant_id_idx").on(table.merchantId),
+    addonIdIdx: index("subscription_addon_payments_addon_id_idx").on(table.addonId),
+    statusIdx: index("subscription_addon_payments_status_idx").on(table.status),
+    sessionIdx: index("subscription_addon_payments_session_idx").on(table.adyenSessionId),
   })
 );
 
@@ -3169,8 +3287,39 @@ export const productRecipesRelations = relations(productRecipes, ({ one }) => ({
   item: one(inventoryItems, { fields: [productRecipes.itemId], references: [inventoryItems.id] }),
 }));
 
-export const subscriptionPlansRelations = relations(subscriptionPlans, ({ many }) => ({
+export const subscriptionPlansRelations = relations(subscriptionPlans, ({ one, many }) => ({
+  edition: one(editions, {
+    fields: [subscriptionPlans.editionId],
+    references: [editions.id],
+  }),
   payments: many(subscriptionPayments),
+}));
+
+export const subscriptionAddonsRelations = relations(subscriptionAddons, ({ many }) => ({
+  merchantSubscriptions: many(merchantAddonSubscriptions),
+  payments: many(subscriptionAddonPayments),
+}));
+
+export const merchantAddonSubscriptionsRelations = relations(merchantAddonSubscriptions, ({ one }) => ({
+  merchant: one(merchants, {
+    fields: [merchantAddonSubscriptions.merchantId],
+    references: [merchants.id],
+  }),
+  addon: one(subscriptionAddons, {
+    fields: [merchantAddonSubscriptions.addonId],
+    references: [subscriptionAddons.id],
+  }),
+}));
+
+export const subscriptionAddonPaymentsRelations = relations(subscriptionAddonPayments, ({ one }) => ({
+  merchant: one(merchants, {
+    fields: [subscriptionAddonPayments.merchantId],
+    references: [merchants.id],
+  }),
+  addon: one(subscriptionAddons, {
+    fields: [subscriptionAddonPayments.addonId],
+    references: [subscriptionAddons.id],
+  }),
 }));
 
 export const subscriptionPaymentsRelations = relations(subscriptionPayments, ({ one }) => ({
@@ -3196,7 +3345,7 @@ export type PlatformShopOrderLine = {
   lineTotal: number;
 };
 
-/** Catalog items sold by Chaslay to merchants */
+/** Catalog items sold by Reborn to merchants */
 export const platformShopProducts = pgTable(
   "platform_shop_products",
   {

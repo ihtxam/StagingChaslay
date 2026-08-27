@@ -13,11 +13,11 @@ type StatusPayload = {
 };
 
 const SERVICES = [
-  { key: 'api', label: 'API', hint: 'app.chaslay.com / api.chaslay.com' },
+  { key: 'api', label: 'API', hint: 'app.rebornsense.com (/api, /v1)' },
   { key: 'database', label: 'Database', hint: 'PostgreSQL' },
-  { key: 'dashboard', label: 'Admin panel', hint: 'app.chaslay.com' },
-  { key: 'shop', label: 'Online shop', hint: 'shop.chaslay.com' },
-  { key: 'pay', label: 'Digital receipts', hint: 'pay.chaslay.com' },
+  { key: 'dashboard', label: 'Admin panel', hint: 'app.rebornsense.com' },
+  { key: 'shop', label: 'Online shop', hint: 'shop.rebornsense.com' },
+  { key: 'pay', label: 'Digital receipts', hint: 'pay.rebornsense.com' },
 ] as const;
 
 function statusLabel(status: 'ok' | 'error' | 'loading') {
@@ -65,7 +65,7 @@ export default function StatusPage() {
           <p className="text-sm font-semibold uppercase tracking-wide text-teal-700">{APP_NAME}</p>
           <h1 className="mt-1 text-2xl font-bold">System status</h1>
           <p className="mt-2 text-sm text-stone-600">
-            Live health for Chaslay POS, shop, and receipts.
+            Live health for Reborn POS, shop, and receipts.
           </p>
         </header>
 
@@ -117,7 +117,7 @@ export default function StatusPage() {
           <button type="button" className="text-teal-700 font-medium hover:underline" onClick={() => void load()}>
             Refresh
           </button>
-          <a href="https://app.chaslay.com/" className="text-teal-700 font-medium hover:underline">
+          <a href="https://app.rebornsense.com/" className="text-teal-700 font-medium hover:underline">
             Back to app
           </a>
         </div>

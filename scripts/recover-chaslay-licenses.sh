@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Probe for legacy Chaslay Postgres volume and print tenants / activation codes.
+# Probe for legacy Reborn Postgres volume and print tenants / activation codes.
 # Does not modify production DB unless IMPORT=1.
 set -euo pipefail
 
@@ -52,4 +52,4 @@ docker exec "$CID" psql -U postgres -d foodtruckpos -c \
   "SELECT tenant_id, label, bound_device_id, valid_days, used_at IS NOT NULL AS used FROM activation_codes ORDER BY created_at DESC LIMIT 50;" 2>/dev/null \
   || echo "(could not query activation_codes — codes are hashed, recreate from device IDs)"
 
-echo "Done. Recreate merchants in ChaslayReborn Superadmin, then Issue license → For POS device ID."
+echo "Done. Recreate merchants in Reborn Superadmin, then Issue license → For POS device ID."

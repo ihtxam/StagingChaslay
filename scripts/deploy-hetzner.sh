@@ -77,7 +77,7 @@ ensure_env_production() {
     echo "Created $ENV_FILE from example"
   fi
 
-  # Pull useful values from legacy Chaslay backend.env when present
+  # Pull useful values from legacy Reborn backend.env when present
   legacy_admin="$(env_get SUPERADMIN_PASSWORD "$LEGACY_ENV")"
   legacy_jwt="$(env_get LICENSE_SECRET "$LEGACY_ENV")"
   legacy_dburl="$(env_get DATABASE_URL "$LEGACY_ENV")"
@@ -113,8 +113,8 @@ ensure_env_production() {
   fi
 
   # Bootstrap panel password (seed syncs this into Postgres on every migrate)
-  adminpass="${SEED_SUPERADMIN_PASSWORD_OVERRIDE:-ChaslayAdmin123!}"
-  if [[ -n "$legacy_admin" && "$legacy_admin" != "change_me_superadmin_password" && -z "${SEED_SUPERADMIN_PASSWORD_OVERRIDE:-}" ]]; then
+  adminpass="${SEED_SUPERADMIN_PASSWORD_OVERRIDE:-${adminpass:-RebornAdmin123!}}"
+  if [[ -n "$legacy_admin" && "$legacy_admin" != "change_me_superadmin_password" && -z "${SEED_SUPERADMIN_PASSWORD_OVERRIDE:-}" && ( -z "$adminpass" || "$adminpass" == "RebornAdmin123!" || "$adminpass" == "ChaslayAdmin123!" ) ]]; then
     adminpass="$legacy_admin"
   fi
   if grep -qE '^SEED_SUPERADMIN_PASSWORD=' "$ENV_FILE"; then
@@ -125,8 +125,8 @@ ensure_env_production() {
   echo "Synced SEED_SUPERADMIN_PASSWORD in $ENV_FILE"
   # Recovery default for panel login (override with SEED_SUPERADMIN_PASSWORD_OVERRIDE)
   if [[ "${FORCE_CHASLAY_ADMIN_BOOTSTRAP:-1}" == "1" ]]; then
-    sed -i "s|^SEED_SUPERADMIN_PASSWORD=.*|SEED_SUPERADMIN_PASSWORD=ChaslayAdmin123!|" "$ENV_FILE"
-    echo "Forced SEED_SUPERADMIN_PASSWORD=ChaslayAdmin123! (set FORCE_CHASLAY_ADMIN_BOOTSTRAP=0 to keep custom)"
+    sed -i "s|^SEED_SUPERADMIN_PASSWORD=.*|SEED_SUPERADMIN_PASSWORD=RebornAdmin123!|" "$ENV_FILE"
+    echo "Forced SEED_SUPERADMIN_PASSWORD=RebornAdmin123! (set FORCE_CHASLAY_ADMIN_BOOTSTRAP=0 to keep custom)"
   fi
 
   # Ensure host defaults per stack (CADDYFILE must live in .env.production — compose defaults to chaslay)
@@ -174,7 +174,7 @@ ensure_env_production() {
     export_stack_caddyfile
   fi
 
-  # Recover / normalize Brevo (Sendinblue) keys from this file or legacy Chaslay envs
+  # Recover / normalize Brevo (Sendinblue) keys from this file or legacy Reborn envs
   ensure_brevo_env "$ENV_FILE"
 }
 
@@ -204,8 +204,8 @@ ensure_brevo_env() {
     /root/chaslay-secrets/.env
     /root/chaslay/.env
     /root/chaslay/.env.production
-    /root/Chaslay/.env
-    /root/Chaslay/.env.production
+    /root/Reborn/.env
+    /root/Reborn/.env.production
     /root/FoodTruckPOS/backend/.env
     /root/FoodTruckPOS/.env
     /opt/chaslay/.env
@@ -253,7 +253,7 @@ ensure_brevo_env() {
       echo "BREVO_FROM_NAME=${name}" >>"$dest"
     fi
   elif ! grep -qE '^BREVO_FROM_NAME=' "$dest"; then
-    echo "BREVO_FROM_NAME=Chaslay" >>"$dest"
+    echo "BREVO_FROM_NAME=Reborn" >>"$dest"
   fi
 
   if grep -qE '^BREVO_API_KEY=.+' "$dest"; then

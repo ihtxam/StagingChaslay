@@ -22,7 +22,7 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <application
-        android:name=".ChaslayPosApp"
+        android:name=".RebornPosApp"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -30,7 +30,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.ChaslayPOS"
+        android:theme="@style/Theme.RebornPOS"
         tools:replace="android:allowBackup,android:usesCleartextTraffic"
         tools:targetApi="31">
 
@@ -63,7 +63,7 @@
             android:exported="true"
             android:screenOrientation="unspecified"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.ChaslayPOS">
+            android:theme="@style/Theme.RebornPOS">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -81,7 +81,7 @@
             android:exported="false"
             android:screenOrientation="unspecified"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.ChaslayPOS" />
+            android:theme="@style/Theme.RebornPOS" />
 
         <!-- Adyen Tap to Pay: SDK auto-detects this to obtain SoftPOS auth sessions. -->
         <service

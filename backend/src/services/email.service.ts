@@ -68,7 +68,7 @@ export class EmailService {
       process.env.FROM_EMAIL ||
       process.env.MAIL_FROM ||
       process.env.SENDGRID_FROM_EMAIL ||
-      "noreply@chaslay.com"
+      "noreply@rebornsense.com"
     ).trim();
   }
 
@@ -78,7 +78,7 @@ export class EmailService {
       process.env.SENDINBLUE_FROM_NAME ||
       process.env.MAIL_FROM_NAME ||
       process.env.EMAIL_FROM_NAME ||
-      "Chaslay"
+      "Reborn"
     ).trim();
   }
 
@@ -188,7 +188,7 @@ export class EmailService {
         provider: "sendgrid",
         apiKey: process.env.SENDGRID_API_KEY,
         fromEmail: process.env.SENDGRID_FROM_EMAIL,
-        fromName: fromName || "Chaslay",
+        fromName: fromName || "Reborn",
         source: dbApiKey ? "database" : "env",
         merchantId,
       };
@@ -514,7 +514,7 @@ export class EmailService {
         "https://api.brevo.com/v3/smtp/email",
         {
           sender: {
-            name: cfg.fromName || "Chaslay",
+            name: cfg.fromName || "Reborn",
             email: cfg.fromEmail,
           },
           to: [{ email: input.to }],

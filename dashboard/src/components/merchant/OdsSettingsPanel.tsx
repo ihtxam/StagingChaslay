@@ -19,7 +19,7 @@ const THEMES = ['light', 'teal', 'dark'] as const;
 function odsPublicUrl(display: Pick<OdsDisplay, 'shortCode' | 'token'>): string {
   const origin =
     (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com');
+    (typeof window !== 'undefined' ? window.location.origin : 'https://app.rebornsense.com');
   const code = (display.shortCode || display.token).trim();
   return `${origin.replace(/\/$/, '')}/ods/${code}`;
 }

@@ -1,0 +1,15 @@
+# Use when the host already binds :80/:443 (existing nginx sites).
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.shared-nginx.yml --env-file .env.production up -d --build
+services:
+  api:
+    ports:
+      - "127.0.0.1:13000:3000"
+
+  dashboard:
+    ports:
+      - "127.0.0.1:13080:80"
+
+  caddy:
+    profiles:
+      - caddy
+    ports: []

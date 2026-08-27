@@ -1,26 +1,44 @@
-# Chaslay POS ? deploy checklist
+# Reborn POS — deploy checklist
 
-Server IP: **116.202.26.15**
+Product name: **Reborn**. Login and API: **https://app.rebornsense.com** (same `/api` and `/v1` paths as before).
 
 | Domain | Purpose |
 |--------|---------|
-| `api.chaslay.com` | POS license, menu sync, order API, `/v1/receipts` |
-| `pay.chaslay.com` | Digital receipt pages (`/receipts/{id}`) |
-| `shop.chaslay.com/{clientName}` | Customer online shop per merchant |
-| `app.chaslay.com` | Merchant back office + superadmin |
-| `status.chaslay.com` | Public system status page |
+| `app.rebornsense.com` | Login, merchant panel, Web POS, Android `/v1` + `/api` |
+| `api.rebornsense.com` | Optional API alias (same backend) |
+| `pay.rebornsense.com` | Digital receipt pages (`/receipt/{id}`) |
+| `shop.rebornsense.com/{slug}` | Customer online shop |
+| `status.rebornsense.com` | Public system status |
+| `rebornsense.com` | Redirects to `app.rebornsense.com` |
+
+New production IP: **`91.98.41.165`**. Previous IP: `116.202.26.15`.
+
+This host already serves other nginx sites (wearedispatcher). Reborn uses Docker on `127.0.0.1:13000` (API) and `127.0.0.1:13080` (dashboard), with `deploy/nginx-rebornsense.conf` — do **not** bind Caddy to :80/:443 there.
+
+---
+
+## Transfer to the new server
+
+1. Point DNS (and `*.rebornsense.com` wildcard) at the new server.
+2. Copy `/root/chaslay-secrets/.env.production` (or dump Postgres) from the old box so merchants, licenses, and passwords stay the same.
+3. On the new server: clone this repo, set `DOMAIN=rebornsense.com` and `PUBLIC_APP_URL=https://app.rebornsense.com` in secrets, then run `bash scripts/deploy-hetzner.sh`.
+4. Add `noreply@rebornsense.com` in Brevo (or keep the current sender until DNS mail is ready).
+5. After cutover, point old `*.chaslay.com` records at the new server so bookmarks redirect (Caddy already maps them).
+6. Sideload a new Android APK (API base is now `https://app.rebornsense.com/`). Installed Windows Print Agent keeps working; UI name is **Reborn Print Agent**.
 
 ---
 
 ## 1. DNS (you)
 
-Point these **A records** to `116.202.26.15`:
+Point these **A records** to the new server IP:
 
-- `api.chaslay.com`
-- `pay.chaslay.com`
-- `shop.chaslay.com`
-- `app.chaslay.com`
-- `status.chaslay.com`
+- `app.rebornsense.com`
+- `api.rebornsense.com` (optional)
+- `pay.rebornsense.com`
+- `shop.rebornsense.com`
+- `status.rebornsense.com`
+- `rebornsense.com` / `www.rebornsense.com`
+- `*.rebornsense.com` (shop subdomains)
 
 ---
 
@@ -360,7 +378,7 @@ ssh root@116.202.26.15 'bash /root/FoodTruckPOS/scripts/deploy-hetzner.sh'
 
 ```bash
 ssh root@116.202.26.15
-cd ChaslayPOS   # or git clone https://github.com/ihtxam/ChaslayPOS.git
+cd RebornPOS   # or git clone https://github.com/ihtxam/RebornPOS.git
 git pull
 cd backend
 # NEVER run: cp .env.example .env  (that wipes your secrets)
@@ -378,10 +396,10 @@ docker compose --env-file .env.production exec -T db \
   psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
   < backend/sql/ensure-editions-resellers.sql
 # or: docker compose exec api npm run migrate
-# Then seed editions + Chaslay agency reseller:
+# Then seed editions + Reborn agency reseller:
 docker compose exec api npm run seed
 # Default agency login: SEED_RESELLER_EMAIL / SEED_RESELLER_PASSWORD
-# (defaults: agency@chaslay.com / ChaslayAgency123!)
+# (defaults: agency@rebornsense.com / ChaslayAgency123!)
 ```
 
 **Overview report email settings:** Merchants can schedule daily/monthly Excel report emails from Overview → Settings. Persist column:
@@ -420,18 +438,18 @@ See `backend/sql/ensure-shifts.sql`.
 | `LICENSE_SECRET` | Min 32 chars |
 | `SUPERADMIN_PASSWORD` | Set once in `/root/chaslay-secrets/backend.env`; stored in Postgres and survives redeploys |
 
-`Caddyfile` is already set for `api.chaslay.com`, `shop.chaslay.com`, `app.chaslay.com`.
+`Caddyfile` is already set for `app.rebornsense.com`, `shop.rebornsense.com`, `app.rebornsense.com`.
 
-**Print agent EXE:** `backend/public/downloads/*.exe` is gitignored. Deploy cross-compiles it with `pkg` (Docker `node:20-bookworm`) into that folder and Caddy proxies `/downloads/*` on `app.chaslay.com` to the API (so the SPA never returns HTML as a fake `.exe`). Verify after deploy:
+**Print agent EXE:** `backend/public/downloads/*.exe` is gitignored. Deploy cross-compiles it with `pkg` (Docker `node:20-bookworm`) into that folder and Caddy proxies `/downloads/*` on `app.rebornsense.com` to the API (so the SPA never returns HTML as a fake `.exe`). Verify after deploy:
 
 ```bash
-curl -sI https://app.chaslay.com/downloads/chaslayreborn-print-agent-setup.exe
+curl -sI https://app.rebornsense.com/downloads/chaslayreborn-print-agent-setup.exe
 # 200 + application/octet-stream + ~40MB Content-Length
 ```
 
 Skip rebuild: `SKIP_PRINT_AGENT_BUILD=1 bash scripts/deploy-hetzner.sh`
 
-**Official login (everyone):** https://app.chaslay.com/login
+**Official login (everyone):** https://app.rebornsense.com/login
 
 After sign-in the panel opens by role: superadmin → `/superadmin`, reseller → `/reseller`, merchant owner → `/merchant`, staff → merchant panel or WebPOS/waiter if that is their only permission.
 
@@ -456,7 +474,7 @@ After changing `.env`, restart: `docker compose up -d --build`
 
 ## Merchant portal (shop owners)
 
-Merchants log in at **https://app.chaslay.com** with email + password.
+Merchants log in at **https://app.rebornsense.com** with email + password.
 
 **Create a merchant login** (superadmin ? Manage tenant ? Merchant portal login), or:
 
@@ -475,7 +493,7 @@ Merchants can manage:
 
 See `backend/ROADMAP.md` for the OrderPin-style agency roadmap (KDS, kiosk, table plan, etc.).
 
-**Health check:** https://api.chaslay.com/health
+**Health check:** https://app.rebornsense.com/health
 
 ---
 
@@ -490,9 +508,9 @@ docker compose exec api npm run create-tenant -- --slug=acme-burger --name="Acme
 This prints:
 
 - **POS API key** ? put in Android `SYNC_API_KEY`
-- **Shop URL** ? `https://shop.chaslay.com/acme-burger`
+- **Shop URL** ? `https://shop.rebornsense.com/acme-burger`
 
-Demo tenant (after seed): https://shop.chaslay.com/demo
+Demo tenant (after seed): https://shop.rebornsense.com/demo
 
 ---
 
@@ -501,7 +519,7 @@ Demo tenant (after seed): https://shop.chaslay.com/demo
 In `app/build.gradle.kts` (per merchant build):
 
 ```kotlin
-buildConfigField("String", "LICENSE_API_BASE_URL", "\"https://api.chaslay.com/\"")
+buildConfigField("String", "LICENSE_API_BASE_URL", "\"https://app.rebornsense.com/\"")
 buildConfigField("String", "TENANT_SLUG", "\"acme-burger\"")
 buildConfigField("String", "SYNC_API_KEY", "\"PASTE_TENANT_API_KEY_FROM_CREATE-TENANT\"")
 ```
@@ -529,7 +547,7 @@ Send the printed code to the merchant.
 
 - Public menu: `GET /v1/shop/{clientName}/menu`
 - Place order: `POST /v1/shop/{clientName}/orders`
-- Storefront page: `https://shop.chaslay.com/{clientName}`
+- Storefront page: `https://shop.rebornsense.com/{clientName}`
 
 Orders appear in POS **Ongoing Orders** when the tablet is online and `SYNC_API_KEY` is set.
 
@@ -551,15 +569,15 @@ Orders appear in POS **Ongoing Orders** when the tablet is online and `SYNC_API_
 ## Optional later
 
 - Stripe for online payment
-- Full admin UI at `app.chaslay.com`
+- Full admin UI at `app.rebornsense.com`
 - POS menu push to server
 - Waiter / kiosk apps
 
 ## Custom domain (merchant shop)
 
-Shop **slug** is enough: `https://shop.chaslay.com/{slug}` (also `/shop/{slug}` on admin).
+Shop **slug** is enough: `https://shop.rebornsense.com/{slug}` (also `/shop/{slug}` on admin).
 
-Shop **subdomain** (`https://{sub}.chaslay.com`) is optional — it is **not** required for custom domains.
+Shop **subdomain** (`https://{sub}.rebornsense.com`) is optional — it is **not** required for custom domains.
 
 ### DNS for a custom domain
 
@@ -569,7 +587,7 @@ Create a **CNAME** at your DNS provider:
 |-------|--------|
 | **Type** | `CNAME` |
 | **Host / Name** | `www` (or `order`, `shop`, … — the hostname customers will use) |
-| **Target / Value / Points to** | `shop.chaslay.com` |
+| **Target / Value / Points to** | `shop.rebornsense.com` |
 
 Then in Merchant → Settings (or Website CMS), enter the full hostname, e.g. `www.mycafe.ch`.
 

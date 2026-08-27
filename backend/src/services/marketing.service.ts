@@ -101,7 +101,7 @@ function shopUrlForMerchant(merchant: {
   subdomain?: string | null;
   customDomain?: string | null;
 }) {
-  const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL || "https://chaslay.com";
+  const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL || "https://rebornsense.com";
   const base = domain.replace(/\/$/, "").startsWith("http")
     ? domain.replace(/\/$/, "")
     : `https://${domain.replace(/\/$/, "")}`;

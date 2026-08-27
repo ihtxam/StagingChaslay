@@ -202,7 +202,7 @@ export function buildSupportLogPayload(
   entries: WebPosLogEntry[],
   diagnostics: WebPosDiagnostics
 ): string {
-  const header = `--- Chaslay WebPOS diagnostics ---\n${JSON.stringify(diagnostics, null, 2)}\n--- Session log (last hour) ---\n`;
+  const header = `--- Reborn WebPOS diagnostics ---\n${JSON.stringify(diagnostics, null, 2)}\n--- Session log (last hour) ---\n`;
   const body = formatWebPosLogsText(entries);
   return `${header}${body || '(no log entries in the last hour)'}`;
 }

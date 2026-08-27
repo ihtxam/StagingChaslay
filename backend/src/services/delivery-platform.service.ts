@@ -318,7 +318,7 @@ export class DeliveryPlatformService {
     return data.access_token;
   }
 
-  /** Notify partner that Chaslay accepted the order (best-effort skeleton). */
+  /** Notify partner that Reborn accepted the order (best-effort skeleton). */
   static async notifyPartnerOrderAccepted(
     merchantId: string,
     order: { id: string; orderSource?: string | null; externalOrderId?: string | null }
@@ -616,7 +616,7 @@ export class DeliveryPlatformService {
     const base =
       process.env.PUBLIC_APP_URL ||
       process.env.MERCHANT_DASHBOARD_URL ||
-      "https://api.chaslay.com";
+      "https://app.rebornsense.com";
     const apiBase = base.replace(/\/$/, "").includes("api.")
       ? base.replace(/\/$/, "")
       : `${base.replace(/\/$/, "")}/api`;

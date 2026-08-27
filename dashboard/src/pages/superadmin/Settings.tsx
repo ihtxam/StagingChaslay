@@ -104,7 +104,7 @@ export default function Settings() {
   const [brevo, setBrevo] = useState<EmailSettings | null>(null);
   const [brevoForm, setBrevoForm] = useState({
     fromEmail: '',
-    fromName: 'Chaslay',
+    fromName: 'Reborn',
     apiKey: '',
   });
   const [savingBrevo, setSavingBrevo] = useState(false);
@@ -135,7 +135,7 @@ export default function Settings() {
       setBrevo(b);
       setBrevoForm({
         fromEmail: b.fromEmail || '',
-        fromName: b.fromName || 'Chaslay',
+        fromName: b.fromName || 'Reborn',
         apiKey: '',
       });
       await refreshEmailUsage();
@@ -687,7 +687,7 @@ export default function Settings() {
               className="input mt-1"
               value={brevoForm.fromName}
               onChange={(e) => setBrevoForm({ ...brevoForm, fromName: e.target.value })}
-              placeholder="Chaslay"
+              placeholder="Reborn"
             />
           </label>
           <label className="block md:col-span-2">

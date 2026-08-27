@@ -80,7 +80,7 @@ class MenuImportService @Inject constructor() {
     }
 
     fun writeTemplate(outputStream: OutputStream) {
-        Workbook(outputStream, "Chaslay POS", "1.0").use { workbook ->
+        Workbook(outputStream, "Reborn POS", "1.0").use { workbook ->
             writeCategoriesSheet(workbook.newWorksheet("Categories"))
             writeProductsSheet(workbook.newWorksheet("Products"))
         }

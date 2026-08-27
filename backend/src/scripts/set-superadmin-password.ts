@@ -9,7 +9,7 @@ dotenv.config();
  * Set or create the platform superadmin password.
  *
  *   npm run set-superadmin-password -- 'YourNewPassword123'
- *   npm run set-superadmin-password -- 'YourNewPassword123' admin@chaslay.com
+ *   npm run set-superadmin-password -- 'YourNewPassword123' admin@rebornsense.com
  *
  * Does not print the password. Never commit a production password.
  */
@@ -17,11 +17,11 @@ async function main() {
   const password = process.argv[2];
   const emailArg = process.argv[3];
   const email = String(
-    emailArg || process.env.SEED_SUPERADMIN_EMAIL || "admin@chaslay.com"
+    emailArg || process.env.SEED_SUPERADMIN_EMAIL || "admin@rebornsense.com"
   )
     .trim()
     .toLowerCase();
-  const name = process.env.SEED_SUPERADMIN_NAME || "Chaslay Admin";
+  const name = process.env.SEED_SUPERADMIN_NAME || "Reborn Admin";
 
   if (!password || password.startsWith("-")) {
     console.error("Usage: npm run set-superadmin-password -- '<new-password>' [email]");
@@ -47,7 +47,7 @@ async function main() {
         passwordHash,
         isActive: true,
         name:
-          existing[0].name && !/manupos|chaslayreborn\s+admin/i.test(existing[0].name)
+          existing[0].name && !/manupos|reborn\s+admin/i.test(existing[0].name)
             ? existing[0].name
             : name,
         updatedAt: new Date(),

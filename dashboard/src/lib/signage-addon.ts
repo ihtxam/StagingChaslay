@@ -1,4 +1,4 @@
-/** Paid Chaslay Screens (digital signage) addon — accept any of the API field names. */
+/** Paid Reborn Screens (digital signage) addon — accept any of the API field names. */
 export function isSignageLicensed(input: {
   enabled?: boolean;
   signageAddonEnabled?: boolean;

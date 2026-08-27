@@ -34,7 +34,7 @@ const CHANNELS = ['takeaway', 'dine_in', 'delivery'] as const;
 function kdsPublicUrl(station: Pick<KdsStation, 'shortCode' | 'token'>): string {
   const origin =
     (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com');
+    (typeof window !== 'undefined' ? window.location.origin : 'https://app.rebornsense.com');
   const code = (station.shortCode || station.token).trim();
   return `${origin.replace(/\/$/, '')}/kds/${code}`;
 }

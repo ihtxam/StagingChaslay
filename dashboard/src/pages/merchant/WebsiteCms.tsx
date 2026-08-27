@@ -13,7 +13,7 @@ import {
   type OpenPageBlocks,
   type OpenPageSiteConfig,
 } from '@/lib/cms/openpage-types';
-import { needsChaslayBlockMigration } from '@/lib/cms/split-openpage-html';
+import { needsRebornBlockMigration } from '@/lib/cms/split-openpage-html';
 import { starterForTemplate } from '@/lib/cms/openpage-starters';
 
 const CMS_LOCALES: CmsLocale[] = ['en', 'fr', 'de'];
@@ -52,7 +52,7 @@ function pageNeedsHtmlMigration(page: CmsPage, locale: CmsLocale = 'en'): boolea
   const blocks = asOpenPage(page.blocks, page.title);
   const config = resolveOpenPageConfig(blocks, locale);
   const html = blocks.locales?.[locale]?.html || (locale === (blocks.defaultLocale || 'en') ? blocks.html : '') || '';
-  return needsChaslayBlockMigration(html, config);
+  return needsRebornBlockMigration(html, config);
 }
 
 function OpenPageHtmlMigrator({
@@ -520,7 +520,7 @@ export default function WebsiteCms() {
             </tr>
             <tr>
               <th className="bg-[var(--bg-muted)] px-2 py-1.5 text-left font-medium">Points to</th>
-              <td className="px-2 py-1.5 font-mono">shop.chaslay.com</td>
+              <td className="px-2 py-1.5 font-mono">shop.rebornsense.com</td>
             </tr>
           </tbody>
         </table>

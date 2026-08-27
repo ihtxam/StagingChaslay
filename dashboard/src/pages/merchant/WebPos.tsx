@@ -9729,6 +9729,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         pricePerKg={Number(pendingWeighed?.price) || 0}
         weightUnit={pendingWeighed?.weightUnit}
         configuredPort={printSettings?.scaleComPort}
+        configuredDeviceName={printSettings?.scaleDeviceName}
+        configuredDeviceId={printSettings?.scaleDeviceId}
         onClose={() => setPendingWeighed(null)}
         onConfirm={(weightKg) => {
           if (!pendingWeighed) return;

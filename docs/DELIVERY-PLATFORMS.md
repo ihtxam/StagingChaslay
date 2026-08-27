@@ -1,6 +1,6 @@
 # Delivery platforms (Just Eat & Uber Eats)
 
-Connect aggregator orders into Chaslay POS alongside your own online shop. Orders share the same kitchen workflow, WebPOS online panel, and auto-print pipeline.
+Connect aggregator orders into Reborn POS alongside your own online shop. Orders share the same kitchen workflow, WebPOS online panel, and auto-print pipeline.
 
 ## What works today
 
@@ -41,7 +41,7 @@ Hetzner deploy runs this automatically via `scripts/deploy-hetzner.sh`.
 4. Leave **Test mode** ON while using sandbox credentials (turns off automatically when production client ID + secret are saved).
 5. **Save**, then copy the **Webhook URL** shown on the tab:
    ```
-   https://api.chaslay.com/api/webhooks/uber-eats/{MERCHANT_UUID}
+   https://app.rebornsense.com/api/webhooks/uber-eats/{MERCHANT_UUID}
    ```
 6. In [Uber Developer Dashboard](https://developer.uber.com/) → your Eats app → **Webhooks**, register that URL and subscribe to **`orders.notification`**.
 7. Place a **test order** on your linked Uber Eats sandbox store. It should appear in **Orders** / **WebPOS** within seconds and auto-print if kitchen printing is enabled.
@@ -64,17 +64,17 @@ Just Eat pointed you to the self-service docs: **[JET Connect API](https://uk.ap
    - **Webhook HMAC secret** → HMAC secret (**required** for live signed webhooks)
 4. **Save**, copy the **webhook base URL**:
    ```
-   https://api.chaslay.com/api/webhooks/just-eat/{MERCHANT_UUID}
+   https://app.rebornsense.com/api/webhooks/just-eat/{MERCHANT_UUID}
    ```
 5. In JET Connect portal → **Webhook subscription**, register that **base URL** (no path suffix). Just Eat POSTs to:
    - `{base}/order-ready-for-preparation-sync` (sync — return HTTP 200)
    - `{base}/order-ready-for-preparation-async` (async — return HTTP 202 + callback)
 6. Subscribe at minimum to **`order-ready-for-preparation-sync`** (or async if your contract requires it).
-7. Send a **sandbox test order** (`IsTest: true` in payload) or use Chaslay test mode + `/test` endpoint below.
+7. Send a **sandbox test order** (`IsTest: true` in payload) or use Reborn test mode + `/test` endpoint below.
 
-**Chaslay field mapping (Just Eat)**
+**Reborn field mapping (Just Eat)**
 
-| Chaslay Settings field | JET Connect portal / docs |
+| Reborn Settings field | JET Connect portal / docs |
 |------------------------|---------------------------|
 | Store / restaurant ID | `Restaurant.Id` |
 | JET Connect API key | Partner REST API key (`JE-API-KEY`) |
@@ -89,7 +89,7 @@ Just Eat pointed you to the self-service docs: **[JET Connect API](https://uk.ap
 
 Until live approval:
 
-- Use **Test mode** in Chaslay and the `/test` webhook endpoint, **or**
+- Use **Test mode** in Reborn and the `/test` webhook endpoint, **or**
 - Use partner **sandbox / test stores** (Uber test creds; Just Eat orders with `IsTest: true`).
 
 After live approval:
@@ -123,9 +123,9 @@ Collect:
 |---|----------------|------------|
 | API base | `https://uk-partnerapi.just-eat.io` (override via `JET_CONNECT_SANDBOX_API_BASE`) | `https://uk-partnerapi.just-eat.io` |
 | Orders | Payloads with `IsTest: true` | Live customer orders |
-| Chaslay | Test mode ON, or live creds + signed webhooks | Test mode OFF when API key + webhook HMAC secret saved |
+| Reborn | Test mode ON, or live creds + signed webhooks | Test mode OFF when API key + webhook HMAC secret saved |
 
-### 2. Configure Chaslay
+### 2. Configure Reborn
 
 **Settings → Delivery platforms → Just Eat**
 
@@ -136,7 +136,7 @@ Collect:
 | JET Connect API key | Partner REST API key |
 | Webhook Authorization key | Optional inbound `Authorization` header value |
 | Webhook HMAC secret | Webhook signing secret (**required for live**) |
-| Auto-accept orders | Optional — skip manual approval; Chaslay calls `PUT /orders/{id}/accept` |
+| Auto-accept orders | Optional — skip manual approval; Reborn calls `PUT /orders/{id}/accept` |
 | Test mode | Off automatically when API key + webhook HMAC secret are saved |
 
 ### 3. Register webhook base URL
@@ -144,12 +144,12 @@ Collect:
 Copy from Settings (replace `{MERCHANT_UUID}` with your merchant id):
 
 ```
-https://api.chaslay.com/api/webhooks/just-eat/{MERCHANT_UUID}
+https://app.rebornsense.com/api/webhooks/just-eat/{MERCHANT_UUID}
 ```
 
 In JET Connect, subscribe to order webhooks. Just Eat appends paths, e.g.:
 
-| Event | Method + path | Chaslay response |
+| Event | Method + path | Reborn response |
 |-------|---------------|------------------|
 | Order ready (sync) | `POST …/order-ready-for-preparation-sync` | HTTP 200 |
 | Order ready (async) | `POST …/order-ready-for-preparation-async?callback=…` | HTTP 202 + success/failure callback |
@@ -162,7 +162,7 @@ In JET Connect, subscribe to order webhooks. Just Eat appends paths, e.g.:
 
 Legacy Flyt-style headers (`X-Flyt-Signature`, `X-JET-Signature`, `X-Webhook-Secret`) are still accepted when test mode is on.
 
-### 4. Order payload (what Chaslay maps)
+### 4. Order payload (what Reborn maps)
 
 Primary webhook: **`order-ready-for-preparation`** with fields such as:
 
@@ -172,11 +172,11 @@ Primary webhook: **`order-ready-for-preparation`** with fields such as:
 - `Items[]` (nested, with `Reference` PLU/SKU)  
 - `PriceBreakdown`, `TotalPrice`, `Customer`, `CustomerNotes`
 
-Map partner item `Reference` values to **Products → SKU** in Chaslay. Unmapped items still print by name.
+Map partner item `Reference` values to **Products → SKU** in Reborn. Unmapped items still print by name.
 
 ### 5. Accept flow
 
-When staff tap **Accept** on a Just Eat order in Chaslay:
+When staff tap **Accept** on a Just Eat order in Reborn:
 
 - **Just Eat:** `PUT https://uk-partnerapi.just-eat.io/orders/{OrderId}/accept` with `Authorization: JE-API-KEY {apiKey}`
 
@@ -192,7 +192,7 @@ When staff tap **Accept** on a Just Eat order in Chaslay:
 4. In **Uber Eats Manager**, authorize the app for your location(s).
 5. Note **Client ID**, **Client secret**, **Store ID**, and **Webhook secret**.
 
-### 2. Configure Chaslay
+### 2. Configure Reborn
 
 **Settings → Delivery platforms → Uber Eats**
 
@@ -209,14 +209,14 @@ When staff tap **Accept** on a Just Eat order in Chaslay:
 ### 3. Register webhook URL
 
 ```
-https://api.chaslay.com/api/webhooks/uber-eats/{MERCHANT_UUID}
+https://app.rebornsense.com/api/webhooks/uber-eats/{MERCHANT_UUID}
 ```
 
 Subscribe to **`orders.notification`** (and related order release events per your Uber contract).
 
 **Signature:** Uber sends `X-Uber-Signature: sha256=<hex>` — HMAC-SHA256 of the raw body using your webhook secret (falls back to client secret).
 
-**Notification-only payloads:** Chaslay fetches full order details via `GET /v1/eats/orders/{id}` when OAuth credentials are configured.
+**Notification-only payloads:** Reborn fetches full order details via `GET /v1/eats/orders/{id}` when OAuth credentials are configured.
 
 ### 4. Accept flow
 
@@ -230,10 +230,10 @@ When staff tap **Accept** on an Uber Eats order:
 
 | Platform | Base URL |
 |----------|----------|
-| Just Eat (JET Connect) | `https://api.chaslay.com/api/webhooks/just-eat/{MERCHANT_UUID}` |
+| Just Eat (JET Connect) | `https://app.rebornsense.com/api/webhooks/just-eat/{MERCHANT_UUID}` |
 | Just Eat events (appended by JE) | `…/order-ready-for-preparation-sync`, `…/order-ready-for-preparation-async`, `…/acceptance-requested` |
-| Uber Eats | `https://api.chaslay.com/api/webhooks/uber-eats/{MERCHANT_UUID}` |
-| Test (sandbox) | `https://api.chaslay.com/api/webhooks/delivery-platforms/just-eat\|uber-eats/{MERCHANT_UUID}/test` |
+| Uber Eats | `https://app.rebornsense.com/api/webhooks/uber-eats/{MERCHANT_UUID}` |
+| Test (sandbox) | `https://app.rebornsense.com/api/webhooks/delivery-platforms/just-eat\|uber-eats/{MERCHANT_UUID}/test` |
 
 `{MERCHANT_UUID}` is shown on the Delivery platforms settings tab (same as `merchants.id`).
 

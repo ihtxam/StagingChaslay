@@ -463,7 +463,7 @@ export default function Licenses() {
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
                   Copy the Device ID from the Android POS license screen, then generate a code for that
-                  device - same as the old Chaslay admin.
+                  device - same as the old Reborn admin.
                 </p>
               </label>
 
@@ -503,7 +503,7 @@ export default function Licenses() {
                     <option value="tablet">Tablet</option>
                     <option value="mobile">Mobile</option>
                     <option value="terminal">Terminal</option>
-                    <option value="desktop">Desktop / ChaslayReborn</option>
+                    <option value="desktop">Desktop / Reborn</option>
                   </select>
                 </label>
                 <label className="block">
