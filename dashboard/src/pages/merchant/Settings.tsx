@@ -49,10 +49,12 @@ import {
   type ScaleDevice,
 } from '@/lib/print-agent';
 import {
+  fetchPrintBridgeManifest,
   isAndroidDevice,
   printAgentDownloadUrl,
   printBridgeDownloadUrl,
   preferredPrintCompanion,
+  type DownloadManifest,
 } from '@/lib/print-agent-platform';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { compressImageIfNeeded } from '@/lib/compress-image';
@@ -446,6 +448,7 @@ export default function Settings() {
   const [savingReceipt, setSavingReceipt] = useState(false);
   const [printAgentOk, setPrintAgentOk] = useState(false);
   const [printAgentOutdated, setPrintAgentOutdated] = useState(false);
+  const [printBridgeManifest, setPrintBridgeManifest] = useState<DownloadManifest | null>(null);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
   const [scalePorts, setScalePorts] = useState<ScaleDevice[]>([]);
@@ -886,6 +889,10 @@ export default function Settings() {
   useEffect(() => {
     void loadSettings().finally(() => setLoading(false));
   }, [loadSettings]);
+
+  useEffect(() => {
+    void fetchPrintBridgeManifest().then(setPrintBridgeManifest);
+  }, []);
 
   const refreshPrintAgentPrinters = useCallback(async () => {
     setRefreshingPrinters(true);
@@ -3675,13 +3682,20 @@ export default function Settings() {
                     </a>
                   ) : null}
                   {preferredPrintCompanion() !== 'windows-agent' ? (
-                    <a
-                      className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
-                      href={printBridgeDownloadUrl()}
-                      download
-                    >
-                      {t('downloadPrintBridge')}
-                    </a>
+                    printBridgeManifest?.available === false ? (
+                      <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                        {printBridgeManifest.message ||
+                          'Print Bridge APK is not published on this server yet. Contact support or try again after the next platform update.'}
+                      </p>
+                    ) : (
+                      <a
+                        className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
+                        href={printBridgeDownloadUrl()}
+                        download="reborn-print-bridge.apk"
+                      >
+                        {t('downloadPrintBridge')}
+                      </a>
+                    )
                   ) : null}
                   <p className="text-sm text-[var(--muted)] max-w-xl m-0">
                     {isAndroidDevice() ? t('printBridgeInstallSteps') : t('printAgentInstallSteps')}

@@ -1,20 +1,17 @@
 # Public downloads
 
-Served by the API at `GET /downloads/<filename>` and proxied on `app.rebornsense.com` / `app.rebornsense.com` (Caddy → API, **not** the SPA).
+Served by the API at `GET /downloads/<filename>` and proxied on `app.rebornsense.com` (Caddy → API, **not** the SPA).
+
+Check availability without downloading the binary:
+
+- `GET /downloads/reborn-print-bridge.json` — `{ available, version, downloadUrl }`
+- `GET /downloads/chaslayreborn-print-agent.json` — Windows agent manifest
 
 ## Print agent (Windows EXE)
 
 `*.exe` files are **gitignored** (~40MB). They must be built and present on the server at:
 
 `backend/public/downloads/chaslayreborn-print-agent-setup.exe`
-
-## Print Bridge (Android APK)
-
-`reborn-print-bridge.apk` is **gitignored**. Built from `print-agent-android/` (see README there).
-
-Served at `GET /downloads/reborn-print-bridge.apk` — merchants on Android POS hardware install this instead of the Windows EXE.
-
-**Supported hardware (one APK):** Sunmi D3 Mini, D2s Plus (in stock), Feitian F310A (roadmap), and generic local Android tablets. Prints via built-in thermal, **USB**, Bluetooth, or LAN — see `print-agent-android/DEVICES.md`.
 
 ### Build on Windows (local)
 
@@ -23,36 +20,52 @@ cd print-agent
 powershell -ExecutionPolicy Bypass -File .\build-installer.ps1
 ```
 
-That writes a real PE (`MZ` header) into this folder.
+### Build on Hetzner (deploy)
+
+`scripts/deploy-hetzner.sh` cross-compiles with `pkg` in a `node:20-bookworm` container.
+
+Skip with `SKIP_PRINT_AGENT_BUILD=1` if you already uploaded a binary.
+
+## Print Bridge (Android APK)
+
+`reborn-print-bridge.apk` is **gitignored**. Built from `print-agent-android/`.
+
+Served at `GET /downloads/reborn-print-bridge.apk`.
+
+### Build locally
+
+```bash
+cd print-agent-android
+./gradlew assembleRelease
+# Gradle copies release APK → ../backend/public/downloads/reborn-print-bridge.apk
+```
 
 ### Build on Hetzner (deploy)
 
-`scripts/deploy-hetzner.sh` cross-compiles with `pkg` in a `node:20-bookworm` container and copies into this directory (bind-mounted into the API container).
-
-Skip with `SKIP_PRINT_AGENT_BUILD=1` if you already uploaded a binary.
+`scripts/deploy-hetzner.sh` builds in `mingc/android-build-box` unless `SKIP_ANDROID_BRIDGE_BUILD=1`.
 
 ### Manual upload
 
 ```bash
-# After local build:
-scp backend/public/downloads/chaslayreborn-print-agent-setup.exe \
-  root@YOUR_HOST:/root/FoodTruckPOS/backend/public/downloads/
-# Restart or recreate API so the mount is fresh (usually not required for bind mounts):
+scp backend/public/downloads/reborn-print-bridge.apk \
+  root@YOUR_HOST:/root/rebornSense/backend/public/downloads/
 docker compose --env-file .env.production up -d api caddy
 ```
 
 ### Verify
 
 ```bash
-curl -sI https://app.rebornsense.com/downloads/chaslayreborn-print-agent-setup.exe
-# Expect: 200, Content-Type: application/octet-stream, Content-Length ~40MB
-# First bytes must be MZ (4D 5A), not <!doctype or {"error"
+curl -sI https://app.rebornsense.com/downloads/reborn-print-bridge.apk
+# Expect: 200, application/vnd.android.package-archive, >100KB, magic PK
 
-curl -sL https://app.rebornsense.com/downloads/chaslayreborn-print-agent-setup.exe | head -c 2 | xxd
-# 00000000: 4d5a  MZ
+curl -sL https://app.rebornsense.com/downloads/reborn-print-bridge.json
+# available: true when APK is on the server
+
+curl -sI https://app.rebornsense.com/downloads/chaslayreborn-print-agent-setup.exe
+# Expect: 200, ~40MB, magic MZ
 ```
 
 Public URLs:
 
+- `https://app.rebornsense.com/downloads/reborn-print-bridge.apk`
 - `https://app.rebornsense.com/downloads/chaslayreborn-print-agent-setup.exe`
-- `https://api.rebornsense.com/downloads/chaslayreborn-print-agent-setup.exe`

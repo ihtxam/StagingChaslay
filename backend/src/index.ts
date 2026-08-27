@@ -1,7 +1,6 @@
 import express, { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import path from "path";
 import authRoutes from "@/routes/auth.routes";
 import licensingRoutes from "@/routes/licensing.routes";
 import superadminRoutes from "@/routes/superadmin.routes";
@@ -47,6 +46,7 @@ import { ensureSubscriptionSchemaAtStartup } from "@/lib/ensure-subscription-sch
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { APP_NAME, CURRENT_HOST_ALIASES, LEGACY_HOST_ALIASES } from "@/lib/brand";
+import downloadsRoutes from "@/routes/downloads.routes";
 
 // Load environment variables
 dotenv.config();
@@ -125,28 +125,8 @@ app.use(
   })
 );
 
-// Public installers / static downloads (print agent EXE, etc.)
-const downloadsRoot = path.join(__dirname, "..", "public", "downloads");
-app.use(
-  "/downloads",
-  express.static(downloadsRoot, {
-    // Missing file → 404 from static (do not fall through to SPA-style handlers)
-    fallthrough: false,
-    maxAge: "1h",
-    setHeaders(res, filePath) {
-      if (filePath.endsWith(".exe")) {
-        res.setHeader("Content-Type", "application/octet-stream");
-        res.setHeader("Content-Disposition", `attachment; filename="${path.basename(filePath)}"`);
-        // Prevent proxies from gzip/brotli-transforming the binary
-        res.setHeader("Content-Encoding", "identity");
-        res.setHeader("X-Content-Type-Options", "nosniff");
-        res.setHeader("Cache-Control", "public, max-age=3600");
-      } else {
-        res.setHeader("Cache-Control", "public, max-age=3600");
-      }
-    },
-  })
-);
+// Public installers (print agent EXE, print bridge APK) — explicit routes avoid 500 JSON on missing files
+app.use("/downloads", downloadsRoutes);
 
 // ============================================================================
 // ROUTES

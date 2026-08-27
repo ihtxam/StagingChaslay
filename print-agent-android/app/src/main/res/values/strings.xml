@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Reborn Print Bridge</string>
+    <string name="notification_channel">Print Bridge</string>
+    <string name="notification_title">Reborn Print Bridge running</string>
+    <string name="notification_body">WebPOS can print on http://127.0.0.1:9101</string>
+    <string name="status_ready">Bridge ready on port 9101</string>
+    <string name="status_starting">Starting print bridge…</string>
+    <string name="open_webpos">Return to WebPOS in Chrome and refresh printers.</string>
+</resources>

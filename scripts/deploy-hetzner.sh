@@ -358,6 +358,47 @@ if [[ ! -f "$SETUP_EXE" ]] || [[ "$(wc -c < "$SETUP_EXE" | tr -d " ")" -lt 10000
   echo "WARNING: $SETUP_EXE missing or too small - Windows will report a corrupted download"
 fi
 
+echo "=== Build Print Bridge Android APK ==="
+BRIDGE_APK="$DOWNLOADS_DIR/reborn-print-bridge.apk"
+if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
+  BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  if docker run --rm \
+    -e "ANDROID_SDK_ROOT=/opt/android-sdk-linux" \
+    -v "$REPO_DIR/print-agent-android:/project" \
+    -v "$DOWNLOADS_DIR:/out" \
+    -w /project \
+    mingc/android-build-box:latest \
+    bash -c 'set -euo pipefail
+      chmod +x ./gradlew
+      ./gradlew assembleRelease --no-daemon
+      APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
+      test -n "$APK"
+      cp -f "$APK" /out/reborn-print-bridge.apk
+      head -c 2 /out/reborn-print-bridge.apk | grep -q PK
+      ls -la /out/reborn-print-bridge.apk
+    '; then
+    printf '%s\n' \
+      "{" \
+      "  \"name\": \"reborn-print-bridge\"," \
+      "  \"version\": \"0.1.0\"," \
+      "  \"apkFile\": \"reborn-print-bridge.apk\"," \
+      "  \"builtAt\": \"${BUILT_AT}\"," \
+      "  \"platform\": \"android\"," \
+      "  \"signed\": false" \
+      "}" > "$DOWNLOADS_DIR/reborn-print-bridge.json"
+    echo "Print Bridge APK ready: $BRIDGE_APK ($(wc -c < "$BRIDGE_APK" | tr -d " ") bytes)"
+  else
+    echo "WARNING: Print Bridge APK build failed. Android download will 404 until rebuilt."
+    echo "  Manual: cd print-agent-android && ./gradlew assembleRelease"
+    echo "  Then copy app/build/outputs/apk/release/*.apk to $BRIDGE_APK"
+  fi
+else
+  echo "SKIP_ANDROID_BRIDGE_BUILD=1 - using existing $BRIDGE_APK (if any)"
+fi
+if [[ ! -f "$BRIDGE_APK" ]] || ! head -c 2 "$BRIDGE_APK" | grep -q PK; then
+  echo "WARNING: $BRIDGE_APK missing or not a valid APK (expected PK zip header)"
+fi
+
 compose_project_name() {
   local dir="${1:-$REPO_DIR}"
   if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
@@ -559,6 +600,17 @@ if [[ "${PRINT_MAGIC:-}" != "4d5a" ]] || [[ "${PRINT_LEN:-0}" -lt 1000000 ]]; th
   echo "WARNING: print-agent download is not a valid Windows EXE (expected MZ / ~40MB)"
 else
   echo "print-agent download OK (MZ PE)"
+fi
+
+BRIDGE_HDR="$(curl -sI "${APP_URL}/downloads/reborn-print-bridge.apk" || true)"
+BRIDGE_LEN="$(printf '%s' "$BRIDGE_HDR" | awk -F': ' 'tolower($1)=="content-length"{gsub(/\r/,""); print $2; exit}')"
+BRIDGE_CT="$(printf '%s' "$BRIDGE_HDR" | awk -F': ' 'tolower($1)=="content-type"{gsub(/\r/,""); print $2; exit}')"
+BRIDGE_MAGIC="$(curl -sL "${APP_URL}/downloads/reborn-print-bridge.apk" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
+echo "print-bridge download: Content-Type=${BRIDGE_CT:-?} Content-Length=${BRIDGE_LEN:-?} magic=${BRIDGE_MAGIC:-?}"
+if [[ "${BRIDGE_MAGIC:-}" != "504b" ]] || [[ "${BRIDGE_LEN:-0}" -lt 100000 ]]; then
+  echo "WARNING: print-bridge download is not a valid APK (expected PK / >100KB) or not published yet"
+else
+  echo "print-bridge download OK (PK zip/APK)"
 fi
 echo
 
