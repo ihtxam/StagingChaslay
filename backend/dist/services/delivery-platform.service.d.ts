@@ -79,7 +79,7 @@ export declare class DeliveryPlatformService {
     /** Resolve Uber notification-only webhooks via Eats API when credentials are configured. */
     static enrichUberWebhookBody(merchantId: string, mapped: unknown): Promise<unknown>;
     static fetchUberAccessToken(clientId: string, clientSecret: string): Promise<string>;
-    /** Notify partner that Chaslay accepted the order (best-effort skeleton). */
+    /** Notify partner that Reborn accepted the order (best-effort skeleton). */
     static notifyPartnerOrderAccepted(merchantId: string, order: {
         id: string;
         orderSource?: string | null;

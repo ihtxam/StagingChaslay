@@ -37,6 +37,7 @@ exports.PERMISSIONS = [
     "MANAGE_BILLING",
     "END_OF_DAY",
     "MANAGE_INVENTORY",
+    "STOREKEEPER_INTAKE",
 ];
 function parsePermissions(raw) {
     if (!raw)
@@ -162,9 +163,16 @@ exports.DEFAULT_ROLE_TEMPLATES = [
             "END_OF_DAY",
         ],
     },
+    {
+        /** Mobile stock intake — scan barcodes, receive stock, expiry lots. No full panel. */
+        name: "Storekeeper",
+        isSystem: true,
+        sortOrder: 55,
+        permissions: ["STOREKEEPER_INTAKE"],
+    },
 ];
 /**
- * Map panel/web permission keys → Android PosPermission names used by Chaslay POS.
+ * Map panel/web permission keys → Android PosPermission names used by Reborn POS.
  * Unknown keys are dropped so Room sync only stores enums the app understands.
  */
 exports.ANDROID_PERMISSION_ALIASES = {
@@ -227,6 +235,7 @@ exports.PANEL_ROUTE_PERMISSIONS = {
     "/merchant/inventory/units": ["MANAGE_INVENTORY"],
     "/merchant/inventory/report": ["MANAGE_INVENTORY"],
     "/merchant/inventory/consumption": ["MANAGE_INVENTORY"],
+    "/merchant/storekeeper": ["STOREKEEPER_INTAKE", "MANAGE_INVENTORY"],
 };
 /** Staff JWT may enter merchant APIs with any of these (POS, waiter, catalog, or full panel). */
 exports.STAFF_MERCHANT_ENTRY_PERMISSIONS = [
@@ -236,6 +245,8 @@ exports.STAFF_MERCHANT_ENTRY_PERMISSIONS = [
     "MANAGE_PRODUCTS",
     "MANAGE_TABLES",
     "SEND_KITCHEN",
+    "MANAGE_INVENTORY",
+    "STOREKEEPER_INTAKE",
 ];
 const WAITER_PRIVILEGED_BLOCKED = [
     "VIEW_REPORTS",

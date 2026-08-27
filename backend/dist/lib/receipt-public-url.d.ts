@@ -1,4 +1,4 @@
-/** Canonical public digital-receipt URL helpers (pay.chaslay.com/receipt/{id}). */
+/** Canonical public digital-receipt URL helpers (pay.rebornsense.com/receipt/{id}). */
 /** Fix common typos and force receipt pages onto pay.* (not app.*). */
 export declare function sanitizeReceiptOrigin(raw: string): string;
 /** Normalize to .../receipt (legacy configs used .../receipts). */

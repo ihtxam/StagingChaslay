@@ -183,10 +183,10 @@ export declare class OrderService {
         } | null;
         items: {
             id: string;
+            quantity: string;
             isOpenPrice: boolean;
             productId: string | null;
             taxAmount: string;
-            quantity: string;
             orderId: string;
             productName: string | null;
             unitPrice: string;
@@ -384,10 +384,10 @@ export declare class OrderService {
         }[];
         items: {
             id: string;
+            quantity: string;
             isOpenPrice: boolean;
             productId: string | null;
             taxAmount: string;
-            quantity: string;
             orderId: string;
             productName: string | null;
             unitPrice: string;

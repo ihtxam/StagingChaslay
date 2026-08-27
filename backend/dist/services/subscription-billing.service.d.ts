@@ -1,3 +1,4 @@
+import { schema } from "@/db";
 export type BillingCycle = "monthly" | "yearly";
 export declare class SubscriptionBillingService {
     static getBillingOverview(merchantId: string): Promise<{
@@ -16,8 +17,14 @@ export declare class SubscriptionBillingService {
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
             features: string[] | null;
             slug: string;
+            maxPosPosts: number;
+            maxWaiterPosts: number;
+            maxStaff: number;
+            editionId: string | null;
             sortOrder: number;
             description: string | null;
             priceMonthly: string;
@@ -25,6 +32,7 @@ export declare class SubscriptionBillingService {
             currency: string;
             maxDevices: number;
             maxProducts: number | null;
+            includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
         } | null;
@@ -34,8 +42,14 @@ export declare class SubscriptionBillingService {
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
             features: string[] | null;
             slug: string;
+            maxPosPosts: number;
+            maxWaiterPosts: number;
+            maxStaff: number;
+            editionId: string | null;
             sortOrder: number;
             description: string | null;
             priceMonthly: string;
@@ -43,6 +57,7 @@ export declare class SubscriptionBillingService {
             currency: string;
             maxDevices: number;
             maxProducts: number | null;
+            includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
         }[];
@@ -54,24 +69,30 @@ export declare class SubscriptionBillingService {
             adyenRecurringDetailReference: string | null;
             merchantId: string;
             currency: string;
-            planId: string;
             billingCycle: string;
+            periodStart: Date | null;
+            periodEnd: Date | null;
             amount: string;
             adyenSessionId: string | null;
             adyenPspReference: string | null;
             isRecurring: boolean;
             adyenResultCode: string | null;
             paidAt: Date | null;
-            periodStart: Date | null;
-            periodEnd: Date | null;
+            planId: string;
             plan: {
                 id: string;
                 name: string;
                 isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                ownerType: string;
+                ownerId: string | null;
                 features: string[] | null;
                 slug: string;
+                maxPosPosts: number;
+                maxWaiterPosts: number;
+                maxStaff: number;
+                editionId: string | null;
                 sortOrder: number;
                 description: string | null;
                 priceMonthly: string;
@@ -79,6 +100,7 @@ export declare class SubscriptionBillingService {
                 currency: string;
                 maxDevices: number;
                 maxProducts: number | null;
+                includedAddons: schema.PackageIncludedAddons | null;
                 isPublic: boolean;
                 trialDays: number;
             };
@@ -96,16 +118,16 @@ export declare class SubscriptionBillingService {
             adyenRecurringDetailReference: string | null;
             merchantId: string;
             currency: string;
-            planId: string;
             billingCycle: string;
+            periodStart: Date | null;
+            periodEnd: Date | null;
             amount: string;
             adyenSessionId: string | null;
             adyenPspReference: string | null;
             isRecurring: boolean;
             adyenResultCode: string | null;
             paidAt: Date | null;
-            periodStart: Date | null;
-            periodEnd: Date | null;
+            planId: string;
         };
         plan: {
             id: string;
@@ -113,8 +135,14 @@ export declare class SubscriptionBillingService {
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
             features: string[] | null;
             slug: string;
+            maxPosPosts: number;
+            maxWaiterPosts: number;
+            maxStaff: number;
+            editionId: string | null;
             sortOrder: number;
             description: string | null;
             priceMonthly: string;
@@ -122,6 +150,7 @@ export declare class SubscriptionBillingService {
             currency: string;
             maxDevices: number;
             maxProducts: number | null;
+            includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
         };
@@ -138,15 +167,15 @@ export declare class SubscriptionBillingService {
             adyenRecurringDetailReference: string | null;
             merchantId: string;
             currency: string;
-            planId: string;
             billingCycle: string;
+            periodStart: Date | null;
+            periodEnd: Date | null;
             amount: string;
             adyenPspReference: string | null;
             isRecurring: boolean;
             adyenResultCode: string | null;
             paidAt: Date | null;
-            periodStart: Date | null;
-            periodEnd: Date | null;
+            planId: string;
         };
         plan: {
             id: string;
@@ -154,8 +183,14 @@ export declare class SubscriptionBillingService {
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            ownerType: string;
+            ownerId: string | null;
             features: string[] | null;
             slug: string;
+            maxPosPosts: number;
+            maxWaiterPosts: number;
+            maxStaff: number;
+            editionId: string | null;
             sortOrder: number;
             description: string | null;
             priceMonthly: string;
@@ -163,6 +198,7 @@ export declare class SubscriptionBillingService {
             currency: string;
             maxDevices: number;
             maxProducts: number | null;
+            includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
         };
@@ -215,16 +251,16 @@ export declare class SubscriptionBillingService {
         adyenRecurringDetailReference: string | null;
         merchantId: string;
         currency: string;
-        planId: string;
         billingCycle: string;
+        periodStart: Date | null;
+        periodEnd: Date | null;
         amount: string;
         adyenSessionId: string | null;
         adyenPspReference: string | null;
         isRecurring: boolean;
         adyenResultCode: string | null;
         paidAt: Date | null;
-        periodStart: Date | null;
-        periodEnd: Date | null;
+        planId: string;
     } | null>;
     /**
      * Charge merchants whose subscription period has ended using stored Adyen token.

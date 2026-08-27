@@ -265,7 +265,7 @@ class ChaslayCompatService {
             dashboardUser,
             dashboardUrl: process.env.MERCHANT_DASHBOARD_URL ||
                 process.env.PUBLIC_APP_URL ||
-                "https://app.chaslay.com",
+                "https://app.rebornsense.com",
         };
     }
     static async posLoginStaff(email, password) {
@@ -322,7 +322,7 @@ class ChaslayCompatService {
             dashboardUser,
             dashboardUrl: process.env.MERCHANT_DASHBOARD_URL ||
                 process.env.PUBLIC_APP_URL ||
-                "https://app.chaslay.com",
+                "https://app.rebornsense.com",
         };
     }
     static async syncBootstrap(merchantId) {
@@ -467,6 +467,8 @@ class ChaslayCompatService {
             scale: {
                 enabled: posPrintSettings.scaleEnabled === true,
                 com_port: posPrintSettings.scaleComPort || null,
+                device_name: posPrintSettings.scaleDeviceName || null,
+                device_id: posPrintSettings.scaleDeviceId || null,
                 usb_address: posPrintSettings.scaleUsbAddress || null,
             },
             print: {

@@ -36,6 +36,8 @@ exports.DEFAULT_POS_PRINT_SETTINGS = {
     kitchenPrintRetryAttempts: 5,
     kitchenPrintRetryIntervalSec: 5,
     scaleComPort: null,
+    scaleDeviceName: null,
+    scaleDeviceId: null,
     scaleUsbAddress: null,
     scaleEnabled: false,
     printers: [],
@@ -72,6 +74,12 @@ function normalizePosPrintSettings(raw) {
         return {
             id: String(row.id || `p-${i}-${Date.now()}`).slice(0, 64),
             name,
+            portName: row.portName == null || row.portName === undefined
+                ? null
+                : String(row.portName).trim().slice(0, 80) || null,
+            matchHint: row.matchHint == null || row.matchHint === undefined
+                ? null
+                : String(row.matchHint).trim().slice(0, 200) || null,
             enabled: row.enabled !== false,
             paperWidthMm: Number(row.paperWidthMm) === 58 ? 58 : 80,
             printReceipts: !!row.printReceipts,
@@ -153,7 +161,13 @@ function normalizePosPrintSettings(raw) {
         kitchenPrintRetryIntervalSec: clampInt(src.kitchenPrintRetryIntervalSec, 2, 60, 5),
         scaleComPort: src.scaleComPort === null || src.scaleComPort === undefined
             ? null
-            : String(src.scaleComPort).trim().slice(0, 32) || null,
+            : String(src.scaleComPort).trim().slice(0, 80) || null,
+        scaleDeviceName: src.scaleDeviceName === null || src.scaleDeviceName === undefined
+            ? null
+            : String(src.scaleDeviceName).trim().slice(0, 200) || null,
+        scaleDeviceId: src.scaleDeviceId === null || src.scaleDeviceId === undefined
+            ? null
+            : String(src.scaleDeviceId).trim().slice(0, 240) || null,
         scaleUsbAddress: src.scaleUsbAddress === null || src.scaleUsbAddress === undefined
             ? null
             : String(src.scaleUsbAddress).trim().slice(0, 120) || null,

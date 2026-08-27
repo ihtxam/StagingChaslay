@@ -1,5 +1,5 @@
 "use strict";
-/** Canonical public digital-receipt URL helpers (pay.chaslay.com/receipt/{id}). */
+/** Canonical public digital-receipt URL helpers (pay.rebornsense.com/receipt/{id}). */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sanitizeReceiptOrigin = sanitizeReceiptOrigin;
 exports.normalizeReceiptPublicBase = normalizeReceiptPublicBase;
@@ -8,15 +8,15 @@ exports.normalizeReceiptPublicUrl = normalizeReceiptPublicUrl;
 exports.receiptPublicUrl = receiptPublicUrl;
 exports.receiptPublicBaseUrl = receiptPublicBaseUrl;
 exports.normalizeReceiptDomain = normalizeReceiptDomain;
-const DEFAULT_RECEIPT_ORIGIN = "https://pay.chaslay.com";
+const brand_1 = require("@/lib/brand");
+const DEFAULT_RECEIPT_ORIGIN = brand_1.PAY_ORIGIN || `https://pay.${brand_1.BRAND_DOMAIN}`;
 /** Fix common typos and force receipt pages onto pay.* (not app.*). */
 function sanitizeReceiptOrigin(raw) {
     let base = String(raw || "").trim();
     if (!base)
         return DEFAULT_RECEIPT_ORIGIN;
     base = base.replace(/\/+$/, "");
-    // chasly.com → chaslay.com (user-reported typo in QR/email links)
-    base = base.replace(/chasly\.com/gi, "chaslay.com");
+    base = (0, brand_1.rewriteLegacyPublicHost)(base);
     // Receipt viewer lives on pay.* — app.* is the merchant panel
     base = base.replace(/^https?:\/\/app\./i, "https://pay.");
     return base || DEFAULT_RECEIPT_ORIGIN;

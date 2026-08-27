@@ -17,7 +17,7 @@ function publicAppBase() {
     return (process.env.PUBLIC_APP_URL ||
         process.env.MERCHANT_DASHBOARD_URL ||
         process.env.SUPERADMIN_URL ||
-        "https://app.chaslay.com").replace(/\/$/, "");
+        "https://app.rebornsense.com").replace(/\/$/, "");
 }
 class MerchantInviteService {
     static buildInviteUrl(token) {

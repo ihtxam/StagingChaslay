@@ -23,7 +23,7 @@ function formatActivationCode() {
 class LicenseAdminService {
     /**
      * Issue a license bound to the Android POS device ID shown in the app.
-     * Matches legacy Chaslay admin flow: copy device ID → generate code for that device.
+     * Matches legacy Reborn admin flow: copy device ID → generate code for that device.
      */
     static async issueForPosDeviceId(merchantId, posDeviceId, licenseType = "yearly", customDays, deviceType = "tablet", issuedByResellerId) {
         const db = (0, db_1.getDb)();
@@ -88,7 +88,7 @@ class LicenseAdminService {
         else {
             expiresAt = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
         }
-        // Chaslay-style short activation code (easier to type on tablet)
+        // Reborn-style short activation code (easier to type on tablet)
         let licenseKey = formatActivationCode();
         for (let i = 0; i < 5; i++) {
             const taken = await db.query.licenses.findFirst({

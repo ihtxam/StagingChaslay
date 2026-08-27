@@ -57,6 +57,7 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         storeHours: Record<string, Record<string, {
             open: string;
@@ -234,6 +235,7 @@ export declare class MerchantSettingsService {
         deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
         inventoryWasteFactor?: number;
         inventoryAutoReorderEmailEnabled?: boolean;
+        inventoryExpiryAlertDays?: number;
     }): Promise<{
         id: string;
         name: string;
@@ -283,6 +285,7 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         storeHours: Record<string, Record<string, {
             open: string;
@@ -472,6 +475,7 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         storeHours: Record<string, Record<string, {
             open: string;
@@ -627,6 +631,7 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         storeHours: Record<string, Record<string, {
             open: string;
@@ -809,6 +814,7 @@ export declare class MerchantSettingsService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
@@ -816,6 +822,7 @@ export declare class MerchantSettingsService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;

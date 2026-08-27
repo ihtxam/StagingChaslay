@@ -262,7 +262,7 @@ class DeliveryPlatformService {
             throw new Error("Uber OAuth missing access_token");
         return data.access_token;
     }
-    /** Notify partner that Chaslay accepted the order (best-effort skeleton). */
+    /** Notify partner that Reborn accepted the order (best-effort skeleton). */
     static async notifyPartnerOrderAccepted(merchantId, order) {
         const source = order.orderSource;
         const externalId = order.externalOrderId?.trim();
@@ -503,7 +503,7 @@ class DeliveryPlatformService {
     static webhookUrl(platform, merchantId) {
         const base = process.env.PUBLIC_APP_URL ||
             process.env.MERCHANT_DASHBOARD_URL ||
-            "https://api.chaslay.com";
+            "https://app.rebornsense.com";
         const apiBase = base.replace(/\/$/, "").includes("api.")
             ? base.replace(/\/$/, "")
             : `${base.replace(/\/$/, "")}/api`;

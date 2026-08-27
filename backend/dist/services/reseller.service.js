@@ -131,14 +131,14 @@ class ResellerService {
     }
     static async ensureChaslayAgency(createdBySuperadminId) {
         const db = (0, db_1.getDb)();
-        const email = (process.env.SEED_RESELLER_EMAIL || "agency@chaslay.com").toLowerCase();
+        const email = (process.env.SEED_RESELLER_EMAIL || "agency@rebornsense.com").toLowerCase();
         const existing = await db.query.resellers.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.resellers.email, email),
         });
         if (existing)
             return serializeReseller(existing);
         const password = process.env.SEED_RESELLER_PASSWORD || "ChaslayAgency123!";
-        const name = process.env.SEED_RESELLER_NAME || "Chaslay";
+        const name = process.env.SEED_RESELLER_NAME || "Reborn";
         const passwordHash = await auth_service_1.AuthService.hashPassword(password);
         const [row] = await db
             .insert(db_1.schema.resellers)

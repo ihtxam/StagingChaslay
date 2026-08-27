@@ -25,7 +25,7 @@ function platformShopEmailCopy(locale, kind, total) {
     if (lang === 'fr') {
         return kind === 'merchant'
             ? {
-                subject: `Confirmation de commande — boutique Chaslay`,
+                subject: `Confirmation de commande — boutique Reborn`,
                 html: `<p>Merci ! Nous avons bien reçu votre commande de ${amount}.</p>`,
                 text: `Commande reçue — ${amount}`,
             }
@@ -38,7 +38,7 @@ function platformShopEmailCopy(locale, kind, total) {
     if (lang === 'de') {
         return kind === 'merchant'
             ? {
-                subject: `Bestellbestätigung — Chaslay Shop`,
+                subject: `Bestellbestätigung — Reborn Shop`,
                 html: `<p>Vielen Dank! Wir haben Ihre Bestellung über ${amount} erhalten.</p>`,
                 text: `Bestellung erhalten — ${amount}`,
             }
@@ -50,7 +50,7 @@ function platformShopEmailCopy(locale, kind, total) {
     }
     return kind === 'merchant'
         ? {
-            subject: `Order confirmation — Chaslay shop`,
+            subject: `Order confirmation — Reborn shop`,
             html: `<p>Thank you! We received your order for ${amount}.</p>`,
             text: `Order received — ${amount}`,
         }

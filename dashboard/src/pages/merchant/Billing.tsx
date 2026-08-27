@@ -13,7 +13,42 @@ type Plan = {
   priceYearly?: string | null;
   currency: string;
   maxDevices: number;
+  maxPosPosts?: number;
+  maxWaiterPosts?: number;
+  maxStaff?: number;
   features?: string[] | null;
+  edition?: { id: string; name: string } | null;
+  includedAddons?: {
+    inventory?: boolean;
+    signage?: boolean;
+    kds?: boolean;
+    ods?: boolean;
+  } | null;
+};
+
+type Addon = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  addonKey: string;
+  priceMonthly: string;
+  priceYearly?: string | null;
+  currency: string;
+  quantity: number;
+};
+
+type MerchantBilling = {
+  subscriptionPlan?: string;
+  subscriptionEndsAt?: string | null;
+  editionName?: string | null;
+  maxPosPosts?: number;
+  maxWaiterPosts?: number;
+  maxStaff?: number;
+  inventoryAddonEnabled?: boolean;
+  signageAddonEnabled?: boolean;
+  kdsAddonEnabled?: boolean;
+  odsAddonEnabled?: boolean;
 };
 
 type PaymentSession = {
@@ -41,17 +76,26 @@ function money(amount: string | number, currency = 'CHF') {
   }).format(Number(amount));
 }
 
+function limitLabel(n?: number) {
+  return n === 0 || n == null ? 'Unlimited' : String(n);
+}
+
 export default function Billing() {
   const { t, formatDate, formatDateTime } = useI18n();
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [addons, setAddons] = useState<Addon[]>([]);
+  const [activeAddonIds, setActiveAddonIds] = useState<Set<string>>(new Set());
+  const [merchant, setMerchant] = useState<MerchantBilling | null>(null);
   const [currentSlug, setCurrentSlug] = useState<string>('free');
   const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null);
   const [payments, setPayments] = useState<BillingPayment[]>([]);
   const [adyenReady, setAdyenReady] = useState(false);
   const [cycle, setCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [checkoutPlan, setCheckoutPlan] = useState<Plan | null>(null);
+  const [checkoutAddon, setCheckoutAddon] = useState<Addon | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [checkoutKind, setCheckoutKind] = useState<'plan' | 'addon'>('plan');
   const [session, setSession] = useState<PaymentSession | null>(null);
   const [payMsg, setPayMsg] = useState('');
   const [payDebug, setPayDebug] = useState('');
@@ -63,6 +107,14 @@ export default function Billing() {
     try {
       const res = await api.get('/merchant/billing');
       setPlans(res.data.plans || []);
+      setAddons(res.data.addons || []);
+      const active = new Set<string>(
+        (res.data.activeAddons || []).map(
+          (row: { addonId?: string; addon?: { id: string } }) => row.addonId || row.addon?.id
+        ).filter(Boolean)
+      );
+      setActiveAddonIds(active);
+      setMerchant(res.data.merchant || null);
       setCurrentSlug(res.data.merchant?.subscriptionPlan || 'free');
       setSubscriptionEndsAt(res.data.merchant?.subscriptionEndsAt || null);
       setPayments(res.data.payments || []);
@@ -93,12 +145,15 @@ export default function Billing() {
             if (cancelled) return;
             setPayMsg(t('billingActivating'));
             try {
-              await api.post('/merchant/billing/confirm', {
+              const confirmUrl =
+                checkoutKind === 'addon' ? '/merchant/billing/addon/confirm' : '/merchant/billing/confirm';
+              await api.post(confirmUrl, {
                 paymentId,
                 resultCode: result?.resultCode || 'Authorised',
               });
               toast.success(t('billingActivated'));
               setCheckoutPlan(null);
+              setCheckoutAddon(null);
               setSession(null);
               setPaymentId(null);
               dropinMounted.current = false;
@@ -110,21 +165,13 @@ export default function Billing() {
           onError: (err) => {
             if (!cancelled) {
               setPayMsg(formatAdyenError(err, 'dropin') || 'Payment failed');
-              setPayDebug(
-                `drop-in env=${session.environment ?? 'auto'} key=${session.clientKey?.slice(0, 8) ?? '?'}… session=${session.id?.slice(0, 8) ?? '?'}…`
-              );
             }
           },
         });
         if (!cancelled) dropinMounted.current = true;
       } catch (err) {
         if (!cancelled) {
-          const message = formatAdyenError(err, 'dropin');
-          setPayMsg(message);
-          setPayDebug(
-            `drop-in mount · session=${session.id?.slice(0, 8) ?? '?'}… env=${session.environment ?? 'auto'} key=${session.clientKey?.slice(0, 8) ?? '?'}…`
-          );
-          console.error('[Billing] Adyen Drop-in mount failed:', err, session);
+          setPayMsg(formatAdyenError(err, 'dropin'));
         }
       }
     })();
@@ -132,16 +179,25 @@ export default function Billing() {
     return () => {
       cancelled = true;
     };
-  }, [session, paymentId, dropinEl, load, t]);
+  }, [session, paymentId, dropinEl, load, t, checkoutKind]);
 
-  const startCheckout = async (plan: Plan) => {
-    setBusy(true);
-    setPayMsg('');
-    setPayDebug('');
-    setCheckoutPlan(plan);
+  const resetCheckout = () => {
+    setCheckoutPlan(null);
+    setCheckoutAddon(null);
     setSession(null);
     setPaymentId(null);
     dropinMounted.current = false;
+  };
+
+  const startPlanCheckout = async (plan: Plan) => {
+    setBusy(true);
+    setPayMsg('');
+    setCheckoutKind('plan');
+    setCheckoutAddon(null);
+    setSession(null);
+    setPaymentId(null);
+    dropinMounted.current = false;
+    setCheckoutPlan(plan);
     try {
       const res = await api.post('/merchant/billing/checkout', {
         planId: plan.id,
@@ -151,40 +207,53 @@ export default function Billing() {
 
       if (res.data.free) {
         toast.success(t('billingFreeActivated').replace('{name}', plan.name));
-        setCheckoutPlan(null);
+        resetCheckout();
         await load();
         return;
       }
 
       setPaymentId(res.data.payment?.id || null);
       const normalized = normalizeAdyenPaymentSession(res.data.paymentSession);
-      if (!normalized) {
-        const raw = res.data.paymentSession;
-        const hint =
-          raw && typeof raw === 'object'
-            ? `keys: ${Object.keys(raw as object).join(', ')}`
-            : 'no paymentSession in response';
-        throw new Error(
-          `Checkout returned an invalid payment session (${hint}). Ensure Superadmin → Settings has a valid Client Key (test_/live_) for the same Adyen account as the API key.`
-        );
-      }
+      if (!normalized) throw new Error('Invalid payment session');
       setSession(normalized);
     } catch (err: any) {
-      setCheckoutPlan(null);
-      const apiErr = err.response?.data?.error;
-      const msg =
-        apiErr ||
-        (err.response?.status === 401
-          ? 'Your session expired — please sign in again and retry checkout.'
-          : formatAdyenError(err, 'checkout')) ||
-        'Checkout failed';
-      toast.error(msg);
-      setPayMsg(msg);
-      if (apiErr) {
-        setPayDebug('backend POST /merchant/billing/checkout');
-      } else if (err.response?.status === 401) {
-        setPayDebug('merchant JWT unauthorized (not Adyen)');
+      resetCheckout();
+      toast.error(err.response?.data?.error || 'Checkout failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startAddonCheckout = async (addon: Addon) => {
+    setBusy(true);
+    setPayMsg('');
+    setCheckoutKind('addon');
+    setCheckoutAddon(addon);
+    setCheckoutPlan(null);
+    setSession(null);
+    setPaymentId(null);
+    dropinMounted.current = false;
+    try {
+      const res = await api.post('/merchant/billing/addon/checkout', {
+        addonId: addon.id,
+        billingCycle: cycle,
+        returnUrl: `${window.location.origin}/merchant/billing`,
+      });
+
+      if (res.data.free) {
+        toast.success(`Add-on activated: ${addon.name}`);
+        resetCheckout();
+        await load();
+        return;
       }
+
+      setPaymentId(res.data.payment?.id || null);
+      const normalized = normalizeAdyenPaymentSession(res.data.paymentSession);
+      if (!normalized) throw new Error('Invalid payment session');
+      setSession(normalized);
+    } catch (err: any) {
+      resetCheckout();
+      toast.error(err.response?.data?.error || 'Add-on checkout failed');
     } finally {
       setBusy(false);
     }
@@ -199,12 +268,39 @@ export default function Billing() {
       <div className="card">
         <h1 className="text-2xl font-bold">{t('billingAndSubscription')}</h1>
         <p className="text-gray-600 mt-1">
-          {t('billingCurrentSubscription')}:{' '}
-          <strong className="capitalize">{currentSlug}</strong>
-          {subscriptionEndsAt
-            ? ` · renews / ends ${formatDate(subscriptionEndsAt)}`
-            : null}
+          {t('billingCurrentSubscription')}: <strong className="capitalize">{currentSlug}</strong>
+          {merchant?.editionName ? ` · ${merchant.editionName}` : null}
+          {subscriptionEndsAt ? ` · renews / ends ${formatDate(subscriptionEndsAt)}` : null}
         </p>
+        {merchant ? (
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
+            <div className="rounded border px-3 py-2 bg-slate-50">
+              <div className="text-gray-500">POS stations</div>
+              <div className="font-semibold">{limitLabel(merchant.maxPosPosts)}</div>
+            </div>
+            <div className="rounded border px-3 py-2 bg-slate-50">
+              <div className="text-gray-500">Waiter devices</div>
+              <div className="font-semibold">{limitLabel(merchant.maxWaiterPosts)}</div>
+            </div>
+            <div className="rounded border px-3 py-2 bg-slate-50">
+              <div className="text-gray-500">Staff users</div>
+              <div className="font-semibold">{limitLabel(merchant.maxStaff)}</div>
+            </div>
+            <div className="rounded border px-3 py-2 bg-slate-50">
+              <div className="text-gray-500">Active add-ons</div>
+              <div className="font-semibold text-xs mt-0.5">
+                {[
+                  merchant.inventoryAddonEnabled && 'Inventory',
+                  merchant.signageAddonEnabled && 'Signage',
+                  merchant.kdsAddonEnabled && 'KDS',
+                  merchant.odsAddonEnabled && 'ODS',
+                ]
+                  .filter(Boolean)
+                  .join(', ') || 'None'}
+              </div>
+            </div>
+          </div>
+        ) : null}
         {!adyenReady && (
           <p className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
             {t('billingAdyenNotConfigured')}
@@ -214,7 +310,7 @@ export default function Billing() {
 
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h2 className="text-lg font-semibold">{t('billingChooseSubscription')}</h2>
+          <h2 className="text-lg font-semibold">Packages</h2>
           <div className="inline-flex rounded border overflow-hidden text-sm">
             <button
               type="button"
@@ -250,6 +346,9 @@ export default function Billing() {
                 }`}
               >
                 <div className="font-semibold text-lg">{plan.name}</div>
+                {plan.edition?.name ? (
+                  <div className="text-xs text-gray-500 mt-0.5">{plan.edition.name}</div>
+                ) : null}
                 <div className="text-2xl font-bold mt-2">
                   {money(price, plan.currency)}
                   <span className="text-sm font-normal text-gray-500">
@@ -261,13 +360,16 @@ export default function Billing() {
                   {(plan.features || []).map((f) => (
                     <li key={f}>• {f}</li>
                   ))}
-                  <li>• Up to {plan.maxDevices} device(s)</li>
+                  <li>
+                    • POS {limitLabel(plan.maxPosPosts)} · Waiter {limitLabel(plan.maxWaiterPosts)} · Staff{' '}
+                    {limitLabel(plan.maxStaff)}
+                  </li>
                 </ul>
                 <button
                   type="button"
                   disabled={busy || isCurrent}
                   className="btn btn-primary mt-4 w-full disabled:opacity-50"
-                  onClick={() => void startCheckout(plan)}
+                  onClick={() => void startPlanCheckout(plan)}
                 >
                   {isCurrent
                     ? t('billingCurrentSubscriptionBtn')
@@ -279,32 +381,58 @@ export default function Billing() {
             );
           })}
         </div>
-        {!plans.length && (
-          <p className="text-gray-500 text-sm">{t('billingNoSubscriptions')}</p>
-        )}
+        {!plans.length && <p className="text-gray-500 text-sm">{t('billingNoSubscriptions')}</p>}
       </div>
 
-      {checkoutPlan && (
+      <div className="card">
+        <h2 className="text-lg font-semibold mb-4">Add-ons</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Optional extras on top of your package — inventory, kitchen screens, extra stations, and more.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {addons.map((addon) => {
+            const price =
+              cycle === 'yearly'
+                ? addon.priceYearly != null && addon.priceYearly !== ''
+                  ? Number(addon.priceYearly)
+                  : Number(addon.priceMonthly) * 12
+                : Number(addon.priceMonthly);
+            const isActive = activeAddonIds.has(addon.id);
+            return (
+              <div key={addon.id} className="border rounded-lg p-4 flex flex-col border-gray-200">
+                <div className="font-semibold">{addon.name}</div>
+                <div className="text-xl font-bold mt-1">
+                  {money(price, addon.currency)}
+                  <span className="text-sm font-normal text-gray-500">
+                    /{cycle === 'yearly' ? 'year' : 'month'}
+                  </span>
+                </div>
+                {addon.description ? <p className="text-sm text-gray-600 mt-2 flex-1">{addon.description}</p> : <div className="flex-1" />}
+                <button
+                  type="button"
+                  disabled={busy || isActive}
+                  className="btn mt-4 w-full disabled:opacity-50"
+                  onClick={() => void startAddonCheckout(addon)}
+                >
+                  {isActive ? 'Active' : price <= 0 ? 'Activate' : 'Subscribe'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        {!addons.length && <p className="text-gray-500 text-sm">No add-ons available.</p>}
+      </div>
+
+      {(checkoutPlan || checkoutAddon) && (
         <div className="card">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
               <h2 className="text-lg font-semibold">
-                {t('billingPayFor').replace('{name}', checkoutPlan.name)}
+                Pay for {checkoutPlan?.name || checkoutAddon?.name}
               </h2>
-              <p className="text-sm text-gray-600">
-                Secure checkout via Adyen - payment goes to the platform account.
-              </p>
+              <p className="text-sm text-gray-600">Secure checkout via Adyen.</p>
             </div>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                setCheckoutPlan(null);
-                setSession(null);
-                setPaymentId(null);
-                dropinMounted.current = false;
-              }}
-            >
+            <button type="button" className="btn" onClick={resetCheckout}>
               Cancel
             </button>
           </div>

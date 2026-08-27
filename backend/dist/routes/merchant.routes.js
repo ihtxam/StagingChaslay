@@ -117,7 +117,7 @@ router.get("/products/import/template", async (_req, res) => {
     try {
         const buffer = catalog_import_service_1.CatalogImportService.buildTemplateBuffer();
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        res.setHeader("Content-Disposition", 'attachment; filename="chaslayreborn-catalog-template.xlsx"');
+        res.setHeader("Content-Disposition", 'attachment; filename="reborn-catalog-template.xlsx"');
         res.send(buffer);
     }
     catch (error) {
@@ -135,7 +135,7 @@ router.get("/products/export", async (req, res) => {
             return res.status(400).json({ error: "Merchant ID is required" });
         const buffer = await catalog_import_service_1.CatalogImportService.exportWorkbook(merchantId);
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        res.setHeader("Content-Disposition", 'attachment; filename="chaslay-catalog-export.xlsx"');
+        res.setHeader("Content-Disposition", 'attachment; filename="chaslayreborn-catalog-export.xlsx"');
         res.send(buffer);
     }
     catch (error) {
@@ -2620,8 +2620,47 @@ router.post("/billing/confirm", async (req, res) => {
         });
     }
 });
+router.post("/billing/addon/checkout", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { addonId, billingCycle, returnUrl } = req.body || {};
+        if (!addonId)
+            return res.status(400).json({ error: "addonId is required" });
+        const result = await subscription_billing_service_1.SubscriptionBillingService.startAddonCheckout(merchantId, addonId, billingCycle === "yearly" ? "yearly" : "monthly", returnUrl);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        console.error("Error starting addon checkout:", error);
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to start add-on checkout",
+        });
+    }
+});
+router.post("/billing/addon/confirm", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { paymentId, resultCode, pspReference } = req.body || {};
+        if (!paymentId)
+            return res.status(400).json({ error: "paymentId is required" });
+        const result = await subscription_billing_service_1.SubscriptionBillingService.confirmAddonPayment(merchantId, paymentId, {
+            resultCode,
+            pspReference,
+        });
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        console.error("Error confirming addon payment:", error);
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to confirm add-on payment",
+        });
+    }
+});
 // ============================================================================
-// PLATFORM SHOP (buy supplies from Chaslay)
+// PLATFORM SHOP (buy supplies from Reborn)
 // ============================================================================
 router.get("/platform-shop/products", async (_req, res) => {
     try {

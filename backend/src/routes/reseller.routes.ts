@@ -9,6 +9,7 @@ import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signag
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
+import { SubscriptionAddonsService } from "@/services/subscription-addons.service";
 
 const router = Router();
 
@@ -287,12 +288,78 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
  * GET /api/reseller/plans
  * Active subscription plans assignable to merchants.
  */
-router.get("/plans", async (_req: Request, res: Response) => {
+router.get("/plans", async (req: Request, res: Response) => {
   try {
-    const plans = await SubscriptionPlansService.listAll(false);
+    const plans = await SubscriptionPlansService.listAll(false, {
+      forResellerId: resellerId(req),
+    });
     res.json({ success: true, plans });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list plans" });
+  }
+});
+
+router.post("/plans", async (req: Request, res: Response) => {
+  try {
+    const plan = await SubscriptionPlansService.create({
+      ...(req.body || {}),
+      ownerType: "reseller",
+      ownerId: resellerId(req),
+    });
+    res.status(201).json({ success: true, plan });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create package" });
+  }
+});
+
+router.put("/plans/:planId", async (req: Request, res: Response) => {
+  try {
+    const existing = await SubscriptionPlansService.getById(req.params.planId);
+    if (existing.ownerType !== "reseller" || existing.ownerId !== resellerId(req)) {
+      return res.status(404).json({ error: "Package not found" });
+    }
+    const plan = await SubscriptionPlansService.update(req.params.planId, req.body || {});
+    res.json({ success: true, plan });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update package" });
+  }
+});
+
+router.get("/addons", async (req: Request, res: Response) => {
+  try {
+    const addons = await SubscriptionAddonsService.listAll({
+      forResellerId: resellerId(req),
+      includeInactive: true,
+    });
+    res.json({ success: true, addons });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list add-ons" });
+  }
+});
+
+router.post("/addons", async (req: Request, res: Response) => {
+  try {
+    const addon = await SubscriptionAddonsService.create({
+      ...(req.body || {}),
+      ownerType: "reseller",
+      ownerId: resellerId(req),
+    });
+    res.status(201).json({ success: true, addon });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create add-on" });
+  }
+});
+
+router.put("/addons/:addonId", async (req: Request, res: Response) => {
+  try {
+    const existing = await SubscriptionAddonsService.getById(req.params.addonId);
+    if (existing.ownerType !== "reseller" || existing.ownerId !== resellerId(req)) {
+      return res.status(404).json({ error: "Add-on not found" });
+    }
+    const addon = await SubscriptionAddonsService.update(req.params.addonId, req.body || {});
+    res.json({ success: true, addon });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update add-on" });
   }
 });
 

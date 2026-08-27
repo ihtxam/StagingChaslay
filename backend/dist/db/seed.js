@@ -73,10 +73,10 @@ const ALWAYS_OPEN = {
         sun: [{ open: "00:00", close: "23:59" }],
     },
 };
-const DEFAULT_SUPERADMIN_NAME = "Chaslay Admin";
+const DEFAULT_SUPERADMIN_NAME = "Reborn Admin";
 function resolveSuperadminName(raw) {
     const name = (raw || "").trim();
-    if (!name || /manupos|chaslayreborn\s+admin/i.test(name))
+    if (!name || /manupos|reborn\s+admin/i.test(name))
         return DEFAULT_SUPERADMIN_NAME;
     return name;
 }
@@ -85,7 +85,7 @@ async function renameLeftoverSuperadminLabels(db) {
         .select({ id: index_1.schema.superadmins.id, name: index_1.schema.superadmins.name })
         .from(index_1.schema.superadmins);
     for (const row of rows) {
-        if (!row.name || !/manupos|chaslayreborn\s+admin/i.test(row.name))
+        if (!row.name || !/manupos|reborn\s+admin/i.test(row.name))
             continue;
         await db
             .update(index_1.schema.superadmins)
@@ -95,7 +95,7 @@ async function renameLeftoverSuperadminLabels(db) {
     }
 }
 async function seedSuperadmin() {
-    const email = process.env.SEED_SUPERADMIN_EMAIL || "admin@chaslay.com";
+    const email = process.env.SEED_SUPERADMIN_EMAIL || "admin@rebornsense.com";
     const password = process.env.SEED_SUPERADMIN_PASSWORD || "ChangeMeNow!123";
     const name = resolveSuperadminName(process.env.SEED_SUPERADMIN_NAME);
     const db = (0, index_1.getDb)();
@@ -130,7 +130,7 @@ async function seedDemoShop() {
         return;
     }
     const db = (0, index_1.getDb)();
-    const email = process.env.SEED_DEMO_MERCHANT_EMAIL || "demo@chaslay.com";
+    const email = process.env.SEED_DEMO_MERCHANT_EMAIL || "demo@rebornsense.com";
     const password = process.env.SEED_DEMO_MERCHANT_PASSWORD || "DemoShop123!";
     const slug = process.env.SEED_DEMO_SLUG || "demo";
     // Keep Android BuildConfig SYNC_API_KEY working when present
@@ -177,7 +177,7 @@ async function seedDemoShop() {
             .returning();
         merchant = inserted[0];
         console.log(`Seeded demo merchant: ${merchant.email} (slug=${slug})`);
-        console.log(`  Shop: https://shop.chaslay.com/${slug} or /shop/${slug}`);
+        console.log(`  Shop: https://shop.rebornsense.com/${slug} or /shop/${slug}`);
         console.log(`  Sync API key: ${merchant.syncApiKey}`);
     }
     else {
@@ -376,6 +376,8 @@ async function seedEditionsAndReseller() {
 async function seed() {
     await seedSuperadmin();
     await subscription_plans_service_1.SubscriptionPlansService.ensureDefaults();
+    const { SubscriptionAddonsService } = await Promise.resolve().then(() => __importStar(require("@/services/subscription-addons.service")));
+    await SubscriptionAddonsService.ensureDefaults();
     await seedEditionsAndReseller();
     await seedDemoShop();
 }

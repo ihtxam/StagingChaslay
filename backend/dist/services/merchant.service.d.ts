@@ -138,8 +138,10 @@ export declare class MerchantService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -415,8 +417,10 @@ export declare class MerchantService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -524,6 +528,7 @@ export declare class MerchantService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
@@ -531,6 +536,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -668,8 +674,10 @@ export declare class MerchantService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -916,8 +924,10 @@ export declare class MerchantService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1163,8 +1173,10 @@ export declare class MerchantService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1388,6 +1400,7 @@ export declare class MerchantService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
@@ -1395,6 +1408,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1508,6 +1522,7 @@ export declare class MerchantService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
@@ -1515,6 +1530,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1628,6 +1644,7 @@ export declare class MerchantService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
@@ -1635,6 +1652,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1769,6 +1787,7 @@ export declare class MerchantService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
@@ -1776,6 +1795,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -1894,6 +1914,7 @@ export declare class MerchantService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxStaff: number;
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
@@ -1901,6 +1922,7 @@ export declare class MerchantService {
         odsAddonEnabled: boolean;
         inventoryWasteFactor: string;
         inventoryAutoReorderEmailEnabled: boolean;
+        inventoryExpiryAlertDays: number;
         posColorTheme: string;
         reservationsEnabled: boolean;
         reservationSettings: schema.ReservationSettings | null;
@@ -2015,6 +2037,7 @@ export declare class MerchantService {
             shiftsEnabled: boolean;
             maxPosPosts: number;
             maxWaiterPosts: number;
+            maxStaff: number;
             inventoryAddonEnabled: boolean;
             signageAddonEnabled: boolean;
             signageScreenLimit: number;
@@ -2022,6 +2045,7 @@ export declare class MerchantService {
             odsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
+            inventoryExpiryAlertDays: number;
             posColorTheme: string;
             reservationsEnabled: boolean;
             reservationSettings: schema.ReservationSettings | null;

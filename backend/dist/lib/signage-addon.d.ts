@@ -1,4 +1,4 @@
-/** Paid digital signage (Chaslay Screens) addon — merchant-level, not edition-gated. */
+/** Paid digital signage (Reborn Screens) addon — merchant-level, not edition-gated. */
 export declare function isSignageAddonEnabled(value: unknown): boolean;
 export declare function normalizeSignageScreenLimit(value: unknown): number;
 export declare function readSignageAddon(merchantId: string): Promise<{

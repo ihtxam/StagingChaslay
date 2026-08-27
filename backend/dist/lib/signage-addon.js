@@ -43,7 +43,7 @@ exports.readSignageAddonMap = readSignageAddonMap;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
-/** Paid digital signage (Chaslay Screens) addon — merchant-level, not edition-gated. */
+/** Paid digital signage (Reborn Screens) addon — merchant-level, not edition-gated. */
 function isSignageAddonEnabled(value) {
     return value === true || value === 1 || value === "1" || value === "true" || value === "t";
 }

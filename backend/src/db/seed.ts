@@ -379,6 +379,8 @@ async function seedEditionsAndReseller() {
 async function seed() {
   await seedSuperadmin();
   await SubscriptionPlansService.ensureDefaults();
+  const { SubscriptionAddonsService } = await import("@/services/subscription-addons.service");
+  await SubscriptionAddonsService.ensureDefaults();
   await seedEditionsAndReseller();
   await seedDemoShop();
 }

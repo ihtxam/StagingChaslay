@@ -295,10 +295,10 @@ export declare class SyncService {
             } | null;
             items: {
                 id: string;
+                quantity: string;
                 isOpenPrice: boolean;
                 productId: string | null;
                 taxAmount: string;
-                quantity: string;
                 orderId: string;
                 productName: string | null;
                 unitPrice: string;

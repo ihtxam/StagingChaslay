@@ -2864,6 +2864,48 @@ router.post("/billing/confirm", async (req: Request, res: Response) => {
   }
 });
 
+router.post("/billing/addon/checkout", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { addonId, billingCycle, returnUrl } = req.body || {};
+    if (!addonId) return res.status(400).json({ error: "addonId is required" });
+
+    const result = await SubscriptionBillingService.startAddonCheckout(
+      merchantId,
+      addonId,
+      billingCycle === "yearly" ? "yearly" : "monthly",
+      returnUrl
+    );
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Error starting addon checkout:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to start add-on checkout",
+    });
+  }
+});
+
+router.post("/billing/addon/confirm", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { paymentId, resultCode, pspReference } = req.body || {};
+    if (!paymentId) return res.status(400).json({ error: "paymentId is required" });
+
+    const result = await SubscriptionBillingService.confirmAddonPayment(merchantId, paymentId, {
+      resultCode,
+      pspReference,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Error confirming addon payment:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to confirm add-on payment",
+    });
+  }
+});
+
 // ============================================================================
 // PLATFORM SHOP (buy supplies from Reborn)
 // ============================================================================

@@ -92,6 +92,7 @@ export declare class MerchantInviteService {
             shiftsEnabled: boolean;
             maxPosPosts: number;
             maxWaiterPosts: number;
+            maxStaff: number;
             inventoryAddonEnabled: boolean;
             signageAddonEnabled: boolean;
             signageScreenLimit: number;
@@ -99,6 +100,7 @@ export declare class MerchantInviteService {
             odsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
+            inventoryExpiryAlertDays: number;
             posColorTheme: string;
             reservationsEnabled: boolean;
             reservationSettings: schema.ReservationSettings | null;

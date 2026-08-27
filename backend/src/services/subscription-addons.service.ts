@@ -1,0 +1,275 @@
+import { and, asc, eq, isNull, or } from "drizzle-orm";
+import { getDb, schema } from "@/db";
+
+export type AddonInput = {
+  name: string;
+  slug: string;
+  description?: string | null;
+  addonKey: string;
+  priceMonthly: number | string;
+  priceYearly?: number | string | null;
+  currency?: string;
+  quantity?: number;
+  isActive?: boolean;
+  isPublic?: boolean;
+  sortOrder?: number;
+  ownerType?: "platform" | "reseller";
+  ownerId?: string | null;
+};
+
+function normalizeSlug(slug: string) {
+  return slug
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 50);
+}
+
+const VALID_ADDON_KEYS = new Set([
+  "inventory",
+  "signage",
+  "kds",
+  "ods",
+  "extra_pos_post",
+  "extra_waiter_post",
+  "extra_staff",
+]);
+
+export class SubscriptionAddonsService {
+  static async listAll(opts?: {
+    ownerType?: "platform" | "reseller";
+    ownerId?: string | null;
+    includeInactive?: boolean;
+    forResellerId?: string;
+  }) {
+    const db = getDb();
+    const clauses = [];
+    if (opts?.forResellerId) {
+      clauses.push(
+        or(
+          and(eq(schema.subscriptionAddons.ownerType, "platform"), isNull(schema.subscriptionAddons.ownerId)),
+          and(
+            eq(schema.subscriptionAddons.ownerType, "reseller"),
+            eq(schema.subscriptionAddons.ownerId, opts.forResellerId)
+          )
+        )!
+      );
+    } else if (opts?.ownerType) {
+      clauses.push(eq(schema.subscriptionAddons.ownerType, opts.ownerType));
+      if (opts.ownerType === "platform") {
+        clauses.push(isNull(schema.subscriptionAddons.ownerId));
+      } else if (opts.ownerId) {
+        clauses.push(eq(schema.subscriptionAddons.ownerId, opts.ownerId));
+      }
+    }
+    if (!opts?.includeInactive) {
+      clauses.push(eq(schema.subscriptionAddons.isActive, true));
+    }
+    return db.query.subscriptionAddons.findMany({
+      where: clauses.length ? and(...clauses) : undefined,
+      orderBy: [asc(schema.subscriptionAddons.sortOrder), asc(schema.subscriptionAddons.name)],
+    });
+  }
+
+  static async listPublicForMerchant(merchantId: string) {
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { resellerId: true },
+    });
+    if (!merchant) throw new Error("Merchant not found");
+
+    const publicClauses = [
+      eq(schema.subscriptionAddons.isActive, true),
+      eq(schema.subscriptionAddons.isPublic, true),
+    ];
+    if (merchant.resellerId) {
+      publicClauses.push(
+        or(
+          and(eq(schema.subscriptionAddons.ownerType, "platform"), isNull(schema.subscriptionAddons.ownerId)),
+          and(
+            eq(schema.subscriptionAddons.ownerType, "reseller"),
+            eq(schema.subscriptionAddons.ownerId, merchant.resellerId)
+          )
+        )!
+      );
+    } else {
+      publicClauses.push(
+        and(eq(schema.subscriptionAddons.ownerType, "platform"), isNull(schema.subscriptionAddons.ownerId))!
+      );
+    }
+    return db.query.subscriptionAddons.findMany({
+      where: and(...publicClauses),
+      orderBy: [asc(schema.subscriptionAddons.sortOrder), asc(schema.subscriptionAddons.name)],
+    });
+  }
+
+  static async getById(id: string) {
+    const db = getDb();
+    const row = await db.query.subscriptionAddons.findFirst({
+      where: eq(schema.subscriptionAddons.id, id),
+    });
+    if (!row) throw new Error("Add-on not found");
+    return row;
+  }
+
+  static async create(input: AddonInput) {
+    const db = getDb();
+    const slug = normalizeSlug(input.slug || input.name);
+    if (!slug) throw new Error("Add-on slug is required");
+    const addonKey = String(input.addonKey || "").toLowerCase();
+    if (!VALID_ADDON_KEYS.has(addonKey)) {
+      throw new Error(`Invalid add-on key. Use: ${[...VALID_ADDON_KEYS].join(", ")}`);
+    }
+    const ownerType = input.ownerType || "platform";
+    const ownerId = ownerType === "reseller" ? input.ownerId || null : null;
+
+    const [row] = await db
+      .insert(schema.subscriptionAddons)
+      .values({
+        name: input.name.trim(),
+        slug,
+        description: input.description ?? null,
+        addonKey,
+        priceMonthly: String(input.priceMonthly ?? 0),
+        priceYearly:
+          input.priceYearly === undefined || input.priceYearly === null || input.priceYearly === ""
+            ? null
+            : String(input.priceYearly),
+        currency: (input.currency || "CHF").toUpperCase().slice(0, 3),
+        quantity: input.quantity ?? 1,
+        isActive: input.isActive !== false,
+        isPublic: input.isPublic !== false,
+        sortOrder: input.sortOrder ?? 0,
+        ownerType,
+        ownerId,
+      })
+      .returning();
+    return row!;
+  }
+
+  static async update(id: string, input: Partial<AddonInput>) {
+    const db = getDb();
+    await this.getById(id);
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.name !== undefined) patch.name = input.name.trim();
+    if (input.slug !== undefined) patch.slug = normalizeSlug(input.slug);
+    if (input.description !== undefined) patch.description = input.description;
+    if (input.addonKey !== undefined) {
+      const key = String(input.addonKey).toLowerCase();
+      if (!VALID_ADDON_KEYS.has(key)) throw new Error("Invalid add-on key");
+      patch.addonKey = key;
+    }
+    if (input.priceMonthly !== undefined) patch.priceMonthly = String(input.priceMonthly);
+    if (input.priceYearly !== undefined) {
+      patch.priceYearly =
+        input.priceYearly === null || input.priceYearly === "" ? null : String(input.priceYearly);
+    }
+    if (input.currency !== undefined) patch.currency = input.currency.toUpperCase().slice(0, 3);
+    if (input.quantity !== undefined) patch.quantity = input.quantity;
+    if (input.isActive !== undefined) patch.isActive = input.isActive;
+    if (input.isPublic !== undefined) patch.isPublic = input.isPublic;
+    if (input.sortOrder !== undefined) patch.sortOrder = input.sortOrder;
+
+    const [row] = await db
+      .update(schema.subscriptionAddons)
+      .set(patch)
+      .where(eq(schema.subscriptionAddons.id, id))
+      .returning();
+    return row!;
+  }
+
+  static async remove(id: string) {
+    const db = getDb();
+    await this.getById(id);
+    const [row] = await db
+      .update(schema.subscriptionAddons)
+      .set({ isActive: false, isPublic: false, updatedAt: new Date() })
+      .where(eq(schema.subscriptionAddons.id, id))
+      .returning();
+    return row!;
+  }
+
+  static async listActiveForMerchant(merchantId: string) {
+    const db = getDb();
+    return db.query.merchantAddonSubscriptions.findMany({
+      where: and(
+        eq(schema.merchantAddonSubscriptions.merchantId, merchantId),
+        eq(schema.merchantAddonSubscriptions.status, "active")
+      ),
+      with: { addon: true },
+    });
+  }
+
+  static async ensureDefaults() {
+    const db = getDb();
+    const existing = await db.query.subscriptionAddons.findMany({ limit: 1 });
+    if (existing.length > 0) return;
+
+    const defaults: AddonInput[] = [
+      {
+        name: "Inventory & recipes",
+        slug: "inventory",
+        addonKey: "inventory",
+        description: "Stock, suppliers, recipes, and expiry alerts",
+        priceMonthly: 29,
+        priceYearly: 290,
+        sortOrder: 10,
+      },
+      {
+        name: "Digital signage",
+        slug: "signage",
+        addonKey: "signage",
+        description: "Menu boards on TV screens",
+        priceMonthly: 19,
+        priceYearly: 190,
+        quantity: 2,
+        sortOrder: 20,
+      },
+      {
+        name: "Kitchen display (KDS)",
+        slug: "kds",
+        addonKey: "kds",
+        description: "Kitchen order screen",
+        priceMonthly: 15,
+        priceYearly: 150,
+        sortOrder: 30,
+      },
+      {
+        name: "Order display (ODS)",
+        slug: "ods",
+        addonKey: "ods",
+        description: "Customer-facing order status screen",
+        priceMonthly: 15,
+        priceYearly: 150,
+        sortOrder: 40,
+      },
+      {
+        name: "Extra POS station",
+        slug: "extra-pos",
+        addonKey: "extra_pos_post",
+        description: "One additional concurrent register",
+        priceMonthly: 12,
+        priceYearly: 120,
+        quantity: 1,
+        sortOrder: 50,
+      },
+      {
+        name: "Extra waiter device",
+        slug: "extra-waiter",
+        addonKey: "extra_waiter_post",
+        description: "One additional waiter station",
+        priceMonthly: 8,
+        priceYearly: 80,
+        quantity: 1,
+        sortOrder: 60,
+      },
+    ];
+
+    for (const addon of defaults) {
+      await this.create(addon);
+    }
+    console.log("Seeded default subscription add-ons");
+  }
+}

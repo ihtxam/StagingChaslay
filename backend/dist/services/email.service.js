@@ -69,14 +69,14 @@ class EmailService {
             process.env.FROM_EMAIL ||
             process.env.MAIL_FROM ||
             process.env.SENDGRID_FROM_EMAIL ||
-            "noreply@chaslay.com").trim();
+            "noreply@rebornsense.com").trim();
     }
     static envFromName() {
         return (process.env.BREVO_FROM_NAME ||
             process.env.SENDINBLUE_FROM_NAME ||
             process.env.MAIL_FROM_NAME ||
             process.env.EMAIL_FROM_NAME ||
-            "Chaslay").trim();
+            "Reborn").trim();
     }
     /** Merchant emails show the shop name as sender; Brevo/SMTP from address stays authenticated. */
     static merchantSenderName(merchantName) {
@@ -173,7 +173,7 @@ class EmailService {
                 provider: "sendgrid",
                 apiKey: process.env.SENDGRID_API_KEY,
                 fromEmail: process.env.SENDGRID_FROM_EMAIL,
-                fromName: fromName || "Chaslay",
+                fromName: fromName || "Reborn",
                 source: dbApiKey ? "database" : "env",
                 merchantId,
             };
@@ -458,7 +458,7 @@ class EmailService {
             }));
             await axios_1.default.post("https://api.brevo.com/v3/smtp/email", {
                 sender: {
-                    name: cfg.fromName || "Chaslay",
+                    name: cfg.fromName || "Reborn",
                     email: cfg.fromEmail,
                 },
                 to: [{ email: input.to }],

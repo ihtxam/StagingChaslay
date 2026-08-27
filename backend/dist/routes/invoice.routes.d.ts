@@ -10,7 +10,7 @@ export declare function merchantInvoicePdf(req: Request, res: Response): Promise
 /** POST /api/merchant/orders/:orderId/record-invoice-payment */
 export declare function merchantRecordInvoicePayment(req: Request, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
 export default router;
-/** Chaslay Android routes mounted at /v1/invoices */
+/** Reborn Android routes mounted at /v1/invoices */
 export declare function chaslayInvoiceRouter(): import("express-serve-static-core").Router;
 export { isInvoicePaymentMethod };
 //# sourceMappingURL=invoice.routes.d.ts.map

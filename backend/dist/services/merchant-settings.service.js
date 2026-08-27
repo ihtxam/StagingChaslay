@@ -106,11 +106,8 @@ class MerchantSettingsService {
         }
     }
     static async buildMerchantSettings(merchantId) {
-        await (0, ensure_merchant_schema_1.ensureInventoryAddonColumn)();
-        await (0, ensure_merchant_schema_1.ensureSignageAddonColumn)();
-        const { ensureKdsAddonColumn, ensureOdsAddonColumn } = await Promise.resolve().then(() => __importStar(require("@/lib/ensure-merchant-schema")));
-        await ensureKdsAddonColumn();
-        await ensureOdsAddonColumn();
+        // Schema patches run at API startup. Do not re-run CREATE/ALTER here —
+        // concurrent Settings loads were locking Postgres and leaving the panel spinning.
         const db = (0, db_1.getDb)();
         const merchant = await db.query.merchants.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
@@ -127,7 +124,7 @@ class MerchantSettingsService {
         const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
         const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
         const shopHost = process.env.SHOP_PUBLIC_HOST ||
-            (domain.includes("chaslay.com") ? "shop.chaslay.com" : domain.startsWith("shop.") ? domain : `shop.${domain}`);
+            (domain.includes("rebornsense.com") ? "shop.rebornsense.com" : domain.startsWith("shop.") ? domain : `shop.${domain}`);
         const apex = domain.replace(/^shop\./, "");
         return {
             id: merchant.id,
@@ -178,6 +175,7 @@ class MerchantSettingsService {
             odsEnabled: odsOn,
             inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
             inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
+            inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),
             posColorTheme: merchant.posColorTheme || "teal",
             storeHours: merchant.storeHours || {},
             shopLogoUrl: merchant.shopLogoUrl,
@@ -531,6 +529,13 @@ class MerchantSettingsService {
         }
         if (updates.inventoryAutoReorderEmailEnabled !== undefined) {
             patch.inventoryAutoReorderEmailEnabled = !!updates.inventoryAutoReorderEmailEnabled;
+        }
+        if (updates.inventoryExpiryAlertDays !== undefined) {
+            const n = Math.round(Number(updates.inventoryExpiryAlertDays));
+            if (!Number.isFinite(n) || n < 1 || n > 365) {
+                throw new Error("inventoryExpiryAlertDays must be between 1 and 365");
+            }
+            patch.inventoryExpiryAlertDays = n;
         }
         if (updates.posPrintSettings !== undefined) {
             patch.posPrintSettings = (0, pos_print_settings_1.normalizePosPrintSettings)(updates.posPrintSettings);

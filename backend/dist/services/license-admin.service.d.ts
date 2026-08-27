@@ -2,7 +2,7 @@ import { schema } from "@/db";
 export declare class LicenseAdminService {
     /**
      * Issue a license bound to the Android POS device ID shown in the app.
-     * Matches legacy Chaslay admin flow: copy device ID → generate code for that device.
+     * Matches legacy Reborn admin flow: copy device ID → generate code for that device.
      */
     static issueForPosDeviceId(merchantId: string, posDeviceId: string, licenseType?: "trial" | "yearly" | "custom", customDays?: number, deviceType?: string, issuedByResellerId?: string | null): Promise<{
         deviceId: string;
@@ -177,6 +177,7 @@ export declare class LicenseAdminService {
             shiftsEnabled: boolean;
             maxPosPosts: number;
             maxWaiterPosts: number;
+            maxStaff: number;
             inventoryAddonEnabled: boolean;
             signageAddonEnabled: boolean;
             signageScreenLimit: number;
@@ -184,6 +185,7 @@ export declare class LicenseAdminService {
             odsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
+            inventoryExpiryAlertDays: number;
             posColorTheme: string;
             reservationsEnabled: boolean;
             reservationSettings: schema.ReservationSettings | null;
@@ -324,6 +326,7 @@ export declare class LicenseAdminService {
             shiftsEnabled: boolean;
             maxPosPosts: number;
             maxWaiterPosts: number;
+            maxStaff: number;
             inventoryAddonEnabled: boolean;
             signageAddonEnabled: boolean;
             signageScreenLimit: number;
@@ -331,6 +334,7 @@ export declare class LicenseAdminService {
             odsAddonEnabled: boolean;
             inventoryWasteFactor: string;
             inventoryAutoReorderEmailEnabled: boolean;
+            inventoryExpiryAlertDays: number;
             posColorTheme: string;
             reservationsEnabled: boolean;
             reservationSettings: schema.ReservationSettings | null;
@@ -534,6 +538,7 @@ export declare class LicenseAdminService {
                 shiftsEnabled: boolean;
                 maxPosPosts: number;
                 maxWaiterPosts: number;
+                maxStaff: number;
                 inventoryAddonEnabled: boolean;
                 signageAddonEnabled: boolean;
                 signageScreenLimit: number;
@@ -541,6 +546,7 @@ export declare class LicenseAdminService {
                 odsAddonEnabled: boolean;
                 inventoryWasteFactor: string;
                 inventoryAutoReorderEmailEnabled: boolean;
+                inventoryExpiryAlertDays: number;
                 posColorTheme: string;
                 reservationsEnabled: boolean;
                 reservationSettings: schema.ReservationSettings | null;

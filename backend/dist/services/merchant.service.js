@@ -500,7 +500,8 @@ class MerchantService {
             const plan = await SubscriptionPlansService.getBySlug(planSlug);
             if (!plan || !plan.isActive)
                 throw new Error("Subscription plan not found or inactive");
-            patch.subscriptionPlan = plan.slug;
+            const { PackageProvisioningService } = await Promise.resolve().then(() => __importStar(require("./package-provisioning.service")));
+            await PackageProvisioningService.applyPlan(merchantId, plan.id);
         }
         if (hasEdition) {
             if (input.editionId === null) {

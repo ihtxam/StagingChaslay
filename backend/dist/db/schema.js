@@ -1,8 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.chaslayFloorPrintJobs = exports.chaslayFloorTableOrders = exports.chaslayFloorDevices = exports.reservations = exports.tableQrCodes = exports.diningTables = exports.floorPlans = exports.orderRefunds = exports.orderItems = exports.signageSlides = exports.signageScreens = exports.signagePlaylists = exports.SIGNAGE_SLIDE_TYPES = exports.SIGNAGE_ORIENTATIONS = exports.SIGNAGE_TEMPLATES = exports.odsDismissedOrders = exports.odsOrders = exports.odsDisplays = exports.ODS_THEMES = exports.kdsTicketItems = exports.kdsTickets = exports.KDS_LAYOUT_MODES = exports.KDS_THEMES = exports.kdsStations = exports.deliveryDriverShifts = exports.deliveryDriverLocations = exports.posSessions = exports.heldOrders = exports.orders = exports.customerAddresses = exports.customers = exports.productModifierGroups = exports.modifierOptions = exports.modifierGroups = exports.products = exports.categories = exports.vatSettings = exports.licenseTransactions = exports.licenses = exports.devices = exports.subscriptionPayments = exports.passwordResetTokens = exports.platformSettings = exports.subscriptionPlans = exports.merchantStaff = exports.merchantRoles = exports.merchants = exports.editions = exports.resellers = exports.superadmins = void 0;
-exports.giftCardPurchasesRelations = exports.giftCardsRelations = exports.loyaltyCardsRelations = exports.orderRefundsRelations = exports.orderItemsRelations = exports.customerAddressesRelations = exports.signageSlidesRelations = exports.signagePlaylistsRelations = exports.signageScreensRelations = exports.kdsTicketItemsRelations = exports.kdsTicketsRelations = exports.odsDismissedOrdersRelations = exports.odsOrdersRelations = exports.odsDisplaysRelations = exports.kdsStationsRelations = exports.heldOrdersRelations = exports.paymentTransactionsRelations = exports.ordersRelations = exports.productModifierGroupsRelations = exports.modifierOptionsRelations = exports.modifierGroupsRelations = exports.productsRelations = exports.licensesRelations = exports.devicesRelations = exports.tableQrCodesRelations = exports.diningTablesRelations = exports.floorPlansRelations = exports.reservationsRelations = exports.voucherRedemptionsRelations = exports.vouchersRelations = exports.merchantsRelations = exports.editionsRelations = exports.resellersRelations = exports.cmsPagesRelations = exports.cmsPages = exports.dailyReports = exports.voucherRedemptions = exports.vouchers = exports.offers = exports.loyaltyPointEvents = exports.loyaltyPointLots = exports.giftCardTransactions = exports.giftCardPurchases = exports.giftCards = exports.loyaltyTransactions = exports.loyaltyCards = exports.paymentTransactions = exports.deliveryZones = exports.rfidReaders = exports.paymentTerminals = void 0;
-exports.supportTicketMessagesRelations = exports.supportTicketsRelations = exports.supportTicketMessages = exports.supportTickets = exports.platformMessageDismissals = exports.platformMessages = exports.platformEventLogs = exports.platformShopOrdersRelations = exports.platformShopOrders = exports.platformShopVouchers = exports.platformShopProducts = exports.subscriptionPaymentsRelations = exports.subscriptionPlansRelations = exports.productRecipesRelations = exports.inventoryMovementsRelations = exports.inventoryUnitRatiosRelations = exports.inventoryUnitsRelations = exports.inventoryCategoriesRelations = exports.inventoryItemsRelations = exports.inventorySuppliersRelations = exports.productRecipes = exports.inventoryMovements = exports.inventoryUnitRatios = exports.inventoryUnits = exports.inventoryCategories = exports.inventoryItems = exports.inventorySuppliers = exports.posCashMovements = exports.posShifts = exports.marketingEmailLog = exports.emailSendLog = exports.newsletterCampaigns = exports.paymentTerminalsRelations = exports.deliveryZonesRelations = exports.rfidReadersRelations = exports.loyaltyPointEventsRelations = exports.loyaltyPointLotsRelations = exports.giftCardTransactionsRelations = void 0;
+exports.reservations = exports.tableQrCodes = exports.diningTables = exports.floorPlans = exports.orderRefunds = exports.orderItems = exports.signageSlides = exports.signageScreens = exports.signagePlaylists = exports.SIGNAGE_SLIDE_TYPES = exports.SIGNAGE_ORIENTATIONS = exports.SIGNAGE_TEMPLATES = exports.odsDismissedOrders = exports.odsOrders = exports.odsDisplays = exports.ODS_THEMES = exports.kdsTicketItems = exports.kdsTickets = exports.KDS_LAYOUT_MODES = exports.KDS_THEMES = exports.kdsStations = exports.deliveryDriverShifts = exports.deliveryDriverLocations = exports.posSessions = exports.heldOrders = exports.orders = exports.customerAddresses = exports.customers = exports.productModifierGroups = exports.modifierOptions = exports.modifierGroups = exports.products = exports.categories = exports.vatSettings = exports.licenseTransactions = exports.licenses = exports.devices = exports.subscriptionPayments = exports.passwordResetTokens = exports.platformSettings = exports.subscriptionAddonPayments = exports.merchantAddonSubscriptions = exports.subscriptionAddons = exports.subscriptionPlans = exports.merchantStaff = exports.merchantRoles = exports.merchants = exports.editions = exports.resellers = exports.superadmins = void 0;
+exports.orderRefundsRelations = exports.orderItemsRelations = exports.customerAddressesRelations = exports.signageSlidesRelations = exports.signagePlaylistsRelations = exports.signageScreensRelations = exports.kdsTicketItemsRelations = exports.kdsTicketsRelations = exports.odsDismissedOrdersRelations = exports.odsOrdersRelations = exports.odsDisplaysRelations = exports.kdsStationsRelations = exports.heldOrdersRelations = exports.paymentTransactionsRelations = exports.ordersRelations = exports.productModifierGroupsRelations = exports.modifierOptionsRelations = exports.modifierGroupsRelations = exports.productsRelations = exports.licensesRelations = exports.devicesRelations = exports.tableQrCodesRelations = exports.diningTablesRelations = exports.floorPlansRelations = exports.reservationsRelations = exports.voucherRedemptionsRelations = exports.vouchersRelations = exports.merchantsRelations = exports.editionsRelations = exports.resellersRelations = exports.cmsPagesRelations = exports.cmsPages = exports.dailyReports = exports.voucherRedemptions = exports.vouchers = exports.offers = exports.loyaltyPointEvents = exports.loyaltyPointLots = exports.giftCardTransactions = exports.giftCardPurchases = exports.giftCards = exports.loyaltyTransactions = exports.loyaltyCards = exports.paymentTransactions = exports.deliveryZones = exports.rfidReaders = exports.paymentTerminals = exports.chaslayFloorPrintJobs = exports.chaslayFloorTableOrders = exports.chaslayFloorDevices = void 0;
+exports.supportTicketMessagesRelations = exports.supportTicketsRelations = exports.supportTicketMessages = exports.supportTickets = exports.platformMessageDismissals = exports.platformMessages = exports.platformEventLogs = exports.platformShopOrdersRelations = exports.platformShopOrders = exports.platformShopVouchers = exports.platformShopProducts = exports.subscriptionPaymentsRelations = exports.subscriptionAddonPaymentsRelations = exports.merchantAddonSubscriptionsRelations = exports.subscriptionAddonsRelations = exports.subscriptionPlansRelations = exports.productRecipesRelations = exports.inventoryMovementsRelations = exports.inventoryUnitRatiosRelations = exports.inventoryUnitsRelations = exports.inventoryCategoriesRelations = exports.inventoryStockLotsRelations = exports.inventoryItemsRelations = exports.inventorySuppliersRelations = exports.productRecipes = exports.inventoryStockLots = exports.inventoryMovements = exports.inventoryUnitRatios = exports.inventoryUnits = exports.inventoryCategories = exports.inventoryItems = exports.inventorySuppliers = exports.posCashMovements = exports.posShifts = exports.marketingEmailLog = exports.emailSendLog = exports.newsletterCampaigns = exports.paymentTerminalsRelations = exports.deliveryZonesRelations = exports.rfidReadersRelations = exports.loyaltyPointEventsRelations = exports.loyaltyPointLotsRelations = exports.giftCardTransactionsRelations = exports.giftCardPurchasesRelations = exports.giftCardsRelations = exports.loyaltyCardsRelations = void 0;
 const pg_core_1 = require("drizzle-orm/pg-core");
 const drizzle_orm_1 = require("drizzle-orm");
 // ============================================================================
@@ -204,7 +204,7 @@ exports.merchants = (0, pg_core_1.pgTable)("merchants", {
     panelLanguage: (0, pg_core_1.varchar)("panel_language", { length: 10 }).default("en").notNull(), // en | fr | de
     /** Default language for online shop + CMS homepage (null = fall back to panelLanguage) */
     shopLanguage: (0, pg_core_1.varchar)("shop_language", { length: 10 }), // en | fr | de
-    /** Chaslay/FoodTruck Android POS sync key (X-Api-Key header) */
+    /** Reborn/FoodTruck Android POS sync key (X-Api-Key header) */
     syncApiKey: (0, pg_core_1.varchar)("sync_api_key", { length: 64 }),
     // Restaurant floor / PAX
     floorPlanEnabled: (0, pg_core_1.boolean)("floor_plan_enabled").default(false).notNull(),
@@ -228,12 +228,14 @@ exports.merchants = (0, pg_core_1.pgTable)("merchants", {
      * Max concurrent waiter stations (waiter web + Android waiter). 0 = unlimited.
      */
     maxWaiterPosts: (0, pg_core_1.integer)("max_waiter_posts").default(0).notNull(),
+    /** Max staff accounts (merchant panel users). 0 = unlimited. */
+    maxStaff: (0, pg_core_1.integer)("max_staff").default(0).notNull(),
     /**
      * Paid restaurant inventory + recipes addon. Superadmin/reseller only (like POS seats).
      */
     inventoryAddonEnabled: (0, pg_core_1.boolean)("inventory_addon_enabled").default(false).notNull(),
     /**
-     * Paid Chaslay Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
+     * Paid Reborn Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
      */
     signageAddonEnabled: (0, pg_core_1.boolean)("signage_addon_enabled").default(false).notNull(),
     /** Max TV screens when the signage addon is on. Default 2. */
@@ -252,6 +254,8 @@ exports.merchants = (0, pg_core_1.pgTable)("merchants", {
     inventoryAutoReorderEmailEnabled: (0, pg_core_1.boolean)("inventory_auto_reorder_email_enabled")
         .default(false)
         .notNull(),
+    /** Days before expiry to alert store admin (default 30 ≈ one month). */
+    inventoryExpiryAlertDays: (0, pg_core_1.integer)("inventory_expiry_alert_days").default(30).notNull(),
     /** WebPOS / counter accent theme: teal | green | blue | violet */
     posColorTheme: (0, pg_core_1.varchar)("pos_color_theme", { length: 20 }).default("teal").notNull(),
     /** Online / phone restaurant table reservations */
@@ -405,19 +409,29 @@ exports.merchantStaff = (0, pg_core_1.pgTable)("merchant_staff", {
     merchantIdIdx: (0, pg_core_1.index)("merchant_staff_merchant_id_idx").on(table.merchantId),
     merchantEmailIdx: (0, pg_core_1.uniqueIndex)("merchant_staff_merchant_email_idx").on(table.merchantId, table.email),
 }));
-// ============================================================================
-// SUBSCRIPTION PLANS (platform SaaS tiers)
-// ============================================================================
 exports.subscriptionPlans = (0, pg_core_1.pgTable)("subscription_plans", {
     id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    /** platform = superadmin; reseller = agency-owned package */
+    ownerType: (0, pg_core_1.varchar)("owner_type", { length: 20 }).default("platform").notNull(),
+    ownerId: (0, pg_core_1.uuid)("owner_id"),
     name: (0, pg_core_1.varchar)("name", { length: 100 }).notNull(),
     slug: (0, pg_core_1.varchar)("slug", { length: 50 }).notNull().unique(),
     description: (0, pg_core_1.text)("description"),
     priceMonthly: (0, pg_core_1.decimal)("price_monthly", { precision: 10, scale: 2 }).notNull().default("0"),
     priceYearly: (0, pg_core_1.decimal)("price_yearly", { precision: 10, scale: 2 }),
     currency: (0, pg_core_1.varchar)("currency", { length: 3 }).notNull().default("CHF"),
+    /** Linked POS version — features applied on subscribe */
+    editionId: (0, pg_core_1.uuid)("edition_id").references(() => exports.editions.id, { onDelete: "set null" }),
     maxDevices: (0, pg_core_1.integer)("max_devices").notNull().default(1),
     maxProducts: (0, pg_core_1.integer)("max_products"),
+    /** Max concurrent main POS stations. 0 = unlimited. */
+    maxPosPosts: (0, pg_core_1.integer)("max_pos_posts").default(0).notNull(),
+    /** Max concurrent waiter stations. 0 = unlimited. */
+    maxWaiterPosts: (0, pg_core_1.integer)("max_waiter_posts").default(0).notNull(),
+    /** Max staff accounts. 0 = unlimited. */
+    maxStaff: (0, pg_core_1.integer)("max_staff").default(0).notNull(),
+    /** Addons bundled in this package */
+    includedAddons: (0, pg_core_1.json)("included_addons").$type().default({}),
     features: (0, pg_core_1.json)("features").$type().default([]),
     isActive: (0, pg_core_1.boolean)("is_active").notNull().default(true),
     /** Visible for merchants to purchase in their panel */
@@ -429,6 +443,82 @@ exports.subscriptionPlans = (0, pg_core_1.pgTable)("subscription_plans", {
 }, (table) => ({
     slugIdx: (0, pg_core_1.uniqueIndex)("subscription_plans_slug_idx").on(table.slug),
     activeIdx: (0, pg_core_1.index)("subscription_plans_active_idx").on(table.isActive),
+    ownerIdx: (0, pg_core_1.index)("subscription_plans_owner_idx").on(table.ownerType, table.ownerId),
+    editionIdx: (0, pg_core_1.index)("subscription_plans_edition_idx").on(table.editionId),
+}));
+/** Purchasable add-ons (inventory, signage, extra POS posts, etc.) */
+exports.subscriptionAddons = (0, pg_core_1.pgTable)("subscription_addons", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    ownerType: (0, pg_core_1.varchar)("owner_type", { length: 20 }).default("platform").notNull(),
+    ownerId: (0, pg_core_1.uuid)("owner_id"),
+    slug: (0, pg_core_1.varchar)("slug", { length: 50 }).notNull(),
+    name: (0, pg_core_1.varchar)("name", { length: 100 }).notNull(),
+    description: (0, pg_core_1.text)("description"),
+    /** inventory | signage | kds | ods | extra_pos_post | extra_waiter_post | extra_staff */
+    addonKey: (0, pg_core_1.varchar)("addon_key", { length: 40 }).notNull(),
+    priceMonthly: (0, pg_core_1.decimal)("price_monthly", { precision: 10, scale: 2 }).notNull().default("0"),
+    priceYearly: (0, pg_core_1.decimal)("price_yearly", { precision: 10, scale: 2 }),
+    currency: (0, pg_core_1.varchar)("currency", { length: 3 }).notNull().default("CHF"),
+    /** Quantity bump for limit-style addons (e.g. +1 POS post, +2 signage screens) */
+    quantity: (0, pg_core_1.integer)("quantity").default(1).notNull(),
+    isActive: (0, pg_core_1.boolean)("is_active").notNull().default(true),
+    isPublic: (0, pg_core_1.boolean)("is_public").notNull().default(true),
+    sortOrder: (0, pg_core_1.integer)("sort_order").notNull().default(0),
+    createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
+    updatedAt: (0, pg_core_1.timestamp)("updated_at").defaultNow().notNull(),
+}, (table) => ({
+    slugOwnerIdx: (0, pg_core_1.uniqueIndex)("subscription_addons_slug_owner_idx").on(table.slug, table.ownerType, table.ownerId),
+    activeIdx: (0, pg_core_1.index)("subscription_addons_active_idx").on(table.isActive),
+    ownerIdx: (0, pg_core_1.index)("subscription_addons_owner_idx").on(table.ownerType, table.ownerId),
+}));
+/** Active merchant add-on subscriptions */
+exports.merchantAddonSubscriptions = (0, pg_core_1.pgTable)("merchant_addon_subscriptions", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    merchantId: (0, pg_core_1.uuid)("merchant_id")
+        .notNull()
+        .references(() => exports.merchants.id, { onDelete: "cascade" }),
+    addonId: (0, pg_core_1.uuid)("addon_id")
+        .notNull()
+        .references(() => exports.subscriptionAddons.id, { onDelete: "restrict" }),
+    billingCycle: (0, pg_core_1.varchar)("billing_cycle", { length: 20 }).notNull(),
+    status: (0, pg_core_1.varchar)("status", { length: 30 }).notNull().default("active"),
+    periodStart: (0, pg_core_1.timestamp)("period_start"),
+    periodEnd: (0, pg_core_1.timestamp)("period_end"),
+    createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
+    updatedAt: (0, pg_core_1.timestamp)("updated_at").defaultNow().notNull(),
+}, (table) => ({
+    merchantIdx: (0, pg_core_1.index)("merchant_addon_subscriptions_merchant_idx").on(table.merchantId),
+    addonIdx: (0, pg_core_1.index)("merchant_addon_subscriptions_addon_idx").on(table.addonId),
+    statusIdx: (0, pg_core_1.index)("merchant_addon_subscriptions_status_idx").on(table.status),
+}));
+/** Add-on payment records (Adyen checkout) */
+exports.subscriptionAddonPayments = (0, pg_core_1.pgTable)("subscription_addon_payments", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    merchantId: (0, pg_core_1.uuid)("merchant_id")
+        .notNull()
+        .references(() => exports.merchants.id, { onDelete: "cascade" }),
+    addonId: (0, pg_core_1.uuid)("addon_id")
+        .notNull()
+        .references(() => exports.subscriptionAddons.id, { onDelete: "restrict" }),
+    billingCycle: (0, pg_core_1.varchar)("billing_cycle", { length: 20 }).notNull(),
+    amount: (0, pg_core_1.decimal)("amount", { precision: 10, scale: 2 }).notNull(),
+    currency: (0, pg_core_1.varchar)("currency", { length: 3 }).notNull().default("CHF"),
+    status: (0, pg_core_1.varchar)("status", { length: 30 }).notNull().default("pending"),
+    adyenSessionId: (0, pg_core_1.varchar)("adyen_session_id", { length: 255 }),
+    adyenPspReference: (0, pg_core_1.varchar)("adyen_psp_reference", { length: 255 }),
+    adyenRecurringDetailReference: (0, pg_core_1.varchar)("adyen_recurring_detail_reference", { length: 255 }),
+    isRecurring: (0, pg_core_1.boolean)("is_recurring").default(false).notNull(),
+    adyenResultCode: (0, pg_core_1.varchar)("adyen_result_code", { length: 50 }),
+    paidAt: (0, pg_core_1.timestamp)("paid_at"),
+    periodStart: (0, pg_core_1.timestamp)("period_start"),
+    periodEnd: (0, pg_core_1.timestamp)("period_end"),
+    createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
+    updatedAt: (0, pg_core_1.timestamp)("updated_at").defaultNow().notNull(),
+}, (table) => ({
+    merchantIdIdx: (0, pg_core_1.index)("subscription_addon_payments_merchant_id_idx").on(table.merchantId),
+    addonIdIdx: (0, pg_core_1.index)("subscription_addon_payments_addon_id_idx").on(table.addonId),
+    statusIdx: (0, pg_core_1.index)("subscription_addon_payments_status_idx").on(table.status),
+    sessionIdx: (0, pg_core_1.index)("subscription_addon_payments_session_idx").on(table.adyenSessionId),
 }));
 /** Platform-wide key/value settings (e.g. platform Adyen credentials) */
 exports.platformSettings = (0, pg_core_1.pgTable)("platform_settings", {
@@ -2106,6 +2196,8 @@ exports.inventoryItems = (0, pg_core_1.pgTable)("inventory_items", {
         .notNull()
         .references(() => exports.merchants.id, { onDelete: "cascade" }),
     name: (0, pg_core_1.varchar)("name", { length: 255 }).notNull(),
+    /** Supplier / shelf barcode for storekeeper mobile scan */
+    barcode: (0, pg_core_1.varchar)("barcode", { length: 255 }),
     /** kg | L | piece */
     unit: (0, pg_core_1.varchar)("unit", { length: 20 }).default("kg").notNull(),
     cost: (0, pg_core_1.decimal)("cost", { precision: 12, scale: 4 }).default("0").notNull(),
@@ -2127,6 +2219,7 @@ exports.inventoryItems = (0, pg_core_1.pgTable)("inventory_items", {
     supplierIdx: (0, pg_core_1.index)("inventory_items_supplier_idx").on(table.supplierId),
     categoryIdx: (0, pg_core_1.index)("inventory_items_category_idx").on(table.categoryId),
     merchantNameIdx: (0, pg_core_1.index)("inventory_items_merchant_name_idx").on(table.merchantId, table.name),
+    merchantBarcodeIdx: (0, pg_core_1.index)("inventory_items_merchant_barcode_idx").on(table.merchantId, table.barcode),
     demoIdx: (0, pg_core_1.index)("inventory_items_demo_idx").on(table.merchantId, table.isDemo),
 }));
 exports.inventoryCategories = (0, pg_core_1.pgTable)("inventory_categories", {
@@ -2194,6 +2287,26 @@ exports.inventoryMovements = (0, pg_core_1.pgTable)("inventory_movements", {
     orderIdx: (0, pg_core_1.index)("inventory_movements_order_idx").on(table.orderId),
     typeIdx: (0, pg_core_1.index)("inventory_movements_type_idx").on(table.merchantId, table.type),
 }));
+/** FEFO stock lots — expiry tracked per inbound delivery. */
+exports.inventoryStockLots = (0, pg_core_1.pgTable)("inventory_stock_lots", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    merchantId: (0, pg_core_1.uuid)("merchant_id")
+        .notNull()
+        .references(() => exports.merchants.id, { onDelete: "cascade" }),
+    itemId: (0, pg_core_1.uuid)("item_id")
+        .notNull()
+        .references(() => exports.inventoryItems.id, { onDelete: "cascade" }),
+    movementId: (0, pg_core_1.uuid)("movement_id").references(() => exports.inventoryMovements.id, { onDelete: "set null" }),
+    qty: (0, pg_core_1.decimal)("qty", { precision: 14, scale: 4 }).notNull(),
+    remainingQty: (0, pg_core_1.decimal)("remaining_qty", { precision: 14, scale: 4 }).notNull(),
+    expiryDate: (0, pg_core_1.timestamp)("expiry_date"),
+    note: (0, pg_core_1.text)("note"),
+    createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
+}, (table) => ({
+    merchantIdx: (0, pg_core_1.index)("inventory_stock_lots_merchant_idx").on(table.merchantId),
+    itemIdx: (0, pg_core_1.index)("inventory_stock_lots_item_idx").on(table.itemId, table.expiryDate),
+    expiryIdx: (0, pg_core_1.index)("inventory_stock_lots_expiry_idx").on(table.merchantId, table.expiryDate),
+}));
 exports.productRecipes = (0, pg_core_1.pgTable)("product_recipes", {
     id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
     merchantId: (0, pg_core_1.uuid)("merchant_id")
@@ -2229,10 +2342,19 @@ exports.inventoryItemsRelations = (0, drizzle_orm_1.relations)(exports.inventory
         references: [exports.inventorySuppliers.id],
     }),
     movements: many(exports.inventoryMovements),
+    stockLots: many(exports.inventoryStockLots),
     recipes: many(exports.productRecipes),
     category: one(exports.inventoryCategories, {
         fields: [exports.inventoryItems.categoryId],
         references: [exports.inventoryCategories.id],
+    }),
+}));
+exports.inventoryStockLotsRelations = (0, drizzle_orm_1.relations)(exports.inventoryStockLots, ({ one }) => ({
+    merchant: one(exports.merchants, { fields: [exports.inventoryStockLots.merchantId], references: [exports.merchants.id] }),
+    item: one(exports.inventoryItems, { fields: [exports.inventoryStockLots.itemId], references: [exports.inventoryItems.id] }),
+    movement: one(exports.inventoryMovements, {
+        fields: [exports.inventoryStockLots.movementId],
+        references: [exports.inventoryMovements.id],
     }),
 }));
 exports.inventoryCategoriesRelations = (0, drizzle_orm_1.relations)(exports.inventoryCategories, ({ one, many }) => ({
@@ -2255,8 +2377,36 @@ exports.productRecipesRelations = (0, drizzle_orm_1.relations)(exports.productRe
     product: one(exports.products, { fields: [exports.productRecipes.productId], references: [exports.products.id] }),
     item: one(exports.inventoryItems, { fields: [exports.productRecipes.itemId], references: [exports.inventoryItems.id] }),
 }));
-exports.subscriptionPlansRelations = (0, drizzle_orm_1.relations)(exports.subscriptionPlans, ({ many }) => ({
+exports.subscriptionPlansRelations = (0, drizzle_orm_1.relations)(exports.subscriptionPlans, ({ one, many }) => ({
+    edition: one(exports.editions, {
+        fields: [exports.subscriptionPlans.editionId],
+        references: [exports.editions.id],
+    }),
     payments: many(exports.subscriptionPayments),
+}));
+exports.subscriptionAddonsRelations = (0, drizzle_orm_1.relations)(exports.subscriptionAddons, ({ many }) => ({
+    merchantSubscriptions: many(exports.merchantAddonSubscriptions),
+    payments: many(exports.subscriptionAddonPayments),
+}));
+exports.merchantAddonSubscriptionsRelations = (0, drizzle_orm_1.relations)(exports.merchantAddonSubscriptions, ({ one }) => ({
+    merchant: one(exports.merchants, {
+        fields: [exports.merchantAddonSubscriptions.merchantId],
+        references: [exports.merchants.id],
+    }),
+    addon: one(exports.subscriptionAddons, {
+        fields: [exports.merchantAddonSubscriptions.addonId],
+        references: [exports.subscriptionAddons.id],
+    }),
+}));
+exports.subscriptionAddonPaymentsRelations = (0, drizzle_orm_1.relations)(exports.subscriptionAddonPayments, ({ one }) => ({
+    merchant: one(exports.merchants, {
+        fields: [exports.subscriptionAddonPayments.merchantId],
+        references: [exports.merchants.id],
+    }),
+    addon: one(exports.subscriptionAddons, {
+        fields: [exports.subscriptionAddonPayments.addonId],
+        references: [exports.subscriptionAddons.id],
+    }),
 }));
 exports.subscriptionPaymentsRelations = (0, drizzle_orm_1.relations)(exports.subscriptionPayments, ({ one }) => ({
     merchant: one(exports.merchants, {
@@ -2268,7 +2418,7 @@ exports.subscriptionPaymentsRelations = (0, drizzle_orm_1.relations)(exports.sub
         references: [exports.subscriptionPlans.id],
     }),
 }));
-/** Catalog items sold by Chaslay to merchants */
+/** Catalog items sold by Reborn to merchants */
 exports.platformShopProducts = (0, pg_core_1.pgTable)("platform_shop_products", {
     id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
     name: (0, pg_core_1.varchar)("name", { length: 255 }).notNull(),

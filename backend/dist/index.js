@@ -71,6 +71,7 @@ const panel_routes_1 = __importDefault(require("@/routes/panel.routes"));
 const merchant_support_routes_1 = __importDefault(require("@/routes/merchant-support.routes"));
 const reseller_support_routes_1 = __importDefault(require("@/routes/reseller-support.routes"));
 const inventory_routes_1 = __importDefault(require("@/routes/inventory.routes"));
+const storekeeper_routes_1 = __importDefault(require("@/routes/storekeeper.routes"));
 const delivery_tracking_routes_1 = __importDefault(require("@/routes/delivery-tracking.routes"));
 const staff_routes_1 = __importDefault(require("@/routes/staff.routes"));
 const reseller_routes_1 = __importDefault(require("@/routes/reseller.routes"));
@@ -82,6 +83,7 @@ const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const ensure_licenses_schema_1 = require("@/lib/ensure-licenses-schema");
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
+const brand_1 = require("@/lib/brand");
 // Load environment variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -96,11 +98,8 @@ function buildCorsOrigins() {
         "http://localhost:3001",
         "http://localhost:3002",
         "http://localhost:3003",
-        "https://pay.chaslay.com",
-        "https://app.chaslay.com",
-        "https://shop.chaslay.com",
-        "https://api.chaslay.com",
-        "https://status.chaslay.com",
+        ...brand_1.CURRENT_HOST_ALIASES,
+        ...brand_1.LEGACY_HOST_ALIASES,
     ].filter(Boolean);
     const extra = (process.env.CORS_ORIGINS || "")
         .split(",")
@@ -171,7 +170,7 @@ app.use("/downloads", express_1.default.static(downloadsRoot, {
 app.get("/health", (_req, res) => {
     res.json({
         status: "ok",
-        service: "chaslayreborn-backend",
+        service: "reborn-backend",
         timestamp: new Date().toISOString(),
     });
 });
@@ -225,6 +224,7 @@ app.use("/api/merchant/offers", offers_routes_1.default);
 app.use("/api/merchant/vouchers", vouchers_routes_1.default);
 app.use("/api/merchant/marketing", marketing_routes_1.default);
 app.use("/api/merchant/inventory", inventory_routes_1.default);
+app.use("/api/merchant/storekeeper", storekeeper_routes_1.default);
 app.use("/api/merchant/delivery", delivery_tracking_routes_1.default);
 app.use("/api/receipts", receipts_routes_1.default);
 app.use("/api/kds", kds_routes_1.default);
@@ -235,7 +235,7 @@ app.use("/api/tv", signage_routes_1.default);
 app.use("/api/merchant/signage", signage_routes_1.signageMerchantRoutes);
 app.use("/api/webhooks", webhooks_routes_1.default);
 app.use("/api/webhooks", delivery_platform_routes_1.default);
-/** Chaslay / FoodTruck Android POS (Retrofit /v1/* contract) */
+/** Reborn / FoodTruck Android POS (Retrofit /v1/* contract) */
 app.use("/v1", chaslay_1.default);
 // ============================================================================
 // ERROR HANDLING
@@ -252,7 +252,7 @@ app.use((err, _req, res, _next) => {
     });
 });
 app.listen(PORT, () => {
-    console.log(`✅ ChaslayReborn API running on port ${PORT}`);
+    console.log(`✅ ${brand_1.APP_NAME} API running on port ${PORT}`);
     console.log(`🏥 Health check: /health`);
     console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
     (0, ensure_merchant_schema_1.ensureMerchantSchemaAtStartup)();

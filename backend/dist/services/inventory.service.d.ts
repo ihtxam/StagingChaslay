@@ -11,6 +11,7 @@ export declare class InventoryService {
         inventoryEnabled: boolean;
         wasteFactor: number;
         autoReorderEmailEnabled: boolean;
+        expiryAlertDays: number;
         merchantName: string;
     }>;
     static assertLicensed(merchantId: string): Promise<{
@@ -19,17 +20,20 @@ export declare class InventoryService {
         inventoryEnabled: boolean;
         wasteFactor: number;
         autoReorderEmailEnabled: boolean;
+        expiryAlertDays: number;
         merchantName: string;
     }>;
     static updateSettings(merchantId: string, updates: {
         wasteFactor?: number;
         autoReorderEmailEnabled?: boolean;
+        expiryAlertDays?: number;
     }): Promise<{
         enabled: boolean;
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
         wasteFactor: number;
         autoReorderEmailEnabled: boolean;
+        expiryAlertDays: number;
         merchantName: string;
     }>;
     static listSuppliers(merchantId: string, opts?: {
@@ -73,6 +77,7 @@ export declare class InventoryService {
             updatedAt: Date;
             merchantId: string;
             categoryId: string | null;
+            barcode: string | null;
             cost: string;
             isDemo: boolean;
             unit: string;
@@ -170,6 +175,7 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
+        barcode: string | null;
         isDemo: boolean;
         unit: string;
         supplierId: string | null;
@@ -203,6 +209,7 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
+        barcode: string | null;
         isDemo: boolean;
         unit: string;
         supplierId: string | null;
@@ -212,6 +219,7 @@ export declare class InventoryService {
     };
     static createItem(merchantId: string, input: {
         name: string;
+        barcode?: string | null;
         unit?: string;
         cost?: number;
         onHand?: number;
@@ -244,6 +252,7 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
+        barcode: string | null;
         isDemo: boolean;
         unit: string;
         supplierId: string | null;
@@ -253,6 +262,7 @@ export declare class InventoryService {
     }>;
     static updateItem(merchantId: string, itemId: string, input: {
         name?: string;
+        barcode?: string | null;
         unit?: string;
         cost?: number;
         minStock?: number;
@@ -284,6 +294,7 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
+        barcode: string | null;
         isDemo: boolean;
         unit: string;
         supplierId: string | null;
@@ -301,6 +312,7 @@ export declare class InventoryService {
         note?: string;
         supplierName?: string;
         date?: string;
+        expiryDate?: string | null;
     }): Promise<{
         onHand: number;
         minStock: number;
@@ -324,6 +336,7 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
+        barcode: string | null;
         isDemo: boolean;
         unit: string;
         supplierId: string | null;
@@ -358,6 +371,7 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
+        barcode: string | null;
         isDemo: boolean;
         unit: string;
         supplierId: string | null;
@@ -391,6 +405,7 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
+        barcode: string | null;
         isDemo: boolean;
         unit: string;
         supplierId: string | null;
@@ -424,6 +439,7 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
+        barcode: string | null;
         isDemo: boolean;
         unit: string;
         supplierId: string | null;
@@ -449,6 +465,7 @@ export declare class InventoryService {
             updatedAt: Date;
             merchantId: string;
             categoryId: string | null;
+            barcode: string | null;
             cost: string;
             isDemo: boolean;
             unit: string;
@@ -484,6 +501,7 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
+        barcode: string | null;
         isDemo: boolean;
         unit: string;
         supplierId: string | null;
@@ -491,6 +509,115 @@ export declare class InventoryService {
         autoReorderEnabled: boolean;
         lastAutoReorderAt: Date | null;
     }[]>;
+    static getItemByBarcode(merchantId: string, barcode: string): Promise<{
+        onHand: number;
+        minStock: number;
+        reorderQty: number;
+        cost: number;
+        lowStock: boolean;
+        outOfStock: boolean;
+        categoryId: string | null;
+        category: {
+            id: string;
+            name: string;
+        } | null;
+        supplier: {
+            id: string;
+            name: string;
+            email: string | null;
+            archivedAt: Date | null;
+        } | null;
+        id: string;
+        name: string;
+        createdAt: Date;
+        updatedAt: Date;
+        merchantId: string;
+        barcode: string | null;
+        isDemo: boolean;
+        unit: string;
+        supplierId: string | null;
+        perishable: boolean;
+        autoReorderEnabled: boolean;
+        lastAutoReorderAt: Date | null;
+    } | null>;
+    static listExpiringSoon(merchantId: string): Promise<{
+        leadDays: number;
+        lots: Array<Record<string, unknown>>;
+    } | {
+        leadDays: number;
+        lots: {
+            id: string;
+            itemId: string;
+            itemName: string;
+            unit: string;
+            qty: number;
+            expiryDate: Date | null;
+            daysLeft: number | null;
+            expired: boolean;
+        }[];
+    }>;
+    static getStorekeeperBootstrap(merchantId: string): Promise<{
+        categories: {
+            id: string;
+            name: string;
+        }[];
+        units: {
+            code: string;
+            name: string;
+        }[];
+        enabled: boolean;
+        inventoryAddonEnabled: boolean;
+        inventoryEnabled: boolean;
+        wasteFactor: number;
+        autoReorderEmailEnabled: boolean;
+        expiryAlertDays: number;
+        merchantName: string;
+    }>;
+    static storekeeperIntake(merchantId: string, input: {
+        barcode: string;
+        name?: string;
+        unit?: string;
+        categoryId?: string | null;
+        qty: number;
+        expiryDate?: string | null;
+        cost?: number;
+        note?: string;
+    }): Promise<{
+        item: {
+            onHand: number;
+            minStock: number;
+            reorderQty: number;
+            cost: number;
+            lowStock: boolean;
+            outOfStock: boolean;
+            categoryId: string | null;
+            category: {
+                id: string;
+                name: string;
+            } | null;
+            supplier: {
+                id: string;
+                name: string;
+                email: string | null;
+                archivedAt: Date | null;
+            } | null;
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            merchantId: string;
+            barcode: string | null;
+            isDemo: boolean;
+            unit: string;
+            supplierId: string | null;
+            perishable: boolean;
+            autoReorderEnabled: boolean;
+            lastAutoReorderAt: Date | null;
+        };
+        created: boolean;
+    }>;
+    private static assertBarcodeAvailable;
+    private static createStockLot;
     static usageReport(merchantId: string, days?: number): Promise<{
         theoreticalUsage: number;
         wasteQty: number;
@@ -517,6 +644,7 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
+        barcode: string | null;
         isDemo: boolean;
         unit: string;
         supplierId: string | null;

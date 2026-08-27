@@ -44,6 +44,7 @@ const license_admin_service_1 = require("@/services/license-admin.service");
 const analytics_service_1 = require("@/services/analytics.service");
 const auth_service_1 = require("@/services/auth.service");
 const subscription_plans_service_1 = require("@/services/subscription-plans.service");
+const subscription_addons_service_1 = require("@/services/subscription-addons.service");
 const platform_settings_service_1 = require("@/services/platform-settings.service");
 const edition_service_1 = require("@/services/edition.service");
 const reseller_service_1 = require("@/services/reseller.service");
@@ -117,6 +118,49 @@ router.delete("/plans/:planId", async (req, res) => {
     catch (error) {
         console.error("Error deactivating plan:", error);
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate plan" });
+    }
+});
+// ============================================================================
+// SUBSCRIPTION ADD-ONS
+// ============================================================================
+router.get("/addons", async (_req, res) => {
+    try {
+        const addons = await subscription_addons_service_1.SubscriptionAddonsService.listAll({ includeInactive: true });
+        res.json({ success: true, addons });
+    }
+    catch (error) {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list add-ons" });
+    }
+});
+router.post("/addons", async (req, res) => {
+    try {
+        const addon = await subscription_addons_service_1.SubscriptionAddonsService.create({
+            ...(req.body || {}),
+            ownerType: "platform",
+            ownerId: null,
+        });
+        res.status(201).json({ success: true, addon });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create add-on" });
+    }
+});
+router.put("/addons/:addonId", async (req, res) => {
+    try {
+        const addon = await subscription_addons_service_1.SubscriptionAddonsService.update(req.params.addonId, req.body || {});
+        res.json({ success: true, addon });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update add-on" });
+    }
+});
+router.delete("/addons/:addonId", async (req, res) => {
+    try {
+        const addon = await subscription_addons_service_1.SubscriptionAddonsService.remove(req.params.addonId);
+        res.json({ success: true, addon });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate add-on" });
     }
 });
 // ============================================================================
@@ -211,8 +255,8 @@ router.post("/email/test", async (req, res) => {
         const { EmailService } = await Promise.resolve().then(() => __importStar(require("@/services/email.service")));
         await EmailService.send({
             to,
-            subject: "Chaslay platform email test",
-            html: "<p>This is a test email from Chaslay platform Brevo.</p>",
+            subject: "Reborn platform email test",
+            html: "<p>This is a test email from Reborn platform Brevo.</p>",
             emailType: "marketing_test",
         });
         res.json({ success: true });
@@ -1007,7 +1051,7 @@ router.post("/resellers/:resellerId/allocate-seats", async (req, res) => {
 });
 /**
  * GET /api/superadmin/resellers/:resellerId/billing
- * Invoice-style platform billing summary (what reseller owes Chaslay)
+ * Invoice-style platform billing summary (what reseller owes Reborn)
  */
 router.get("/resellers/:resellerId/billing", async (req, res) => {
     try {

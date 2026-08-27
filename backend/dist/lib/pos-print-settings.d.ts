@@ -6,6 +6,10 @@ export type PosPrinterProfile = {
     id: string;
     /** Windows printer name (print-agent) or device label */
     name: string;
+    /** Last Windows port (COM7, USB001). COM numbers change; used only as a hint. */
+    portName?: string | null;
+    /** Stable key without COM numbers (manufacturer / model). */
+    matchHint?: string | null;
     enabled?: boolean;
     paperWidthMm?: 58 | 80;
     printReceipts?: boolean;
@@ -53,8 +57,12 @@ export type PosPrintSettings = {
     kitchenPrintRetryAttempts?: number;
     /** Seconds between kitchen print retries (default 5). */
     kitchenPrintRetryIntervalSec?: number;
-    /** WebPOS / Print Agent USB scale COM port (e.g. COM3). Skips port discovery when set. */
+    /** Last-known WebPOS / Print Agent COM port (e.g. COM3). May change after USB replug. */
     scaleComPort?: string | null;
+    /** Friendly USB/Bluetooth name (e.g. USB-SERIAL CH340) used to find the new COM port. */
+    scaleDeviceName?: string | null;
+    /** Windows PNP device id for the scale, when available. */
+    scaleDeviceId?: string | null;
     /** Android USB scale stable address synced from panel (optional). */
     scaleUsbAddress?: string | null;
     scaleEnabled?: boolean;

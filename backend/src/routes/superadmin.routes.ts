@@ -6,6 +6,7 @@ import { LicenseAdminService } from "@/services/license-admin.service";
 import { AnalyticsService } from "@/services/analytics.service";
 import { AuthService } from "@/services/auth.service";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
+import { SubscriptionAddonsService } from "@/services/subscription-addons.service";
 import { PlatformSettingsService } from "@/services/platform-settings.service";
 import { EditionService } from "@/services/edition.service";
 import { ResellerService } from "@/services/reseller.service";
@@ -82,6 +83,50 @@ router.delete("/plans/:planId", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error deactivating plan:", error);
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate plan" });
+  }
+});
+
+// ============================================================================
+// SUBSCRIPTION ADD-ONS
+// ============================================================================
+
+router.get("/addons", async (_req: Request, res: Response) => {
+  try {
+    const addons = await SubscriptionAddonsService.listAll({ includeInactive: true });
+    res.json({ success: true, addons });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list add-ons" });
+  }
+});
+
+router.post("/addons", async (req: Request, res: Response) => {
+  try {
+    const addon = await SubscriptionAddonsService.create({
+      ...(req.body || {}),
+      ownerType: "platform",
+      ownerId: null,
+    });
+    res.status(201).json({ success: true, addon });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create add-on" });
+  }
+});
+
+router.put("/addons/:addonId", async (req: Request, res: Response) => {
+  try {
+    const addon = await SubscriptionAddonsService.update(req.params.addonId, req.body || {});
+    res.json({ success: true, addon });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update add-on" });
+  }
+});
+
+router.delete("/addons/:addonId", async (req: Request, res: Response) => {
+  try {
+    const addon = await SubscriptionAddonsService.remove(req.params.addonId);
+    res.json({ success: true, addon });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate add-on" });
   }
 });
 
