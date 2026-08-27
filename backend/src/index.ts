@@ -249,6 +249,10 @@ app.listen(PORT, () => {
   console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
   ensureMerchantSchemaAtStartup();
   ensureLicensesSchemaAtStartup();
+  ensureSubscriptionSchemaAtStartup();
+  void import("@/services/subscription-addons.service").then(({ SubscriptionAddonsService }) =>
+    SubscriptionAddonsService.ensureDefaults().catch(() => {})
+  );
 
   // Reminder sweeps (~hourly). Lightweight; skips merchants without email.
   const tick = async () => {

@@ -1,5 +1,6 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import type { PackageIncludedAddons } from "@/db/schema";
 
 export type PlanInput = {
   name: string;
@@ -8,13 +9,20 @@ export type PlanInput = {
   priceMonthly: number | string;
   priceYearly?: number | string | null;
   currency?: string;
+  editionId?: string | null;
   maxDevices?: number;
   maxProducts?: number | null;
+  maxPosPosts?: number;
+  maxWaiterPosts?: number;
+  maxStaff?: number;
+  includedAddons?: PackageIncludedAddons;
   features?: string[];
   isActive?: boolean;
   isPublic?: boolean;
   sortOrder?: number;
   trialDays?: number;
+  ownerType?: "platform" | "reseller";
+  ownerId?: string | null;
 };
 
 function normalizeSlug(slug: string) {
@@ -27,24 +35,89 @@ function normalizeSlug(slug: string) {
 }
 
 export class SubscriptionPlansService {
-  static async listAll(includeInactive = true) {
+  static async listAll(
+    includeInactive = true,
+    opts?: {
+      ownerType?: "platform" | "reseller";
+      ownerId?: string | null;
+      forResellerId?: string;
+    }
+  ) {
     const db = getDb();
+    const clauses = [];
+    if (opts?.forResellerId) {
+      clauses.push(
+        or(
+          and(eq(schema.subscriptionPlans.ownerType, "platform"), isNull(schema.subscriptionPlans.ownerId)),
+          and(
+            eq(schema.subscriptionPlans.ownerType, "reseller"),
+            eq(schema.subscriptionPlans.ownerId, opts.forResellerId)
+          )
+        )!
+      );
+    } else if (opts?.ownerType) {
+      clauses.push(eq(schema.subscriptionPlans.ownerType, opts.ownerType));
+      if (opts.ownerType === "platform") {
+        clauses.push(isNull(schema.subscriptionPlans.ownerId));
+      } else if (opts.ownerId) {
+        clauses.push(eq(schema.subscriptionPlans.ownerId, opts.ownerId));
+      }
+    }
     const plans = await db.query.subscriptionPlans.findMany({
+      where: clauses.length ? and(...clauses) : undefined,
       orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
+      with: { edition: true },
     });
     if (includeInactive) return plans;
     return plans.filter((p) => p.isActive);
   }
 
-  /** Plans merchants can see / buy */
   static async listPublic() {
     const db = getDb();
     return db.query.subscriptionPlans.findMany({
       where: and(
         eq(schema.subscriptionPlans.isActive, true),
-        eq(schema.subscriptionPlans.isPublic, true)
+        eq(schema.subscriptionPlans.isPublic, true),
+        eq(schema.subscriptionPlans.ownerType, "platform"),
+        isNull(schema.subscriptionPlans.ownerId)
       ),
       orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
+      with: { edition: true },
+    });
+  }
+
+  static async listPublicForMerchant(merchantId: string) {
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { resellerId: true },
+    });
+    if (!merchant) throw new Error("Merchant not found");
+
+    const publicClauses = [
+      eq(schema.subscriptionPlans.isActive, true),
+      eq(schema.subscriptionPlans.isPublic, true),
+    ];
+    if (merchant.resellerId) {
+      publicClauses.push(
+        or(
+          and(eq(schema.subscriptionPlans.ownerType, "platform"), isNull(schema.subscriptionPlans.ownerId)),
+          and(
+            eq(schema.subscriptionPlans.ownerType, "reseller"),
+            eq(schema.subscriptionPlans.ownerId, merchant.resellerId)
+          )
+        )!
+      );
+    } else {
+      publicClauses.push(
+        and(eq(schema.subscriptionPlans.ownerType, "platform"), isNull(schema.subscriptionPlans.ownerId))!
+      );
+    }
+
+    return db.query.subscriptionPlans.findMany({
+      where: and(...publicClauses),
+      orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
+      with: { edition: true },
     });
   }
 
@@ -52,6 +125,7 @@ export class SubscriptionPlansService {
     const db = getDb();
     const plan = await db.query.subscriptionPlans.findFirst({
       where: eq(schema.subscriptionPlans.id, id),
+      with: { edition: true },
     });
     if (!plan) throw new Error("Plan not found");
     return plan;
@@ -61,6 +135,7 @@ export class SubscriptionPlansService {
     const db = getDb();
     return db.query.subscriptionPlans.findFirst({
       where: eq(schema.subscriptionPlans.slug, normalizeSlug(slug)),
+      with: { edition: true },
     });
   }
 
@@ -72,6 +147,9 @@ export class SubscriptionPlansService {
 
     const existing = await this.getBySlug(slug);
     if (existing) throw new Error(`Plan slug "${slug}" already exists`);
+
+    const ownerType = input.ownerType || "platform";
+    const ownerId = ownerType === "reseller" ? input.ownerId || null : null;
 
     const [plan] = await db
       .insert(schema.subscriptionPlans)
@@ -85,13 +163,20 @@ export class SubscriptionPlansService {
             ? null
             : String(input.priceYearly),
         currency: (input.currency || "CHF").toUpperCase().slice(0, 3),
+        editionId: input.editionId || null,
         maxDevices: input.maxDevices ?? 1,
         maxProducts: input.maxProducts ?? null,
+        maxPosPosts: input.maxPosPosts ?? 0,
+        maxWaiterPosts: input.maxWaiterPosts ?? 0,
+        maxStaff: input.maxStaff ?? 0,
+        includedAddons: input.includedAddons || {},
         features: input.features || [],
         isActive: input.isActive !== false,
         isPublic: input.isPublic !== false,
         sortOrder: input.sortOrder ?? 0,
         trialDays: input.trialDays ?? 0,
+        ownerType,
+        ownerId,
       })
       .returning();
 
@@ -120,8 +205,13 @@ export class SubscriptionPlansService {
           : String(input.priceYearly);
     }
     if (input.currency !== undefined) patch.currency = input.currency.toUpperCase().slice(0, 3);
+    if (input.editionId !== undefined) patch.editionId = input.editionId || null;
     if (input.maxDevices !== undefined) patch.maxDevices = input.maxDevices;
     if (input.maxProducts !== undefined) patch.maxProducts = input.maxProducts;
+    if (input.maxPosPosts !== undefined) patch.maxPosPosts = input.maxPosPosts;
+    if (input.maxWaiterPosts !== undefined) patch.maxWaiterPosts = input.maxWaiterPosts;
+    if (input.maxStaff !== undefined) patch.maxStaff = input.maxStaff;
+    if (input.includedAddons !== undefined) patch.includedAddons = input.includedAddons;
     if (input.features !== undefined) patch.features = input.features;
     if (input.isActive !== undefined) patch.isActive = input.isActive;
     if (input.isPublic !== undefined) patch.isPublic = input.isPublic;
@@ -140,7 +230,6 @@ export class SubscriptionPlansService {
   static async remove(id: string) {
     const db = getDb();
     await this.getById(id);
-    // Soft-deactivate so payment history stays valid
     const [plan] = await db
       .update(schema.subscriptionPlans)
       .set({ isActive: false, isPublic: false, updatedAt: new Date() })
@@ -149,11 +238,19 @@ export class SubscriptionPlansService {
     return plan!;
   }
 
-  /** Seed default plans if table is empty */
   static async ensureDefaults() {
     const db = getDb();
     const existing = await db.query.subscriptionPlans.findMany({ limit: 1 });
     if (existing.length > 0) return;
+
+    const { EditionService } = await import("@/services/edition.service");
+    await EditionService.ensureDefaults();
+    const retailEdition = await db.query.editions.findFirst({
+      where: and(eq(schema.editions.ownerType, "platform"), eq(schema.editions.name, "Retail Basic")),
+    });
+    const restaurantEdition = await db.query.editions.findFirst({
+      where: and(eq(schema.editions.ownerType, "platform"), eq(schema.editions.name, "Restaurant Pro")),
+    });
 
     const defaults: PlanInput[] = [
       {
@@ -162,9 +259,13 @@ export class SubscriptionPlansService {
         description: "Get started with basic POS features",
         priceMonthly: 0,
         priceYearly: 0,
+        editionId: retailEdition?.id,
         maxDevices: 1,
         maxProducts: 50,
-        features: ["1 device", "Up to 50 products", "Online shop"],
+        maxPosPosts: 1,
+        maxWaiterPosts: 0,
+        maxStaff: 3,
+        features: ["1 POS station", "Up to 50 products", "Online shop"],
         sortOrder: 0,
       },
       {
@@ -173,9 +274,13 @@ export class SubscriptionPlansService {
         description: "For small food trucks and cafés",
         priceMonthly: 49,
         priceYearly: 490,
+        editionId: restaurantEdition?.id,
         maxDevices: 2,
         maxProducts: 200,
-        features: ["2 devices", "Up to 200 products", "Online shop", "Loyalty"],
+        maxPosPosts: 2,
+        maxWaiterPosts: 2,
+        maxStaff: 5,
+        features: ["2 POS stations", "2 waiter devices", "Up to 200 products", "Online shop", "Loyalty"],
         sortOrder: 10,
       },
       {
@@ -184,9 +289,14 @@ export class SubscriptionPlansService {
         description: "Growing restaurants with multi-device needs",
         priceMonthly: 99,
         priceYearly: 990,
+        editionId: restaurantEdition?.id,
         maxDevices: 5,
         maxProducts: null,
-        features: ["5 devices", "Unlimited products", "Floor plan", "Priority support"],
+        maxPosPosts: 5,
+        maxWaiterPosts: 5,
+        maxStaff: 15,
+        includedAddons: { kds: true },
+        features: ["5 POS stations", "5 waiter devices", "Unlimited products", "KDS included", "Priority support"],
         sortOrder: 20,
       },
       {
@@ -195,9 +305,14 @@ export class SubscriptionPlansService {
         description: "Multi-location and custom requirements",
         priceMonthly: 199,
         priceYearly: 1990,
+        editionId: restaurantEdition?.id,
         maxDevices: 25,
         maxProducts: null,
-        features: ["25 devices", "Unlimited products", "Dedicated support", "Custom SLA"],
+        maxPosPosts: 0,
+        maxWaiterPosts: 0,
+        maxStaff: 0,
+        includedAddons: { inventory: true, signage: true, kds: true, ods: true, signageScreenLimit: 5 },
+        features: ["Unlimited stations", "All add-ons included", "Dedicated support"],
         sortOrder: 30,
       },
     ];
