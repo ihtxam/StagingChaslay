@@ -20,7 +20,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.8.2";
+const VERSION = "1.8.3";
 const APP_NAME = "RebornPrintAgent";
 const LEGACY_APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "reborn-print-agent.exe";
@@ -610,7 +610,7 @@ async function listPrinters() {
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
 $items = Get-CimInstance -ClassName Win32_Printer | Where-Object {
-  $_.WorkOffline -ne $true -and [int]$_.PrinterStatus -ne 7
+  $_.WorkOffline -ne $true -and [int]$_.PrinterStatus -ne 7 -and [int]$_.PrinterStatus -ne 2
 } | ForEach-Object {
   $hint = [regex]::Replace([string]$_.Name, '\s*\(COM\d+\)\s*', ' ')
   $hint = $hint.Trim()
@@ -700,7 +700,14 @@ async function resolvePrinterName(requested) {
   return scored[0] ? scored[0].p.name : want;
 }
 
-async function printRaw({ printerName, dataBase64 }) {
+function normalizeBtSlowMode(value) {
+  const raw = String(value || "auto").trim().toLowerCase();
+  if (raw === "on" || raw === "true" || raw === "1") return "on";
+  if (raw === "off" || raw === "false" || raw === "0") return "off";
+  return "auto";
+}
+
+async function printRaw({ printerName, dataBase64, btSlowMode }) {
   if (!isWindows()) {
     throw new Error("Reborn Print Agent supports Windows only.");
   }
@@ -720,6 +727,10 @@ async function printRaw({ printerName, dataBase64 }) {
   }
 
   const bytes = Buffer.from(dataBase64, "base64");
+  const slowMode = normalizeBtSlowMode(btSlowMode);
+  console.log(
+    `[print-agent] print ${bytes.length} bytes -> ${name || "default"} (btSlowMode=${slowMode})`
+  );
   // 1.6.0+: reborn-print-* (older installed EXEs still used manupos-print-*).
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-print-"));
   const tmpFile = path.join(tmpDir, "receipt.bin");
@@ -732,7 +743,7 @@ async function printRaw({ printerName, dataBase64 }) {
       throw new Error(`win-raw-print.ps1 not found at ${scriptPath}`);
     }
     // Pass printer name via UTF-8 file (not argv) so OpenPrinterW gets real Unicode.
-    const args = ["-FilePath", tmpFile];
+    const args = ["-FilePath", tmpFile, "-BtSlowMode", slowMode];
     if (name) {
       // UTF-8 BOM so PowerShell/.NET always detect UTF-8 (accents/dashes intact).
       const bom = Buffer.from([0xef, 0xbb, 0xbf]);
@@ -786,6 +797,7 @@ function startServer() {
         "virtual-printer-guard",
         "device-name-match",
         "bt-com-chunked-raw",
+        "bt-com-cut-split",
       ],
     });
   });
@@ -803,7 +815,10 @@ function startServer() {
 
   app.post("/print", async (req, res) => {
     try {
-      const usedPrinter = await printRaw(req.body || {});
+      const usedPrinter = await printRaw({
+        ...(req.body || {}),
+        btSlowMode: (req.body && req.body.btSlowMode) || "auto",
+      });
       res.json({
         ok: true,
         printer: usedPrinter,

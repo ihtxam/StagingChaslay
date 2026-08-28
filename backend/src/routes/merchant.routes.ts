@@ -1305,7 +1305,7 @@ router.post("/orders/:orderId/cancel", async (req: Request, res: Response) => {
  * GET /api/merchant/customers
  * Get all customers
  */
-router.get("/customers", async (req: Request, res: Response) => {
+router.get("/customers", requirePermission("MANAGE_CUSTOMERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     const page = parseInt(req.query.page as string) || 1;
@@ -1333,7 +1333,7 @@ router.get("/customers", async (req: Request, res: Response) => {
  * POST /api/merchant/customers
  * Create customer
  */
-router.post("/customers", async (req: Request, res: Response) => {
+router.post("/customers", requirePermission("MANAGE_CUSTOMERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     const { email, phone, firstName, lastName, defaultAddress, defaultZip, defaultCity, name } =
@@ -1383,7 +1383,7 @@ router.post("/customers", async (req: Request, res: Response) => {
  * GET /api/merchant/customers/:customerId
  * Get customer details
  */
-router.get("/customers/:customerId", async (req: Request, res: Response) => {
+router.get("/customers/:customerId", requirePermission("MANAGE_CUSTOMERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     const { customerId } = req.params;

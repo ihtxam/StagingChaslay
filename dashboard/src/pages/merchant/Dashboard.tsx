@@ -68,6 +68,9 @@ import {
   isStorekeeperOnlyStaff,
   isStorekeeperRestrictedStaff,
   isStorekeeperPanelPath,
+  isWaiterRestrictedStaff,
+  isWaiterPanelPath,
+  waiterRestrictedHomePath,
   isFloorWaiterStaff,
   storekeeperHomePath,
   isOrdersPanelPath,
@@ -228,6 +231,10 @@ function MerchantShell() {
 
   const storekeeperRestricted = useMemo(
     () => !jwtIsOwner && isStorekeeperRestrictedStaff(effective.permissions, false),
+    [jwtIsOwner, effective.permissions]
+  );
+  const waiterRestricted = useMemo(
+    () => !jwtIsOwner && isWaiterRestrictedStaff(effective.permissions, false),
     [jwtIsOwner, effective.permissions]
   );
   const hideChrome =
@@ -479,6 +486,15 @@ function MerchantShell() {
     navigate,
   ]);
 
+  // Waiter staff without full panel access — waiter app and optional menu/orders only.
+  useEffect(() => {
+    if (jwtIsOwner || user?.role !== 'staff') return;
+    const perms = effective.permissions;
+    if (!isWaiterRestrictedStaff(perms, false)) return;
+    if (isWaiterPanelPath(location.pathname, perms)) return;
+    navigate(waiterRestrictedHomePath(perms), { replace: true });
+  }, [jwtIsOwner, user?.role, effective.permissions, location.pathname, navigate]);
+
   // Floor waiters (and POS-destination staff) cannot browse the manager panel.
   useEffect(() => {
     if (jwtIsOwner || user?.role !== 'staff') return;
@@ -598,6 +614,36 @@ function MerchantShell() {
       return false;
     });
 
+  const waiterMenuItems = [
+    ...(hasPermission(effective.permissions, 'MANAGE_TABLES', false)
+      ? [{ label: t('waiterAppTitle'), path: '/merchant/waiter', icon: '🍽️' }]
+      : []),
+    ...(allow('/merchant/orders')
+      ? [{ label: t('orders'), path: '/merchant/orders', icon: '📦' }]
+      : []),
+    ...(allow('/merchant/products')
+      ? [
+          {
+            id: 'catalog',
+            label: t('navCatalog'),
+            icon: '🛍️',
+            children: fullMenuItems
+              .find((entry) => 'id' in entry && entry.id === 'catalog')
+              ?.children?.filter((item) => {
+                const path = 'path' in item ? item.path : '';
+                return path && allow(path);
+              }),
+          },
+        ].filter((entry) => (entry.children?.length ?? 0) > 0)
+      : []),
+  ].filter((entry) => {
+    if ('children' in entry && Array.isArray(entry.children)) {
+      return entry.children.length > 0;
+    }
+    if (entry.path) return allow(entry.path);
+    return false;
+  });
+
   const menuItems = storekeeperRestricted
     ? [
         ...(allowStorekeeper('/merchant/storekeeper')
@@ -626,7 +672,11 @@ function MerchantShell() {
         if (entry.path) return allow(entry.path);
         return false;
       })
-    : fullMenuItems;
+    : waiterRestricted
+      ? waiterMenuItems
+      : fullMenuItems;
+
+  const panelChromeRestricted = storekeeperRestricted || waiterRestricted;
 
   return (
     <div className={`flex h-full max-h-full panel-shell${hideChrome ? ' webpos-app-mode' : ''}`}>
@@ -647,17 +697,17 @@ function MerchantShell() {
           onLanguageChange={changeLanguage}
           profileMenu={{
             settingsPath:
-              !storekeeperRestricted && allow('/merchant/settings')
+              !panelChromeRestricted && allow('/merchant/settings')
                 ? '/merchant/settings'
                 : undefined,
             billingPath:
-              !storekeeperRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
+              !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
             supportPath:
-              !storekeeperRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
+              !panelChromeRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
           }}
           shopName={merchantShopName}
           shopPath={
-            !storekeeperRestricted && allow('/merchant/platform-shop')
+            !panelChromeRestricted && allow('/merchant/platform-shop')
               ? '/merchant/platform-shop'
               : null
           }

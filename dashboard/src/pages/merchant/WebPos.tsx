@@ -79,6 +79,7 @@ import {
   listAgentPrinters,
   printViaAgent,
   reconcilePosPrinterProfiles,
+  reconcileAndPrunePosPrinterProfiles,
   resolveAgentPrinterName,
   suggestPrinterAutoHeal,
   unsuitableRawPrinterMessage,
@@ -1833,7 +1834,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       setPrintSettings((ps) => {
         if (!ps?.printers?.length) return ps;
-        const { profiles, changed } = reconcilePosPrinterProfiles(ps.printers, list);
+        const { profiles, changed } = reconcileAndPrunePosPrinterProfiles(ps.printers, list);
         if (!changed) return ps;
         const next = { ...ps, printers: profiles };
         void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);

@@ -288,6 +288,43 @@ export function isStorekeeperRestrictedStaff(
   return true;
 }
 
+/**
+ * Floor waiters without full panel access — waiter/POS app and (optionally) menu or
+ * orders only. Never CMS, inventory, clients, or settings.
+ */
+export function isWaiterRestrictedStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  if (!hasPermission(permissions, 'MANAGE_TABLES', false)) return false;
+  if (hasPermission(permissions, 'ACCESS_PANEL', false)) return false;
+  return !hasFullPanelAccess(permissions, false);
+}
+
+export function isWaiterPanelPath(
+  pathname: string,
+  permissions: Permission[] | undefined
+): boolean {
+  const path = pathname.replace(/\/$/, '') || '/merchant';
+  if (path === '/merchant/waiter' || path.startsWith('/merchant/waiter/')) return true;
+  if (path === '/merchant/pos' || path.startsWith('/merchant/pos/')) return true;
+  if (hasPermission(permissions, 'MANAGE_PRODUCTS', false) && isCatalogPanelPath(path)) {
+    return true;
+  }
+  if (hasPermission(permissions, 'VIEW_ORDER_HISTORY', false) && isOrdersPanelPath(path)) {
+    return true;
+  }
+  return false;
+}
+
+export function waiterRestrictedHomePath(permissions: Permission[] | undefined): string {
+  if (hasPermission(permissions, 'MANAGE_PRODUCTS', false)) return '/merchant/products';
+  if (hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return '/merchant/orders';
+  if (hasPermission(permissions, 'MANAGE_TABLES', false)) return '/merchant/waiter';
+  return '/merchant/pos';
+}
+
 export function isStorekeeperPanelPath(
   pathname: string,
   permissions: Permission[] | undefined
@@ -329,14 +366,17 @@ export function jwtHasPanelAccess(
   );
 }
 
-/** Floor waiter — tables/POS only, no merchant back office. */
+/** Floor waiter — tables/POS only, no merchant back office (pos-only template). */
 export function isFloorWaiterStaff(
   permissions: Permission[] | undefined,
   isOwner = false
 ): boolean {
   if (isOwner) return false;
-  if (!hasPermission(permissions, 'MANAGE_TABLES', false)) return false;
-  return !jwtHasPanelAccess(permissions, false, 'staff');
+  if (!isWaiterRestrictedStaff(permissions, false)) return false;
+  return (
+    !hasPermission(permissions, 'MANAGE_PRODUCTS', false) &&
+    !hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)
+  );
 }
 
 /** Staff may open merchant back office only when login destination allows panel access. */
@@ -349,6 +389,12 @@ export function canStaffOpenBackOffice(
   if (normalizeStaffLoginHome(loginHome) === 'pos') return false;
   if (isFloorWaiterStaff(permissions, false)) return false;
   if (isStorekeeperRestrictedStaff(permissions, false)) return false;
+  if (isWaiterRestrictedStaff(permissions, false)) {
+    return (
+      hasPermission(permissions, 'MANAGE_PRODUCTS', false) ||
+      hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)
+    );
+  }
   return jwtHasPanelAccess(permissions, false, 'staff');
 }
 

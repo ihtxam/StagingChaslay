@@ -50,6 +50,7 @@ import {
   listAgentPrinters,
   listScaleDevices,
   reconcilePosPrinterProfiles,
+  reconcileAndPrunePosPrinterProfiles,
   type AgentPrinter,
   type ScaleDevice,
 } from '@/lib/print-agent';
@@ -234,6 +235,7 @@ interface SettingsData {
     kitchenPrintRetryEnabled?: boolean;
     kitchenPrintRetryAttempts?: number;
     kitchenPrintRetryIntervalSec?: number;
+    bluetoothPrinterSlowMode?: boolean;
     scaleComPort?: string | null;
     scaleDeviceName?: string | null;
     scaleDeviceId?: string | null;
@@ -1024,15 +1026,19 @@ export default function Settings() {
       setAgentPrinters(list);
       setSettings((prev) => {
         if (!prev?.posPrintSettings?.printers?.length) return prev;
-        const { profiles, changed } = reconcilePosPrinterProfiles(
+        const { profiles, changed } = reconcileAndPrunePosPrinterProfiles(
           prev.posPrintSettings.printers,
           list
         );
         if (!changed) return prev;
-        return {
+        const nextSettings = {
           ...prev,
           posPrintSettings: { ...prev.posPrintSettings, printers: profiles },
         };
+        void api
+          .put('/merchant/settings', { posPrintSettings: nextSettings.posPrintSettings })
+          .catch(() => undefined);
+        return nextSettings;
       });
     } catch {
       setPrintAgentOk(false);
@@ -1295,6 +1301,7 @@ export default function Settings() {
           60,
           Math.max(2, Number(ps.kitchenPrintRetryIntervalSec) || 5)
         ),
+        bluetoothPrinterSlowMode: ps.bluetoothPrinterSlowMode === true,
         scaleComPort: ps.scaleComPort?.trim() || null,
         scaleDeviceName: ps.scaleDeviceName?.trim() || null,
         scaleDeviceId: ps.scaleDeviceId?.trim() || null,
@@ -3838,6 +3845,28 @@ export default function Settings() {
                       </label>
                     </div>
                   ) : null}
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.posPrintSettings?.bluetoothPrinterSlowMode === true}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            bluetoothPrinterSlowMode: e.target.checked,
+                          },
+                        })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{t('bluetoothPrinterSlowMode')}</span>
+                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                        {t('bluetoothPrinterSlowModeHint')}
+                      </span>
+                    </span>
+                  </label>
                 </div>
                 <label className="mt-3 flex items-start gap-2 text-sm">
                   <input

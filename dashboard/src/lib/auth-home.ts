@@ -6,7 +6,9 @@ import {
   hasPermission,
   isDeliveryDriverOnlyStaff,
   isStorekeeperOnlyStaff,
+  isWaiterRestrictedStaff,
   storekeeperHomePath,
+  waiterRestrictedHomePath,
   type Permission,
 } from '@/lib/permissions';
 import { normalizeStaffLoginHome, type StaffLoginHome } from '@/lib/staff-login-home';
@@ -25,6 +27,9 @@ export function homePathForUser(
   if (loginHome === 'panel') {
     if (isDeliveryDriverOnlyStaff(perms, user.isOwner === true)) return deliveryDriverHomePath();
     if (isStorekeeperOnlyStaff(perms, user.isOwner === true)) return storekeeperHomePath();
+    if (isWaiterRestrictedStaff(perms, user.isOwner === true)) {
+      return waiterRestrictedHomePath(perms);
+    }
     const hasCatalogOrOrders =
       hasPermission(perms, 'MANAGE_PRODUCTS', false) ||
       hasPermission(perms, 'VIEW_ORDER_HISTORY', false);
@@ -46,6 +51,9 @@ export function homePathForUser(
 
   if (isDeliveryDriverOnlyStaff(perms, user.isOwner === true)) return deliveryDriverHomePath();
   if (isStorekeeperOnlyStaff(perms, user.isOwner === true)) return storekeeperHomePath();
+  if (isWaiterRestrictedStaff(perms, user.isOwner === true)) {
+    return waiterRestrictedHomePath(perms);
+  }
   if (hasFullPanelAccess(perms, user.isOwner === true)) return '/merchant';
   if (hasPermission(perms, 'USE_WEBPOS', false)) return '/merchant/pos';
   if (hasPermission(perms, 'MANAGE_TABLES', false)) return '/merchant/waiter';

@@ -186,6 +186,8 @@ export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinte
   for (const p of printers) {
     const name = String(p.name || '').trim();
     if (!name || seen.has(name)) continue;
+    const status = String(p.status || '').trim();
+    if (status === '7') continue;
     seen.add(name);
     out.push({
       ...p,
@@ -242,6 +244,32 @@ export function reconcilePosPrinterProfiles<T extends PosPrinterProfileLike>(
     return { ...p, name: '' };
   });
   return { profiles: next, changed };
+}
+
+/** Drop saved profiles that no longer map to a live Windows queue. */
+export function prunePosPrinterProfiles<T extends PosPrinterProfileLike>(
+  profiles: T[],
+  livePrinters: AgentPrinter[]
+): { profiles: T[]; changed: boolean } {
+  const next = profiles.filter((p) => {
+    const name = String(p.name || '').trim();
+    if (!name) return false;
+    return !!resolveAgentPrinterName(name, livePrinters);
+  });
+  return { profiles: next, changed: next.length !== profiles.length };
+}
+
+/** Reconcile names against live printers, then remove profiles with no matching queue. */
+export function reconcileAndPrunePosPrinterProfiles<T extends PosPrinterProfileLike>(
+  profiles: T[],
+  livePrinters: AgentPrinter[]
+): { profiles: T[]; changed: boolean } {
+  const reconciled = reconcilePosPrinterProfiles(profiles, livePrinters);
+  const pruned = prunePosPrinterProfiles(reconciled.profiles, livePrinters);
+  return {
+    profiles: pruned.profiles,
+    changed: reconciled.changed || pruned.changed,
+  };
 }
 
 /** Agent is up but the stored Windows name is gone (rename / 1801). */
@@ -489,10 +517,29 @@ export type PrintViaAgentResult = {
   printer?: string;
 };
 
+export type BtSlowMode = 'auto' | 'on' | 'off';
+
+const MERCHANT_AUTOPRINT_CACHE_KEY = 'manupos_merchant_autoprint_cache';
+
+/** Resolve Bluetooth/COM slow print mode for the Windows print agent. */
+export function resolveBtSlowMode(explicit?: BtSlowMode): BtSlowMode {
+  if (explicit === 'on' || explicit === 'off') return explicit;
+  try {
+    const raw = localStorage.getItem(MERCHANT_AUTOPRINT_CACHE_KEY);
+    if (!raw) return 'auto';
+    const parsed = JSON.parse(raw) as { bluetoothPrinterSlowMode?: boolean };
+    if (parsed.bluetoothPrinterSlowMode === true) return 'on';
+  } catch {
+    /* ignore */
+  }
+  return 'auto';
+}
+
 export async function printViaAgent(opts: {
   printerName?: string;
   dataBase64: string;
   text?: string;
+  btSlowMode?: BtSlowMode;
 }): Promise<PrintViaAgentResult> {
   const name = opts.printerName?.trim() || '';
   if (name && isUnsuitableRawPrinter(name)) {
@@ -522,6 +569,7 @@ export async function printViaAgent(opts: {
         printerName: opts.printerName || undefined,
         dataBase64: opts.dataBase64,
         text: opts.text,
+        btSlowMode: resolveBtSlowMode(opts.btSlowMode),
       }),
     },
     name

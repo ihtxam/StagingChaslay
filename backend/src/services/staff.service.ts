@@ -4,6 +4,7 @@ import { AuthService } from "@/services/auth.service";
 import {
   ALL_PERMISSIONS,
   DEFAULT_ROLE_TEMPLATES,
+  applyRolePermissionPolicy,
   encodePermissions,
   hasAnyPermission,
   parsePermissions,
@@ -330,7 +331,7 @@ export class StaffService {
         email: s.email,
         roleId: s.roleId,
         roleName: role?.name || "Unknown",
-        permissions: parsePermissions(role?.permissions),
+        permissions: applyRolePermissionPolicy(role?.name || "Unknown", parsePermissions(role?.permissions)),
         canAccessPanel: s.canAccessPanel,
         isActive: s.isActive,
         pinSet: !!s.pinHash,
@@ -609,7 +610,10 @@ export class StaffService {
     const role = await db.query.merchantRoles.findFirst({
       where: eq(schema.merchantRoles.id, staff.roleId),
     });
-    const permissions = parsePermissions(role?.permissions);
+    const permissions = applyRolePermissionPolicy(
+      role?.name || "Staff",
+      parsePermissions(role?.permissions)
+    );
     const accessToken = AuthService.generateToken({
       id: staff.id,
       email: staff.email || `${staff.id}@pin.local`,
@@ -648,7 +652,10 @@ export class StaffService {
     const role = await db.query.merchantRoles.findFirst({
       where: eq(schema.merchantRoles.id, staff.roleId),
     });
-    const permissions = parsePermissions(role?.permissions);
+    const permissions = applyRolePermissionPolicy(
+      role?.name || "Staff",
+      parsePermissions(role?.permissions)
+    );
 
     return {
       id: staff.id,
@@ -730,7 +737,10 @@ export class StaffService {
     const role = await db.query.merchantRoles.findFirst({
       where: eq(schema.merchantRoles.id, staff.roleId),
     });
-    const permissions = parsePermissions(role?.permissions);
+    const permissions = applyRolePermissionPolicy(
+      role?.name || "Staff",
+      parsePermissions(role?.permissions)
+    );
     if (!hasAnyPermission(permissions, STAFF_MERCHANT_ENTRY_PERMISSIONS)) {
       throw new Error(this.NO_ENTRY_PERMISSION_MESSAGE);
     }
@@ -774,7 +784,7 @@ export class StaffService {
       email: staff.email,
       roleId: staff.roleId,
       roleName: role.name,
-      permissions: parsePermissions(role.permissions),
+      permissions: applyRolePermissionPolicy(role.name, parsePermissions(role.permissions)),
       canAccessPanel: staff.canAccessPanel,
       isActive: staff.isActive,
       pinSet: !!staff.pinHash,

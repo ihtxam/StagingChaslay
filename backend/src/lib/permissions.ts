@@ -321,3 +321,84 @@ const STOREKEEPER_PRIVILEGED_BLOCKED: Permission[] = [
 export function storekeeperBlockedPermissions(): Permission[] {
   return [...STOREKEEPER_PRIVILEGED_BLOCKED];
 }
+
+/** Full merchant panel (Sales overview, CMS, users, billing) — not catalog/orders-only. */
+export const FULL_PANEL_PERMISSIONS: Permission[] = [
+  "ACCESS_PANEL",
+  "VIEW_REPORTS",
+  "MANAGE_SETTINGS",
+  "MANAGE_STAFF",
+  "MANAGE_BILLING",
+  "MANAGE_CUSTOMERS",
+  "MANAGE_ONLINE_SHOP",
+  "MANAGE_OFFERS",
+  "MANAGE_INVENTORY",
+  "MANAGE_ROLES",
+  "VIEW_ALL_SALES",
+  "END_OF_DAY",
+];
+
+export function hasFullPanelAccess(
+  granted: readonly string[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return true;
+  return FULL_PANEL_PERMISSIONS.some((p) => hasPermission(granted, p));
+}
+
+/**
+ * Floor waiters (system Waiter templates) without ACCESS_PANEL — POS/waiter app
+ * and optional menu/orders, never CMS, inventory, settings, or clients.
+ */
+export function isWaiterRestrictedStaff(
+  granted: readonly string[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  if (!hasPermission(granted, "MANAGE_TABLES")) return false;
+  if (hasPermission(granted, "ACCESS_PANEL")) return false;
+  return !hasFullPanelAccess(granted, false);
+}
+
+export function isWaiterPanelPath(pathname: string, granted: readonly string[] | undefined): boolean {
+  const path = pathname.replace(/\/$/, "") || "/merchant";
+  if (path === "/merchant/waiter" || path.startsWith("/merchant/waiter/")) return true;
+  if (path === "/merchant/pos" || path.startsWith("/merchant/pos/")) return true;
+  if (hasPermission(granted, "MANAGE_PRODUCTS")) {
+    if (
+      path === "/merchant/products" ||
+      path.startsWith("/merchant/products/") ||
+      path === "/merchant/categories" ||
+      path.startsWith("/merchant/categories/") ||
+      path === "/merchant/modifiers" ||
+      path.startsWith("/merchant/modifiers/")
+    ) {
+      return true;
+    }
+  }
+  if (hasPermission(granted, "VIEW_ORDER_HISTORY")) {
+    if (path === "/merchant/orders" || path.startsWith("/merchant/orders/")) return true;
+  }
+  return false;
+}
+
+export function waiterRestrictedHomePath(granted: readonly string[] | undefined): string {
+  if (hasPermission(granted, "MANAGE_PRODUCTS")) return "/merchant/products";
+  if (hasPermission(granted, "VIEW_ORDER_HISTORY")) return "/merchant/orders";
+  if (hasPermission(granted, "MANAGE_TABLES")) return "/merchant/waiter";
+  return "/merchant/pos";
+}
+
+/** Strip privileged permissions from system Waiter roles before issuing JWTs. */
+export function applyRolePermissionPolicy(roleName: string, permissions: Permission[]): Permission[] {
+  const kind = waiterSystemKind(roleName);
+  if (kind) {
+    const blocked = new Set(waiterBlockedPermissions(kind));
+    return permissions.filter((p) => !blocked.has(p));
+  }
+  if (roleName.trim().toLowerCase() === "storekeeper") {
+    const blocked = new Set(storekeeperBlockedPermissions());
+    return permissions.filter((p) => !blocked.has(p));
+  }
+  return permissions;
+}
