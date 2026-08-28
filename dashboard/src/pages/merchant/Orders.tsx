@@ -8,6 +8,7 @@ import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
   canAdminCollectPayment,
+  canCancelOrder,
   canCollectPayment,
   canMarkReadyOrder,
   showsKitchenFulfillmentStages,
@@ -44,7 +45,6 @@ import WebPosRefundPrintPromptModal from '@/components/webpos/WebPosRefundPrintP
 import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import {
   settingsDash,
-  SettingsReportCard,
 } from '@/components/settings/SettingsReportUi';
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
@@ -189,6 +189,44 @@ function canRefundMerchantOrder(o: MerchantOrder): boolean {
     o.paymentStatus === 'paid' ||
     o.paymentStatus === 'partially_refunded'
   );
+}
+
+function orderStatusNorm(status?: string | null): string {
+  return String(status || '')
+    .toLowerCase()
+    .trim()
+    .replace(/-/g, '_');
+}
+
+function isOpenOnlineFulfillment(o: MerchantOrder): boolean {
+  if (!isOnlineShopOrder(o)) return false;
+  const status = orderStatusNorm(o.status);
+  return !['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status);
+}
+
+function isUnpaidOnlineOrder(o: MerchantOrder): boolean {
+  if (isPaidOrder(o)) return false;
+  const pay = orderStatusNorm(o.paymentStatus);
+  const method = String(o.paymentMethod || '')
+    .toLowerCase()
+    .replace(/-/g, '_');
+  return (
+    pay === 'awaiting_payment' ||
+    method === 'pay_later' ||
+    method === 'invoice' ||
+    pay === 'cash'
+  );
+}
+
+function canShowCollectPayment(o: MerchantOrder): boolean {
+  if (isOnlineShopOrder(o)) return canCollectPayment(o);
+  return canAdminCollectPayment(o);
+}
+
+function canFinalizeOnlineHandoff(o: MerchantOrder): boolean {
+  if (!isOpenOnlineFulfillment(o)) return false;
+  const status = orderStatusNorm(o.status);
+  return status === 'ready' || status === 'out_for_delivery';
 }
 
 type InvoicePayFilter = 'all' | 'unpaid' | 'paid';
@@ -1094,7 +1132,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
             className="flex h-full w-full max-w-md flex-col bg-[var(--bg-elevated)] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3.5">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3.5">
               <div className="min-w-0">
                 <h2 className="truncate text-base font-extrabold">
                   {formatOrderNumberDisplay(selected.orderNumber) || selected.id.slice(0, 8)}
@@ -1252,32 +1290,47 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   </span>
                 ) : null}
               </p>
+            </div>
 
-              <SettingsReportCard icon={ShoppingBag} accent={settingsDash.accent} title={t('ordersActionsTitle')}>
-                <div className="space-y-2">
-                  {isInvoiceOrder(selected) ? (
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <button
-                        type="button"
-                        disabled={pdfBusy}
-                        onClick={() => void openInvoice(selected, 'view')}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
-                      >
-                        <FileText size={16} />
-                        {t('webPosViewInvoice')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={pdfBusy}
-                        onClick={() => void openInvoice(selected, 'download')}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-sm font-semibold text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
-                      >
-                        <Download size={16} />
-                        {t('webPosDownloadInvoice')}
-                      </button>
-                    </div>
-                  ) : null}
-                  {isAwaitingApproval(selected.status) ? (
+            <div className="shrink-0 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3.5">
+              <div className="mb-2.5 flex items-center gap-2">
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: `${settingsDash.accent}22` }}
+                >
+                  <ShoppingBag className="h-4 w-4" style={{ color: settingsDash.accent }} aria-hidden />
+                </div>
+                <h3 className="text-sm font-extrabold tracking-tight text-[var(--text)]">
+                  {t('ordersActionsTitle')}
+                </h3>
+              </div>
+              <div className="max-h-[min(42vh,20rem)] space-y-2 overflow-y-auto">
+                {!isHeldListRow(selected) && isInvoiceOrder(selected) ? (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      disabled={pdfBusy}
+                      onClick={() => void openInvoice(selected, 'view')}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                    >
+                      <FileText size={16} />
+                      {t('webPosViewInvoice')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pdfBusy}
+                      onClick={() => void openInvoice(selected, 'download')}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-sm font-semibold text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
+                    >
+                      <Download size={16} />
+                      {t('webPosDownloadInvoice')}
+                    </button>
+                  </div>
+                ) : null}
+                {!isHeldListRow(selected) &&
+                isOpenOnlineFulfillment(selected) &&
+                isAwaitingApproval(orderStatusNorm(selected.status)) ? (
+                  <>
                     <button
                       type="button"
                       disabled={actionBusy}
@@ -1286,59 +1339,41 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                     >
                       {t('webPosAcceptOrder')}
                     </button>
-                  ) : null}
-                  {canMarkReadyOrder(selected) ? (
                     <button
                       type="button"
                       disabled={actionBusy}
-                      onClick={() => void runOrderAction(selected, 'mark_ready')}
-                      className="inline-flex w-full items-center justify-center rounded-lg bg-violet-800 px-3 py-2.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
+                      onClick={() => void runOrderAction(selected, 'reject')}
+                      className="inline-flex w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                     >
-                      {t('webPosMarkReady')}
+                      {t('webPosRejectOrder')}
                     </button>
-                  ) : null}
-                  {showsKitchenFulfillmentStages(selected) &&
-                  selected.status === 'ready' &&
-                  (selected.fulfillmentChannel || selected.channel) === 'delivery' ? (
-                    <button
-                      type="button"
-                      disabled={actionBusy}
-                      onClick={() => void runOrderAction(selected, 'out_for_delivery')}
-                      className="inline-flex w-full items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
-                    >
-                      {t('ordersActionSendDelivery')}
-                    </button>
-                  ) : null}
-                  {isOnlineShopOrder(selected) &&
-                  isPaidOrder(selected) &&
-                  (selected.status === 'ready' || selected.status === 'out_for_delivery') ? (
-                    <button
-                      type="button"
-                      disabled={actionBusy}
-                      onClick={() => void runOrderAction(selected, 'complete')}
-                      className="inline-flex w-full items-center justify-center rounded-lg bg-stone-800 px-3 py-2.5 text-sm font-bold text-white hover:bg-stone-900 disabled:opacity-50"
-                    >
-                      {t('webPosCompleteOrder')}
-                    </button>
-                  ) : null}
-                  {(isOnlineShopOrder(selected)
-                    ? canCollectPayment(selected)
-                    : canAdminCollectPayment(selected)) ? (
-                    isInvoiceOrder(selected) ? (
-                      <div className="space-y-1.5">
-                        <button
-                          type="button"
-                          disabled={actionBusy}
-                          onClick={() => void recordInvoicePaid(selected)}
-                          className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
-                        >
-                          {t('webPosInvoiceMarkPaid')} · CHF {Number(selected.total || 0).toFixed(2)}
-                        </button>
-                        <p className="text-[11px] text-[var(--text-muted)]">
-                          {t('webPosInvoiceMarkPaidHint')}
-                        </p>
-                      </div>
-                    ) : (
+                  </>
+                ) : null}
+                {!isHeldListRow(selected) && canMarkReadyOrder(selected) ? (
+                  <button
+                    type="button"
+                    disabled={actionBusy}
+                    onClick={() => void runOrderAction(selected, 'mark_ready')}
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-violet-800 px-3 py-2.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
+                  >
+                    {t('webPosMarkReady')}
+                  </button>
+                ) : null}
+                {!isHeldListRow(selected) &&
+                showsKitchenFulfillmentStages(selected) &&
+                orderStatusNorm(selected.status) === 'ready' &&
+                orderChannel(selected) === 'delivery' ? (
+                  <button
+                    type="button"
+                    disabled={actionBusy}
+                    onClick={() => void runOrderAction(selected, 'out_for_delivery')}
+                    className="inline-flex w-full items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                  >
+                    {t('ordersActionSendDelivery')}
+                  </button>
+                ) : null}
+                {!isHeldListRow(selected) && canFinalizeOnlineHandoff(selected) ? (
+                  isUnpaidOnlineOrder(selected) || canCollectPayment(selected) ? (
                     <>
                       <button
                         type="button"
@@ -1379,29 +1414,107 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                         </div>
                       ) : null}
                     </>
-                    )
-                  ) : null}
-                  <button
-                    type="button"
-                    disabled={printing}
-                    onClick={() => void doPrint(selected)}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
-                  >
-                    <Printer size={16} />
-                    {t('webPosPrintReceipt')}
-                  </button>
-                  {!showingInvoices && canRefundMerchantOrder(selected) ? (
+                  ) : (
                     <button
                       type="button"
-                      disabled={refundBusy}
-                      onClick={() => setRefundFor(selected)}
-                      className="inline-flex w-full items-center justify-center rounded-lg bg-rose-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+                      disabled={actionBusy}
+                      onClick={() => void runOrderAction(selected, 'complete')}
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-stone-800 px-3 py-2.5 text-sm font-bold text-white hover:bg-stone-900 disabled:opacity-50"
                     >
-                      {t('webPosRefund')}
+                      {t('webPosCompleteOrder')}
                     </button>
-                  ) : null}
-                </div>
-              </SettingsReportCard>
+                  )
+                ) : null}
+                {!isHeldListRow(selected) && !canFinalizeOnlineHandoff(selected) && canShowCollectPayment(selected) ? (
+                  isInvoiceOrder(selected) ? (
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        disabled={actionBusy}
+                        onClick={() => void recordInvoicePaid(selected)}
+                        className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {t('webPosInvoiceMarkPaid')} · CHF {Number(selected.total || 0).toFixed(2)}
+                      </button>
+                      <p className="text-[11px] text-[var(--text-muted)]">
+                        {t('webPosInvoiceMarkPaidHint')}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        disabled={actionBusy}
+                        onClick={() => setCollectOpen((v) => !v)}
+                        className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {t('webPosCollectNow')} · CHF {Number(selected.total || 0).toFixed(2)}
+                      </button>
+                      {collectOpen ? (
+                        <div className="space-y-1.5 rounded-lg border border-[var(--border)] p-2">
+                          <p className="text-[11px] text-[var(--text-muted)]">
+                            {t('webPosCollectNowHint')}
+                          </p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {(['cash', 'card', 'terminal', 'bank_transfer'] as const).map((method) => (
+                              <button
+                                key={method}
+                                type="button"
+                                disabled={actionBusy}
+                                onClick={() =>
+                                  void runOrderAction(selected, collectPaymentAction(selected.status), {
+                                    paymentMethod: method,
+                                  })
+                                }
+                                className="rounded-md border border-[var(--border)] px-2 py-1.5 text-xs font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                              >
+                                {method === 'cash'
+                                  ? t('webPosCash')
+                                  : method === 'card'
+                                    ? t('webPosCard')
+                                    : method === 'terminal'
+                                      ? t('webPosTerminal')
+                                      : t('webPosBankTransfer')}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  )
+                ) : null}
+                {!isHeldListRow(selected) &&
+                canCancelOrder(selected) &&
+                !isAwaitingApproval(orderStatusNorm(selected.status)) ? (
+                  <button
+                    type="button"
+                    disabled={actionBusy}
+                    onClick={() => void runOrderAction(selected, 'cancel')}
+                    className="inline-flex w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                  >
+                    {t('webPosCancelOrder')}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={printing}
+                  onClick={() => void doPrint(selected)}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2.5 text-sm font-semibold text-[var(--text)] hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                >
+                  <Printer size={16} />
+                  {t('webPosPrintReceipt')}
+                </button>
+                {!showingInvoices && canRefundMerchantOrder(selected) ? (
+                  <button
+                    type="button"
+                    disabled={refundBusy}
+                    onClick={() => setRefundFor(selected)}
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-rose-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+                  >
+                    {t('webPosRefund')}
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
