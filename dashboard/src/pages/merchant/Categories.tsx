@@ -25,6 +25,8 @@ interface Category {
   imageUrl?: string | null;
   sortOrder?: number;
   visibility?: CatalogVisibility;
+  deliveryPricingEnabled?: boolean;
+  extraDeliveryPrice?: number | string | null;
 }
 
 const MAX_CATEGORY_NAME = 56;
@@ -44,6 +46,9 @@ export default function Categories() {
   const [uploading, setUploading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [visibility, setVisibility] = useState<CatalogVisibility>({ ...DEFAULT_CATALOG_VISIBILITY });
+  const [categoryPricingEnabled, setCategoryPricingEnabled] = useState(false);
+  const [deliveryPricingEnabled, setDeliveryPricingEnabled] = useState(false);
+  const [extraDeliveryPrice, setExtraDeliveryPrice] = useState('0');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const allSelected = categories.length > 0 && categories.every((c) => selectedIds.includes(c.id));
@@ -62,8 +67,12 @@ export default function Categories() {
 
   const load = async () => {
     try {
-      const response = await api.get('/merchant/categories');
+      const [response, settingsRes] = await Promise.all([
+        api.get('/merchant/categories'),
+        api.get('/merchant/settings').catch(() => null),
+      ]);
       setCategories(response.data.categories || []);
+      setCategoryPricingEnabled(!!settingsRes?.data?.settings?.categoryPricingEnabled);
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('categoryToastLoadFailed'));
     } finally {
@@ -81,6 +90,8 @@ export default function Categories() {
     setImageUrl('');
     setColor('');
     setVisibility({ ...DEFAULT_CATALOG_VISIBILITY });
+    setDeliveryPricingEnabled(false);
+    setExtraDeliveryPrice('0');
     setEditingId(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -93,6 +104,8 @@ export default function Categories() {
     setImageUrl(category.imageUrl || '');
     setColor(categoryColor(category.id, index >= 0 ? index : 0, category.color));
     setVisibility(normalizeCatalogVisibility(category.visibility));
+    setDeliveryPricingEnabled(category.deliveryPricingEnabled === true);
+    setExtraDeliveryPrice(String(category.extraDeliveryPrice ?? '0'));
   };
 
   const onUploadImage = async (file: File | null) => {
@@ -154,6 +167,12 @@ export default function Categories() {
     if (!payload) return;
     setSaving(true);
     try {
+      const deliveryPayload = categoryPricingEnabled
+        ? {
+            deliveryPricingEnabled,
+            extraDeliveryPrice: Number(extraDeliveryPrice || 0),
+          }
+        : {};
       if (editingId) {
         await api.put(`/merchant/categories/${editingId}`, {
           name: payload.name,
@@ -161,6 +180,7 @@ export default function Categories() {
           imageUrl: imageUrl || null,
           color: payload.color,
           visibility,
+          ...deliveryPayload,
         });
         toast.success(t('categoryToastUpdated'));
       } else {
@@ -173,7 +193,10 @@ export default function Categories() {
         if (imageUrl && created.data?.category?.id) {
           await api.put(`/merchant/categories/${created.data.category.id}`, {
             imageUrl,
+            ...deliveryPayload,
           });
+        } else if (created.data?.category?.id && categoryPricingEnabled) {
+          await api.put(`/merchant/categories/${created.data.category.id}`, deliveryPayload);
         }
         toast.success(t('categoryToastCreated'));
       }
@@ -281,6 +304,31 @@ export default function Categories() {
           <div className="md:col-span-3">
             <ChannelVisibilityEditor value={visibility} onChange={setVisibility} />
           </div>
+          {categoryPricingEnabled ? (
+            <div className="md:col-span-3 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 space-y-3">
+              <p className="text-sm font-medium">Delivery category pricing</p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={deliveryPricingEnabled}
+                  onChange={(e) => setDeliveryPricingEnabled(e.target.checked)}
+                />
+                Enable extra delivery price for this category
+              </label>
+              <div>
+                <label className="block text-sm font-medium mb-1">Extra delivery price (CHF)</label>
+                <input
+                  className="input max-w-xs"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={extraDeliveryPrice}
+                  disabled={!deliveryPricingEnabled}
+                  onChange={(e) => setExtraDeliveryPrice(e.target.value)}
+                />
+              </div>
+            </div>
+          ) : null}
           <div className="md:col-span-3 flex flex-wrap items-center gap-3">
             <label className="text-sm">
               <span className="font-medium mr-2">{t('categoryPhoto')}</span>
@@ -352,6 +400,9 @@ export default function Categories() {
               <th className="py-2 px-2 w-10" />
               <th className="py-2 px-2">{t('name')}</th>
               <th className="py-2 px-2">{t('description')}</th>
+              {categoryPricingEnabled ? (
+                <th className="py-2 px-2">Delivery extra</th>
+              ) : null}
               <th className="py-2 px-2" />
             </tr>
           </thead>
@@ -405,6 +456,13 @@ export default function Categories() {
                       </span>
                     </td>
                     <td className="py-2.5 px-2 muted">{category.description || '-'}</td>
+                    {categoryPricingEnabled ? (
+                      <td className="py-2.5 px-2 text-sm">
+                        {category.deliveryPricingEnabled
+                          ? `CHF ${Number(category.extraDeliveryPrice || 0).toFixed(2)}`
+                          : '—'}
+                      </td>
+                    ) : null}
                     <td className="py-2.5 px-2 text-right space-x-3 whitespace-nowrap">
                       <button
                         type="button"

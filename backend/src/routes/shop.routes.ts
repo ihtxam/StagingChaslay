@@ -28,6 +28,10 @@ import {
   filterCatalogForChannel,
   shopMenuCatalogChannel,
 } from "@/lib/catalog-visibility";
+import {
+  buildCategoryDeliveryPricingMap,
+  resolveShopItemDeliveryMarkup,
+} from "@/lib/shop-delivery-pricing";
 import { normalizeTableQrSettings } from "@/lib/table-qr-settings";
 import { TableSessionService } from "@/services/table-session.service";
 
@@ -565,6 +569,16 @@ router.get("/:slug", async (req: Request, res: Response) => {
         ? await CmsService.getPublishedTheme(merchant.id)
         : null;
 
+    const db = getDb();
+    const categoryRows = await db.query.categories.findMany({
+      where: eq(schema.categories.merchantId, merchant.id),
+      columns: {
+        id: true,
+        deliveryPricingEnabled: true,
+        extraDeliveryPrice: true,
+      },
+    });
+
     res.json({
       success: true,
       data: {
@@ -589,6 +603,12 @@ router.get("/:slug", async (req: Request, res: Response) => {
         taxIncludedInPrice: merchant.taxIncludedInPrice === true,
         vatAfterDiscount: merchant.vatAfterDiscount !== false,
         deliveryMenuMarkup: merchant.deliveryMenuMarkup ?? "0",
+        categoryPricingEnabled: merchant.categoryPricingEnabled === true,
+        categoryDeliveryPricing: categoryRows.map((c) => ({
+          id: c.id,
+          deliveryPricingEnabled: c.deliveryPricingEnabled === true,
+          extraDeliveryPrice: Number(c.extraDeliveryPrice ?? 0) || 0,
+        })),
         storeHours: hours,
         /** Homepage banner hours (display channel or takeaway fallback) */
         displayHours,
@@ -849,6 +869,8 @@ router.get("/:slug/menu", async (req: Request, res: Response) => {
       name: cat.name,
       image: (cat as { imageUrl?: string | null }).imageUrl || null,
       isOffersCategory: !!(cat as { isOffersCategory?: boolean }).isOffersCategory,
+      deliveryPricingEnabled: cat.deliveryPricingEnabled === true,
+      extraDeliveryPrice: Number(cat.extraDeliveryPrice ?? 0) || 0,
       items: visibleProducts.filter((p) => p.categoryId === cat.id).map(toItem),
     }));
 
@@ -1804,6 +1826,20 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     const authCustomer = optionalCustomer(req);
     const loyaltyProgram = ShopLoyaltyService.programFromMerchant(merchant);
 
+    const merchantCategories = await db.query.categories.findMany({
+      where: eq(schema.categories.merchantId, merchant.id),
+      columns: {
+        id: true,
+        deliveryPricingEnabled: true,
+        extraDeliveryPrice: true,
+      },
+    });
+    const categoryDeliveryMap = buildCategoryDeliveryPricingMap(merchantCategories);
+    const deliveryPricingConfig = {
+      categoryPricingEnabled: merchant.categoryPricingEnabled === true,
+      deliveryMenuMarkup: merchant.deliveryMenuMarkup,
+    };
+
     let subtotal = 0;
     let taxAmount = 0;
     let rewardPointsNeeded = 0;
@@ -1894,8 +1930,12 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       }
 
       const extrasTotal = roundMoney2(resolved.extras.reduce((s, e) => s + e.price, 0));
-      const deliveryMarkup =
-        channel === "delivery" ? Math.max(0, Number(merchant.deliveryMenuMarkup || 0) || 0) : 0;
+      const deliveryMarkup = resolveShopItemDeliveryMarkup(
+        deliveryPricingConfig,
+        channel,
+        product.categoryId,
+        categoryDeliveryMap
+      );
       const unitPrice = roundMoney2(
         parseFloat(product.price.toString()) + deliveryMarkup + extrasTotal + comboSurcharge
       );

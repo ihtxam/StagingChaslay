@@ -35,6 +35,10 @@ import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
+import {
+  buildCategoryDeliveryPricingMap,
+  resolveShopItemDeliveryMarkup,
+} from '@/lib/shop-delivery-pricing';
 
 type Step = 'details' | 'payment' | 'review';
 type WhenMode = 'asap' | 'later';
@@ -250,16 +254,30 @@ export default function CheckoutPage() {
     };
   }, [shopKey, draft.items, draft.channel, draft.scheduledFor, whenMode]);
 
-  /** Keep item prices in sync when switching takeaway ↔ delivery (menu markup). */
+  /** Keep item prices in sync when switching takeaway ↔ delivery (menu markup / category pricing). */
+  const categoryPricingEnabled = merchant?.categoryPricingEnabled === true;
+  const deliveryMenuMarkup = useMemo(() => {
+    const n = Number(merchant?.deliveryMenuMarkup ?? 0);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }, [merchant]);
+  const categoryDeliveryMap = useMemo(
+    () => buildCategoryDeliveryPricingMap(merchant?.categoryDeliveryPricing || []),
+    [merchant?.categoryDeliveryPricing]
+  );
+
   useEffect(() => {
     if (!merchant) return;
-    const markupRaw = Number(merchant.deliveryMenuMarkup ?? 0);
-    const markup = Number.isFinite(markupRaw) && markupRaw > 0 ? markupRaw : 0;
     setDraft((prev) => {
       let changed = false;
-      const addMarkup = prev.channel === 'delivery' ? markup : 0;
       const items = prev.items.map((item) => {
         if (item.loyaltyReward) return item;
+        const addMarkup = resolveShopItemDeliveryMarkup(
+          categoryPricingEnabled,
+          prev.channel,
+          item.categoryId,
+          deliveryMenuMarkup,
+          categoryDeliveryMap
+        );
         const extrasTotal = roundMoney2(
           (item.selectedExtras || []).reduce((s, e) => s + Number(e.price || 0), 0) +
             (item.comboSelections || []).reduce(
@@ -304,7 +322,7 @@ export default function CheckoutPage() {
       if (!changed) return prev;
       return { ...prev, items };
     });
-  }, [draft.channel, merchant]);
+  }, [draft.channel, merchant, categoryDeliveryMap, categoryPricingEnabled, deliveryMenuMarkup]);
 
   const taxRate = useMemo(() => {
     if (!merchant) return 0;

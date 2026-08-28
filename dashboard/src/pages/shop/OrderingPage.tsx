@@ -49,6 +49,10 @@ import ShopOfferPicker, {
 import { findNextOpen, type StoreHours } from '@/lib/shop-hours';
 import { applyPercent, isPickableDeal, matchingPercentOffer } from '@/lib/shop-offers';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
+import {
+  buildCategoryDeliveryPricingMap,
+  resolveShopItemDeliveryMarkup,
+} from '@/lib/shop-delivery-pricing';
 
 interface Product {
   id: string;
@@ -87,6 +91,8 @@ interface Category {
   name: string;
   image?: string | null;
   isOffersCategory?: boolean;
+  deliveryPricingEnabled?: boolean;
+  extraDeliveryPrice?: number;
   items: Product[];
 }
 
@@ -302,12 +308,32 @@ export default function OrderingPage() {
 
   const channel = draft.channel;
   const cart = draft.items;
+  const categoryPricingEnabled = merchant?.categoryPricingEnabled === true;
   const deliveryMenuMarkup = useMemo(() => {
     const n = Number(merchant?.deliveryMenuMarkup ?? 0);
     return Number.isFinite(n) && n > 0 ? n : 0;
   }, [merchant]);
-  const catalogUnitPrice = (productPrice: number) =>
-    roundMoney2(productPrice + (channel === 'delivery' ? deliveryMenuMarkup : 0));
+  const categoryDeliveryMap = useMemo(
+    () =>
+      buildCategoryDeliveryPricingMap(
+        menu.map((c) => ({
+          id: c.id,
+          deliveryPricingEnabled: c.deliveryPricingEnabled,
+          extraDeliveryPrice: c.extraDeliveryPrice,
+        }))
+      ),
+    [menu]
+  );
+  const itemDeliveryMarkup = (categoryId?: string | null) =>
+    resolveShopItemDeliveryMarkup(
+      categoryPricingEnabled,
+      channel,
+      categoryId,
+      deliveryMenuMarkup,
+      categoryDeliveryMap
+    );
+  const catalogUnitPrice = (productPrice: number, categoryId?: string | null) =>
+    roundMoney2(productPrice + itemDeliveryMarkup(categoryId));
   const taxRate = useMemo(() => {
     if (!merchant) return 0;
     if (channel === 'dine_in') return Number(merchant.taxDineInRate ?? merchant.vatRate ?? 0);
@@ -320,9 +346,15 @@ export default function OrderingPage() {
     if (!merchant) return;
     setDraft((prev) => {
       let changed = false;
-      const markup = prev.channel === 'delivery' ? deliveryMenuMarkup : 0;
       const items = prev.items.map((item) => {
         if (item.loyaltyReward) return item;
+        const markup = resolveShopItemDeliveryMarkup(
+          categoryPricingEnabled,
+          prev.channel,
+          item.categoryId,
+          deliveryMenuMarkup,
+          categoryDeliveryMap
+        );
         const extrasTotal = roundMoney2(
           (item.selectedExtras || []).reduce((s, e) => s + Number(e.price || 0), 0) +
             (item.comboSelections || []).reduce(
@@ -387,7 +419,7 @@ export default function OrderingPage() {
       if (!changed) return prev;
       return { ...prev, items };
     });
-  }, [channel, deliveryMenuMarkup, merchant, shopOffers]);
+  }, [channel, deliveryMenuMarkup, merchant, shopOffers, categoryDeliveryMap, categoryPricingEnabled]);
 
   const cartTotal = roundMoney2(cart.reduce((sum, item) => sum + item.price * item.quantity, 0));
   const voucherDiscount = roundMoney2(Math.max(0, Number(draft.voucherDiscount) || 0));
@@ -491,7 +523,12 @@ export default function OrderingPage() {
       0
     );
     // Always recompute from catalog base so delivery markup is applied (modal unitPrice is takeaway-based).
-    const catalogUnit = roundMoney2(catalogUnitPrice(product.price) + extrasTotal + comboTotal);
+    const catalogUnit = roundMoney2(
+      catalogUnitPrice(
+        product.price,
+        'categoryId' in product ? product.categoryId ?? null : null
+      ) + extrasTotal + comboTotal
+    );
     const pctMatch = !offerMeta
       ? matchingPercentOffer(
           shopOffers,
@@ -516,7 +553,12 @@ export default function OrderingPage() {
       offerInstanceId = offerMeta.offerInstanceId;
       offerName = offerMeta.offerName;
       const dealBase =
-        typeof offerMeta.dealPrice === 'number' ? offerMeta.dealPrice : catalogUnitPrice(product.price);
+        typeof offerMeta.dealPrice === 'number'
+          ? offerMeta.dealPrice
+          : catalogUnitPrice(
+              product.price,
+              'categoryId' in product ? product.categoryId ?? null : null
+            );
       // Free deal lines stay 0; paid deal price + option surcharges
       price =
         dealBase <= 0
@@ -1667,7 +1709,7 @@ export default function OrderingPage() {
                       ) : null}
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                         {items.map((product) => {
-                          const catalog = catalogUnitPrice(product.price);
+                          const catalog = catalogUnitPrice(product.price, product.categoryId ?? cat.id);
                           const pctMatch = matchingPercentOffer(
                             shopOffers,
                             { id: product.id, categoryId: product.categoryId ?? cat.id },
@@ -1754,7 +1796,10 @@ export default function OrderingPage() {
 
       {pendingProduct && (
         <ShopProductModifiersModal
-          product={{ ...pendingProduct, price: catalogUnitPrice(pendingProduct.price) }}
+          product={{
+            ...pendingProduct,
+            price: catalogUnitPrice(pendingProduct.price, pendingProduct.categoryId ?? null),
+          }}
           onClose={() => {
             setPendingProduct(null);
             if (offerConfigMeta) {
@@ -1790,7 +1835,10 @@ export default function OrderingPage() {
 
       {pendingCombo && (
         <ShopComboWizard
-          product={{ ...pendingCombo, price: catalogUnitPrice(pendingCombo.price) }}
+          product={{
+            ...pendingCombo,
+            price: catalogUnitPrice(pendingCombo.price, pendingCombo.categoryId ?? null),
+          }}
           onClose={() => {
             setPendingCombo(null);
             if (offerConfigMeta) {
@@ -1831,7 +1879,7 @@ export default function OrderingPage() {
         <ShopOfferPicker
           offer={pendingOffer}
           products={allMenuProducts}
-          priceOf={(p) => catalogUnitPrice(p.price)}
+          priceOf={(p) => catalogUnitPrice(p.price, p.categoryId ?? null)}
           onClose={() => setPendingOffer(null)}
           onConfirm={addOfferDealToCart}
         />

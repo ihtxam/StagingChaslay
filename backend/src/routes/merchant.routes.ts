@@ -1028,6 +1028,16 @@ router.put("/categories/:categoryId", async (req: Request, res: Response) => {
     if (updates.visibility !== undefined) {
       updates.visibility = normalizeCatalogVisibility(updates.visibility);
     }
+    if (updates.deliveryPricingEnabled !== undefined) {
+      updates.deliveryPricingEnabled = !!updates.deliveryPricingEnabled;
+    }
+    if (updates.extraDeliveryPrice !== undefined) {
+      const n = Number(updates.extraDeliveryPrice);
+      if (!Number.isFinite(n) || n < 0) {
+        return res.status(400).json({ error: "extraDeliveryPrice must be >= 0" });
+      }
+      updates.extraDeliveryPrice = n.toFixed(2);
+    }
 
     const category = await CategoryService.updateCategory(merchantId, categoryId, updates);
 

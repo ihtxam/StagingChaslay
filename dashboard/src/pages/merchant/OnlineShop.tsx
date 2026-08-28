@@ -226,6 +226,7 @@ export default function OnlineShop() {
         deliveryEtaMinutes: Number(settings.deliveryEtaMinutes || 45),
         minPreOrderDelayMinutes: Number(settings.minPreOrderDelayMinutes ?? 30),
         deliveryMenuMarkup: Number(settings.deliveryMenuMarkup || 0),
+        categoryPricingEnabled: !!settings.categoryPricingEnabled,
         shopLogoUrl: settings.shopLogoUrl,
         shopBannerUrl: settings.shopBannerUrl,
         slug: settings.slug,
@@ -616,6 +617,22 @@ export default function OnlineShop() {
               />
             </div>
             <div className="md:col-span-2">
+              <label className="flex items-center gap-2 text-sm font-medium mb-2">
+                <input
+                  type="checkbox"
+                  checked={!!settings.categoryPricingEnabled}
+                  onChange={(e) =>
+                    setSettings({ ...settings, categoryPricingEnabled: e.target.checked })
+                  }
+                />
+                Enable category pricing
+              </label>
+              <p className="text-xs text-stone-500 mb-3">
+                When enabled, delivery item prices use per-category extra charges instead of the flat
+                delivery menu markup below. Configure each category under Products → Categories.
+              </p>
+            </div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium mb-1">
                 Delivery menu markup (CHF)
               </label>
@@ -627,10 +644,12 @@ export default function OnlineShop() {
                 value={settings.deliveryMenuMarkup ?? 0}
                 onChange={(e) => setSettings({ ...settings, deliveryMenuMarkup: e.target.value })}
                 placeholder="0"
+                disabled={!!settings.categoryPricingEnabled}
               />
               <p className="text-xs text-stone-500 mt-1">
-                Added to every item for delivery (e.g. 2.00 → delivery prices = takeaway + 2.00). Zone
-                delivery fee is separate.
+                {settings.categoryPricingEnabled
+                  ? 'Disabled while category pricing is enabled. Set extra delivery prices per category instead.'
+                  : 'Added to every item for delivery (e.g. 2.00 → delivery prices = takeaway + 2.00). Zone delivery fee is separate.'}
               </p>
             </div>
             <div>

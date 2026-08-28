@@ -62,6 +62,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS cart_layout varchar(20) NOT NULL DEFAULT 'hidden_slide'",
   delivery_menu_markup:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_menu_markup numeric(10,2) DEFAULT 0",
+  category_pricing_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS category_pricing_enabled boolean NOT NULL DEFAULT false",
   webpos_gift_card_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_gift_card_enabled boolean NOT NULL DEFAULT false",
   adyen_use_legacy_endpoint:
@@ -155,6 +157,10 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\"]}'::jsonb",
   categories_visibility:
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\"]}'::jsonb",
+  categories_delivery_pricing_enabled:
+    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS delivery_pricing_enabled boolean NOT NULL DEFAULT false",
+  categories_extra_delivery_price:
+    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS extra_delivery_price numeric(10,2) DEFAULT 0",
   orders_table_session_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_session_id uuid",
 };
 

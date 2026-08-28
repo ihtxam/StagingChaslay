@@ -207,6 +207,7 @@ export class MerchantSettingsService {
       deliveryEtaMinutes: merchant.deliveryEtaMinutes,
       minPreOrderDelayMinutes: merchant.minPreOrderDelayMinutes ?? 30,
       deliveryMenuMarkup: merchant.deliveryMenuMarkup ?? "0",
+      categoryPricingEnabled: merchant.categoryPricingEnabled === true,
       deliveryDriverPayMode: merchant.deliveryDriverPayMode || "both",
       deliveryDriverHourlyRate: merchant.deliveryDriverHourlyRate ?? "0",
       deliveryPerOrderFee: merchant.deliveryPerOrderFee ?? "0",
@@ -322,6 +323,7 @@ export class MerchantSettingsService {
       deliveryEtaMinutes?: number;
       minPreOrderDelayMinutes?: number;
       deliveryMenuMarkup?: number;
+      categoryPricingEnabled?: boolean;
       deliveryDriverPayMode?: string;
       deliveryDriverHourlyRate?: number;
       deliveryPerOrderFee?: number;
@@ -443,6 +445,9 @@ export class MerchantSettingsService {
       const n = Number(updates.deliveryMenuMarkup);
       if (!Number.isFinite(n) || n < 0) throw new Error("deliveryMenuMarkup must be >= 0");
       patch.deliveryMenuMarkup = n.toFixed(2);
+    }
+    if (updates.categoryPricingEnabled !== undefined) {
+      patch.categoryPricingEnabled = !!updates.categoryPricingEnabled;
     }
     if (updates.deliveryDriverPayMode !== undefined) {
       const mode = String(updates.deliveryDriverPayMode);

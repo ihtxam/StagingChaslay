@@ -184,6 +184,11 @@ export const merchants = pgTable(
      * (e.g. 2 → delivery item prices = takeaway + 2.00).
      */
     deliveryMenuMarkup: decimal("delivery_menu_markup", { precision: 10, scale: 2 }).default("0"),
+    /**
+     * When true, delivery item pricing uses per-category extra_delivery_price
+     * instead of the flat delivery_menu_markup.
+     */
+    categoryPricingEnabled: boolean("category_pricing_enabled").default(false).notNull(),
     /** Driver pay: hourly | per_order | both */
     deliveryDriverPayMode: varchar("delivery_driver_pay_mode", { length: 20 })
       .default("both")
@@ -809,6 +814,9 @@ export const categories = pgTable(
       .$type<{ channels: string[] }>()
       .default({ channels: ["pos", "shop", "qr_table", "delivery"] })
       .notNull(),
+    /** When category_pricing_enabled on merchant, apply extra_delivery_price on delivery orders */
+    deliveryPricingEnabled: boolean("delivery_pricing_enabled").default(false).notNull(),
+    extraDeliveryPrice: decimal("extra_delivery_price", { precision: 10, scale: 2 }).default("0"),
     sortOrder: integer("sort_order").default(0).notNull(),
     clientId: varchar("client_id", { length: 64 }), // offline sync id from POS device
     createdAt: timestamp("created_at").defaultNow().notNull(),
