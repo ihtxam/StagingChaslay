@@ -259,6 +259,15 @@ export default function StaffPage() {
   const showEditLoginHome =
     editForm?.canAccessPanel || !!(editForm?.email.trim() && editForm?.password.trim());
 
+  useEffect(() => {
+    if (!editingStaff && !editingRole) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [editingStaff, editingRole]);
+
   if (loading) {
     return <div className="p-4 text-sm text-[var(--text-muted)]">{t('staffLoading')}</div>;
   }
@@ -545,10 +554,18 @@ export default function StaffPage() {
       )}
 
       {editingStaff && editForm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/40 p-4"
+          onClick={() => {
+            setEditingStaff(null);
+            setEditForm(null);
+          }}
+        >
+          <div className="flex min-h-full items-start justify-center py-4 sm:items-center">
           <form
             onSubmit={(e) => void saveStaffEdit(e)}
-            className="w-full max-w-lg max-h-[85vh] overflow-auto rounded-xl bg-white dark:bg-stone-900 p-4 shadow-xl space-y-3"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg max-h-[85vh] overflow-y-auto overscroll-contain rounded-xl bg-white dark:bg-stone-900 p-4 shadow-xl space-y-3"
           >
             <h3 className="font-semibold">
               {t('staffEditUser').replace('{name}', editingStaff.name)}
@@ -748,12 +765,19 @@ export default function StaffPage() {
               </button>
             </div>
           </form>
+          </div>
         </div>
       ) : null}
 
       {editingRole ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg max-h-[85vh] overflow-auto rounded-xl bg-white dark:bg-stone-900 p-4 shadow-xl">
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/40 p-4"
+          onClick={() => setEditingRole(null)}
+        >
+          <div
+            className="mx-auto w-full max-w-lg max-h-[85vh] overflow-y-auto overscroll-contain rounded-xl bg-white dark:bg-stone-900 p-4 shadow-xl my-4 sm:my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="font-semibold mb-3">
               {t('staffEditRole').replace('{name}', staffRoleDisplayName(editingRole.name, t))}
             </h3>

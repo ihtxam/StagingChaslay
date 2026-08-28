@@ -68,10 +68,12 @@ import {
   isCatalogPanelPath,
   isDeliveryDriverOnlyStaff,
   isStorekeeperOnlyStaff,
+  isFloorWaiterStaff,
   storekeeperHomePath,
   isOrdersPanelPath,
   isReportsPanelPath,
   isStaffJwt,
+  hasPermission,
   loadWebPosStaffSession,
   notifyWebPosStaffSessionChanged,
   resolveWebPosStaffSession,
@@ -83,6 +85,7 @@ import {
 import type { EditionFeatureKey } from '@/lib/edition-features';
 import type { BusinessModule } from '@/lib/business-module';
 import { isRestaurantModule, normalizeBusinessModule } from '@/lib/business-module';
+import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
@@ -229,6 +232,7 @@ function MerchantShell() {
   const pinRestrictedHomePath = useMemo(() => {
     if (isDeliveryDriverOnlyStaff(effective.permissions, false)) return deliveryDriverHomePath();
     if (isStorekeeperOnlyStaff(effective.permissions, false)) return storekeeperHomePath();
+    if (hasPermission(effective.permissions, 'MANAGE_TABLES', false)) return '/merchant/waiter';
     return '/merchant/pos';
   }, [effective.permissions]);
 
@@ -448,6 +452,19 @@ function MerchantShell() {
     location.pathname,
     navigate,
   ]);
+
+  // Floor waiters (and POS-destination staff) cannot browse the manager panel.
+  useEffect(() => {
+    if (jwtIsOwner || user?.role !== 'staff') return;
+    const perms = user?.permissions as Permission[] | undefined;
+    const floorOnly = isFloorWaiterStaff(perms, false);
+    const posDest = normalizeStaffLoginHome(user?.loginHome) === 'pos';
+    if (!floorOnly && !posDest) return;
+    if (isPosLikeRoute) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    const dest = hasPermission(perms, 'MANAGE_TABLES', false) ? '/merchant/waiter' : '/merchant/pos';
+    if (path !== dest) navigate(dest, { replace: true });
+  }, [jwtIsOwner, user?.role, user?.loginHome, user?.permissions, isPosLikeRoute, location.pathname, navigate]);
 
   const showWebPosQuickAction = useMemo(
     () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),

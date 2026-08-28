@@ -20,7 +20,7 @@ export default function TableQrPrintPanel({ merchantSlug, tables }: Props) {
       tables.map((table) => {
         const payload = buildTableQrPayload(merchantSlug, table.id);
         const shopUrl = buildTableShopUrl(merchantSlug, table.id);
-        return { ...table, payload, shopUrl, qrUrl: qrImageUrl(payload, 200) };
+        return { ...table, payload, shopUrl, qrUrl: qrImageUrl(shopUrl, 200) };
       }),
     [merchantSlug, tables]
   );

@@ -85,7 +85,8 @@ export default function TableQrCodes() {
       const tableCodes = qrCodes.filter((c) => c.tableId === table.id);
       const staticCode = tableCodes.find((c) => c.codeType === 'static');
       const tempCode = tableCodes.find((c) => c.codeType === 'temporary');
-      const defaultPayload = buildTableQrPayload(merchantSlug, table.id);
+      const shopUrl = buildTableShopUrl(merchantSlug, table.id);
+      const defaultPayload = shopUrl;
       const payload = staticCode?.code || tempCode?.code || defaultPayload;
       return {
         id: table.id,
@@ -93,9 +94,9 @@ export default function TableQrCodes() {
         capacity: table.capacity,
         sectionName: sectionNameById.get(table.floorPlanId) || table.floorPlanName || '',
         payload,
-        shopUrl: buildTableShopUrl(merchantSlug, table.id),
+        shopUrl,
         waiterUrl: buildWaiterTableUrl(table.id),
-        qrUrl: qrImageUrl(payload, 200),
+        qrUrl: qrImageUrl(shopUrl, 200),
         codes: tableCodes,
       };
     });
@@ -123,7 +124,7 @@ export default function TableQrCodes() {
       const payload =
         codeType === 'temporary'
           ? customCode.trim() || buildTableShopUrl(merchantSlug, selected.id)
-          : customCode.trim() || buildTableQrPayload(merchantSlug, selected.id);
+          : customCode.trim() || buildTableShopUrl(merchantSlug, selected.id);
 
       await api.post(`/merchant/floor-plans/tables/${selected.id}/qr-codes`, {
         codeType,

@@ -25,6 +25,16 @@ export function homePathForUser(
   if (loginHome === 'panel') {
     if (isDeliveryDriverOnlyStaff(perms, user.isOwner === true)) return deliveryDriverHomePath();
     if (isStorekeeperOnlyStaff(perms, user.isOwner === true)) return storekeeperHomePath();
+    const hasCatalogOrOrders =
+      hasPermission(perms, 'MANAGE_PRODUCTS', false) ||
+      hasPermission(perms, 'VIEW_ORDER_HISTORY', false);
+    const hasFullPanel =
+      hasPermission(perms, 'ACCESS_PANEL', false) ||
+      hasPermission(perms, 'MANAGE_INVENTORY', false) ||
+      hasFullPanelAccess(perms, user.isOwner === true);
+    if (!hasCatalogOrOrders && !hasFullPanel && hasPermission(perms, 'MANAGE_TABLES', false)) {
+      return '/merchant/waiter';
+    }
     return backOfficeHomePath(perms, user.isOwner === true);
   }
 

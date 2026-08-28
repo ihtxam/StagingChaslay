@@ -480,12 +480,19 @@ export function parseTableQrPayload(raw: string): ParsedTableQr | null {
   try {
     if (/^https?:\/\//i.test(trimmed)) {
       const url = new URL(trimmed);
-      const table = url.searchParams.get('table');
-      if (table) {
+      const tableFromQuery = url.searchParams.get('table');
+      if (tableFromQuery) {
         const parts = url.pathname.split('/').filter(Boolean);
         const shopIdx = parts.indexOf('shop');
         const slug = shopIdx >= 0 ? parts[shopIdx + 1] : undefined;
-        return { merchantSlug: slug, tableId: table };
+        return { merchantSlug: slug, tableId: tableFromQuery };
+      }
+      const parts = url.pathname.split('/').filter(Boolean);
+      const tableIdx = parts.lastIndexOf('table');
+      if (tableIdx >= 0 && parts[tableIdx + 1]) {
+        const slug =
+          tableIdx > 0 && parts[tableIdx - 1] !== 'shop' ? parts[tableIdx - 1] : parts[0];
+        return { merchantSlug: slug, tableId: parts[tableIdx + 1]! };
       }
     }
   } catch {

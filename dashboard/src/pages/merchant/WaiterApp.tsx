@@ -22,6 +22,7 @@ import {
 } from '@/lib/webpos-print-relay';
 import {
   backOfficeHomePath,
+  canStaffOpenBackOffice,
   hasPermission,
   isMerchantOwnerJwt,
   loadWebPosStaffSession,
@@ -68,6 +69,7 @@ import WebPosProductModifiersModal, {
 } from '@/components/webpos/WebPosProductModifiersModal';
 import WaiterSettingsDropdown from '@/components/webpos/WaiterSettingsDropdown';
 import type { CartLine, Category, PosCategoryId, PosChannel, Product } from '@/components/webpos/types';
+import type { Permission } from '@/lib/permissions';
 import type { ShopSelectedExtra } from '@/lib/shop-cart';
 
 type WaiterTab = 'tables' | 'order';
@@ -109,6 +111,9 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [sending, setSending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [autoPrintKitchen, setAutoPrintKitchen] = useState(() => readDeviceAutoPrintKitchen(true));
+  const [isPhoneLayout, setIsPhoneLayout] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
+  );
   const [heldTableIds, setHeldTableIds] = useState<string[]>([]);
   const [heldTableInfo, setHeldTableInfo] = useState<Record<string, TableHeldDisplay>>({});
   const [ordersRefresh, setOrdersRefresh] = useState(0);
@@ -119,6 +124,20 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     hasStaffPins: staffConfigured,
     pinSession: staff,
   });
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const onChange = () => setIsPhoneLayout(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  const showBackOffice = canStaffOpenBackOffice(
+    (staff?.permissions ?? authUser?.permissions) as Permission[] | undefined,
+    authUser?.loginHome,
+    jwtIsOwner
+  );
 
   useEffect(() => {
     if (!staffPinsKnown) return;
@@ -709,13 +728,15 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       className={`waiter-shell flex h-full min-h-0 flex-col bg-stone-950 text-stone-100 ${
         appMode ? 'waiter-app-mode' : ''
       }`}
+      data-narrow={isPhoneLayout ? '1' : undefined}
+      data-grid-step="0"
     >
-      <header className="flex shrink-0 items-center justify-between border-b border-stone-800 px-4 py-3">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-stone-500">{t('waiterAppTitle')}</p>
-          <p className="font-semibold">{staff?.name || t('waiterAppSubtitle')}</p>
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-stone-800 px-3 py-2 sm:px-4 sm:py-3">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wide text-stone-500 sm:text-xs">{t('waiterAppTitle')}</p>
+          <p className="truncate font-semibold">{staff?.name || t('waiterAppSubtitle')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <WaiterSettingsDropdown
             open={settingsOpen}
             onToggle={() => setSettingsOpen((v) => !v)}
@@ -723,12 +744,11 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
             autoPrintKitchen={autoPrintKitchen}
             onAutoPrintKitchenChange={setAutoPrintKitchen}
           />
-          {hasPermission(staff?.permissions, 'MANAGE_PRODUCTS') ||
-          hasPermission(staff?.permissions, 'VIEW_ORDER_HISTORY') ? (
+          {showBackOffice ? (
             <button
               type="button"
               onClick={() => navigate(backOfficeHomePath(staff?.permissions, false))}
-              className="inline-flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm"
+              className="hidden items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm sm:inline-flex"
             >
               <PanelLeft className="h-4 w-4" aria-hidden />
               {t('webPosBackOffice')}
@@ -737,10 +757,10 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           <button
             type="button"
             onClick={() => void handleLogout()}
-            className="inline-flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-700 px-2.5 py-2 text-sm sm:gap-2 sm:px-3"
           >
             <LogOut className="h-4 w-4" aria-hidden />
-            {t('logout')}
+            <span className="hidden sm:inline">{t('logout')}</span>
           </button>
         </div>
       </header>
@@ -770,34 +790,37 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           </div>
         ) : (
           <>
-            <div className="flex min-h-0 flex-1 flex-col border-stone-800 lg:border-r">
-              <div className="flex shrink-0 items-center gap-2 border-b border-stone-800 px-3 py-2 text-sm">
-                {tableLabel ? (
-                  <span className="rounded-full bg-stone-800 px-3 py-1">{tableLabel}</span>
-                ) : channel === 'takeaway' ? (
-                  <span className="rounded-full bg-amber-900/50 px-3 py-1">{t('waiterTakeaway')}</span>
-                ) : null}
-                {ticketDisplay && (
-                  <span className="text-stone-400">{ticketDisplay}</span>
-                )}
+            <div className="flex min-h-0 flex-1 flex-col border-stone-800 lg:min-h-0 lg:flex-row">
+              <div className="flex min-h-0 flex-1 flex-col border-stone-800 lg:border-r">
+                <div className="flex shrink-0 items-center gap-2 border-b border-stone-800 px-3 py-2 text-sm">
+                  {tableLabel ? (
+                    <span className="rounded-full bg-stone-800 px-3 py-1">{tableLabel}</span>
+                  ) : channel === 'takeaway' ? (
+                    <span className="rounded-full bg-amber-900/50 px-3 py-1">{t('waiterTakeaway')}</span>
+                  ) : null}
+                  {ticketDisplay && (
+                    <span className="text-stone-400">{ticketDisplay}</span>
+                  )}
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto p-2 max-lg:max-h-[42vh]">
+                  <WebPosProductArea
+                    categories={categories}
+                    products={products}
+                    categoryId={categoryId}
+                    onCategoryChange={setCategoryId}
+                    onProductClick={onProductClick}
+                    cartQtyByProduct={cartQtyByProduct}
+                    productHasCombo={() => false}
+                    productHasMods={(p) => productHasModifiers(p as ShopProductForModifiers)}
+                    tileSize={isPhoneLayout ? 'md' : 'lg'}
+                    isPhoneLayout={isPhoneLayout}
+                    mobileGridStep={0}
+                    showProductImages
+                  />
+                </div>
               </div>
-              <div className="min-h-0 flex-1 overflow-auto p-2">
-                <WebPosProductArea
-                  categories={categories}
-                  products={products}
-                  categoryId={categoryId}
-                  onCategoryChange={setCategoryId}
-                  onProductClick={onProductClick}
-                  cartQtyByProduct={cartQtyByProduct}
-                  productHasCombo={() => false}
-                  productHasMods={(p) => productHasModifiers(p as ShopProductForModifiers)}
-                  tileSize="lg"
-                  showProductImages
-                />
-              </div>
-            </div>
 
-            <aside className="flex w-full shrink-0 flex-col border-t border-stone-800 lg:w-80 lg:border-t-0">
+            <aside className="flex w-full max-h-[48vh] shrink-0 flex-col border-t border-stone-800 lg:max-h-none lg:w-80 lg:border-t-0">
               <div className="border-b border-stone-800 px-4 py-3">
                 <p className="text-sm font-semibold">{t('waiterCart')}</p>
                 <p className="text-2xl font-bold tabular-nums">{money(cartTotal)}</p>
@@ -872,7 +895,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
                   type="button"
                   disabled={sending || !cart.some((l) => !l.sentToKitchen)}
                   onClick={() => void sendToKitchen()}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-4 text-lg font-semibold text-white disabled:opacity-40"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40 sm:py-4 sm:text-lg"
                 >
                   {sending ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
@@ -890,6 +913,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
                 </button>
               </div>
             </aside>
+            </div>
           </>
         )}
       </div>

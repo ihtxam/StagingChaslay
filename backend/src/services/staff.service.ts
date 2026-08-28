@@ -163,6 +163,28 @@ export class StaffService {
         .set({ permissions: encodePermissions(next), updatedAt: new Date() })
         .where(eq(schema.merchantRoles.id, role.id));
     }
+    await this.syncFloorWaiterLoginHome(merchantId);
+  }
+
+  /** Floor waiters should land on POS/waiter screen, not merchant panel. */
+  static async syncFloorWaiterLoginHome(merchantId: string) {
+    const db = getDb();
+    const staffRows = await db.query.merchantStaff.findMany({
+      where: eq(schema.merchantStaff.merchantId, merchantId),
+    });
+    const roles = await db.query.merchantRoles.findMany({
+      where: eq(schema.merchantRoles.merchantId, merchantId),
+    });
+    const roleById = new Map(roles.map((r) => [r.id, r]));
+    for (const member of staffRows) {
+      const role = roleById.get(member.roleId);
+      if (!role || waiterSystemKind(role.name) !== "pos-only") continue;
+      if (normalizeStaffLoginHome(member.loginHome) === "pos") continue;
+      await db
+        .update(schema.merchantStaff)
+        .set({ loginHome: "pos", updatedAt: new Date() })
+        .where(eq(schema.merchantStaff.id, member.id));
+    }
   }
 
   static async listRoles(merchantId: string) {

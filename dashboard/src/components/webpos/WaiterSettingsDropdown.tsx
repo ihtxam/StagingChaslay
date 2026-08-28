@@ -22,13 +22,13 @@ export default function WaiterSettingsDropdown({
     <div className="relative">
       <button
         type="button"
-        className="inline-flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm"
+        className="inline-flex items-center gap-1.5 rounded-xl border border-stone-700 px-2.5 py-2 text-sm sm:gap-2 sm:px-3"
         aria-expanded={open}
         aria-label={t('webPosMoreShort')}
         onClick={onToggle}
       >
         <Menu className="h-4 w-4" aria-hidden />
-        {t('webPosMoreShort')}
+        <span className="hidden sm:inline">{t('webPosMoreShort')}</span>
       </button>
       {open ? (
         <>
@@ -36,10 +36,10 @@ export default function WaiterSettingsDropdown({
             type="button"
             tabIndex={-1}
             aria-label={t('close')}
-            className="fixed inset-0 z-[48] cursor-default border-0 bg-black/40 p-0"
+            className="fixed inset-0 z-[60] cursor-default border-0 bg-black/40 p-0"
             onClick={onClose}
           />
-          <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-stone-700 bg-stone-900 shadow-xl">
+          <div className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-[61] overflow-hidden rounded-xl border border-stone-700 bg-stone-900 shadow-xl sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-[calc(100%+6px)] sm:w-[min(18rem,calc(100vw-2rem))]">
             <div className="flex items-center justify-between border-b border-stone-800 px-3 py-2.5">
               <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
                 {t('webPosPrinting')}

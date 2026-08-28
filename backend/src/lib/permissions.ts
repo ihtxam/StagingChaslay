@@ -110,8 +110,6 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "SEND_KITCHEN",
       "MANAGE_TABLES",
       "TAKEAWAY_ORDERS",
-      "VIEW_ORDER_HISTORY",
-      "MANAGE_PRODUCTS",
     ],
   },
   {
@@ -283,7 +281,10 @@ export function waiterSystemKind(name: string): WaiterSystemKind | null {
   return "pos-only";
 }
 
-export function waiterBlockedPermissions(_kind: WaiterSystemKind): Permission[] {
-  // Menu (MANAGE_PRODUCTS), orders, and own-sales EOD (END_OF_DAY) stay role-assigned.
-  return [...WAITER_PRIVILEGED_BLOCKED];
+export function waiterBlockedPermissions(kind: WaiterSystemKind): Permission[] {
+  const blocked = [...WAITER_PRIVILEGED_BLOCKED];
+  if (kind === "pos-only") {
+    blocked.push("MANAGE_PRODUCTS", "VIEW_ORDER_HISTORY");
+  }
+  return blocked;
 }

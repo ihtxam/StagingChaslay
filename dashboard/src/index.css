@@ -776,6 +776,39 @@ button {
     }
   }
 
+  /* Waiter phone — mirror compact WebPOS product grid. */
+  @media (max-width: 639px) {
+    .waiter-shell[data-narrow='1'] .webpos-cat-scroll {
+      display: grid;
+      gap: 0.375rem;
+      overflow: visible;
+      padding-bottom: 0;
+    }
+    .waiter-shell[data-narrow='1'][data-grid-step='0'] .webpos-cat-scroll,
+    .waiter-shell[data-narrow='1']:not([data-grid-step]) .webpos-cat-scroll {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .waiter-shell[data-narrow='1'] .webpos-category-chip {
+      width: 100%;
+      min-height: 2.25rem;
+      height: auto;
+      flex-shrink: 1;
+      font-size: 0.6875rem;
+      white-space: normal;
+      line-height: 1.15;
+      padding: 0.3125rem 0.375rem;
+    }
+    .waiter-shell[data-narrow='1'][data-grid-step='0'] .webpos-product-scroll > .grid,
+    .waiter-shell[data-narrow='1']:not([data-grid-step]) .webpos-product-scroll > .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 0.375rem;
+    }
+    .waiter-shell[data-narrow='1'] .webpos-product-card,
+    .waiter-shell[data-narrow='1'] .webpos-product-card.group {
+      min-height: 3.5rem;
+    }
+  }
+
   .webpos-mini-btn {
     @apply inline-flex flex-col items-center justify-center gap-0.5 rounded-lg border border-stone-200 bg-white px-1 py-1.5 text-[10px] font-semibold leading-tight text-stone-600 hover:bg-stone-50 disabled:opacity-40;
   }

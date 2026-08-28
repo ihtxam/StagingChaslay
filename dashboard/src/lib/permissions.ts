@@ -4,6 +4,7 @@ import {
 } from './edition-features';
 import { canAccessBusinessModuleRoute, type BusinessModule } from './business-module';
 import { isStandalonePwa } from './pwa';
+import { normalizeStaffLoginHome, type StaffLoginHome } from './staff-login-home';
 
 export type Permission =
   | 'USE_POS'
@@ -298,6 +299,28 @@ export function jwtHasPanelAccess(
     hasPermission(jwtPermissions, 'VIEW_ORDER_HISTORY', false) ||
     canOpenReportsPanel(jwtPermissions, false)
   );
+}
+
+/** Floor waiter — tables/POS only, no merchant back office. */
+export function isFloorWaiterStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  if (!hasPermission(permissions, 'MANAGE_TABLES', false)) return false;
+  return !jwtHasPanelAccess(permissions, false, 'staff');
+}
+
+/** Staff may open merchant back office only when login destination allows panel access. */
+export function canStaffOpenBackOffice(
+  permissions: Permission[] | undefined,
+  loginHome?: StaffLoginHome | string | null,
+  isOwner = false
+): boolean {
+  if (isOwner) return true;
+  if (normalizeStaffLoginHome(loginHome) === 'pos') return false;
+  if (isFloorWaiterStaff(permissions, false)) return false;
+  return jwtHasPanelAccess(permissions, false, 'staff');
 }
 
 /**
