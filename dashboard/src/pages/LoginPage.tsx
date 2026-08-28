@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { homePathForUser } from '@/lib/auth-home';
 import { posEmbedReturnPath } from '@/pages/PosEmbedPage';
-import { APP_NAME, APP_PANEL_TITLE, APP_TAGLINE } from '@/lib/brand';
+import { APP_NAME, APP_PANEL_TITLE, APP_TAGLINE, REBORN_LOGO_WHITE } from '@/lib/brand';
 import { BRAND_BLUE_CHARCOAL, BRAND_BURGUNDY, BRAND_WARM_WHITE } from '@/lib/brand-colors';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { clearWebPosStaffSession } from '@/lib/permissions';
@@ -206,20 +206,12 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-[420px]">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div
-            className="flex h-20 w-20 items-center justify-center rounded-2xl shadow-lg ring-1 ring-white/10"
-            style={{ backgroundColor: BRAND_BURGUNDY }}
-          >
-            <img
-              src="/brand/logo-mark.png"
-              alt=""
-              className="h-14 w-14 object-contain"
-            />
-          </div>
-          <h1 className="mt-4 text-2xl font-semibold tracking-tight" style={{ color: BRAND_WARM_WHITE }}>
-            {APP_NAME}
-          </h1>
-          <p className="mt-1 text-sm opacity-80" style={{ color: BRAND_WARM_WHITE }}>
+          <img
+            src={REBORN_LOGO_WHITE}
+            alt={APP_NAME}
+            className="h-24 w-auto max-w-[200px] object-contain"
+          />
+          <p className="mt-4 text-sm opacity-80" style={{ color: BRAND_WARM_WHITE }}>
             {t('loginTagline')}
           </p>
         </div>

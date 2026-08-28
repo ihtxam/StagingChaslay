@@ -1,6 +1,9 @@
 /** Public product name (PWA, Windows app, panel, shop chrome). */
 export const APP_NAME = 'Reborn';
 
+/** White Reborn logo (icon + wordmark) for dark backgrounds — login, merchant sidebar. */
+export const REBORN_LOGO_WHITE = '/brand/reborn-logo-white.png';
+
 export const APP_PANEL_TITLE = `${APP_NAME} Admin`;
 
 /** Superadmin sidebar footer label above Sign out (not a personal name). */

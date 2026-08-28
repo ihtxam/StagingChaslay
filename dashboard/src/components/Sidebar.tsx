@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, Settings, Store, User, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
-import { displaySidebarAccountName, displaySidebarShopName } from '@/lib/brand';
+import { displaySidebarAccountName, displaySidebarShopName, REBORN_LOGO_WHITE } from '@/lib/brand';
 import { useI18n, type Locale } from '@/lib/i18n';
 import StaffSwitchButton from '@/components/StaffSwitchButton';
 
@@ -241,11 +241,13 @@ export default function Sidebar({
       >
         <div className="panel-sidebar-divider px-4 py-3 border-b flex items-center justify-between shrink-0">
           <div className="flex min-w-0 items-center gap-2.5">
-            <img
-              src="/brand/logo-mark.png"
-              alt=""
-              className="h-8 w-8 shrink-0 object-contain"
-            />
+            <div className="h-9 w-9 shrink-0 overflow-hidden" aria-hidden>
+              <img
+                src={REBORN_LOGO_WHITE}
+                alt=""
+                className="h-9 w-auto max-w-none object-contain object-left"
+              />
+            </div>
             <div className="min-w-0">
               <h1 className="text-base font-semibold tracking-tight text-white truncate">{headerShopName}</h1>
               <p className="text-[11px] text-white/70 mt-0.5">{t('panel')}</p>
